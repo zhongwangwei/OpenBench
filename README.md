@@ -1,6 +1,5 @@
 # OpenBech
-Optimized Performance Evaluation and Next generation Benchmarking for Land Surface Models
-
+The Open Land Surface Model Benchmark Evaluation System
 ## Overview
 
 This system is designed for the evaluation of land surface model outputs against reference data. It handles configuration, data processing, validation, comparison, and statistical analysis.
@@ -42,7 +41,7 @@ This system is designed for the evaluation of land surface model outputs against
 Run the evaluation system using:
 
 '''
-python openbench.py main.nml [or path_to_main_namelist]
+python script/openbench.py nml/main.nml [or path_to_main_namelist]
 '''
 
 ## Supported Evaluations
@@ -62,12 +61,13 @@ The system generates various outputs including:
 
 ## Customization
 
-- Custom filters can be added for specific models or datasets
+- Custom filters can be added for handling specific variables, models or datasets
 - Evaluation items, metrics, and scores can be configured in the namelists
 
 ## Contributors
 
 - Zhongwang Wei (zhongwang007@gmail.com)
+- Qingchen Xu (******)
 
 ## Version
 

@@ -22,10 +22,11 @@ class Validation_grid(metrics,scores):
         self.__dict__.update(info)
         os.makedirs(self.casedir+'/output/', exist_ok=True)
 
-        print('Validation processes starting!')
-        print("=======================================")
         print(" ")
-        print(" ")
+        print("\033[1;32m╔═══════════════════════════════════════════════════════════════╗\033[0m")
+        print("\033[1;32m║                Evaluation processes starting!                 ║\033[0m")
+        print("\033[1;32m╚═══════════════════════════════════════════════════════════════╝\033[0m")
+        print("\n")
 
     def process_metric(self, metric, s, o, vkey=''):
         pb = getattr(self, metric)(s, o)
@@ -64,7 +65,7 @@ class Validation_grid(metrics,scores):
                 print('No such score')
                 sys.exit(1)
 
-        print("=======================================")
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
         print(" ")
         print(" ")
 
@@ -91,7 +92,8 @@ class Validation_grid(metrics,scores):
             cmap = colors.ListedColormap(cpool)
             norm = colors.BoundaryNorm(bnd, cmap.N)
             self.plot_map(cmap, norm, key, bnd,metric,'metrics')
-        print("=======================================")
+     
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
             print(f'plotting score: {score}')
             if score in ['KGESS']:
@@ -108,6 +110,7 @@ class Validation_grid(metrics,scores):
             cmap = colors.ListedColormap(cpool)
             norm = colors.BoundaryNorm(bnd, cmap.N)
             self.plot_map(cmap, norm, key, bnd,score,'scores')
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
 
     def plot_map(self, colormap, normalize, key, levels, xitem, k, **kwargs):
         # Plot settings

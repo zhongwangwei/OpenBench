@@ -26,21 +26,34 @@ os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
 
 def print_welcome_message():
-    """Print the welcome message and ASCII art."""
-    print("Welcome to the The Land Surface Model 2024 Benchmark Evaluation System!")
-    print('''
-         _     ____  __  __ ____  _____ ____  
-        | |   / ___||  \\/  | __ )| ____/ ___| 
-        | |  \\___ \\| |\\/| |  _ \\|  _| \\___ \\ 
-        | |___ ___) | |  | | |_) | |___ ___) |
-        |_____|____/|_|  |_|____/|_____|____/ 
-                                                
-        ''')
-    print("This module is used to validate various land surface model outputs against reference data.")
-    print("===============================================================================")
-    print("Start running Benchmark System...")
-    input("Press Enter to continue...")
-    print("...............................................................................")
+    """Print a more beautiful welcome message and ASCII art."""
+    print("\n\n")
+    print("=" * 80)
+    print("""
+    \033[1;36m  
+   ____                   ____                  _     
+  / __ \\                 |  _ \\                | |    
+ | |  | |_ __   ___ _ __ | |_) | ___ _ __   ___| |__  
+ | |  | | '_ \\ / _ \\ '_ \\|  _ < / _ \\ '_ \\ / __| '_ \\ 
+ | |__| | |_) |  __/ | | | |_) |  __/ | | | (__| | | |
+  \\____/| .__/ \\___|_| |_|____/ \\___|_| |_|\\___|_| |_|
+        | |                                           
+        |_|                                           \033[0m
+    """)
+    print("\033[1;32m" + "=" * 80 + "\033[0m")
+    print("\033[1;33mWelcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!\033[0m")
+    print("\033[1;32m" + "=" * 80 + "\033[0m")
+    print("\n\033[1mThis system validates various land surface model outputs against reference data.\033[0m")
+    print("\n\033[1;34mKey Features:\033[0m")
+    print("  • Multi-model support")
+    print("  • Comprehensive variable evaluation")
+    print("  • Advanced metrics and scoring")
+    print("  • Customizable benchmarking")
+    print("\n\033[1;32m" + "=" * 80 + "\033[0m")
+    print("\033[1;35mInitializing OpenBench Evaluation System...\033[0m")
+    input("\033[1mPress Enter to begin the benchmarking process...\033[0m")
+    print("\033[1;32m" + "=" * 80 + "\033[0m")
+    print("\n")
 
 def setup_directories(main_nl):
     """Create necessary directories for the evaluation process."""
@@ -127,6 +140,7 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
     ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
     
     for cvar in comparison_vars:
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
         print(f"********************Start running {cvar} comparison...******************")
         comparison_method = f'scenarios_{cvar}_comparison'
         if hasattr(ch, comparison_method):
@@ -136,6 +150,7 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
             print(f"Please add the {cvar} function in the Comparison_handle class!")
             exit(1)
         print(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
 
 def run_statistics(main_nl, stats_nml, statistic_vars):
     """Run statistical analysis for each statistic variable."""
