@@ -1,0 +1,26 @@
+&general
+   model_namelist    =  ./nml/Mod_variables_defination/CoLM.nml                           #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  month
+   dir = /share/home/dq010/CoLM202X-test20240803/cases/Global_Grid_50km_PC_VG/history/
+   fulllist =
+   tim_res =  month
+   grid_res =  0.5
+   prefix =  Global_Grid_50km_PC_VG_hist_
+   suffix =
+   syear =  2001
+   eyear =  2021
+/
+
+&Sensible_Heat
+/
+
+
+&Latent_Heat
+/
+
+&Gross_Primary_Productivity
+   varname =  f_assim
+   varunit =  mol m-2 s-1
+/
