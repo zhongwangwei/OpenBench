@@ -12,7 +12,7 @@
   min_lon           = -180
   min_year          = 1.0
   reference_nml     = ./nml/ref.nml
-  simulation_nml    = ./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM2024vs2014.nml
+  simulation_nml    = ./nml/sim_CoLM20X4vsCLM5-0921.nml #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
   statistics_nml    = ./nml/stats.nml
   num_cores         = 16  #-1 # how many core will be used in Parallel computing
   evaluation        = True # True #False
@@ -55,7 +55,7 @@
   Permafrost=False
  
   ###Soil####
-  Surface_Soil_Moisture=False
+  Surface_Soil_Moisture=True
   Root-Zone_Soil_Moisture=False
   Surface_Soil_Temperature=False
 
@@ -67,9 +67,9 @@
   #**************************************************************
 
   #*******************  Radiation and Energy Cycle  *************
-  Net_Radiation=True   
-  Latent_Heat=True
-  Sensible_Heat=True
+  Net_Radiation=False   
+  Latent_Heat=False
+  Sensible_Heat=False
   Ground_Heat=False
   Albedo=False
   Surface_Upward_SW_Radiation=False
