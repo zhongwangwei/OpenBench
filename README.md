@@ -1,4 +1,4 @@
-# OpenBech
+# OpenBench
 The Open Land Surface Model Benchmark Evaluation System
 ## Overview
 
