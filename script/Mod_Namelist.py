@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import glob
 import pandas as pd
 import importlib
 import re
@@ -314,6 +315,10 @@ class GeneralInfoReader(NamelistReader):
         self._process_data_types()
         self._process_time_resolutions()
         self._process_station_data()
+        
+        # Add this line at the end of the __init__ method
+        self.check_dataset_namelist_match()
+
 
         #if self.sim_varname is empty, then set it to item
         if self.sim_varname is None or self.sim_varname == '':
@@ -322,6 +327,49 @@ class GeneralInfoReader(NamelistReader):
         if self.ref_varname is None or self.ref_varname == '':
             print(f"Warning: ref_varname is not specified in namelist. Using item name: {self.item}")
             self.ref_varname = self.item
+
+    def check_dataset_namelist_match(self):
+        """
+        Check the match between the dataset and the namelist configuration.
+        This includes year range, regional coverage, and dataset availability.
+        """
+        for data_type in ['ref', 'sim']:
+            print(f"Checking {data_type} dataset...")
+            
+            # Check year range
+            data_syear = getattr(self, f'{data_type}_syear')
+            data_eyear = getattr(self, f'{data_type}_eyear')
+            if data_syear > self.use_syear or data_eyear < self.use_eyear:
+                print(f"Warning: {data_type} data year range ({data_syear}-{data_eyear}) "
+                    f"does not fully cover the analysis period ({self.use_syear}-{self.use_eyear})")
+            
+            # Check regional coverage
+            data_dir = getattr(self, f'{data_type}_dir')
+            try:
+                sample_file = next(iter(glob.glob(os.path.join(data_dir, '*.nc'))))
+                with xr.open_dataset(sample_file) as ds:
+                    #get the resolution of the data from the lat and lon
+                    if len(ds['lat']) > 1:
+                        lat_res = abs(np.diff(ds['lat'])[0])
+                        lat_res = round(lat_res, 4)
+                    lat = ds['lat']
+                    lon = ds['lon']
+            except StopIteration:
+                print(f"Warning: No netCDF files found in {data_dir}")
+            except KeyError:
+                print(f"Warning: Latitude or longitude not found in {data_type} dataset")
+            
+            # Check dataset availability
+            varname = getattr(self, f'{data_type}_varname')
+            try:
+                with xr.open_dataset(sample_file) as ds:
+                    if varname not in ds.variables:
+                        print(f"Warning: Variable '{varname}' not found in {data_type} dataset")
+            except NameError:
+                print(f"Warning: Could not check variable availability for {data_type} dataset")
+            
+        print("Dataset check completed.")
+
 
     def _initialize_attributes(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], 
                                ref_nml: Dict[str, Any], item: str, sim_source: str, ref_source: str):
