@@ -161,11 +161,11 @@ def filter_CoLM(info,ds):   #update info as well
       try:
             # Use method='nearest' to select the nearest value in the 'soil' index
             try:
-               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].sel(soilsnow=1.0).squeeze() +
-                                     ds['f_wliq_soisno'].sel(soilsnow=2.0).squeeze())/0.0626/1000.0
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soilsnow=5) +
+                                     ds['f_wliq_soisno'].isel(soilsnow=6))/0.0626/1000.0
             except:
-               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].sel(soil_snow_lev=1.0).squeeze() +
-                                     ds['f_wliq_soisno'].sel(soil_snow_lev=2.0).squeeze())/0.0626/1000.0
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
+                                     ds['f_wliq_soisno'].isel(soil_snow_lev=6))/0.0626/1000.0
       
             info.sim_varname = 'f_wliq_soisno'
             info.sim_varunit = 'unitless'

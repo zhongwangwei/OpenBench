@@ -1,9 +1,8 @@
 def filter_CLM5(info,ds):   #update info as well
    if info.item == "Surface_Soil_Moisture":
       try:
-            # Use method='nearest' to select the nearest value in the 'soil' index
-            ds['SOILLIQ']= (ds['SOILLIQ'].sel(levsoi=0).squeeze() +
-                                       ds['SOILLIQ'].sel(levsoi=1).squeeze())/0.06/1000.0
+            ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
+                                       ds['SOILLIQ'].isel(levsoi=1))/0.06/1000.0
             info.sim_varname = 'SOILLIQ'
             info.sim_varunit = 'unitless'
       except Exception as e:
