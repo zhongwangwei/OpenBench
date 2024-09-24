@@ -62,7 +62,6 @@ class DatasetPreprocessing:
             #ds = ds.assign_coords(time=time_index)  # Assign the created time index to the dataset
             lon=ds.lon.values
             lat=ds.lat.values
-            print(f"Reconstructing {ds.name} dataset of {syear}...")
             data=ds.values
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             try:
