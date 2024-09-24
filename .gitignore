@@ -1,0 +1,9 @@
+
+.DS_Store
+/script/__pycache__
+/script/figlib/__pycache__
+/script/regrid-dev/methods/__pycache__
+/script/regrid/__pycache__
+/script/custom/__pycache__
+/script/regrid-dev/__pycache__
+/script/regrid/methods/__pycache__

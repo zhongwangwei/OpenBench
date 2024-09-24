@@ -1,0 +1,13 @@
+&general
+   model_namelist = ./nml/Mod_variables_defination/CoLM.nml
+   timezone     =  0.0
+   data_type    =  grid
+   data_groupby =  month
+   dir      =  /share/home/dq010/CoLM202X-test20240803/cases/Global_Grid_2x2_PFT_VG_BGC-Hist1850-2021/history/
+   tim_res  =  month
+   grid_res =  1.875
+   prefix   =  Global_Grid_2x2_PFT_VG_BGC-Hist1850-2021_hist_
+   suffix   =
+   syear    =  2001
+   eyear    =  2021
+/

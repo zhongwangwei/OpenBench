@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/Mod_variables_defination/CaMa-Flood.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Year
+   dir = /share/home/dq013/zhwei/data_for_test
+   fulllist =
+   tim_res =  day
+   grid_res =  0.25
+   prefix= o_outflw
+   suffix =
+   syear =  2008
+   eyear =  2009
+/
