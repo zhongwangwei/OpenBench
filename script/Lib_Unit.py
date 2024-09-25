@@ -429,6 +429,22 @@ class UnitProcessing:
 				print(f"Error: The unit of the Surface_Soil_Moisture data is not supported!")
 				exit()
 		return data,unit
+	def Unit_Root_Zone_Soil_Moisture(self,data, unit):
+		standard_units = 'unitless'
+		input_units_list  = sorted(unit.lower().split())
+		target_units_list = sorted(standard_units.lower().split())
+		if input_units_list == target_units_list:
+			pass
+		else:
+			unit = standard_units
+			if input_units_list==sorted('m3 m-3'.lower().split()):
+				pass
+			elif input_units_list==sorted('unitless'.lower().split()):
+				pass
+			else:
+				print(f"Error: The unit of the Root_Zone_Soil_Moisture data is not supported!")
+				exit()
+		return data,unit
 
 #-----------------------------------------------------------------------------------
 #*******************  Radiation and Energy Cycle  *************
@@ -584,6 +600,21 @@ class UnitProcessing:
 			exit()
 		return data,unit
 
+	def Unit_Surface_Soil_Temperature(self,data, unit):
+		#convert to 'K'
+		standard_units = 'K'
+		input_units_list  = sorted(unit.lower().split())
+		target_units_list = sorted(standard_units.lower().split())
+		if input_units_list == target_units_list:
+			pass
+		else:
+			unit = standard_units
+			if input_units_list==sorted('C'.lower().split()):
+				data=data+273.15
+			else:
+				print(f"Error: The unit of the Surface_Soil_Temperature data is not supported!")
+				exit()
+		return data,unit
   #****************************      Forcing      **********************************
 	def Unit_Surface_Air_Temperature(self,data, unit):
 		#convert to 'K'
