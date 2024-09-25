@@ -1,5 +1,5 @@
 &general
-  basename=test23
+  basename=test25
   basedir=/share/home/dq013/zhwei/colm-test/       #  
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
@@ -56,8 +56,9 @@
  
   ###Soil####
   Surface_Soil_Moisture=True
-  Root-Zone_Soil_Moisture=False
-  Surface_Soil_Temperature=False
+  Root_Zone_Soil_Moisture=True
+
+  Surface_Soil_Temperature=True
 
   ###  Groundwater ####
   Water_Table_Depth=False

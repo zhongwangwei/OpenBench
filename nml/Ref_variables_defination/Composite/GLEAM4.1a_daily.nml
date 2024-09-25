@@ -55,7 +55,7 @@ prefix            =  Et_
 suffix            =  _GLEAM_v4.1a
 /
 
-&Open-Water_Evaporation
+&Open_Water_Evaporation
 dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
@@ -85,7 +85,7 @@ prefix            =  Ec_
 suffix            =  _GLEAM_v4.1a
 /
 
-&Root-Zone_Soil_Moisture
+&Root_Zone_Soil_Moisture
 dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid

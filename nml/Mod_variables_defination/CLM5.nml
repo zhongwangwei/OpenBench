@@ -169,12 +169,12 @@ varname           =  FSNO_EFF
 varunit           =  unitless
 /
 
-&Lake_temperature
+&Lake_Surface_Water_Temperature
 varname           =  TLAKE
 varunit           =  K
 /
 
-&Lake_Ice_Fraction_Cover
+&Surface_Lake_Ice_Fraction_Cover
 varname           =  LAKEICEFRAC_SURF
 varunit           =  unitless
 /
@@ -199,13 +199,13 @@ varname           =  SOILLIQ
 varunit           =  unitless
 /
 
-&Root-Zone_Soil_Moisture
-varname           =  H2OSOI
+&Root_Zone_Soil_Moisture
+varname           =  SOILLIQ
 varunit           =  unitless
 /
 
 &Surface_Soil_Temperature
-varname           =  TSOI_10CM
+varname           =  TG
 varunit           =  K
 
 

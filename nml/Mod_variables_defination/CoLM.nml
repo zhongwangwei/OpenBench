@@ -186,13 +186,13 @@ varname           =  f_wliq_soisno
 varunit           =  m3 m-3
 /
 
-&Root-Zone_Soil_Moisture
-varname           =  f_h2osoi
+&Root_Zone_Soil_Moisture
+varname           =  f_wliq_soisno
 varunit           =  m3 m-3
 /
 
 &Surface_Soil_Temperature
-varname           =  f_t_soisno
+varname           =  f_t_grnd
 varunit           =  K
 
 ###River####
@@ -219,26 +219,26 @@ varunit = m2
   
 ###Lake####
 &Lake_temperature
-varname = ??
+varname = 
 varunit = m2
 /
 &Lake_Ice_Fraction_Cover
-varname = ??
+varname = 
 varunit = m2
 /
 &Lake_Water_Level
-varname = ??
+varname = 
 varunit = m2
 /
 &Lake_Water_Area
-varname = ??
+varname = 
 varunit = m2
 /
 &Lake_Water_Volume
-varname = ??
+varname = 
 varunit = m2
 /
-&Lake_temperature
+&Lake_Surface_Water_Temperature
 varname           =  f_t_lake
 varunit           =  K
 /

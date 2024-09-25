@@ -12,14 +12,14 @@
 &Net_Radiation
 varname           =  sfc_net_tot_all_mon
 varunit           =  w m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 /
 
 &Surface_Upward_SW_Radiation
 varname           =  sfc_sw_up_all_mon
 varunit           =  w m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 
 /
@@ -27,14 +27,14 @@ suffix            =
 &Surface_Upward_LW_Radiation
 varname           =  sfc_lw_up_all_mon
 varunit           =  w m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 /
 
 &Surface_Downward_SW_Radiation
 varname           =  sfc_sw_down_all_mon
 varunit           =  w m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 
 /
@@ -42,20 +42,20 @@ suffix            =
 &Surface_Downward_LW_Radiation
 varname           =  sfc_lw_down_all_mon
 varunit           =  w m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 /
 
 &Surface_Net_LW_Radiation
 varname           =  sfc_net_lw_all_mon 
 varunit           =  W m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 /
 
 &Surface_Net_SW_Radiation
 varname           = sfc_net_sw_all_mon
 varunit           =  W m-2
-prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405
+prefix            =  CERES_EBAF_Ed4.2_Subset_200003-202405_land
 suffix            =   
 /

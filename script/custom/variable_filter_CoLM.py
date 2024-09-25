@@ -157,24 +157,6 @@ def filter_CoLM(info,ds):   #update info as well
          print('canopy interception evaporation calculation processing ERROR!!!')
       return info, ds['Canopy_Interception']
 
-   if info.item == "Surface_Soil_Moisture":
-      try:
-            # Use method='nearest' to select the nearest value in the 'soil' index
-            try:
-               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soilsnow=5) +
-                                     ds['f_wliq_soisno'].isel(soilsnow=6))/0.0626/1000.0
-            except:
-               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
-                                     ds['f_wliq_soisno'].isel(soil_snow_lev=6))/0.0626/1000.0
-      
-            info.sim_varname = 'f_wliq_soisno'
-            info.sim_varunit = 'unitless'
-
-      except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
-         return info, None
-      return info, ds['f_wliq_soisno']
-   
    if info.item == "Precipitation":
       try:
          if 'Precipitation' in ds.variables:
@@ -206,3 +188,52 @@ def filter_CoLM(info,ds):   #update info as well
       except:
          print('Surface Net LW Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Net_LW_Radiation']
+   
+   if info.item == "Surface_Soil_Moisture":
+      try:
+            # Use method='nearest' to select the nearest value in the 'soil' index
+            try:
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soilsnow=5) +
+                                     ds['f_wliq_soisno'].isel(soilsnow=6))/0.0626/1000.0
+            except:
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
+                                     ds['f_wliq_soisno'].isel(soil_snow_lev=6))/0.0626/1000.0
+      
+            info.sim_varname = 'f_wliq_soisno'
+            info.sim_varunit = 'unitless'
+
+      except Exception as e:
+         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['f_wliq_soisno']
+   
+
+   if info.item == "Root_Zone_Soil_Moisture":
+      try:
+            try:
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soilsnow=5) +
+                                    ds['f_wliq_soisno'].isel(soilsnow=6)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=7)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=8)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=9)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=10)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=11)+
+                                    ds['f_wliq_soisno'].isel(soilsnow=12)*0.31
+                                          )/1000.0
+            except:
+               ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=6)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=7)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=8)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=9)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=10)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=11)+
+                                    ds['f_wliq_soisno'].isel(soil_snow_lev=12)*0.31
+                                          )/1000.0               
+            info.sim_varname = 'f_wliq_soisno'
+            info.sim_varunit = 'unitless'
+      except Exception as e:
+         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['f_wliq_soisno']
+   

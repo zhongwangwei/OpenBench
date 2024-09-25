@@ -9,7 +9,8 @@
   Surface_Net_SW_Radiation_ref_source       = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2                                #stn: PLUMBER2 
   Surface_Net_LW_Radiation_ref_source       = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR                     #stn: PLUMBER2
   Albedo_ref_source                         = ILAMB_monthly          #Grid: ILAMB_monthly,                               #stn: PLUMBER2  
-  
+  Surface_Soil_Temperature_ref_source       = HOMTS
+
   #*******************Ecosystem and Carbon Cycle****************
   Gross_Primary_Productivity_ref_source     = FLUXCOM-X-BASE_monthly         # Grid: ILAMB_monthly, FLUXCOM, FLUXCOM-X-BASE_monthly,    #stn: PLUMBER2
   Net_Ecosystem_Exchange_ref_source         = ILAMB_monthly                  # Grid: ILAMB_monthly, FLUXCOM, FLUXCOM-X-BASE_monthly,    #stn: PLUMBER2
@@ -41,14 +42,14 @@
   ###Soil####
   Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.1a_monthly           #GLEAM4.1a_monthly
   Surface_Soil_Moisture_ref_source                    = GLEAM4.1a_monthly           #GLEAM4.1a_monthly, ERA5LAND,ILAMB_monthly
-  Surface_Soil_Temperature_ref_source                 = HOMTS         
+                          
 
   ###  Groundwater ####
   Water_Table_Depth_ref_source                        = 
   Water_Storage_In_Aquifer_ref_source                 = 
   Depth_Of_Surface_Water_ref_source                   = 
   Groundwater_Recharge_Rate_ref_source                =
-  Terrestrial_Water_Storage_Anomaly_ref_source        = ILAMB_monthly              # Grid: 
+  Terrestrial_Water_Storage_Anomaly_ref_source        = GRACE-REC          # Grid: GRACE-REC,ILAMB_monthly    
 
   #*******************      Human Activity    **********************
   ###Crop
@@ -87,7 +88,7 @@
   River_Water_Level_ref_source                        = HydroWeb_river
   
   ###Lake
-  Lake_temperature_ref_source                         =                              #
+  Lake_Surface_Water_Temperature_ref_source           =       GCOS                   #Grid: GCOS
   Lake_Ice_Fraction_Cover_ref_source                  =                              #
   Lake_Water_Level_ref_source                         = 
   Lake_Water_Area_ref_source                          = 
@@ -101,7 +102,7 @@
   Surface_Downward_SW_Radiation_ref_source            =  CERES_EBAF_Ed4.2        # MSWX,ERA5LAND,CERES_EBAF_Ed4.2
   Surface_Downward_LW_Radiation_ref_source            =  CERES_EBAF_Ed4.2        # MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR
   Surface_Relative_Humidity_ref_source                =                          # CRU-TS4.08,MSWX,ERA5LAND
-  Surface_Specific_Humidity_ref_source                =  ERA5LAND                #  MSWX,ERA5LAND
+  Surface_Specific_Humidity_ref_source                =  ERA5LAND                # MSWX,ERA5LAND
   Precipitation_ref_source                            =  CRU-TS4.08              # CRU-TS4.08,MSWX,ERA5LAND, MSWEP2.8,GPCPv3.2_monthly,GPCPv3.2_daily
 / 
 
@@ -123,6 +124,7 @@ LAI_Yuan2011               = ./nml/Ref_variables_defination/Ecosystem/LAI_Yuan20
 CERES_EBAF_Ed4.2           = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR                = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
 Rn-Xu2022                  = ./nml/Ref_variables_defination/Energy/Rn-Xu2022.nml
+HOMTS                      = ./nml/Ref_variables_defination/Energy/HOMTS.nml
 
 #Hydrology
 Transpiration_GLEAM_hybird = ./nml/Ref_variables_defination/Hydrology/Transpiration_GLEAM_hybird.nml
@@ -132,6 +134,8 @@ ET_Xu_etal_2024            = ./nml/Ref_variables_defination/Hydrology/ET_Xu_etal
 Transpiration_Li_etal2024  = ./nml/Ref_variables_defination/Hydrology/Transpiration_Li_etal2024.nml
 GRFR                       = ./nml/Ref_variables_defination/Hydrology/GRFR.nml
 snowex23                   = 
+GRACE-REC                  = ./nml/Ref_variables_defination/Hydrology/GRACE-REC.nml
+GRADES                     = ./nml/Ref_variables_defination/Hydrology/GRADES.nml
 
 #Crop
 CropYield_GDHY             = ./nml/Ref_variables_defination/Crop/CropYield_GDHY.nml
@@ -152,7 +156,7 @@ GIEMS_v2                   = ./nml/Ref_variables_defination/River/GIEMS_v2.nml
 
 #Lake
 HydroWeb_lake              = ./nml/Ref_variables_defination/River/HydroWeb_lake.nml
-
+GCOS                       = ./nml/Ref_variables_defination/lake/GCOS.nml
 #Urban
 AH4GUC                     = ./nml/Ref_variables_defination/Urban/Urban_AH4GUC.nml
 China_AHE                  = ./nml/Ref_variables_defination/Urban/Urban_China_AHE.nml
@@ -167,5 +171,9 @@ TRIMS_LST                  = ./nml/Ref_variables_defination/Urban/Urban_TRIMS_LS
 CRU-TS4.08                = ./nml/Ref_variables_defination/Forcing/cru_ts_408.nml
 GPCPv3.2_monthly          = ./nml/Ref_variables_defination/Forcing/GPCPv3.2_monthly.nml
 GPCPv3.2_daily            = ./nml/Ref_variables_defination/Forcing/GPCPv3.2_daily.nml
+MSWX                      = ./nml/Ref_variables_defination/Forcing/MSWX.nml
+MSWEP                     = ./nml/Ref_variables_defination/Forcing/MSWEP.nml
+CERES_EBAF_Ed4.2          = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
+CLARA_AVHRR               = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
 
 /
