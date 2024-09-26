@@ -49,7 +49,7 @@
   Water_Storage_In_Aquifer_ref_source                 = 
   Depth_Of_Surface_Water_ref_source                   = 
   Groundwater_Recharge_Rate_ref_source                =
-  Terrestrial_Water_Storage_Anomaly_ref_source        = GRACE-REC,          # Grid: GRACE-REC,ILAMB_monthly    
+  Terrestrial_Water_Storage_Anomaly_ref_source        = GRACE-REC          # Grid: GRACE-REC,ILAMB_monthly    
 
   #*******************      Human Activity    **********************
   ###Crop
