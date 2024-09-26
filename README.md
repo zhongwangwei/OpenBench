@@ -13,7 +13,7 @@ This system is designed for the evaluation of land surface model outputs against
 
 ## Main Components
 
-1. 'run.py': Main entry point for the evaluation system
+1. 'openbench.py': Main entry point for the evaluation system
 2. 'Mod_Validation.py': Handles validation of model outputs
 3. 'Mod_DatasetProcessing.py': Processes datasets for evaluation
 4. 'Mod_Comparison.py': Performs comparisons between models and reference data
