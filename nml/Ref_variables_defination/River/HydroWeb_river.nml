@@ -13,7 +13,7 @@
 ############################   ############################
 
 &River_water_Level
-   varname =  height
+   varname = height
    varunit = m
 /
 

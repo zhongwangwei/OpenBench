@@ -397,6 +397,8 @@ class UnitProcessing:
 				data=data*86400.
 			elif input_units_list==sorted('m day-1'.lower().split()):
 				data=data/1000.
+			elif input_units_list==sorted('mm month-1'.lower().split()):
+				data=data*86400.
 			else:
 				print(f"Error: The unit of the Runoff data is not supported!")
 				exit()
@@ -429,6 +431,7 @@ class UnitProcessing:
 				print(f"Error: The unit of the Surface_Soil_Moisture data is not supported!")
 				exit()
 		return data,unit
+
 	def Unit_Root_Zone_Soil_Moisture(self,data, unit):
 		standard_units = 'unitless'
 		input_units_list  = sorted(unit.lower().split())
@@ -589,15 +592,18 @@ class UnitProcessing:
 		return data,unit
 	
 	def Unit_Albedo(self,data, unit):
-		#convert to 'unitless'
 		standard_units = 'unitless'
 		input_units_list  = sorted(unit.lower().split())
 		target_units_list = sorted(standard_units.lower().split())
 		if input_units_list == target_units_list:
 			pass
 		else:
-			print(f"Error: The unit of the Albedo data is not supported!")
-			exit()
+			unit = standard_units
+			if input_units_list==sorted('percentage'.lower().split()):
+				data=data/100.
+			else:
+				print(f"Error: The unit of the Albedo data is not supported!")
+				exit()
 		return data,unit
 
 	def Unit_Surface_Soil_Temperature(self,data, unit):
@@ -615,6 +621,7 @@ class UnitProcessing:
 				print(f"Error: The unit of the Surface_Soil_Temperature data is not supported!")
 				exit()
 		return data,unit
+ 
   #****************************      Forcing      **********************************
 	def Unit_Surface_Air_Temperature(self,data, unit):
 		#convert to 'K'
@@ -773,8 +780,6 @@ class UnitProcessing:
 		return data,unit	
 
 
-
-
 #*******************    Human activity       ***************
 #---------------------------Urban---------------------------
 	def Unit_Urban_Anthropogenic_Heat_Flux(self,data,unit):
@@ -795,8 +800,12 @@ class UnitProcessing:
 		if input_units_list == target_units_list:
 			pass
 		else:
-			print(f"Error: The unit of the Ground_Heat_Flux data is not supported!")
-			exit()
+			unit = standard_units
+			if input_units_list==sorted('percentage'.lower().split()):
+				data=data/100.
+			else:
+				print(f"Error: The unit of the Albedo data is not supported!")
+				exit()
 		return data,unit
 
 	def Unit_Urban_Latent_Heat_Flux(self,data,unit):
@@ -979,7 +988,6 @@ class UnitProcessing:
 				exit()
 		return data,unit
 #---------------------------Lake---------------------------
-
 
 #---------------------------Crop---------------------------
 	def Unit_Total_Irrigation_Amount(self,data, unit):

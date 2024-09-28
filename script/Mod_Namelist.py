@@ -361,12 +361,12 @@ class GeneralInfoReader(NamelistReader):
             
             # Check dataset availability
             varname = getattr(self, f'{data_type}_varname')
-            try:
-                with xr.open_dataset(sample_file) as ds:
-                    if varname not in ds.variables:
-                        print(f"Warning: Variable '{varname}' not found in {data_type} - {sample_file} dataset")
-            except NameError:
-                print(f"Warning: Could not check variable availability for {data_type} - {sample_file}  dataset")
+            #try:
+            #    with xr.open_dataset(sample_file) as ds:
+            #        if varname not in ds.variables:
+            #            print(f"Warning: Variable '{varname}' not found in {data_type} - {sample_file} dataset")
+            #except NameError:
+            #    print(f"Warning: Could not check variable availability for {data_type} - {sample_file}  dataset")
             
         print("Dataset check completed.")
 
