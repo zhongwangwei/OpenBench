@@ -1,5 +1,5 @@
 # OpenBench
-The Open Land Surface Model Benchmark Evaluation System
+The Open Source Land Surface Model Benchmark Evaluation System
 ## Overview
 
 This system is designed for the evaluation of land surface model outputs against reference data. It handles configuration, data processing, validation, comparison, and statistical analysis.
@@ -68,6 +68,7 @@ The system generates various outputs including:
 
 - Zhongwang Wei (zhongwang007@gmail.com)
 - Qingchen Xu (******)
+- Fan Bai
 
 ## Version
 

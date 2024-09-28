@@ -4,58 +4,47 @@ model=GLDAS2
 
 ############################  Radiation and Energy Cycle  ############################
 &Sensible_Heat
-   varname =  Qh
+   varname =  Qh_tavg
    varunit = w m-2
 /
-&Canopy_Sensible_Heat
-   varname = 
-   varunit = 
-/
-&Ground_Sensible_Heat
-   varname = 
-   varunit =  
-/
-&Ground_Latent_Heat
-   varname = 
-   varunit =   
-/
+
 &Latent_Heat
-   varname =  Qle
+   varname =  Qle_tavg
    varunit =  w m-2
 /
 
 &Net_Radiation
    varname =  
-   varunit = 
+   varunit =  w m-2
 /
 
 &Ground_Heat
-   varname =  Qg   
+   varname =  Qg_tavg   
    varunit =  w m-2
 / 
 
 &Surface_Upward_SW_Radiation
    varname =   
-   varunit =   
+   varunit =  w m-2
 /
 
 &Surface_Upward_LW_Radiation
    varname =   
-   varunit =   
+   varunit =  w m-2
 /
 
 &Surface_Net_SW_Radiation
-   varname =  Swnet
+   varname =  Swnet_tavg
    varunit =  w m-2
 /
 
 &Surface_Net_LW_Radiation
-   varname =  Lwnet
+   varname =  Lwnet_tavg
    varunit =  w m-2
 /
 
 &Albedo
-   varname =  Albedo
+   varname =  Albedo_inst
    varunit =  percentage 
 /
 ##################################################################################
@@ -239,66 +228,6 @@ varunit = mm
 /
 ##################################################################################
 
-###################################Human Activity#################################
-###Urban###
-
-&Sensible_Heat_From_Urban
-varname = 
-varunit =
-/
-&Latent_Heat_From_Urban
-varname =
-varunit =
-/
-
-&Sensible_Heat_From_Urban_Roof
-varname = 
-varunit = 
-/
-
-&Latent_Heat_From_Urban_Roof
-varname = 
-varunit =
-/
-
-&Waste_Heat_From_Heat_or_Cool_AC
-varname = 
-varunit = 
-/
-
-&Sensible_Flux_From_Heat_or_Cool_AC
-varname = 
-varunit = 
-/
-
-&Flux_From_Metabolism
-varname = 
-varunit = 
-/
-&Flux_From_Traffic
-varname = 
-varunit = 
-/
-&Temperature_Of_Urban_Roof
-varname = 
-varunit = 
-/
-
-###Crop###
-
-
-
-###Dam###
-&Dam_Inflow
-varname = 
-varunit = 
-/
-
-&Dam_Outflow
-varname = 
-varunit = 
-/
-##################################################################################
 
 
 ########################################Forcing####################################
@@ -318,12 +247,12 @@ varunit =
 /
 
 &Surface_Downward_SW_Radiation
-varname =  SWdown_f
+varname =  SWdown_f_tavg
 varunit =  w m-2
 /
 
 &Surface_Downward_LW_Radiation
-varname =  LWdown_f
+varname =  LWdown_f_tavg
 varunit =  w m-2
 /
 

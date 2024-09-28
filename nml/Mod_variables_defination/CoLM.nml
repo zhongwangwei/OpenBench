@@ -51,8 +51,8 @@ model=CoLM
 /
 
 &Albedo
-  varname = f_alb
-  varunit =  %
+  varname = 
+  varunit = unitless
 /
 ##################################################################################
 

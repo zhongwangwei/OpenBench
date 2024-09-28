@@ -1,0 +1,32 @@
+&general
+    Gross_Primary_Productivity_sim_source     = GLDAS2
+    Evapotranspiration_sim_source             = GLDAS2
+    Canopy_Transpiration_sim_source           = GLDAS2
+    Canopy_Interception_sim_source            = GLDAS2
+    Total_Runoff_sim_source                   = GLDAS2
+    Latent_Heat_sim_source                    = GLDAS2
+    Sensible_Heat_sim_source                  = GLDAS2
+    Surface_Soil_Moisture_sim_source          = GLDAS2
+    Root_Zone_Soil_Moisture_sim_source        = GLDAS2
+    Net_Radiation_sim_source                  = GLDAS2
+    Surface_Upward_SW_Radiation_sim_source    = GLDAS2
+    Surface_Soil_Temperature_sim_source       = GLDAS2
+    Ground_Heat_sim_source                    = GLDAS2
+    Albedo_sim_source                         = GLDAS2
+    Surface_Upward_LW_Radiation_sim_source    = GLDAS2
+    Surface_Net_SW_Radiation_sim_source       = GLDAS2
+    Surface_Net_LW_Radiation_sim_source       = GLDAS2     
+    Surface_Net_SW_Radiation_sim_source       = GLDAS2     
+    Surface_Downward_SW_Radiation_sim_source  = GLDAS2   
+    Surface_Downward_LW_Radiation_sim_source  = GLDAS2   
+
+/
+
+&def_nml
+  CLM5          = ./nml/user/CoLMvsCLM5/IHistClm50BgcCropGSWP_CWD-1901-2014.nml
+  CoLM2024      = ./nml/user/CoLM20X4vsCLM5/CoLM2024.nml
+  CoLM2024-tune = ./nml/user/CoLM20X4vsCLM5/CoLM2024-tune.nml
+  CoLM2014      = ./nml/user/CoLM20X4vsCLM5/CoLM2014.nml
+  GLDAS2        = ./nml/user/GLDAS2_test.nml     
+/
+
