@@ -47,7 +47,7 @@ def filter_CLM5(info,ds):   #update info as well
          return info, None
       return info, ds['SOILLIQ']
    
-   if info.item == "Root_Zone_Soil_Moisture":
+   if info.item == "Root_Zone_Soil_Temperature":
       try:
             ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
                                        ds['SOILLIQ'].isel(levsoi=1)+
@@ -65,4 +65,27 @@ def filter_CLM5(info,ds):   #update info as well
          print(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
+   
+   if info.item == "Ground_Heat":
+      try:
+            ds['Ground_Heat']=  ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']-ds['FSH']-ds['EFLX_LH_TOT']
+
+            info.sim_varname = 'Ground_Heat'
+            info.sim_varunit = 'unitless'
+      except Exception as e:
+         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['Ground_Heat']
+
+   
+   if info.item == "Albedo":
+      try:
+            ds['Albedo']= ds['FSR'] /  ds['FSDS'] 
+
+            info.sim_varname = 'Albedo'
+            info.sim_varunit = 'unitless'
+      except Exception as e:
+         print(f"Surface Albedo calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['Albedo']
    

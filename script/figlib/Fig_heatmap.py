@@ -37,7 +37,7 @@ def make_scenarios_scores_comparison_heat_map(file,score):
    # Add numbers to each cell
    for i in range(len(df.index)):
       for j in range(len(df.columns)):
-            ax.text(j, i, f'{df.iloc[i, j]:.2f}', ha='center', va='center', color='white' if df.iloc[i, j] > 0.8 or df.iloc[i, j] < 0.2 else 'black', fontsize=12)
+            ax.text(j, i, f'{df.iloc[i, j]:.2f}', ha='center', va='center', color='white' if df.iloc[i, j] > 0.8 or df.iloc[i, j] < 0.2 else 'black', fontsize=8)
 
 
    for i in range(len(ref_dataname.index)):

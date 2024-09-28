@@ -68,13 +68,13 @@ eyear             =  2018
 /
 
 &Albedo
-sub_dir           =  Albedo/CERESed4.1
+sub_dir           =  Albedo/GEWEX.SRB
 varname           =  albedo
 varunit           =  unitless
-prefix            =  albedo
+prefix            =  albedo_0.5x0.5
 suffix            =   
-syear             =  2000
-eyear             =  2018
+syear             =  1984
+eyear             =  2007
 /
 
 &Surface_Net_LW_Radiation
