@@ -15,18 +15,13 @@ from Lib_Unit import UnitProcessing
 #logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 #logging.getLogger("xarray").setLevel(logging.WARNING)
 
-class DatasetPreprocessing:
+class BaseDatasetProcessing:
     def __init__(self, config: Dict[str, Any]):
-        self.name = 'DatasetPreprocessing'
-        self.version = '0.1'
-        self.release = '0.1'
-        self.date = 'Mar 2023'
-        self.author = "Zhongwang Wei / zhongwang007@gmail.com"
-        
         self.initialize_attributes(config)
+        self.setup_output_directories()
 
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
-        self.__dict__.update(config.__dict__)
+        self.__dict__.update(config)  # Changed this line
         self.sim_varname = [self.sim_varname] if isinstance(self.sim_varname, str) else self.sim_varname
         self.ref_varname = [self.ref_varname] if isinstance(self.ref_varname, str) else self.ref_varname
         # Handle both single values and Series for use_syear and use_eyear
@@ -36,6 +31,40 @@ class DatasetPreprocessing:
         else:
             self.minyear = int(self.use_syear)
             self.maxyear = int(self.use_eyear)
+
+    def setup_output_directories(self) -> None:
+        if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
+            self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
+            output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
+            shutil.rmtree(output_dir, ignore_errors=True)
+            os.makedirs(output_dir, exist_ok=True)
+
+    def get_data_params(self, datasource: str) -> Dict[str, Any]:
+        return {
+            'data_dir': getattr(self, f"{datasource}_dir"),
+            'data_groupby': getattr(self, f"{datasource}_data_groupby").lower(),
+            'varname': getattr(self, f"{datasource}_varname"),
+            'tim_res': getattr(self, f"{datasource}_tim_res"),
+            'varunit': getattr(self, f"{datasource}_varunit"),
+            'prefix': getattr(self, f"{datasource}_prefix"),
+            'suffix': getattr(self, f"{datasource}_suffix"),
+            'datasource': datasource,  # This should be 'ref' or 'sim'
+            'data_type': getattr(self, f"{datasource}_data_type"), 
+        }
+
+    def process(self, datasource: str) -> None:
+        logging.info(f"Processing {datasource} data")
+        self._preprocess(datasource)
+        logging.info(f"{datasource.capitalize()} data prepared!")
+
+    def _preprocess(self, datasource: str) -> None:
+        data_params = self.get_data_params(datasource)
+        
+        if data_params['data_type'] != 'stn':
+            print(f"Processing {data_params['data_type']} data")
+            self.process_grid_data(data_params)
+        else:
+            self.process_station_data(data_params)
 
     def check_dataset(self, ds: xr.Dataset) -> xr.Dataset:
         if not isinstance(ds, xr.Dataset):
@@ -273,58 +302,95 @@ class DatasetPreprocessing:
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__
 
-class DatasetProcessing(DatasetPreprocessing):
-    def __init__(self, config: Dict[str, Any]):
-        #super().__init__(config)
-        self.initialize_attributes(config)
-        self.setup_output_directories()
+class StationDatasetProcessing(BaseDatasetProcessing):
+    def process_station_data(self, data_params: Dict[str, Any]) -> None:
+        logging.info("Processing station data")
+        Parallel(n_jobs=-1)(
+            delayed(self._make_stn_parallel)(
+                self.station_list, data_params['datasource'], i
+            ) for i in range(len(self.station_list['ID']))
+        )
 
-    def initialize_attributes(self, config: Dict[str, Any]) -> None:
-        self.__dict__.update(config)
-        self.sim_varname = [self.sim_varname] if isinstance(self.sim_varname, str) else self.sim_varname
-        self.ref_varname = [self.ref_varname] if isinstance(self.ref_varname, str) else self.ref_varname        
-        # Handle both single values and Series for use_syear and use_eyear
-        if hasattr(self.use_syear, 'iloc'):
-            self.minyear = int(self.use_syear.min())
-            self.maxyear = int(self.use_eyear.max())
-        else:
-            self.minyear = int(self.use_syear)
-            self.maxyear = int(self.use_eyear)
-
-    def setup_output_directories(self) -> None:
-        if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
-            self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
-            output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
-            shutil.rmtree(output_dir, ignore_errors=True)
-            os.makedirs(output_dir, exist_ok=True)
-
-    def process(self, datasource: str) -> None:
-        logging.info(f"Processing {datasource} data")
-        self._preprocess(datasource)
-        logging.info(f"{datasource.capitalize()} data prepared!")
-
-    def _preprocess(self, datasource: str) -> None:
-        data_params = self.get_data_params(datasource)
+    def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
+        varname = self.ref_varname if datasource == 'ref' else self.sim_varname
+    # Check if the variable exists in the dataset
+        if varname[0] not in stn_data:
+            raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
         
-        if data_params['data_type'] != 'stn':
-            print(f"Processing {data_params['data_type']} data")
-            self.process_grid_data(data_params)
+        ds = stn_data[varname[0]]
+        
+        # Check the time dimension
+        if 'time' not in ds.dims:
+            raise ValueError("Time dimension not found in the station data.")
+        
+        # Ensure the time coordinate is datetime
+        if not np.issubdtype(ds.time.dtype, np.datetime64):
+            ds['time'] = pd.to_datetime(ds.time.values)
+        
+        # Select the time range before resampling
+        ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
+        
+        # Resample only if there's data in the selected time range
+        if len(ds.time) > 0:
+            ds = ds.resample(time=self.compare_tim_res).mean()
         else:
-            self.process_station_data(data_params)
+            logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
+            return None  # or return an empty dataset with the correct structure
+        
+        #ds = ds.resample(time=self.compare_tim_res).mean()
+        ds = self.check_coordinate(ds)
+        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
+        
+        if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
+            ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
+        
+        ds = self.select_timerange(ds, start_year, end_year)
+        return ds.where((ds > -1e20) & (ds < 1e20), np.nan)
 
-    def get_data_params(self, datasource: str) -> Dict[str, Any]:
-        return {
-            'data_dir': getattr(self, f"{datasource}_dir"),
-            'data_groupby': getattr(self, f"{datasource}_data_groupby").lower(),
-            'varname': getattr(self, f"{datasource}_varname"),
-            'tim_res': getattr(self, f"{datasource}_tim_res"),
-            'varunit': getattr(self, f"{datasource}_varunit"),
-            'prefix': getattr(self, f"{datasource}_prefix"),
-            'suffix': getattr(self, f"{datasource}_suffix"),
-            'datasource': datasource,  # This should be 'ref' or 'sim'
-            'data_type': getattr(self, f"{datasource}_data_type"), 
-        }
+    def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
+        station = station_list.iloc[index]
+        start_year = int(station['use_syear'])
+        end_year = int(station['use_eyear'])     
+        file_path = f'{station['sim_dir']}' if datasource == 'sim' else f'{station['ref_dir']}'
+        with xr.open_dataset(file_path) as stn_data:
+            processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
+            self.save_station_data(processed_data, station, datasource)
 
+    def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
+        output_file = (f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/'
+                       f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+        data.to_netcdf(output_file)
+        logging.info(f"Saved station data to {output_file}")
+
+    def _extract_stn_parallel(self, datasource: str, dataset: xr.Dataset, station_list: pd.DataFrame, index: int) -> None:
+        station = station_list.iloc[index]
+        start_year = int(station['use_syear'])
+        end_year = int(station['use_eyear'])
+        
+        station_data = self.extract_single_station_data(dataset, station, datasource)
+        processed_data = self.process_extracted_data(station_data, start_year, end_year)
+        self.save_extracted_data(processed_data, station, datasource)
+
+    def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
+        if  datasource == 'ref':
+            return dataset.sel(lat=[station['sim_lat']], lon=[station['sim_lon']], method="nearest")
+        elif datasource == 'sim':
+            return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
+        else:
+            raise ValueError(f"Invalid datasource: {datasource}")
+
+    def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
+        data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
+        data = data.where((data > -1e20) & (data < 1e20), np.nan)
+        return data.resample(time=self.compare_tim_res).mean()
+
+    def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
+        output_file = (f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/"
+                       f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
+        data.to_netcdf(output_file)
+        logging.info(f"Saved extracted station data to {output_file}")
+
+class GridDatasetProcessing(BaseDatasetProcessing):
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
         self.prepare_grid_data(data_params)
         self.remap_and_combine_data(data_params)
@@ -436,50 +502,6 @@ class DatasetProcessing(DatasetPreprocessing):
             )
         os.remove(output_file)
 
-    def process_station_data(self, data_params: Dict[str, Any]) -> None:
-        logging.info("Processing station data")
-        Parallel(n_jobs=-1)(
-            delayed(self._make_stn_parallel)(
-                self.station_list, data_params['datasource'], i
-            ) for i in range(len(self.station_list['ID']))
-        )
-
-    def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
-        varname = self.ref_varname if datasource == 'ref' else self.sim_varname
-    # Check if the variable exists in the dataset
-        if varname[0] not in stn_data:
-            raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
-        
-        ds = stn_data[varname[0]]
-        
-        # Check the time dimension
-        if 'time' not in ds.dims:
-            raise ValueError("Time dimension not found in the station data.")
-        
-        # Ensure the time coordinate is datetime
-        if not np.issubdtype(ds.time.dtype, np.datetime64):
-            ds['time'] = pd.to_datetime(ds.time.values)
-        
-        # Select the time range before resampling
-        ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
-        
-        # Resample only if there's data in the selected time range
-        if len(ds.time) > 0:
-            ds = ds.resample(time=self.compare_tim_res).mean()
-        else:
-            logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-            return None  # or return an empty dataset with the correct structure
-        
-        #ds = ds.resample(time=self.compare_tim_res).mean()
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
-        
-        if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
-            ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
-        
-        ds = self.select_timerange(ds, start_year, end_year)
-        return ds.where((ds > -1e20) & (ds < 1e20), np.nan)
-
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
         if data_source not in ['ref', 'sim']:
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
@@ -587,56 +609,10 @@ class DatasetProcessing(DatasetPreprocessing):
         data.to_netcdf(out_file)
         logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
 
-    def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
-        station = station_list.iloc[index]
-        start_year = int(station['use_syear'])
-        end_year = int(station['use_eyear'])     
-        file_path = f'{station['sim_dir']}' if datasource == 'sim' else f'{station['ref_dir']}'
-        with xr.open_dataset(file_path) as stn_data:
-            processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
-            self.save_station_data(processed_data, station, datasource)
+class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
 
-    def process_station_data_bk(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
-        ds = stn_data.resample(time=self.compare_tim_res).mean()
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
-        
-        if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
-            ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
-        
-        ds = self.select_timerange(ds, start_year, end_year)
-        return ds.where((ds > -1e20) & (ds < 1e20), np.nan)
-
-    def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
-        output_file = (f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/'
-                       f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
-        data.to_netcdf(output_file)
-        logging.info(f"Saved station data to {output_file}")
-
-    def _extract_stn_parallel(self, datasource: str, dataset: xr.Dataset, station_list: pd.DataFrame, index: int) -> None:
-        station = station_list.iloc[index]
-        start_year = int(station['use_syear'])
-        end_year = int(station['use_eyear'])
-        
-        station_data = self.extract_single_station_data(dataset, station, datasource)
-        processed_data = self.process_extracted_data(station_data, start_year, end_year)
-        self.save_extracted_data(processed_data, station, datasource)
-
-    def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
-        if  datasource == 'ref':
-            return dataset.sel(lat=[station['sim_lat']], lon=[station['sim_lon']], method="nearest")
-        elif datasource == 'sim':
-            return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
-        else:
-            raise ValueError(f"Invalid datasource: {datasource}")
-
-    def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
-        data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
-        data = data.where((data > -1e20) & (data < 1e20), np.nan)
-        return data.resample(time=self.compare_tim_res).mean()
-
-    def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
-        output_file = (f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/"
-                       f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
-        data.to_netcdf(output_file)
-        logging.info(f"Saved extracted station data to {output_file}")
+    def process(self, datasource: str) -> None:
+        super().process(datasource)
+        # Add any additional processing specific to this class if needed
