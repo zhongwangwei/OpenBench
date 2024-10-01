@@ -15,7 +15,7 @@
   simulation_nml    = ./nml/sim_CoLM20X4vsCLM5vsGLDAS-0927.nml #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
   statistics_nml    = ./nml/stats.nml
   num_cores         = 16  #-1 # how many core will be used in Parallel computing
-  evaluation        = False # True #False
+  evaluation        = True # True #False
   comparison        = True  #
   statistics        = False
 /
@@ -66,15 +66,15 @@
   #**************************************************************
 
   #*******************  Radiation and Energy Cycle  *************
-  Net_Radiation=True   
+  Net_Radiation=False   
   Latent_Heat=True
-  Sensible_Heat=True
-  Ground_Heat=True
-  Albedo=True
-  Surface_Upward_SW_Radiation=True
-  Surface_Upward_LW_Radiation=True
-  Surface_Net_SW_Radiation=True
-  Surface_Net_LW_Radiation=True
+  Sensible_Heat=False
+  Ground_Heat=False
+  Albedo=False
+  Surface_Upward_SW_Radiation=False
+  Surface_Upward_LW_Radiation=False
+  Surface_Net_SW_Radiation=False
+  Surface_Net_LW_Radiation=False
   Surface_Soil_Temperature=False
   Root_Zone_Soil_Temperature=False
   #****************************************************************
