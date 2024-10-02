@@ -12,9 +12,9 @@ import warnings
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 from matplotlib import colors
 
-class Validation_grid(metrics,scores):
+class Evaluation_grid(metrics,scores):
     def __init__(self, info):
-        self.name = 'Validation'
+        self.name = 'Evaluation_grid'
         self.version = '0.1'
         self.release = '0.1'
         self.date = 'Mar 2023'
@@ -40,7 +40,7 @@ class Validation_grid(metrics,scores):
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
         pb_da.to_netcdf(f'{self.casedir}/output/scores/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
 
-    def make_validation(self, **kwargs):
+    def make_Evaluation(self, **kwargs):
         o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[f'{self.ref_varname}'] 
         s = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')[f'{self.sim_varname}'] 
 
@@ -49,9 +49,10 @@ class Validation_grid(metrics,scores):
         mask1 = np.isnan(s) | np.isnan(o)
         s.values[mask1] = np.nan
         o.values[mask1] = np.nan
-        
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
         for metric in self.metrics:
             if hasattr(self, metric):
+                print(f'calculating metric: {metric}')
                 self.process_metric(metric, s, o)
             else:
                 print('No such metric')
@@ -59,15 +60,13 @@ class Validation_grid(metrics,scores):
 
         for score in self.scores:
             if hasattr(self, score):
-                print(score)
+                print(f'calculating score: {score}')
                 self.process_score(score, s, o)
             else:
                 print('No such score')
                 sys.exit(1)
 
         print("\033[1;32m" + "=" * 80 + "\033[0m")
-        print(" ")
-        print(" ")
 
         return
 
@@ -93,7 +92,7 @@ class Validation_grid(metrics,scores):
             norm = colors.BoundaryNorm(bnd, cmap.N)
             self.plot_map(cmap, norm, key, bnd,metric,'metrics')
      
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
+        #print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
             print(f'plotting score: {score}')
             if score in ['KGESS']:
@@ -166,9 +165,9 @@ class Validation_grid(metrics,scores):
         plt.savefig(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.png', format='png', dpi=300)
         plt.close()
 
-class Validation_stn(metrics,scores):
+class Evaluation_stn(metrics,scores):
     def __init__(self,info):
-        self.name = 'Validation_plot'
+        self.name = 'Evaluation_point'
         self.version = '0.1'
         self.release = '0.1'
         self.date = 'Mar 2023'
@@ -178,12 +177,12 @@ class Validation_stn(metrics,scores):
         if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
 
-        print ('Validation processes starting!')
+        print ('Evaluation processes starting!')
         print("=======================================")
         print(" ")
         print(" ")  
 
-    def make_validation(self):
+    def make_evaluation(self):
         #read station information
         stnlist  =f"{self.casedir}/stn_list.txt"
         station_list = pd.read_csv(stnlist,header=0)
@@ -227,7 +226,7 @@ class Validation_stn(metrics,scores):
         print("=======================================")
         print(" ")
         print(" ")  
-        print(f"send {self.ref_varname} validation to {self.ref_varname}_{self.sim_varname}_metric.csv'")
+        print(f"send {self.ref_varname} evaluation to {self.ref_varname}_{self.sim_varname}_metric.csv'")
         station_list.to_csv(f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metric.csv',index=False)
         station_list.to_csv(f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',index=False)
 
@@ -430,7 +429,7 @@ class Validation_stn(metrics,scores):
             norm = colors.BoundaryNorm(bnd, cmap.N)
             self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd,  self.ref_varname[0],score,'scores')             
 
-    def make_validation_parallel(self,station_list,iik):
+    def make_evaluation_parallel(self,station_list,iik):
         s=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.sim_varname].to_array().squeeze()
         o=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.ref_varname].to_array().squeeze()
 
@@ -484,7 +483,7 @@ class Validation_stn(metrics,scores):
         return row
         # return station_list
   
-    def make_validation_P(self):
+    def make_evaluation_P(self):
         stnlist  =f"{self.casedir}/stn_list.txt"
         station_list = pd.read_csv(stnlist,header=0)
         num_cores = os.cpu_count()  ##用来计算现在可以获得多少cpu核心。 也可以用multipocessing.cpu_count(),或者随意设定<=cpu核心数的数值
@@ -498,10 +497,10 @@ class Validation_stn(metrics,scores):
         #    station_list[f'{metric}']=[-9999.0] * len(station_list['ID'])
         #if self.ref_source.lower() == 'grdc':
 
-        results=Parallel(n_jobs=-1)(delayed(self.make_validation_parallel)(station_list,iik) for iik in range(len(station_list['ID'])))
+        results=Parallel(n_jobs=-1)(delayed(self.make_evaluation_parallel)(station_list,iik) for iik in range(len(station_list['ID'])))
         station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
-        print ('Validation finished')
+        print ('Evaluation finished')
         print("=======================================")
         print(" ")
         print(" ")  

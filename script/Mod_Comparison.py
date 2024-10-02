@@ -172,17 +172,17 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write(f"{metric}\t")
 
                            # Calculate and write the overall mean first
-                           overall_median = ds[metric].median(skipna=True).values
-                           overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
+                           overall_mean = ds[metric].mean(skipna=True).values
+                           overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                            for i in range(1, 18):
                               ds1 = ds.where(IGBPtype == i)
                               igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                               ds1.to_netcdf(f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
-                              median_value = ds1[metric].median(skipna=True).values
-                              median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                              output_file.write(f"{median_value_str}\t")
-                           output_file.write(f"{overall_median_str}\t")  # Write overall median
+                              mean_value = ds1[metric].mean(skipna=True).values
+                              mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                              output_file.write(f"{mean_value_str}\t")
+                           output_file.write(f"{overall_mean_str}\t")  # Write overall mean
                            output_file.write("\n")
 
                      selected_metrics = self.metrics
@@ -202,24 +202,24 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write(f"{igbp_class_name}\t")
                         output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                        # Calculate and print median values
+                        # Calculate and print mean values
 
                         for score in self.scores:
                            ds = xr.open_dataset(f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                            output_file.write(f"{score}\t")
 
                            # Calculate and write the overall mean first
-                           overall_median = ds[score].median(skipna=True).values
-                           overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
+                           overall_mean = ds[score].mean(skipna=True).values
+                           overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                            for i in range(1, 18):
                               ds1 = ds.where(IGBPtype == i)
                               igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                               ds1.to_netcdf(f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
-                              median_value = ds1[score].median(skipna=True).values
-                              median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                              output_file.write(f"{median_value_str}\t")
-                           output_file.write(f"{overall_median_str}\t")  # Write overall median
+                              mean_value = ds1[score].mean(skipna=True).values
+                              mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                              output_file.write(f"{mean_value_str}\t")
+                           output_file.write(f"{overall_mean_str}\t")  # Write overall mean
                            output_file.write("\n")
 
                      selected_scores = self.scores
@@ -357,17 +357,17 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write(f"{metric}\t")
 
                            # Calculate and write the overall mean first
-                           overall_median = ds[metric].median(skipna=True).values
-                           overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
+                           overall_mean = ds[metric].mean(skipna=True).values
+                           overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                            for i in range(0, 16):
                               ds1 = ds.where(PFTtype == i)
                               PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                               ds1.to_netcdf(f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
-                              median_value = ds1[metric].median(skipna=True).values
-                              median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                              output_file.write(f"{median_value_str}\t")
-                           output_file.write(f"{overall_median_str}\t")  # Write overall median
+                              mean_value = ds1[metric].mean(skipna=True).values
+                              mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                              output_file.write(f"{mean_value_str}\t")
+                           output_file.write(f"{overall_mean_str}\t")  # Write overall mean
                            output_file.write("\n")
 
                      selected_metrics = self.metrics
@@ -390,24 +390,24 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write(f"{PFT_class_name}\t")
                         output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                        # Calculate and print median values
+                        # Calculate and print mean values
 
                         for score in self.scores:
                            ds = xr.open_dataset(f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                            output_file.write(f"{score}\t")
 
-                           # Calculate and write the overall median first
-                           overall_median = ds[score].median(skipna=True).values
-                           overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
+                           # Calculate and write the overall mean first
+                           overall_mean = ds[score].mean(skipna=True).values
+                           overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                            for i in range(0, 16):
                               ds1 = ds.where(PFTtype == i)
                               PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                               ds1.to_netcdf(f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
-                              median_value = ds1[score].median(skipna=True).values
-                              median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                              output_file.write(f"{median_value_str}\t")
-                           output_file.write(f"{overall_median_str}\t")  # Write overall median
+                              mean_value = ds1[score].mean(skipna=True).values
+                              mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                              output_file.write(f"{mean_value_str}\t")
+                           output_file.write(f"{overall_mean_str}\t")  # Write overall mean
                            output_file.write("\n")
 
                      selected_scores = self.scores
@@ -469,13 +469,13 @@ class ComparisonProcessing(metrics,scores,statistics):
                      if ref_data_type == 'stn' or sim_data_type == 'stn':
                         file= f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                         df = pd.read_csv(file, sep=',', header=0)                        
-                        overall_median = df[f'{score}'].median(skipna=True)
+                        overall_mean = df[f'{score}'].mean(skipna=True)
                      else:
                         ds = xr.open_dataset(f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                        overall_median = ds[score].median(skipna=True).values
+                        overall_mean = ds[score].mean(skipna=True).values
                      
-                     overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
-                     output_file.write(f"{overall_median_str}\t")
+                     overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                     output_file.write(f"{overall_mean_str}\t")
                   output_file.write("\n")
 
          make_scenarios_scores_comparison_heat_map(output_file_path, score)
@@ -568,16 +568,16 @@ class ComparisonProcessing(metrics,scores,statistics):
                      station_list.to_csv(f"{dir_path}/taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
 
                      station_list = pd.read_csv(f"{dir_path}/taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt",header=0)
-                     std_sim=station_list['std_s'].median(skipna=True)
+                     std_sim=station_list['std_s'].mean(skipna=True)
                      output_file.write(f"{std_sim}\t")
                      stds[i+1]=std_sim
-                     cor_sim=station_list['correlation'].median(skipna=True) 
+                     cor_sim=station_list['correlation'].mean(skipna=True) 
                      output_file.write(f"{cor_sim}\t")
                      cors[i+1]=cor_sim
-                     RMS_sim=station_list['CRMSD'].median(skipna=True) 
+                     RMS_sim=station_list['CRMSD'].mean(skipna=True) 
                      output_file.write(f"{RMS_sim}\t")
                      RMSs[i+1]=RMS_sim
-                     std_ref=station_list['std_o'].median(skipna=True) 
+                     std_ref=station_list['std_o'].mean(skipna=True) 
 
                   else:
                      ref_varname             =  ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
@@ -588,16 +588,16 @@ class ComparisonProcessing(metrics,scores,statistics):
                         ref_varname = evaluation_item
                      reffile = xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[ref_varname]
                      simfile = xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[sim_varname]
-                     std_sim                 =  self.stat_standard_deviation(simfile).median().values
+                     std_sim                 =  self.stat_standard_deviation(simfile).mean().values
                      output_file.write(f"{std_sim}\t")
                      stds[i+1]=std_sim
-                     cor_sim                 =  self.correlation(simfile,reffile).median(skipna=True).values
+                     cor_sim                 =  self.correlation(simfile,reffile).mean(skipna=True).values
                      output_file.write(f"{cor_sim}\t")
                      cors[i+1]=cor_sim
-                     RMS_sim                 =  self.CRMSD(simfile,reffile).median(skipna=True).values
+                     RMS_sim                 =  self.CRMSD(simfile,reffile).mean(skipna=True).values
                      output_file.write(f"{RMS_sim}\t")
                      RMSs[i+1]=RMS_sim
-                     std_ref                    =  self.stat_standard_deviation(reffile).median(skipna=True).values 
+                     std_ref                    =  self.stat_standard_deviation(reffile).mean(skipna=True).values 
                   stds[0]=std_ref
 
                output_file.write(f"{std_ref}\n")
@@ -687,15 +687,15 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                      station_list = pd.read_csv(f"{dir_path}/target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt",header=0)
                      
-                     bias_sim=station_list['bias'].median(skipna=True)
+                     bias_sim=station_list['bias'].mean(skipna=True)
                      output_file.write(f"{bias_sim}\t")
                      biases[i]=bias_sim
                      
-                     rmse_sim=station_list['rmse'].median(skipna=True) 
+                     rmse_sim=station_list['rmse'].mean(skipna=True) 
                      output_file.write(f"{rmse_sim}\t")
                      rmses[i]=rmse_sim
 
-                     crmsd_sim=station_list['CRMSD'].median(skipna=True) 
+                     crmsd_sim=station_list['CRMSD'].mean(skipna=True) 
                      output_file.write(f"{crmsd_sim}\t")
                      crmsds[i]=crmsd_sim
                   else:
@@ -708,13 +708,13 @@ class ComparisonProcessing(metrics,scores,statistics):
                      reffile = xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[ref_varname]
                      simfile = xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[sim_varname]
 
-                     bias_sim                 =  self.bias(simfile,reffile).median(skipna=True).values
+                     bias_sim                 =  self.bias(simfile,reffile).mean(skipna=True).values
                      output_file.write(f"{bias_sim}\t")
                      biases[i]=bias_sim
-                     rmse_sim                 =  self.RMSE(simfile,reffile).median(skipna=True).values
+                     rmse_sim                 =  self.RMSE(simfile,reffile).mean(skipna=True).values
                      output_file.write(f"{rmse_sim}\t")
                      rmses[i]=rmse_sim
-                     crmsd_sim                 =  self.CRMSD(simfile,reffile).median(skipna=True).values
+                     crmsd_sim                 =  self.CRMSD(simfile,reffile).mean(skipna=True).values
                      output_file.write(f"{crmsd_sim}\t")
                      crmsds[i]=crmsd_sim
     
@@ -847,12 +847,12 @@ class ComparisonProcessing(metrics,scores,statistics):
                         df = pd.read_csv(file_path, sep=',', header=0)
 
                         for score in scores:
-                           kk = df[score].median(skipna=True)
+                           kk = df[score].mean(skipna=True)
                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                            output_file.write(f"{kk_str}\t")
 
                         for metric in metrics:
-                           kk = df[metric].median(skipna=True)
+                           kk = df[metric].mean(skipna=True)
                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                            output_file.write(f"{kk_str}\t")
 
@@ -868,12 +868,12 @@ class ComparisonProcessing(metrics,scores,statistics):
                         simfile = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[sim_varname]
                         for score in scores:
                            ds = xr.open_dataset(f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                           kk=ds[score].median(skipna=True).values
+                           kk=ds[score].mean(skipna=True).values
                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                            output_file.write(f"{kk_str}\t")
                         for metric in metrics:
                            ds = xr.open_dataset(f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                           kk=ds[metric].median(skipna=True).values
+                           kk=ds[metric].mean(skipna=True).values
                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                            output_file.write(f"{kk_str}\t")
                         output_file.write("\n")
@@ -906,7 +906,7 @@ class ComparisonProcessing(metrics,scores,statistics):
             pb_da.to_netcdf(f'{casedir}/output/comparisons/Portrait_Plot_seasonal/{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
          except:
             pass
-         return np.nanmedian(pb)
+         return np.nanmean(pb)
 
       def process_score(casedir, item, ref_source, sim_source, score, s, o, vkey=None):
          pb = getattr(self, score)(s, o)
@@ -916,7 +916,7 @@ class ComparisonProcessing(metrics,scores,statistics):
          except:
             pass
 
-         return np.nanmedian(pb)
+         return np.nanmean(pb)
 
  
       output_file_path = f"{dir_path}/Portrait_Plot_seasonal.txt"     
@@ -987,8 +987,8 @@ class ComparisonProcessing(metrics,scores,statistics):
                            results = Parallel(n_jobs=-1)(delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
                                                                                                    sim_varname, ref_varname, station_list, iik, 'metric', season, metric=metric)
                                                          for iik in range(len(station_list['ID'])))
-                           median_value = np.nanmedian(results)
-                           kk_str = f"{median_value:.2f}" if not np.isnan(median_value) else "N/A"
+                           mean_value = np.nanmean(results)
+                           kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
                            output_file.write(f"{kk_str}\t")
 
                      for score in scores:
@@ -996,8 +996,8 @@ class ComparisonProcessing(metrics,scores,statistics):
                            results = Parallel(n_jobs=-1)(delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
                                                                                                    sim_varname, ref_varname, station_list, iik, 'score', season, score=score)
                                                          for iik in range(len(station_list['ID'])))
-                           median_value = np.nanmedian(results)
-                           kk_str = f"{median_value:.2f}" if not np.isnan(median_value) else "N/A"
+                           mean_value = np.nanmean(results)
+                           kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
                            output_file.write(f"{kk_str}\t")                                
                   else:
                      ref_varname             =  ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
@@ -1385,10 +1385,10 @@ class ComparisonProcessing(metrics,scores,statistics):
                                                                                              sim_varname, ref_varname, station_list, iik)
                                                       for iik in range(len(station_list['ID'])))
                            smpi_values, lower_values, upper_values = zip(*results)
-                           median_smpi = np.nanmedian(smpi_values)
-                           median_lower = np.nanmedian(lower_values)
-                           median_upper = np.nanmedian(upper_values)
-                           output_file.write(f"{median_smpi:.4f}\t{median_lower:.4f}\t{median_upper:.4f}\n")
+                           mean_smpi = np.nanmean(smpi_values)
+                           mean_lower = np.nanmean(lower_values)
+                           mean_upper = np.nanmean(upper_values)
+                           output_file.write(f"{mean_smpi:.4f}\t{mean_lower:.4f}\t{mean_upper:.4f}\n")
                      
                      else:
                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']

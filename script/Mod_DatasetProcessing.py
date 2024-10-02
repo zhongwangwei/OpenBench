@@ -110,7 +110,7 @@ class BaseDatasetProcessing:
             ds = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
         return ds
 
-    def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
+    def check_dataset_time_integrity_bk(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales.
         Args:
         ds (xr.Dataset): The xarray Dataset containing time data.
@@ -155,7 +155,7 @@ class BaseDatasetProcessing:
                 ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:00:00'))
                 if datasource == 'sim':
                     if self.sim_model.lower() == 'cama' or self.sim_model.lower() == 'colm':
-                        ds['time'] = ds['time'] - np.timedelta64(1, 'h')
+                        ds['time'] = ds['time'] - np.timedelta64(1, 'h') 
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:00:00'))
 
         time_var = ds.time
@@ -176,6 +176,24 @@ class BaseDatasetProcessing:
             pass
         return ds
 
+    def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
+        """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
+        # Ensure the dataset has a proper time index
+        ds = self.check_time(ds, syear, eyear, tim_res)
+        # Apply model-specific time adjustments
+        ds = self.apply_model_specific_time_adjustment(ds,datasource,syear,eyear,tim_res)
+        return ds
+    def apply_model_specific_time_adjustment(self, ds: xr.Dataset, datasource: str,syear: int, eyear: int, tim_res: str) -> xr.Dataset:
+        model = self.sim_model if datasource == 'sim' else self.ref_source
+        try:
+            custom_module = importlib.import_module(f"custom.{model}_filter")
+            custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
+            ds = custom_time_adjustment(self, ds,syear,eyear,tim_res)
+        except (ImportError, AttributeError):
+            logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
+
+        return ds
+
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
         try:
             ds = xr.open_dataset(VarFile)
@@ -193,7 +211,7 @@ class BaseDatasetProcessing:
         model = self.sim_model if datasource == 'sim' else self.ref_source
         try:
             logging.info(f"Loading custom variable filter for {model}")
-            custom_module = importlib.import_module(f"custom.variable_filter_{model}")
+            custom_module = importlib.import_module(f"custom.{model}_filter")
             custom_filter = getattr(custom_module, f"filter_{model}")
             self, ds = custom_filter(self, ds)
         except AttributeError:
@@ -296,7 +314,14 @@ class BaseDatasetProcessing:
 
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
         if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
-            ds, varunit = UnitProcessing.process_unit(self, ds, varunit)
+            try:
+                converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
+                ds = ds.copy(data=converted_data)
+                print(f"Converted unit from {varunit} to {new_unit}")
+                return ds, new_unit
+            except ValueError as e:
+                print(f"Warning: {str(e)}. Attempting specific conversion.")
+                exit()
         return ds, varunit
 
     def to_dict(self) -> Dict[str, Any]:
@@ -563,8 +588,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             resolution_lat=self.compare_grid_res,
             resolution_lon=self.compare_grid_res,
         )
-        target_dataset = create_regridding_dataset(grid)
-        return data.regrid.conservative(target_dataset, latitude_coord="lat")
+        target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
+        # Convert sparse arrays to dense arrays
+        data_regrid = data.regrid.conservative(target_dataset,nan_threshold=0)
+        #data_regrid = data_regrid.compute()
+
+        return data_regrid
         #target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
         #return data.regrid.conservative(target_dataset,nan_threshold=0)
 
@@ -600,6 +629,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             f.write(f"yinc = {self.compare_grid_res}\n")
 
     def save_remapped_data(self, data: xr.Dataset, data_source: str, year: int) -> None:
+        # Convert sparse arrays to dense arrays
         data = data.resample(time=self.compare_tim_res).mean()
         data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
         

@@ -1,5 +1,4 @@
 """Methods based on xr.interp."""
-
 from typing import Literal, overload
 
 import xarray as xr
@@ -10,7 +9,8 @@ def interp_regrid(
     data: xr.DataArray,
     target_ds: xr.Dataset,
     method: Literal["linear", "nearest", "cubic"],
-) -> xr.DataArray: ...
+) -> xr.DataArray:
+    ...
 
 
 @overload
@@ -18,7 +18,8 @@ def interp_regrid(
     data: xr.Dataset,
     target_ds: xr.Dataset,
     method: Literal["linear", "nearest", "cubic"],
-) -> xr.Dataset: ...
+) -> xr.Dataset:
+    ...
 
 
 def interp_regrid(

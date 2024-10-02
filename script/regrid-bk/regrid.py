@@ -1,13 +1,12 @@
 import xarray as xr
 
 from regrid.methods import conservative, interp, most_common
-from regrid.utils import format_for_regrid
 
 
 @xr.register_dataarray_accessor("regrid")
 @xr.register_dataset_accessor("regrid")
 class Regridder:
-    """Regridding xarray datasets and dataarrays.
+    """Regridding xarray dataarrays.
 
     Available methods:
         linear: linear, bilinear, or higher dimensional linear interpolation.
@@ -35,8 +34,7 @@ class Regridder:
             Data regridded to the target dataset coordinates.
         """
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
-        return interp.interp_regrid(ds_formatted, ds_target_grid, "linear")
+        return interp.interp_regrid(self._obj, ds_target_grid, "linear")
 
     def nearest(
         self,
@@ -53,14 +51,14 @@ class Regridder:
             Data regridded to the target dataset coordinates.
         """
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
-        return interp.interp_regrid(ds_formatted, ds_target_grid, "nearest")
+        return interp.interp_regrid(self._obj, ds_target_grid, "nearest")
 
     def cubic(
         self,
         ds_target_grid: xr.Dataset,
         time_dim: str = "time",
     ) -> xr.DataArray | xr.Dataset:
+        ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
         """Regrid to the coords of the target dataset with cubic interpolation.
 
         Args:
@@ -70,50 +68,29 @@ class Regridder:
         Returns:
             Data regridded to the target dataset coordinates.
         """
-        ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
-        return interp.interp_regrid(ds_formatted, ds_target_grid, "cubic")
+        return interp.interp_regrid(self._obj, ds_target_grid, "cubic")
 
     def conservative(
         self,
         ds_target_grid: xr.Dataset,
-        latitude_coord: str | None = None,
+        latitude_coord: str | None,
         time_dim: str = "time",
-        skipna: bool = True,
-        nan_threshold: float = 0.0,
     ) -> xr.DataArray | xr.Dataset:
         """Regrid to the coords of the target dataset with a conservative scheme.
 
         Args:
             ds_target_grid: Dataset containing the target coordinates.
             latitude_coord: Name of the latitude coord, to be used for applying the
-                spherical correction. By default, attempt to infer a latitude coordinate
-                as anything starting with "lat".
+                spherical correction.
             time_dim: The name of the time dimension/coordinate.
-            skipna: If True, enable handling for NaN values. This adds some overhead,
-                so can be disabled for optimal performance on data without any NaNs.
-                With `skipna=True, chunking is recommended in the non-grid dimensions,
-                otherwise the intermediate arrays that track the fraction of valid data
-                can become very large and consume excessive memory.
-                Warning: with `skipna=False`, isolated NaNs will propagate throughout
-                the dataset due to the sequential regridding scheme over each dimension.
-            nan_threshold: Threshold value that will retain any output points
-                containing at least this many non-null input points. The default value
-                is 1.0, which will keep output points containing any non-null inputs,
-                while a value of 0.0 will only keep output points where all inputs are
-                non-null.
 
         Returns:
             Data regridded to the target dataset coordinates.
         """
-        if not 0.0 <= nan_threshold <= 1.0:
-            msg = "nan_threshold must be between [0, 1]]"
-            raise ValueError(msg)
 
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
         return conservative.conservative_regrid(
-            ds_formatted, ds_target_grid, latitude_coord, skipna, nan_threshold
+            self._obj, ds_target_grid, latitude_coord
         )
 
     def most_common(
@@ -142,9 +119,8 @@ class Regridder:
             Regridded data.
         """
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
         return most_common.most_common_wrapper(
-            ds_formatted, ds_target_grid, time_dim, max_mem
+            self._obj, ds_target_grid, time_dim, max_mem
         )
 
 
@@ -175,3 +151,6 @@ def validate_input(
         raise ValueError(msg)
 
     return ds_target_grid
+
+
+
