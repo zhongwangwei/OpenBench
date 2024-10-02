@@ -368,7 +368,7 @@ class GeneralInfoReader(NamelistReader):
         self.sim_model = sim_nml[item][f'{sim_source}_model']
 
     def _process_data_types(self):
-        """Process and validate data types for simulation and reference data."""
+        """Process and evaluate data types for simulation and reference data."""
         self.ref_data_type = self.ref_data_type.lower()
         self.sim_data_type = self.sim_data_type.lower()
         if self.ref_data_type not in ['stn', 'grid'] or self.sim_data_type not in ['stn', 'grid']:

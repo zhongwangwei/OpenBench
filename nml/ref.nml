@@ -1,7 +1,7 @@
 &general
   #*******************  Radiation and Energy Cycle  *************
   Sensible_Heat_ref_source                  = GLEAM4.1a_monthly      #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND，GLEAM4.1a_monthly  #stn: PLUMBER2
-  Latent_Heat_ref_source                    = PLUMBER2                #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND                     #stn: PLUMBER2
+  Latent_Heat_ref_source                    = ILAMB_monthly          #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND                     #stn: PLUMBER2
   Ground_Heat_ref_source                    = ILAMB_monthly          #Grid: ILAMB_monthly，#stn:PLUMBER2
   Net_Radiation_ref_source                  = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, FLUXCOM, ERA5LAND,CERES_EBAF_Ed4.2,Rn-Xu2022          #stn: PLUMBER2
   Surface_Upward_SW_Radiation_ref_source    = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2                                     #stn: PLUMBER2
