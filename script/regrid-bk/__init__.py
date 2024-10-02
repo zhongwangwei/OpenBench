@@ -1,7 +1,7 @@
 from regrid import methods
 from regrid.regrid import Regridder
 from regrid.utils import Grid, create_regridding_dataset
-from regrid.regrid_cdo import regridder_cdo
+from regrid.regrid_cdo import regridder_cdo 
 __all__ = [
     "Grid",
     "Regridder",
@@ -9,5 +9,3 @@ __all__ = [
     "methods",
     "regridder_cdo"
 ]
-
-__version__ = "0.3.0"

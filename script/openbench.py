@@ -3,7 +3,7 @@
 Land Surface Model 2024 Benchmark Evaluation System
 
 This script is the main entry point for the evaluation system. It handles the
-configuration, data processing, validation, comparison, and statistical analysis
+configuration, data processing, Evaluation, comparison, and statistical analysis
 of land surface model outputs against reference data.
 
 Author: Zhongwang Wei (zhongwang007@gmail.com)
@@ -15,8 +15,9 @@ Date: Mar 2023
 import sys
 import os
 import shutil
+import time
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist
-from Mod_Validation import Validation_grid, Validation_stn
+from Mod_Evaluation import Evaluation_grid, Evaluation_stn
 from Mod_DatasetProcessing import DatasetProcessing
 from Mod_Comparison  import ComparisonProcessing
 from Mod_Statistics import StatisticsProcessing
@@ -43,7 +44,7 @@ def print_welcome_message():
     print("\033[1;32m" + "=" * 80 + "\033[0m")
     print("\033[1;33mWelcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!\033[0m")
     print("\033[1;32m" + "=" * 80 + "\033[0m")
-    print("\n\033[1mThis system validates various land surface model outputs against reference data.\033[0m")
+    print("\n\033[1mThis system evaluate various land surface model outputs against reference data.\033[0m")
     print("\n\033[1;34mKey Features:\033[0m")
     print("  • Multi-model support")
     print("  • Comprehensive variable evaluation")
@@ -124,15 +125,15 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     shutil.rmtree(scratch_dir, ignore_errors=True)
     os.makedirs(scratch_dir)
     
-    # Run validation
+    # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        validator = Validation_stn(general_info)
-        validator.make_validation_P()
+        evaluater = Evaluation_stn(general_info)
+        evaluater.make_evaluation_P()
     else:
-        validator = Validation_grid(general_info)
-        validator.make_validation()
+        evaluater = Evaluation_grid(general_info)
+        evaluater.make_Evaluation()
     
-    validator.make_plot_index()
+    evaluater.make_plot_index()
 
 def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars):
     """Run the comparison process for each comparison variable."""
@@ -197,15 +198,27 @@ def main():
     
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
+        start_time = time.time()
         run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars)
-    
+        end_time = time.time()
+        evaluation_time = (end_time - start_time)/60
+        print(f"\n\033[1;36mEvaluation process completed in {evaluation_time:.2f} minutes.\033[0m")
+
     # Run comparison if enabled
     if main_nl['general']['comparison']:
+        start_time = time.time()
         run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars)
-    
+        end_time = time.time()
+        comparison_time = (end_time - start_time)/60
+        print(f"\n\033[1;36mComparison process completed in {comparison_time:.2f} minutes.\033[0m")
+
     # Run statistics if enabled
     if main_nl['general']['statistics']:
+        start_time = time.time()
         run_statistics(main_nl, stats_nml, statistic_vars)
+        end_time = time.time()
+        statistic_time = (end_time - start_time)/60
+        print(f"\n\033[1;36mStatistics process completed in {statistic_time:.2f} minutes.\033[0m")
 
 if __name__ == '__main__':
     main()

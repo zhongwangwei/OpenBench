@@ -1,5 +1,5 @@
 &general
-  basename=CoLM20X4vsCLM5vsGLDAS
+  basename=bbb
   basedir=/share/home/dq013/zhwei/colm-test/       #  
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
@@ -23,7 +23,7 @@
 &evaluation_items
   #========================Evaluation_Items====================
   #*******************Ecosystem and Carbon Cycle****************
-  Gross_Primary_Productivity = False
+  Gross_Primary_Productivity = True
   Ecosystem_Respiration      = False
   Net_Ecosystem_Exchange     = False
 
@@ -67,7 +67,7 @@
 
   #*******************  Radiation and Energy Cycle  *************
   Net_Radiation=False   
-  Latent_Heat=True
+  Latent_Heat=False
   Sensible_Heat=False
   Ground_Heat=False
   Albedo=False
@@ -83,8 +83,8 @@
   Diurnal_Temperature_Range=False
   Diurnal_Max_Temperature=False
   Diurnal_Min_Temperature=False
-  Surface_Downward_SW_Radiation=True
-  Surface_Downward_LW_Radiation=True
+  Surface_Downward_SW_Radiation=False
+  Surface_Downward_LW_Radiation=False
   Surface_Relative_Humidity=False
   Surface_Specific_Humidity=False
   Precipitation=False
