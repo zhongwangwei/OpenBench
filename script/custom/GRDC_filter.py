@@ -21,12 +21,12 @@ def process_station(station, info, min_uparea, max_uparea):
         return result
     if os.path.exists(file_path):
         result['ref_dir'] = file_path
+        #print(f"Processing station {int(station['ID'])}...")
         with xr.open_dataset(file_path) as df:
             result['obs_syear'] = df["time.year"].values[0]
             result['obs_eyear'] = df["time.year"].values[-1]
             result['use_syear'] = max(result['obs_syear'], info.sim_syear, info.syear)
             result['use_eyear'] = min(result['obs_eyear'], info.sim_eyear, info.eyear)
-            
             if ((result['use_eyear'] - result['use_syear'] >= info.min_year) and
                 (station['lon'] >= info.min_lon) and
                 (station['lon'] <= info.max_lon) and
