@@ -182,7 +182,43 @@ class BaseDatasetProcessing:
         ds = self.check_time(ds, syear, eyear, tim_res)
         # Apply model-specific time adjustments
         ds = self.apply_model_specific_time_adjustment(ds,datasource,syear,eyear,tim_res)
+        ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds
+
+    def make_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
+        match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
+        if match:
+            num_value, time_unit = match.groups()
+            num_value = int(num_value) if num_value else 1
+            time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
+            if time_unit.lower() in ['m', 'month', 'mon']:
+                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
+                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
+            elif time_unit.lower() in ['d', 'day', '1d', '1day']:
+                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
+                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
+            elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
+                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
+                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
+            
+            time_var = ds.time
+            time_values = time_var
+            # Create a complete time series based on the specified time frequency and range 
+            # Compare the actual time with the complete time series to find the missing time
+            #print('Checking time series completeness...')
+            missing_times = time_index[~np.isin(time_index, time_values)]
+            if len(missing_times) > 0:
+                print("Time series is not complete. Missing time values found: ")
+                print(missing_times)
+                print('Filling missing time values with np.nan')
+                # Fill missing time values with np.nan
+                ds = ds.reindex(time=time_index)
+                ds = ds.where(ds.time.isin(time_values), np.nan)
+            else:
+                #print('Time series is complete.')
+                pass
+        return ds
+  
     def apply_model_specific_time_adjustment(self, ds: xr.Dataset, datasource: str,syear: int, eyear: int, tim_res: str) -> xr.Dataset:
         model = self.sim_model if datasource == 'sim' else self.ref_source
         try:
@@ -190,8 +226,8 @@ class BaseDatasetProcessing:
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
             ds = custom_time_adjustment(self, ds,syear,eyear,tim_res)
         except (ImportError, AttributeError):
-            logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
-
+            #logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
+            pass
         return ds
 
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
@@ -490,6 +526,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         self.combine_and_save_data(var_files, data_params)
 
     def combine_and_save_data(self, var_files: List[str], data_params: Dict[str, Any]) -> None:
+        print(var_files)
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
             ds = ds.where((ds > -1e20) & (ds < 1e20), np.nan)

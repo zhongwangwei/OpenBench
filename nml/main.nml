@@ -1,5 +1,5 @@
 &general
-  basename=bbb
+  basename=hhh
   basedir=/share/home/dq013/zhwei/colm-test/       #  
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
@@ -12,7 +12,7 @@
   min_lon           = -180
   min_year          = 1.0
   reference_nml     = ./nml/ref.nml
-  simulation_nml    = ./nml/sim_CoLM20X4vsCLM5vsGLDAS-0927.nml #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
+  simulation_nml    = ./nml/sim_CoLM20X4vsCLM5vsGLDAS-0927.nml      #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
   statistics_nml    = ./nml/stats.nml
   num_cores         = 16  #-1 # how many core will be used in Parallel computing
   evaluation        = True # True #False
