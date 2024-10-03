@@ -501,7 +501,7 @@ class GeneralInfoReader(NamelistReader):
     def _get_custom_filter(self):
         """Attempt to get a custom filter function for the reference source."""
         try:
-            custom_module = importlib.import_module(f"custom.station_list_filter_{self.ref_source}")
+            custom_module = importlib.import_module(f"custom.{self.ref_source}_filter")
             return getattr(custom_module, f"filter_{self.ref_source}")
         except (ImportError, AttributeError):
             print(f"Custom filter for {self.ref_source} not available/or contains errors. Using default filter.")
