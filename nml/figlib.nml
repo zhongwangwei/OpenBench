@@ -1,0 +1,18 @@
+&validation_nml
+  plot_stn_source                      = ./nml/fignml/plot_stn.nml
+  make_stn_plot_index_source           = ./nml/fignml/make_stn_plot_index.nml
+  make_geo_plot_index_source           = ./nml/fignml/make_geo_plot_index.nml
+/
+
+&comparison_nml
+    make_scenarios_comparison_Portrait_Plot_seasonal_source          = ./nml/fignml/make_scenarios_comparison_Portrait_Plot_seasonal.nml
+    make_scenarios_scores_comparison_heat_map_source                 = ./nml/fignml/make_scenarios_scores_comparison_heat_map.nml
+    make_scenarios_comparison_parallel_coordinates_source            = ./nml/fignml/make_scenarios_comparison_parallel_coordinates.nml
+    make_scenarios_comparison_Taylor_Diagram_source                  = ./nml/fignml/make_scenarios_comparison_Taylor_Diagram.nml
+    make_scenarios_comparison_Target_Diagram_source                  = ./nml/fignml/make_scenarios_comparison_Target_Diagram.nml
+    make_scenarios_comparison_Kernel_Density_Estimate_source         = ./nml/fignml/make_scenarios_comparison_Kernel_Density_Estimate.nml
+    make_LC_based_heat_map_source                                    = ./nml/fignml/make_LC_based_heat_map.nml
+    make_scenarios_comparison_Whisker_Plot_source                    = ./nml/fignml/make_scenarios_comparison_Whisker_Plot.nml
+    make_scenarios_comparison_Single_Model_Performance_Index_source  = ./nml/fignml/make_scenarios_comparison_Single_Model_Performance_Index.nml
+    make_scenarios_comparison_Ridgeline_Plot_source                  = ./nml/fignml/make_scenarios_comparison_Ridgeline_Plot.nml
+/
