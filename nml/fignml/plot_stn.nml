@@ -1,0 +1,33 @@
+&general
+  title =  
+  title_size =  20
+  xtick =  17
+  ytick =  17
+  labelsize = 15
+  fontsize = 15
+  grid =  True
+  grid_linestyle =  --
+  grid_width =  1.0
+
+
+  obs_linecolor =  F96969
+  obs_linestyle = solid
+  obs_lineswidth = 1.5
+  obs_marker = .
+  obs_markersize =  10
+  obs_alphas = 1.0
+
+  sim_linecolor =  599AD4
+  sim_linestyle = dashed
+  sim_lineswidth = 1.5
+  sim_marker =
+  sim_markersize =  10
+  sim_alphas = 1.0
+
+  x_wise =  17
+  y_wise =  6
+  saving_format =  jpg
+  font              = Times new roman
+  dpi               = 300
+/
+
