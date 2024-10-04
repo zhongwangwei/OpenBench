@@ -1,5 +1,5 @@
 # OpenBench
-The Open Source Land Surface Model Benchmark Evaluation System
+The Open Source Land Surface Model Benchmarking System
 ## Overview
 
 This system is designed for the evaluation of land surface model outputs against reference data. It handles configuration, data processing, validation, comparison, and statistical analysis.
@@ -14,7 +14,7 @@ This system is designed for the evaluation of land surface model outputs against
 ## Main Components
 
 1. 'openbench.py': Main entry point for the evaluation system
-2. 'Mod_Validation.py': Handles validation of model outputs
+2. 'Mod_Evaluation.py': Handles evaluation of model outputs
 3. 'Mod_DatasetProcessing.py': Processes datasets for evaluation
 4. 'Mod_Comparison.py': Performs comparisons between models and reference data
 5. 'Mod_Namelist.py': Manages configuration and namelist reading
@@ -23,7 +23,7 @@ This system is designed for the evaluation of land surface model outputs against
 8. 'Mod_Statistics': Conducts statistical analysis
 9. 'Lib_Unit': convert the unit 
 10. Folder 'figlib': lib for vitalization
-11. Folder 'regrid': lib for remap--modified from xarray-regrid
+11. Folder 'regrid': lib for remap--modified from xarray-regrid (currently version 0.40)
 12. Floder 'custom': lib for dataset filter
  
 ## Setup and Configuration
@@ -67,8 +67,8 @@ The system generates various outputs including:
 ## Contributors
 
 - Zhongwang Wei (zhongwang007@gmail.com)
-- Qingchen Xu (******)
-- Fan Bai
+- PhD student: Qingchen Xu  
+- MS student: Fan Bai
 
 ## Version
 
