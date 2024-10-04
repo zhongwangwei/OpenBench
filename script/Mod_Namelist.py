@@ -239,6 +239,58 @@ class UpdateNamelist(NamelistReader):
         except KeyError:
             print(f"{attr} is missing in namelist")
 
+
+class UpdateFigNamelist(NamelistReader):
+    def __init__(self, main_nl: Dict[str, Any], fig_nml: Dict[str, Any], comparisons: List[str]):
+        # Initialize with general settings
+        self.__dict__.update(fig_nml)
+
+        # print all the attributes
+        # Process each validation parameters
+        fig_nml.setdefault('Validation', {})
+        fig_nml.setdefault('Comparison', {})
+
+        self._process_validation_item(fig_nml)
+
+        if main_nl['general']['comparison']:
+            self._process_comparison_item(fig_nml, comparisons)
+
+    def _process_validation_item(self, fig_nml: Dict[str, Any]):
+        # """Process a single evaluation item for both reference and simulation data."""
+
+        # Process reference sources
+        for key in fig_nml['validation_nml'].keys():
+            self._process_validation_source(fig_nml, key)
+
+    def _process_comparison_item(self, fig_nml: Dict[str, Any], comparisons: List[str]):
+
+        # Process reference sources
+        for comparison in comparisons:
+            self._process_comparison_source(fig_nml, comparison)
+
+    def _process_validation_source(self, fig_nml: Dict[str, Any], key: str):
+        """Process a single reference source for an evaluation item."""
+        # Read the namelist for this reference source
+        tmp = self._read_source_namelist(fig_nml, key, 'Validation')
+        # Initialize the evaluation item dictionary if it doesn't exist
+        fig_nml['Validation'].setdefault(key[:-7], {})
+        fig_nml['Validation'][key[:-7]] = tmp['general']
+
+    def _process_comparison_source(self, fig_nml: Dict[str, Any], comparison: str):
+        """Process a single simulation source for an evaluation item."""
+        # Read the namelist for this simulation source
+        tmp = self._read_source_namelist(fig_nml, comparison, 'Comparison')
+        # Initialize the evaluation item dictionary if it doesn't exist
+        fig_nml['Comparison'].setdefault(comparison[:-7], {})
+        fig_nml['Comparison'][comparison[:-7]] = tmp['general']
+
+    def _read_source_namelist(self, nml: Dict[str, Any], key: str, source_type: str):
+        """Read the namelist for a given source."""
+        if source_type == 'Validation':
+            return self.read_namelist(nml['validation_nml'][key])
+        else:
+            return self.read_namelist(nml['comparison_nml'][key])
+
 class GeneralInfoReader(NamelistReader):
     """
     A class for reading and processing general information from namelists for simulation and reference data.
