@@ -11,15 +11,17 @@ from Mod_Scores import scores
 import warnings
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 from matplotlib import colors
+from matplotlib import cm
 
 class Evaluation_grid(metrics,scores):
-    def __init__(self, info):
+    def __init__(self, info, fig_nml):
         self.name = 'Evaluation_grid'
         self.version = '0.1'
         self.release = '0.1'
         self.date = 'Mar 2023'
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
+        self.fig_nml = fig_nml
         os.makedirs(self.casedir+'/output/', exist_ok=True)
 
         print(" ")
@@ -71,47 +73,66 @@ class Evaluation_grid(metrics,scores):
         return
 
     def make_plot_index(self):
+        option = self.fig_nml['make_geo_plot_index']
         key=self.ref_varname
         for metric in self.metrics:
             print(f'plotting metric: {metric}')
-            if metric in ['bias', 'mean_absolute_error', 'ubRMSE', 'absolute_percent_bias', 'RMSE', 'L','percent_bias','absolute_percent_bias']:
-                vmin = -100.0
-                vmax = 100.0
-            elif metric in ['KGE', 'NSE', 'correlation']:
-                vmin = -1
-                vmax = 1
-            elif metric in ['correlation_R2', 'index_agreement']:
-                vmin = 0
-                vmax = 1
+            option['colorbar_label'] = metric.replace('_', ' ')
+
+            import math
+
+            ds = xr.open_dataset(
+                f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
+            quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
+            if not option["vmin_max_on"]:
+                if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
+                    option["vmax"] = math.ceil(quantiles[1].values)
+                    option["vmin"] = math.floor(quantiles[0].values)
+                elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                    option["vmin"], option["vmax"] = -1, 1
+                elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                    option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
+                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've', 'absolute_percent_bias']:
+                    option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
+            # else:
+            #     option["vmin"], option["vmax"] = 0, 1
+
+            if option['cmap'] is not None:
+                cmap = cm.get_cmap(option['cmap'])
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
-                vmin = -1
-                vmax = 1
-            bnd = np.linspace(vmin, vmax, 11)
-            cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-            cmap = colors.ListedColormap(cpool)
-            norm = colors.BoundaryNorm(bnd, cmap.N)
-            self.plot_map(cmap, norm, key, bnd,metric,'metrics')
+                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
+                         '#313695']
+                cmap = colors.ListedColormap(cpool)
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+
+            self.plot_map(cmap, norm, bnd, metric, 'metrics', option)
      
         #print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
             print(f'plotting score: {score}')
-            if score in ['KGESS']:
-                vmin = -1
-                vmax = 1
-            elif score in ['nBiasScore','nRMSEScore']:
-                vmin = 0
-                vmax = 1
+            option['colorbar_label'] = score.replace('_', ' ')
+            if not option["vmin_max_on"]:
+                option["vmin"], option["vmax"] = 0, 1
+                option['extend'] = 'neither'
+
+            if option['cmap'] is not None:
+                cmap = cm.get_cmap(option['cmap'])
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
-                vmin = 0
-                vmax = 1
-            bnd = np.linspace(vmin, vmax, 11)
-            cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-            cmap = colors.ListedColormap(cpool)
-            norm = colors.BoundaryNorm(bnd, cmap.N)
-            self.plot_map(cmap, norm, key, bnd,score,'scores')
+                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
+                         '#313695']
+                cmap = colors.ListedColormap(cpool)
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+
+            self.plot_map(cmap, norm, bnd, score, 'scores', option)
         print("\033[1;32m" + "=" * 80 + "\033[0m")
 
-    def plot_map(self, colormap, normalize, key, levels, xitem, k, **kwargs):
+    def plot_map(self, colormap, normalize, levels, xitem, k, option):
         # Plot settings
         import matplotlib.pyplot as plt
         import matplotlib
@@ -119,18 +140,19 @@ class Evaluation_grid(metrics,scores):
         import xarray as xr
         from mpl_toolkits.basemap import Basemap
         from matplotlib import rcParams
-        font = {'family': 'DejaVu Sans'}
-        matplotlib.rc('font', **font)
+        # try:
+        #     font = {'family': option['font']}
+        # except:
+        # font = {'family' : 'Myriad Pro'}
+        # matplotlib.rc('font', **font)
 
         params = {'backend': 'ps',
-                  'axes.labelsize': 10,
+                  'axes.labelsize': option['labelsize'],
                   'grid.linewidth': 0.2,
-                  'font.size': 12,
-                  'legend.fontsize': 12,
-                  'legend.frameon': False,
-                  'xtick.labelsize': 12,
+                  'font.size': option['labelsize'],
+                  'xtick.labelsize': option['xtick'],
                   'xtick.direction': 'out',
-                  'ytick.labelsize': 12,
+                  'ytick.labelsize': option['ytick'],
                   'ytick.direction': 'out',
                   'savefig.bbox': 'tight',
                   'axes.unicode_minus': False,
@@ -138,7 +160,7 @@ class Evaluation_grid(metrics,scores):
         rcParams.update(params)
 
         # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-        ds=xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
+        ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
 
         # Extract variables
         lat = ds.lat.values
@@ -147,32 +169,83 @@ class Evaluation_grid(metrics,scores):
 
         var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
 
-        fig = plt.figure()
-        M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
-                    llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
+        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
+        ax = fig.add_subplot(111)
+        if not option['set_lat_lon']:
+            M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
+                        llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
+        else:
+            M = Basemap(projection='cyl', llcrnrlat=option['min_lat'], urcrnrlat=option['max_lat'], \
+                        llcrnrlon=option['min_lon'], urcrnrlon=option['max_lon'], resolution='l')
 
         M.drawmapboundary(fill_color='white', zorder=-1)
         M.fillcontinents(color='0.8', lake_color='white', zorder=0)
         M.drawcoastlines(color='0.6', linewidth=0.1)
+        M.drawparallels(np.arange(self.min_lat, self.max_lat + 30, 30.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
+                        linewidth=0.25, color='0.5')
+        M.drawmeridians(np.arange(self.min_lon, self.max_lon, 60.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
+                        linewidth=0.25, color='0.5')
 
         loc_lon, loc_lat = M(lon, lat)
 
-        cs = M.contourf(loc_lon, loc_lat, var, cmap=colormap, norm=normalize, levels=levels, extend='both')
-        cbaxes = fig.add_axes([0.26, 0.31, 0.5, 0.015])
-        cb = fig.colorbar(cs, cax=cbaxes, ticks=levels, orientation='horizontal', spacing='uniform')
+        cs = M.contourf(loc_lon, loc_lat, var, cmap=colormap, norm=normalize, levels=levels,
+                        extend=option['extend'])
+
+        if 2 >= option["vmax"] - option["vmin"] > 1:
+            option['colorbar_ticks'] = 0.2
+        elif 10 >= option["vmax"] - option["vmin"] > 5:
+            option['colorbar_ticks'] = 1
+        elif 100 >= option["vmax"] - option["vmin"] > 10:
+            option['colorbar_ticks'] = 5
+        elif 1000 >= option["vmax"] - option["vmin"] > 100:
+            option['colorbar_ticks'] = 50
+        elif option["vmax"] - option["vmin"] > 1000:
+            option['colorbar_ticks'] = 500
+        else:
+            option['colorbar_ticks'] = 0.1
+
+        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
+        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
+        plt.title(option['title'], fontsize=option['title_size'])
+
+        ticks = matplotlib.ticker.MultipleLocator(option["colorbar_ticks"])
+        mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+        if mticks[0] < option['vmin']:
+            mticks = mticks[1:]
+        if mticks[-1] > option['vmax']:
+            mticks = mticks[:-1]
+
+        if not option['colorbar_position_set']:
+            pos = ax.get_position()  # .bounds
+            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+            if option['colorbar_position'] == 'horizontal':
+                if len(option['xticklabel']) == 0:
+                    cbaxes = fig.add_axes([left, bottom - 0.15, width, 0.04])
+                else:
+                    cbaxes = fig.add_axes([left, bottom - 0.18, width, 0.04])
+            else:
+                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+        else:
+            cbaxes = fig.add_axes(
+                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
+
+        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                          orientation=option['colorbar_position'])
         cb.solids.set_edgecolor("face")
-        cb.set_label('%s' % (xitem), position=(0.5, 1.5), labelpad=-35)
-        plt.savefig(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.png', format='png', dpi=300)
+
+        plt.savefig(
+            f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
+            format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
 
 class Evaluation_stn(metrics,scores):
-    def __init__(self,info):
+    def __init__(self, info, fig_nml):
         self.name = 'Evaluation_point'
         self.version = '0.1'
         self.release = '0.1'
         self.date = 'Mar 2023'
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
-
+        self.fig_nml = fig_nml
         self.__dict__.update(info)
         if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
@@ -230,105 +303,185 @@ class Evaluation_stn(metrics,scores):
         station_list.to_csv(f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metric.csv',index=False)
         station_list.to_csv(f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',index=False)
 
-    def plot_stn(self,sim,obs,ID,key,RMSE,KGESS,correlation):
+    def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
+        option = self.fig_nml['plot_stn']
         from pylab import rcParams
         import matplotlib
         import matplotlib.pyplot as plt
         ### Plot settings
-        font = {'family' : 'DejaVu Sans'}
-        #font = {'family' : 'Myriad Pro'}
+
+        # font = {'family': 'Times-Roman'}
+        font = {'family': 'DejaVu Sans'}
         matplotlib.rc('font', **font)
 
         params = {'backend': 'ps',
-          'axes.labelsize': 12,
-          'grid.linewidth': 0.2,
-          'font.size': 15,
-          'legend.fontsize': 12,
-          'legend.frameon': False,
-          'xtick.labelsize': 12,
-          'xtick.direction': 'out',
-          'ytick.labelsize': 12,
-          'ytick.direction': 'out',
-          'savefig.bbox': 'tight',
-          'axes.unicode_minus': False,
-          'text.usetex': False}
+                  'axes.labelsize': option['labelsize'],
+                  'font.size': option['fontsize'],
+                  'legend.fontsize': option['fontsize'],
+                  'legend.frameon': False,
+                  'xtick.labelsize': option['xtick'],
+                  'xtick.direction': 'out',
+                  'ytick.labelsize': option['ytick'],
+                  'ytick.direction': 'out',
+                  'savefig.bbox': 'tight',
+                  'axes.unicode_minus': False,
+                  'text.usetex': False}
         rcParams.update(params)
-        
-        legs =['obs','sim']
-        lines=[1.5, 1.5]
-        alphas=[1.,1.]
-        linestyles=['solid','dotted']
-        colors=['g',"purple"]
-        fig, ax = plt.subplots(1,1,figsize=(10,5))
 
-        obs.plot.line (x='time', label='obs', linewidth=lines[0], linestyle=linestyles[0], alpha=alphas[0],color=colors[0]                ) 
-        sim.plot.line (x='time', label='sim', linewidth=lines[0], linestyle=linestyles[1], alpha=alphas[1],color=colors[1],add_legend=True) 
-        #set ylabel to be the same as the variable name
-        ax.set_ylabel(key, fontsize=18)        
-        #ax.set_ylabel(f'{obs}', fontsize=18)
-        ax.set_xlabel('Date', fontsize=18)
-        ax.tick_params(axis='both', top='off', labelsize=16)
-        ax.legend(loc='upper right', shadow=False, fontsize=14)
-        #add RMSE,KGE,correlation in two digital to the legend in left top
-        ax.text(0.01, 0.95, f'RMSE: {RMSE:.2f} \n R: {correlation:.2f} \n KGESS: {KGESS:.2f} ', transform=ax.transAxes, fontsize=14,verticalalignment='top')
-        plt.tight_layout()
-        plt.savefig(f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.png')
+        legs = ['Obs', 'Sim']
+        lines = [option['obs_lineswidth'], option['sim_lineswidth']]
+        alphas = [option['obs_alphas'], option['sim_alphas']]
+        linestyles = [option['obs_linestyle'], option['sim_linestyle']]
+
+        hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
+        if bool(re.match(hex_pattern, f"#{option['obs_linecolor']}")) and bool(
+                re.match(hex_pattern, f"#{option['sim_linecolor']}")):
+            colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
+        else:
+            colors = [option['obs_linecolor'], option['sim_linecolor']]
+        markers = [option['obs_marker'], option['sim_marker']]
+        markersizes = [option['obs_markersize'], option['sim_markersize']]
+
+        fig, ax = plt.subplots(1, 1, figsize=(option['x_wise'], option['y_wise']))
+
+        obs.plot.line(x='time', label='Obs', linewidth=lines[0], linestyle=linestyles[0], alpha=alphas[0], color=colors[0],
+                      marker=markers[0], markersize=markersizes[0])
+        sim.plot.line(x='time', label='Sim', linewidth=lines[0], linestyle=linestyles[1], alpha=alphas[1], color=colors[1],
+                      marker=markers[1], markersize=markersizes[1], add_legend=True)
+        # set ylabel to be the same as the variable name
+        ax.set_ylabel(f"{ID.title()} [{key[0]}]", fontsize=option['ytick'] + 1)
+        ax.set_xlabel('Date', fontsize=option['xtick'] + 1)
+        # ax.tick_params(axis='both', top='off', labelsize=16)
+
+        overall_label = f' RMSE: {RMSE:.2f}\n R: {correlation:.2f}\n KGESS: {KGESS:.2f} '
+        ax.scatter([], [], color='black', marker='o', label=overall_label)
+        ax.legend(loc='best', shadow=False, fontsize=option['fontsize'])
+        # add RMSE,KGE,correlation in two digital to the legend in left top
+        # ax.text(0.01, 0.95, f'RMSE: {RMSE:.2f}\n R: {correlation:.2f}\n KGESS: {KGESS:.2f} ', transform=ax.transAxes,
+        #         fontsize=option['fontsize'], verticalalignment='top')
+        if len(option['title']) == 0:
+            option['title'] = f'Lat: {lat_lon[0]:.2f},    Lon:{lat_lon[1]:.2f}'
+        ax.set_title(option['title'], fontsize=option['title_size'])
+        if option['grid']:
+            ax.grid(linestyle=option['grid_linestyle'], alpha=0.7, linewidth=option['grid_width'])
+
+        # plt.tight_layout()
+        plt.savefig(f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option["saving_format"]}',
+            format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close(fig)
 
-    def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, ticks,key,varname,s_m):
+    def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, option):
         from pylab import rcParams
         from mpl_toolkits.basemap import Basemap
         import matplotlib
         import matplotlib.pyplot as plt
         ### Plot settings
-        font = {'family' : 'DejaVu Sans'}
-        #font = {'family' : 'Myriad Pro'}
+        # font = {'family': option['font']}
+        font = {'family': 'DejaVu Sans'}
         matplotlib.rc('font', **font)
 
         params = {'backend': 'ps',
-          'axes.labelsize': 12,
-          'grid.linewidth': 0.2,
-          'font.size': 15,
-          'legend.fontsize': 12,
-          'legend.frameon': False,
-          'xtick.labelsize': 12,
-          'xtick.direction': 'out',
-          'ytick.labelsize': 12,
-          'ytick.direction': 'out',
-          'savefig.bbox': 'tight',
-          'axes.unicode_minus': False,
-          'text.usetex': False}
+                  'axes.labelsize': option['labelsize'],
+                  'grid.linewidth': 0.2,
+                  'font.size': option['labelsize'],
+                  'xtick.labelsize': option['xtick'],
+                  'xtick.direction': 'out',
+                  'ytick.labelsize': option['ytick'],
+                  'ytick.direction': 'out',
+                  'savefig.bbox': 'tight',
+                  'axes.unicode_minus': False,
+                  'text.usetex': False}
         rcParams.update(params)
-        fig = plt.figure()
-        #set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
+        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
+        ax = fig.add_subplot(111)
+        # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
 
-        M = Basemap(projection='cyl',llcrnrlat=self.min_lat,urcrnrlat=self.max_lat,\
-                    llcrnrlon=self.min_lon,urcrnrlon=self.max_lon,resolution='l')
+        if not option['set_lat_lon']:
+            M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
+                        llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
+            M.drawparallels(np.arange(self.min_lat, self.max_lat + 30, 30.), labels=[True, False, False, True],
+                            dashes=[1, 0, 0, 1],
+                            linewidth=0.25, color='0.5')
+            M.drawmeridians(np.arange(self.min_lon, self.max_lon, 60.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
+                            linewidth=0.25, color='0.5')
 
-        
-        #fig.set_tight_layout(True)
-        #M = Basemap(projection='robin', resolution='l', lat_0=15, lon_0=0)
+        else:
+            M = Basemap(projection='cyl', llcrnrlat=option['min_lat'], urcrnrlat=option['max_lat'], \
+                        llcrnrlon=option['min_lon'], urcrnrlon=option['max_lon'], resolution='l')
+            M.drawparallels(np.arange(option['min_lat'], option['max_lat'] + 30, 30.), labels=[True, False, False, True],
+                            dashes=[1, 0, 0, 1],
+                            linewidth=0.25, color='0.5')
+            M.drawmeridians(np.arange(option['min_lon'], option['max_lon'], 60.), labels=[True, False, False, True],
+                            dashes=[1, 0, 0, 1],
+                            linewidth=0.25, color='0.5')
+
+        # M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat, \
+        #             llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
+
         M.drawmapboundary(fill_color='white', zorder=-1)
         M.fillcontinents(color='0.8', lake_color='white', zorder=0)
         M.drawcoastlines(color='0.6', linewidth=0.1)
-        #M.drawcountries(color='0.6', linewidth=0.1)
-       # M.drawparallels(np.arange(-60.,60.,30.), dashes=[1,1], linewidth=0.25, color='0.5')
-        #M.drawmeridians(np.arange(0., 360., 60.), dashes=[1,1], linewidth=0.25, color='0.5')
+
         loc_lon, loc_lat = M(stn_lon, stn_lat)
-        cs = M.scatter(loc_lon, loc_lat, 15, metric, cmap=cmap, norm=norm, marker='.', edgecolors='none', alpha=0.9)
-        cbaxes = fig.add_axes([0.26, 0.31, 0.5, 0.015])
-        cb = fig.colorbar(cs, cax=cbaxes, ticks=ticks, orientation='horizontal', spacing='uniform')
+        # cs = M.scatter(loc_lon, loc_lat, 15, metric, cmap=cmap, norm=norm, marker='.', edgecolors='none', alpha=0.9)
+        cs = M.scatter(loc_lon, loc_lat, option['markersize'], metric, cmap=cmap, norm=norm, marker=option['marker'],
+                       edgecolors='none', alpha=0.9)
+
+        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
+        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
+        plt.title(option['title'], fontsize=option['title_size'])
+
+        if 2 >= option["vmax"] - option["vmin"] > 1:
+            option['colorbar_ticks'] = 0.2
+        elif 10 >= option["vmax"] - option["vmin"] > 5:
+            option['colorbar_ticks'] = 1
+        elif 100 >= option["vmax"] - option["vmin"] > 10:
+            option['colorbar_ticks'] = 5
+        elif 1000 >= option["vmax"] - option["vmin"] > 100:
+            option['colorbar_ticks'] = 50
+        elif option["vmax"] - option["vmin"] > 1000:
+            option['colorbar_ticks'] = 500
+        else:
+            option['colorbar_ticks'] = 0.1
+
+        ticks = matplotlib.ticker.MultipleLocator(option["colorbar_ticks"])
+        mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+        if mticks[0] < option['vmin']:
+            mticks = mticks[1:]
+        if mticks[-1] > option['vmax']:
+            mticks = mticks[:-1]
+
+        if not option['colorbar_position_set']:
+            pos = ax.get_position()  # .bounds
+            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+            if option['colorbar_position'] == 'horizontal':
+                if len(option['xticklabel']) == 0:
+                    cbaxes = fig.add_axes([left, bottom - 0.15, width, 0.04])
+                else:
+                    cbaxes = fig.add_axes([left, bottom - 0.18, width, 0.04])
+            else:
+                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+        else:
+            cbaxes = fig.add_axes(
+                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
+
+        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                          orientation=option['colorbar_position'])
         cb.solids.set_edgecolor("face")
-        cb.set_label('%s'%(varname), position=(0.5, 1.5), labelpad=-35)
-        plt.savefig(f'{self.casedir}/output/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.png',  format='png',dpi=400)
+        # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
+        plt.savefig(
+            f'{self.casedir}/output/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option["saving_format"]}',
+            format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
 
     def make_plot_index(self):
+        option = self.fig_nml['make_stn_plot_index']
         # read the data
         df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv', header=0)
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
             print(f'plotting metric: {metric}')
+            option['colorbar_label'] = metric.replace('_', ' ')
             min_metric  = -999.0
             max_metric  = 100000.0
             #print(df['%s'%(metric)])
@@ -349,58 +502,37 @@ class Evaluation_stn(metrics,scores):
                 lon_select = data_select['sim_lon'].values
                 lat_select = data_select['sim_lat'].values 
             plotvar=data_select['%s'%(metric)].values
-            if metric == 'percent_bias':
-                vmin=-100.0
-                vmax= 100.0
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd, self.ref_varname[0],metric,'metrics')
-            elif metric == 'KGE':
-                vmin=-1
-                vmax= 1
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd, self.ref_varname[0],metric,'metrics')
-            elif metric == 'KGESS':
-                vmin=-1
-                vmax= 1
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd, self.ref_varname[0],metric,'metrics')
-            elif metric == 'NSE':
-                vmin=-1
-                vmax= 1
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd,  self.ref_varname[0],metric,'metrics')
-            elif metric == 'correlation':
-                vmin=-1
-                vmax= 1
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd,  self.ref_varname[0],metric,'metrics') 
-            elif metric == 'index_agreement':
-                vmin=-1
-                vmax= 1
-                bnd = np.linspace(vmin, vmax, 11)
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-                cmap = colors.ListedColormap(cpool)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-                self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd,  self.ref_varname[0],metric,'metrics')
 
+            import math
+            vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
+            if not option["vmin_max_on"]:
+                if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
+                    option["vmax"] = math.ceil(vmax)
+                    option["vmin"] = math.floor(vmin)
+                elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                    option["vmin"], option["vmax"] = -1, 1
+                elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                    option["vmin"], option["vmax"] = math.floor(vmin), 1
+                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've', 'absolute_percent_bias']:
+                    option["vmin"], option["vmax"] = 0, math.ceil(vmax)
+            # else:
+            #     option["vmin"], option["vmax"] = 0, 1
+
+            if option['cmap'] is not None:
+                cmap = cm.get_cmap(option['cmap'])
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+            else:
+                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
+                         '#313695']
+                cmap = colors.ListedColormap(cpool)
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm,  metric, 'metrics', option)
 
         for score in self.scores:
             print(f'plotting score: {score}')
+            option['colorbar_label'] = score.replace('_', ' ')
             min_score  = -999.0
             max_score  = 100000.0
             #print(df['%s'%(score)])
@@ -421,13 +553,23 @@ class Evaluation_stn(metrics,scores):
                 lon_select = data_select['sim_lon'].values
                 lat_select = data_select['sim_lat'].values 
             plotvar=data_select['%s'%(score)].values
-            vmin=0
-            vmax= 1
-            bnd = np.linspace(vmin, vmax, 11)
-            cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-            cmap = colors.ListedColormap(cpool)
-            norm = colors.BoundaryNorm(bnd, cmap.N)
-            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, bnd,  self.ref_varname[0],score,'scores')             
+
+            if not option["vmin_max_on"]:
+                option["vmin"], option["vmax"] = 0, 1
+                option['extend'] = 'neither'
+
+            if option['cmap'] is not None:
+                cmap = cm.get_cmap(option['cmap'])
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+            else:
+                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
+                         '#313695']
+                cmap = colors.ListedColormap(cpool)
+                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                norm = colors.BoundaryNorm(bnd, cmap.N)
+
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm,  score, 'scores', option)
 
     def make_evaluation_parallel(self,station_list,iik):
         s=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.sim_varname].to_array().squeeze()
@@ -462,7 +604,7 @@ class Evaluation_stn(metrics,scores):
                     row[f'{metric}']=pb.values
                 else:
                     row[f'{metric}']=-9999.0
-                    self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]))
+                    self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]), [station_list['ref_lat'], station_list['ref_lon']])
             else:
                 print(f'No such metric: {metric}')
                 sys.exit(1)
@@ -479,7 +621,7 @@ class Evaluation_stn(metrics,scores):
                 print('No such score')
                 sys.exit(1)
         
-        self.plot_stn(s,o,station_list['ID'][iik],self.ref_varname, float(row['RMSE']),float(row['KGESS']),float(row['correlation']))
+        self.plot_stn(s,o,station_list['ID'][iik],self.ref_varname, float(row['RMSE']),float(row['KGESS']),float(row['correlation']), [station_list['ref_lat'], station_list['ref_lon']])
         return row
         # return station_list
   
