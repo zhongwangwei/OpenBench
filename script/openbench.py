@@ -140,13 +140,13 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
     """Run the comparison process for each comparison variable."""
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
-    
+
     for cvar in comparison_vars:
         print("\033[1;32m" + "=" * 80 + "\033[0m")
         print(f"********************Start running {cvar} comparison...******************")
         comparison_method = f'scenarios_{cvar}_comparison'
         if hasattr(ch, comparison_method):
-            getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars)
+            getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, fig_nml[cvar])
         else:
             print(f"Error: The {cvar} module does not exist!")
             print(f"Please add the {cvar} function in the Comparison_handle class!")

@@ -54,7 +54,7 @@ class ComparisonProcessing(metrics,scores,statistics):
         #self.ref_source              =  ref_source
         #self.sim_source              =  sim_source
 
-   def scenarios_IGBP_groupby_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores, metrics):
+   def scenarios_IGBP_groupby_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores, metrics, option):
       def _IGBP_class_remap_cdo():
          """
          Compare the IGBP class of the model output data and the reference data
@@ -187,7 +187,7 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                      selected_metrics = self.metrics
                      #selected_metrics = list(selected_metrics)
-                     make_LC_based_heat_map(output_file_path, selected_metrics,'metric',0,2)
+                     make_LC_based_heat_map(output_file_path, selected_metrics,'metric',0,2,option)
                      print(f"IGBP class metrics comparison results are saved to {output_file_path}")
                      output_file_path2 =  os.path.join(dir_path,f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
 
@@ -224,7 +224,7 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                      selected_scores = self.scores
                      #selected_metrics = list(selected_metrics)
-                     make_LC_based_heat_map(output_file_path2, selected_scores,'score',0,1)
+                     make_LC_based_heat_map(output_file_path2, selected_scores,'score',0,1,option)
                      print(f"IGBP class scores comparison results are saved to {output_file_path2}")
 
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'IGBP_groupby')
@@ -240,9 +240,9 @@ class ComparisonProcessing(metrics,scores,statistics):
          print("Falling back to xarray-regrid remapping...")
          _PFT_class_remap(self)
 
-      _scenarios_IGBP_groupby(casedir,scores,metrics,sim_nml,ref_nml, evaluation_items)
+      _scenarios_IGBP_groupby(casedir,scores,metrics,sim_nml,ref_nml, evaluation_items,option)
 
-   def scenarios_PFT_groupby_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores, metrics):
+   def scenarios_PFT_groupby_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores, metrics, option):
       def _PFT_class_remap_cdo(self):
          """
          Compare the PFT class of the model output data and the reference data
@@ -374,7 +374,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                      #selected_metrics = list(selected_metrics)
 
 
-                     make_LC_based_heat_map(output_file_path, selected_metrics,'metric',0,2)
+                     make_LC_based_heat_map(output_file_path, selected_metrics,'metric',0,2,option)
                      print(f"PFT class metrics comparison results are saved to {output_file_path}")
                         
                      
@@ -411,7 +411,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write("\n")
 
                      selected_scores = self.scores
-                     make_LC_based_heat_map(output_file_path2, selected_scores,'score',0,1)
+                     make_LC_based_heat_map(output_file_path2, selected_scores,'score',0,1,option)
                      print(f"PFT class scores comparison results are saved to {output_file_path2}")      
 
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'PFT_groupby')
@@ -429,7 +429,7 @@ class ComparisonProcessing(metrics,scores,statistics):
          _PFT_class_remap(self)
       _scenarios_PFT_groupby(casedir,scores,metrics,sim_nml,ref_nml, evaluation_items)
  
-   def scenarios_HeatMap_comparison(self, casedir, sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_HeatMap_comparison(self, casedir, sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'HeatMap')
       if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
@@ -478,9 +478,9 @@ class ComparisonProcessing(metrics,scores,statistics):
                      output_file.write(f"{overall_mean_str}\t")
                   output_file.write("\n")
 
-         make_scenarios_scores_comparison_heat_map(output_file_path, score)
+         make_scenarios_scores_comparison_heat_map(output_file_path, score, option)
 
-   def scenarios_Taylor_Diagram_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Taylor_Diagram_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Taylor_Diagram')
       if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
@@ -602,9 +602,9 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                output_file.write(f"{std_ref}\n")
 
-            make_scenarios_comparison_Taylor_Diagram(casedir,evaluation_item,stds,RMSs,cors,ref_source,sim_sources)
+            make_scenarios_comparison_Taylor_Diagram(casedir,evaluation_item,stds,RMSs,cors,ref_source,sim_source, options)
 
-   def scenarios_Target_Diagram_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Target_Diagram_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Target_Diagram')
       if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
@@ -719,9 +719,9 @@ class ComparisonProcessing(metrics,scores,statistics):
                      crmsds[i]=crmsd_sim
     
                output_file.write("\n")
-               make_scenarios_comparison_Target_Diagram(dir_path,evaluation_item,biases,rmses,crmsds,ref_source,sim_sources)
+               make_scenarios_comparison_Target_Diagram(dir_path,evaluation_item,biases,rmses,crmsds,ref_source,sim_sources, option)
 
-   def scenarios_Kernel_Density_Estimate_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Kernel_Density_Estimate_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Kernel_Density_Estimate')
       if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
@@ -765,7 +765,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                   datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                try:
-                  make_scenarios_comparison_Kernel_Density_Estimate(dir_path,evaluation_item,ref_source,sim_sources,score,datasets_filtered)
+                  make_scenarios_comparison_Kernel_Density_Estimate(dir_path,evaluation_item,ref_source,sim_sources,score,datasets_filtered, option)
                except:
                   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
 
@@ -799,11 +799,11 @@ class ComparisonProcessing(metrics,scores,statistics):
                   datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                try:
-                  make_scenarios_comparison_Kernel_Density_Estimate(dir_path,evaluation_item,ref_source,sim_sources,metric,datasets_filtered)
+                  make_scenarios_comparison_Kernel_Density_Estimate(dir_path,evaluation_item,ref_source,sim_sources,metric,datasets_filtered, option)
                except:
                   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
-   def scenarios_Parallel_Coordinates_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Parallel_Coordinates_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
       if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
@@ -888,9 +888,9 @@ class ComparisonProcessing(metrics,scores,statistics):
       metrics = [metric for metric in metrics if metric in df.columns]
       output_file_path1 = f"{dir_path}/Parallel_Coordinates_evaluations_remove_nan.txt"
       df.to_csv(output_file_path1, sep='\t', index=False)
-      make_scenarios_comparison_parallel_coordinates(output_file_path1,self.casedir, evaluation_items,ref_sources,sim_sources,scores,metrics)
+      make_scenarios_comparison_parallel_coordinates(output_file_path1,self.casedir, evaluation_items,ref_sources,sim_sources,scores,metrics, option)
 
-   def scenarios_Portrait_Plot_seasonal_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Portrait_Plot_seasonal_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       #scenarios_portrait_plot is special, need to recalculate the scores and metrics
       #read the simulation source and reference source
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Portrait_Plot_seasonal')
@@ -1070,9 +1070,9 @@ class ComparisonProcessing(metrics,scores,statistics):
                print(" ")
                print(" ")
         
-      make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path,self.casedir, evaluation_items,ref_sources,sim_sources,scores,metrics)
+      make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path,self.casedir, evaluation_items,ref_sources,sim_sources,scores,metrics, option)
 
-   def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics):
+   def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Whisker_Plot')      
       if os.path.exists(dir_path):
          shutil.rmtree(dir_path)
@@ -1118,7 +1118,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                      datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                   try:
-                     make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, score, datasets_filtered)
+                     make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, score, datasets_filtered, option)
                   except:
                      print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!")
 
@@ -1156,11 +1156,11 @@ class ComparisonProcessing(metrics,scores,statistics):
                      datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                   #try:
-                  make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric, datasets_filtered)
+                  make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric, datasets_filtered, option)
                   #except:
                   #   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
 
-   def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics):
+   def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
       
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Relative_Score')
       if os.path.exists(dir_path):
@@ -1268,7 +1268,7 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                             #print(f"Relative scores calculated and saved for {evaluation_item}, {ref_source}, {sim_source}, {score}")
    
-   def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics):
+   def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Single_Model_Performance_Index')
       if os.path.exists(dir_path):
          shutil.rmtree(dir_path)
@@ -1411,11 +1411,11 @@ class ComparisonProcessing(metrics,scores,statistics):
                print(f"Completed SMPI calculation for {evaluation_item}")
                print("===============================================================================")
       # After all calculations are done, call the plotting function
-      make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml)
+      make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option)
 
       return 
    
-   def scenarios_Ridgeline_Plot_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics):
+   def scenarios_Ridgeline_Plot_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
       if os.path.exists(dir_path):
          shutil.rmtree(dir_path)
@@ -1459,7 +1459,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                   datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                try:
-                  make_scenarios_comparison_Ridgeline_Plot(dir_path,evaluation_item,ref_source,sim_sources,score,datasets_filtered)
+                  make_scenarios_comparison_Ridgeline_Plot(dir_path,evaluation_item,ref_source,sim_sources,score,datasets_filtered, option)
                except:
                   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Ridgeline_Plot failed!")
 
@@ -1498,7 +1498,7 @@ class ComparisonProcessing(metrics,scores,statistics):
                   datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                try:
-                  make_scenarios_comparison_Ridgeline_Plot(dir_path,evaluation_item,ref_source,sim_sources,metric,datasets_filtered)
+                  make_scenarios_comparison_Ridgeline_Plot(dir_path,evaluation_item,ref_source,sim_sources,metric,datasets_filtered, option)
                except:
                   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
    
