@@ -263,7 +263,6 @@ class UpdateFigNamelist(NamelistReader):
             self._process_validation_source(fig_nml, key)
 
     def _process_comparison_item(self, fig_nml: Dict[str, Any], comparisons: List[str]):
-
         # Process reference sources
         for comparison in comparisons:
             self._process_comparison_source(fig_nml, comparison)
@@ -279,10 +278,10 @@ class UpdateFigNamelist(NamelistReader):
     def _process_comparison_source(self, fig_nml: Dict[str, Any], comparison: str):
         """Process a single simulation source for an evaluation item."""
         # Read the namelist for this simulation source
-        tmp = self._read_source_namelist(fig_nml, comparison, 'Comparison')
+        tmp = self._read_source_namelist(fig_nml, f'{comparison}_source', 'Comparison')
         # Initialize the evaluation item dictionary if it doesn't exist
-        fig_nml['Comparison'].setdefault(comparison[:-7], {})
-        fig_nml['Comparison'][comparison[:-7]] = tmp['general']
+        fig_nml['Comparison'].setdefault(comparison, {})
+        fig_nml['Comparison'][comparison] = tmp['general']
 
     def _read_source_namelist(self, nml: Dict[str, Any], key: str, source_type: str):
         """Read the namelist for a given source."""
