@@ -1,6 +1,3 @@
-import xarray as xr
-import numpy as np
-
 class UnitProcessing:
 	def __init__(self, info):
 		self.name = 'plotting'
@@ -35,18 +32,18 @@ class UnitProcessing:
 			},
 			'w m-2': {
 				'MJ m-2 day-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
-				'MJ m-2 d-1': lambda x: x * 11.574074074074074,    # 1 / 0.0864
+				'MJ m-2 d-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
 			},
 			'unitless': {
 				'percent': lambda x: x / 100,
 				'percentage': lambda x: x / 100,
-				'%':lambda x: x / 100,
-				'g kg-1':lambda x: x / 1000,
-				'fraction':lambda x: x ,
+				'%': lambda x: x / 100,
+				'g kg-1': lambda x: x / 1000,
+				'fraction': lambda x: x,
 			},
 			'K': {
 				'C': lambda x: x + 273.15,
-				'F': lambda x: (x - 32) * 5/9 + 273.15,
+				'F': lambda x: (x - 32) * 5 / 9 + 273.15,
 			},
 			'm3 s-1': {
 				'm3 day-1': lambda x: x / 86400,
@@ -56,23 +53,22 @@ class UnitProcessing:
 			'mcm': {
 				'm3': lambda x: x * 1e6,
 				'km3': lambda x: x / 1000,
-				'million cubic meters':lambda x: x,
+				'million cubic meters': lambda x: x,
 			},
 			'mm year-1': {
-				'mm day-1': lambda x: x / 365.25,
 				'm year-1': lambda x: x / 1000,
 				'cm year-1': lambda x: x / 10,
-				'kg m-2':lambda x: x ,
-				'mm month-1':lambda x: x * 12  ,
-				'mm mon-1':lambda x: x * 12  ,
-				'mm day-1':lambda x: x * 12 *365 ,
+				'kg m-2': lambda x: x,
+				'mm month-1': lambda x: x * 12,
+				'mm mon-1': lambda x: x * 12,
+				'mm day-1': lambda x: x * 365,
 			},
 			'm': {
 				'cm': lambda x: x / 100,
 				'mm': lambda x: x / 1000,
 			},
 			'km2': {
-				'm2': lambda x: x /1.e6,
+				'm2': lambda x: x / 1.e6,
 			},
 		}
 		
@@ -103,4 +99,3 @@ class UnitProcessing:
 		Check if input units match target units.
 		"""
 		return sorted(input_units.lower().split()) == sorted(target_units.lower().split())
-

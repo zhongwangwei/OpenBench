@@ -412,7 +412,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         station = station_list.iloc[index]
         start_year = int(station['use_syear'])
         end_year = int(station['use_eyear'])     
-        file_path = f'{station['sim_dir']}' if datasource == 'sim' else f'{station['ref_dir']}'
+        file_path = f'{station["sim_dir"]}' if datasource == 'sim' else f'{station["ref_dir"]}'
         with xr.open_dataset(file_path) as stn_data:
             processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
             self.save_station_data(processed_data, station, datasource)
@@ -526,7 +526,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         self.combine_and_save_data(var_files, data_params)
 
     def combine_and_save_data(self, var_files: List[str], data_params: Dict[str, Any]) -> None:
-        print(var_files)
+        # print(var_files)
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
             ds = ds.where((ds > -1e20) & (ds < 1e20), np.nan)
