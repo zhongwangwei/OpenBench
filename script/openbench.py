@@ -16,7 +16,7 @@ import sys
 import os
 import shutil
 import time
-from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist
+from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Evaluation import Evaluation_grid, Evaluation_stn
 from Mod_DatasetProcessing import DatasetProcessing
 from Mod_Comparison  import ComparisonProcessing
@@ -78,9 +78,10 @@ def load_namelists(nl, main_nl):
         stats_nml = nl.read_namelist(main_nl["general"]["statistics_nml"])
     except:
         stats_nml = None
-    return ref_nml, sim_nml, stats_nml
+    fig_nml = nl.read_namelist(main_nl["general"]["figure_nml"])
+    return ref_nml, sim_nml, stats_nml, fig_nml
 
-def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars):
+def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml):
     """Run the evaluation process for each item."""
     for evaluation_item in evaluation_items:
         print(f"Start running {evaluation_item} evaluation...")
@@ -98,10 +99,10 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         for ref_source in ref_sources:
             onetimeref=True
             for sim_source in sim_sources:
-                process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
+                process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
                 onetimeref=False
 
-def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source):
+def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
     """Process a single evaluation for given sources."""
     print(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
@@ -127,25 +128,25 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     
     # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        evaluater = Evaluation_stn(general_info)
+        evaluater = Evaluation_stn(general_info,fig_nml)
         evaluater.make_evaluation_P()
     else:
-        evaluater = Evaluation_grid(general_info)
+        evaluater = Evaluation_grid(general_info,fig_nml)
         evaluater.make_Evaluation()
     
     evaluater.make_plot_index()
 
-def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars):
+def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml):
     """Run the comparison process for each comparison variable."""
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
-    
+
     for cvar in comparison_vars:
         print("\033[1;32m" + "=" * 80 + "\033[0m")
         print(f"********************Start running {cvar} comparison...******************")
         comparison_method = f'scenarios_{cvar}_comparison'
         if hasattr(ch, comparison_method):
-            getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars)
+            getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, fig_nml[cvar])
         else:
             print(f"Error: The {cvar} module does not exist!")
             print(f"Please add the {cvar} function in the Comparison_handle class!")
@@ -184,7 +185,7 @@ def main():
     setup_directories(main_nl)
     
     # Load namelists
-    ref_nml, sim_nml, stats_nml = load_namelists(nl, main_nl)
+    ref_nml, sim_nml, stats_nml, fig_nml = load_namelists(nl, main_nl)
     
     # Select variables based on main namelist settings
     evaluation_items = nl.select_variables(main_nl['evaluation_items']).keys()
@@ -195,11 +196,12 @@ def main():
     
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
-    
+
+    UpdateFigNamelist(main_nl, fig_nml, comparison_vars)
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
         start_time = time.time()
-        run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars)
+        run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml['Validation'])
         end_time = time.time()
         evaluation_time = (end_time - start_time)/60
         print(f"\n\033[1;36mEvaluation process completed in {evaluation_time:.2f} minutes.\033[0m")
@@ -207,7 +209,7 @@ def main():
     # Run comparison if enabled
     if main_nl['general']['comparison']:
         start_time = time.time()
-        run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars)
+        run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml['Comparison'])
         end_time = time.time()
         comparison_time = (end_time - start_time)/60
         print(f"\n\033[1;36mComparison process completed in {comparison_time:.2f} minutes.\033[0m")
