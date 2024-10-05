@@ -75,17 +75,17 @@ class UnitProcessing:
 				'm2': lambda x: x /1.e6,
 			},
 		}
+		
 		for base_unit, conversions in conversion_factors.items():
 			if input_unit == base_unit:
 				return data, base_unit
 			elif input_unit in conversions:
 				converted_data = conversions[input_unit](data)
 				return converted_data, base_unit
-			else:
-				print(f'no conversion is found for {input_unit}')
-				exit()
-
-	
+		
+		# If no conversion is found after checking all base units
+		print(f'No conversion found for {input_unit}')
+		raise ValueError(f'Unsupported input unit: {input_unit}')
 
 	@staticmethod
 	def process_unit(self, data, unit):
