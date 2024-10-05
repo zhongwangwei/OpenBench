@@ -1,7 +1,7 @@
 import numpy as np
 import os, sys
 import xarray as xr
-import shutil 
+import shutil
 import pandas as pd
 from joblib import Parallel, delayed
 from matplotlib import colors
@@ -9,11 +9,13 @@ from matplotlib import colors
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 import warnings
+
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 from matplotlib import colors
 from matplotlib import cm
 
-class Evaluation_grid(metrics,scores):
+
+class Evaluation_grid(metrics, scores):
     def __init__(self, info, fig_nml):
         self.name = 'Evaluation_grid'
         self.version = '0.1'
@@ -22,7 +24,7 @@ class Evaluation_grid(metrics,scores):
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
         self.fig_nml = fig_nml
-        os.makedirs(self.casedir+'/output/', exist_ok=True)
+        os.makedirs(self.casedir + '/output/', exist_ok=True)
 
         print(" ")
         print("\033[1;32m╔═══════════════════════════════════════════════════════════════╗\033[0m")
@@ -32,19 +34,22 @@ class Evaluation_grid(metrics,scores):
 
     def process_metric(self, metric, s, o, vkey=''):
         pb = getattr(self, metric)(s, o)
-        pb=pb.squeeze()
+        pb = pb.squeeze()
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
-        pb_da.to_netcdf(f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
+        pb_da.to_netcdf(
+            f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
 
     def process_score(self, score, s, o, vkey=''):
         pb = getattr(self, score)(s, o)
-        pb=pb.squeeze()
+        pb = pb.squeeze()
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
         pb_da.to_netcdf(f'{self.casedir}/output/scores/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
 
     def make_Evaluation(self, **kwargs):
-        o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[f'{self.ref_varname}'] 
-        s = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')[f'{self.sim_varname}'] 
+        o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[
+            f'{self.ref_varname}']
+        s = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')[
+            f'{self.sim_varname}']
 
         s['time'] = o['time']
 
@@ -74,7 +79,7 @@ class Evaluation_grid(metrics,scores):
 
     def make_plot_index(self):
         option = self.fig_nml['make_geo_plot_index']
-        key=self.ref_varname
+        key = self.ref_varname
         for metric in self.metrics:
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
@@ -92,7 +97,8 @@ class Evaluation_grid(metrics,scores):
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                     option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
-                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've', 'absolute_percent_bias']:
+                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
+                                'absolute_percent_bias']:
                     option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
             # else:
             #     option["vmin"], option["vmax"] = 0, 1
@@ -109,8 +115,8 @@ class Evaluation_grid(metrics,scores):
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
             self.plot_map(cmap, norm, bnd, metric, 'metrics', option)
-     
-        #print("\033[1;32m" + "=" * 80 + "\033[0m")
+
+        # print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
             print(f'plotting score: {score}')
             option['colorbar_label'] = score.replace('_', ' ')
@@ -140,9 +146,9 @@ class Evaluation_grid(metrics,scores):
         import xarray as xr
         from mpl_toolkits.basemap import Basemap
         from matplotlib import rcParams
-        # try:
-        #     font = {'family': option['font']}
-        # except:
+
+        # font = {'family': option['font']}
+
         # font = {'family' : 'Myriad Pro'}
         # matplotlib.rc('font', **font)
 
@@ -238,7 +244,8 @@ class Evaluation_grid(metrics,scores):
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
 
-class Evaluation_stn(metrics,scores):
+
+class Evaluation_stn(metrics, scores):
     def __init__(self, info, fig_nml):
         self.name = 'Evaluation_point'
         self.version = '0.1'
@@ -250,34 +257,38 @@ class Evaluation_stn(metrics,scores):
         if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
 
-        print ('Evaluation processes starting!')
+        print('Evaluation processes starting!')
         print("=======================================")
         print(" ")
-        print(" ")  
+        print(" ")
 
     def make_evaluation(self):
-        #read station information
-        stnlist  =f"{self.casedir}/stn_list.txt"
-        station_list = pd.read_csv(stnlist,header=0)
+        # read station information
+        stnlist = f"{self.casedir}/stn_list.txt"
+        station_list = pd.read_csv(stnlist, header=0)
 
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
-            station_list[f'{metric}']=[-9999.0] * len(station_list['ID'])
+            station_list[f'{metric}'] = [-9999.0] * len(station_list['ID'])
         for score in self.scores:
-            station_list[f'{score}']=[-9999.0] * len(station_list['ID'])
+            station_list[f'{score}'] = [-9999.0] * len(station_list['ID'])
         for iik in range(len(station_list['ID'])):
-            s=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.sim_varname]
-            o=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.ref_varname]
+            s = xr.open_dataset(
+                f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+                self.sim_varname]
+            o = xr.open_dataset(
+                f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+                self.ref_varname]
             s['time'] = o['time']
             mask1 = np.isnan(s) | np.isnan(o)
             s.values[mask1] = np.nan
             o.values[mask1] = np.nan
-            
+
             for metric in self.metrics:
                 if hasattr(self, metric):
                     pb = getattr(self, metric)(s, o)
-                    station_list.loc[iik, f'{metric}']=pb.values
-                  #  self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]))
+                    station_list.loc[iik, f'{metric}'] = pb.values
+                #  self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]))
                 else:
                     print('No such metric')
                     sys.exit(1)
@@ -285,7 +296,7 @@ class Evaluation_stn(metrics,scores):
             for score in self.scores:
                 if hasattr(self, score):
                     pb = getattr(self, score)(s, o)
-                
+
                 else:
                     print('No such score')
                     sys.exit(1)
@@ -294,14 +305,17 @@ class Evaluation_stn(metrics,scores):
             print(" ")
             print(" ")
 
-        
-        print ('Comparison dataset prepared!')
+        print('Comparison dataset prepared!')
         print("=======================================")
         print(" ")
-        print(" ")  
+        print(" ")
         print(f"send {self.ref_varname} evaluation to {self.ref_varname}_{self.sim_varname}_metric.csv'")
-        station_list.to_csv(f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metric.csv',index=False)
-        station_list.to_csv(f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',index=False)
+        station_list.to_csv(
+            f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metric.csv',
+            index=False)
+        station_list.to_csv(
+            f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',
+            index=False)
 
     def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         option = self.fig_nml['plot_stn']
@@ -334,6 +348,7 @@ class Evaluation_stn(metrics,scores):
         linestyles = [option['obs_linestyle'], option['sim_linestyle']]
 
         hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
+        import re
         if bool(re.match(hex_pattern, f"#{option['obs_linecolor']}")) and bool(
                 re.match(hex_pattern, f"#{option['sim_linecolor']}")):
             colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
@@ -366,7 +381,8 @@ class Evaluation_stn(metrics,scores):
             ax.grid(linestyle=option['grid_linestyle'], alpha=0.7, linewidth=option['grid_width'])
 
         # plt.tight_layout()
-        plt.savefig(f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option["saving_format"]}',
+        plt.savefig(
+            f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option["saving_format"]}',
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close(fig)
 
@@ -477,20 +493,21 @@ class Evaluation_stn(metrics,scores):
     def make_plot_index(self):
         option = self.fig_nml['make_stn_plot_index']
         # read the data
-        df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv', header=0)
+        df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
+                         header=0)
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
-            min_metric  = -999.0
-            max_metric  = 100000.0
-            #print(df['%s'%(metric)])
-            ind0 = df[df['%s'%(metric)]>min_metric].index
+            min_metric = -999.0
+            max_metric = 100000.0
+            # print(df['%s'%(metric)])
+            ind0 = df[df['%s' % (metric)] > min_metric].index
             data_select0 = df.loc[ind0]
-            #print(data_select0[data_select0['%s'%(metric)] < max_metric])
-            ind1 = data_select0[data_select0['%s'%(metric)] < max_metric].index
+            # print(data_select0[data_select0['%s'%(metric)] < max_metric])
+            ind1 = data_select0[data_select0['%s' % (metric)] < max_metric].index
             data_select = data_select0.loc[ind1]
-            #if key=='discharge':
+            # if key=='discharge':
             #    #ind2 = data_select[abs(data_select['err']) < 0.001].index
             #    #data_select = data_select.loc[ind2]
             #    ind3 = data_select[abs(data_select['area1']) > 1000.].index
@@ -500,8 +517,8 @@ class Evaluation_stn(metrics,scores):
                 lat_select = data_select['ref_lat'].values
             except:
                 lon_select = data_select['sim_lon'].values
-                lat_select = data_select['sim_lat'].values 
-            plotvar=data_select['%s'%(metric)].values
+                lat_select = data_select['sim_lat'].values
+            plotvar = data_select['%s' % (metric)].values
 
             import math
             vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
@@ -513,7 +530,8 @@ class Evaluation_stn(metrics,scores):
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                     option["vmin"], option["vmax"] = math.floor(vmin), 1
-                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've', 'absolute_percent_bias']:
+                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
+                                'absolute_percent_bias']:
                     option["vmin"], option["vmax"] = 0, math.ceil(vmax)
             # else:
             #     option["vmin"], option["vmax"] = 0, 1
@@ -528,20 +546,20 @@ class Evaluation_stn(metrics,scores):
                 cmap = colors.ListedColormap(cpool)
                 bnd = np.linspace(option['vmin'], option['vmax'], 11)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
-            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm,  metric, 'metrics', option)
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', option)
 
         for score in self.scores:
             print(f'plotting score: {score}')
             option['colorbar_label'] = score.replace('_', ' ')
-            min_score  = -999.0
-            max_score  = 100000.0
-            #print(df['%s'%(score)])
-            ind0 = df[df['%s'%(score)]>min_score].index
+            min_score = -999.0
+            max_score = 100000.0
+            # print(df['%s'%(score)])
+            ind0 = df[df['%s' % (score)] > min_score].index
             data_select0 = df.loc[ind0]
-            #print(data_select0[data_select0['%s'%(score)] < max_score])
-            ind1 = data_select0[data_select0['%s'%(score)] < max_score].index
+            # print(data_select0[data_select0['%s'%(score)] < max_score])
+            ind1 = data_select0[data_select0['%s' % (score)] < max_score].index
             data_select = data_select0.loc[ind1]
-            #if key=='discharge':
+            # if key=='discharge':
             #    #ind2 = data_select[abs(data_select['err']) < 0.001].index
             #    #data_select = data_select.loc[ind2]
             #    ind3 = data_select[abs(data_select['area1']) > 1000.].index
@@ -551,8 +569,8 @@ class Evaluation_stn(metrics,scores):
                 lat_select = data_select['ref_lat'].values
             except:
                 lon_select = data_select['sim_lon'].values
-                lat_select = data_select['sim_lat'].values 
-            plotvar=data_select['%s'%(score)].values
+                lat_select = data_select['sim_lat'].values
+            plotvar = data_select['%s' % (score)].values
 
             if not option["vmin_max_on"]:
                 option["vmin"], option["vmax"] = 0, 1
@@ -569,42 +587,52 @@ class Evaluation_stn(metrics,scores):
                 bnd = np.linspace(option['vmin'], option['vmax'], 11)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
-            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm,  score, 'scores', option)
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, score, 'scores', option)
 
-    def make_evaluation_parallel(self,station_list,iik):
-        s=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.sim_varname].to_array().squeeze()
-        o=xr.open_dataset(f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[self.ref_varname].to_array().squeeze()
+    def make_evaluation_parallel(self, station_list, iik):
+        s = xr.open_dataset(
+            f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+            self.sim_varname].to_array().squeeze()
+        o = xr.open_dataset(
+            f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+            self.ref_varname].to_array().squeeze()
 
         s['time'] = o['time']
         mask1 = np.isnan(s) | np.isnan(o)
         s.values[mask1] = np.nan
         o.values[mask1] = np.nan
-        #remove the nan values
-        #s=s.dropna(dim='time').astype(np.float32)
-        #o=o.dropna(dim='time').astype(np.float32)
-        row={}
+        # remove the nan values
+        # s=s.dropna(dim='time').astype(np.float32)
+        # o=o.dropna(dim='time').astype(np.float32)
+        row = {}
         # for based plot
         try:
-            row['KGESS']=self.KGESS(s, o).values
+            row['KGESS'] = self.KGESS(s, o).values
         except:
-            row['KGESS']=-9999.0
+            row['KGESS'] = -9999.0
         try:
-            row['RMSE']=self.rmse(s, o).values
+            row['RMSE'] = self.rmse(s, o).values
         except:
-            row['RMSE']=-9999.0 
+            row['RMSE'] = -9999.0
         try:
-            row['correlation']=self.correlation(s, o).values
+            row['correlation'] = self.correlation(s, o).values
         except:
-            row['correlation']=-9999.0   
-        
+            row['correlation'] = -9999.0
+
         for metric in self.metrics:
             if hasattr(self, metric):
                 pb = getattr(self, metric)(s, o)
                 if pb.values is not None:
-                    row[f'{metric}']=pb.values
+                    row[f'{metric}'] = pb.values
                 else:
-                    row[f'{metric}']=-9999.0
-                    self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]), [station_list['ref_lat'], station_list['ref_lon']])
+                    row[f'{metric}'] = -9999.0
+                    if 'ref_lat' in station_list:
+                        lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
+                    else:
+                        lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
+                    self.plot_stn(s.squeeze(), o.squeeze(), station_list['ID'][iik], self.ref_varname,
+                                  float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),
+                                  float(station_list['correlation'][iik]), lat_lon)
             else:
                 print(f'No such metric: {metric}')
                 sys.exit(1)
@@ -612,42 +640,49 @@ class Evaluation_stn(metrics,scores):
         for score in self.scores:
             if hasattr(self, score):
                 pb2 = getattr(self, score)(s, o)
-                #if pb2.values is not None:
+                # if pb2.values is not None:
                 if pb2.values is not None:
-                    row[f'{score}']=pb2.values
+                    row[f'{score}'] = pb2.values
                 else:
-                    row[f'{score}']=-9999.0
+                    row[f'{score}'] = -9999.0
             else:
                 print('No such score')
                 sys.exit(1)
-        
-        self.plot_stn(s,o,station_list['ID'][iik],self.ref_varname, float(row['RMSE']),float(row['KGESS']),float(row['correlation']), [station_list['ref_lat'], station_list['ref_lon']])
+
+        if 'ref_lat' in station_list:
+            lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
+        else:
+            lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
+        self.plot_stn(s, o, station_list['ID'][iik], self.ref_varname, float(row['RMSE']), float(row['KGESS']),
+                      float(row['correlation']), lat_lon)
         return row
         # return station_list
-  
+
     def make_evaluation_P(self):
-        stnlist  =f"{self.casedir}/stn_list.txt"
-        station_list = pd.read_csv(stnlist,header=0)
+        stnlist = f"{self.casedir}/stn_list.txt"
+        station_list = pd.read_csv(stnlist, header=0)
         num_cores = os.cpu_count()  ##用来计算现在可以获得多少cpu核心。 也可以用multipocessing.cpu_count(),或者随意设定<=cpu核心数的数值
-        #shutil.rmtree(f'{self.casedir}/output',ignore_errors=True)
-        #creat tmp directory
-        #os.makedirs(f'{self.casedir}/output', exist_ok=True)
+        # shutil.rmtree(f'{self.casedir}/output',ignore_errors=True)
+        # creat tmp directory
+        # os.makedirs(f'{self.casedir}/output', exist_ok=True)
 
         # loop the keys in self.variables
         # loop the keys in self.variables to get the metric output
-        #for metric in self.metrics.keys():
+        # for metric in self.metrics.keys():
         #    station_list[f'{metric}']=[-9999.0] * len(station_list['ID'])
-        #if self.ref_source.lower() == 'grdc':
+        # if self.ref_source.lower() == 'grdc':
 
         results=Parallel(n_jobs=-1)(delayed(self.make_evaluation_parallel)(station_list,iik) for iik in range(len(station_list['ID'])))
         station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
-        print ('Evaluation finished')
+        print('Evaluation finished')
         print("=======================================")
         print(" ")
-        print(" ")  
+        print(" ")
         print(f"send evaluation to {self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations")
         print(f"send evaluation to {self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations")
 
-        station_list.to_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',index=False)
-        station_list.to_csv(f'{self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',index=False)
+        station_list.to_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
+                            index=False)
+        station_list.to_csv(f'{self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
+                            index=False)

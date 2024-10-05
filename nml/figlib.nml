@@ -5,14 +5,16 @@
 /
 
 &comparison_nml
-    make_scenarios_comparison_Portrait_Plot_seasonal_source          = ./nml/fignml/make_scenarios_comparison_Portrait_Plot_seasonal.nml
-    make_scenarios_scores_comparison_heat_map_source                 = ./nml/fignml/make_scenarios_scores_comparison_heat_map.nml
-    make_scenarios_comparison_parallel_coordinates_source            = ./nml/fignml/make_scenarios_comparison_parallel_coordinates.nml
-    make_scenarios_comparison_Taylor_Diagram_source                  = ./nml/fignml/make_scenarios_comparison_Taylor_Diagram.nml
-    make_scenarios_comparison_Target_Diagram_source                  = ./nml/fignml/make_scenarios_comparison_Target_Diagram.nml
-    make_scenarios_comparison_Kernel_Density_Estimate_source         = ./nml/fignml/make_scenarios_comparison_Kernel_Density_Estimate.nml
-    make_LC_based_heat_map_source                                    = ./nml/fignml/make_LC_based_heat_map.nml
-    make_scenarios_comparison_Whisker_Plot_source                    = ./nml/fignml/make_scenarios_comparison_Whisker_Plot.nml
-    make_scenarios_comparison_Single_Model_Performance_Index_source  = ./nml/fignml/make_scenarios_comparison_Single_Model_Performance_Index.nml
-    make_scenarios_comparison_Ridgeline_Plot_source                  = ./nml/fignml/make_scenarios_comparison_Ridgeline_Plot.nml
+    IGBP_groupby_source                    = ./nml/fignml/IGBP_groupby_source.nml
+    PFT_groupby_source                     = ./nml/fignml/PFT_groupby_source.nml
+    HeatMap_source                         = ./nml/fignml/HeatMap_source.nml
+    Taylor_Diagram_source                  = ./nml/fignml/Taylor_Diagram.nml
+    Target_Diagram_source                  = ./nml/fignml/Target_Diagram.nml
+    Kernel_Density_Estimate_source         = ./nml/fignml/Kernel_Density_Estimate.nml
+    Whisker_Plot_source                    = ./nml/fignml/Whisker_Plot.nml
+    parallel_coordinates_source            = ./nml/fignml/parallel_coordinates.nml
+    Portrait_Plot_seasonal_source          = ./nml/fignml/Portrait_Plot_seasonal.nml
+    Single_Model_Performance_Index_source  = ./nml/fignml/Single_Model_Performance_Index.nml
+    Relative_Score_source                  = ./nml/fignml/Relative_Score.nml
+    Ridgeline_Plot_source                  = ./nml/fignml/Ridgeline_Plot.nml
 /
