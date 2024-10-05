@@ -412,7 +412,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         station = station_list.iloc[index]
         start_year = int(station['use_syear'])
         end_year = int(station['use_eyear'])     
-        file_path = f'{station['sim_dir']}' if datasource == 'sim' else f'{station['ref_dir']}'
+        file_path = f'{station["sim_dir"]}' if datasource == 'sim' else f'{station["ref_dir"]}'
         with xr.open_dataset(file_path) as stn_data:
             processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
             self.save_station_data(processed_data, station, datasource)
