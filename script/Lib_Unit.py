@@ -56,13 +56,12 @@ class UnitProcessing:
 				'million cubic meters': lambda x: x,
 			},
 			'mm year-1': {
-				'mm day-1': lambda x: x / 365.25,
 				'm year-1': lambda x: x / 1000,
 				'cm year-1': lambda x: x / 10,
 				'kg m-2': lambda x: x,
 				'mm month-1': lambda x: x * 12,
 				'mm mon-1': lambda x: x * 12,
-				'mm day-1': lambda x: x * 12 * 365,
+				'mm day-1': lambda x: x * 365,
 			},
 			'm': {
 				'cm': lambda x: x / 100,
