@@ -526,7 +526,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         self.combine_and_save_data(var_files, data_params)
 
     def combine_and_save_data(self, var_files: List[str], data_params: Dict[str, Any]) -> None:
-        print(var_files)
+        # print(var_files)
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
             ds = ds.where((ds > -1e20) & (ds < 1e20), np.nan)
