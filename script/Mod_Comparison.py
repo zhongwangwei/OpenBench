@@ -607,7 +607,7 @@ class ComparisonProcessing(metrics,scores,statistics):
 
                output_file.write(f"{std_ref}\n")
 
-            make_scenarios_comparison_Taylor_Diagram(casedir,evaluation_item,stds,RMSs,cors,ref_source,sim_source, options)
+            make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option)
 
    def scenarios_Target_Diagram_comparison(self,casedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Target_Diagram')

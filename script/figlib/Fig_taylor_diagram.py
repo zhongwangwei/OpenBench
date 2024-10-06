@@ -8,43 +8,66 @@ import numpy as np
 
 import matplotlib
 import matplotlib.pyplot as plt
-from   matplotlib import colors
-from   mpl_toolkits.basemap import Basemap
-from   matplotlib import rcParams
-from   matplotlib import ticker
+from matplotlib import colors
+from mpl_toolkits.basemap import Basemap
+from matplotlib import rcParams
+from matplotlib import ticker
 import math
 import matplotlib.colors as clr
 import itertools
 
-def make_scenarios_comparison_Taylor_Diagram(basedir,evaluation_item, stds,RMSs,cors,ref_source,sim_sources):
-    fig, ax = plt.subplots(figsize=(6, 6))
-    metrics = ["Standard deviation", "CRMSD", "Correlation"]
 
-    #titles = generate_markers(sim_sources)
+def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMSs, cors, ref_source, sim_sources, option):
+    font = {'family': 'DejaVu Sans'}
+    # font = {'family': option['font']}
+    matplotlib.rc('font', **font)
 
-    MARKERS =generate_markers(sim_sources)
-    #tickRMS_range_max=max(RMSs)+np.max(RMSs)*0.2
-    #tickRMS_range_min=max( np.min(RMSs)-np.min(RMSs)*0.2, 0.0)
-    #tickRMS_range_step=(tickRMS_range_max-tickRMS_range_min)/5
+    params = {'backend': 'ps',
+              'axes.linewidth': option['axes_linewidth'],
+              'font.size': option['fontsize'],
+              'xtick.direction': 'out',
+              'ytick.direction': 'out',
+              'savefig.bbox': 'tight',
+              'axes.unicode_minus': False,
+              'text.usetex': False}
+    rcParams.update(params)
 
-    #tickSTD_range_max=max(stds)+np.max(stds)*0.2
-    #tickSTD_range_min=max(np.min(stds)-np.min(stds)*0.2, 0.0)
-    #tickSTD_range_step=(tickSTD_range_max-tickSTD_range_min)/5
+    fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
 
-    taylor_diagram(stds, RMSs, cors,markers = MARKERS,
-                titleRMS = 'on', markerLegend = 'on',
-                colRMS = 'grey', colSTD = 'k', colCOR = 'k',
-                styleRMS = ':', styleSTD = '-', styleCOR = '--',
-                widthRMS = 2.0, widthSTD = 1.0, widthCOR = 1.0,
-                #tickRMS =  np.arange(tickRMS_range_min,tickRMS_range_max,tickRMS_range_step), 
-                #tickSTD =  np.arange(tickSTD_range_min,tickSTD_range_max,tickSTD_range_step), 
-                #tickRMSangle = 150, axismax = tickRMS_range_max,
-                styleOBS = '-', colOBS = 'm', markerobs = 'o',
-                )
-    output_file_path=os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',f'taylor_diagram_{evaluation_item}_{ref_source}.jpg')
-    # plt.title("(b) Sensible Heat Flux", fontsize=18, pad=25, loc='left')
-    # output_file_path = f"{basedir}/taylor_diagram_{evaluation_item}_{ref_source}.jpg"
-    plt.savefig(output_file_path, format='jpg', dpi=300, bbox_inches='tight')  
+    MARKERS = generate_markers(sim_sources, option)
+    # print(MARKERS)
+
+    if option['Normalized']:
+        stds = STDs / STDs[0]
+    else:
+        stds = STDs
+
+    taylor_diagram(stds, RMSs, cors,
+                   markers=MARKERS, markerLegend=option['markerLegend'],
+
+                   titleRMS=option['titleRMS'],
+                   colRMS=option['colRMS'], colSTD=option['colSTD'], colCOR=option['colCOR'],
+                   styleRMS=option['styleRMS'], styleSTD=option['styleSTD'], styleCOR=option['styleCOR'],
+                   widthRMS=option['widthRMS'], widthSTD=option['widthSTD'], widthCOR=option['widthCOR'],
+                   ticksizerms=option['ticksizeRMS'], ticksizeSTD=option['ticksizeSTD'], ticksizecor=option['ticksizeCOR'],
+                   rmslabelsize=option['RMSlabelsize'], stdlabelsize=option['STDlabelsize'], corlabelsize=option['CORlabelsize'],
+
+                   normalizedstd=option['Normalized'],
+                   legend={option['set_legend'], option['bbox_to_anchor_x'], option['bbox_to_anchor_y']},
+
+                   # tickRMS =  np.arange(tickRMS_range_min,tickRMS_range_max,tickRMS_range_step),
+                   # tickSTD =  np.arange(tickSTD_range_min,tickSTD_range_max,tickSTD_range_step),
+                   # tickRMSangle = 150, axismax = tickRMS_range_max,
+                   styleOBS=option['styleOBS'], colOBS=option['colOBS'], widthOBS=option['widthOBS'],
+                   markerobs=option['markerobs'],
+                   )
+
+    ax.set_title(option['title'], fontsize=option['title_size'])
+
+    output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
+                                    f'taylor_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
+    plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+
 
 def taylor_diagram(*args, **kwargs):
     '''
@@ -146,10 +169,11 @@ def taylor_diagram(*args, **kwargs):
             # Use Bias values for colors
             _plot_pattern_diagram_colorbar(ax, X, Y, options['cmapzdata'][1:], options)
     else:
-        raise ValueError('Unrecognized option: ' + 
-                        options['markerdisplayed'])
-    
+        raise ValueError('Unrecognized option: ' +
+                         options['markerdisplayed'])
+
     return None
+
 
 def _display_taylor_diagram_options() -> None:
     '''
@@ -157,141 +181,140 @@ def _display_taylor_diagram_options() -> None:
     '''
     _disp('General options:')
 
+    _dispopt("'alpha'", "Blending of symbol face color (0.0 transparent through 1.0 opaque)" +
+             "\n\t\t" + "(Default: 1.0)")
 
-    _dispopt("'alpha'","Blending of symbol face color (0.0 transparent through 1.0 opaque)" +
-            "\n\t\t" + "(Default: 1.0)")
+    _dispopt("'axisMax'", 'Maximum for the radial contours')
 
-    _dispopt("'axisMax'",'Maximum for the radial contours')
+    _dispopt("'colFrame'", "Color for both the y (left) and x (bottom) spines. " +
+             "(Default: '#000000' (black))")
 
-    _dispopt("'colFrame'", "Color for both the y (left) and x (bottom) spines. "+
-                            "(Default: '#000000' (black))")
+    _dispopt("'colorMap'", "'on'/ 'off' (default): " +
+             "Switch to map color shading of markers to colormap ('on')\n\t\t" +
+             "or min to max range of RMSDz values ('off').")
 
-    _dispopt("'colorMap'","'on'/ 'off' (default): "  + 
-        "Switch to map color shading of markers to colormap ('on')\n\t\t"  +
-        "or min to max range of RMSDz values ('off').")
+    _dispopt("'labelWeight'", "weight of the x & y axis labels")
 
-    _dispopt("'labelWeight'","weight of the x & y axis labels")
+    _dispopt("'numberPanels'", '1 or 2: Panels to display (1 for ' +
+             'positive correlations, 2 for positive and negative' +
+             ' correlations). \n\t\tDefault value depends on ' +
+             'correlations (CORs)')
 
-    _dispopt("'numberPanels'",'1 or 2: Panels to display (1 for ' +
-            'positive correlations, 2 for positive and negative' +
-            ' correlations). \n\t\tDefault value depends on ' +
-            'correlations (CORs)')
-
-    _dispopt("'overlay'","'on' / 'off' (default): " +
-        'Switch to overlay current statistics on Taylor diagram. ' +
-        '\n\t\tOnly markers will be displayed.')
+    _dispopt("'overlay'", "'on' / 'off' (default): " +
+             'Switch to overlay current statistics on Taylor diagram. ' +
+             '\n\t\tOnly markers will be displayed.')
 
     _disp("OPTIONS when 'colormap' == 'on'")
-    _dispopt("'cmap'","Choice of colormap. (Default: 'jet')")
-    _dispopt("'cmap_marker'","Marker to use with colormap (Default: 'd')")
-    _dispopt("'cmap_vmax'","Maximum range of colormap (Default: None)")
-    _dispopt("'cmap_vmin'","Minimum range of colormap (Default: None)")
+    _dispopt("'cmap'", "Choice of colormap. (Default: 'jet')")
+    _dispopt("'cmap_marker'", "Marker to use with colormap (Default: 'd')")
+    _dispopt("'cmap_vmax'", "Maximum range of colormap (Default: None)")
+    _dispopt("'cmap_vmin'", "Minimum range of colormap (Default: None)")
     _disp('')
 
     _disp('Marker options:')
 
     _dispopt("'MarkerDisplayed'",
-        "'marker' (default): Experiments are represented by individual " + 
-        "symbols\n\t\t"  + 
-        "'colorBar': Experiments are represented by a color described " + \
-        "in a colorbar")
+             "'marker' (default): Experiments are represented by individual " +
+             "symbols\n\t\t" +
+             "'colorBar': Experiments are represented by a color described " + \
+             "in a colorbar")
 
     _disp("OPTIONS when 'MarkerDisplayed' == 'marker'")
 
-    _dispopt("'markerColor'",'Single color to use for all markers'  +
-        ' (Default: red)')
+    _dispopt("'markerColor'", 'Single color to use for all markers' +
+             ' (Default: red)')
 
     _dispopt("'markerColors'", "Dictionary with up to two colors as keys ('face', 'edge') " +
-            "to use for all markers " + 
-            "\n\t\twhen 'markerlegend' == 'off' or None." +
-            "\n\t\tIf None or 'markerlegend' == 'on', then uses only the " +
-            "value of 'markercolor'. (Default: None)")
+             "to use for all markers " +
+             "\n\t\twhen 'markerlegend' == 'off' or None." +
+             "\n\t\tIf None or 'markerlegend' == 'on', then uses only the " +
+             "value of 'markercolor'. (Default: None)")
 
-    _dispopt("'markerLabel'",'Labels for markers')
+    _dispopt("'markerLabel'", 'Labels for markers')
 
-    _dispopt("'markerLabelColor'",'Marker label color (Default: black)')
-    
-    _dispopt("'markerLayout'","Matrix layout for markers in legend [nrow, ncolumn]." + "\n\t\t" + 
-            "(Default: [15, no. markers/15])'")
+    _dispopt("'markerLabelColor'", 'Marker label color (Default: black)')
 
-    _dispopt("'markerLegend'","'on' / 'off' (default): "  +
-        'Use legend for markers')
+    _dispopt("'markerLayout'", "Matrix layout for markers in legend [nrow, ncolumn]." + "\n\t\t" +
+             "(Default: [15, no. markers/15])'")
 
-    _dispopt("'markers'",'Dictionary providing individual control of the marker ' +
-            'label, label color, symbol, size, face color, and edge color'  +
-        ' (Default: None)')
+    _dispopt("'markerLegend'", "'on' / 'off' (default): " +
+             'Use legend for markers')
 
-    _dispopt("'markerSize'",'Marker size (Default: 10)')
+    _dispopt("'markers'", 'Dictionary providing individual control of the marker ' +
+             'label, label color, symbol, size, face color, and edge color' +
+             ' (Default: None)')
 
-    _dispopt("'markerSymbol'","Marker symbol (Default: '.')")
+    _dispopt("'markerSize'", 'Marker size (Default: 10)')
+
+    _dispopt("'markerSymbol'", "Marker symbol (Default: '.')")
 
     _disp("OPTIONS when MarkerDisplayed' == 'colorbar'")
 
-    _dispopt("'cmapzdata'","Data values to use for color mapping of markers, " + 
-            "e.g. RMSD or BIAS." +
-            "\n\t\t(Used to make range of RMSDs values appear above color bar.)")
-    
-    _dispopt("'locationColorBar'","Location for the colorbar, 'NorthOutside' " +
-            "or 'EastOutside'")
+    _dispopt("'cmapzdata'", "Data values to use for color mapping of markers, " +
+             "e.g. RMSD or BIAS." +
+             "\n\t\t(Used to make range of RMSDs values appear above color bar.)")
 
-    _dispopt("'titleColorBar'",'Title of the colorbar.')
+    _dispopt("'locationColorBar'", "Location for the colorbar, 'NorthOutside' " +
+             "or 'EastOutside'")
+
+    _dispopt("'titleColorBar'", 'Title of the colorbar.')
 
     _disp('')
 
     _disp('RMS axis options:')
 
-    _dispopt("'colRMS'",'Color for RMS labels (Default: medium green)')
+    _dispopt("'colRMS'", 'Color for RMS labels (Default: medium green)')
 
-    _dispopt("'labelRMS'","RMS axis label (Default 'RMSD')")
+    _dispopt("'labelRMS'", "RMS axis label (Default 'RMSD')")
 
-    _dispopt("'rincRMS'",'Axis tick increment for RMS values')
+    _dispopt("'rincRMS'", 'Axis tick increment for RMS values')
 
-    _dispopt("'rmsLabelFormat'","String format for RMS contour labels, e.g. '0:.2f'.\n\t\t" +
-            "(Default '0', format as specified by str function.)")
+    _dispopt("'rmsLabelFormat'", "String format for RMS contour labels, e.g. '0:.2f'.\n\t\t" +
+             "(Default '0', format as specified by str function.)")
 
-    _dispopt("'showlabelsRMS'","'on' (default) / 'off': "  +
-        'Show the RMS tick labels')
+    _dispopt("'showlabelsRMS'", "'on' (default) / 'off': " +
+             'Show the RMS tick labels')
 
-    _dispopt("'styleRMS'",'Line style of the RMS grid')
+    _dispopt("'styleRMS'", 'Line style of the RMS grid')
 
-    _dispopt("'tickRMS'",'RMS values to plot grid circles from ' +
-            'observation point')
+    _dispopt("'tickRMS'", 'RMS values to plot grid circles from ' +
+             'observation point')
 
-    _dispopt("'tickRMSangle'",'Angle for RMS tick labels with the ' +
-            'observation point. Default: 135 deg.')
+    _dispopt("'tickRMSangle'", 'Angle for RMS tick labels with the ' +
+             'observation point. Default: 135 deg.')
 
-    _dispopt("'titleRMS'","'on' (default) / 'off': "  +
-        'Show RMSD axis title')
+    _dispopt("'titleRMS'", "'on' (default) / 'off': " +
+             'Show RMSD axis title')
 
-    _dispopt("'titleRMSDangle'","angle at which to display the 'RMSD' label for the\n\t\t" +
-            "RMSD contours (Default: 160 degrees)")
+    _dispopt("'titleRMSDangle'", "angle at which to display the 'RMSD' label for the\n\t\t" +
+             "RMSD contours (Default: 160 degrees)")
 
-    _dispopt("'widthRMS'",'Line width of the RMS grid')
+    _dispopt("'widthRMS'", 'Line width of the RMS grid')
     _disp('')
 
     _disp('STD axis options:')
 
-    _dispopt("'colSTD'",'STD grid and tick labels color. (Default: black)')
+    _dispopt("'colSTD'", 'STD grid and tick labels color. (Default: black)')
 
     _dispopt("'colsSTD'", "STD dictionary of grid colors with: " +
-        "'grid', 'tick_labels', 'title' keys/values." +
-        "\n\t\tIf not provided or None, considers the monotonic 'colSTD' argument. " + 
-        "(Default: None")  # subplot-specific
+             "'grid', 'tick_labels', 'title' keys/values." +
+             "\n\t\tIf not provided or None, considers the monotonic 'colSTD' argument. " +
+             "(Default: None")  # subplot-specific
 
-    _dispopt("'rincSTD'",'axis tick increment for STD values')
+    _dispopt("'rincSTD'", 'axis tick increment for STD values')
 
-    _dispopt("'showlabelsSTD'","'on' (default) / 'off': "  +
-        'Show the STD tick labels')
+    _dispopt("'showlabelsSTD'", "'on' (default) / 'off': " +
+             'Show the STD tick labels')
 
-    _dispopt("'styleSTD'",'Line style of the STD grid')
+    _dispopt("'styleSTD'", 'Line style of the STD grid')
 
-    _dispopt("'tickSTD'",'STD values to plot gridding circles from ' + 
-            'origin')
+    _dispopt("'tickSTD'", 'STD values to plot gridding circles from ' +
+             'origin')
 
-    _dispopt("'titleSTD'","'on' (default) / 'off': "  +
-        'Show STD axis title')
+    _dispopt("'titleSTD'", "'on' (default) / 'off': " +
+             'Show STD axis title')
 
-    _dispopt("'widthSTD'",'Line width of the STD grid')
+    _dispopt("'widthSTD'", 'Line width of the STD grid')
     _disp('')
 
     _disp('CORRELATION axis options:')
@@ -299,55 +322,56 @@ def _display_taylor_diagram_options() -> None:
     _dispopt("'colCOR'", 'CORRELATION grid color. Default: blue')
 
     _dispopt("'colsCOR'", "CORRELATION dictionary of grid colors with: " +
-        "'grid', 'tick_labels', 'title' keys/values." + 
-        "\n\t\tIf not provided or None, considers the monotonic 'colCOR' argument." +
-        "Default: None")  # subplot-specific
+             "'grid', 'tick_labels', 'title' keys/values." +
+             "\n\t\tIf not provided or None, considers the monotonic 'colCOR' argument." +
+             "Default: None")  # subplot-specific
 
-    _dispopt("'showlabelsCOR'","'on' (default) / 'off': "  +
-        'Show the CORRELATION tick labels')
+    _dispopt("'showlabelsCOR'", "'on' (default) / 'off': " +
+             'Show the CORRELATION tick labels')
 
-    _dispopt("'styleCOR'",'Line style of the CORRELATION grid')
+    _dispopt("'styleCOR'", 'Line style of the CORRELATION grid')
 
-    _dispopt("'tickCOR[panel]'","Tick values for correlation coefficients for " +
-            "two types of panels")
+    _dispopt("'tickCOR[panel]'", "Tick values for correlation coefficients for " +
+             "two types of panels")
 
-    _dispopt("'titleCOR'","'on' (default) / 'off': "  +
-        'Show CORRELATION axis title')
+    _dispopt("'titleCOR'", "'on' (default) / 'off': " +
+             'Show CORRELATION axis title')
 
     _dispopt("'titleCORshape'", "The shape of the label 'correlation coefficient'. " +
-                                "\n\t\tAccepted values are 'curved' or 'linear' " +
-                                "(Default: 'curved'),")
+             "\n\t\tAccepted values are 'curved' or 'linear' " +
+             "(Default: 'curved'),")
 
-    _dispopt("'widthCOR'",'Line width of the COR grid')
+    _dispopt("'widthCOR'", 'Line width of the COR grid')
     _disp('')
 
     _disp('Observation Point options:')
 
-    _dispopt("'colObs'","Observation STD color. (Default: magenta)")
+    _dispopt("'colObs'", "Observation STD color. (Default: magenta)")
 
-    _dispopt("'markerObs'","Marker to use for x-axis indicating observed STD." +
-            "\n\t\tA choice of 'None' will suppress appearance of marker. (Default None)")
+    _dispopt("'markerObs'", "Marker to use for x-axis indicating observed STD." +
+             "\n\t\tA choice of 'None' will suppress appearance of marker. (Default None)")
 
-    _dispopt("'styleObs'","Line style for observation grid line. A choice of empty string ('')\n\t\t" +
-            "will suppress appearance of the grid line. (Default: '')")
+    _dispopt("'styleObs'", "Line style for observation grid line. A choice of empty string ('')\n\t\t" +
+             "will suppress appearance of the grid line. (Default: '')")
 
-    _dispopt("'titleOBS'","Label for observation point (Default: '')")
+    _dispopt("'titleOBS'", "Label for observation point (Default: '')")
 
-    _dispopt("'widthOBS'",'Line width for observation grid line')
+    _dispopt("'widthOBS'", 'Line width for observation grid line')
 
     _disp('')
 
     _disp('CONTROL options:')
 
-    _dispopt("'checkStats'","'on' / 'off' (default): "  +
-        'Check input statistics satisfy Taylor relationship')
+    _dispopt("'checkStats'", "'on' / 'off' (default): " +
+             'Check input statistics satisfy Taylor relationship')
 
     _disp('Plotting Options from File:')
 
-    _dispopt("'taylor_options_file'","name of CSV file containing values for optional " +
-            "arguments" +
-            "\n\t\t" + "of the taylor_diagram function. If no file suffix is given," +
-            "\n\t\t" + "a '.csv' is assumed. (Default: empty string '')")
+    _dispopt("'taylor_options_file'", "name of CSV file containing values for optional " +
+             "arguments" +
+             "\n\t\t" + "of the taylor_diagram function. If no file suffix is given," +
+             "\n\t\t" + "a '.csv' is assumed. (Default: empty string '')")
+
 
 def _ensure_np_array_or_die(v, label: str) -> np.ndarray:
     '''
@@ -366,6 +390,7 @@ def _ensure_np_array_or_die(v, label: str) -> np.ndarray:
     if not isinstance(ret_v, np.ndarray):
         raise ValueError('Argument {0} is not a numeric array: {1}'.format(label, v))
     return ret_v
+
 
 def _get_taylor_diagram_arguments(*args):
     '''
@@ -388,7 +413,7 @@ def _get_taylor_diagram_arguments(*args):
 
     # Check amount of values provided and display options list if needed
     import numbers
-    
+
     nargin = len(args)
     if nargin == 0:
         # Display options list
@@ -404,16 +429,17 @@ def _get_taylor_diagram_arguments(*args):
     else:
         raise ValueError('Must supply 3 or 4 arguments.')
     del nargin
-    
+
     # Check data validity
     STDs = _ensure_np_array_or_die(stds, "STDs")
     RMSs = _ensure_np_array_or_die(rmss, "RMSs")
     CORs = _ensure_np_array_or_die(cors, "CORs")
-    
+
     return CAX, STDs, RMSs, CORs
 
+
 def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
-                                option: dict) -> None:
+                                   option: dict) -> None:
     '''
     Plots color markers on a pattern diagram shaded according to a 
     supplied value.
@@ -467,17 +493,17 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
             using the cmap and norm
     '''
     fontSize = rcParams.get('font.size')
-    cxscale = fontSize/10 # scale color bar by font size
-    markerSize = option['markersize']*2
+    cxscale = fontSize / 10  # scale color bar by font size
+    markerSize = option['markersize'] * 2
 
-    hp = plt.scatter(X,Y, s=markerSize, c=Z, marker=option['cmap_marker'],
-                    cmap=option['cmap'], vmin=option['cmap_vmin'],
-                    vmax=option['cmap_vmax'])
+    hp = plt.scatter(X, Y, s=markerSize, c=Z, marker=option['cmap_marker'],
+                     cmap=option['cmap'], vmin=option['cmap_vmin'],
+                     vmax=option['cmap_vmax'])
     hp.set_facecolor(hp.get_edgecolor())
-    
+
     # Set parameters for color bar location
     location = option['locationcolorbar'].lower()
-    xscale= 1.0
+    xscale = 1.0
     labelpad = -25
     if location == 'northoutside':
         orientation = 'horizontal'
@@ -490,44 +516,44 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
         if 'checkstats' in option:
             # Taylor diagram
             xscale = 0.5
-            cxscale = 6*fontSize/10
+            cxscale = 6 * fontSize / 10
             labelpad = -30
     else:
         raise ValueError('Invalid color bar location: ' + option['locationcolorbar']);
-    
+
     # Add color bar to plot
     if option['colormap'] == 'on':
         # map color shading of markers to colormap 
-        hc = plt.colorbar(hp,orientation = orientation, aspect = aspect,
-                        fraction = fraction, pad=0.06, ax = ax)
+        hc = plt.colorbar(hp, orientation=orientation, aspect=aspect,
+                          fraction=fraction, pad=0.06, ax=ax)
 
         # Limit number of ticks on color bar to reasonable number
         if orientation == 'horizontal':
-            _setColorBarTicks(hc,5,20)
-        
+            _setColorBarTicks(hc, 5, 20)
+
     elif option['colormap'] == 'off':
         # map color shading of markers to min to max range of Z values
         if len(Z) > 1:
             ax.clim(min(Z), max(Z))
-            hc = ax.colorbar(hp,orientation = orientation, aspect = aspect,
-                            fraction = fraction, pad=0.06, ticks=[min(Z), max(Z)],
-                            ax = ax)
-            
+            hc = ax.colorbar(hp, orientation=orientation, aspect=aspect,
+                             fraction=fraction, pad=0.06, ticks=[min(Z), max(Z)],
+                             ax=ax)
+
             # Label just min/max range
             hc.set_ticklabels(['Min.', 'Max.'])
     else:
-        raise ValueError('Invalid option for option.colormap: ' + 
-                        option['colormap']);
-    
-    if orientation == 'horizontal':
-        location = _getColorBarLocation(hc, option, xscale = xscale,
-                                    yscale = 7.5, cxscale = cxscale)
-    else:
-        location = _getColorBarLocation(hc, option, xscale = xscale,
-                                    yscale = 1.0, cxscale = cxscale)
+        raise ValueError('Invalid option for option.colormap: ' +
+                         option['colormap']);
 
-    hc.ax.set_position(location) # set new position
-    hc.ax.tick_params(labelsize=fontSize) # set tick label size
+    if orientation == 'horizontal':
+        location = _getColorBarLocation(hc, option, xscale=xscale,
+                                        yscale=7.5, cxscale=cxscale)
+    else:
+        location = _getColorBarLocation(hc, option, xscale=xscale,
+                                        yscale=1.0, cxscale=cxscale)
+
+    hc.ax.set_position(location)  # set new position
+    hc.ax.tick_params(labelsize=fontSize)  # set tick label size
 
     hc.ax.xaxis.set_ticks_position('top')
     hc.ax.xaxis.set_label_position('top')
@@ -535,14 +561,15 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
     # Title the color bar
     if option['titlecolorbar']:
         if orientation == 'horizontal':
-            hc.set_label(option['titlecolorbar'],fontsize=fontSize)
+            hc.set_label(option['titlecolorbar'], fontsize=fontSize)
         else:
-            hc.set_label(option['titlecolorbar'],fontsize=fontSize, 
-                        labelpad=labelpad, y=1.05, rotation=0)
+            hc.set_label(option['titlecolorbar'], fontsize=fontSize,
+                         labelpad=labelpad, y=1.05, rotation=0)
     else:
-        hc.set_label(hc,'Color Scale',fontsize=fontSize)
+        hc.set_label(hc, 'Color Scale', fontsize=fontSize)
 
-def _getColorBarLocation(hc,option,**kwargs):
+
+def _getColorBarLocation(hc, option, **kwargs):
     '''
     Determine location for color bar.
     
@@ -587,16 +614,17 @@ def _getColorBarLocation(hc,option,**kwargs):
     # Calculate location : [left, bottom, width, height]
     if 'checkstats' in option:
         # Taylor diagram
-        location = [cp.x0 + xscale*0.5*(1+math.cos(math.radians(45)))*cp.width, yscale*cp.y0,
-                    cxscale*cp.width/6, cp.height]
+        location = [cp.x0 + xscale * 0.5 * (1 + math.cos(math.radians(45))) * cp.width, yscale * cp.y0,
+                    cxscale * cp.width / 6, cp.height]
     else:
         # target diagram
-        location = [cp.x0 + xscale*0.5*(1+math.cos(math.radians(60)))*cp.width, yscale*cp.y0,
-                    cxscale*cp.width/6, cxscale*cp.height]
+        location = [cp.x0 + xscale * 0.5 * (1 + math.cos(math.radians(60))) * cp.width, yscale * cp.y0,
+                    cxscale * cp.width / 6, cxscale * cp.height]
 
     return location
 
-def _setColorBarTicks(hc,numBins,lenTick):
+
+def _setColorBarTicks(hc, numBins, lenTick):
     '''
     Determine number of ticks for color bar.
     
@@ -618,9 +646,9 @@ def _setColorBarTicks(hc,numBins,lenTick):
     lengthTick = lenTick
     while lengthTick > maxChar:
         # Limit number of ticks on color bar to numBins-1
-        hc.locator = ticker.MaxNLocator(nbins=numBins, prune = 'both')
+        hc.locator = ticker.MaxNLocator(nbins=numBins, prune='both')
         hc.update_ticks()
-        
+
         # Check number of characters in tick labels is 
         # acceptable, otherwise reduce number of bins
         locs = str(hc.get_ticks())
@@ -629,7 +657,8 @@ def _setColorBarTicks(hc,numBins,lenTick):
         for tick in locs:
             tickStr = str(tick).rstrip('.')
             lengthTick += len(tickStr)
-        if lengthTick > maxChar: numBins -=1
+        if lengthTick > maxChar: numBins -= 1
+
 
 def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     '''
@@ -671,28 +700,27 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     Revised on Aug 14, 2022
     '''
 
-
     # Set face color transparency
     alpha = option['alpha']
-    
+
     # Set font and marker size
     fontSize = matplotlib.rcParams.get('font.size') - 2
     markerSize = option['markersize']
-    
+
     # Check enough labels provided if markerlabel provided. Not a problem if labels
     # provided via the markers option.
     numberLabel = len(option['markerlabel'])
     if numberLabel > 0:
         if isinstance(option['markerlabel'], list) and numberLabel < len(X):
             raise ValueError('Insufficient number of marker labels provided.\n' +
-                            'target: No. labels=' + str(numberLabel) + ' < No. markers=' +
-                            str(len(X)) + '\n' +
-                            'taylor: No. labels=' + str(numberLabel+1) + ' < No. markers=' +
-                            str(len(X)+1))
+                             'target: No. labels=' + str(numberLabel) + ' < No. markers=' +
+                             str(len(X)) + '\n' +
+                             'taylor: No. labels=' + str(numberLabel + 1) + ' < No. markers=' +
+                             str(len(X) + 1))
         elif isinstance(option['markerlabel'], dict) and numberLabel > 70:
             raise ValueError('Insufficient number of marker labels provided.\n' +
-                            'target: No. labels=' + str(numberLabel) + ' > No. markers= 70')
-    
+                             'target: No. labels=' + str(numberLabel) + ' > No. markers= 70')
+
     if option['markerlegend'] == 'on':
         # Check that marker labels have been provided
         if option['markerlabel'] == '' and option['markers'] == None:
@@ -706,16 +734,16 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         if option['markers'] is None:
             # Define default markers (function)
             marker, markercolor = _get_default_markers(X, option)
-        
+
             # Plot markers at data points
             labelcolor = []
             markerlabel = []
             for i, xval in enumerate(X):
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
-                    h = ax.plot(X[i],Y[i],marker[i], markersize = markerSize,
-                        markerfacecolor = markercolor[i],
-                        markeredgecolor = markercolor[i][0:3] + (1.0,),
-                        markeredgewidth = 2)
+                    h = ax.plot(X[i], Y[i], marker[i], markersize=markerSize,
+                                markerfacecolor=markercolor[i],
+                                markeredgecolor=markercolor[i][0:3] + (1.0,),
+                                markeredgewidth=2)
                     hp += tuple(h)
                     labelcolor.append(option['markerlabelcolor'])
                     markerlabel.append(option['markerlabel'][i])
@@ -724,15 +752,15 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             # Obtain markers from option['markers']
             labels, labelcolor, marker, markersize, markerfacecolor, markeredgecolor = \
                 _get_single_markers(option['markers'])
-        
+
             # Plot markers at data points
             markerlabel = []
             for i, xval in enumerate(X):
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
-                    h = ax.plot(X[i],Y[i],marker[i], markersize = markersize[i],
-                        markerfacecolor = markerfacecolor[i],
-                        markeredgecolor = markeredgecolor[i],
-                        markeredgewidth = 2)
+                    h = ax.plot(X[i], Y[i], marker[i], markersize=markersize[i],
+                                markerfacecolor=markerfacecolor[i],
+                                markeredgecolor=markeredgecolor[i],
+                                markeredgewidth=2)
                     hp += tuple(h)
                     markerlabel.append(labels[i])
 
@@ -744,7 +772,6 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     else:
         # Plot markers as dots of a single color with accompanying labels
 
-        
         # Plot markers at data points
         limit = option['axismax']
 
@@ -765,7 +792,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                         markerfacecolor=face_color,
                         markeredgecolor=edge_color)
                 labelcolor.append(option['markerlabelcolor'])
-                
+
                 # Check if marker labels provided
                 if type(option['markerlabel']) is list:
                     # Label marker
@@ -783,8 +810,9 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         if type(markerlabel) is dict:
             _add_legend(markerlabel, labelcolor, option, marker_label_color, markerSize, fontSize)
 
+
 def _get_default_markers(X, option: dict):
-    #def _get_default_markers(X, option: dict) -> tuple[list, list]: #fails with Python 3.6
+    # def _get_default_markers(X, option: dict) -> tuple[list, list]: #fails with Python 3.6
     '''
     Provides a list of default markers and marker colors.
     
@@ -812,12 +840,12 @@ def _get_default_markers(X, option: dict):
     alpha = option['alpha']
 
     # Define list of marker symbols and colros
-    kind = ['+','o','x','s','d','^','v','p','h','*']
-    colorm = ['r','b','g','c','m','y','k','gray']
+    kind = ['+', 'o', 'x', 's', 'd', '^', 'v', 'p', 'h', '*']
+    colorm = ['r', 'b', 'g', 'c', 'm', 'y', 'k', 'gray']
     if len(X) > 80:
         print('You must introduce new markers to plot more than 70 cases.')
         print('The ''marker'' character array need to be extended inside the code.')
-    
+
     if len(X) <= len(kind):
         # Define markers with specified color
         marker = []
@@ -844,7 +872,8 @@ def _get_default_markers(X, option: dict):
 
     return marker, markercolor
 
-def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp = []):
+
+def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[]):
     '''
     Adds a legend to a pattern diagram.
     
@@ -891,21 +920,26 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp 
     '''
 
     if type(markerLabel) is list:
-        
+
         # Check for empty list of plot handles
         if len(hp) == 0:
             raise ValueError('Empty list of plot handles')
         elif len(hp) != len(markerLabel):
             raise ValueError('Number of labels and plot handle do not match: ' +
-                            str(len(markerLabel)) + ' != ' + str(len(hp)))
-        
+                             str(len(markerLabel)) + ' != ' + str(len(hp)))
+
         # Add legend using labels provided as list
         if len(markerLabel) <= 6:
             # Put legend in a default location
             markerlabel = tuple(markerLabel)
-            leg = plt.legend(hp, markerlabel, loc = 'upper right',
-                                fontsize = fontSize, numpoints=1,
-                                bbox_to_anchor=(1.2,1.0))
+            if option['legend']['set_legend']:
+                leg = plt.legend(hp, markerlabel, loc='upper right',
+                                 fontsize=fontSize, numpoints=1,
+                                 bbox_to_anchor=(option['legend']['bbox_to_anchor_x'], option['legend']['bbox_to_anchor_y']))
+            else:
+                leg = plt.legend(hp, markerlabel, loc='upper right',
+                                 fontsize=fontSize, numpoints=1,
+                                 bbox_to_anchor=(1.5, 1.))
         else:
             # Put legend to right of the plot in multiple columns as needed
 
@@ -922,45 +956,50 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp 
 
             # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
-            if 'circlelinespec' in option:
-                loc = (1.2, 0.25)
+            if option['legend']['set_legend']:
+                loc = (option['legend']['bbox_to_anchor_x'], option['legend']['bbox_to_anchor_y'])
             else:
-                loc = (1.1, 0.25)
-            leg = plt.legend(hp, markerlabel, loc = loc, fontsize = fontSize,
-                            numpoints=1, ncol = ncol)
+                if 'circlelinespec' in option:
+                    loc = (1.2, 0.25)
+                else:
+                    loc = (1.1, 0.25)
+            leg = plt.legend(hp, markerlabel, loc=loc, fontsize=fontSize,
+                             numpoints=1, ncol=ncol)
 
     elif type(markerLabel) is dict:
-        
+
         # Add legend using labels provided as dictionary
-            
+
         # Define legend elements
         legend_elements = []
         for key, value in markerLabel.items():
-            legend_object = Line2D([0], [0], marker='.', markersize = markerSize,
-                markerfacecolor = rgba, markeredgecolor = value, label=key, linestyle='')
+            legend_object = Line2D([0], [0], marker='.', markersize=markerSize,
+                                   markerfacecolor=rgba, markeredgecolor=value, label=key, linestyle='')
             legend_elements.append(legend_object)
 
         # Put legend in a default location
-        leg = plt.legend(handles=legend_elements, loc = 'upper right',
-                            fontsize = fontSize, numpoints=1,
-                            bbox_to_anchor=(1.2,1.0))
+        leg = plt.legend(handles=legend_elements, loc='upper right',
+                         fontsize=fontSize, numpoints=1,
+                         bbox_to_anchor=(1.4, 1.1))
 
         if _checkKey(option, 'numberpanels') and option['numberpanels'] == 2:
             # add padding so legend is not cut off
             plt.tight_layout(pad=1)
     else:
-        raise Exception('markerLabel type is not a list or dictionary: ' + 
+        raise Exception('markerLabel type is not a list or dictionary: ' +
                         str(type(markerLabel)))
-    
+
     # Set color of text in legend
     for i, text in enumerate(leg.get_texts()):
         text.set_color(labelcolor[i])
 
-def _checkKey(dictionary, key): 
-    if key in dictionary.keys(): 
+
+def _checkKey(dictionary, key):
+    if key in dictionary.keys():
         return True
-    else: 
-        return False 
+    else:
+        return False
+
 
 def _get_from_dict_or_default(options: dict, default_key: str, dict_key: str, key_key: str):
     '''
@@ -995,8 +1034,9 @@ def _get_from_dict_or_default(options: dict, default_key: str, dict_key: str, ke
     else:
         return options[dict_key][key_key]
 
+
 def _get_single_markers(markers: dict):
-    #def _get_single_markers(markers: dict) -> tuple[list, list, list, list, list, list]: #fails with Python 3.6
+    # def _get_single_markers(markers: dict) -> tuple[list, list, list, list, list, list]: #fails with Python 3.6
     '''
     Provides a list of markers and their properties as stored in a dictionary.
     
@@ -1036,7 +1076,7 @@ def _get_single_markers(markers: dict):
     markeredgecolor = []
     markerlabel = []
     markersize = []
-    
+
     # Iterate through keys in dictionary
     for key in markers:
         color = markers[key]['faceColor']
@@ -1046,12 +1086,13 @@ def _get_single_markers(markers: dict):
         markersize.append(markers[key]['size'])
         markerfacecolor.append(color)
         markeredgecolor.append(markers[key]['edgeColor'])
-        markerlabel.append(key) # store label
+        markerlabel.append(key)  # store label
         labelcolor.append(markers[key]['labelColor'])
 
     return markerlabel, labelcolor, marker, markersize, markerfacecolor, markeredgecolor
 
-def _check_taylor_stats(STDs, CRMSDs, CORs, threshold = 0.01):
+
+def _check_taylor_stats(STDs, CRMSDs, CORs, threshold=0.01):
     '''
     Checks input statistics satisfy Taylor diagram relation to <1%.
 
@@ -1084,25 +1125,26 @@ def _check_taylor_stats(STDs, CRMSDs, CORs, threshold = 0.01):
         raise ValueError('threshold value must be positive: ' + str(threshold))
 
     diff = np.square(CRMSDs[1:]) \
-        - (np.square(STDs[1:]) + np.square(STDs[0]) \
-        - 2.0*STDs[0]*np.multiply(STDs[1:],CORs[1:]))
-    diff = np.abs(np.divide(diff,np.square(CRMSDs[1:])))
+           - (np.square(STDs[1:]) + np.square(STDs[0]) \
+              - 2.0 * STDs[0] * np.multiply(STDs[1:], CORs[1:]))
+    diff = np.abs(np.divide(diff, np.square(CRMSDs[1:])))
     index = np.where(diff > threshold)
 
     if np.any(index):
         ii = np.where(diff != 0)
         if len(ii) == len(diff):
             raise ValueError('Incompatible data\nYou must have:' +
-                '\nCRMSDs - sqrt(STDs.^2 + STDs[0]^2 - ' +
-                '2*STDs*STDs[0].*CORs) = 0 !')
+                             '\nCRMSDs - sqrt(STDs.^2 + STDs[0]^2 - ' +
+                             '2*STDs*STDs[0].*CORs) = 0 !')
         else:
             raise ValueError('Incompatible data indices: {}'.format(ii) +
-                    '\nYou must have:\nCRMSDs - sqrt(STDs.^2 + STDs[0]^2 - ' +
-                    '2*STDs*STDs[0].*CORs) = 0 !')
+                             '\nYou must have:\nCRMSDs - sqrt(STDs.^2 + STDs[0]^2 - ' +
+                             '2*STDs*STDs[0].*CORs) = 0 !')
 
-    return diff    
+    return diff
 
-def _calc_rinc(tick : list) -> float:
+
+def _calc_rinc(tick: list) -> float:
     '''
     Calculate axis tick increment given list of tick values.
     
@@ -1111,30 +1153,32 @@ def _calc_rinc(tick : list) -> float:
 
     return: axis tick increment
     '''
-    rinc  = (max(tick) - min(tick))/ len(tick)
+    rinc = (max(tick) - min(tick)) / len(tick)
     return rinc
 
+
 def _check_dict_with_keys(variable_name: str, dict_obj: Union[dict, None],
-                        accepted_keys: set, or_none: bool = False) -> None:
+                          accepted_keys: set, or_none: bool = False) -> None:
     '''
     Check if an argument in the form of dictionary has valid keys.
     :return: None. Raise 'ValueError' if evaluated variable is considered invalid. 
     '''
-    
+
     # if variable is None, check if it can be None
     if dict_obj is None:
         if or_none:
             return None
         else:
             raise ValueError('%s cannot be None!' % variable_name)
-    
+
     # check if every key provided is valid
     for key in dict_obj.keys():
         if key not in accepted_keys:
             raise ValueError('Unrecognized option of %s: %s' % (variable_name, key))
         del key
-    
+
     return None
+
 
 def _is_int(element):
     '''
@@ -1146,6 +1190,7 @@ def _is_int(element):
     except ValueError:
         return False
 
+
 def _is_float(element):
     '''
     Check if variable is a float. 
@@ -1156,13 +1201,15 @@ def _is_float(element):
     except ValueError:
         return False
 
+
 def _is_list_in_string(element):
     '''
     Check if variable is list provided as string 
     '''
     return bool(re.search(r'\[|\]', element))
 
-def _default_options(CORs : list) -> dict:
+
+def _default_options(CORs: list) -> dict:
     '''
     Set default optional arguments for taylor_diagram function.
     
@@ -1284,9 +1331,15 @@ def _default_options(CORs : list) -> dict:
 
     option['widthcor']        : linewidth for correlation coefficient grid 
                                 lines (Default: .8)
-    option['widthobs']        : linewidth for observation grid line (Default: .8)
-    option['widthrms']        : linewidth for RMS grid lines (Default: .8)
-    option['widthstd']        : linewidth for STD grid lines (Default: .8)
+    option['stdlabelsize']    : STD label size (Default 15)
+    option['corlabelsize']    : correlation label size (Default: 15)
+    option['rmslabelsize']    : RMS label size (Default: 15)
+
+    option['ticksizestd']     : STD ticks size (Default: 13)
+    option['ticksizecor']     : correlation ticks size (Default: 13)
+    option['ticksizerms']     : RMS ticks size (Default: 13)
+
+    option['NormalizedSTD']   : Normalized for STD (Default: False)
 
     Author:
     
@@ -1304,24 +1357,24 @@ def _default_options(CORs : list) -> dict:
     option['alpha'] = 1.0
     option['axismax'] = 0.0
     option['checkstats'] = 'off'
-    
+
     option['cmap'] = 'jet'
     option['cmap_vmin'] = None
     option['cmap_vmax'] = None
-    option['cmap_marker'] = 'd'    
+    option['cmap_marker'] = 'd'
     option['cmapzdata'] = []
 
-    option['colcor'] = (0, 0, 1)   # blue
-    option['colscor'] = None       # if None, considers 'colcor' only
-    option['colobs'] = 'm'         # magenta
+    option['colcor'] = (0, 0, 1)  # blue
+    option['colscor'] = None  # if None, considers 'colcor' only
+    option['colobs'] = 'm'  # magenta
     option['colrms'] = (0, .6, 0)  # medium green
-    option['colstd'] = (0, 0, 0)   # black
-    option['colsstd'] = None       # if None, considers 'colstd' only
-    option['colframe'] = '#000000' # black
+    option['colstd'] = (0, 0, 0)  # black
+    option['colsstd'] = None  # if None, considers 'colstd' only
+    option['colframe'] = '#000000'  # black
     option['colormap'] = 'on'
 
     option['labelrms'] = 'RMSD'
-    option['labelweight'] = 'bold' # weight of the x/y labels ('light', 'normal', 'bold', ...)
+    option['labelweight'] = 'bold'  # weight of the x/y labels ('light', 'normal', 'bold', ...)
     option['locationcolorbar'] = 'NorthOutside'
 
     option['markercolor'] = None
@@ -1331,13 +1384,15 @@ def _default_options(CORs : list) -> dict:
     option['markerlabelcolor'] = 'k'
     option['markerlayout'] = [15, None]
     option['markerlegend'] = 'off'
+    option['legend'] = dict(set_legend=False, bbox_to_anchor_x=1.4, bbox_to_anchor_y=1.1)
+
     option['markerobs'] = 'none'
     option['markers'] = None
     option['markersize'] = 10
     option['markersymbol'] = '.'
 
     option['titlecorshape'] = "curved"
-                                
+
     # panels: double (2) or single (1)
     negative = CORs[np.where(CORs < 0.0)]
     option['numberpanels'] = 2 if (len(negative) > 0) else 1
@@ -1365,14 +1420,14 @@ def _default_options(CORs : list) -> dict:
     middle = np.linspace(0.9, 0.1, 9)
     tickval1[3:3] = middle
     tickval2 = tickval1[:]
-    values = np.linspace(-0.1,-0.9,9)
+    values = np.linspace(-0.1, -0.9, 9)
     tickval2.extend(values)
     tickval2.extend([-0.95, -0.99, -1])
-    option['tickcor'] = (tickval1, tickval2) # store as tuple
+    option['tickcor'] = (tickval1, tickval2)  # store as tuple
     del tickval1, tickval2, middle, values
 
-    option['tickrms'] = [] 
-    option['tickstd'] = [] 
+    option['tickrms'] = []
+    option['tickstd'] = []
     option['tickrmsangle'] = -1
     option['titlecolorbar'] = ''
     option['titlecor'] = 'on'
@@ -1386,10 +1441,21 @@ def _default_options(CORs : list) -> dict:
     option['widthobs'] = lineWidth
     option['widthrms'] = lineWidth
     option['widthstd'] = lineWidth
-                    
+
+    option['stdlabelsize'] = 13
+    option['corlabelsize'] = 13
+    option['rmslabelsize'] = 13
+
+    option['ticksizestd'] = 11
+    option['ticksizecor'] = 11
+    option['ticksizerms'] = 11
+
+    option['normalizedstd'] = True
+
     return option
 
-def _get_options(option : dict, **kwargs) -> dict:
+
+def _get_options(option: dict, **kwargs) -> dict:
     '''
     Get values for optional arguments for taylor_diagram function.
     
@@ -1413,7 +1479,7 @@ def _get_options(option : dict, **kwargs) -> dict:
     Created on Sep 12, 2022
     Revised on Sep 12, 2022
     '''
-    
+
     # Check for valid keys and values in dictionary
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
@@ -1454,7 +1520,7 @@ def _get_options(option : dict, **kwargs) -> dict:
                     option['markerlabel'] = optvalue
                 else:
                     raise ValueError('markerlabel value is not a list or dictionary: ' +
-                                    str(optvalue))
+                                     str(optvalue))
 
             elif optname == 'markerlegend':
                 option['markerlegend'] = check_on_off(option['markerlegend'])
@@ -1491,14 +1557,24 @@ def _get_options(option : dict, **kwargs) -> dict:
                     'colsstd': {'grid', 'title', 'tick_labels', 'ticks'}
                 }
                 _check_dict_with_keys(optname, option[optname],
-                                    accepted_keys[optname], or_none=True)
+                                      accepted_keys[optname], or_none=True)
                 del accepted_keys
+
+            if optname in {'stdlabelsize', 'corlabelsize', 'rmslabelsize', 'ticksizestd', 'ticksizecor', 'ticksizerms'}:
+                option[optname] = optvalue
+
+            elif optname == 'normalizedstd':
+                option[optname] = optvalue
+            elif optname == 'legend':
+                if option['markerlegend']:
+                    option['legend'] = dict(set_legend=list(optvalue)[0], bbox_to_anchor_x=list(optvalue)[1], bbox_to_anchor_y=list(optvalue)[2])
 
         del optname, optvalue
 
     return option
 
-def _read_options(option : dict, **kwargs) -> dict:
+
+def _read_options(option: dict, **kwargs) -> dict:
     '''
     Reads the optional arguments from a CSV file. 
     
@@ -1535,47 +1611,47 @@ def _read_options(option : dict, **kwargs) -> dict:
             name = optvalue
             break
     if not name: return option
-    
+
     # Check if CSV file suffix
     filename, file_extension = os.path.splitext(name)
-    
+
     if file_extension == "":
         filename = name + '.csv'
     elif name.endswith('.csv'):
         filename = name
     else:
         raise Exception("Invalid file type: " + name)
-    
+
     # Check if file exists
     if not os.path.isfile(filename):
         raise Exception("File does not exist: " + filename)
-    
+
     # Load object from CSV file
     objectData = pd.read_csv(filename)
-    
+
     # Parse object for keys and values
-    keys = objectData.iloc[:,0]
-    values = objectData.iloc[:,1].tolist()
+    keys = objectData.iloc[:, 0]
+    values = objectData.iloc[:, 1].tolist()
 
     # Identify keys requiring special consideration   
-    listkey=['cmapzdata','rincrms','rincstd','tickcor','tickrms','tickstd']
-    tuplekey=['colcor','colrms','colstd']
-    
+    listkey = ['cmapzdata', 'rincrms', 'rincstd', 'tickcor', 'tickrms', 'tickstd']
+    tuplekey = ['colcor', 'colrms', 'colstd']
+
     # Process for options read from CSV file
     for index in range(len(keys)):
-        
+
         # Skip assignment if no value provided in CSV file
         if pd.isna(values[index]):
             continue
-        
+
         # Convert list provided as string
         if _is_list_in_string(values[index]):
             # Remove brackets
-            values[index] = values[index].replace('[','').replace(']','')
-        
+            values[index] = values[index].replace('[', '').replace(']', '')
+
         if keys[index] in listkey:
             if pd.isna(values[index]):
-                option[keys[index]]=[]
+                option[keys[index]] = []
             else:
                 # Convert string to list of floats
                 split_string = re.split(' |,', values[index])
@@ -1589,25 +1665,26 @@ def _read_options(option : dict, **kwargs) -> dict:
 
         elif keys[index] in tuplekey:
             try:
-                option[keys[index]]=eval(values[index])
+                option[keys[index]] = eval(values[index])
             except NameError:
-                raise Exception('Invalid ' + keys[index] + ': '+ values[index])
+                raise Exception('Invalid ' + keys[index] + ': ' + values[index])
         elif keys[index] == 'rmslabelformat':
-            option[keys[index]]=values[index]
+            option[keys[index]] = values[index]
         elif pd.isna(values[index]):
-            option[keys[index]]=''
+            option[keys[index]] = ''
         elif _is_int(values[index]):
             option[keys[index]] = int(values[index])
         elif _is_float(values[index]):
             option[keys[index]] = float(values[index])
-        elif values[index]=='None':
-            option[keys[index]]=None
+        elif values[index] == 'None':
+            option[keys[index]] = None
         else:
             option[keys[index]] = values[index]
-        
+
     return option
 
-def _get_taylor_diagram_options(*args,**kwargs) -> dict:
+
+def _get_taylor_diagram_options(*args, **kwargs) -> dict:
     '''
     Get optional arguments for taylor_diagram function.
     
@@ -1647,29 +1724,29 @@ def _get_taylor_diagram_options(*args,**kwargs) -> dict:
     # No options requested, so return with only defaults
     if nargin == 0: return option
 
-    #Check to see if the Key for the file exist
+    # Check to see if the Key for the file exist
     name = ''
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
         if optname == 'taylor_options_file':
-            name = optvalue 
-            break 
-    
+            name = optvalue
+            break
+
     if name:
         # Check if CSV file suffix
         filename, file_extension = os.path.splitext(name)
-    
+
         if file_extension == "":
             filename = name + '.csv'
         elif name.endswith('.csv'):
             filename = name
         else:
             raise Exception("Invalid file type: " + name)
-    
+
         # Check if file exists
         if not os.path.isfile(filename):
             raise Exception("File does not exist: " + filename)
-        
+
         # Read the optional arguments for taylor_diagram function from a 
         # CSV file, if specified. 
         option = _read_options(option, **kwargs)
@@ -1677,8 +1754,9 @@ def _get_taylor_diagram_options(*args,**kwargs) -> dict:
     # Check for valid keys and values in dictionary
     # Allows user to override options specified in CSV file
     option = _get_options(option, **kwargs)
-                                    
+
     return option
+
 
 def _get_taylor_diagram_axes(ax, rho, option) -> dict:
     '''
@@ -1716,10 +1794,10 @@ def _get_taylor_diagram_axes(ax, rho, option) -> dict:
 
     axes = {}
     axes['dx'] = rho[0]
-    
+
     axes['tc'] = option['colframe']
-    axes['next'] = 'replace' #needed?
-    
+    axes['next'] = 'replace'  # needed?
+
     # make a radial grid
     if option['axismax'] == 0.0:
         maxrho = max(abs(rho))
@@ -1727,40 +1805,41 @@ def _get_taylor_diagram_axes(ax, rho, option) -> dict:
         maxrho = option['axismax']
 
     # Determine default number of tick marks
-    if option['overlay'] =='off':
+    if option['overlay'] == 'off':
         ax.set_xlim(-maxrho, maxrho)
     xt = ax.get_xticks()
     ticks = sum(xt >= 0)
-    
+
     # Check radial limits and ticks
-    axes['rmin'] = 0; 
+    axes['rmin'] = 0;
     if option['axismax'] == 0.0:
         axes['rmax'] = xt[-1]
         option['axismax'] = axes['rmax']
     else:
         axes['rmax'] = option['axismax']
-    rticks = np.amax(ticks-1,axis=0)
-    if rticks > 5: # see if we can reduce the number
+    rticks = np.amax(ticks - 1, axis=0)
+    if rticks > 5:  # see if we can reduce the number
         if rticks % 2 == 0:
-            rticks = rticks/2
+            rticks = rticks / 2
         elif rticks % 3 == 0:
-            rticks = rticks/3
-    axes['rinc']  = (axes['rmax'] - axes['rmin'])/rticks
-    tick  = np.arange(axes['rmin'] + axes['rinc'],
-                    axes['rmax'] + axes['rinc'],
-                    axes['rinc']) 
-    
+            rticks = rticks / 3
+    axes['rinc'] = (axes['rmax'] - axes['rmin']) / rticks
+    tick = np.arange(axes['rmin'] + axes['rinc'],
+                     axes['rmax'] + axes['rinc'],
+                     axes['rinc'])
+
     if len(option['tickrms']) == 0:
         option['tickrms'] = tick
         option['rincrms'] = axes['rinc']
     if len(option['tickstd']) == 0:
         option['tickstd'] = tick
         option['rincstd'] = axes['rinc']
-    
+
     return axes
 
+
 def _overlay_taylor_diagram_circles(ax: matplotlib.axes.Axes, axes: dict,
-                                        option: dict) -> None:
+                                    option: dict) -> None:
     '''
     Overlays circle contours on a Taylor diagram.
     
@@ -1802,63 +1881,63 @@ def _overlay_taylor_diagram_circles(ax: matplotlib.axes.Axes, axes: dict,
         adlzanchetta@gmail.com
     '''
 
-    th = np.arange(0, 2*np.pi, np.pi/150)
+    th = np.arange(0, 2 * np.pi, np.pi / 150)
     xunit = np.cos(th)
     yunit = np.sin(th)
 
     # now really force points on x/y axes to lie on them exactly
-    inds = range(0,len(th),(len(th)-1) // 4)
+    inds = range(0, len(th), (len(th) - 1) // 4)
     xunit[inds[1:5:2]] = np.zeros(2)
     yunit[inds[0:6:2]] = np.zeros(3)
-    
+
     # DRAW RMS CIRCLES:
     # ANGLE OF THE TICK LABELS
     if option['tickrmsangle'] > 0:
         tickRMSAngle = option['tickrmsangle']
     else:
-        phi = np.arctan2(option['tickstd'][-1],axes['dx'])
+        phi = np.arctan2(option['tickstd'][-1], axes['dx'])
         tickRMSAngle = 180 - np.rad2deg(phi)
-    
-    cst = np.cos(tickRMSAngle*np.pi/180)
-    snt = np.sin(tickRMSAngle*np.pi/180)
-    radius = np.sqrt(axes['dx']**2+axes['rmax']**2 - 
-                    2*axes['dx']*axes['rmax']*xunit)
+
+    cst = np.cos(tickRMSAngle * np.pi / 180)
+    snt = np.sin(tickRMSAngle * np.pi / 180)
+    radius = np.sqrt(axes['dx'] ** 2 + axes['rmax'] ** 2 -
+                     2 * axes['dx'] * axes['rmax'] * xunit)
 
     # Define label format
     labelFormat = '{' + option['rmslabelformat'] + '}'
     fontSize = matplotlib.rcParams.get('font.size') + 2
-    
+
     for iradius in option['tickrms']:
         phi = th[np.where(radius >= iradius)]
         if len(phi) != 0:
             phi = phi[0]
-            ig = np.where(iradius*np.cos(th)+axes['dx'] <=
-                        axes['rmax']*np.cos(phi))
-            hhh = ax.plot(xunit[ig]*iradius+axes['dx'],yunit[ig]*iradius,
-                        linestyle = option['stylerms'],color = option['colrms'],
-                        linewidth = option['widthrms'])
+            ig = np.where(iradius * np.cos(th) + axes['dx'] <=
+                          axes['rmax'] * np.cos(phi))
+            hhh = ax.plot(xunit[ig] * iradius + axes['dx'], yunit[ig] * iradius,
+                          linestyle=option['stylerms'], color=option['colrms'],
+                          linewidth=option['widthrms'])
             if option['showlabelsrms'] == 'on':
-                rt = (iradius+option['rincrms']/20)
+                rt = (iradius + option['rincrms'] / 20)
                 if option['tickrmsangle'] > 90:
-                    xtextpos = (rt + abs(cst)*axes['rinc']/5)*cst + axes['dx']
-                    ytextpos = (rt + abs(cst)*axes['rinc']/5)*snt
+                    xtextpos = (rt + abs(cst) * axes['rinc'] / 5) * cst + axes['dx']
+                    ytextpos = (rt + abs(cst) * axes['rinc'] / 5) * snt
                 else:
-                    xtextpos = rt*cst + axes['dx']
-                    ytextpos = rt*snt
+                    xtextpos = rt * cst + axes['dx']
+                    ytextpos = rt * snt
 
                 ax.text(xtextpos, ytextpos, labelFormat.format(iradius),
-                        horizontalalignment = 'center', verticalalignment = 'center',
-                        color = option['colrms'], rotation = tickRMSAngle - 90,
-                        fontsize = fontSize)
-    
+                        horizontalalignment='center', verticalalignment='center',
+                        color=option['colrms'], rotation=tickRMSAngle - 90,
+                        fontsize=option['ticksizerms'])
+
     # DRAW STD CIRCLES:
     # draw radial circles
     grid_color = _get_from_dict_or_default(option, 'colstd', 'colsstd', 'grid')
     for i in option['tickstd']:
-        hhh = ax.plot(xunit*i, yunit*i,
-                    linestyle=option['stylestd'],
-                    color=grid_color,
-                    linewidth=option['widthstd'])
+        hhh = ax.plot(xunit * i, yunit * i,
+                      linestyle=option['stylestd'],
+                      color=grid_color,
+                      linewidth=option['widthstd'])
         del i
 
     # Set tick values for axes
@@ -1872,19 +1951,20 @@ def _overlay_taylor_diagram_circles(ax: matplotlib.axes.Axes, axes: dict,
 
     ax.set_xticks(tickValues)
 
-    hhh[0].set_linestyle('-') # Make outermost STD circle solid
-    
+    hhh[0].set_linestyle('-')  # Make outermost STD circle solid
+
     # Draw circle for outer boundary
     i = option['axismax']
-    hhh = ax.plot(xunit*i, yunit*i, 
-                linestyle = option['stylestd'],
-                color = grid_color,
-                linewidth = option['widthstd'])
+    hhh = ax.plot(xunit * i, yunit * i,
+                  linestyle=option['stylestd'],
+                  color=grid_color,
+                  linewidth=option['widthstd'])
 
     return None
 
+
 def _overlay_taylor_diagram_lines(ax: matplotlib.axes.Axes, axes: dict,
-                                    option: dict) -> None:
+                                  option: dict) -> None:
     '''
     Overlay lines emanating from origin on a Taylor diagram.
 
@@ -1920,24 +2000,24 @@ def _overlay_taylor_diagram_lines(ax: matplotlib.axes.Axes, axes: dict,
     '''
 
     # Get common information
-    corr = option['tickcor'][option['numberpanels']-1]
-    th  = np.arccos(corr)
+    corr = option['tickcor'][option['numberpanels'] - 1]
+    th = np.arccos(corr)
     cst, snt = np.cos(th), np.sin(th)
     del th
-    
+
     # DRAW CORRELATION LINES EMANATING FROM THE ORIGIN:
-    cs = np.append(-1.0*cst, cst)
-    sn = np.append(-1.0*snt, snt)
+    cs = np.append(-1.0 * cst, cst)
+    sn = np.append(-1.0 * snt, snt)
     lines_col = _get_from_dict_or_default(option, 'colcor', 'colscor', 'grid')
     for i, val in enumerate(cs):
-        ax.plot([0, axes['rmax']*cs[i]],
-                [0, axes['rmax']*sn[i]], 
-                linestyle = option['stylecor'],
-                color = lines_col,
-                linewidth = option['widthcor'])
+        ax.plot([0, axes['rmax'] * cs[i]],
+                [0, axes['rmax'] * sn[i]],
+                linestyle=option['stylecor'],
+                color=lines_col,
+                linewidth=option['widthcor'])
         del i, val
     del lines_col, sn, cs
-    
+
     # annotate them in correlation coefficient
     if option['showlabelscor'] == 'on':
         ticklabels_col = _get_from_dict_or_default(option, 'colcor', 'colscor', 'tick_labels')
@@ -1945,19 +2025,20 @@ def _overlay_taylor_diagram_lines(ax: matplotlib.axes.Axes, axes: dict,
         rt = 1.05 * axes['rmax']
         for i, cc in enumerate(corr):
             if option['numberpanels'] == 2:
-                x = (1.05+abs(cst[i])/30)*axes['rmax']*cst[i]
+                x = (1.05 + abs(cst[i]) / 30) * axes['rmax'] * cst[i]
             else:
-                x = rt*cst[i]
-            y = rt*snt[i]
+                x = rt * cst[i]
+            y = rt * snt[i]
             ax.text(x, y,
                     str(round(cc, 2)),
-                    horizontalalignment = 'center',
-                    color = ticklabels_col,
-                    fontsize = fontSize)
+                    horizontalalignment='center',
+                    color=ticklabels_col,
+                    fontsize=option['ticksizecor'])
             del i, cc
         del fontSize, rt, ticklabels_col
 
     return None
+
 
 def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
         -> list:
@@ -1993,6 +2074,14 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
     option['titlecorshape'] : defines the shape of the label "correlation coefficient"
                                 as either 'curved' or 'linear' (Default: 'curved')
 
+    option['stdlabelsize']    : STD label size (Default 15)
+    option['corlabelsize']    : correlation label size (Default: 15)
+    option['rmslabelsize']    : RMS label size (Default: 15)
+
+    option['ticksizestd']     : STD ticks size (Default: 13)
+    option['ticksizecor']     : correlation ticks size (Default: 13)
+    option['ticksizerms']     : RMS ticks size (Default: 13)
+
     OUTPUTS:
     ax: returns a list of handles of axis labels
     
@@ -2006,7 +2095,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
     Created on Dec 3, 2016
     Revised on Aug 14, 2022
     '''
-    
+
     axes_handles = []
     axlabweight = option['labelweight']
     fontSize = rcParams.get('font.size') + 2
@@ -2015,15 +2104,22 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
 
     if option['numberpanels'] == 1:
         # Single panel
-        
+
         if option['titlestd'] == 'on':
             color = _get_from_dict_or_default(
                 option, 'colstd', 'colsstd', 'title')
-            handle = ax.set_ylabel('Standard Deviation',
-                                color=color,
-                                fontweight=axlabweight,
-                                fontsize=fontSize,
-                                fontfamily=fontFamily)
+            if option['normalizedstd']:
+                handle = ax.set_ylabel('Normalized Standard Deviation',
+                                       color=color,
+                                       fontweight=axlabweight,
+                                       fontsize=option['stdlabelsize'],
+                                       fontfamily=fontFamily)
+            else:
+                handle = ax.set_ylabel('Standard Deviation',
+                                       color=color,
+                                       fontweight=axlabweight,
+                                       fontsize=option['stdlabelsize'],
+                                       fontfamily=fontFamily)
             axes_handles.append(handle)
             del color, handle
 
@@ -2035,81 +2131,82 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
             lab = 'Correlation Coefficient'
 
             if option['titlecorshape'] == 'curved':
-                DA  = 15
-                c = np.fliplr([np.linspace(pos1-DA, pos1+DA, len(lab))])[0]
+                DA = 15
+                c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
                 dd = 1.1 * axes['rmax']
                 for ii, ith in enumerate(c):
-                    cur_x = dd*np.cos(ith*np.pi/180)
-                    cur_y = dd*np.sin(ith*np.pi/180)
+                    cur_x = dd * np.cos(ith * np.pi / 180)
+                    cur_y = dd * np.sin(ith * np.pi / 180)
                     # print("%s: %.03f, %.03f, %.03f" % (lab[ii], cur_x, cur_y, ith))
-                    handle = ax.text(dd*np.cos(ith*np.pi/180),
-                                    dd*np.sin(ith*np.pi/180),
-                                    lab[ii])
-                    handle.set(rotation=ith-90,
-                            color=color,
-                            horizontalalignment='center',
-                            verticalalignment='bottom',
-                            fontsize=fontSize,
-                            fontfamily=fontFamily,
-                            fontweight=axlabweight)
+                    handle = ax.text(dd * np.cos(ith * np.pi / 180),
+                                     dd * np.sin(ith * np.pi / 180),
+                                     lab[ii])
+                    handle.set(rotation=ith - 90,
+                               color=color,
+                               horizontalalignment='center',
+                               verticalalignment='bottom',
+                               fontsize=option['corlabelsize'],
+                               fontfamily=fontFamily,
+                               fontweight=axlabweight)
                     axes_handles.append(handle)
                     del ii, ith, handle
                 del DA, c, dd
 
             elif option['titlecorshape'] == 'linear':
-                pos_x_y = 1.13 * axes['rmax'] * np.cos(pos1*np.pi/180)
+                pos_x_y = 1.13 * axes['rmax'] * np.cos(pos1 * np.pi / 180)
                 handle = ax.text(pos_x_y, pos_x_y, "Correlation Coefficient")
                 handle.set(rotation=-45,
-                        color=color,
-                        horizontalalignment='center',
-                        verticalalignment='center',
-                        fontsize=fontSize,
-                        fontfamily=fontFamily,
-                        fontweight=axlabweight)
+                           color=color,
+                           horizontalalignment='center',
+                           verticalalignment='center',
+                           fontsize=option['corlabelsize'],
+                           fontfamily=fontFamily,
+                           fontweight=axlabweight)
                 del pos_x_y, handle
 
             else:
                 raise ValueError("Invalid value for 'titlecorshape': %s" %
-                                option['titlecorshape'])
+                                 option['titlecorshape'])
 
             del color, pos1, lab
-        
+
         if option['titlerms'] == 'on':
             lab = option['labelrms']
-            pos1 = option['titlermsdangle']; DA = 10
-            c = np.fliplr([np.linspace(pos1-DA,pos1+DA,len(lab))])[0]
+            pos1 = option['titlermsdangle'];
+            DA = 10
+            c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
             if option['tickrms'][0] > 0:
-                dd = 0.8*option['tickrms'][0] + 0.2*option['tickrms'][1]
+                dd = 0.8 * option['tickrms'][0] + 0.2 * option['tickrms'][1]
             else:
-                dd = 0.8*option['tickrms'][1] + 0.2*option['tickrms'][2]
-            
+                dd = 0.8 * option['tickrms'][1] + 0.2 * option['tickrms'][2]
+
             # Adjust spacing of label letters if on too small an arc
-            posFraction = dd/axes['rmax']
+            posFraction = dd / axes['rmax']
             if posFraction < 0.35:
-                DA = 2*DA
-                c = np.fliplr([np.linspace(pos1-DA,pos1+DA,len(lab))])[0]
+                DA = 2 * DA
+                c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
 
             # Write label in a circular arc               
-            for ii,ith in enumerate(c):
-                xtextpos = axes['dx'] + dd*np.cos(ith*np.pi/180) 
-                ytextpos = dd*np.sin(ith*np.pi/180) 
-                handle = ax.text(xtextpos,ytextpos,lab[ii])
-                handle.set(rotation = ith-90, color = option['colrms'], 
-                    horizontalalignment = 'center', 
-                    verticalalignment = 'top', 
-                    fontsize = fontSize, fontweight = axlabweight)
+            for ii, ith in enumerate(c):
+                xtextpos = axes['dx'] + dd * np.cos(ith * np.pi / 180)
+                ytextpos = dd * np.sin(ith * np.pi / 180)
+                handle = ax.text(xtextpos, ytextpos, lab[ii])
+                handle.set(rotation=ith - 90, color=option['colrms'],
+                           horizontalalignment='center',
+                           verticalalignment='top',
+                           fontsize=option['rmslabelsize'], fontweight=axlabweight)
                 axes_handles.append(handle)
-        
+
     else:
         # Double panel
-    
+
         if option['titlestd'] == 'on':
             color = _get_from_dict_or_default(
                 option, 'colstd', 'colsstd', 'title')
             handle = ax.set_xlabel('Standard Deviation',
-                                color = color,
-                                fontweight = axlabweight,
-                                fontsize = fontSize)
+                                   color=color,
+                                   fontweight=axlabweight,
+                                   fontsize=option['stdlabelsize'])
 
             axes_handles.append(handle)
             del color, handle
@@ -2117,51 +2214,53 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
         if option['titlecor'] == 'on':
             color = _get_from_dict_or_default(
                 option, 'colcor', 'colscor', 'title')
-            pos1 = 90; DA = 25;
-            lab = 'Correlation Coefficient' 
-            c = np.fliplr([np.linspace(pos1-DA,pos1+DA,len(lab))])[0]
-            dd = 1.1*axes['rmax']
+            pos1 = 90;
+            DA = 25;
+            lab = 'Correlation Coefficient'
+            c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
+            dd = 1.1 * axes['rmax']
 
             # Write label in a circular arc
             for ii, ith in enumerate(c):
-                handle = ax.text(dd*np.cos(ith*np.pi/180),
-                                dd*np.sin(ith*np.pi/180),lab[ii])
-                handle.set(rotation = ith-90, color = color,
-                    horizontalalignment = 'center', 
-                    verticalalignment = 'bottom', 
-                    fontsize = fontSize,
-                    fontweight = axlabweight)
+                handle = ax.text(dd * np.cos(ith * np.pi / 180),
+                                 dd * np.sin(ith * np.pi / 180), lab[ii])
+                handle.set(rotation=ith - 90, color=color,
+                           horizontalalignment='center',
+                           verticalalignment='bottom',
+                           fontsize=option['corlabelsize'],
+                           fontweight=axlabweight)
                 axes_handles.append(handle)
 
                 del ii, ith, handle
             del color, pos1, DA, lab, c, dd
-        
+
         if option['titlerms'] == 'on':
             lab = option['labelrms']
-            pos1 = option['titlermsdangle']; DA = 10
-            c = np.fliplr([np.linspace(pos1-DA,pos1+DA,len(lab))])[0]
+            pos1 = option['titlermsdangle'];
+            DA = 10
+            c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
             if option['tickrms'][0] > 0:
-                dd = 0.7*option['tickrms'][0] + 0.3*option['tickrms'][1]
+                dd = 0.7 * option['tickrms'][0] + 0.3 * option['tickrms'][1]
             else:
-                dd = 0.7*option['tickrms'][1] + 0.3*option['tickrms'][2]
+                dd = 0.7 * option['tickrms'][1] + 0.3 * option['tickrms'][2]
 
             # Adjust spacing of label letters if on too small an arc
-            posFraction = dd/axes['rmax']
+            posFraction = dd / axes['rmax']
             if posFraction < 0.35:
-                DA = 2*DA
-                c = np.fliplr([np.linspace(pos1-DA,pos1+DA,len(lab))])[0]
+                DA = 2 * DA
+                c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
 
-            for ii,ith in enumerate(c):
-                xtextpos = axes['dx'] + dd*np.cos(ith*np.pi/180) 
-                ytextpos = dd*np.sin(ith*np.pi/180) 
-                handle = ax.text(xtextpos,ytextpos,lab[ii])
-                handle.set(rotation = ith-90, color = option['colrms'],
-                    horizontalalignment = 'center', 
-                    verticalalignment = 'bottom',
-                    fontsize = fontSize,
-                    fontweight = axlabweight)
+            for ii, ith in enumerate(c):
+                xtextpos = axes['dx'] + dd * np.cos(ith * np.pi / 180)
+                ytextpos = dd * np.sin(ith * np.pi / 180)
+                handle = ax.text(xtextpos, ytextpos, lab[ii])
+                handle.set(rotation=ith - 90, color=option['colrms'],
+                           horizontalalignment='center',
+                           verticalalignment='bottom',
+                           fontsize=option['rmslabelsize'],
+                           fontweight=axlabweight)
                 axes_handles.append(handle)
-    
+
     #  Set color of tick labels to that specified for STD contours
     labels_color = _get_from_dict_or_default(option, 'colstd', 'colsstd', 'tick_labels')
     ticks_color = _get_from_dict_or_default(option, 'colstd', 'colsstd', 'ticks')
@@ -2181,7 +2280,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
         else:
             xtick = np.concatenate((-option['tickstd'][0:], 0, option['tickstd']), axis=None)
         xtick = np.sort(xtick)
-        
+
         # Set x tick labels
         xlabel = [];
         for i in range(len(xtick)):
@@ -2192,24 +2291,24 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
             xlabel.append(label)
 
         ax.set_xticks(xtick)
-        ax.set_xticklabels(xlabel, fontfamily=fontFamily)
+        ax.set_xticklabels(xlabel, fontfamily=fontFamily, fontsize=option['ticksizestd'])
 
-        axislim = [axes['rmax']*x for x in [-1, 1, 0, 1]]
+        axislim = [axes['rmax'] * x for x in [-1, 1, 0, 1]]
         ax.set_xlim(axislim[0:2])
         ax.set_ylim(axislim[2:])
-        ax.plot([-axes['rmax'], axes['rmax']],[0, 0],
-                color = axes['tc'], linewidth = lineWidth+1)
-        ax.plot([0, 0],[0, axes['rmax']], color = axes['tc'])
+        ax.plot([-axes['rmax'], axes['rmax']], [0, 0],
+                color=axes['tc'], linewidth=lineWidth + 1)
+        ax.plot([0, 0], [0, axes['rmax']], color=axes['tc'])
 
         # hide y-axis line
         ax.axes.get_yaxis().set_visible(False)
     else:
         ytick = ax.get_yticks()
         ytick = list(filter(lambda x: x >= 0 and x <= axes['rmax'], ytick))
-        axislim = [axes['rmax']*x for x in [0, 1, 0, 1]]
+        axislim = [axes['rmax'] * x for x in [0, 1, 0, 1]]
         ax.set_xlim(axislim[0:2])
         ax.set_ylim(axislim[2:])
-        
+
         # Set y tick labels
         for i in range(len(ytick)):
             label = _get_axis_tick_label(ytick[i])
@@ -2217,22 +2316,23 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
 
         ax.set_xticks(ytick)
         ax.set_yticks(ytick)
-        ax.set_xticklabels(ylabel, fontfamily=fontFamily, fontsize=fontSize*0.9)
-        ax.set_yticklabels(ylabel, fontfamily=fontFamily, fontsize=fontSize*0.9)
+        ax.set_xticklabels(ylabel, fontfamily=fontFamily, fontsize=option['ticksizestd'])
+        ax.set_yticklabels(ylabel, fontfamily=fontFamily, fontsize=option['ticksizestd'])
 
         ax.plot([0,
-                axes['rmax']],[0, 0],
-                color = axes['tc'],
-                linewidth = lineWidth+2)
+                 axes['rmax']], [0, 0],
+                color=axes['tc'],
+                linewidth=lineWidth + 2)
         ax.plot([0, 0],
                 [0, axes['rmax']],
-                color = axes['tc'],
-                linewidth = lineWidth+1)
+                color=axes['tc'],
+                linewidth=lineWidth + 1)
 
     return axes_handles
 
+
 def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD,
-                    axes_info: dict, option: dict) -> None:
+                     axes_info: dict, option: dict) -> None:
     '''
     Plots observation STD on Taylor diagram.
     
@@ -2265,34 +2365,35 @@ def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD,
     Created on Feb 19, 2017
     Revised on Aug 14, 2022
     '''
-    
+
     if option['markerobs'] != 'none':
         # Display marker on x-axis indicating observed STD
         markersize = option['markersize'] - 4
-        yobsSTD = 0.001*axes_info['rmax'] - axes_info['rmin']
-        ax.plot(obsSTD,yobsSTD,option['markerobs'],color = option['colobs'],
-                markersize = markersize, markerfacecolor = option['colobs'],
-                markeredgecolor = option['colobs'],
-                linewidth = 1.0, clip_on=False);
-    
+        yobsSTD = 0.001 * axes_info['rmax'] - axes_info['rmin']
+        ax.plot(obsSTD, yobsSTD, option['markerobs'], color=option['colobs'],
+                markersize=markersize, markerfacecolor=option['colobs'],
+                markeredgecolor=option['colobs'],
+                linewidth=1.0, clip_on=False);
+
     if option['titleobs'] != '':
         # Put label below the marker
-        labelsize = axes_handle[0].get_fontsize() # get label size of STD axes
-        ax.set_xlabel(option['titleobs'], color = option['colobs'],
-                fontweight = 'bold', fontsize = labelsize)
+        labelsize = axes_handle[0].get_fontsize()  # get label size of STD axes
+        ax.set_xlabel(option['titleobs'], color=option['colobs'],
+                      fontweight='bold', fontsize=labelsize)
         xlabelh = ax.xaxis.get_label()
         xypos = xlabelh.get_position()
-        markerpos = ax.transLimits.transform((obsSTD,0))
+        markerpos = ax.transLimits.transform((obsSTD, 0))
         xlabelh.set_position([markerpos[0], xypos[1]])
         xlabelh.set_horizontalalignment('center')
-    
+
     if option['styleobs'] != '':
         # Draw circle for observation STD
-        theta = np.arange(0, 2*np.pi, np.pi/150)
-        xunit = obsSTD*np.cos(theta)
-        yunit = obsSTD*np.sin(theta)
-        ax.plot(xunit,yunit,linestyle=option['styleobs'],
-                color = option['colobs'],linewidth = option['widthobs'])
+        theta = np.arange(0, 2 * np.pi, np.pi / 150)
+        xunit = obsSTD * np.cos(theta)
+        yunit = obsSTD * np.sin(theta)
+        ax.plot(xunit, yunit, linestyle=option['styleobs'],
+                color=option['colobs'], linewidth=option['widthobs'])
+
 
 def _get_axis_tick_label(value):
     '''
@@ -2319,7 +2420,7 @@ def _get_axis_tick_label(value):
     number_digits = 0
     if not _use_sci_notation(value):
         label = str(value)
-        
+
         # Get substring after period
         trailing = label.partition('.')[2]
         number_sigfig = 0
@@ -2332,12 +2433,12 @@ def _get_axis_tick_label(value):
             while go and number_digits < len(trailing):
                 if trailing[number_digits] == before:
                     number_sigfig = number_digits - 1
-                    if(number_sigfig > 5): go = False
+                    if (number_sigfig > 5): go = False
                 else:
                     before = trailing[number_digits]
                     number_sigfig = number_digits - 1
-                number_digits+=1
-    
+                number_digits += 1
+
         if number_digits == len(trailing): number_sigfig = number_digits
 
         # Round up the number to desired significant figures
@@ -2346,6 +2447,7 @@ def _get_axis_tick_label(value):
         label = "{:.1e}".format(value)
 
     return label
+
 
 def _use_sci_notation(value):
     '''
@@ -2363,10 +2465,11 @@ def _use_sci_notation(value):
 
     Created on May 10, 2022
     '''
-    if (abs(value)>0 and abs(value) < 1e-3):
+    if (abs(value) > 0 and abs(value) < 1e-3):
         return True
     else:
         return False
+
 
 def check_on_off(value):
     '''
@@ -2389,31 +2492,43 @@ def check_on_off(value):
 
     if isinstance(value, str):
         lowcase = value.lower()
-        if lowcase == 'off': return lowcase
-        elif lowcase == 'on': return lowcase
+        if lowcase == 'off':
+            return lowcase
+        elif lowcase == 'on':
+            return lowcase
         else:
             raise ValueError('Invalid value: ' + str(value))
     elif isinstance(value, bool):
-        if value == False: value = 'off'
-        elif value == True: value = 'on'
+        if value == False:
+            value = 'off'
+        elif value == True:
+            value = 'on'
     else:
         raise ValueError('Invalid value: ' + str(value))
 
     return value
 
-def generate_markers(data_names):
-    import itertools
-    markers = {}
-    #add colors and symbols
-    colors = itertools.cycle(["r", "b", "g", "c", "m", "y", "k", "orange", "purple", "brown", "pink", "gray"])  # Cycle through colors
-    symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])  # Cycle through symbols
 
+def generate_markers(data_names, option):
+    import itertools
+    import matplotlib.colors as mcolors
+    markers = {}
+    # add colors and symbols
+    hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
+        , '#277DA1', '#5A189A']
+    colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+    # colors = itertools.cycle(["r", "b", "g", "c", "m", "y", "k", "orange", "purple", "brown", "pink", "gray"])  # Cycle through colors
+    symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])  # Cycle through symbols
     for name in data_names:
+        if not option['faceColor']:
+            faceColor = next(colors)
+        else:
+            faceColor = option['faceColor']
         markers[name] = {
-        "labelColor": next(colors),
-        "symbol": next(symbols),
-        "size": 10,
-        "faceColor": "w",
-        "edgeColor": next(colors),
+            "labelColor": next(colors),
+            "edgeColor": next(colors),
+            "symbol": next(symbols),
+            "size": option['MARKERSsize'],
+            "faceColor": faceColor,
         }
     return markers
