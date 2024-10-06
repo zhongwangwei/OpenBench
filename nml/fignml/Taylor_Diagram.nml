@@ -1,0 +1,47 @@
+&general
+  title             =
+  title_size        = 18
+  STDlabelsize      = 14
+  CORlabelsize      = 14
+  RMSlabelsize      = 14
+  fontsize          = 14 # to contral legend font zise
+  axes_linewidth    = 1
+
+  Normalized        =  true   # True False if Ture the will show Normalized STD, else STd
+  ticksizeSTD       =  12
+  styleSTD          =  -
+  widthSTD          =  1
+  colSTD            =  k
+
+  ticksizeCOR       =  12
+  styleCOR          =  --
+  widthCOR          =  1
+  colCOR            =  k
+
+  ticksizeRMS       = 12
+  styleRMS          = :
+  widthRMS          = 1.5
+  colRMS            = grey
+  titleRMS          = on  # 'on' 'off'
+
+  styleOBS          =  -
+  colOBS            =  r
+  widthOBS          =  1
+  markerobs         =  o
+
+  markerLegend      = on # 'on' 'off'
+  MARKERSsize       = 10
+  faceColor         =  w
+
+  set_legend        =  false      # if false then will use default setting to plot legend
+  bbox_to_anchor_x  =  1.4
+  bbox_to_anchor_y  =  1.1
+
+  x_wise            = 6
+  saving_format     = jpg
+  y_wise            = 6
+  font              = Times new roman
+  dpi               = 300
+
+/
+
