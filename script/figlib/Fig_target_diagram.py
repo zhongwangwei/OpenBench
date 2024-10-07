@@ -1,81 +1,67 @@
-import xarray as xr
-import pandas as pd
-import numpy as np
-
-import matplotlib
-import matplotlib.pyplot as plt
-from   matplotlib import colors
-from   mpl_toolkits.basemap import Basemap
-from   matplotlib import rcParams
-from   matplotlib import ticker
-import math
-import matplotlib.colors as clr
-import itertools
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from matplotlib.ticker import ScalarFormatter
-import matplotlib
-import matplotlib.colors as clr
-import matplotlib
-import warnings
-from matplotlib.lines import Line2D
-from matplotlib import ticker
 import math
 import numbers
-import numpy as np
+import os
+import warnings
 from array import array
 from typing import Union
+
+import matplotlib
+import matplotlib.colors as clr
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from matplotlib import rcParams
-import os
+from matplotlib import ticker
+from matplotlib.lines import Line2D
+from matplotlib.ticker import ScalarFormatter
 
-font = {'family': 'DejaVu Sans'}
-matplotlib.rc('font', **font)
 
-params = {'backend': 'ps',
-            'axes.labelsize': 10,
-            'grid.linewidth': 0.2,
-            'font.size': 12,
-            'legend.fontsize': 12,
-            'legend.frameon': False,
-            'xtick.labelsize': 12,
-            'xtick.direction': 'out',
-            'ytick.labelsize': 12,
-            'ytick.direction': 'out',
-            'savefig.bbox': 'tight',
-            'axes.unicode_minus': False,
-            'text.usetex': False}
-rcParams.update(params)
-
-def make_scenarios_comparison_Target_Diagram(basedir,evaluation_item, bias,crmsd,rmsd,ref_source,sim_sources):
+def make_scenarios_comparison_Target_Diagram(basedir, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources, option):
     import matplotlib.pyplot as plt
-    from matplotlib import rcParams
-    from matplotlib.ticker import ScalarFormatter
     import matplotlib
-    import matplotlib.colors as clr
-    import matplotlib
-    import warnings
-    from matplotlib.lines import Line2D
-    from matplotlib import ticker
-    import math
-    import numbers
-    import numpy as np
-    from array import array
-    from typing import Union
     from matplotlib import rcParams
     import os
 
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
 
+    params = {'backend': 'ps',
+              'axes.linewidth': option['axes_linewidth'],
+              'font.size': option['fontsize'],
+              'xtick.direction': 'out',
+              'xtick.labelsize': option['xticksize'],
+              'ytick.direction': 'out',
+              'ytick.labelsize': option['yticksize'],
+              'savefig.bbox': 'tight',
+              'axes.unicode_minus': False,
+              'text.usetex': False}
+    rcParams.update(params)
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
+
+    option['MARKERS'] = generate_markers(sim_sources, option)
 
 
     target_diagram(bias,crmsd,rmsd, markerLabel = sim_sources,
-                    markerLabelColor = 'b', markerLegend = 'on',
-                    circleLineSpec = 'b-.', circleLineWidth = 1.5)
+                   markers=option['MARKERS'],
+                   markerLegend=option['markerLegend'],
 
-    # plt.title("(b) Sensible Heat Flux", fontsize=18, pad=25, loc='left')
-    output_file_path=os.path.join(f'{basedir}', f'target_diagram_{evaluation_item}_{ref_source}.jpg')
-    plt.savefig(output_file_path, format='jpg', dpi=300, bbox_inches='tight')  
+                   normalized=option['Normalized'],
+
+                   circlecolor=option['circlecolor'],
+                   circlestyle=option['circlestyle'],
+                   circleLineWidth=option['widthcircle'],
+                   circlelabelsize=option['circlelabelsize'],
+
+                   legend={option['set_legend'], option['bbox_to_anchor_x'], option['bbox_to_anchor_y']}
+                   )
+
+    if not option['title']:
+        option['title'] = evaluation_item.replace('_', " ")
+    ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
+
+    output_file_path = os.path.join(f'{basedir}', f'Target_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
+    plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
 
 def target_diagram(*args, **kwargs):
@@ -140,7 +126,7 @@ def target_diagram(*args, **kwargs):
 
     # Modify axes for target diagram (no overlay)
     if option['overlay'] == 'off':
-        axes_handles = plot_target_axes(ax, axes)
+        axes_handles = plot_target_axes(ax, axes, option)
 
     # Plot data points
     lowcase = option['markerdisplayed'].lower()
@@ -296,8 +282,7 @@ def _get_target_diagram_arguments(*args):
     '''
 
     # Check amount of values provided and display options list if needed
-    import numbers
-        
+
     nargin = len(args)
     if nargin == 0:
         # Display options list
@@ -321,7 +306,8 @@ def _get_target_diagram_arguments(*args):
 
     return CAX, Bs, RMSDs, RMSDz
 
-def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict) -> list:
+
+def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list:
     '''
     Plot axes for target diagram.
     
@@ -385,7 +371,8 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict) -> list:
     ax.set_ylim(axislim[2:])
 
     # Label x-axis
-    fontSize = matplotlib.rcParams.get('font.size')
+    # fontSize = matplotlib.rcParams.get('font.size')
+    fontSize = option['circlelabelsize']
     xpos = axes['xtick'][-1] + 2*axes['xtick'][-1]/30
     ypos = axes['xtick'][-1]/30
     if axes['xoffset'] == 'None':
@@ -745,9 +732,14 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp =
         if len(markerLabel) <= 6:
             # Put legend in a default location
             markerlabel = tuple(markerLabel)
-            leg = plt.legend(hp, markerlabel, loc = 'upper right',
-                                fontsize = fontSize, numpoints=1,
-                                bbox_to_anchor=(1.2,1.0))
+            if option['legend']['set_legend']:
+                leg = plt.legend(hp, markerlabel, loc='upper right',
+                                 fontsize=fontSize, numpoints=1,
+                                 bbox_to_anchor=(option['legend']['bbox_to_anchor_x'], option['legend']['bbox_to_anchor_y']))
+            else:
+                leg = plt.legend(hp, markerlabel, loc='upper right',
+                                 fontsize=fontSize, numpoints=1,
+                                 bbox_to_anchor=(1.55, 1.05))
         else:
             # Put legend to right of the plot in multiple columns as needed
 
@@ -764,10 +756,13 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp =
 
             # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
-            if 'circlelinespec' in option:
-                loc = (1.2, 0.25)
+            if option['legend']['set_legend']:
+                loc = (option['legend']['bbox_to_anchor_x'], option['legend']['bbox_to_anchor_y'])
             else:
-                loc = (1.1, 0.25)
+                if 'circlelinespec' in option:
+                    loc = (1.2, 0.25)
+                else:
+                    loc = (1.1, 0.25)
             leg = plt.legend(hp, markerlabel, loc = loc, fontsize = fontSize,
                             numpoints=1, ncol = ncol)
 
@@ -927,6 +922,7 @@ def _default_options() -> dict:
     option['circles']         : radii of circles to draw to indicate 
                                 isopleths of standard deviation (empty by default)
     option['circlestyle']     : line style for circles (Default: None)
+    option['circlelabelsize'] : circle labels (default 12)
 
     option['cmap']            : Choice of colormap. (Default : 'jet')
     option['cmap_vmin']       : minimum range of colormap (Default : None)
@@ -1006,6 +1002,7 @@ def _default_options() -> dict:
     option['circlelinewidth'] = rcParams.get('lines.linewidth')
     option['circles'] = None
     option['circlestyle'] = None # circlelinespec by default
+    option['circlelabelsize'] = 12
 
     option['circlecolor'] = option['circlelinespec'][0]
     option['circlestyle'] = option['circlelinespec'][1:]
@@ -1048,7 +1045,9 @@ def _default_options() -> dict:
     option['titlecolorbar'] = ''
     option['xticklabelpos'] = []
     option['yticklabelpos'] = []
-                    
+
+    option['legend'] = dict(set_legend=False, bbox_to_anchor_x=1.4, bbox_to_anchor_y=1.1)
+
     return option
 
 def _get_options(option, **kwargs) -> dict:
@@ -1122,6 +1121,12 @@ def _get_options(option, **kwargs) -> dict:
                 option['normalized'] = check_on_off(option['normalized'])
             elif optname == 'overlay':
                 option['overlay'] = check_on_off(option['overlay'])
+            elif optname == 'legend':
+                if option['markerlegend'] == 'on':
+                    option['legend'] = dict(set_legend=list(optvalue)[0], bbox_to_anchor_x=list(optvalue)[1],
+                                            bbox_to_anchor_y=list(optvalue)[2])
+            elif optname == 'circlelabelsize':
+                option['circlelabelsize'] = optvalue
 
         del optname, optvalue   
     
@@ -1621,11 +1626,21 @@ def overlay_target_diagram_circles(ax: matplotlib.axes.Axes, option: dict) -> No
     if option['normalized'] == 'on':
         rho = unit
         X, Y = pol2cart(theta, rho)
-        ax.plot(X, Y, 'k', 'LineWidth', option['circleLineWidth'])
+        # ax.plot(X, Y, 'k', 'LineWidth', option['circleLineWidth'])
 
     # Set range for target circles
     if option['normalized'] == 'on':
-        circles = [.5, 1]
+        circles = [x for x in np.arange(0.5, option['axismax'] + 0.5, 0.5)]
+        if math.log10(option['axismax']) < 0:
+            circles = [x for x in np.arange(0.5 * 10 ** math.floor(math.log10(option['axismax'])),
+                                            option['axismax'] + 0.5 * 10 ** math.floor(math.log10(option['axismax'])),
+                                            0.5 * 10 ** math.floor(math.log10(option['axismax'])))]
+        elif math.log10(option['axismax']) >= 0 and math.log10(option['axismax']) < 1:
+            circles = [x for x in np.arange(0.5, option['axismax'] + 0.5, 0.5)]
+        else:
+            circles = [x for x in np.arange(0.5 * 10 ** math.floor(math.log10(option['axismax'])),
+                                            option['axismax'] + 0.5 * 10 ** math.floor(math.log10(option['axismax'])),
+                                            0.5 * 10 ** math.floor(math.log10(option['axismax'])))]
     else:
         if option['circles'] is None:
             circles = [option['axismax'] * x for x in [.7, 1]]
@@ -1870,3 +1885,32 @@ def _setColorBarTicks(hc,numBins,lenTick):
 
 def _disp(text):
     print(text)
+
+
+def generate_markers(data_names, option):
+    import itertools
+    import matplotlib.colors as mcolors
+    markers = {}
+
+    # add colors and symbols
+    hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
+        , '#277DA1', '#5A189A']
+    colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+    symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])  # Cycle through symbols
+
+    for name in data_names:
+        color = next(colors)
+
+        if not option['faceColor']:
+            faceColor = color
+        else:
+            faceColor = option['faceColor']
+
+        markers[name] = {
+            "labelColor": color,
+            "edgeColor": color,
+            "symbol": next(symbols),
+            "size": option['MARKERSsize'],
+            "faceColor": faceColor,
+        }
+    return markers

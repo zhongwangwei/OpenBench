@@ -1,0 +1,31 @@
+&general
+  title             =
+  title_size        = 14
+  xticksize         = 13
+  yticksize         = 13
+  fontsize          = 13 # to contral legend font zise
+  axes_linewidth    = 1
+
+  Normalized        =  off   # on off, statistics supplied are normalized with respect to the standard deviation of reference values (Default 'off')
+
+  circlelabelsize   = 14
+  circlestyle       = --
+  widthcircle       = 1
+  circlecolor       = k
+
+  markerLegend      = on # 'on' 'off'
+  MARKERSsize       = 10
+  faceColor         =  w
+
+  set_legend        =  false      # if false then will use default setting to plot legend
+  bbox_to_anchor_x  =  1.4
+  bbox_to_anchor_y  =  1.1
+
+  x_wise            = 6
+  saving_format     = jpg
+  y_wise            = 6
+  font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi               = 300
+
+/
+
