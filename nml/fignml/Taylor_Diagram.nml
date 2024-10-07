@@ -28,6 +28,7 @@
   colOBS            =  r
   widthOBS          =  1
   markerobs         =  o
+  markersizeobs     =  10
 
   markerLegend      = on # 'on' 'off'
   MARKERSsize       = 10
@@ -40,7 +41,7 @@
   x_wise            = 6
   saving_format     = jpg
   y_wise            = 6
-  font              = Times new roman
+  font              = Times new roman # 'DejaVu Sans', 'Times new roman'
   dpi               = 300
 
 /
