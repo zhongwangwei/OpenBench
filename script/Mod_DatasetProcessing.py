@@ -11,6 +11,7 @@ import logging
 import re
 import importlib
 from Lib_Unit import UnitProcessing
+from regrid.regrid_wgs84 import convert_to_wgs84_scipy,convert_to_wgs84_xesmf
 
 #logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 #logging.getLogger("xarray").setLevel(logging.WARNING)
@@ -572,12 +573,20 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         logging.info(f"Processing {var_file} for year {year}")
         logging.info(f"Processing {data_source} data for year {year}")
         with xr.open_dataset(var_file) as data:
+
             data = self.preprocess_grid_data(data)
             remapped_data = self.remap_data(data)
             self.save_remapped_data(remapped_data, data_source, year)
 
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
-        # Assuming the longitude dimension is named 'lon'
+        # Check if lon and lat are 2D
+        data = self.check_coordinate(data)
+        if data['lon'].ndim == 2 and data['lat'].ndim == 2:
+            try:
+                data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
+            except:
+                data = convert_to_wgs84_scipy(data, self.compare_grid_res)
+        
         # Convert longitude values
         lon = data['lon'].values
         lon_adjusted = np.where(lon > 180, lon - 360, lon)
@@ -590,7 +599,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
         # If needed, sort the dataset by the new longitude values
         data = data.sortby('lon')
-        #convert 0-360 to -180-180
+        
         return data
 
     def remap_data(self, data: xr.Dataset) -> xr.Dataset:
