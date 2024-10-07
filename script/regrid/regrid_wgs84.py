@@ -5,8 +5,8 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
     from scipy.interpolate import griddata
     # Step 2: Create a new regular lon-lat grid (WGS84)
     # Define the bounds and resolution of your new grid
-    min_lon, max_lon = ds.longitude.min().item(), ds.longitude.max().item()
-    min_lat, max_lat = ds.latitude.min().item(), ds.latitude.max().item()
+    min_lon, max_lon = ds.lon.min().item(), ds.longitude.max().item()
+    min_lat, max_lat = ds.lat.min().item(), ds.latitude.max().item()
 
     new_lon = np.arange(min_lon, max_lon, resolution)
     new_lat = np.arange(min_lat, max_lat, resolution)
@@ -14,14 +14,14 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
 
     # Step 3: Perform the regridding
     # Flatten the original 2D lon/lat arrays
-    orig_lon_flat = ds.longitude.values.ravel()
-    orig_lat_flat = ds.latitude.values.ravel()
+    orig_lon_flat = ds.lon.values.ravel()
+    orig_lat_flat = ds.lat.values.ravel()
 
     new_data_vars = {}
     for var_name, data in ds.data_vars.items():
         regridded_data = []
-        for time_idx in range(data.XTIME.size):
-            orig_values = data.isel(XTIME=time_idx).values
+        for time_idx in range(data.time.size):
+            orig_values = data.isel(time=time_idx).values
             
             # Flatten orig_values and create a mask for valid (non-NaN) values
             orig_values_flat = orig_values.ravel()
