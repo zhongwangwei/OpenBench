@@ -14,8 +14,8 @@ from matplotlib import ticker
 
 
 def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMSs, cors, ref_source, sim_sources, option):
-    # font = {'family': 'DejaVu Sans'}
-    font = {'family': option['font']}
+    font = {'family': 'DejaVu Sans'}
+    # font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
     params = {'backend': 'ps',
@@ -58,7 +58,9 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
                    markerobs=option['markerobs'], markersizeobs=option['markersizeobs'],
                    )
 
-    ax.set_title(option['title'], fontsize=option['title_size'])
+    if not option['title']:
+        option['title'] = evaluation_item.replace('_', " ")
+    ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
     output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
                                     f'taylor_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
@@ -1567,7 +1569,7 @@ def _get_options(option: dict, **kwargs) -> dict:
             elif optname == 'normalizedstd':
                 option[optname] = optvalue
             elif optname == 'legend':
-                if option['markerlegend']:
+                if option['markerlegend'] == 'on':
                     option['legend'] = dict(set_legend=list(optvalue)[0], bbox_to_anchor_x=list(optvalue)[1],
                                             bbox_to_anchor_y=list(optvalue)[2])
             elif optname == 'markersizeobs':
