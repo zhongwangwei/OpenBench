@@ -1,20 +1,16 @@
+import math
+import os
+import re
 import warnings
 from typing import Union
-import os
-import pandas as pd
-import re
-import xarray as xr
-import numpy as np
 
 import matplotlib
+import matplotlib.colors as clr
 import matplotlib.pyplot as plt
-from matplotlib import colors
-from mpl_toolkits.basemap import Basemap
+import numpy as np
+import pandas as pd
 from matplotlib import rcParams
 from matplotlib import ticker
-import math
-import matplotlib.colors as clr
-import itertools
 
 
 def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMSs, cors, ref_source, sim_sources, option):
@@ -59,10 +55,12 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
                    # tickSTD =  np.arange(tickSTD_range_min,tickSTD_range_max,tickSTD_range_step),
                    # tickRMSangle = 150, axismax = tickRMS_range_max,
                    styleOBS=option['styleOBS'], colOBS=option['colOBS'], widthOBS=option['widthOBS'],
-                   markerobs=option['markerobs'],
+                   markerobs=option['markerobs'], markersizeobs=option['markersizeobs'],
                    )
 
-    ax.set_title(option['title'], fontsize=option['title_size'])
+    if not option['title']:
+        option['title'] = evaluation_item.replace('_', " ")
+    ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
     output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
                                     f'taylor_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
@@ -412,7 +410,6 @@ def _get_taylor_diagram_arguments(*args):
     '''
 
     # Check amount of values provided and display options list if needed
-    import numbers
 
     nargin = len(args)
     if nargin == 0:
@@ -1284,6 +1281,7 @@ def _default_options(CORs: list) -> dict:
                                 = 1 for positive correlations
                                 = 2 for positive and negative correlations
                             (Default value depends on correlations (CORs))
+    option['markersizeobs']      : OBS marker size (Default 10)
 
     option['overlay']         : 'on'/'off' switch to overlay current
                                 statistics on Taylor diagram (Default 'off')
@@ -1331,6 +1329,10 @@ def _default_options(CORs: list) -> dict:
 
     option['widthcor']        : linewidth for correlation coefficient grid 
                                 lines (Default: .8)
+    option['widthobs']        : linewidth for observation grid line (Default: .8)
+    option['widthrms']        : linewidth for RMS grid lines (Default: .8)
+    option['widthstd']        : linewidth for STD grid lines (Default: .8)
+
     option['stdlabelsize']    : STD label size (Default 15)
     option['corlabelsize']    : correlation label size (Default: 15)
     option['rmslabelsize']    : RMS label size (Default: 15)
@@ -1390,6 +1392,7 @@ def _default_options(CORs: list) -> dict:
     option['markers'] = None
     option['markersize'] = 10
     option['markersymbol'] = '.'
+    option['markersizeobs'] = 10
 
     option['titlecorshape'] = "curved"
 
@@ -1566,8 +1569,11 @@ def _get_options(option: dict, **kwargs) -> dict:
             elif optname == 'normalizedstd':
                 option[optname] = optvalue
             elif optname == 'legend':
-                if option['markerlegend']:
-                    option['legend'] = dict(set_legend=list(optvalue)[0], bbox_to_anchor_x=list(optvalue)[1], bbox_to_anchor_y=list(optvalue)[2])
+                if option['markerlegend'] == 'on':
+                    option['legend'] = dict(set_legend=list(optvalue)[0], bbox_to_anchor_x=list(optvalue)[1],
+                                            bbox_to_anchor_y=list(optvalue)[2])
+            elif optname == 'markersizeobs':
+                option['markersizeobs'] = optvalue
 
         del optname, optvalue
 
@@ -2368,10 +2374,10 @@ def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD,
 
     if option['markerobs'] != 'none':
         # Display marker on x-axis indicating observed STD
-        markersize = option['markersize'] - 4
+        # markersize = option['markersize'] - 4
         yobsSTD = 0.001 * axes_info['rmax'] - axes_info['rmin']
         ax.plot(obsSTD, yobsSTD, option['markerobs'], color=option['colobs'],
-                markersize=markersize, markerfacecolor=option['colobs'],
+                markersize=option['markersizeobs'], markerfacecolor=option['colobs'],
                 markeredgecolor=option['colobs'],
                 linewidth=1.0, clip_on=False);
 
@@ -2517,16 +2523,16 @@ def generate_markers(data_names, option):
     hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
         , '#277DA1', '#5A189A']
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
-    # colors = itertools.cycle(["r", "b", "g", "c", "m", "y", "k", "orange", "purple", "brown", "pink", "gray"])  # Cycle through colors
     symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])  # Cycle through symbols
     for name in data_names:
+        color = next(colors)
         if not option['faceColor']:
-            faceColor = next(colors)
+            faceColor = color
         else:
             faceColor = option['faceColor']
         markers[name] = {
-            "labelColor": next(colors),
-            "edgeColor": next(colors),
+            "labelColor": color,
+            "edgeColor": color,
             "symbol": next(symbols),
             "size": option['MARKERSsize'],
             "faceColor": faceColor,
