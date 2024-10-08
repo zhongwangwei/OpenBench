@@ -1,0 +1,67 @@
+&general
+  title =
+  title_fontsize =  20
+  xticklabel =  
+  yticklabel =
+  xtick =  17
+  ytick =  17
+  labelsize =  23
+  axes_linewidth =  1
+  vert =  true
+  x_rotation =  45
+  y_rotation = 0
+  ha =  right
+
+
+
+  limit_on =  false
+  value_max =  1
+  value_min =  -1
+
+  showfliers =  true
+  flierpropsmarker =  o
+  flierpropsmarkerfacecolor =  FFFFFF
+  flierpropsmarkersize =  10
+  flierpropsmarkeredgecolor =  k
+
+  box_widths =  0.5
+
+  boxpropslinewidth =  1
+  patch_artist =  false
+  boxpropsfacecolor =  007CFD
+  boxpropsedgecolor =  k
+
+
+  medianpropslinestyle =  -
+  medianpropslinewidth =  1
+  medianpropscolor =  FD5900
+
+
+  box_showmeans =  true
+  meanline =  true
+  meanpropslinestyle =  -
+  meanpropslinewidth =  1
+  meanpropscolor =  0050FD
+
+
+  whiskerpropslinestyle =  -
+  whiskerpropslinewidth =  1
+  whiskerpropscolor =  k
+
+
+  cappropslinestyle =  -
+  cappropslinewidth =  1
+  cappropscolor =  k
+
+  grid =  true
+  grid_style =  dashed
+  grid_linewidth =  1
+
+
+  x_wise =  10
+  saving_format =  jpg
+  y_wise =  6
+  font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi =  300
+
+/
