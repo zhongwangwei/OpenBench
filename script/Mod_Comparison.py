@@ -828,10 +828,10 @@ class ComparisonProcessing(metrics,scores,statistics):
 
          #read the simulation source and reference source
          for evaluation_item in evaluation_items:
-            #read the simulation source and reference source
+            # read the simulation source and reference source
             sim_sources    =  sim_nml['general'][f'{evaluation_item}_sim_source']
             ref_sources    =  ref_nml['general'][f'{evaluation_item}_ref_source']
-            #if the sim_sources and ref_sources are not list, then convert them to list
+            # if the sim_sources and ref_sources are not list, then convert them to list
             if isinstance(sim_sources, str): sim_sources = [sim_sources]
             if isinstance(ref_sources, str): ref_sources = [ref_sources]
             for ref_source in ref_sources:
@@ -878,22 +878,22 @@ class ComparisonProcessing(metrics,scores,statistics):
                            output_file.write(f"{kk_str}\t")
                         for metric in metrics:
                            ds = xr.open_dataset(f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                           kk=ds[metric].mean(skipna=True).values
+                           kk = ds[metric].where(np.isfinite(ds[metric]), np.nan).mean(skipna=True).values
                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                            output_file.write(f"{kk_str}\t")
                         output_file.write("\n")
                         del reffile,simfile,ds,kk,kk_str
-
-      #deal with output_file_path, remove the column and its index with any nan values
+      #
+      # # #deal with output_file_path, remove the column and its index with any nan values
       df = pd.read_csv(output_file_path, sep='\t', header=0)
-      #find the columns with any nan values, drop the index
+      # #find the columns with any nan values, drop the index
       df = df.dropna(axis=1, how='any')
       #if index in scroes or metrics was dropped, then remove the corresponding scores or metrics
       scores = [score for score in scores if score in df.columns]
       metrics = [metric for metric in metrics if metric in df.columns]
       output_file_path1 = f"{dir_path}/Parallel_Coordinates_evaluations_remove_nan.txt"
       df.to_csv(output_file_path1, sep='\t', index=False)
-      make_scenarios_comparison_parallel_coordinates(output_file_path1,self.casedir, evaluation_items,ref_sources,sim_sources,scores,metrics, option)
+      make_scenarios_comparison_parallel_coordinates(output_file_path1, self.casedir, evaluation_items, scores, metrics, option)
 
    def scenarios_Portrait_Plot_seasonal_comparison(self,basedir,sim_nml,ref_nml, evaluation_items,scores,metrics, option):
       #scenarios_portrait_plot is special, need to recalculate the scores and metrics
