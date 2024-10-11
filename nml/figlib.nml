@@ -12,7 +12,7 @@
     Target_Diagram_source                  = ./nml/fignml/Target_Diagram.nml
     Kernel_Density_Estimate_source         = ./nml/fignml/Kernel_Density_Estimate.nml
     Whisker_Plot_source                    = ./nml/fignml/Whisker_Plot.nml
-    parallel_coordinates_source            = ./nml/fignml/parallel_coordinates.nml
+    Parallel_Coordinates_source            = ./nml/fignml/Parallel_Coordinates.nml
     Portrait_Plot_seasonal_source          = ./nml/fignml/Portrait_Plot_seasonal.nml
     Single_Model_Performance_Index_source  = ./nml/fignml/Single_Model_Performance_Index.nml
     Relative_Score_source                  = ./nml/fignml/Relative_Score.nml
