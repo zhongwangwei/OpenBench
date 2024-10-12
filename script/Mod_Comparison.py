@@ -135,17 +135,18 @@ class ComparisonProcessing(metrics, scores, statistics):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
+                print("now processing the evaluation item: ", evaluation_item)
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str): sim_sources = [sim_sources]
                 if isinstance(ref_sources, str): ref_sources = [ref_sources]
                 for ref_source in ref_sources:
-                    for sim_source in sim_sources:
+                    for i, sim_source in enumerate(sim_sources):
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                        if isinstance(ref_data_type, str): sim_sources = [ref_data_type]
-                        if isinstance(sim_data_type, str): ref_sources = [sim_data_type]
+                        # if isinstance(ref_data_type, str): ref_data_type = [ref_data_type]
+                        # if isinstance(sim_data_type, str): sim_data_type = [sim_data_type]
 
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             print(f"warning: station data is not supported for IGBP class comparison")
@@ -177,6 +178,12 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     output_file.write(f"{metric}\t")
 
                                     # Calculate and write the overall mean first
+                                    ds = ds.where(np.isfinite(ds), np.nan)
+                                    if metric == 'percent_bias':
+                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
+                                    q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                    ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
+
                                     overall_mean = ds[metric].mean(skipna=True).values
                                     overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
@@ -195,6 +202,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                             # selected_metrics = list(selected_metrics)
                             option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                             option['item'] = [evaluation_item, sim_source, ref_source]
+                            option['groupby'] = 'IGBP_groupby'
                             make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
                             # print(f"IGBP class metrics comparison results are saved to {output_file_path}")
                             output_file_path2 = os.path.join(dir_path,
@@ -235,6 +243,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
                             selected_scores = self.scores
                             # selected_metrics = list(selected_metrics)
+                            option['groupby'] = 'IGBP_groupby'
                             make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                             # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
 
@@ -371,6 +380,12 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     output_file.write(f"{metric}\t")
 
                                     # Calculate and write the overall mean first
+                                    ds = ds.where(np.isfinite(ds), np.nan)
+                                    if metric == 'percent_bias':
+                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
+                                    q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                    ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
+
                                     overall_mean = ds[metric].mean(skipna=True).values
                                     overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
@@ -389,6 +404,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                             # selected_metrics = list(selected_metrics)
                             option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                             option['item'] = [evaluation_item, sim_source, ref_source]
+                            option['groupby'] = 'PFT_groupby'
                             make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
                             # print(f"PFT class metrics comparison results are saved to {output_file_path}")
 
@@ -428,6 +444,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     output_file.write("\n")
 
                             selected_scores = self.scores
+                            option['groupby'] = 'PFT_groupby'
                             make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                             # print(f"PFT class scores comparison results are saved to {output_file_path2}")
 
@@ -470,8 +487,8 @@ class ComparisonProcessing(metrics, scores, statistics):
                     # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str): sim_sources = [sim_sources]
                     if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                    ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                    # if isinstance(ref_sources, str): ref_sources = [ref_sources]
 
                     for ref_source in ref_sources:
                         output_file.write(f"{evaluation_item}\t")
@@ -900,6 +917,12 @@ class ComparisonProcessing(metrics, scores, statistics):
                                 output_file.write(f"{kk_str}\t")
 
                             for metric in metrics:
+                                df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
+                                if metric == 'percent_bias':
+                                    df[metric] = df[metric].where((df[metric] >= -500) & (df[metric] <= 500), np.nan)
+                                q_low, q_high = df[metric].quantile([0.05, 0.95])
+                                df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
+
                                 kk = df[metric].mean(skipna=True)
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                 output_file.write(f"{kk_str}\t")
@@ -927,7 +950,14 @@ class ComparisonProcessing(metrics, scores, statistics):
                             for metric in metrics:
                                 ds = xr.open_dataset(
                                     f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                kk = ds[metric].where(np.isfinite(ds[metric]), np.nan).mean(skipna=True).values
+
+                                ds = ds.where(np.isfinite(ds), np.nan)
+                                if metric == 'percent_bias':
+                                    ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
+                                q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
+                                kk = ds[metric].mean(skipna=True).values
+                                # kk = ds[metric].where(np.isfinite(ds[metric]), np.nan).mean(skipna=True).values
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                 output_file.write(f"{kk_str}\t")
                             output_file.write("\n")
@@ -1007,6 +1037,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
+                print("now processing the evaluation item: ", evaluation_item)
                 # read the simulation source and reference source
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
@@ -1160,9 +1191,9 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     sys.exit(1)
                         output_file.write("\n")
 
-                    print("===============================================================================")
-                    print(" ")
-                    print(" ")
+                    # print("===============================================================================")
+                    # print(" ")
+                    # print(" ")
 
         make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                          option)
@@ -1190,10 +1221,10 @@ class ComparisonProcessing(metrics, scores, statistics):
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                        if isinstance(sim_sources, str):
-                            sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str):
-                            ref_sources = [ref_sources]
+                        # if isinstance(sim_sources, str):
+                        #     sim_sources = [sim_sources]
+                        # if isinstance(ref_sources, str):
+                        #     ref_sources = [ref_sources]
 
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
@@ -1251,11 +1282,11 @@ class ComparisonProcessing(metrics, scores, statistics):
                             data = ds[metric].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
-                    # try:
-                    make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
+                    try:
+                        make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                            datasets_filtered, option)
-                    # except:
-                    #   print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
+                    except:
+                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
 
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
 

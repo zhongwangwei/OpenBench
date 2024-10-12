@@ -95,6 +95,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                rotation=option['x_rotation'],
                                ha=option['x_ha'])
         else:
+            item = option['groupby']
             ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
 
@@ -129,9 +130,9 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                     bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
                     bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
                     x_height = bbox_transformed.height
-                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.04])
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.04])
                 else:
-                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - 0.1, width, 0.04])
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         else:
             cbar_ax = fig.add_axes(option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"],
                                    option["colorbar_height"])
@@ -214,6 +215,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                      rotation=option['x_rotation'],
                                      ha=option['x_ha'])
         else:
+            item = option['groupby']
             axes[-1].set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                      ha=option['x_ha'])
 

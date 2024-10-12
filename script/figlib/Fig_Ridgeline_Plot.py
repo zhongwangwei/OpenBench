@@ -110,7 +110,6 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             plt.close()
         return
 
-
 def generate_lines(data_names, option):
     import itertools
     import matplotlib.colors as mcolors
@@ -118,7 +117,7 @@ def generate_lines(data_names, option):
     # add colors and symbols
     hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
         , '#277DA1', '#5A189A']
-    # hex_colors = cm.Set3(np.linspace(0, 1, len(data_names) + 1))
+    # hex_colors = cm.vivid(np.linspace(0, 1, len(data_names) + 1))
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
 
     if not option['linewidth']:
