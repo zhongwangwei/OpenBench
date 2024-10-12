@@ -7,9 +7,9 @@
   ytick             =  17
   axes_linewidth    = 1
   x_rotation        = 45
-  x_ha              = right
+  x_ha              = right  # 'right', 'left', 'center'
   y_rotation        = 45
-  y_ha              = right
+  y_ha              = right  # 'right', 'left', 'center'
 
   ticks_format      = .2f
   fontsize          = 15
@@ -22,20 +22,20 @@
   extend            = neither    # 'neither', 'both', 'min', 'max'
   colorbar_label    =
 
-  colorbar_position_set = False
+  colorbar_position_set = False # 'True', 'False'
   colorbar_left     =  0.26
   colorbar_bottom   =  0.14
   colorbar_width    =  0.5
   colorbar_height   =  0.03
 
-  vmin_max_on       = false  # Be cautious about this option, if turn on then all the metrics and scores will share the same max/min values
+  vmin_max_on       = false  # 'True', 'False' Be cautious about this option, if turn on then all the metrics and scores will share the same max/min values
   vmin              = 0
   vmax              = 1
 
   x_wise            = 10
   saving_format     = jpg
   y_wise            = 8
-  font              = Times new roman
+  font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
   dpi               = 300
 
 /
