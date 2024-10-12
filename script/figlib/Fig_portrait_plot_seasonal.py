@@ -1,11 +1,12 @@
+import itertools
 import sys
+
 import matplotlib
-from matplotlib import rcParams
 import matplotlib.collections as collections
 import matplotlib.pyplot as plt
 import numpy as np
-import itertools
 import pandas as pd
+from matplotlib import rcParams
 
 
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
@@ -86,7 +87,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             data_score[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = scores
+            yaxis_labels = [score.replace('_', ' ') for score in scores]
 
             # Create the portrait plot
             fig, ax, cbar = portrait_plot(data_score,
@@ -183,7 +184,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             data_score[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = unique_items
+            yaxis_labels = [unique_item.replace('_', ' ') for unique_item in unique_items]
             cbar_label = option['colorbar_label']
 
             if option['colorbar_label'] == '':
@@ -383,7 +384,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             data_metric[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = unique_items
+            yaxis_labels = [unique_item.replace('_', ' ') for unique_item in unique_items]
 
             if option['colorbar_label'] == '':
                 cbar_label = metric.replace('_', ' ')
