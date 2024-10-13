@@ -86,7 +86,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
             title = option['title']
 
         if not option['xticklabel']:
-            xticklabel = f'{varname.replace('_', '')}'
+            xticklabel = f"{varname.replace('_', '')}"
         else:
             xticklabel = option['xticklabel']
 
@@ -95,11 +95,12 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         else:
             yticklabel = option['yticklabel']
 
+
         plt.xlabel(xticklabel, fontsize=option['xtick'] + 1)
         plt.ylabel(yticklabel, fontsize=option['ytick'] + 1)
         plt.title(title, fontsize=option['title_fontsize'])
 
-        output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option["saving_format"]}"
+        output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
         plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
 

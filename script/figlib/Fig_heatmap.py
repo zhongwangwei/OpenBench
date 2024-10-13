@@ -1,16 +1,7 @@
-import xarray as xr
-import pandas as pd
-import numpy as np
-
 import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib import colors
-from mpl_toolkits.basemap import Basemap
+import pandas as pd
 from matplotlib import rcParams
-from matplotlib import ticker
-import math
-import matplotlib.colors as clr
-import itertools
 
 
 def make_scenarios_scores_comparison_heat_map(file, score, option):
@@ -85,7 +76,10 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
     if not option['colorbar_position_set']:
         if option["colorbar_position"] == 'vertical':
-            cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height])  # right + 0.2
+            if len(df.index) < 6:
+                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height])  # right + 0.2
+            else:
+                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom + height / 6, 0.03, height / 3 * 2])  # right + 0.2
         else:
             xlabel = ax.xaxis.label
             xticks = ax.get_xticklabels()
@@ -98,9 +92,15 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
                 bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
                 bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
                 x_height = bbox_transformed.height
-                cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
+                if len(df.columns) < 6:
+                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
+                else:
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.05])
             else:
-                cbar_ax = fig.add_axes([left, bottom - max_xtick_height - 0.1, width, 0.05])
+                if len(df.columns) < 6:
+                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
+                else:
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.05])
     else:
         cbar_ax = fig.add_axes(option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"],
                                option["colorbar_height"])
@@ -112,4 +112,3 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
 
     file2 = file[:-4]
     plt.savefig(f'{file2}_heatmap.{option["saving_format"]}', format=f'{option["saving_format"]}', dpi=option['dpi'])
-
