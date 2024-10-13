@@ -9,18 +9,18 @@
   axes_linewidth    = 1
 
 
-  linestyle         = solid  #'solid', 'dotted', 'dashed', 'dashdot'
+  linestyle         = solid  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
   linewidth         = 1.5
   alpha             = 0.2
 
 
   ncol              = 1
   loc               = best  #'best', 'right', 'left', 'upper left', 'upper right', 'lower left', 'lower right', 'upper center', 'lower center', 'center left', 'center right'
-  set_legend        = false
+  set_legend        = false # 'True', 'False'
   bbox_to_anchor_x  = 1.5
   bbox_to_anchor_y  = 1
 
-  grid              = True
+  grid              = True  # 'True', 'False'
   grid_style        = dotted  #'solid', 'dotted', 'dashed', 'dashdot'
   grid_linewidth    = 0.7
 

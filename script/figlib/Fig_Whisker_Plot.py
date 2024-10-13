@@ -101,6 +101,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
             ylabel = f'{varname}'
         plt.ylabel(ylabel, fontsize=option['ytick'] + 1)
 
+
         if option['grid']:
             ax.yaxis.grid(True, linestyle=option['grid_style'], alpha=0.7, linewidth=option['grid_linewidth'])
 
@@ -140,7 +141,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
         title = f'Whisker Plot of {evaluation_item.replace("_", " ")}'
     plt.title(title, fontsize=option['title_fontsize'])
 
-    output_file_path = f"{basedir}/Whisker_Plot_{evaluation_item}_{ref_source}_{varname}.{option["saving_format"]}"
+    output_file_path = f"{basedir}/Whisker_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
     plt.close()  # Close the figure to free up memory
 
