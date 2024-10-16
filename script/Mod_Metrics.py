@@ -109,7 +109,7 @@ class metrics:
         s, o = self._validate_inputs(s, o)
         
         # Calculate unbiased RMSE
-        ubrmse = np.sqrt(((s - o.mean(dim='time') - o) ** 2).mean(dim='time'))
+        ubrmse = np.sqrt((((s - s.mean(dim='time')) - (o - o.mean(dim='time'))) ** 2).mean(dim='time'))
         return ubrmse
  
     def CRMSD(self, s, o=None):
@@ -325,10 +325,11 @@ class metrics:
             s: simulated
             o: observed
         output:
-            nse: Nash Sutcliffe efficient coefficient
+            ubnse: Unbiased Nash Sutcliffe efficient coefficient
         """
-        s,o = self.rm_mean(s,o)
-        var = self.NSE(s,o)
+        _tmp1=((o-o.mean(dim='time'))**2).sum(dim='time')
+        _tmp2=(((s - s.mean(dim='time')) - (o - o.mean(dim='time')))**2).sum(dim='time')
+        var=1-_tmp2/_tmp1
         return var
 
     def ubKGE(self,s,o):

@@ -364,7 +364,7 @@ class Evaluation_stn(metrics, scores):
         sim.plot.line(x='time', label='Sim', linewidth=lines[0], linestyle=linestyles[1], alpha=alphas[1], color=colors[1],
                       marker=markers[1], markersize=markersizes[1], add_legend=True)
         # set ylabel to be the same as the variable name
-        ax.set_ylabel(f"{string(ID).title()} [{key[0]}]", fontsize=option['ytick'] + 1)
+        ax.set_ylabel(f"{str(ID).title()} [{key[0]}]", fontsize=option['ytick'] + 1)
         ax.set_xlabel('Date', fontsize=option['xtick'] + 1)
         # ax.tick_params(axis='both', top='off', labelsize=16)
 
