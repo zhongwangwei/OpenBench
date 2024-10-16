@@ -827,12 +827,11 @@ class ComparisonProcessing(metrics, scores, statistics):
                             ds = xr.open_dataset(file_path)
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
-
-                    try:
-                        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
+                    # try:
+                    make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
                                                                           score, datasets_filtered, option)
-                    except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
+                    # except:
+                    #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
 
             for metric in metrics:
                 for ref_source in ref_sources:
@@ -860,13 +859,16 @@ class ComparisonProcessing(metrics, scores, statistics):
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"
                             ds = xr.open_dataset(file_path)
                             data = ds[metric].values
+                        data = data[~np.isinf(data)]
+                        if metric == 'percent_bias':
+                            data = data[(data >= -500) & (data <= 500)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
-                    try:
-                        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
+                    # try:
+                    make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
                                                                           metric, datasets_filtered, option)
-                    except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                    # except:
+                    #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
     def scenarios_Parallel_Coordinates_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
@@ -1280,6 +1282,9 @@ class ComparisonProcessing(metrics, scores, statistics):
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"
                             ds = xr.open_dataset(file_path)
                             data = ds[metric].values
+                        data = data[~np.isinf(data)]
+                        if metric == 'percent_bias':
+                            data = data[(data >= -500) & (data <= 500)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     try:
@@ -1630,6 +1635,9 @@ class ComparisonProcessing(metrics, scores, statistics):
 
                             ds = xr.open_dataset(file_path)
                             data = ds[metric].values
+                        data = data[~np.isinf(data)]
+                        if metric == 'percent_bias':
+                            data = data[(data >= -500) & (data <= 500)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     try:
