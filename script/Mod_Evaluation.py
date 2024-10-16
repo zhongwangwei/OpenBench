@@ -1,14 +1,17 @@
+import os
+import sys
+import warnings
+
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
-import os, sys
-import xarray as xr
-import shutil
 import pandas as pd
+import xarray as xr
 from joblib import Parallel, delayed
-from matplotlib import colors
+
 # Check the platform
 from Mod_Metrics import metrics
 from Mod_Scores import scores
-import warnings
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 from matplotlib import colors
@@ -84,37 +87,74 @@ class Evaluation_grid(metrics, scores):
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
 
-            import math
+            try:
+                import math
 
-            ds = xr.open_dataset(
-                f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
-            quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
-            if not option["vmin_max_on"]:
-                if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
-                    option["vmax"] = math.ceil(quantiles[1].values)
-                    option["vmin"] = math.floor(quantiles[0].values)
-                elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
-                    option["vmin"], option["vmax"] = -1, 1
-                elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
-                    option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
-                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
-                                'absolute_percent_bias']:
-                    option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
-            # else:
-            #     option["vmin"], option["vmax"] = 0, 1
+                ds = xr.open_dataset(
+                    f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
+                quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
+                if not option["vmin_max_on"]:
+                    if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
+                        option["vmax"] = math.ceil(quantiles[1].values)
+                        option["vmin"] = math.floor(quantiles[0].values)
+                        if metric == 'percent_bias':
+                            if option["vmax"] > 500:
+                                option["vmax"] = 500
+                            if option["vmin"] < -500:
+                                option["vmin"] = -500
+                    elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                        option["vmin"], option["vmax"] = -1, 1
+                    elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                        option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
+                    elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
+                                    'absolute_percent_bias']:
+                        option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
+                    else:
+                        option["vmin"], option["vmax"] = 0, 1
 
-            if option['cmap'] is not None:
-                cmap = cm.get_cmap(option['cmap'])
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
-            else:
-                cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
-                         '#313695']
-                cmap = colors.ListedColormap(cpool)
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
-                norm = colors.BoundaryNorm(bnd, cmap.N)
+                if 2 >= option["vmax"] - option["vmin"] > 1:
+                    option['colorbar_ticks'] = 0.2
+                elif 10 >= option["vmax"] - option["vmin"] > 5:
+                    option['colorbar_ticks'] = 1
+                elif 100 >= option["vmax"] - option["vmin"] > 10:
+                    option['colorbar_ticks'] = 5
+                elif 200 >= option["vmax"] - option["vmin"] > 100:
+                    option['colorbar_ticks'] = 20
+                elif 500 >= option["vmax"] - option["vmin"] > 200:
+                    option['colorbar_ticks'] = 50
+                elif 1000 >= option["vmax"] - option["vmin"] > 500:
+                    option['colorbar_ticks'] = 100
+                elif 2000 >= option["vmax"] - option["vmin"] > 1000:
+                    option['colorbar_ticks'] = 200
+                elif 10000 >= option["vmax"] - option["vmin"] > 2000:
+                    option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
+                else:
+                    option['colorbar_ticks'] = 0.1
 
-            self.plot_map(cmap, norm, bnd, metric, 'metrics', option)
+                ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
+                mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+                if mticks[0] < option['vmin']:
+                    mticks = mticks[1:]
+                if mticks[-1] > option['vmax']:
+                    mticks = mticks[:-1]
+                option['vmax'], option['vmin'] = mticks[-1], mticks[0]
+
+                if option['cmap'] is not None:
+                    cmap = cm.get_cmap(option['cmap'])
+                    # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                    bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                    norm = colors.BoundaryNorm(bnd, cmap.N)
+                else:
+                    cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
+                             '#313695']
+                    cmap = colors.ListedColormap(cpool)
+                    # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                    bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                    norm = colors.BoundaryNorm(bnd, cmap.N)
+
+                self.plot_map(cmap, norm, bnd, metric, 'metrics', mticks, option)
+            except:
+                print(f"ERROR: {key} {metric} ploting error, please check!")
 
         # print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
@@ -124,33 +164,62 @@ class Evaluation_grid(metrics, scores):
                 option["vmin"], option["vmax"] = 0, 1
                 option['extend'] = 'neither'
 
+            if 2 >= option["vmax"] - option["vmin"] > 1:
+                option['colorbar_ticks'] = 0.2
+            elif 10 >= option["vmax"] - option["vmin"] > 5:
+                option['colorbar_ticks'] = 1
+            elif 100 >= option["vmax"] - option["vmin"] > 10:
+                option['colorbar_ticks'] = 5
+            elif 200 >= option["vmax"] - option["vmin"] > 100:
+                option['colorbar_ticks'] = 20
+            elif 500 >= option["vmax"] - option["vmin"] > 200:
+                option['colorbar_ticks'] = 50
+            elif 1000 >= option["vmax"] - option["vmin"] > 500:
+                option['colorbar_ticks'] = 100
+            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
+                option['colorbar_ticks'] = 200
+            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
+                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
+            else:
+                option['colorbar_ticks'] = 0.1
+
+            ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
+            mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+            if mticks[0] < option['vmin']:
+                mticks = mticks[1:]
+            if mticks[-1] > option['vmax']:
+                mticks = mticks[:-1]
+            option['vmax'], option['vmin'] = mticks[-1], mticks[0]
+
+
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
-            self.plot_map(cmap, norm, bnd, score, 'scores', option)
+            self.plot_map(cmap, norm, bnd, score, 'scores', mticks, option)
         print("\033[1;32m" + "=" * 80 + "\033[0m")
 
-    def plot_map(self, colormap, normalize, levels, xitem, k, option):
+    def plot_map(self, colormap, normalize, levels, xitem, k, mticks, option):
         # Plot settings
-        import matplotlib.pyplot as plt
-        import matplotlib
         import numpy as np
         import xarray as xr
-        from mpl_toolkits.basemap import Basemap
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+
         from matplotlib import rcParams
 
-        # font = {'family': option['font']}
-
-        # font = {'family' : 'Myriad Pro'}
-        # matplotlib.rc('font', **font)
+        font = {'family': option['font']}
+        matplotlib.rc('font', **font)
 
         params = {'backend': 'ps',
                   'axes.labelsize': option['labelsize'],
@@ -176,59 +245,44 @@ class Evaluation_grid(metrics, scores):
         var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
 
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-        ax = fig.add_subplot(111)
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+
+        cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+        coastline = cfeature.NaturalEarthFeature(
+            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+        rivers = cfeature.NaturalEarthFeature(
+            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
+        ax.add_feature(cfeature.LAND, facecolor='0.8')
+        ax.add_feature(coastline, linewidth=0.6)
+        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
+        ax.add_feature(rivers, linewidth=0.5)
+        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+
         if not option['set_lat_lon']:
-            M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
-                        llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
+            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
+            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
         else:
-            M = Basemap(projection='cyl', llcrnrlat=option['min_lat'], urcrnrlat=option['max_lat'], \
-                        llcrnrlon=option['min_lon'], urcrnrlon=option['max_lon'], resolution='l')
-
-        M.drawmapboundary(fill_color='white', zorder=-1)
-        M.fillcontinents(color='0.8', lake_color='white', zorder=0)
-        M.drawcoastlines(color='0.6', linewidth=0.1)
-        M.drawparallels(np.arange(self.min_lat, self.max_lat + 30, 30.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
-                        linewidth=0.25, color='0.5')
-        M.drawmeridians(np.arange(self.min_lon, self.max_lon, 60.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
-                        linewidth=0.25, color='0.5')
-
-        loc_lon, loc_lat = M(lon, lat)
-
-        cs = M.contourf(loc_lon, loc_lat, var, cmap=colormap, norm=normalize, levels=levels,
-                        extend=option['extend'])
-
-        if 2 >= option["vmax"] - option["vmin"] > 1:
-            option['colorbar_ticks'] = 0.2
-        elif 10 >= option["vmax"] - option["vmin"] > 5:
-            option['colorbar_ticks'] = 1
-        elif 100 >= option["vmax"] - option["vmin"] > 10:
-            option['colorbar_ticks'] = 5
-        elif 1000 >= option["vmax"] - option["vmin"] > 100:
-            option['colorbar_ticks'] = 50
-        elif option["vmax"] - option["vmin"] > 1000:
-            option['colorbar_ticks'] = 500
-        else:
-            option['colorbar_ticks'] = 0.1
+            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
+            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+        lon_formatter = LongitudeFormatter()
+        lat_formatter = LatitudeFormatter()
+        ax.xaxis.set_major_formatter(lon_formatter)
+        ax.yaxis.set_major_formatter(lat_formatter)
 
         ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
         ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
         plt.title(option['title'], fontsize=option['title_size'])
-
-        ticks = matplotlib.ticker.MultipleLocator(option["colorbar_ticks"])
-        mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-        if mticks[0] < option['vmin']:
-            mticks = mticks[1:]
-        if mticks[-1] > option['vmax']:
-            mticks = mticks[:-1]
 
         if not option['colorbar_position_set']:
             pos = ax.get_position()  # .bounds
             left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
             if option['colorbar_position'] == 'horizontal':
                 if len(option['xticklabel']) == 0:
-                    cbaxes = fig.add_axes([left, bottom - 0.15, width, 0.04])
+                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
                 else:
-                    cbaxes = fig.add_axes([left, bottom - 0.18, width, 0.04])
+                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
             else:
                 cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
         else:
@@ -364,7 +418,7 @@ class Evaluation_stn(metrics, scores):
         sim.plot.line(x='time', label='Sim', linewidth=lines[0], linestyle=linestyles[1], alpha=alphas[1], color=colors[1],
                       marker=markers[1], markersize=markersizes[1], add_legend=True)
         # set ylabel to be the same as the variable name
-        ax.set_ylabel(f"{str(ID).title()} [{key[0]}]", fontsize=option['ytick'] + 1)
+        ax.set_ylabel(f"{key[0]} [{self.ref_varunit}]", fontsize=option['ytick'] + 1)
         ax.set_xlabel('Date', fontsize=option['xtick'] + 1)
         # ax.tick_params(axis='both', top='off', labelsize=16)
 
@@ -375,7 +429,7 @@ class Evaluation_stn(metrics, scores):
         # ax.text(0.01, 0.95, f'RMSE: {RMSE:.2f}\n R: {correlation:.2f}\n KGESS: {KGESS:.2f} ', transform=ax.transAxes,
         #         fontsize=option['fontsize'], verticalalignment='top')
         if len(option['title']) == 0:
-            option['title'] = f'Lat: {lat_lon[0]:.2f},    Lon:{lat_lon[1]:.2f}'
+            option['title'] = f'ID: {str(ID).title()},  Lat: {lat_lon[0]:.2f},  Lon:{lat_lon[1]:.2f}'
         ax.set_title(option['title'], fontsize=option['title_size'])
         if option['grid']:
             ax.grid(linestyle=option['grid_linestyle'], alpha=0.7, linewidth=option['grid_width'])
@@ -386,14 +440,15 @@ class Evaluation_stn(metrics, scores):
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close(fig)
 
-    def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, option):
+    def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mticks, option):
         from pylab import rcParams
-        from mpl_toolkits.basemap import Basemap
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
         import matplotlib
         import matplotlib.pyplot as plt
         ### Plot settings
-        # font = {'family': option['font']}
-        font = {'family': 'DejaVu Sans'}
+        font = {'family': option['font']}
         matplotlib.rc('font', **font)
 
         params = {'backend': 'ps',
@@ -409,72 +464,45 @@ class Evaluation_stn(metrics, scores):
                   'text.usetex': False}
         rcParams.update(params)
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-        ax = fig.add_subplot(111)
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
+        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, marker=option['marker'],
+                        edgecolors='none', alpha=0.9)
+        coastline = cfeature.NaturalEarthFeature(
+            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+        rivers = cfeature.NaturalEarthFeature(
+            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
+        ax.add_feature(cfeature.LAND, facecolor='0.8')
+        ax.add_feature(coastline, linewidth=0.6)
+        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
+        ax.add_feature(rivers, linewidth=0.5)
+        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
         if not option['set_lat_lon']:
-            M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
-                        llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
-            M.drawparallels(np.arange(self.min_lat, self.max_lat + 30, 30.), labels=[True, False, False, True],
-                            dashes=[1, 0, 0, 1],
-                            linewidth=0.25, color='0.5')
-            M.drawmeridians(np.arange(self.min_lon, self.max_lon, 60.), labels=[True, False, False, True], dashes=[1, 0, 0, 1],
-                            linewidth=0.25, color='0.5')
-
+            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
+            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
         else:
-            M = Basemap(projection='cyl', llcrnrlat=option['min_lat'], urcrnrlat=option['max_lat'], \
-                        llcrnrlon=option['min_lon'], urcrnrlon=option['max_lon'], resolution='l')
-            M.drawparallels(np.arange(option['min_lat'], option['max_lat'] + 30, 30.), labels=[True, False, False, True],
-                            dashes=[1, 0, 0, 1],
-                            linewidth=0.25, color='0.5')
-            M.drawmeridians(np.arange(option['min_lon'], option['max_lon'], 60.), labels=[True, False, False, True],
-                            dashes=[1, 0, 0, 1],
-                            linewidth=0.25, color='0.5')
-
-        # M = Basemap(projection='cyl', llcrnrlat=self.min_lat, urcrnrlat=self.max_lat, \
-        #             llcrnrlon=self.min_lon, urcrnrlon=self.max_lon, resolution='l')
-
-        M.drawmapboundary(fill_color='white', zorder=-1)
-        M.fillcontinents(color='0.8', lake_color='white', zorder=0)
-        M.drawcoastlines(color='0.6', linewidth=0.1)
-
-        loc_lon, loc_lat = M(stn_lon, stn_lat)
-        # cs = M.scatter(loc_lon, loc_lat, 15, metric, cmap=cmap, norm=norm, marker='.', edgecolors='none', alpha=0.9)
-        cs = M.scatter(loc_lon, loc_lat, option['markersize'], metric, cmap=cmap, norm=norm, marker=option['marker'],
-                       edgecolors='none', alpha=0.9)
+            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
+            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+        lon_formatter = LongitudeFormatter()
+        lat_formatter = LatitudeFormatter()
+        ax.xaxis.set_major_formatter(lon_formatter)
+        ax.yaxis.set_major_formatter(lat_formatter)
 
         ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
         ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
         plt.title(option['title'], fontsize=option['title_size'])
-
-        if 2 >= option["vmax"] - option["vmin"] > 1:
-            option['colorbar_ticks'] = 0.2
-        elif 10 >= option["vmax"] - option["vmin"] > 5:
-            option['colorbar_ticks'] = 1
-        elif 100 >= option["vmax"] - option["vmin"] > 10:
-            option['colorbar_ticks'] = 5
-        elif 1000 >= option["vmax"] - option["vmin"] > 100:
-            option['colorbar_ticks'] = 50
-        elif option["vmax"] - option["vmin"] > 1000:
-            option['colorbar_ticks'] = 500
-        else:
-            option['colorbar_ticks'] = 0.1
-
-        ticks = matplotlib.ticker.MultipleLocator(option["colorbar_ticks"])
-        mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-        if mticks[0] < option['vmin']:
-            mticks = mticks[1:]
-        if mticks[-1] > option['vmax']:
-            mticks = mticks[:-1]
 
         if not option['colorbar_position_set']:
             pos = ax.get_position()  # .bounds
             left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
             if option['colorbar_position'] == 'horizontal':
                 if len(option['xticklabel']) == 0:
-                    cbaxes = fig.add_axes([left, bottom - 0.15, width, 0.04])
+                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
                 else:
-                    cbaxes = fig.add_axes([left, bottom - 0.18, width, 0.04])
+                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
             else:
                 cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
         else:
@@ -507,11 +535,7 @@ class Evaluation_stn(metrics, scores):
             # print(data_select0[data_select0['%s'%(metric)] < max_metric])
             ind1 = data_select0[data_select0['%s' % (metric)] < max_metric].index
             data_select = data_select0.loc[ind1]
-            # if key=='discharge':
-            #    #ind2 = data_select[abs(data_select['err']) < 0.001].index
-            #    #data_select = data_select.loc[ind2]
-            #    ind3 = data_select[abs(data_select['area1']) > 1000.].index
-            #    data_select = data_select.loc[ind3]
+
             try:
                 lon_select = data_select['ref_lon'].values
                 lat_select = data_select['ref_lat'].values
@@ -520,33 +544,64 @@ class Evaluation_stn(metrics, scores):
                 lat_select = data_select['sim_lat'].values
             plotvar = data_select['%s' % (metric)].values
 
-            import math
-            vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
-            if not option["vmin_max_on"]:
-                if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
-                    option["vmax"] = math.ceil(vmax)
-                    option["vmin"] = math.floor(vmin)
-                elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
-                    option["vmin"], option["vmax"] = -1, 1
-                elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
-                    option["vmin"], option["vmax"] = math.floor(vmin), 1
-                elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
-                                'absolute_percent_bias']:
-                    option["vmin"], option["vmax"] = 0, math.ceil(vmax)
-            # else:
-            #     option["vmin"], option["vmax"] = 0, 1
+            try:
+                import math
+                vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
+                if not option["vmin_max_on"]:
+                    if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
+                        option["vmax"] = math.ceil(vmax)
+                        option["vmin"] = math.floor(vmin)
+                    elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                        option["vmin"], option["vmax"] = -1, 1
+                    elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                        option["vmin"], option["vmax"] = math.floor(vmin), 1
+                    elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
+                                    'absolute_percent_bias']:
+                        option["vmin"], option["vmax"] = 0, math.ceil(vmax)
+                    else:
+                        option["vmin"], option["vmax"] = 0, 1
+            except:
+                option["vmin"], option["vmax"] = 0, 1
+
+            if 2 >= option["vmax"] - option["vmin"] > 1:
+                option['colorbar_ticks'] = 0.2
+            elif 10 >= option["vmax"] - option["vmin"] > 5:
+                option['colorbar_ticks'] = 1
+            elif 100 >= option["vmax"] - option["vmin"] > 10:
+                option['colorbar_ticks'] = 5
+            elif 200 >= option["vmax"] - option["vmin"] > 100:
+                option['colorbar_ticks'] = 20
+            elif 500 >= option["vmax"] - option["vmin"] > 200:
+                option['colorbar_ticks'] = 50
+            elif 1000 >= option["vmax"] - option["vmin"] > 500:
+                option['colorbar_ticks'] = 100
+            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
+                option['colorbar_ticks'] = 200
+            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
+                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
+            else:
+                option['colorbar_ticks'] = 0.1
+
+            ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
+            mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+            if mticks[0] < option['vmin']:
+                mticks = mticks[1:]
+            if mticks[-1] > option['vmax']:
+                mticks = mticks[:-1]
 
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
-            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', option)
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', mticks, option)
 
         for score in self.scores:
             print(f'plotting score: {score}')
@@ -576,18 +631,46 @@ class Evaluation_stn(metrics, scores):
                 option["vmin"], option["vmax"] = 0, 1
                 option['extend'] = 'neither'
 
+            if 2 >= option["vmax"] - option["vmin"] > 1:
+                option['colorbar_ticks'] = 0.2
+            elif 10 >= option["vmax"] - option["vmin"] > 5:
+                option['colorbar_ticks'] = 1
+            elif 100 >= option["vmax"] - option["vmin"] > 10:
+                option['colorbar_ticks'] = 5
+            elif 200 >= option["vmax"] - option["vmin"] > 100:
+                option['colorbar_ticks'] = 20
+            elif 500 >= option["vmax"] - option["vmin"] > 200:
+                option['colorbar_ticks'] = 50
+            elif 1000 >= option["vmax"] - option["vmin"] > 500:
+                option['colorbar_ticks'] = 100
+            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
+                option['colorbar_ticks'] = 200
+            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
+                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
+            else:
+                option['colorbar_ticks'] = 0.1
+
+            ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
+            mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+            if mticks[0] < option['vmin']:
+                mticks = mticks[1:]
+            if mticks[-1] > option['vmax']:
+                mticks = mticks[:-1]
+
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
-                bnd = np.linspace(option['vmin'], option['vmax'], 11)
+                # bnd = np.linspace(mticks[0], mticks[-1], 11)
+                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
-            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, score, 'scores', option)
+            self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, score, 'scores', mticks, option)
 
     def make_evaluation_parallel(self, station_list, iik):
         s = xr.open_dataset(
@@ -672,7 +755,8 @@ class Evaluation_stn(metrics, scores):
         #    station_list[f'{metric}']=[-9999.0] * len(station_list['ID'])
         # if self.ref_source.lower() == 'grdc':
 
-        results=Parallel(n_jobs=-1)(delayed(self.make_evaluation_parallel)(station_list,iik) for iik in range(len(station_list['ID'])))
+        results = Parallel(n_jobs=-1)(
+            delayed(self.make_evaluation_parallel)(station_list, iik) for iik in range(len(station_list['ID'])))
         station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
         print('Evaluation finished')
