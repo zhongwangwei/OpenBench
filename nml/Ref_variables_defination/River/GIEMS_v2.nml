@@ -10,14 +10,14 @@
 /
 
 &Inundation_Fraction
-   varname           =  fldare
+   varname           =  fldfrc
    varunit           =  unitless
    prefix            =  GIEMS_v2_2020_fldfrc_15min_
    suffix            =  
 /
 
 &Inundation_Area
-   varname           =  fldfrc
+   varname           =  fldare
    varunit           =  km2
    prefix            =  GIEMS_v2_2020_fldare_15min_
    suffix            =  
