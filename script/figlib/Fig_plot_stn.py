@@ -1,17 +1,7 @@
-import xarray as xr
-import pandas as pd
-import numpy as np
-
 import matplotlib
 import matplotlib.pyplot as plt
-from   matplotlib import colors
-from   mpl_toolkits.basemap import Basemap
+# from   mpl_toolkits.basemap import Basemap
 from   matplotlib import rcParams
-from   matplotlib import ticker
-import math
-import matplotlib.colors as clr
-import itertools
-
 
 font = {'family': 'DejaVu Sans'}
 matplotlib.rc('font', **font)
