@@ -258,7 +258,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         except Exception as e:
             print(f"CDO remapping failed: {e}")
             print("Falling back to xarray-regrid remapping...")
-            _PFT_class_remap(self)
+            _IGBP_class_remap(self)
 
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
