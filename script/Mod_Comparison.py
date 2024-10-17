@@ -88,9 +88,9 @@ class ComparisonProcessing(metrics, scores, statistics):
                 "./data/IGBP.nc",
                 chunks={"lat": 2000, "lon": 2000},
             )
-            ds = ds[["IGBP"]]  # Only take the class variable.
+            ds = ds["IGBP"]  # Only take the class variable.
             ds = ds.sortby(["lat", "lon"])
-            ds = ds.rename({"lat": "latitude", "lon": "longitude"})
+            # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
             new_grid = Grid(
                 north=self.max_lat - self.compare_grid_res / 2,
                 south=self.min_lat + self.compare_grid_res / 2,
@@ -100,7 +100,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                 resolution_lon=self.compare_grid_res,
             )
             target_dataset = create_regridding_dataset(new_grid)
-            ds_regrid = ds.regrid.most_common(target_dataset, max_mem=1e9)
+            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1, 18))
             IGBPtype_remap = f'{self.casedir}/output/comparisons/IGBP_groupby/IGBP_remap.nc'
             ds_regrid.to_netcdf(IGBPtype_remap)
             self.IGBP_dir = IGBPtype_remap
@@ -251,6 +251,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         try:
@@ -295,10 +296,9 @@ class ComparisonProcessing(metrics, scores, statistics):
             """
             from regrid import Grid, create_regridding_dataset
             ds = xr.open_dataset("./data/PFT.nc", chunks={"lat": 2000, "lon": 2000})
-            ds = ds[["PFT"]]
+            ds = ds["PFT"]
             ds = ds.sortby(["lat", "lon"])
-            ds = ds.rename({"lat": "latitude", "lon": "longitude"})
-
+            # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
             new_grid = Grid(
                 north=self.max_lat - self.compare_grid_res / 2,
                 south=self.min_lat + self.compare_grid_res / 2,
@@ -308,7 +308,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                 resolution_lon=self.compare_grid_res,
             )
             target_dataset = create_regridding_dataset(new_grid)
-            ds_regrid = ds.regrid.most_common(target_dataset, max_mem=1e9)
+            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(0, 16))
             PFTtype_remap = f'{self.casedir}/output/comparisons/PFT_groupby/PFT_remap.nc'
             ds_regrid.to_netcdf(PFTtype_remap)
             self.PFT_dir = PFTtype_remap
@@ -452,6 +452,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -467,6 +468,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'HeatMap')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         for score in scores:
@@ -519,6 +521,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Taylor_Diagram')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -658,6 +661,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Target_Diagram')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -789,6 +793,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Kernel_Density_Estimate')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -829,7 +834,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                     # try:
                     make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                          score, datasets_filtered, option)
+                                                                      score, datasets_filtered, option)
                     # except:
                     #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
 
@@ -866,7 +871,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
                     # try:
                     make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                          metric, datasets_filtered, option)
+                                                                      metric, datasets_filtered, option)
                     # except:
                     #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
@@ -874,6 +879,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -982,6 +988,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Portrait_Plot_seasonal')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1094,12 +1101,12 @@ class ComparisonProcessing(metrics, scores, statistics):
                                                                                 sim_varname, ref_varname, station_list, iik,
                                                                                 'metric', season, metric=metric)
                                         for iik in range(len(station_list['ID'])))
-                                    results= np.array(results)
+                                    results = np.array(results)
                                     if metric == 'percent_bias':
-                                        results = np.where((results >= -500) & (results <= 500),results, np.nan)
+                                        results = np.where((results >= -500) & (results <= 500), results, np.nan)
 
                                     q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
-                                    results = np.where((results >= q1) & (results <= q3),results, np.nan)
+                                    results = np.where((results >= q1) & (results <= q3), results, np.nan)
 
                                     mean_value = np.nanmean(results)
                                     kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
@@ -1204,6 +1211,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Whisker_Plot')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1289,7 +1297,7 @@ class ComparisonProcessing(metrics, scores, statistics):
 
                     try:
                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
-                                                           datasets_filtered, option)
+                                                               datasets_filtered, option)
                     except:
                         print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
 
@@ -1298,6 +1306,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Relative_Score')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1406,6 +1415,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Single_Model_Performance_Index')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1560,6 +1570,7 @@ class ComparisonProcessing(metrics, scores, statistics):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+        print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
