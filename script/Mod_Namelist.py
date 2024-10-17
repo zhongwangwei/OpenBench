@@ -97,7 +97,7 @@ class NamelistReader:
             else:
                 return value
 
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
