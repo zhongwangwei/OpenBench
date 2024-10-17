@@ -1,0 +1,19 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/stn_ref/HydroWeb_2.0/output/river/
+   timezone          =  0.0
+   data_type         =  stn
+   data_groupby      =  single
+   tim_res           =  Day
+   grid_res          =  
+   syear             =  
+   eyear             =  
+   fulllist          =  /share/home/dq013/zhwei/Data_ref/stn_ref/HydroWeb_2.0/hydroprd_river.csv
+/
+
+############################   ############################
+
+&River_water_Level
+   varname = height
+   varunit = m
+/
+
