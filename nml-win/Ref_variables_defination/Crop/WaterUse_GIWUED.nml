@@ -1,0 +1,23 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/WaterUse/GIWUED
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  single
+   tim_res           =  Month
+   grid_res          =  0.25
+/
+
+&Total_Irrigation_Amount
+sub_dir           =  
+varname           =  IWUens
+varunit           =  mm month-1
+prefix            =  IWU.ens.Y
+suffix            =   
+syear             =  2011
+eyear             =  2018
+/
+#Reference:
+# Huang, Z., Hejazi, M., Li, X., Tang, Q., Vernon, C., Leng, G., Liu, Y.,
+# Döll, P., Eisner, S., Gerten, D. and Hanasaki, N., 2018. Reconstruction of
+# global gridded monthly sectoral water withdrawals for 1971–2010 and analysis 
+# of their spatiotemporal patterns. Hydrology and Earth System Sciences, 22(4), pp.2117-2133.

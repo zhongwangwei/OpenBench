@@ -1,17 +1,20 @@
-import os
 import glob
-import xarray as xr
-import pandas as pd
-from joblib import Parallel, delayed
-import numpy as np
-import shutil
-from dask.diagnostics import ProgressBar
-from typing import List, Dict, Any, Tuple
-import logging
-import re
 import importlib
+import logging
+import os
+import re
+import shutil
+from typing import List, Dict, Any, Tuple
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+from dask.diagnostics import ProgressBar
+from joblib import Parallel, delayed
+
 from Lib_Unit import UnitProcessing
-from regrid.regrid_wgs84 import convert_to_wgs84_scipy,convert_to_wgs84_xesmf
+from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
+
 
 #logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 #logging.getLogger("xarray").setLevel(logging.WARNING)
@@ -478,9 +481,9 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         years = range(self.minyear, self.maxyear + 1)
         Parallel(n_jobs=self.num_cores)(
             delayed(self.check_all)(data_params['data_dir'], year, year,
-                                    data_params['tim_res'], data_params['varunit'], 
+                                    data_params['tim_res'], data_params['varunit'],
                                     data_params['varname'], data_params['data_groupby'],
-                                    self.casedir, data_params['suffix'], data_params['prefix'], 
+                                    self.casedir, data_params['suffix'], data_params['prefix'],
                                     data_params['datasource'])
             for year in years
         )
@@ -514,10 +517,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         
         if self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
             Parallel(n_jobs=self.num_cores)(
-                delayed(self._make_grid_parallel)(data_source, 
-                                                 data_params['suffix'], 
-                                                 data_params['prefix'], 
-                                                 data_dir, year) 
+                delayed(self._make_grid_parallel)(data_source,
+                                                  data_params['suffix'],
+                                                  data_params['prefix'],
+                                                  data_dir, year)
                 for year in years
             )
             var_files = glob.glob(f'{self.casedir}/tmp/{data_source}_{data_params["varname"][0]}_remap_*.nc')
@@ -610,14 +613,14 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             self.remap_xesmf,
             self.remap_cdo
         ]
-        
+
         for method in remapping_methods:
             try:
                 return method(data, new_grid)
             except Exception as e:
                 logging.warning(f"{method.__name__} failed: {e}")
-        
-        raise RuntimeError("All remapping methods failed")
+
+        # raise RuntimeError("All remapping methods failed")
 
     def create_target_grid(self) -> xr.Dataset:
         lon_new = np.arange(self.min_lon + self.compare_grid_res / 2, self.max_lon, self.compare_grid_res)
@@ -625,7 +628,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         return xr.Dataset({'lon': lon_new, 'lat': lat_new})
 
     def remap_interpolate(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
-        from regrid import Grid, create_regridding_dataset
+        from regrid import Grid
         grid = Grid(
             north=self.max_lat - self.compare_grid_res / 2,
             south=self.min_lat + self.compare_grid_res / 2,

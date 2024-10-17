@@ -1,0 +1,66 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Forcing/MSWX/
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Year
+   tim_res           =  Daily
+   grid_res          =  0.1
+   syear             =  1979
+   eyear             =  2020
+/
+
+&Surface_Air_Temperature
+sub_dir           =  Surface_Air_Temperature
+varname           =  Temp 
+varunit           =  K
+prefix            =  Temp_
+suffix            =  
+/
+
+&Diurnal_Max_Temperature
+sub_dir           =  Diurnal_Max_Temperature
+varname           =  air_temperature
+varunit           =  K
+prefix            =  
+suffix            =  
+/
+
+&Diurnal_Min_Temperature
+sub_dir           = Diurnal_Min_Temperature
+varname           = air_temperature
+varunit           =  K
+prefix            =  
+suffix            =  
+/
+
+&Precipitation
+sub_dir           =  Precipitation
+varname           =  precipitation
+varunit           =  
+prefix            =   
+suffix            =  
+/
+
+&Surface_Downward_SW_Radiation
+sub_dir           =  Surface_Downward_SW_Radiation
+varname           =  downward_shortwave_radiation
+varunit           =  w m-2
+prefix            =  SWd_
+suffix            =  
+/
+
+&Surface_Downward_LW_Radiation
+sub_dir           =  Surface_Downward_LW_Radiation
+varname           =  downward_longwave_radiation
+varunit           =  w m-2
+prefix            =  LWd_
+suffix            =  
+/
+
+&Surface_Specific_Humidity
+sub_dir           =  specific_humidity
+varname           =  specific_humidity
+varunit           =  unitless
+prefix            =   
+suffix            =  
+/
