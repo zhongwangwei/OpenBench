@@ -1,10 +1,10 @@
 &general
   title             =
-  title_size        =  26
+  title_size        =  18
   xlabel            = Land Cover Classes
   ylabel            =
-  xtick             =  24
-  ytick             =  24
+  xtick             =  17
+  ytick             =  17
   axes_linewidth    = 1
   x_rotation        = 45
   x_ha              = right  # 'right', 'left', 'center'
@@ -12,8 +12,8 @@
   y_ha              = right  # 'right', 'left', 'center'
   x_ticklabel       = Shorter # 'Normal', 'Shorter'
 
-  ticks_format      = .2f
-  fontsize          = 20
+  ticks_format      = .1f
+  fontsize          = 12
 
   cmap                  = coolwarm
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
