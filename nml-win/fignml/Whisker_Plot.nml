@@ -1,0 +1,67 @@
+&general
+  title                     =
+  title_fontsize            =  20
+  xticklabel                =
+  yticklabel                =
+  xtick                     =  17
+  ytick                     =  17
+  labelsize                 =  23
+  axes_linewidth            =  1
+  vert                      =  true  # 'True', 'False'
+  x_rotation                =  45
+  y_rotation                =  0
+  ha                        =  right  #'right', 'left', 'center'
+
+
+
+  limit_on                  =  false  # 'True', 'False'
+  value_max                 =  1
+  value_min                 =  -1
+
+  showfliers                =  true  # 'True', 'False'
+  flierpropsmarker          =  o  # '.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"
+  flierpropsmarkerfacecolor =  FFFFFF
+  flierpropsmarkersize      =  10
+  flierpropsmarkeredgecolor =  k
+
+  box_widths                =  0.5
+
+  boxpropslinewidth         =  1
+  patch_artist              =  false  # 'True', 'False'
+  boxpropsfacecolor         =  007CFD
+  boxpropsedgecolor         =  k
+
+
+  medianpropslinestyle      =  -
+  medianpropslinewidth      =  1
+  medianpropscolor          =  FD5900
+
+
+  box_showmeans             =  true  # 'True', 'False'
+  meanline                  =  true  # 'True', 'False'
+  meanpropslinestyle        =  -
+  meanpropslinewidth        =  1
+  meanpropscolor            =  0050FD
+
+
+  whiskerpropslinestyle     =  -  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
+  whiskerpropslinewidth     =  1
+  whiskerpropscolor         =  k
+
+
+  cappropslinestyle         =  -  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
+  cappropslinewidth         =  1
+  cappropscolor             =  k
+
+  grid                      =  true  # 'True', 'False'
+  grid_style                =  dashed  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
+  grid_linewidth            =  1
+
+
+  x_wise                    =  10
+  saving_format             =  jpg
+  y_wise                    =  6
+  font                      = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi                       =  300
+
+/

@@ -1,0 +1,30 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/stn_ref/HydroWeb_2.0/output/lake/
+   timezone          =  0.0
+   data_type         =  stn
+   data_groupby      =  single
+   tim_res           =  Day
+   grid_res          =  
+   syear             =  
+   eyear             =  
+   fulllist          =  /share/home/dq013/zhwei/Data_ref/stn_ref/HydroWeb_2.0/hydroprd_lake.csv
+/
+
+############################   ############################
+
+&Lake_Water_Level
+   varname =  height
+   varunit = m
+/
+
+&Lake_Water_Area
+   varname =  area
+   varunit = km2
+/
+
+&Lake_Water_Volume
+   varname =  volume
+   varunit = km3
+/
+
+

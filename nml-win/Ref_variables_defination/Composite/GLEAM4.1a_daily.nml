@@ -1,0 +1,131 @@
+&general
+  root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM/v4.1/v4.1a/daily/
+  timezone          =  0
+  data_type         =  grid
+  data_groupby      =  Year
+  syear             =  1980
+  eyear             =  2023 
+  tim_res           =  Day        #Day or Month
+  grid_res          =  0.1 
+/
+
+&Evapotranspiration
+varname           =  E
+varunit           =  mm day-1
+prefix            =  E_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Canopy_Interception
+varname           =  Ei
+varunit           =  mm day-1
+prefix            =  Ei_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Soil_Evaporation
+varname           =  Eb
+varunit           =  mm day-1
+prefix            =  Ei_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Snow_Sublimation
+varname           =  Es
+varunit           =  mm day-1
+prefix            =  Es_
+suffix            =  _GLEAM_v4.1a
+/
+
+
+&Canopy_Transpiration
+#You could also define it seperately
+#If you define it seperately, the &general setting will be ignored in this variable
+#dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  Et
+varunit           =  mm day-1
+tim_res           =  Day        #Day or Month
+grid_res          =  0.1 
+prefix            =  Et_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Open_Water_Evaporation
+dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  Ew
+varunit           =  mm day-1
+tim_res           =  Month        #Day or Month
+grid_res          =  0.1 
+prefix            =  Ew_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Surface_Condensation
+dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  Ec
+varunit           =  w m-2
+tim_res           =  Day        #Day or Month
+grid_res          =  0.1 
+prefix            =  Ec_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Root_Zone_Soil_Moisture
+dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  SMrz
+varunit           =  unitless
+tim_res           =  Day        #Day or Month
+grid_res          =  0.1 
+prefix            =  SMrz_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Surface_Soil_Moisture
+dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  SMs
+varunit           =  unitless
+tim_res           =  Day        #Day or Month
+grid_res          =  0.1 
+prefix            =  SMs_
+suffix            =  _GLEAM_v4.1a
+/
+
+&Sensible_Heat
+dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+timezone          =  0 #UTC+0: if Local, read from List file
+data_type         =  grid
+data_groupby      =  Year
+syear             =  1980
+eyear             =  2023
+varname           =  H
+varunit           =  w m-2
+tim_res           =  Day        #Day or Month
+grid_res          =  0.1 
+prefix            =  H_
+suffix            =  _GLEAM_v4.1a
+/

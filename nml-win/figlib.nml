@@ -1,0 +1,20 @@
+&validation_nml
+  plot_stn_source                      = ./nml/fignml/plot_stn.nml
+  make_stn_plot_index_source           = ./nml/fignml/make_stn_plot_index.nml
+  make_geo_plot_index_source           = ./nml/fignml/make_geo_plot_index.nml
+/
+
+&comparison_nml
+    IGBP_groupby_source                    = ./nml/fignml/IGBP_groupby_source.nml
+    PFT_groupby_source                     = ./nml/fignml/PFT_groupby_source.nml
+    HeatMap_source                         = ./nml/fignml/HeatMap_source.nml
+    Taylor_Diagram_source                  = ./nml/fignml/Taylor_Diagram.nml
+    Target_Diagram_source                  = ./nml/fignml/Target_Diagram.nml
+    Kernel_Density_Estimate_source         = ./nml/fignml/Kernel_Density_Estimate.nml
+    Whisker_Plot_source                    = ./nml/fignml/Whisker_Plot.nml
+    Parallel_Coordinates_source            = ./nml/fignml/Parallel_Coordinates.nml
+    Portrait_Plot_seasonal_source          = ./nml/fignml/Portrait_Plot_seasonal.nml
+    Single_Model_Performance_Index_source  = ./nml/fignml/Single_Model_Performance_Index.nml
+    Relative_Score_source                  = ./nml/fignml/Relative_Score.nml
+    Ridgeline_Plot_source                  = ./nml/fignml/Ridgeline_Plot.nml
+/
