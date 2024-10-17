@@ -407,8 +407,8 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
         
-        if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
-            ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
+        #if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
+        #    ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
         
         ds = self.select_timerange(ds, start_year, end_year)
         return ds.where((ds > -1e20) & (ds < 1e20), np.nan)
