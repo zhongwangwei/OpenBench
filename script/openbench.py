@@ -12,14 +12,15 @@ Release: 0.1
 Date: Mar 2023
 """
 
-import sys
 import os
 import shutil
+import sys
 import time
-from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
-from Mod_Evaluation import Evaluation_grid, Evaluation_stn
+
+from Mod_Comparison import ComparisonProcessing
 from Mod_DatasetProcessing import DatasetProcessing
-from Mod_Comparison  import ComparisonProcessing
+from Mod_Evaluation import Evaluation_grid, Evaluation_stn
+from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
 
 # Suppress warnings
@@ -124,6 +125,7 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     # Clear scratch directory
     scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
     shutil.rmtree(scratch_dir, ignore_errors=True)
+    print(f"Re-creating output directory: {scratch_dir}")
     os.makedirs(scratch_dir)
     
     # Run Evaluation

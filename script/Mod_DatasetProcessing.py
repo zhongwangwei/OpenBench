@@ -41,6 +41,7 @@ class BaseDatasetProcessing:
             self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
             output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
             shutil.rmtree(output_dir, ignore_errors=True)
+            print(f"Re-creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
