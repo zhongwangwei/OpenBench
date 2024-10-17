@@ -1,0 +1,17 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Water/Runoff/CNRD
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.5
+   syear             =  1901
+   eyear             =  2019
+/
+
+&Total_Runoff
+varname           =  Runoff
+varunit           =  mm day-1
+prefix            =  G-RUN_ENSEMBLE_MMM
+suffix            =  
+/

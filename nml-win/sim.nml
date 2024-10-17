@@ -1,0 +1,33 @@
+&general
+    Sensible_Heat_sim_source                  = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Latent_Heat_sim_source                    = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG ,Global_Grid_2x2_PFT_VG_BGC
+    Ground_Heat_sim_source                    = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Net_Radiation_sim_source                  = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Surface_Upward_SW_Radiation_sim_source    = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Surface_Upward_LW_Radiation_sim_source    = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Gross_Primary_Productivity_sim_source     = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    
+    Evapotranspiration_sim_source             = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC
+    Canopy_Transpiration_sim_source           = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC #,Global_Grid_50km_PFT_VG-BB
+    Canopy_Interception_sim_source            = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC #,Global_Grid_50km_PFT_VG-BB
+
+    Total_Runoff_sim_source                   = Global_Grid_50km_PFT_VG,Global_Grid_50km_IGBP_VG,Global_Grid_2x2_PFT_VG_BGC # ,Global_Grid_50km_PFT_VG-BB
+
+    Crop_Yield_Corn_sim_source                = Global_Grid_2x2_crop
+    Total_Irrigation_Amount_sim_source        = Global_Grid_2x2_crop
+    Streamflow_sim_source                     = Global_cama
+    Leaf_Area_Index_sim_source                = Global_Grid_50km_PFT_VG
+/
+
+&def_nml
+  Global_Grid_50km_PFT_VG         = ./nml/user/Global_Grid_50km_PFT_VG.nml
+  Global_Grid_50km_PC_VG          = ./nml/user/Global_Grid_50km_PC_VG.nml
+  Global_Grid_50km_IGBP_VG        = ./nml/user/Global_Grid_50km_IGBP_VG.nml
+  Global_Grid_2x2_PFT_VG_BGC      = ./nml/user/Global_Grid_2x2_PFT_VG_BGC.nml
+  Global_Grid_2x2_PC_VG_BGC       = ./nml/user/Global_Grid_2x2_PC_VG_BGC.nml
+  Global_Grid_50km_PFT_VG-BB      = ./nml/user/Global_Grid_50km_PFT_VG-BB.nml
+  Global_Grid_50km_PC_VG-BB       = ./nml/user/Global_Grid_50km_PC_VG-BB.nml
+  Global_Grid_2x2_crop            = ./nml/user/Global_Grid_2x2_crop.nml
+  Global_cama                     = ./nml/user/Global_cama.nml
+/
+

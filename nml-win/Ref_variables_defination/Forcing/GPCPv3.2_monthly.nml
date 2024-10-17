@@ -1,0 +1,17 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Forcing/GPCP/GPCPv3.2mon
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Month
+   tim_res           =  Month
+   grid_res          =  0.5
+   syear             =  1983
+   eyear             =  2023
+/
+
+&Canopy_Interception
+varname           =  sat_gauge_precip
+varunit           =  mm day-1
+prefix            =  GPCPMON_L3_
+suffix            =  _V3.2
+/

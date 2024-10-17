@@ -1,0 +1,17 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Water/GRACE-SeDA/
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.5
+   syear             =  2003
+   eyear             =  2019
+/
+
+&Terrestrial_Water_Storage_Anomaly
+varname           =  twsa
+varunit           =  mm
+prefix            =  GRACE-SeDA
+suffix            =  
+/

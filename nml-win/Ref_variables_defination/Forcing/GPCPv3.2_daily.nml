@@ -1,0 +1,17 @@
+&general
+   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Forcing/GPCP/GPCPv3.2day
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Day
+   tim_res           =  Day
+   grid_res          =  0.5
+   syear             =  2000
+   eyear             =  2020
+/
+
+&Canopy_Interception
+varname           =  precip
+varunit           =  mm day-1
+prefix            =  GPCPDAY_L3_
+suffix            =  _V3.2
+/
