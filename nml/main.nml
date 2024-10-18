@@ -1,29 +1,30 @@
 &general
-  basename=hhh
-  basedir=/share/home/dq013/zhwei/colm-test/       #  
+  basename=LS3MIP
+  basedir=/share/home/dq013/xuqch3/Streamlit/case_test/       #
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
-  compare_grid_res  = 0.5                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
-  syear             = 2002                         # must be integer
-  eyear             = 2003                            # must be integer
+  compare_grid_res  = 1.25                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
+  syear             = 2003                         # must be integer
+  eyear             = 2009                            # must be integer
   max_lat           = 90 
   min_lat           = -90
   max_lon           = 180          
   min_lon           = -180
   min_year          = 1.0
   reference_nml     = ./nml/ref.nml
-  simulation_nml    = ./nml/sim_CoLM20X4vsCLM5vsGLDAS-0927.nml      #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
+  simulation_nml    = ./nml/sim_LS3MIP.nml      #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
   statistics_nml    = ./nml/stats.nml
+  figure_nml        = ./nml/figlib.nml
   num_cores         = 16  #-1 # how many core will be used in Parallel computing
   evaluation        = True # True #False
-  comparison        = True  #
+  comparison        = False  #
   statistics        = False
 /
 
 &evaluation_items
   #========================Evaluation_Items====================
   #*******************Ecosystem and Carbon Cycle****************
-  Gross_Primary_Productivity = True
+  Gross_Primary_Productivity = False
   Ecosystem_Respiration      = False
   Net_Ecosystem_Exchange     = False
 
@@ -39,7 +40,7 @@
 
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration   =False
+  Evapotranspiration   =True
   Canopy_Transpiration =False
   Canopy_Interception  =False
   Ground_Evaporation   =False
@@ -204,18 +205,18 @@ The_Ideal_Point_score     = False       #
 /
 
 &comparsions
-IGBP_groupby                    =   False
-PFT_groupby                     =   False
-HeatMap                         =   True
-Taylor_Diagram                  =   False       
-Target_Diagram                  =   False
-Kernel_Density_Estimate         =   False        
-Whisker_Plot                    =   False       
-Parallel_Coordinates            =   False 
-Portrait_Plot_seasonal          =   False
-Single_Model_Performance_Index  =   False      
-Relative_Score                  =   False       
-Ridgeline_Plot                  =   False  
+#IGBP_groupby                    =   False
+#PFT_groupby                     =   False
+HeatMap                         =   False
+Taylor_Diagram                  =   True
+Target_Diagram                  =   True
+Kernel_Density_Estimate         =   True
+Whisker_Plot                    =   True
+Parallel_Coordinates            =   True
+Portrait_Plot_seasonal          =   True
+Single_Model_Performance_Index  =   True
+Relative_Score                  =   False
+Ridgeline_Plot                  =   True
 /
 
 
