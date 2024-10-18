@@ -12,7 +12,7 @@
   y_ha              = right  # 'right', 'left', 'center'
   x_ticklabel       = Shorter # 'Normal', 'Shorter'
 
-  ticks_format      = .1f
+  ticks_format      = .2f
   fontsize          = 12
 
   cmap              = coolwarm
