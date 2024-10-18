@@ -2,11 +2,11 @@
   plot_stn_source                      = ./nml/fignml/plot_stn.nml
   make_stn_plot_index_source           = ./nml/fignml/make_stn_plot_index.nml
   make_geo_plot_index_source           = ./nml/fignml/make_geo_plot_index.nml
+  IGBP_groupby_source                  = ./nml/fignml/IGBP_groupby_source.nml
+  PFT_groupby_source                   = ./nml/fignml/PFT_groupby_source.nml
 /
 
 &comparison_nml
-    IGBP_groupby_source                    = ./nml/fignml/IGBP_groupby_source.nml
-    PFT_groupby_source                     = ./nml/fignml/PFT_groupby_source.nml
     HeatMap_source                         = ./nml/fignml/HeatMap_source.nml
     Taylor_Diagram_source                  = ./nml/fignml/Taylor_Diagram.nml
     Target_Diagram_source                  = ./nml/fignml/Target_Diagram.nml

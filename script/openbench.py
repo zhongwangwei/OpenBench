@@ -19,7 +19,7 @@ import time
 
 from Mod_Comparison import ComparisonProcessing
 from Mod_DatasetProcessing import DatasetProcessing
-from Mod_Evaluation import Evaluation_grid, Evaluation_stn
+from Mod_Evaluation import Evaluation_grid, Evaluation_stn, LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
 
@@ -89,19 +89,26 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         if evaluation_item not in sim_nml:
             print(f"Error: {evaluation_item} is not in the simulation namelist!")
             exit(1)
-        
+
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-        
+
         # Ensure sources are lists
         sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
         ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
-        
+
         for ref_source in ref_sources:
             onetimeref=True
             for sim_source in sim_sources:
                 process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
                 onetimeref=False
+
+    LC = LC_groupby(main_nl, score_vars, metric_vars)
+    basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+    LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+                                         fig_nml['IGBP_groupby'])
+    LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+                                        fig_nml['PFT_groupby'])
 
 def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
     """Process a single evaluation for given sources."""
