@@ -35,6 +35,12 @@ class BaseDatasetProcessing:
         else:
             self.minyear = int(self.use_syear)
             self.maxyear = int(self.use_eyear)
+      
+        essential_attrs = ['sim_tim_res', 'ref_tim_res', 'compare_tim_res']
+        for attr in essential_attrs:
+            if not hasattr(self, attr):
+                setattr(self, attr, config.get(attr, 'M'))
+                print(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
@@ -85,35 +91,65 @@ class BaseDatasetProcessing:
         for coord in ds.coords:
             if coord in self.coordinate_map:
                 ds = ds.rename({coord: self.coordinate_map[coord]})
+        #if the longitude is not between -180 and 180, convert it to the equivalent value between -180 and 180
+        if 'lon' in ds.coords:
+            ds['lon'] = (ds['lon'] + 180) % 360 - 180
+            # Reindex the dataset
+            ds = ds.reindex(lon=sorted(ds.lon.values))
         return ds
     
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
         if 'time' not in ds.coords:
             print("The dataset does not contain a 'time' coordinate.")
             # Based on the syear and eyear, create a time index
-            #time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
-            #ds = ds.expand_dims('time')  # Ensure 'time' dimension exists
-            #ds = ds.assign_coords(time=time_index)  # Assign the created time index to the dataset
             lon=ds.lon.values
             lat=ds.lat.values
             data=ds.values
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             try:
-                ds = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
+                ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
             except:
                 try:
-                    ds = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)}, coords={'time': time_index, 'lon': lon, 'lat': lat})
+                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)}, coords={'time': time_index, 'lon': lon, 'lat': lat})
                 except:
-                    ds = xr.Dataset({f'{ds.name}': (['lat', 'lon','time'], data)}, coords={'lat': lat, 'lon': lon,'time': time_index})
-        if np.issubdtype(ds.time.dtype, float):
-            #reconstruct ds
-            lon=ds.lon.values
-            lat=ds.lat.values
-            print(f"Reconstructing {ds.name} dataset of {syear}...")
-            data=ds.values
-            time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
-            ds = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
-        return ds
+                    ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon','time'], data)}, coords={'lat': lat, 'lon': lon,'time': time_index})
+            ds1=ds1.transpose('time','lat','lon')
+            return ds1[f'{ds.name}']
+        
+        if not hasattr(ds['time'], 'dt'):
+            try:
+                ds['time'] = pd.to_datetime(ds['time'])
+            except:
+                lon=ds.lon.values
+                lat=ds.lat.values
+                data=ds.values
+                time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
+                try:
+                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
+                except:
+                    try:
+                        ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)}, coords={'time': time_index, 'lon': lon, 'lat': lat})
+                    except:
+                        ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon','time'], data)}, coords={'lat': lat, 'lon': lon,'time': time_index})
+                    ds1=ds1.transpose('time','lat','lon')
+                    return ds1[f'{ds.name}']
+        
+        # Check for duplicate time values
+        if ds['time'].to_index().has_duplicates:
+            print("Warning: Duplicate time values found. Removing duplicates...")
+            # Remove duplicates by keeping the first occurrence
+            _, index = np.unique(ds['time'], return_index=True)
+            ds = ds.isel(time=index)
+        
+        # Ensure time is sorted
+        ds = ds.sortby('time')
+        try:
+            return ds.transpose('time','lat','lon')[f'{ds.name}']
+        except:
+            try:
+                return ds.transpose('time','lat','lon')
+            except:
+                return ds.squeeze().transpose('time','lat','lon')
 
     def check_dataset_time_integrity_bk(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales.
@@ -237,7 +273,10 @@ class BaseDatasetProcessing:
 
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
         try:
-            ds = xr.open_dataset(VarFile)
+            try:
+                ds = xr.open_dataset(VarFile) #.squeeze()
+            except:
+                ds = xr.open_dataset(VarFile, decode_times=False) #.squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
@@ -300,9 +339,6 @@ class BaseDatasetProcessing:
             var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
         datasets = []
         for file in var_files:
-        #    try:
-        #        ds = xr.open_dataset(file, engine='netcdf4')[varname[0]].astype('float32')
-        #    except:
             ds = self.select_var(year, year, tim_res, file, varname, datasource)
             datasets.append(ds)
         data0 = xr.concat(datasets, dim="time").sortby('time')
@@ -354,7 +390,7 @@ class BaseDatasetProcessing:
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
-        if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
+        if not UnitProcessing.check_units(self.ref_varunit.lower(), self.sim_varunit.lower()):
             try:
                 converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
                 ds = ds.copy(data=converted_data)
@@ -411,7 +447,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         #    ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
         
         ds = self.select_timerange(ds, start_year, end_year)
-        return ds.where((ds > -1e20) & (ds < 1e20), np.nan)
+        return ds #.where((ds > -1e20) & (ds < 1e20), np.nan)
 
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
         station = station_list.iloc[index]
@@ -447,7 +483,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
         data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
-        data = data.where((data > -1e20) & (data < 1e20), np.nan)
+        data = data #.where((data > -1e20) & (data < 1e20), np.nan)
         return data.resample(time=self.compare_tim_res).mean()
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
@@ -534,7 +570,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         # print(var_files)
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
-            ds = ds.where((ds > -1e20) & (ds < 1e20), np.nan)
+            #ds = ds.where((ds > -1e10) & (ds < 1e10), np.nan)
             output_file = self.get_output_filename(data_params)
             with ProgressBar():
                 ds.to_netcdf(output_file)
@@ -696,3 +732,4 @@ class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
     def process(self, datasource: str) -> None:
         super().process(datasource)
         # Add any additional processing specific to this class if needed
+

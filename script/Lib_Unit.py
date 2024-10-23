@@ -29,6 +29,8 @@ class UnitProcessing:
 				'mm mon-1': lambda x: x / 30,
 				'mm m-1': lambda x: x / 30,
 				'mm month-1': lambda x: x / 30,
+				'w m-2 heat': lambda x: x /28.4,
+				'mm 3hour-1': lambda x: x * 8,
 			},
 			'w m-2': {
 				'MJ m-2 day-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
@@ -71,10 +73,12 @@ class UnitProcessing:
 				'm2': lambda x: x / 1.e6,
 			},
 		}
-		
+		print(f'Converting {input_unit} to base unit...')
 		for base_unit, conversions in conversion_factors.items():
 			if input_unit == base_unit:
+				print(f'No conversion needed for {input_unit}')
 				return data, base_unit
+
 			elif input_unit in conversions:
 				converted_data = conversions[input_unit](data)
 				return converted_data, base_unit
