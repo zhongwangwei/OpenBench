@@ -1,4 +1,29 @@
-def filter_BCCAVIM(info, ds):   #update info as well
+import numpy as np
+import pandas as pd
+import re 
+def adjust_time_BCC_AVIM(info, ds,syear,eyear,tim_res):
+   match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
+   if match:
+      # normalize time values
+      num_value, time_unit = match.groups()
+      num_value = int(num_value) if num_value else 1   
+      ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
+      if time_unit.lower() in ['m', 'month', 'mon']:
+         print('Adjusting time values for monthly BCC_AVIM output...')
+         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(months=1)
+      elif time_unit.lower() in ['d', 'day', '1d', '1day']:
+         print('Adjusting time values for daily BCC_AVIM output...')
+         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)  
+      elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
+         print('Adjusting time values for yearly BCC_AVIM output ...')
+         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
+   else:
+      print('tim_res error')
+      exit()
+   return ds
+
+
+def filter_BCC_AVIM(info, ds):   #update info as well
    if info.item == "Net_Radiation":
       try:
          ds['Net_Radiation'] = ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
@@ -85,7 +110,7 @@ def filter_BCCAVIM(info, ds):   #update info as well
 
    if info.item == "Evapotranspiration":
       try:
-            ds['Evapotranspiration']=  (ds['FCEV'] + ds['FCTR']) / 28.4 + ds['QSOIL']  
+            ds['Evapotranspiration']=  ds['QVEGE'] + ds['QVEGT'] + ds['QSOIL']  
 
             info.sim_varname = 'Evapotranspiration'
             info.sim_varunit = 'mm s-1'
@@ -97,10 +122,10 @@ def filter_BCCAVIM(info, ds):   #update info as well
    
    if info.item == "Canopy_Interception":
       try:
-            ds['Canopy_Interception']=  ds['H2OCAN'] / 86400.
+            ds['Canopy_Interception']=  ds['H2OCAN'] 
 
             info.sim_varname = 'Canopy_Interception'
-            info.sim_varunit = 'mm s-1'
+            info.sim_varunit = 'mm month-1'
       except Exception as e:
          print(f"Canopy Interception calculation processing ERROR: {e}")
          return info, None
@@ -109,10 +134,10 @@ def filter_BCCAVIM(info, ds):   #update info as well
    
    if info.item == "Canopy_Evaporation_Canopy_Transpiration":
       try:
-            ds['Canopy_Evaporation_Canopy_Transpiration']=  ds['FCEV'] + ds['FCTR']
+            ds['Canopy_Evaporation_Canopy_Transpiration']=  ds['QVEGE'] + ds['QVEGT']
 
             info.sim_varname = 'Canopy_Evaporation_Canopy_Transpiration'
-            info.sim_varunit = 'W m-2'
+            info.sim_varunit = 'mm s-1'
       except Exception as e:
          print(f"Canopy Evaporation and Transpiration calculation processing ERROR: {e}")
          return info, None
