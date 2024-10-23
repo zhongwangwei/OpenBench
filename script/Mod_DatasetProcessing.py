@@ -390,16 +390,16 @@ class BaseDatasetProcessing:
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
-        if not UnitProcessing.check_units(self.ref_varunit.lower(), self.sim_varunit.lower()):
-            try:
-                converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
-                ds = ds.copy(data=converted_data)
-                print(f"Converted unit from {varunit} to {new_unit}")
-                return ds, new_unit
-            except ValueError as e:
-                print(f"Warning: {str(e)}. Attempting specific conversion.")
-                exit()
-        return ds, varunit
+        #if not UnitProcessing.check_units(self.ref_varunit.lower(), self.sim_varunit.lower()):
+        try:
+            converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
+            ds = ds.copy(data=converted_data)
+            print(f"Converted unit from {varunit} to {new_unit}")
+            return ds, new_unit
+        except ValueError as e:
+            print(f"Warning: {str(e)}. Attempting specific conversion.")
+            exit()
+        #return ds, varunit
 
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__
