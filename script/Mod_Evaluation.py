@@ -84,18 +84,40 @@ class Evaluation_grid(metrics, scores):
         return
 
     def make_plot_index(self):
-        option = self.fig_nml['make_geo_plot_index']
         key = self.ref_varname
+
+        def get_ticks(vmin, vmax):
+            if 2 >= vmax - vmin > 1:
+                colorbar_ticks = 0.2
+            elif 10 >= vmax - vmin > 5:
+                colorbar_ticks = 1
+            elif 100 >= vmax - vmin > 10:
+                colorbar_ticks = 5
+            elif 200 >= vmax - vmin > 100:
+                colorbar_ticks = 20
+            elif 500 >= vmax - vmin > 200:
+                colorbar_ticks = 50
+            elif 1000 >= vmax - vmin > 500:
+                colorbar_ticks = 100
+            elif 2000 >= vmax - vmin > 1000:
+                colorbar_ticks = 200
+            elif 10000 >= vmax - vmin > 2000:
+                colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+            else:
+                colorbar_ticks = 0.1
+            return colorbar_ticks
+
         for metric in self.metrics:
+            option = self.fig_nml['make_geo_plot_index']
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
 
             try:
                 import math
-
                 ds = xr.open_dataset(
                     f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
                 quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
+                del ds
                 if not option["vmin_max_on"]:
                     if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
                         option["vmax"] = math.ceil(quantiles[1].values)
@@ -115,76 +137,43 @@ class Evaluation_grid(metrics, scores):
                     else:
                         option["vmin"], option["vmax"] = 0, 1
 
-                if 2 >= option["vmax"] - option["vmin"] > 1:
-                    option['colorbar_ticks'] = 0.2
-                elif 10 >= option["vmax"] - option["vmin"] > 5:
-                    option['colorbar_ticks'] = 1
-                elif 100 >= option["vmax"] - option["vmin"] > 10:
-                    option['colorbar_ticks'] = 5
-                elif 200 >= option["vmax"] - option["vmin"] > 100:
-                    option['colorbar_ticks'] = 20
-                elif 500 >= option["vmax"] - option["vmin"] > 200:
-                    option['colorbar_ticks'] = 50
-                elif 1000 >= option["vmax"] - option["vmin"] > 500:
-                    option['colorbar_ticks'] = 100
-                elif 2000 >= option["vmax"] - option["vmin"] > 1000:
-                    option['colorbar_ticks'] = 200
-                elif 10000 >= option["vmax"] - option["vmin"] > 2000:
-                    option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
-                else:
-                    option['colorbar_ticks'] = 0.1
+                option['colorbar_ticks'] = get_ticks(option["vmin"], option["vmax"])
 
                 ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
                 mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-                if mticks[0] < option['vmin']:
+                if mticks[0] < option['vmin'] and mticks[-1] < option['vmax']:
                     mticks = mticks[1:]
-                if mticks[-1] > option['vmax']:
+                elif mticks[0] > option['vmin'] and mticks[-1] > option['vmax']:
                     mticks = mticks[:-1]
+                elif mticks[0] < option['vmin'] and mticks[-1] > option['vmax']:
+                    option['extend'] = 'both'
+                    mticks = mticks[1:-1]
                 option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
                 if option['cmap'] is not None:
                     cmap = cm.get_cmap(option['cmap'])
-                    # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                    bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                    bnd = np.arange(option['vmin'], option['vmax'] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                     norm = colors.BoundaryNorm(bnd, cmap.N)
                 else:
                     cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                              '#313695']
                     cmap = colors.ListedColormap(cpool)
-                    # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                    bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                    bnd = np.arange(option['vmin'], option['vmax'] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                     norm = colors.BoundaryNorm(bnd, cmap.N)
-
                 self.plot_map(cmap, norm, bnd, metric, 'metrics', mticks, option)
             except:
                 print(f"ERROR: {key} {metric} ploting error, please check!")
 
         # print("\033[1;32m" + "=" * 80 + "\033[0m")
         for score in self.scores:
+            option = self.fig_nml['make_geo_plot_index']
             print(f'plotting score: {score}')
             option['colorbar_label'] = score.replace('_', ' ')
             if not option["vmin_max_on"]:
                 option["vmin"], option["vmax"] = 0, 1
                 option['extend'] = 'neither'
 
-            if 2 >= option["vmax"] - option["vmin"] > 1:
-                option['colorbar_ticks'] = 0.2
-            elif 10 >= option["vmax"] - option["vmin"] > 5:
-                option['colorbar_ticks'] = 1
-            elif 100 >= option["vmax"] - option["vmin"] > 10:
-                option['colorbar_ticks'] = 5
-            elif 200 >= option["vmax"] - option["vmin"] > 100:
-                option['colorbar_ticks'] = 20
-            elif 500 >= option["vmax"] - option["vmin"] > 200:
-                option['colorbar_ticks'] = 50
-            elif 1000 >= option["vmax"] - option["vmin"] > 500:
-                option['colorbar_ticks'] = 100
-            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
-                option['colorbar_ticks'] = 200
-            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
-                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
-            else:
-                option['colorbar_ticks'] = 0.1
+            option['colorbar_ticks'] = get_ticks(option["vmin"], option["vmax"])
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
@@ -194,18 +183,15 @@ class Evaluation_grid(metrics, scores):
                 mticks = mticks[:-1]
             option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
-
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
-                # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
             self.plot_map(cmap, norm, bnd, score, 'scores', mticks, option)
@@ -300,6 +286,7 @@ class Evaluation_grid(metrics, scores):
             f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
+
 
 class Evaluation_stn(metrics, scores):
     def __init__(self, info, fig_nml):
@@ -521,12 +508,34 @@ class Evaluation_stn(metrics, scores):
         plt.close()
 
     def make_plot_index(self):
-        option = self.fig_nml['make_stn_plot_index']
+
+        def get_ticks(vmin, vmax):
+            if 2 >= vmax - vmin > 1:
+                colorbar_ticks = 0.2
+            elif 10 >= vmax - vmin > 5:
+                colorbar_ticks = 1
+            elif 100 >= vmax - vmin > 10:
+                colorbar_ticks = 5
+            elif 200 >= vmax - vmin > 100:
+                colorbar_ticks = 20
+            elif 500 >= vmax - vmin > 200:
+                colorbar_ticks = 50
+            elif 1000 >= vmax - vmin > 500:
+                colorbar_ticks = 100
+            elif 2000 >= vmax - vmin > 1000:
+                colorbar_ticks = 200
+            elif 10000 >= vmax - vmin > 2000:
+                colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+            else:
+                colorbar_ticks = 0.1
+            return colorbar_ticks
         # read the data
         df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                          header=0)
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
+            option = self.fig_nml['make_stn_plot_index']
+            option['extend'] = self.fig_nml['make_geo_plot_index']['extend']
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
             min_metric = -999.0
@@ -565,24 +574,7 @@ class Evaluation_stn(metrics, scores):
             except:
                 option["vmin"], option["vmax"] = 0, 1
 
-            if 2 >= option["vmax"] - option["vmin"] > 1:
-                option['colorbar_ticks'] = 0.2
-            elif 10 >= option["vmax"] - option["vmin"] > 5:
-                option['colorbar_ticks'] = 1
-            elif 100 >= option["vmax"] - option["vmin"] > 10:
-                option['colorbar_ticks'] = 5
-            elif 200 >= option["vmax"] - option["vmin"] > 100:
-                option['colorbar_ticks'] = 20
-            elif 500 >= option["vmax"] - option["vmin"] > 200:
-                option['colorbar_ticks'] = 50
-            elif 1000 >= option["vmax"] - option["vmin"] > 500:
-                option['colorbar_ticks'] = 100
-            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
-                option['colorbar_ticks'] = 200
-            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
-                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
-            else:
-                option['colorbar_ticks'] = 0.1
+            option['colorbar_ticks'] = get_ticks(option["vmin"], option["vmax"])
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
@@ -593,19 +585,19 @@ class Evaluation_stn(metrics, scores):
 
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
                 # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', mticks, option)
 
         for score in self.scores:
+            option = self.fig_nml['make_stn_plot_index']
             print(f'plotting score: {score}')
             option['colorbar_label'] = score.replace('_', ' ')
             min_score = -999.0
@@ -631,26 +623,8 @@ class Evaluation_stn(metrics, scores):
 
             if not option["vmin_max_on"]:
                 option["vmin"], option["vmax"] = 0, 1
-                option['extend'] = 'neither'
 
-            if 2 >= option["vmax"] - option["vmin"] > 1:
-                option['colorbar_ticks'] = 0.2
-            elif 10 >= option["vmax"] - option["vmin"] > 5:
-                option['colorbar_ticks'] = 1
-            elif 100 >= option["vmax"] - option["vmin"] > 10:
-                option['colorbar_ticks'] = 5
-            elif 200 >= option["vmax"] - option["vmin"] > 100:
-                option['colorbar_ticks'] = 20
-            elif 500 >= option["vmax"] - option["vmin"] > 200:
-                option['colorbar_ticks'] = 50
-            elif 1000 >= option["vmax"] - option["vmin"] > 500:
-                option['colorbar_ticks'] = 100
-            elif 2000 >= option["vmax"] - option["vmin"] > 1000:
-                option['colorbar_ticks'] = 200
-            elif 10000 >= option["vmax"] - option["vmin"] > 2000:
-                option['colorbar_ticks'] = 10 ** math.floor(math.log10(option["vmax"] - option["vmin"])) / 2
-            else:
-                option['colorbar_ticks'] = 0.1
+            option['colorbar_ticks'] = get_ticks(option["vmin"], option["vmax"])
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
@@ -661,15 +635,13 @@ class Evaluation_stn(metrics, scores):
 
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
-                # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
             else:
                 cpool = ['#a50026', '#d73027', '#f46d43', '#fdae61', '#fee090', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4',
                          '#313695']
                 cmap = colors.ListedColormap(cpool)
-                # bnd = np.linspace(mticks[0], mticks[-1], 11)
-                bnd = np.arange(mticks[0], mticks[-1] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
+                bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
                 norm = colors.BoundaryNorm(bnd, cmap.N)
 
             self.plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, score, 'scores', mticks, option)
