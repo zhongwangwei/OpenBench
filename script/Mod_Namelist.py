@@ -75,17 +75,20 @@ class NamelistReader:
         namelist = {}
         current_dict = None
 
-        def parse_value(value: str) -> Union[bool, int, float, list, str]:
+        def parse_value(key: str, value: str) -> Union[bool, int, float, list, str]:
             """
             Parse a string value into its appropriate type.
 
             Args:
+                key (str): The key of the value being parsed.
                 value (str): The string value to parse.
 
             Returns:
                 Union[bool, int, float, list, str]: The parsed value.
             """
             value = value.strip()
+            if key in ['suffix', 'prefix']:
+                return value  # Return as string for suffix and prefix
             if value.lower() in ['true', 'false']:
                 return bool(self.strtobool(value))
             elif value.replace('-', '', 1).isdigit():
@@ -112,7 +115,7 @@ class NamelistReader:
                     key, value = line.split('=', 1)
                     key = key.strip()
                     value = value.split('#')[0].strip()  # Remove inline comments
-                    current_dict[key] = parse_value(value)
+                    current_dict[key] = parse_value(key, value)
 
         return namelist
 
@@ -403,23 +406,30 @@ class GeneralInfoReader(NamelistReader):
             source = ref_source if source_type == 'ref' else sim_source
             nml = ref_nml if source_type == 'ref' else sim_nml
             attributes = ['data_type', 'varname', 'varunit', 'data_groupby', 'dir', 'tim_res', 
-                          'grid_res', 'suffix', 'prefix', 'syear', 'eyear']
+                          'grid_res', 'syear', 'eyear']
             for attr in attributes:
-                setattr(self, f'{source_type}_{attr}', nml[item][f'{source}_{attr}'])
+                value = nml[item].get(f'{source}_{attr}')
+                setattr(self, f'{source_type}_{attr}', str(value) if value is not None else '')
+            
+            # Handle suffix and prefix separately to ensure they're always strings
+            for attr in ['suffix', 'prefix']:
+                value = nml[item].get(f'{source}_{attr}')
+                setattr(self, f'{source_type}_{attr}', str(value) if value is not None else '')
+
             if nml[item][f'{source}_data_type'] == 'stn':
                 try:
-                    setattr(self, f'{source_type}_fulllist', nml[item][f'{source}_fulllist'])
+                    setattr(self, f'{source_type}_fulllist', str(nml[item][f'{source}_fulllist']))
                 except:
                     try:
-                        setattr(self, f'{source_type}_fulllist', nml['general'][f'{source}_fulllist'])
+                        setattr(self, f'{source_type}_fulllist', str(nml['general'][f'{source}_fulllist']))
                     except:
                         print(f'read {source_type}_fulllist namelist error')
             try:
-                setattr(self, f'{source_type}_max_uparea', nml[item][f'{source}_max_uparea'])
-                setattr(self, f'{source_type}_min_uparea', nml[item][f'{source}_min_uparea'])
+                setattr(self, f'{source_type}_max_uparea', str(nml[item][f'{source}_max_uparea']))
+                setattr(self, f'{source_type}_min_uparea', str(nml[item][f'{source}_min_uparea']))
             except KeyError:
                 pass
-        self.sim_model = sim_nml[item][f'{sim_source}_model']
+        self.sim_model = str(sim_nml[item][f'{sim_source}_model'])
 
     def _process_data_types(self):
         """Process and evaluate data types for simulation and reference data."""
@@ -620,3 +630,6 @@ class GeneralInfoReader(NamelistReader):
     def to_dict(self):
         """Convert the instance attributes to a dictionary."""
         return self.__dict__
+
+
+
