@@ -42,6 +42,9 @@ class UnitProcessing:
 				'%': lambda x: x / 100,
 				'g kg-1': lambda x: x / 1000,
 				'fraction': lambda x: x,
+				'm3 m-3': lambda x: x,
+				'm2 m-2': lambda x: x,
+				'g g-1': lambda x: x,
 			},
 			'K': {
 				'C': lambda x: x + 273.15,
