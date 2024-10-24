@@ -48,7 +48,7 @@ def filter_BCC_AVIM(info, ds):   #update info as well
    if info.item == "Surface_Soil_Moisture":
       try:
             ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
-                                       ds['SOILLIQ'].isel(levsoi=1))/0.06/1000.0
+                                       ds['SOILLIQ'].isel(levsoi=1))/0.0626/1000.0
             info.sim_varname = 'SOILLIQ'
             info.sim_varunit = 'unitless'
       except Exception as e:
