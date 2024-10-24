@@ -182,13 +182,13 @@ varunit           =  mm
 /
 
 &Surface_Soil_Moisture
-varname           =  
-varunit           =  kg m-2
+varname           =  SOILLIQ
+varunit           =  unitless 
 /
 
 &Root_Zone_Soil_Moisture
-varname           =  
-varunit           =  kg m-2
+varname           =  SOILLIQ
+varunit           =  unitless
 /
 
 &Surface_Soil_Temperature
