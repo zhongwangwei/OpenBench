@@ -160,7 +160,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                             output_file_path = os.path.join(dir_path,
                                                             f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                             with open(output_file_path, "w") as output_file:
-                                # Print the table header with an additional column for the overall mean
+                                # Print the table header with an additional column for the overall media
                                 output_file.write("ID\t")
                                 for i in range(1, 18):
                                     output_file.write(f"{i}\t")
@@ -170,32 +170,30 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     output_file.write(f"{igbp_class_name}\t")
                                 output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                                # Calculate and print mean values
+                                # Calculate and print media values
 
                                 for metric in self.metrics:
                                     ds = xr.open_dataset(
                                         f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                     output_file.write(f"{metric}\t")
 
-                                    # Calculate and write the overall mean first
+                                    # Calculate and write the overall media first
                                     ds = ds.where(np.isfinite(ds), np.nan)
-                                    if metric == 'percent_bias':
-                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_mean = ds[metric].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                    overall_media = ds[metric].median(skipna=True).values
+                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
 
                                     for i in range(1, 18):
                                         ds1 = ds.where(IGBPtype == i)
                                         igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
-                                        mean_value = ds1[metric].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        media_value = ds1[metric].median(skipna=True).values
+                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
+                                        output_file.write(f"{media_value_str}\t")
+                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
@@ -372,32 +370,30 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     output_file.write(f"{PFT_class_name}\t")
                                 output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                                # Calculate and print mean values
+                                # Calculate and print media values
 
                                 for metric in self.metrics:
                                     ds = xr.open_dataset(
                                         f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                     output_file.write(f"{metric}\t")
 
-                                    # Calculate and write the overall mean first
+                                    # Calculate and write the overall media first
                                     ds = ds.where(np.isfinite(ds), np.nan)
-                                    if metric == 'percent_bias':
-                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_mean = ds[metric].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                    overall_media = ds[metric].median(skipna=True).values
+                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
 
                                     for i in range(0, 16):
                                         ds1 = ds.where(PFTtype == i)
                                         PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
-                                        mean_value = ds1[metric].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        media_value = ds1[metric].median(skipna=True).values
+                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
+                                        output_file.write(f"{media_value_str}\t")
+                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
@@ -479,6 +475,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                 # fixme: ugly code, need to be improved
                 for evaluation_item in evaluation_items:
                     sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
                 for sim_source in sim_sources:
                     output_file.write(f"{sim_source}\t")
                 output_file.write("\n")  # Move "All" to the first line
@@ -866,7 +863,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
-                            data = data[(data >= -500) & (data <= 500)]
+                            data = data[(data >= -100) & (data <= 100)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     # try:
@@ -926,12 +923,10 @@ class ComparisonProcessing(metrics, scores, statistics):
 
                             for metric in metrics:
                                 df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
-                                if metric == 'percent_bias':
-                                    df[metric] = df[metric].where((df[metric] >= -500) & (df[metric] <= 500), np.nan)
                                 q_low, q_high = df[metric].quantile([0.05, 0.95])
                                 df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
 
-                                kk = df[metric].mean(skipna=True)
+                                kk = df[metric].median(skipna=True)
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                 output_file.write(f"{kk_str}\t")
 
@@ -960,11 +955,9 @@ class ComparisonProcessing(metrics, scores, statistics):
                                     f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
 
                                 ds = ds.where(np.isfinite(ds), np.nan)
-                                if metric == 'percent_bias':
-                                    ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
                                 q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                 ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
-                                kk = ds[metric].mean(skipna=True).values
+                                kk = ds[metric].median(skipna=True).values
                                 # kk = ds[metric].where(np.isfinite(ds[metric]), np.nan).mean(skipna=True).values
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                 output_file.write(f"{kk_str}\t")
@@ -995,8 +988,6 @@ class ComparisonProcessing(metrics, scores, statistics):
         def process_metric(casedir, item, ref_source, sim_source, metric, s, o, vkey=None):
             pb = getattr(self, metric)(s, o)
             pb = pb.where(np.isfinite(pb), np.nan)
-            if metric == 'percent_bias':
-                pb = pb.where((pb >= -500) | (pb <= 500), np.nan)
             try:
                 # q1, q3 = np.percentile(pb.values[~np.isnan(pb.values)], [5, 95])
                 q_value = pb.quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
@@ -1010,7 +1001,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                     f'{casedir}/output/comparisons/Portrait_Plot_seasonal/{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
             except:
                 pass
-            return np.nanmean(pb)
+            return np.nanmedian(pb)
 
         def process_score(casedir, item, ref_source, sim_source, score, s, o, vkey=None):
             pb = getattr(self, score)(s, o)
@@ -1102,13 +1093,10 @@ class ComparisonProcessing(metrics, scores, statistics):
                                                                                 'metric', season, metric=metric)
                                         for iik in range(len(station_list['ID'])))
                                     results = np.array(results)
-                                    if metric == 'percent_bias':
-                                        results = np.where((results >= -500) & (results <= 500), results, np.nan)
-
                                     q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
                                     results = np.where((results >= q1) & (results <= q3), results, np.nan)
 
-                                    mean_value = np.nanmean(results)
+                                    mean_value = np.nanmedian(results)
                                     kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
                                     output_file.write(f"{kk_str}\t")
 
@@ -1291,8 +1279,8 @@ class ComparisonProcessing(metrics, scores, statistics):
                             ds = xr.open_dataset(file_path)
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
-                        if metric == 'percent_bias':
-                            data = data[(data >= -500) & (data <= 500)]
+                        # if metric == 'percent_bias':
+                        #     data = data[(data >= -100) & (data <= 100)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     try:
@@ -1648,7 +1636,7 @@ class ComparisonProcessing(metrics, scores, statistics):
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
-                            data = data[(data >= -500) & (data <= 500)]
+                            data = data[(data >= -100) & (data <= 100)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     try:

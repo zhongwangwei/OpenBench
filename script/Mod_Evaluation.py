@@ -89,10 +89,14 @@ class Evaluation_grid(metrics, scores):
         def get_ticks(vmin, vmax):
             if 2 >= vmax - vmin > 1:
                 colorbar_ticks = 0.2
+            elif 5 >= vmax - vmin > 2:
+                colorbar_ticks = 0.5
             elif 10 >= vmax - vmin > 5:
                 colorbar_ticks = 1
             elif 100 >= vmax - vmin > 10:
                 colorbar_ticks = 5
+            elif 100 >= vmax - vmin > 50:
+                colorbar_ticks = 20
             elif 200 >= vmax - vmin > 100:
                 colorbar_ticks = 20
             elif 500 >= vmax - vmin > 200:
@@ -104,7 +108,7 @@ class Evaluation_grid(metrics, scores):
             elif 10000 >= vmax - vmin > 2000:
                 colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
             else:
-                colorbar_ticks = 0.1
+                colorbar_ticks = 0.10
             return colorbar_ticks
 
         for metric in self.metrics:
@@ -123,10 +127,10 @@ class Evaluation_grid(metrics, scores):
                         option["vmax"] = math.ceil(quantiles[1].values)
                         option["vmin"] = math.floor(quantiles[0].values)
                         if metric == 'percent_bias':
-                            if option["vmax"] > 500:
-                                option["vmax"] = 500
-                            if option["vmin"] < -500:
-                                option["vmin"] = -500
+                            if option["vmax"] > 100:
+                                option["vmax"] = 100
+                            if option["vmin"] < -100:
+                                option["vmin"] = -100
                     elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                         option["vmin"], option["vmax"] = -1, 1
                     elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
@@ -141,12 +145,13 @@ class Evaluation_grid(metrics, scores):
 
                 ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
                 mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
+                mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
+                          mticks]
                 if mticks[0] < option['vmin'] and mticks[-1] < option['vmax']:
                     mticks = mticks[1:]
                 elif mticks[0] > option['vmin'] and mticks[-1] > option['vmax']:
                     mticks = mticks[:-1]
                 elif mticks[0] < option['vmin'] and mticks[-1] > option['vmax']:
-                    option['extend'] = 'both'
                     mticks = mticks[1:-1]
                 option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
@@ -171,16 +176,18 @@ class Evaluation_grid(metrics, scores):
             option['colorbar_label'] = score.replace('_', ' ')
             if not option["vmin_max_on"]:
                 option["vmin"], option["vmax"] = 0, 1
-                option['extend'] = 'neither'
 
             option['colorbar_ticks'] = get_ticks(option["vmin"], option["vmax"])
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-            if mticks[0] < option['vmin']:
+            mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
+            if mticks[0] < option['vmin'] and mticks[-1] < option['vmax']:
                 mticks = mticks[1:]
-            if mticks[-1] > option['vmax']:
+            elif mticks[0] > option['vmin'] and mticks[-1] > option['vmax']:
                 mticks = mticks[:-1]
+            elif mticks[0] < option['vmin'] and mticks[-1] > option['vmax']:
+                mticks = mticks[1:-1]
             option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
             if option['cmap'] is not None:
@@ -232,6 +239,16 @@ class Evaluation_grid(metrics, scores):
         lat, lon = np.meshgrid(lat[::-1], lon)
 
         var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
+        min_value, max_value = np.nanmin(var), np.nanmax(var)
+        if min_value < option['vmin'] and max_value > option['vmax']:
+            option['extend'] = 'both'
+        elif min_value > option['vmin'] and max_value > option['vmax']:
+            option['extend'] = 'max'
+        elif min_value < option['vmin'] and max_value < option['vmax']:
+            option['extend'] = 'min'
+        else:
+            option['extend'] = 'neither'
+
 
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -455,6 +472,16 @@ class Evaluation_stn(metrics, scores):
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
+        min_value, max_value = np.nanmin(metric), np.nanmax(metric)
+        if min_value < option['vmin'] and max_value > option['vmax']:
+            option['extend'] = 'both'
+        elif min_value > option['vmin'] and max_value > option['vmax']:
+            option['extend'] = 'max'
+        elif min_value < option['vmin'] and max_value < option['vmax']:
+            option['extend'] = 'min'
+        else:
+            option['extend'] = 'neither'
+
         cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, marker=option['marker'],
                         edgecolors='none', alpha=0.9)
         coastline = cfeature.NaturalEarthFeature(
@@ -499,6 +526,7 @@ class Evaluation_stn(metrics, scores):
                 [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
 
         cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                          extend=option['extend'],
                           orientation=option['colorbar_position'])
         cb.solids.set_edgecolor("face")
         # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
@@ -512,10 +540,14 @@ class Evaluation_stn(metrics, scores):
         def get_ticks(vmin, vmax):
             if 2 >= vmax - vmin > 1:
                 colorbar_ticks = 0.2
+            elif 5 >= vmax - vmin > 2:
+                colorbar_ticks = 0.5
             elif 10 >= vmax - vmin > 5:
                 colorbar_ticks = 1
             elif 100 >= vmax - vmin > 10:
                 colorbar_ticks = 5
+            elif 100 >= vmax - vmin > 50:
+                colorbar_ticks = 20
             elif 200 >= vmax - vmin > 100:
                 colorbar_ticks = 20
             elif 500 >= vmax - vmin > 200:
@@ -527,8 +559,9 @@ class Evaluation_stn(metrics, scores):
             elif 10000 >= vmax - vmin > 2000:
                 colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
             else:
-                colorbar_ticks = 0.1
+                colorbar_ticks = 0.10
             return colorbar_ticks
+
         # read the data
         df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                          header=0)
@@ -562,6 +595,10 @@ class Evaluation_stn(metrics, scores):
                     if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
                         option["vmax"] = math.ceil(vmax)
                         option["vmin"] = math.floor(vmin)
+                        if option["vmax"] > 100:
+                            option["vmax"] = 100
+                        if option["vmin"] < -100:
+                            option["vmin"] = -100
                     elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                         option["vmin"], option["vmax"] = -1, 1
                     elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
@@ -578,10 +615,14 @@ class Evaluation_stn(metrics, scores):
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-            if mticks[0] < option['vmin']:
+            mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
+            if mticks[0] < option['vmin'] and mticks[-1] < option['vmax']:
                 mticks = mticks[1:]
-            if mticks[-1] > option['vmax']:
+            elif mticks[0] > option['vmin'] and mticks[-1] > option['vmax']:
                 mticks = mticks[:-1]
+            elif mticks[0] < option['vmin'] and mticks[-1] > option['vmax']:
+                mticks = mticks[1:-1]
+            option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
@@ -628,10 +669,14 @@ class Evaluation_stn(metrics, scores):
 
             ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
             mticks = ticks.tick_values(vmin=option['vmin'], vmax=option['vmax'])
-            if mticks[0] < option['vmin']:
+            mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
+            if mticks[0] < option['vmin'] and mticks[-1] < option['vmax']:
                 mticks = mticks[1:]
-            if mticks[-1] > option['vmax']:
+            elif mticks[0] > option['vmin'] and mticks[-1] > option['vmax']:
                 mticks = mticks[:-1]
+            elif mticks[0] < option['vmin'] and mticks[-1] > option['vmax']:
+                mticks = mticks[1:-1]
+            option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
             if option['cmap'] is not None:
                 cmap = cm.get_cmap(option['cmap'])
@@ -894,23 +939,21 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and write the overall mean first
                                     ds = ds.where(np.isfinite(ds), np.nan)
-                                    if metric == 'percent_bias':
-                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_mean = ds[metric].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                    overall_media = ds[metric].median(skipna=True).values
+                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
 
                                     for i in range(1, 18):
                                         ds1 = ds.where(IGBPtype == i)
                                         igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
-                                        mean_value = ds1[metric].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        media_value = ds1[metric].median(skipna=True).values
+                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
+                                        output_file.write(f"{media_value_str}\t")
+                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
@@ -1088,7 +1131,7 @@ class LC_groupby(metrics, scores):
                             output_file_path = os.path.join(dir_path,
                                                             f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                             with open(output_file_path, "w") as output_file:
-                                # Print the table header with an additional column for the overall mean
+                                # Print the table header with an additional column for the overall media
                                 output_file.write("ID\t")
                                 for i in range(0, 16):
                                     output_file.write(f"{i}\t")
@@ -1098,32 +1141,30 @@ class LC_groupby(metrics, scores):
                                     output_file.write(f"{PFT_class_name}\t")
                                 output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                                # Calculate and print mean values
+                                # Calculate and print media values
 
                                 for metric in self.metrics:
                                     ds = xr.open_dataset(
                                         f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                     output_file.write(f"{metric}\t")
 
-                                    # Calculate and write the overall mean first
+                                    # Calculate and write the overall media first
                                     ds = ds.where(np.isfinite(ds), np.nan)
-                                    if metric == 'percent_bias':
-                                        ds = ds.where((ds >= -500) | (ds <= 500), np.nan)
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_mean = ds[metric].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                    overall_media = ds[metric].median(skipna=True).values
+                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
 
                                     for i in range(0, 16):
                                         ds1 = ds.where(PFTtype == i)
                                         PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
-                                        mean_value = ds1[metric].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        media_value = ds1[metric].median(skipna=True).values
+                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
+                                        output_file.write(f"{media_value_str}\t")
+                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
