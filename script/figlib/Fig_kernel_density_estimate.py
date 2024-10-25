@@ -70,11 +70,16 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
                     f"Error: {evaluation_item} {ref_source} {sim_source} {varname} Kernel Density Estimate failed!")  # ValueError: array must not contain infs or NaNs
 
         # Add labels and legend
+        if varname == 'percent_bias':
+            legend_title = 'Percent Bias showing value between [-100,100]'
+        else:
+            legend_title = ''
+
         if not option["set_legend"]:
-            ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'],
+            ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
                       loc=option["loc"], ncol=option["ncol"])
         else:
-            ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'],
+            ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
                       bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=option["ncol"])
 
         if option['grid']:
@@ -103,8 +108,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
         plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
-
-        del data, datasets_filtered, MLINES, lines, kde, covariance_matrix, x_values, density, line
+        try:
+            del data, datasets_filtered, MLINES, lines, kde, covariance_matrix, x_values, density, line
+        except:
+            del data, datasets_filtered, MLINES, lines, x_values, line
 
 
 def generate_lines(data_names, option):
