@@ -1,3 +1,5 @@
+import math
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -138,12 +140,105 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                    option["colorbar_height"])
         cbar = fig.colorbar(im, cax=cbar_ax, label=option['colorbar_label'], orientation=option['colorbar_position'],
                             extend=option['extend'])
+    elif len(df_selected.index) == 1 and lb != 'score':
+        fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
+
+        selected_item, sim_source, ref_source = option['item'][0], option['item'][1], option['item'][2]
+
+        metric = df_selected.index[0]
+        print(metric)
+        import glob
+        files = glob.glob(f'{option["path"]}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
+        datasets = [xr.open_dataset(file) for file in files]
+        for t, ds in enumerate(datasets):
+            datasets[t] = ds.expand_dims(dim={'time': [t]})  # 为每个文件添加一个新的'time'维度
+
+        combined_dataset = xr.concat(datasets, dim='time')
+        quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=['time', 'lat', 'lon'])
+        # consider 0.05 and 0.95 value as the max/min value
+        custom_vmin_vmax = {}
+        if not option["vmin_max_on"]:
+            if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
+                custom_vmin_vmax[metric] = [quantiles[metric][0].values, quantiles[metric][-1].values,
+                                            quantiles[metric][2].values, quantiles[metric][1].values]
+            elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                custom_vmin_vmax[metric] = [-1, 1, 0.8, -0.8]
+            elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                custom_vmin_vmax[metric] = [quantiles[metric][0].values, 1, 0.8, quantiles[metric][1].values]
+            elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
+                            'absolute_percent_bias']:
+                custom_vmin_vmax[metric] = [-1, quantiles[metric][-1].values, quantiles[metric][2].values, -0.8]
+            else:
+                custom_vmin_vmax[metric] = [0, 1, 0.8, 0.2]
+        else:
+            custom_vmin_vmax[metric] = [option["vmin"], option["vmax"], 0.8, 0.2]
+
+        if not option['cmap']:
+            option['cmap'] = 'coolwarm'
+
+        vmin, vmax = custom_vmin_vmax[metric][0], custom_vmin_vmax[metric][1]
+        x1, x2 = custom_vmin_vmax[metric][2], custom_vmin_vmax[metric][3]
+        im = ax.imshow(df_selected, cmap=option['cmap'], vmin=vmin, vmax=vmax)
+
+        ax.set_yticks(range(len(df_selected.index)))
+        ax.set_xticks(range(len(df_selected.columns)))
+        ax.set_yticklabels([index.replace('_', ' ') for index in df_selected.index], rotation=option['y_rotation'],
+                           ha=option['y_ha'])
+        if option["x_ticklabel"] == 'Normal':
+            ax.set_xticklabels([columns.replace('_', ' ').title() for columns in df_selected.columns],
+                               rotation=option['x_rotation'],
+                               ha=option['x_ha'])
+        else:
+            item = option['groupby']
+            ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
+                               ha=option['x_ha'])
+
+        ax.set_ylabel('Metrics', fontsize=option['ytick'] + 1)
+        ax.set_xlabel(option['xlabel'], fontsize=option['xtick'] + 1)
+
+        if len(option['title']) == 0:
+            option['title'] = f'Heatmap of {lb}'
+        ax.set_title(option['title'], fontsize=option['title_size'])
+
+        for i in range(len(df_selected.index)):
+            for j in range(len(df_selected.columns)):
+                ax.text(j, i, f'{df_selected.iloc[i, j]:{option["ticks_format"]}}', ha='center', va='center',
+                        color='white' if df_selected.iloc[i, j] > x1 else 'black' or df_selected.iloc[i, j] < x2,
+                        fontsize=option['fontsize'])
+
+        pos = ax.get_position()  # .bounds
+        left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+
+        if not option['colorbar_position_set']:
+            if option["colorbar_position"] == 'vertical':
+                cbar_ax = fig.add_axes([right + 0.05, bottom, 0.03, height])  # right + 0.2
+            else:
+                xlabel = ax.xaxis.label
+                xticks = ax.get_xticklabels()
+                max_xtick_height = 0
+                for xtick in xticks:
+                    bbox = xtick.get_window_extent()  # 获取每个 xtick 的包围框
+                    bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
+                    max_xtick_height = max(max_xtick_height, bbox_transformed.height)
+                if xlabel is not None:
+                    bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
+                    bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
+                    x_height = bbox_transformed.height
+                    cbar_ax = fig.add_axes(
+                        [left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.04])
+                else:
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
+        else:
+            cbar_ax = fig.add_axes(option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"],
+                                   option["colorbar_height"])
+        cbar = fig.colorbar(im, cax=cbar_ax, label=option['colorbar_label'], orientation=option['colorbar_position'],
+                            extend=option['extend'])
     else:
         selected_item, sim_source, ref_source = option['item'][0], option['item'][1], option['item'][2]
-        print(selected_item, sim_source, ref_source)
-        fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=(option['x_wise'], option['y_wise']), sharex=True)
+        mfigsize = (len(shorter[option['groupby']]), len(df_selected.index))
+        fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=mfigsize, sharex=True)
         fig.text(-0.01, 0.5, 'Metrics', va='center', rotation='vertical', fontsize=option['ytick'] + 1)
-        plt.subplots_adjust(hspace=-0.91)
+        plt.subplots_adjust(hspace=0)
         # get the minimal and maximal value
         if not option['cmap']:
             option['cmap'] = 'coolwarm'
@@ -188,9 +283,9 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
 
             pos = axes[i].get_position()  # .bounds
             left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-            cbar_ax = fig.add_axes([right + 0.02, bottom + height / 2, height * 2, height / 4])
+            cbar_ax = fig.add_axes([right + 0.02, bottom + height / 2, width * 2 / len(shorter[option['groupby']]), height / 4])
             cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal', extend=option['extend'])
-            cbar.set_ticks([vmin, (vmin + vmax) / 2, vmax])
+            cbar.set_ticks([math.ceil(vmin), (vmin + vmax) / 2, math.floor(vmax)])
             cbar.set_ticklabels([f'{vmin:.1f}', f'{(vmin + vmax) / 2:.1f}', f'{vmax:.1f}'])
             cbar.ax.tick_params(labelsize=9)
 
