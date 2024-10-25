@@ -942,18 +942,18 @@ class LC_groupby(metrics, scores):
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_media = ds[metric].median(skipna=True).values
-                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
+                                    overall_median = ds[metric].median(skipna=True).values
+                                    overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
                                     for i in range(1, 18):
                                         ds1 = ds.where(IGBPtype == i)
                                         igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
-                                        media_value = ds1[metric].median(skipna=True).values
-                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
-                                        output_file.write(f"{media_value_str}\t")
-                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
+                                        median_value = ds1[metric].median(skipna=True).values
+                                        median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
+                                        output_file.write(f"{median_value_str}\t")
+                                    output_file.write(f"{overall_median_str}\t")  # Write overall median
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
@@ -1131,7 +1131,7 @@ class LC_groupby(metrics, scores):
                             output_file_path = os.path.join(dir_path,
                                                             f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                             with open(output_file_path, "w") as output_file:
-                                # Print the table header with an additional column for the overall media
+                                # Print the table header with an additional column for the overall median
                                 output_file.write("ID\t")
                                 for i in range(0, 16):
                                     output_file.write(f"{i}\t")
@@ -1141,30 +1141,30 @@ class LC_groupby(metrics, scores):
                                     output_file.write(f"{PFT_class_name}\t")
                                 output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                                # Calculate and print media values
+                                # Calculate and print median values
 
                                 for metric in self.metrics:
                                     ds = xr.open_dataset(
                                         f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                     output_file.write(f"{metric}\t")
 
-                                    # Calculate and write the overall media first
+                                    # Calculate and write the overall median first
                                     ds = ds.where(np.isfinite(ds), np.nan)
                                     q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                     ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                    overall_media = ds[metric].median(skipna=True).values
-                                    overall_media_str = f"{overall_media:.3f}" if not np.isnan(overall_media) else "N/A"
+                                    overall_median = ds[metric].median(skipna=True).values
+                                    overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
                                     for i in range(0, 16):
                                         ds1 = ds.where(PFTtype == i)
                                         PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                         ds1.to_netcdf(
                                             f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
-                                        media_value = ds1[metric].median(skipna=True).values
-                                        media_value_str = f"{media_value:.3f}" if not np.isnan(media_value) else "N/A"
-                                        output_file.write(f"{media_value_str}\t")
-                                    output_file.write(f"{overall_media_str}\t")  # Write overall media
+                                        median_value = ds1[metric].median(skipna=True).values
+                                        median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
+                                        output_file.write(f"{median_value_str}\t")
+                                    output_file.write(f"{overall_median_str}\t")  # Write overall median
                                     output_file.write("\n")
 
                             selected_metrics = self.metrics
