@@ -1,4 +1,4 @@
-import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -69,7 +69,10 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
 
             # Plot
             for k, (value, size) in enumerate(zip(I2_values, sizes)):
-                ax.scatter(value, 0, s=size * option["n"], facecolors=MCOLORS[item]["Color"], edgecolors=MCOLORS[item]["Color"],
+                if np.isnan(size):
+                    size = 2
+                ax.scatter(value, 0, s=size * option["n"], facecolors=MCOLORS[item]["Color"],
+                           edgecolors=MCOLORS[item]["Color"],
                            alpha=option['markeraplha'])
                 ax.scatter(value, 0, s=size * 0.01 * option["n"], facecolors='white', edgecolors='none')
 
