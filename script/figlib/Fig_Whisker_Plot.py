@@ -101,13 +101,12 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
             ylabel = f'{varname}'
         plt.ylabel(ylabel, fontsize=option['ytick'] + 1)
 
-
         if option['grid']:
             ax.yaxis.grid(True, linestyle=option['grid_style'], alpha=0.7, linewidth=option['grid_linewidth'])
 
         if option['limit_on']:
             if option['value_min'] > option['value_max']:
-                st.error('make sure your max min value was setting right!')
+                print('Error: make sure your max min value was setting right!')
                 exit()
             else:
                 ax.set(ylim=(option['value_min'], option['value_max']))
@@ -128,7 +127,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
 
         if option['limit_on']:
             if option['value_min'] > option['value_max']:
-                st.error('make sure your max min value was setting right!')
+                print('Error: make sure your max min value was setting right!')
                 exit()
             else:
                 ax.set(xlim=(option['value_min'], option['value_max']))
