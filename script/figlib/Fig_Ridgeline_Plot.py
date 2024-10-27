@@ -69,22 +69,25 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
 
                 # Add labels
                 axes.text(global_min, y_shift + 0.2, sim_source, fontweight='bold', ha='left', va='center')
-
                 # Calculate and plot median
                 median = np.median(filtered_data)
-                axes.vlines(median, y_shift, y_shift + y_range.max(), color='black', linestyle=option['vlinestyle'],
+                y_target = np.interp(median, x_range, y_range + y_shift)
+                axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
                             linewidth=option['vlinewidth'], zorder=n_plots + 1)
 
                 # Add median value text
-                axes.text(median, y_shift + y_range.max(), f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
+                axes.text(median, y_shift + y_target, f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
                           zorder=n_plots + 2)
 
             # Customize the plot
             axes.set_yticks([])
             xlabel = option['xlabel']
             title = option['title']
+
             if not option['xlabel']:
                 xlabel = varname.replace('_', ' ')
+                if varname == 'percent_bias':
+                    xlabel = varname.replace('_', ' ') + f' (showing value between [-100,100])'
             if not option['title']:
                 title = f'Ridgeline Plot of {evaluation_item.replace("_", " ")}'
             axes.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
@@ -103,7 +106,7 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
 
             # Adjust layout and save
             plt.tight_layout()
-            output_file_path = f"{basedir}/Ridgeline_Plot_{evaluation_item}_{ref_source}_{varname}.{option["saving_format"]}"
+            output_file_path = f"{basedir}/Ridgeline_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
             plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
             # Clean up
