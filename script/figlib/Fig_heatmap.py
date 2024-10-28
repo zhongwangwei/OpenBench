@@ -49,9 +49,10 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     ax.set_ylabel(option['ylabel'], fontsize=option['ytick'] + 1)
     ax.set_xlabel(option['xlabel'], fontsize=option['xtick'] + 1)
 
+    title = option['title']
     if len(option['title']) == 0:
-        option['title'] = f'Heatmap of {score}'
-    ax.set_title(option['title'], fontsize=option['title_size'])
+        title = f'Heatmap of {score}'
+    ax.set_title(title, fontsize=option['title_size'])
 
     # Add numbers to each cell
     for i in range(len(df.index)):
