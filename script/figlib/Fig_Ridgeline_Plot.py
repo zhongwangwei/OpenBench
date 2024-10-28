@@ -71,7 +71,8 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
                 axes.text(global_min, y_shift + 0.2, sim_source, fontweight='bold', ha='left', va='center')
                 # Calculate and plot median
                 median = np.median(filtered_data)
-                y_target = np.interp(median, x_range, y_range + y_shift)
+                index_closest = (np.abs(x_range - median)).argmin()
+                y_target = y_range[index_closest]
                 axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
                             linewidth=option['vlinewidth'], zorder=n_plots + 1)
 
