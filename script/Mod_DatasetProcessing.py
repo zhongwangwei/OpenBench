@@ -606,7 +606,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                     data_params['datasource'], ds, self.station_list, i
                 ) for i in range(len(self.station_list['ID']))
             )
-        os.remove(output_file)
+        #os.remove(output_file)
 
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
         if data_source not in ['ref', 'sim']:
