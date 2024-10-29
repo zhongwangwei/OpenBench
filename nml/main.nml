@@ -1,9 +1,9 @@
 &general
   basename=LS3MIP
-  basedir=/share/home/dq013/xuqch3/Streamlit/case_test/       #
+  basedir=./output/       #
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
-  compare_grid_res  = 1.25                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
+  compare_grid_res  = 0.5                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
   syear             = 2003                         # must be integer
   eyear             = 2009                            # must be integer
   max_lat           = 90 
@@ -41,12 +41,12 @@
   #*******************      Hydrology Cycle      ****************
   ###surface####
   Evapotranspiration   =True
-  Canopy_Transpiration =False
-  Canopy_Interception  =False
+  Canopy_Transpiration =True
+  Canopy_Interception  =True
   Ground_Evaporation   =False
   Water_Evaporation    =False
   Soil_Evaporation     =False
-  Total_Runoff         =False
+  Total_Runoff         =True
   Terrestrial_Water_Storage_Anomaly=False
 
   ###Snow#### 
