@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/Mod_variables_defination/GLDAS2.nml                    
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  month
+   dir = /share/home/dq013/zhwei/data_for_test/Model_Comparison/GLDAS
+   fulllist =
+   tim_res =  month
+   grid_res =  0.25
+   prefix = GLDAS_NOAH025_M.A
+   suffix = .021
+   syear =  2000
+   eyear =  2023
+/
