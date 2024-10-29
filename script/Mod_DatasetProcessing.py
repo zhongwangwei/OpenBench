@@ -149,7 +149,10 @@ class BaseDatasetProcessing:
             try:
                 return ds.transpose('time','lat','lon')
             except:
-                return ds.squeeze().transpose('time','lat','lon')
+                try:
+                    return ds.transpose('time','lon','lat')
+                except:   
+                    return ds.squeeze() 
 
     def check_dataset_time_integrity_bk(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales.
