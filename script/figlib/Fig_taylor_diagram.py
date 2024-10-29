@@ -736,6 +736,10 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             labelcolor = []
             markerlabel = []
             for i, xval in enumerate(X):
+                # Skip if X or Y contains NaN
+                if np.isnan(X[i]) or np.isnan(Y[i]):
+                    continue
+                    
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markerSize,
                                 markerfacecolor=markercolor[i],
@@ -753,6 +757,10 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             # Plot markers at data points
             markerlabel = []
             for i, xval in enumerate(X):
+                # Skip if X or Y contains NaN
+                if np.isnan(X[i]) or np.isnan(Y[i]):
+                    continue
+                    
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markersize[i],
                                 markerfacecolor=markerfacecolor[i],
@@ -781,6 +789,10 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
 
         labelcolor = []
         for i in range(len(X)):
+            # Skip if X or Y contains NaN
+            if np.isnan(X[i]) or np.isnan(Y[i]):
+                continue
+                
             xval, yval = X[i], Y[i]
             if abs(xval) <= limit and abs(yval) <= limit:
                 # Plot marker
