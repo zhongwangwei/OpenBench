@@ -38,21 +38,19 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
             try:
                 lower_bound, upper_bound = np.percentile(data, 1.5), np.percentile(data, 98.5)
-                if varname in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
-                    filtered_data = data[(data >= lower_bound) & (data <= upper_bound)]
-                elif varname in ['KGE', 'KGESS', 'NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
-                    filtered_data = data[(data >= lower_bound)]
-                elif varname in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
-                                 'absolute_percent_bias']:
-                    filtered_data = data[(data <= upper_bound)]
-                else:
-                    filtered_data = data
+                filtered_data = data
 
                 kde = gaussian_kde(filtered_data)
                 covariance_matrix = kde.covariance
                 covariance_matrix += np.eye(covariance_matrix.shape[0]) * 1e-6  # Regularization
                 kde.covariance = covariance_matrix
-                x_values = np.linspace(filtered_data.min(), filtered_data.max(), 100)
+                
+                # Set x-axis range for KGE and KGESS
+                if varname in ['KGE', 'KGESS']:
+                    x_values = np.linspace(-1, 1, 100)
+                else:
+                    x_values = np.linspace(filtered_data.min(), filtered_data.max(), 100)
+                    
                 density = kde(x_values)
 
                 # Store the line object
