@@ -574,14 +574,39 @@ class GeneralInfoReader(NamelistReader):
     def _apply_default_filter(self):
         """Apply the default station filter based on geographical and temporal criteria."""
         if self.ref_data_type == 'stn' and self.sim_data_type == 'stn':
-            self.use_syear = pd.concat([self.stn_list['sim_syear'], self.stn_list['ref_syear'], pd.Series([self.syear] * len(self.stn_list))], axis=1).max(axis=1)
-            self.use_eyear = pd.concat([self.stn_list['sim_eyear'], self.stn_list['ref_eyear'], pd.Series([self.eyear] * len(self.stn_list))], axis=1).min(axis=1)
+            # Convert years to integers before comparison
+            sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
+            ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
+            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            self.use_syear = pd.concat([sim_years, ref_years, syear_series], axis=1).max(axis=1)
+            
+            sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
+            ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
+            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            self.use_eyear = pd.concat([sim_eyears, ref_eyears, eyear_series], axis=1).min(axis=1)
+        
         elif self.sim_data_type == 'stn':
-            self.use_syear = pd.concat([self.stn_list['sim_syear'], pd.Series([self.ref_syear] * len(self.stn_list)),pd.Series([self.syear] * len(self.stn_list))], axis=1).max(axis=1)
-            self.use_eyear = pd.concat([self.stn_list['sim_eyear'], pd.Series([self.ref_eyear] * len(self.stn_list)),pd.Series([self.eyear] * len(self.stn_list))], axis=1).min(axis=1)
+            sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
+            ref_syear = pd.Series([int(self.ref_syear)] * len(self.stn_list))
+            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            self.use_syear = pd.concat([sim_years, ref_syear, syear_series], axis=1).max(axis=1)
+            
+            sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
+            ref_eyear = pd.Series([int(self.ref_eyear)] * len(self.stn_list))
+            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            self.use_eyear = pd.concat([sim_eyears, ref_eyear, eyear_series], axis=1).min(axis=1)
+        
         elif self.ref_data_type == 'stn':
-            self.use_syear = pd.concat([self.stn_list['ref_syear'], pd.Series([self.sim_syear] * len(self.stn_list)),pd.Series([self.syear] * len(self.stn_list))], axis=1).max(axis=1)
-            self.use_eyear = pd.concat([self.stn_list['ref_eyear'], pd.Series([self.sim_eyear] * len(self.stn_list)),pd.Series([self.eyear] * len(self.stn_list))], axis=1).min(axis=1)
+            ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
+            sim_syear = pd.Series([int(self.sim_syear)] * len(self.stn_list))
+            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            self.use_syear = pd.concat([ref_years, sim_syear, syear_series], axis=1).max(axis=1)
+            
+            ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
+            sim_eyear = pd.Series([int(self.sim_eyear)] * len(self.stn_list))
+            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            self.use_eyear = pd.concat([ref_eyears, sim_eyear, eyear_series], axis=1).min(axis=1)
+
         self.stn_list['use_syear']=self.use_syear
         self.stn_list['use_eyear']=self.use_eyear
         self.stn_list['Flag'] = self.stn_list.apply(self._station_filter_criteria, axis=1)
