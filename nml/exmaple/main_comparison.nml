@@ -1,23 +1,23 @@
 &general
-  basename=LS3MIP
-  basedir=/share/home/dq013/xuqch3/Streamlit/case_test/       #
+  basename=CoLM2024_TE_GLDAS_CLM5
+  basedir=/share/home/dq013/zhwei/OpenBench/colm-test        #
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
-  compare_grid_res  = 1.25                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
-  syear             = 2003                         # must be integer
-  eyear             = 2009                            # must be integer
+  compare_grid_res  = 0.5                          # Degree; only work for self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
+  syear             = 2001                         # must be integer
+  eyear             = 2010                         # must be integer
   max_lat           = 90 
   min_lat           = -90
   max_lon           = 180          
   min_lon           = -180
   min_year          = 1.0
   reference_nml     = ./nml/ref.nml
-  simulation_nml    = ./nml/sim_LS3MIP.nml      #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
+  simulation_nml    = ./nml/sim_CoLM2024_TE_GLDAS_CLM5.nml      #./nml/sim_CoLM20X4vsCLM5.nml #./nml/sim_CoLM20X4vsCLM5-0921.nml
   statistics_nml    = ./nml/stats.nml
   figure_nml        = ./nml/figlib.nml
-  num_cores         = 16  #-1 # how many core will be used in Parallel computing
-  evaluation        = True # True #False
-  comparison        = False  #
+  num_cores         = 4  #-1 # how many core will be used in Parallel computing
+  evaluation        = False # True #False
+  comparison        = True  #
   statistics        = False
 /
 
@@ -40,13 +40,13 @@
 
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration   =True
-  Canopy_Transpiration =False
+  Evapotranspiration   =False
+  Canopy_Transpiration =True
   Canopy_Interception  =False
   Ground_Evaporation   =False
   Water_Evaporation    =False
   Soil_Evaporation     =False
-  Total_Runoff         =False
+  Total_Runoff         =True
   Terrestrial_Water_Storage_Anomaly=False
 
   ###Snow#### 
@@ -68,8 +68,8 @@
 
   #*******************  Radiation and Energy Cycle  *************
   Net_Radiation=False   
-  Latent_Heat=False
-  Sensible_Heat=False
+  Latent_Heat=True
+  Sensible_Heat=True
   Ground_Heat=False
   Albedo=False
   Surface_Upward_SW_Radiation=False
@@ -207,7 +207,7 @@ The_Ideal_Point_score     = False       #
 &comparsions
 #IGBP_groupby                    =   False
 #PFT_groupby                     =   False
-HeatMap                         =   False
+HeatMap                         =   True
 Taylor_Diagram                  =   True
 Target_Diagram                  =   True
 Kernel_Density_Estimate         =   True

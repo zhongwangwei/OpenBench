@@ -40,8 +40,8 @@
   Permafrost_ref_source                               = ILAMB_monthly
  
   ###Soil####
+  Surface_Soil_Moisture_ref_source                    = GLEAM4.1a_monthly           #GLEAM4.1a_monthly, ERA5LAND,ILAMB_monthly,SMAPL3
   Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.1a_monthly           #GLEAM4.1a_monthly
-  Surface_Soil_Moisture_ref_source                    = GLEAM4.1a_monthly           #GLEAM4.1a_monthly, ERA5LAND,ILAMB_monthly
                           
 
   ###  Groundwater ####
@@ -68,7 +68,7 @@
 
 
   ###urban
-  Urban_Latent_Heat_ref_source                         =  MCD43A3            # Grid: FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
+  Urban_Latent_Heat_ref_source                        =  MCD43A3            # Grid: FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
   Urban_Anthropogenic_Heat_Flux_ref_source            =  ETMonitor          #
   Urban_Albedo_ref_source                             =  AH4GUC             # DONG_AHE, China_AHE
   Urban_Surface_Temperature_ref_source                =  MODIST             # TRIMS,MODIST
@@ -132,7 +132,7 @@ GLEAM_hybird_PLUMBER2      = ./nml/Ref_variables_defination/Hydrology/GLEAM_hybi
 Ei_Lian_etal               = ./nml/Ref_variables_defination/Hydrology/Ei_Lian_etal.nml
 ET_Xu_etal_2024            = ./nml/Ref_variables_defination/Hydrology/ET_Xu_etal_2024.nml
 Transpiration_Li_etal2024  = ./nml/Ref_variables_defination/Hydrology/Transpiration_Li_etal2024.nml
-
+SMAPL3                     = ./nml/Ref_variables_defination/Hydrology/SMAP_L3.nml
 GRFR                       = ./nml/Ref_variables_defination/Hydrology/GRFR.nml
 GRADES                     = ./nml/Ref_variables_defination/Hydrology/GRADES.nml
 LORA                       = ./nml/Ref_variables_defination/Hydrology/LORA.nml
@@ -155,13 +155,10 @@ CropArea_CROPGRIDS         = ./nml/Ref_variables_defination/Crop/CropArea_CROPGR
 
 #Dam
 ResOpsUS                   = ./nml/Ref_variables_defination/Dam/ResOpsUS.nml
-
-
 #River
 GRDC                       = ./nml/Ref_variables_defination/River/GRDC.nml
 HydroWeb_river             = ./nml/Ref_variables_defination/River/HydroWeb_river.nml
 GIEMS_v2                   = ./nml/Ref_variables_defination/River/GIEMS_v2.nml
-
 #Lake
 HydroWeb_lake              = ./nml/Ref_variables_defination/River/HydroWeb_lake.nml
 GCOS                       = ./nml/Ref_variables_defination/lake/GCOS.nml
@@ -183,5 +180,4 @@ MSWX                      = ./nml/Ref_variables_defination/Forcing/MSWX.nml
 MSWEP                     = ./nml/Ref_variables_defination/Forcing/MSWEP.nml
 CERES_EBAF_Ed4.2          = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR               = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
-
 /
