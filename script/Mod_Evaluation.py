@@ -115,6 +115,9 @@ class Evaluation_grid(metrics, scores):
             option = self.fig_nml['make_geo_plot_index']
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
+            # Set default extend option if not specified
+            if 'extend' not in option:
+                option['extend'] = 'both'  # Default value
 
             try:
                 import math
@@ -469,6 +472,11 @@ class Evaluation_stn(metrics, scores):
                   'axes.unicode_minus': False,
                   'text.usetex': False}
         rcParams.update(params)
+        # Add check for empty or all-NaN array
+        if len(metric) == 0 or np.all(np.isnan(metric)):
+            print(f"Warning: No valid data for {varname}. Skipping plot.")
+            return
+            
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
@@ -1029,7 +1037,6 @@ class LC_groupby(metrics, scores):
             print(f"CDO remapping failed: {e}")
             print("Falling back to xarray-regrid remapping...")
             _IGBP_class_remap(self)
-
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
     def scenarios_PFT_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
