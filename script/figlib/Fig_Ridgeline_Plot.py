@@ -43,7 +43,9 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
                 global_min = global_min * 0 - 0.2
             elif varname in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                 global_max = global_max * 0 + 0.2
-
+            elif varname in ['KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
+                global_min = -1
+                global_max = 1
             # global_min = min(data.min() for data in datasets_filtered)
             # global_max = max(data.max() for data in datasets_filtered)
             x_range = np.linspace(global_min, global_max, 200)
