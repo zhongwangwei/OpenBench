@@ -1911,6 +1911,6 @@ def generate_markers(data_names, option):
             "edgeColor": color,
             "symbol": next(symbols),
             "size": option['MARKERSsize'],
-            "faceColor": 'none',
+            "faceColor": faceColor,
         }
     return markers
