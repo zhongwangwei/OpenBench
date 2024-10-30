@@ -8,3 +8,5 @@
 /script/regrid-dev/__pycache__
 /script/regrid/methods/__pycache__
 
+script/Evapotranspiration_sim_CoLM2024_f_fevpa.nc
+script/Evapotranspiration_ref_ET_Xu_etal_2024_ET.nc

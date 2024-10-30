@@ -58,8 +58,8 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
                    markerobs=option['markerobs'], markersizeobs=option['markersizeobs'],
                    )
 
-    #if not option['title']:
-    #    option['title'] = evaluation_item.replace('_', " ")
+    if not option['title']:
+        option['title'] = evaluation_item.replace('_', " ")
     #ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
     output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
@@ -2547,6 +2547,6 @@ def generate_markers(data_names, option):
             "edgeColor": color,
             "symbol": next(symbols),
             "size": option['MARKERSsize'],
-            "faceColor": 'none',
+            "faceColor": faceColor,
         }
     return markers
