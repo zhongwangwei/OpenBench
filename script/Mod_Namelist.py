@@ -317,7 +317,6 @@ class GeneralInfoReader(NamelistReader):
             sim_source (str): The simulation data source
             ref_source (str): The reference data source
         """
-        sim_source, ref_source = self._arrange_source_order(sim_nml, ref_nml, item, sim_source, ref_source)
         
         self.name = self.__class__.__name__
         self.freq_map = {
@@ -658,31 +657,6 @@ class GeneralInfoReader(NamelistReader):
         """Convert the instance attributes to a dictionary."""
         return self.__dict__
 
-    @staticmethod
-    def _arrange_source_order(sim_nml: Dict[str, Any], ref_nml: Dict[str, Any], 
-                            item: str, sim_source: str, ref_source: str) -> Tuple[str, str]:
-        """
-        Arrange the order of sources to prioritize station data.
-        If one source is station data, it will be moved to the front.
-
-        Args:
-            sim_nml: Simulation namelist
-            ref_nml: Reference namelist
-            item: The evaluation item
-            sim_source: Original simulation source
-            ref_source: Original reference source
-
-        Returns:
-            Tuple[str, str]: Arranged (sim_source, ref_source)
-        """
-        sim_is_stn = sim_nml[item].get(f'{sim_source}_data_type', '').lower() == 'stn'
-        ref_is_stn = ref_nml[item].get(f'{ref_source}_data_type', '').lower() == 'stn'
-
-        if sim_is_stn and not ref_is_stn:
-            # Swap sources to put station data first
-            return ref_source, sim_source
-        
-        return sim_source, ref_source
 
 
 

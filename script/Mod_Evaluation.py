@@ -576,6 +576,8 @@ class Evaluation_stn(metrics, scores):
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
             option = self.fig_nml['make_stn_plot_index']
+            if 'extend' not in self.fig_nml['make_geo_plot_index']:
+                self.fig_nml['make_geo_plot_index']['extend'] = 'both'  # Default value
             option['extend'] = self.fig_nml['make_geo_plot_index']['extend']
             print(f'plotting metric: {metric}')
             option['colorbar_label'] = metric.replace('_', ' ')
