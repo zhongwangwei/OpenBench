@@ -92,6 +92,9 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+        # Ensure sources are lists
+        sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
+        ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
         # Rearrange reference sources to put station data first
         ref_sources = sorted(ref_sources, key=lambda x: 0 if ref_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
         print(f'ref_sources: {ref_sources}')
@@ -99,9 +102,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
         print(f'sim_sources: {sim_sources}')
 
-        # Ensure sources are lists
-        sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
-        ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
+
 
         for ref_source in ref_sources:
             onetimeref=True
