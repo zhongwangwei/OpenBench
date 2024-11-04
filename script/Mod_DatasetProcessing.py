@@ -303,7 +303,11 @@ class BaseDatasetProcessing:
         return ds
 
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
-        return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
+        if (eyear < syear) or (ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59')) is None):
+            print(f"Error: Attempting checking the data time range.")
+            exit()
+        else:
+            return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
 
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
