@@ -47,10 +47,10 @@ def print_welcome_message():
     print("\033[1;32m" + "=" * 80 + "\033[0m")
     print("\n\033[1mThis system evaluate various land surface model outputs against reference data.\033[0m")
     print("\n\033[1;34mKey Features:\033[0m")
-    print("  • Multi-model support")
-    print("  • Comprehensive variable evaluation")
-    print("  • Advanced metrics and scoring")
-    print("  • Customizable benchmarking")
+    print("  * Multi-model support")
+    print("  * Comprehensive variable evaluation")
+    print("  * Advanced metrics and scoring")
+    print("  * Customizable benchmarking")
     print("\n\033[1;32m" + "=" * 80 + "\033[0m")
     print("\033[1;35mInitializing OpenBench Evaluation System...\033[0m")
    # input("\033[1mPress Enter to begin the benchmarking process...\033[0m")
@@ -207,7 +207,7 @@ def main():
     evaluation_items = nl.select_variables(main_nl['evaluation_items']).keys()
     metric_vars = nl.select_variables(main_nl['metrics']).keys()
     score_vars = nl.select_variables(main_nl['scores']).keys()
-    comparison_vars = nl.select_variables(main_nl['comparsions']).keys()
+    comparison_vars = nl.select_variables(main_nl['comparisons']).keys()
     statistic_vars = nl.select_variables(main_nl['statistics']).keys()
     
     # Update namelists
