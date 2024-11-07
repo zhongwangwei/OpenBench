@@ -1,0 +1,33 @@
+&general
+    Case_lib = Global_Grid_50km_PFT_VG, Global_Grid_50km_PC_VG, Global_Grid_50km_IGBP_VG, Global_Grid_2x2_PFT_VG_BGC, Global_Grid_2x2_PC_VG_BGC, Global_Grid_50km_PFT_VG-BB, Global_Grid_50km_PC_VG-BB, Global_cama
+/
+
+
+&def_nml
+    Global_Grid_50km_PFT_VG    = ./nml/user/Global_Grid_50km_PFT_VG.nml
+    Global_Grid_50km_PC_VG     = ./nml/user/Global_Grid_50km_PC_VG.nml
+    Global_Grid_50km_IGBP_VG   = ./nml/user/Global_Grid_50km_IGBP_VG.nml
+    Global_Grid_2x2_PFT_VG_BGC = ./nml/user/Global_Grid_2x2_PFT_VG_BGC.nml
+    Global_Grid_2x2_PC_VG_BGC  = ./nml/user/Global_Grid_2x2_PC_VG_BGC.nml
+    Global_Grid_50km_PFT_VG-BB = ./nml/user/Global_Grid_50km_PFT_VG-BB.nml
+    Global_Grid_50km_PC_VG-BB  = ./nml/user/Global_Grid_50km_PC_VG-BB.nml
+    Global_Grid_2x2_crop       = ./nml/user/Global_Grid_2x2_crop.nml
+    Global_cama                = ./nml/user/Global_cama.nml
+/
+
+
+&def_Mod
+    MATSIRO   = ./nml/Mod_variables_defination/MATSIRO.nml
+    JULES7    = ./nml/Mod_variables_defination/JULES7.nml
+    GLDAS2    = ./nml/Mod_variables_defination/GLDAS2.nml
+    VIC5      = ./nml/Mod_variables_defination/VIC5.nml
+    BCCAVIM   = ./nml/Mod_variables_defination/BCCAVIM.nml
+    LS3MIP    = ./nml/Mod_variables_defination/LS3MIP.nml
+    NoahMP5   = ./nml/Mod_variables_defination/NoahMP5.nml
+    CaMaFlood = ./nml/Mod_variables_defination/CaMaFlood.nml
+    CLM5      = ./nml/Mod_variables_defination/CLM5.nml
+    LEM2      = ./nml/Mod_variables_defination/LEM2.nml
+    CoLM      = ./nml/Mod_variables_defination/CoLM.nml
+/
+
+
