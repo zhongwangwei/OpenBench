@@ -204,7 +204,7 @@ Overall_Score             = True        # overall score from ILAMB
 The_Ideal_Point_score     = False       #
 /
 
-&comparsions
+&comparisons
 #IGBP_groupby                    =   False
 #PFT_groupby                     =   False
 HeatMap                         =   False
