@@ -118,7 +118,7 @@ suffix            =  _daymax_2m_temperature
 sub_dir           =  air_temperature_2m
 varname           =  t2m
 varunit           =  K
-prefix            =  ERA5LAND_
+prefix            =  ERA5Land_
 suffix            =  _daymin_2m_temperature
 /
 
@@ -126,7 +126,7 @@ suffix            =  _daymin_2m_temperature
 sub_dir           =  surface_solar_radiation_downwards
 varname           =  ssrd
 varunit           =  w m-2
-prefix            =  ERA5LAND_
+prefix            =  ERA5Land_
 suffix            =  _ssrd_1D_0p1
 /
 
@@ -134,7 +134,7 @@ suffix            =  _ssrd_1D_0p1
 sub_dir           =  surface_thermal_radiation_downwards
 varname           =  strd
 varunit           =  w m-2
-prefix            =  ERA5LAND_
+prefix            =  ERA5Land_
 suffix            =  _strd_1D_0p1
 /
 
@@ -142,7 +142,7 @@ suffix            =  _strd_1D_0p1
 sub_dir           =  specific_humidity
 varname           =  Q
 varunit           =  unitless
-prefix            =  ERA5LAND_
+prefix            =  ERA5Land_
 suffix            =  _Q_1D_0p1
 /
 
@@ -150,6 +150,6 @@ suffix            =  _Q_1D_0p1
 sub_dir           =  total_precipitation
 varname           =  tp
 varunit           =  m hr-1
-prefix            =  ERA5LAND_
+prefix            =  ERA5Land_
 suffix            =  _tp_1D_0p1
 /
