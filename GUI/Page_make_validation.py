@@ -476,9 +476,9 @@ class make_initional:
 
         # showing for detail ===============================================
         st.session_state.casepath = f'{os.path.join(General["basedir"], General["basename"])}'
-        if not General["reference_nml"] or st.session_state.step1_initial == 'setting':
+        if not General["reference_nml"] or st.session_state.step1_initial == 'Setting':
             General["reference_nml"] = f"{st.session_state.openbench_path}/nml/ref-{General['basename']}.nml"
-        if not General["simulation_nml"] or st.session_state.step1_initial == 'setting':
+        if not General["simulation_nml"] or st.session_state.step1_initial == 'Setting':
             General["simulation_nml"] = f"{st.session_state.openbench_path}/nml/sim-{General['basename']}.nml"
         General["statistics_nml"] = f"{st.session_state.openbench_path}/nml/stats.nml"
         General["figure_nml"] = f"{st.session_state.openbench_path}/nml/figlib.nml"
@@ -537,13 +537,18 @@ class make_initional:
 
         def get_os_type(path):
             os_type = False
-            if ('\\' in path) and (':' in path):
-                if sys.platform.startswith('win'):
+            if path:
+                if ('\\' in path) and (':' in path):
+                    if sys.platform.startswith('win'):
+                        os_type = True
+                elif ('/' in path) & (path[0] == '/'):
+                    if sys.platform.startswith('linux') | (not sys.platform.startswith('win')):
+                        os_type = True
+                elif (('./' in path)|('.\\' in path)) & (path[0] == '.'):
                     os_type = True
-            elif ('/' in path) & (path[0] == '/'):
-                if sys.platform.startswith('linux') | (not sys.platform.startswith('win')):
-                    os_type = True
-            return os_type
+                return os_type
+            else:
+                return os_type
 
         basedir_type = get_os_type(Generals['basedir'])
         if not basedir_type:

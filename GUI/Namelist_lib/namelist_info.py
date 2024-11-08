@@ -41,7 +41,7 @@ class initial_setting():
     def generals(self):
         General = {
             'basename': '',
-            'basedir': '/media/zhwei/data02/Streamlit/case_test',
+            'basedir': '',
             'compare_tim_res': 'month',
             'compare_tzone': 0.0,
             'compare_grid_res': 0.25,
@@ -52,8 +52,8 @@ class initial_setting():
             'min_lat': -90.0,
             'max_lon': 180.0,
             'min_lon': -180.0,
-            'reference_nml': './ref.nml',
-            'simulation_nml': './sim.nml',
+            'reference_nml': '',
+            'simulation_nml': '',
             'num_cores': 8,
             'evaluation': True,
             'comparison': False,
