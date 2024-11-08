@@ -4162,6 +4162,7 @@ class make_simulation():
                         make()
                 if st.session_state.get('switch_button1', True):
                     st.session_state.step4_set = True
+                    st.session_state.step3 = True
                     st.session_state.switch_button1_onclick = +1
                     st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 4
 
