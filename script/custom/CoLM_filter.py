@@ -284,3 +284,14 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varunit='mm'
       except:
          print('Terrestrial Water Storage Change calculation processing ERROR!!!')
+
+
+   if info.item == "Surface_Wind_Speed":
+      try:
+            ds['Surface_Wind_Speed']= (ds['f_us10m']**2+ds['f_vs10m']**2)**0.5
+            info.sim_varname = 'Surface_Wind_Speed'
+            info.sim_varunit = 'm s-1 wind'
+      except Exception as e:
+         print(f"Surface Wind Speed calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['Surface_Wind_Speed']

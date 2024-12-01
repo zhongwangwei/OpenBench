@@ -1,0 +1,31 @@
+&general
+    Gross_Primary_Productivity_sim_source     = GLDAS2,TE,CLM5,CoLM2024
+    Evapotranspiration_sim_source             = GLDAS2,TE,CLM5,CoLM2024
+    Canopy_Transpiration_sim_source           = GLDAS2,TE,CLM5,CoLM2024  
+    Canopy_Interception_sim_source            = GLDAS2,TE,CLM5,CoLM2024
+    Total_Runoff_sim_source                   = GLDAS2,TE,CLM5,CoLM2024
+    Latent_Heat_sim_source                    = GLDAS2,TE,CLM5,CoLM2024
+    Sensible_Heat_sim_source                  = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Soil_Moisture_sim_source          = GLDAS2,TE,CLM5,CoLM2024
+    Root_Zone_Soil_Moisture_sim_source        = GLDAS2,TE,CLM5,CoLM2024
+    Net_Radiation_sim_source                  = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Upward_SW_Radiation_sim_source    = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Soil_Temperature_sim_source       = CoLM2024    #GLDAS2,TE,CLM5,CoLM2024
+    Ground_Heat_sim_source                    = GLDAS2,TE,CLM5,CoLM2024
+    Albedo_sim_source                         = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Upward_LW_Radiation_sim_source    = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Net_SW_Radiation_sim_source       = GLDAS2,TE,CLM5,CoLM2024
+    Surface_Net_LW_Radiation_sim_source       = GLDAS2,TE,CLM5,CoLM2024     
+    Surface_Net_SW_Radiation_sim_source       = GLDAS2,TE,CLM5,CoLM2024     
+    Surface_Downward_SW_Radiation_sim_source  = GLDAS2,TE,CLM5,CoLM2024   
+    Surface_Downward_LW_Radiation_sim_source  = GLDAS2,TE,CLM5,CoLM2024   
+    Surface_Wind_Speed_sim_source             = CoLM2024
+/
+
+&def_nml
+TE=./nml/user/CoLM2024_TE_GLDAS_CLM5/TE.nml
+GLDAS2=./nml/user/CoLM2024_TE_GLDAS_CLM5/GLDAS2.nml
+CLM5=./nml/user/CoLM2024_TE_GLDAS_CLM5/CLM5.nml
+CoLM2024=./nml/user/CoLM2024_TE_GLDAS_CLM5/CoLM2024.nml
+/
+

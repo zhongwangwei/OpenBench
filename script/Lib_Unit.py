@@ -46,9 +46,9 @@ class UnitProcessing:
 				'm2 m-2': lambda x: x,
 				'g g-1': lambda x: x,
 			},
-			'K': {
-				'C': lambda x: x + 273.15,
-				'F': lambda x: (x - 32) * 5 / 9 + 273.15,
+			'k': {
+				'c': lambda x: x + 273.15,
+				'f': lambda x: (x - 32) * 5 / 9 + 273.15,
 			},
 			'm3 s-1': {
 				'm3 day-1': lambda x: x / 86400,
@@ -74,6 +74,10 @@ class UnitProcessing:
 			},
 			'km2': {
 				'm2': lambda x: x / 1.e6,
+			},
+
+			'm s-1 wind': {
+				'km h-1': lambda x: x * 3.6,
 			},
 		}
 		print(f'Converting {input_unit} to base unit...')
