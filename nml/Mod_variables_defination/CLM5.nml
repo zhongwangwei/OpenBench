@@ -335,5 +335,8 @@ varunit = mm s-1
 varname = TSA
 varunit = K
 /
-
+&Surface_Wind_Speed
+varname=
+varunit=m s-1 wind
+/
 ##################################################################################

@@ -9,7 +9,7 @@
   Surface_Net_SW_Radiation_ref_source       = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2                                #stn: PLUMBER2 
   Surface_Net_LW_Radiation_ref_source       = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR                     #stn: PLUMBER2
   Albedo_ref_source                         = ILAMB_monthly          #Grid: ILAMB_monthly,                               #stn: PLUMBER2  
-  Surface_Soil_Temperature_ref_source       = HOMTS
+  Surface_Soil_Temperature_ref_source       = CLM5 #HOMTS
   Root_Zone_Soil_Temperature_ref_source     = HOMTS     
   #*******************Ecosystem and Carbon Cycle****************
   Gross_Primary_Productivity_ref_source     = FLUXCOM-X-BASE_monthly         # Grid: ILAMB_monthly, FLUXCOM, FLUXCOM-X-BASE_monthly,    #stn: PLUMBER2
@@ -104,6 +104,7 @@
   Surface_Relative_Humidity_ref_source                =                          # Grid: CRU-TS4.08,MSWX,ERA5LAND
   Surface_Specific_Humidity_ref_source                =  ERA5LAND                # Grid: MSWX,ERA5LAND
   Precipitation_ref_source                            =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND, MSWEP2.8,GPCPv3.2_monthly,GPCPv3.2_daily
+  Surface_Wind_Speed_ref_source                       =  CLM5             # Grid: CRU-TS4.08,MSWX,ERA5LAND
 / 
 
 
@@ -180,4 +181,7 @@ MSWX                      = ./nml/Ref_variables_defination/Forcing/MSWX.nml
 MSWEP                     = ./nml/Ref_variables_defination/Forcing/MSWEP.nml
 CERES_EBAF_Ed4.2          = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR               = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
+
+#Defination
+CLM5                      = ./nml/Ref_variables_defination/Defination/CLM5.nml
 /
