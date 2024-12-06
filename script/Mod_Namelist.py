@@ -431,6 +431,8 @@ class GeneralInfoReader(NamelistReader):
             except KeyError:
                 pass
         self.sim_model = str(sim_nml[item][f'{sim_source}_model'])
+        setattr(self, f'{source_type}_grid_res', float(nml[item][f'{source}_grid_res']))
+
 
     def _process_data_types(self):
         """Process and evaluate data types for simulation and reference data."""

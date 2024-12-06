@@ -23,10 +23,11 @@ def process_station(station, info, min_uparea, max_uparea):
         result['ref_dir'] = file_path
         #print(f"Processing station {int(station['ID'])}...")
         with xr.open_dataset(file_path) as df:
-            result['obs_syear'] = df["time.year"].values[0]
-            result['obs_eyear'] = df["time.year"].values[-1]
-            result['use_syear'] = max(result['obs_syear'], info.sim_syear, info.syear)
-            result['use_eyear'] = min(result['obs_eyear'], info.sim_eyear, info.eyear)
+            print(f"Processing station {int(station['ID'])}...")
+            result['obs_syear'] = int(df["time.year"].values[0])
+            result['obs_eyear'] = int(df["time.year"].values[-1])
+            result['use_syear'] = max(result['obs_syear'], int(info.sim_syear), int(info.syear))
+            result['use_eyear'] = min(result['obs_eyear'], int(info.sim_eyear), int(info.eyear))
             if ((result['use_eyear'] - result['use_syear'] >= info.min_year) and
                 (station['lon'] >= info.min_lon) and
                 (station['lon'] <= info.max_lon) and
@@ -55,6 +56,7 @@ def filter_GRDC(info):
 
    ind = station_list[station_list['Flag'] == True].index
    data_select = station_list.loc[ind]
+    
    if info.sim_grid_res == 0.25:
       lat0 = np.arange(89.875, -90, -0.25)
       lon0 = np.arange(-179.875, 180, 0.25)
