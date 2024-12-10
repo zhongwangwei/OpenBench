@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/Mod_variables_defination/CaMaFlood.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Month
+   dir = ./data/simulation/discharge/SIMTOP
+   fulllist =
+   tim_res =  day
+   grid_res =  0.1
+   suffix = 
+   prefix = US-test0_hist_cama_
+   syear =  1980
+   eyear =  2015
+/

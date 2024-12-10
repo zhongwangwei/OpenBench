@@ -23,9 +23,9 @@
 /
 
 &def_nml
-TE=/share/home/dq013/zhwei/OpenBench/20241028/nml/user/CoLM2024_TE_GLDAS_CLM5/TE.nml
-GLDAS2=/share/home/dq013/zhwei/OpenBench/20241028/nml/user/CoLM2024_TE_GLDAS_CLM5/GLDAS2.nml
-CLM5=/share/home/dq013/zhwei/OpenBench/20241028/nml/user/CoLM2024_TE_GLDAS_CLM5/CLM5.nml
-CoLM2024=/share/home/dq013/zhwei/OpenBench/20241028/nml/user/CoLM2024_TE_GLDAS_CLM5/CoLM2024.nml
+TE=./nml/user/CoLM2024_TE_GLDAS_CLM5/TE.nml
+GLDAS2=./nml/user/CoLM2024_TE_GLDAS_CLM5/GLDAS2.nml
+CLM5=./nml/user/CoLM2024_TE_GLDAS_CLM5/CLM5.nml
+CoLM2024=./nml/user/CoLM2024_TE_GLDAS_CLM5/CoLM2024.nml
 /
 

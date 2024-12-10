@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/stn_ref/Dam_River_Lake/StreamFlow/GRDC/
+   root_dir          =  ./data/reference/stn_ref/Dam_River_Lake/StreamFlow/GRDC/
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -18,7 +18,7 @@ suffix            =
 prefix            =   
 fulllist          =  
 max_uparea        =  50000000000.0   
-min_uparea        =  10.0  
+min_uparea        =  1000.0  
 data_groupby      =  single
 /
 

@@ -40,7 +40,8 @@ class BaseDatasetProcessing:
         for attr in essential_attrs:
             if not hasattr(self, attr):
                 setattr(self, attr, config.get(attr, 'M'))
-                print(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
+                if self.debug_mode:
+                    print(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
@@ -106,6 +107,9 @@ class BaseDatasetProcessing:
             lat=ds.lat.values
             data=ds.values
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
+            # Check data dimension, if it is 2-dimensional, reshape to 3-dimensional
+            if data.ndim == 2:
+                data = data.reshape((1, data.shape[0], data.shape[1]))
             try:
                 ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
             except:
@@ -237,14 +241,28 @@ class BaseDatasetProcessing:
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             if time_unit.lower() in ['m', 'month', 'mon']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
+                try:
+                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
+                except:
+                    ds['time'] = time_index
             elif time_unit.lower() in ['d', 'day', '1d', '1day']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
+                try:
+                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
+                except:
+                    ds['time'] = time_index
             elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-            
+                try:
+                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
+                except:
+                    ds['time'] = time_index
+            elif time_unit.lower() in ['y', 'year', '1y', '1year']:
+                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-01-01T00:00:00'))
+                try:
+                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-01-01T00:00:00'))
+                except:
+                    ds['time'] = time_index
             time_var = ds.time
             time_values = time_var
             # Create a complete time series based on the specified time frequency and range 
@@ -617,8 +635,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
         
         var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
-        logging.info(f"Processing {var_file} for year {year}")
-        logging.info(f"Processing {data_source} data for year {year}")
+        if self.debug_mode:
+            logging.info(f"Processing {var_file} for year {year}")
+            logging.info(f"Processing {data_source} data for year {year}")
+
         with xr.open_dataset(var_file) as data:
 
             data = self.preprocess_grid_data(data)
