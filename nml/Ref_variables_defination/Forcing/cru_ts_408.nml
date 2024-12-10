@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Forcing/cru_ts4.08
+   root_dir          =  ./data/reference/grid_ref/Forcing/cru_ts4.08
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

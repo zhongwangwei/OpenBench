@@ -10,11 +10,15 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m', 'month', 'mon']:
          pass
+      elif time_unit.lower() in ['y', 'year', '1y', '1year']:
+         pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-         print('Adjusting time values for daily CoLM output...')
+         if self.debug_mode:
+            print('Adjusting time values for daily CoLM output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)      
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-         print('Adjusting time values for yearly CoLM output ...')
+         if self.debug_mode:
+            print('Adjusting time values for yearly CoLM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
       print('tim_res error')
@@ -23,14 +27,16 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
 
 def filter_CoLM(info,ds):   #update info as well
    if info.item == "Crop_Yield_Corn":
-      ds = ds.fillna(0)
       try:
-         ds['Crop_Yield_Corn']=(((ds['f_cropprodc_rainfed_temp_corn']*ds['area_rainfed_temp_corn'])+
-                                    (ds['f_cropprodc_irrigated_temp_corn']*ds['area_irrigated_temp_corn']) +
-                                    (ds['f_cropprodc_rainfed_trop_corn']*ds['area_rainfed_trop_corn']) +
-                                    (ds['f_cropprodc_irrigated_trop_corn']*ds['area_irrigated_trop_corn']))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn']+ds['area_irrigated_temp_corn']+ds['area_rainfed_trop_corn']+
-                                    ds['area_irrigated_trop_corn'])*(3600.*24.*365.))/100.
+         ds['Crop_Yield_Corn'] = (
+            ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0)) +
+             (ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0)) +
+             (ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0)) +
+             (ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0))) *
+            (10**6) * 2.5 * (10**(-6)) /
+            (ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0) +
+             ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0)) *
+            (3600. * 24. * 365.)) / 100.
       except:
          print("Missing variables:")
          missing_vars = []
@@ -48,20 +54,19 @@ def filter_CoLM(info,ds):   #update info as well
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Corn'] =  ds['Crop_Yield_Corn'].assign_attrs(varunit='t ha-1')
-
-      info.sim_varname='Crop_Yield_Corn'
+      info.sim_varname=['Crop_Yield_Corn']
       info.sim_varunit='t ha-1'
       return info, ds['Crop_Yield_Corn']
 
    if info.item == "Crop_Yield_Maize":
       ds = ds.fillna(0)
       try:
-         ds['Crop_Yield_Maize']=(((ds['f_cropprodc_rainfed_temp_corn']*ds['area_rainfed_temp_corn'])+
-                                    (ds['f_cropprodc_irrigated_temp_corn']*ds['area_irrigated_temp_corn']) +
-                                    (ds['f_cropprodc_rainfed_trop_corn']*ds['area_rainfed_trop_corn']) +
-                                    (ds['f_cropprodc_irrigated_trop_corn']*ds['area_irrigated_trop_corn']))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn']+ds['area_irrigated_temp_corn']+ds['area_rainfed_trop_corn']+
-                                    ds['area_irrigated_trop_corn'])*(3600.*24.*365.))/100.
+         ds['Crop_Yield_Maize']=(((ds['f_cropprodc_rainfed_temp_corn'].fillna(0)*ds['area_rainfed_temp_corn'].fillna(0))+
+                                    (ds['f_cropprodc_irrigated_temp_corn'].fillna(0)*ds['area_irrigated_temp_corn'].fillna(0)) +
+                                    (ds['f_cropprodc_rainfed_trop_corn'].fillna(0)*ds['area_rainfed_trop_corn'].fillna(0)) +
+                                    (ds['f_cropprodc_irrigated_trop_corn'].fillna(0)*ds['area_irrigated_trop_corn'].fillna(0)))*
+                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn'].fillna(0)+ds['area_irrigated_temp_corn'].fillna(0)+ds['area_rainfed_trop_corn'].fillna(0)+
+                                    ds['area_irrigated_trop_corn'].fillna(0))*(3600.*24.*365.))/100.
       except:
          print("Missing variables:")
          missing_vars = []
@@ -80,19 +85,19 @@ def filter_CoLM(info,ds):   #update info as well
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Maize'] =  ds['Crop_Yield_Maize'].assign_attrs(varunit='t ha-1')
 
-      info.sim_varname='Crop_Yield_Maize'
+      info.sim_varname=['Crop_Yield_Maize']
       info.sim_varunit='t ha-1'
       return info, ds['Crop_Yield_Maize']
 
    if info.item == "Crop_Yield_Soybean":
       ds = ds.fillna(0)
       try:
-         ds['Crop_Yield_Soybean']=(((ds['f_cropprodc_rainfed_temp_soybean']*ds['area_rainfed_temp_soybean'])+
-                                    (ds['f_cropprodc_irrigated_temp_soybean']*ds['area_irrigated_temp_soybean']) +
-                                    (ds['f_cropprodc_rainfed_trop_soybean']*ds['area_rainfed_trop_soybean']) +
-                                    (ds['f_cropprodc_irrigated_trop_soybean']*ds['area_irrigated_trop_soybean']))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_soybean']+ds['area_irrigated_temp_soybean']+ds['area_rainfed_trop_soybean']+
-                                    ds['area_irrigated_trop_soybean'])*(3600.*24.*365.))/100.
+         ds['Crop_Yield_Soybean']=(((ds['f_cropprodc_rainfed_temp_soybean'].fillna(0)*ds['area_rainfed_temp_soybean'].fillna(0))+
+                                    (ds['f_cropprodc_irrigated_temp_soybean'].fillna(0)*ds['area_irrigated_temp_soybean'].fillna(0)) +
+                                    (ds['f_cropprodc_rainfed_trop_soybean'].fillna(0)*ds['area_rainfed_trop_soybean'].fillna(0)) +
+                                    (ds['f_cropprodc_irrigated_trop_soybean'].fillna(0)*ds['area_irrigated_trop_soybean'].fillna(0)))*
+                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_soybean'].fillna(0)+ds['area_irrigated_temp_soybean'].fillna(0)+ds['area_rainfed_trop_soybean'].fillna(0)+
+                                    ds['area_irrigated_trop_soybean'].fillna(0))*(3600.*24.*365.))/100.
       except:
          print("Missing variables:")
          missing_vars = []
@@ -111,7 +116,7 @@ def filter_CoLM(info,ds):   #update info as well
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Soybean'] =  ds['Crop_Yield_Soybean'].assign_attrs(varunit='t ha-1')
 
-      info.sim_varname='Crop_Yield_Soybean'
+      info.sim_varname=['Crop_Yield_Soybean']
       info.sim_varunit='t ha-1'
       return info, ds['Crop_Yield_Soybean']
 
@@ -136,19 +141,19 @@ def filter_CoLM(info,ds):   #update info as well
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Rice'] =  ds['Crop_Yield_Rice'].assign_attrs(varunit='t ha-1')
 
-      info.sim_varname='Crop_Yield_Rice'
+      info.sim_varname=['Crop_Yield_Rice']
       info.sim_varunit='t ha-1'
       return info, ds['Crop_Yield_Rice']
 
    if info.item == "Crop_Yield_Wheat":
       ds = ds.fillna(0)
       try:
-         ds['Crop_Yield_Wheat']=(((ds['f_cropprodc_rainfed_spwheat']*ds['area_rainfed_spwheat'])+
-                                    (ds['f_cropprodc_irrigated_spwheat']*ds['area_irrigated_spwheat'])+
-                                    (ds['f_cropprodc_rainfed_wtwheat']*ds['area_rainfed_wtwheat'])+
-                                    (ds['f_cropprodc_irrigated_wtwheat']*ds['area_irrigated_wtwheat']))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_spwheat']+ds['area_irrigated_spwheat']+
-                                    ds['area_rainfed_wtwheat']+ds['area_irrigated_wtwheat'])*(3600.*24.*365.))/100.
+         ds['Crop_Yield_Wheat']=(((ds['f_cropprodc_rainfed_spwheat'].fillna(0)*ds['area_rainfed_spwheat'].fillna(0))+
+                                    (ds['f_cropprodc_irrigated_spwheat'].fillna(0)*ds['area_irrigated_spwheat'].fillna(0))+
+                                    (ds['f_cropprodc_rainfed_wtwheat'].fillna(0)*ds['area_rainfed_wtwheat'].fillna(0))+
+                                    (ds['f_cropprodc_irrigated_wtwheat'].fillna(0)*ds['area_irrigated_wtwheat'].fillna(0)))*
+                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_spwheat'].fillna(0)+ds['area_irrigated_spwheat'].fillna(0)+
+                                    ds['area_rainfed_wtwheat'].fillna(0)+ds['area_irrigated_wtwheat'].fillna(0))*(3600.*24.*365.))/100.
       except:
          print("Missing variables:")
          missing_vars = []
@@ -167,14 +172,14 @@ def filter_CoLM(info,ds):   #update info as well
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Wheat'] =  ds['Crop_Yield_Wheat'].assign_attrs(varunit='t ha-1')
 
-      info.sim_varname='Crop_Yield_Wheat'
+      info.sim_varname=['Crop_Yield_Wheat']
       info.sim_varunit='t ha-1'
       return info, ds['Crop_Yield_Wheat']
 
    if info.item == "Canopy_Interception":
       try:
          ds['Canopy_Interception']=ds['f_fevpl']-ds['f_etr']
-         info.sim_varname='Canopy_Interception'
+         info.sim_varname=['Canopy_Interception']
          info.sim_varunit=' mm s-1'
       except:
          print('canopy interception evaporation calculation processing ERROR!!!')
@@ -185,7 +190,7 @@ def filter_CoLM(info,ds):   #update info as well
          if 'Precipitation' in ds.variables:
                # Use method='nearest' to select the nearest value in the 'soil' index
                ds['Precipitation'] = ds['Precipitation']
-               info.sim_varname = 'Precipitation'
+               info.sim_varname = ['Precipitation']
                info.sim_varunit = 'mm s-1'
          else:
                ds['Precipitation']=ds['f_xy_rain']+ds['f_xy_snow']
@@ -197,7 +202,7 @@ def filter_CoLM(info,ds):   #update info as well
    if info.item == "Surface_Net_SW_Radiation":
       try:
          ds['Surface_Net_SW_Radiation']=ds['f_xy_solarin']- ds['f_sr']
-         info.sim_varname='Surface_Net_SW_Radiation'
+         info.sim_varname=['Surface_Net_SW_Radiation']
          info.sim_varunit='W m-2'
       except:
          print('Surface Net SW Radiation calculation processing ERROR!!!')
@@ -206,7 +211,7 @@ def filter_CoLM(info,ds):   #update info as well
    if info.item == "Surface_Net_LW_Radiation":
       try:
          ds['Surface_Net_LW_Radiation']=ds['f_xy_frl']-ds['f_olrg']
-         info.sim_varname='Surface_Net_LW_Radiation'
+         info.sim_varname=['Surface_Net_LW_Radiation']
          info.sim_varunit='W m-2'
       except:
          print('Surface Net LW Radiation calculation processing ERROR!!!')
@@ -222,7 +227,7 @@ def filter_CoLM(info,ds):   #update info as well
                ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
                                      ds['f_wliq_soisno'].isel(soil_snow_lev=6))/0.0626/1000.0
       
-            info.sim_varname = 'f_wliq_soisno'
+            info.sim_varname = ['f_wliq_soisno']
             info.sim_varunit = 'unitless'
 
       except Exception as e:
@@ -253,7 +258,7 @@ def filter_CoLM(info,ds):   #update info as well
                                     ds['f_wliq_soisno'].isel(soil_snow_lev=11)+
                                     ds['f_wliq_soisno'].isel(soil_snow_lev=12)*0.31
                                           )/1000.0               
-            info.sim_varname = 'f_wliq_soisno'
+            info.sim_varname = ['f_wliq_soisno']
             info.sim_varunit = 'unitless'
       except Exception as e:
          print(f"Surface soil moisture calculation processing ERROR: {e}")
@@ -263,7 +268,7 @@ def filter_CoLM(info,ds):   #update info as well
       try:
             ds['Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
 
-            info.sim_varname = 'Albedo'
+            info.sim_varname = ['Albedo']
             info.sim_varunit = 'unitless'
       except Exception as e:
          print(f"Surface Albedo calculation processing ERROR: {e}")
@@ -280,18 +285,32 @@ def filter_CoLM(info,ds):   #update info as well
          ds['Terrestrial_Water_Storage_Change']=ds['f_wat'].copy()
          ds['Terrestrial_Water_Storage_Change'][0,:,:]=np.nan
          ds['Terrestrial_Water_Storage_Change'][1:,:,:]=tmp
-         info.sim_varname='Terrestrial_Water_Storage_Change'
+         info.sim_varname=['Terrestrial_Water_Storage_Change']
          info.sim_varunit='mm'
       except:
          print('Terrestrial Water Storage Change calculation processing ERROR!!!')
+         return info, None
+      return info, ds['Terrestrial_Water_Storage_Change']
 
 
    if info.item == "Surface_Wind_Speed":
       try:
             ds['Surface_Wind_Speed']= (ds['f_us10m']**2+ds['f_vs10m']**2)**0.5
-            info.sim_varname = 'Surface_Wind_Speed'
+            info.sim_varname = ['Surface_Wind_Speed']
             info.sim_varunit = 'm s-1 wind'
       except Exception as e:
          print(f"Surface Wind Speed calculation processing ERROR: {e}")
          return info, None
       return info, ds['Surface_Wind_Speed']
+
+
+   if info.item == "Urban_Anthropogenic_Heat_Flux":
+      try:
+         #f_fhac+f_fach+f_fhah+f_fvehc+f_fmeta+f_fwst
+         ds['Urban_Anthropogenic_Heat_Flux']=ds['f_fhac']+ds['f_fach']+ds['f_fhah']+ds['f_fvehc']+ds['f_fmeta']+ds['f_fwst']
+         info.sim_varname=['Urban_Anthropogenic_Heat_Flux']
+         info.sim_varunit='W m-2'
+      except Exception as e:
+         print(f"Urban Anthropogenic Heat Flux calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['Urban_Anthropogenic_Heat_Flux']

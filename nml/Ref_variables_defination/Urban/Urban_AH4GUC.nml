@@ -1,19 +1,20 @@
 &general
-   root_dir          =   
-   timezone          =   
-   data_type         =   
-   data_groupby      =   
-   tim_res           =   
-   grid_res          =   
-   syear             =   2010
-   eyear             =   2010
+   root_dir          =   ./data/reference/grid_ref/Urban/AH4GUC
+   timezone          =  UTC  
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.5
+   syear             =  2010
+   eyear             =  2010
+   prefix            =  AH4GUC_2010_monmean_settime
+   suffix            =  
 /
 
 &Urban_Anthropogenic_Heat_Flux
 varname           =  AHE
 varunit           =  w m-2
-prefix            =   
-suffix            =  
+
 /
 #Reference:
 #Varquez, A. C. G., Kiyomoto, S., Khanh, D. N., & Kanda, M. (2021).

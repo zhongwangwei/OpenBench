@@ -1,7 +1,7 @@
 &general
   #*******************  Radiation and Energy Cycle  *************
   Sensible_Heat_ref_source                  = GLEAM4.1a_monthly      #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND，GLEAM4.1a_monthly  #stn: PLUMBER2
-  Latent_Heat_ref_source                    = ILAMB_monthly          #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND                     #stn: PLUMBER2
+  Latent_Heat_ref_source                    = ILAMB_monthly,FLUXCOM,ERA5LAND,PLUMBER2             #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND                     #stn: PLUMBER2
   Ground_Heat_ref_source                    = ILAMB_monthly          #Grid: ILAMB_monthly，#stn:PLUMBER2
   Net_Radiation_ref_source                  = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, FLUXCOM, ERA5LAND,CERES_EBAF_Ed4.2,Rn-Xu2022          #stn: PLUMBER2
   Surface_Upward_SW_Radiation_ref_source    = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2                                     #stn: PLUMBER2
@@ -26,8 +26,8 @@
   
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration_ref_source                       = ET_Xu_etal_2024            # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
-  Canopy_Transpiration_ref_source                     = Transpiration_Li_etal2024  # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024   stn: Transpiration_GLEAM_hybird
+  Evapotranspiration_ref_source                       = GLEAM4.1a_monthly #,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024,GLEAM_hybird_PLUMBER2   # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
+  Canopy_Transpiration_ref_source                     = GLEAM4.1a_monthly  # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024   stn: Transpiration_GLEAM_hybird
   Canopy_Interception_ref_source                      = GLEAM4.1a_monthly          # Grid: Ei_Lian_etal,GLEAM4.1a_monthly
   Open_Water_Evaporation_ref_source                   = GLEAM4.1a_monthly          # Grid: 
   Soil_Evaporation_ref_source                         = GLEAM4.1a_monthly          # Grid: 
@@ -69,8 +69,8 @@
 
   ###urban
   Urban_Latent_Heat_ref_source                        =  MCD43A3            # Grid: FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
-  Urban_Anthropogenic_Heat_Flux_ref_source            =  ETMonitor          #
-  Urban_Albedo_ref_source                             =  AH4GUC             # DONG_AHE, China_AHE
+  Urban_Anthropogenic_Heat_Flux_ref_source            =  AH4GUC             #ETMonitor
+  Urban_Albedo_ref_source                             =               # DONG_AHE, China_AHE,AH4GUC
   Urban_Surface_Temperature_ref_source                =  MODIST             # TRIMS,MODIST
   Urban_Air_Temperature_max_ref_source                =  Zhang_et_al_2022   #
   Urban_Air_Temperature_min_ref_source                =  Zhang_et_al_2022   #

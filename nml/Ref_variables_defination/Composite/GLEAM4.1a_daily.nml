@@ -1,5 +1,5 @@
 &general
-  root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM/v4.1/v4.1a/daily/
+  root_dir          =  ./data/reference/grid_ref/GLEAM/v4.1/v4.1a/daily/
   timezone          =  0
   data_type         =  grid
   data_groupby      =  Year
@@ -41,7 +41,7 @@ suffix            =  _GLEAM_v4.1a
 &Canopy_Transpiration
 #You could also define it seperately
 #If you define it seperately, the &general setting will be ignored in this variable
-#dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+#dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year
@@ -56,7 +56,7 @@ suffix            =  _GLEAM_v4.1a
 /
 
 &Open_Water_Evaporation
-dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year
@@ -71,7 +71,7 @@ suffix            =  _GLEAM_v4.1a
 /
 
 &Surface_Condensation
-dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year
@@ -86,7 +86,7 @@ suffix            =  _GLEAM_v4.1a
 /
 
 &Root_Zone_Soil_Moisture
-dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year
@@ -101,7 +101,7 @@ suffix            =  _GLEAM_v4.1a
 /
 
 &Surface_Soil_Moisture
-dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year
@@ -116,7 +116,7 @@ suffix            =  _GLEAM_v4.1a
 /
 
 &Sensible_Heat
-dir               =  /share/home/dq013/zhwei/Data_ref/grid_ref/GLEAM_v4.1a/daily/
+dir               =  /tera11/zhwei/share/Data_ref/grid_ref/GLEAM_v4.1a/daily/
 timezone          =  0 #UTC+0: if Local, read from List file
 data_type         =  grid
 data_groupby      =  Year

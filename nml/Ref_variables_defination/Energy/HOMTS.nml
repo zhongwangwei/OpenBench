@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Energy/HOMTS_update
+   root_dir          = ./data/reference/grid_ref/Energy/HOMTS_update
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Single
