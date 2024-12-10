@@ -13,11 +13,11 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       elif time_unit.lower() in ['y', 'year', '1y', '1year']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-         if self.debug_mode:
+         if info.debug_mode:
             print('Adjusting time values for daily CoLM output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)      
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-         if self.debug_mode:
+         if info.debug_mode:
             print('Adjusting time values for yearly CoLM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
@@ -59,7 +59,6 @@ def filter_CoLM(info,ds):   #update info as well
       return info, ds['Crop_Yield_Corn']
 
    if info.item == "Crop_Yield_Maize":
-      ds = ds.fillna(0)
       try:
          ds['Crop_Yield_Maize']=(((ds['f_cropprodc_rainfed_temp_corn'].fillna(0)*ds['area_rainfed_temp_corn'].fillna(0))+
                                     (ds['f_cropprodc_irrigated_temp_corn'].fillna(0)*ds['area_irrigated_temp_corn'].fillna(0)) +
@@ -90,7 +89,6 @@ def filter_CoLM(info,ds):   #update info as well
       return info, ds['Crop_Yield_Maize']
 
    if info.item == "Crop_Yield_Soybean":
-      ds = ds.fillna(0)
       try:
          ds['Crop_Yield_Soybean']=(((ds['f_cropprodc_rainfed_temp_soybean'].fillna(0)*ds['area_rainfed_temp_soybean'].fillna(0))+
                                     (ds['f_cropprodc_irrigated_temp_soybean'].fillna(0)*ds['area_irrigated_temp_soybean'].fillna(0)) +
@@ -121,7 +119,6 @@ def filter_CoLM(info,ds):   #update info as well
       return info, ds['Crop_Yield_Soybean']
 
    if info.item == "Crop_Yield_Rice":
-      ds = ds.fillna(0)
       try:
          ds['Crop_Yield_Rice']=(((ds['f_cropprodc_rainfed_rice']*ds['area_rainfed_rice'])+
                                     (ds['f_cropprodc_irrigated_rice']*ds['area_irrigated_rice']))*(10**6)*2.5*(10**(-6))/(ds['area_rainfed_rice']+ds['area_irrigated_rice'])*(3600.*24.*365.))/100.
@@ -146,7 +143,6 @@ def filter_CoLM(info,ds):   #update info as well
       return info, ds['Crop_Yield_Rice']
 
    if info.item == "Crop_Yield_Wheat":
-      ds = ds.fillna(0)
       try:
          ds['Crop_Yield_Wheat']=(((ds['f_cropprodc_rainfed_spwheat'].fillna(0)*ds['area_rainfed_spwheat'].fillna(0))+
                                     (ds['f_cropprodc_irrigated_spwheat'].fillna(0)*ds['area_irrigated_spwheat'].fillna(0))+
