@@ -4,7 +4,7 @@ import os, sys
 import xarray as xr
 from joblib import Parallel, delayed
 
-def process_station(station, info, min_uparea, max_uparea):
+def process_station(station, info, min_uparea, max_uparea, debug_mode):
     result = {
         'Flag': False,
         'use_syear': -9999,
@@ -21,9 +21,9 @@ def process_station(station, info, min_uparea, max_uparea):
         return result
     if os.path.exists(file_path):
         result['ref_dir'] = file_path
-        #print(f"Processing station {int(station['ID'])}...")
         with xr.open_dataset(file_path) as df:
-            print(f"Processing station {int(station['ID'])}...")
+            if debug_mode:
+               print(f"Processing station {int(station['ID'])}...")
             result['obs_syear'] = int(df["time.year"].values[0])
             result['obs_eyear'] = int(df["time.year"].values[-1])
             result['use_syear'] = max(result['obs_syear'], int(info.sim_syear), int(info.syear))
@@ -37,7 +37,8 @@ def process_station(station, info, min_uparea, max_uparea):
                 (station['area1'] <= max_uparea) and
                 (station['ix2'] == -9999)):
                 result['Flag'] = True
-                print(f"Station {int(station['ID'])} is selected")
+               if debug_mode:
+                  print(f"Station {int(station['ID'])} is selected")
     return result
 
 def filter_GRDC(info):
