@@ -1,5 +1,5 @@
 &general
-  root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Water/Transpiration_Li_etal2024/
+  root_dir          =  ./data/reference/grid_ref/Water/Transpiration_Li_etal2024/
   timezone          =  0
   data_type         =  grid
   data_groupby      =  Year

@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/stn_ref/Ecosystem/LAI/Yuan2022
+   root_dir          =  ./data/reference/stn_ref/Ecosystem/LAI/Yuan2022
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single

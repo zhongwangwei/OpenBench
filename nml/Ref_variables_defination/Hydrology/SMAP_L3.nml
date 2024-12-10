@@ -1,5 +1,5 @@
 &general
-  root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Water/SMAP_L3
+  root_dir          =  ./data/reference/grid_ref/Water/SMAP_L3
   timezone          =  0
   data_type         =  grid
   data_groupby      =  Single

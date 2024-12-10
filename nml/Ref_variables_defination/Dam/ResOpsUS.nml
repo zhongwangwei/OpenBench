@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/stn_ref/StreamFlow/GRDC
+   root_dir          =  ./data/reference/stn_ref/StreamFlow/GRDC
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -7,7 +7,7 @@
    grid_res          =  
    syear             =  1900
    eyear             =  2020
-   fulllist          = /share/home/dq013/zhwei/Data_ref/stn_ref/Dam/ResOpsUS/reservoir_attributes.csv 
+   fulllist          = ./data/reference/stn_ref/Dam/ResOpsUS/reservoir_attributes.csv 
 
 /
 

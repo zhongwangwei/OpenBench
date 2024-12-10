@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Forcing/MSWEP_V280/Precipitation_merged/
+   root_dir          =  ./data/reference/grid_ref/Forcing/MSWEP_V280/Precipitation_merged/
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

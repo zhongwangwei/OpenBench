@@ -1,5 +1,5 @@
 &general
-   root_dir          =   /share/home/dq013/zhwei/Data_ref/grid_ref/Urban/Qian2024/netcdf/Annual
+   root_dir          =   /tera11/zhwei/share/Data_ref/grid_ref/Urban/Qian2024/netcdf/Annual
    timezone          =   
    data_type         =   grid
    data_groupby      =   Single

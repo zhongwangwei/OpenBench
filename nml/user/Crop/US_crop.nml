@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/Mod_variables_defination/CoLM.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Year
+   dir = ./data/simulation/crop/noirrig/history
+   fulllist =
+   tim_res  =  Year
+   grid_res = 0.5
+   prefix   =  noirrig_hist_
+   suffix   = _yearmean
+   syear    =  2001
+   eyear    =  2016
+/

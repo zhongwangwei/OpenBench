@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Water/Runoff/CNRD
+   root_dir          =  ./data/reference/grid_ref/Water/Runoff/CNRD
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Single

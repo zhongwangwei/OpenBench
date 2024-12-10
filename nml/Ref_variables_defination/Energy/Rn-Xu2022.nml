@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/Data_ref/grid_ref/Energy/Rn-Xu2022/netcdf
+   root_dir          =  ./data/reference/grid_ref/Energy/Rn-Xu2022/netcdf
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Day

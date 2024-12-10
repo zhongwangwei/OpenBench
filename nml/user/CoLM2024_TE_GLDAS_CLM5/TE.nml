@@ -3,10 +3,9 @@
    timezone =  0.0
    data_type =  grid
    data_groupby = Year
-   dir = /share/home/dq013/zhwei/data_for_test/Model_Comparison/TE
+   dir = ./data/simulation/LSMs/TE/
    fulllist =
-   tim_res =  month
-   suffix = .021
+   tim_res =  Month
    syear =  1955
    eyear =  2023
    grid_res =  0.5

@@ -1,0 +1,8 @@
+&general
+    Streamflow_sim_source                   = SIMTOP,XinAnJiang,Simple_VIC
+
+&def_nml
+SIMTOP                          = ./nml/user/Streamflow/SIMTOP.nml
+XinAnJiang                      = ./nml/user/Streamflow/XinAnJiang.nml
+Simple_VIC                      = ./nml/user/Streamflow/Simple_VIC.nml
+/

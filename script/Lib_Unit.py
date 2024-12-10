@@ -33,8 +33,8 @@ class UnitProcessing:
 				'mm 3hour-1': lambda x: x * 8,
 			},
 			'w m-2': {
-				'MJ m-2 day-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
-				'MJ m-2 d-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
+				'mj m-2 day-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
+				'mj m-2 d-1': lambda x: x * 11.574074074074074,  # 1 / 0.0864
 			},
 			'unitless': {
 				'percent': lambda x: x / 100,
@@ -78,6 +78,9 @@ class UnitProcessing:
 
 			'm s-1 wind': {
 				'km h-1': lambda x: x * 3.6,
+			},
+			't ha-1': {
+				'kg ha-1': lambda x: x / 1000,
 			},
 		}
 		print(f'Converting {input_unit} to base unit...')
