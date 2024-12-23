@@ -22,7 +22,7 @@ def process_station(station, info, min_uparea, max_uparea, debug_mode):
     if os.path.exists(file_path):
         result['ref_dir'] = file_path
         with xr.open_dataset(file_path) as df:
-            if debug_mode:
+            if info.debug_mode:
                print(f"Processing station {int(station['ID'])}...")
             result['obs_syear'] = int(df["time.year"].values[0])
             result['obs_eyear'] = int(df["time.year"].values[-1])
@@ -37,7 +37,7 @@ def process_station(station, info, min_uparea, max_uparea, debug_mode):
                 (station['area1'] <= max_uparea) and
                 (station['ix2'] == -9999)):
                 result['Flag'] = True
-               if debug_mode:
+               if info.debug_mode:
                   print(f"Station {int(station['ID'])} is selected")
     return result
 
