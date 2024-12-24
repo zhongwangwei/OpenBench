@@ -4,7 +4,7 @@ import os, sys
 import xarray as xr
 from joblib import Parallel, delayed
 
-def process_station(station, info, min_uparea, max_uparea, debug_mode):
+def process_station(station, info, min_uparea, max_uparea):
     result = {
         'Flag': False,
         'use_syear': -9999,
@@ -36,7 +36,7 @@ def process_station(station, info, min_uparea, max_uparea, debug_mode):
                 (station['area1'] >= min_uparea) and
                 (station['area1'] <= max_uparea) and
                 (station['ix2'] == -9999)):
-                result['Flag'] = True
+               result['Flag'] = True
                if info.debug_mode:
                   print(f"Station {int(station['ID'])} is selected")
     return result
