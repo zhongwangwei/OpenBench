@@ -37,8 +37,8 @@ def process_station(station, info, min_uparea, max_uparea, debug_mode):
                 (station['area1'] <= max_uparea) and
                 (station['ix2'] == -9999)):
                 result['Flag'] = True
-               if info.debug_mode:
-                  print(f"Station {int(station['ID'])} is selected")
+                if info.debug_mode:
+                    print(f"Station {int(station['ID'])} is selected")
     return result
 
 def filter_GRDC(info):
