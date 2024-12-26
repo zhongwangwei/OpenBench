@@ -926,98 +926,102 @@ class LC_groupby(metrics, scores):
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
-
-                            output_file_path = os.path.join(dir_path,
-                                                            f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
-                            with open(output_file_path, "w") as output_file:
-                                # Print the table header with an additional column for the overall mean
-                                output_file.write("ID\t")
-                                for i in range(1, 18):
-                                    output_file.write(f"{i}\t")
-                                output_file.write("All\n")  # Move "All" to the first line
-                                output_file.write("FullName\t")
-                                for igbp_class_name in igbp_class_names.values():
-                                    output_file.write(f"{igbp_class_name}\t")
-                                output_file.write("Overall\n")  # Write "Overall" on the second line
-
-                                # Calculate and print mean values
-
-                                for metric in self.metrics:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                    output_file.write(f"{metric}\t")
-
-                                    # Calculate and write the overall mean first
-                                    ds = ds.where(np.isfinite(ds), np.nan)
-                                    q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
-                                    ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
-
-                                    overall_median = ds[metric].median(skipna=True).values
-                                    overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
-
+                            if len(self.metrics) > 0:
+                                output_file_path = os.path.join(dir_path,
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                with open(output_file_path, "w") as output_file:
+                                    # Print the table header with an additional column for the overall mean
+                                    output_file.write("ID\t")
                                     for i in range(1, 18):
-                                        ds1 = ds.where(IGBPtype == i)
-                                        igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
-                                        ds1.to_netcdf(
-                                            f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
-                                        median_value = ds1[metric].median(skipna=True).values
-                                        median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                                        output_file.write(f"{median_value_str}\t")
-                                    output_file.write(f"{overall_median_str}\t")  # Write overall median
-                                    output_file.write("\n")
+                                        output_file.write(f"{i}\t")
+                                    output_file.write("All\n")  # Move "All" to the first line
+                                    output_file.write("FullName\t")
+                                    for igbp_class_name in igbp_class_names.values():
+                                        output_file.write(f"{igbp_class_name}\t")
+                                    output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                            selected_metrics = self.metrics
-                            # selected_metrics = list(selected_metrics)
-                            option['path'] = f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/"
-                            option['item'] = [evaluation_item, sim_source, ref_source]
-                            option['groupby'] = 'IGBP_groupby'
-                            make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                                    # Calculate and print mean values
+                                    for metric in self.metrics:
+                                        ds = xr.open_dataset(
+                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        output_file.write(f"{metric}\t")
 
-                            dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'IGBP_groupby',
-                                                    f'{sim_source}___{ref_source}')
-                            if not os.path.exists(dir_path):
-                                os.makedirs(dir_path)
-                            output_file_path2 = os.path.join(dir_path,
-                                                             f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                        # Calculate and write the overall mean first
+                                        ds = ds.where(np.isfinite(ds), np.nan)
+                                        q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                        ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                            with open(output_file_path2, "w") as output_file:
-                                # Print the table header with an additional column for the overall mean
-                                output_file.write("ID\t")
-                                for i in range(1, 18):
-                                    output_file.write(f"{i}\t")
-                                output_file.write("All\n")  # Move "All" to the first line
-                                output_file.write("FullName\t")
-                                for igbp_class_name in igbp_class_names.values():
-                                    output_file.write(f"{igbp_class_name}\t")
-                                output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        overall_median = ds[metric].median(skipna=True).values
+                                        overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
-                                # Calculate and print mean values
+                                        for i in range(1, 18):
+                                            ds1 = ds.where(IGBPtype == i)
+                                            igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
+                                            ds1.to_netcdf(
+                                                f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
+                                            median_value = ds1[metric].median(skipna=True).values
+                                            median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
+                                            output_file.write(f"{median_value_str}\t")
+                                        output_file.write(f"{overall_median_str}\t")  # Write overall median
+                                        output_file.write("\n")
 
-                                for score in self.scores:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    output_file.write(f"{score}\t")
+                                selected_metrics = self.metrics
+                                # selected_metrics = list(selected_metrics)
+                                option['path'] = f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['item'] = [evaluation_item, sim_source, ref_source]
+                                option['groupby'] = 'IGBP_groupby'
+                                make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                            else:
+                                print('Error: No metrics for IGBP class comparison')
 
-                                    # Calculate and write the overall mean first
-                                    overall_mean = ds[score].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                            if len(self.scores) > 0:
+                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'IGBP_groupby',
+                                                        f'{sim_source}___{ref_source}')
+                                if not os.path.exists(dir_path):
+                                    os.makedirs(dir_path)
+                                output_file_path2 = os.path.join(dir_path,
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
 
+                                with open(output_file_path2, "w") as output_file:
+                                    # Print the table header with an additional column for the overall mean
+                                    output_file.write("ID\t")
                                     for i in range(1, 18):
-                                        ds1 = ds.where(IGBPtype == i)
-                                        igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
-                                        ds1.to_netcdf(
-                                            f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
-                                        mean_value = ds1[score].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
-                                    output_file.write("\n")
+                                        output_file.write(f"{i}\t")
+                                    output_file.write("All\n")  # Move "All" to the first line
+                                    output_file.write("FullName\t")
+                                    for igbp_class_name in igbp_class_names.values():
+                                        output_file.write(f"{igbp_class_name}\t")
+                                    output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                            selected_scores = self.scores
-                            option['path'] = f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/"
-                            option['groupby'] = 'IGBP_groupby'
-                            make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
-                            # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
+                                    # Calculate and print mean values
+
+                                    for score in self.scores:
+                                        ds = xr.open_dataset(
+                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        output_file.write(f"{score}\t")
+
+                                        # Calculate and write the overall mean first
+                                        overall_mean = ds[score].mean(skipna=True).values
+                                        overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+
+                                        for i in range(1, 18):
+                                            ds1 = ds.where(IGBPtype == i)
+                                            igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
+                                            ds1.to_netcdf(
+                                                f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
+                                            mean_value = ds1[score].mean(skipna=True).values
+                                            mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                                            output_file.write(f"{mean_value_str}\t")
+                                        output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        output_file.write("\n")
+
+                                selected_scores = self.scores
+                                option['path'] = f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['groupby'] = 'IGBP_groupby'
+                                make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
+                                # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
+                            else:
+                                print('Error: No scores for IGBP class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'IGBP_groupby')
         if os.path.exists(metricsdir_path):
@@ -1137,97 +1141,103 @@ class LC_groupby(metrics, scores):
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
 
-                            output_file_path = os.path.join(dir_path,
-                                                            f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
-                            with open(output_file_path, "w") as output_file:
-                                # Print the table header with an additional column for the overall median
-                                output_file.write("ID\t")
-                                for i in range(0, 16):
-                                    output_file.write(f"{i}\t")
-                                output_file.write("All\n")  # Move "All" to the first line
-                                output_file.write("FullName\t")
-                                for PFT_class_name in PFT_class_names.values():
-                                    output_file.write(f"{PFT_class_name}\t")
-                                output_file.write("Overall\n")  # Write "Overall" on the second line
-
-                                # Calculate and print median values
-
-                                for metric in self.metrics:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                    output_file.write(f"{metric}\t")
-
-                                    # Calculate and write the overall median first
-                                    ds = ds.where(np.isfinite(ds), np.nan)
-                                    q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
-                                    ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
-
-                                    overall_median = ds[metric].median(skipna=True).values
-                                    overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
-
+                            if len(self.metrics) > 0:
+                                output_file_path = os.path.join(dir_path,
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                with open(output_file_path, "w") as output_file:
+                                    # Print the table header with an additional column for the overall median
+                                    output_file.write("ID\t")
                                     for i in range(0, 16):
-                                        ds1 = ds.where(PFTtype == i)
-                                        PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
-                                        ds1.to_netcdf(
-                                            f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
-                                        median_value = ds1[metric].median(skipna=True).values
-                                        median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                                        output_file.write(f"{median_value_str}\t")
-                                    output_file.write(f"{overall_median_str}\t")  # Write overall median
-                                    output_file.write("\n")
+                                        output_file.write(f"{i}\t")
+                                    output_file.write("All\n")  # Move "All" to the first line
+                                    output_file.write("FullName\t")
+                                    for PFT_class_name in PFT_class_names.values():
+                                        output_file.write(f"{PFT_class_name}\t")
+                                    output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                            selected_metrics = self.metrics
-                            # selected_metrics = list(selected_metrics)
-                            option['path'] = f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/"
-                            option['item'] = [evaluation_item, sim_source, ref_source]
-                            option['groupby'] = 'PFT_groupby'
-                            make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
-                            # print(f"PFT class metrics comparison results are saved to {output_file_path}")
+                                    # Calculate and print median values
 
-                            dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'PFT_groupby',
-                                                    f'{sim_source}___{ref_source}')
-                            if not os.path.exists(dir_path):
-                                os.makedirs(dir_path)
-                            output_file_path2 = os.path.join(dir_path,
-                                                             f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
-                            with open(output_file_path2, "w") as output_file:
-                                # Print the table header with an additional column for the overall mean
-                                output_file.write("ID\t")
-                                for i in range(0, 16):
-                                    output_file.write(f"{i}\t")
-                                output_file.write("All\n")  # Move "All" to the first line
-                                output_file.write("FullName\t")
-                                for PFT_class_name in PFT_class_names.values():
-                                    output_file.write(f"{PFT_class_name}\t")
-                                output_file.write("Overall\n")  # Write "Overall" on the second line
+                                    for metric in self.metrics:
+                                        ds = xr.open_dataset(
+                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        output_file.write(f"{metric}\t")
 
-                                # Calculate and print mean values
+                                        # Calculate and write the overall median first
+                                        ds = ds.where(np.isfinite(ds), np.nan)
+                                        q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                        ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
 
-                                for score in self.scores:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    output_file.write(f"{score}\t")
+                                        overall_median = ds[metric].median(skipna=True).values
+                                        overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
-                                    # Calculate and write the overall mean first
-                                    overall_mean = ds[score].mean(skipna=True).values
-                                    overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                        for i in range(0, 16):
+                                            ds1 = ds.where(PFTtype == i)
+                                            PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
+                                            ds1.to_netcdf(
+                                                f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
+                                            median_value = ds1[metric].median(skipna=True).values
+                                            median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
+                                            output_file.write(f"{median_value_str}\t")
+                                        output_file.write(f"{overall_median_str}\t")  # Write overall median
+                                        output_file.write("\n")
 
+                                selected_metrics = self.metrics
+                                # selected_metrics = list(selected_metrics)
+                                option['path'] = f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['item'] = [evaluation_item, sim_source, ref_source]
+                                option['groupby'] = 'PFT_groupby'
+                                make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                                # print(f"PFT class metrics comparison results are saved to {output_file_path}")
+                            else:
+                                print('Error: No scores for PFT class comparison')
+
+                            if len(self.scores) > 0:
+                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'PFT_groupby',
+                                                        f'{sim_source}___{ref_source}')
+                                if not os.path.exists(dir_path):
+                                    os.makedirs(dir_path)
+                                output_file_path2 = os.path.join(dir_path,
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                with open(output_file_path2, "w") as output_file:
+                                    # Print the table header with an additional column for the overall mean
+                                    output_file.write("ID\t")
                                     for i in range(0, 16):
-                                        ds1 = ds.where(PFTtype == i)
-                                        PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
-                                        ds1.to_netcdf(
-                                            f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
-                                        mean_value = ds1[score].mean(skipna=True).values
-                                        mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                        output_file.write(f"{mean_value_str}\t")
-                                    output_file.write(f"{overall_mean_str}\t")  # Write overall mean
-                                    output_file.write("\n")
+                                        output_file.write(f"{i}\t")
+                                    output_file.write("All\n")  # Move "All" to the first line
+                                    output_file.write("FullName\t")
+                                    for PFT_class_name in PFT_class_names.values():
+                                        output_file.write(f"{PFT_class_name}\t")
+                                    output_file.write("Overall\n")  # Write "Overall" on the second line
 
-                            selected_scores = self.scores
-                            option['path'] = f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/"
-                            option['groupby'] = 'PFT_groupby'
-                            make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
-                            # print(f"PFT class scores comparison results are saved to {output_file_path2}")
+                                    # Calculate and print mean values
+
+                                    for score in self.scores:
+                                        ds = xr.open_dataset(
+                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        output_file.write(f"{score}\t")
+
+                                        # Calculate and write the overall mean first
+                                        overall_mean = ds[score].mean(skipna=True).values
+                                        overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+
+                                        for i in range(0, 16):
+                                            ds1 = ds.where(PFTtype == i)
+                                            PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
+                                            ds1.to_netcdf(
+                                                f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
+                                            mean_value = ds1[score].mean(skipna=True).values
+                                            mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
+                                            output_file.write(f"{mean_value_str}\t")
+                                        output_file.write(f"{overall_mean_str}\t")  # Write overall mean
+                                        output_file.write("\n")
+
+                                selected_scores = self.scores
+                                option['path'] = f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['groupby'] = 'PFT_groupby'
+                                make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
+                                # print(f"PFT class scores comparison results are saved to {output_file_path2}")
+                            else:
+                                print('Error: No scores for PFT class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'PFT_groupby')
         if os.path.exists(metricsdir_path):
