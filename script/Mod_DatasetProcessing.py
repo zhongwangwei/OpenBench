@@ -419,6 +419,7 @@ class BaseDatasetProcessing:
         try:
             converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
             ds = ds.copy(data=converted_data)
+            ds.attrs['units'] = new_unit
             print(f"Converted unit from {varunit} to {new_unit}")
             return ds, new_unit
         except ValueError as e:
