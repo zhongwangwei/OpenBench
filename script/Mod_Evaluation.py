@@ -237,9 +237,9 @@ class Evaluation_grid(metrics, scores):
         ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
 
         # Extract variables
-        lat = ds.lat.values
-        lon = ds.lon.values
-        lat, lon = np.meshgrid(lat[::-1], lon)
+        ilat = ds.lat.values
+        ilon = ds.lon.values
+        lat, lon = np.meshgrid(ilat[::-1], ilon)
 
         var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
         min_value, max_value = np.nanmin(var), np.nanmax(var)
@@ -252,11 +252,24 @@ class Evaluation_grid(metrics, scores):
         else:
             option['extend'] = 'neither'
 
-
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+        if not option['set_lat_lon']:
+            extent = [self.min_lon, self.max_lon, self.min_lat, self.max_lat]
+        else:
+            extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
 
-        cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+        if ilat[0] < 0:
+            origin = 'lower'
+        else:
+            origin = 'upper'
+
+        if option['show_method'] == 'imshow':
+            cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+                           origin=origin)
+        elif option['show_method'] == 'contourf':
+            cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+
         coastline = cfeature.NaturalEarthFeature(
             'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
         rivers = cfeature.NaturalEarthFeature(
@@ -299,6 +312,7 @@ class Evaluation_grid(metrics, scores):
                 [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
 
         cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                          extend=option['extend'],
                           orientation=option['colorbar_position'])
         cb.solids.set_edgecolor("face")
 
@@ -476,7 +490,7 @@ class Evaluation_stn(metrics, scores):
         if len(metric) == 0 or np.all(np.isnan(metric)):
             print(f"Warning: No valid data for {varname}. Skipping plot.")
             return
-            
+
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
         # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
