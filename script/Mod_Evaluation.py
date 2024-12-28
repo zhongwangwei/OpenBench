@@ -134,9 +134,9 @@ class Evaluation_grid(metrics, scores):
                                 option["vmax"] = 100
                             if option["vmin"] < -100:
                                 option["vmin"] = -100
-                    elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                    elif metric in ['NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                         option["vmin"], option["vmax"] = -1, 1
-                    elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                    elif metric in ['LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                         option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
                     elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
                                     'absolute_percent_bias']:
@@ -623,9 +623,9 @@ class Evaluation_stn(metrics, scores):
                             option["vmax"] = 100
                         if option["vmin"] < -100:
                             option["vmin"] = -100
-                    elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                    elif metric in ['NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                         option["vmin"], option["vmax"] = -1, 1
-                    elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                    elif metric in ['LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                         option["vmin"], option["vmax"] = math.floor(vmin), 1
                     elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
                                     'absolute_percent_bias']:
