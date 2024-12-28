@@ -41,9 +41,9 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             if varname in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
                            'absolute_percent_bias']:
                 global_min = global_min * 0 - 0.2
-            elif varname in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+            elif varname in ['LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                 global_max = global_max * 0 + 0.2
-            elif varname in ['KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
+            elif varname in ['NSE', 'KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
                 global_min = -1
                 global_max = 1
             # global_min = min(data.min() for data in datasets_filtered)
