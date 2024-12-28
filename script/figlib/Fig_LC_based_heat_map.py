@@ -161,9 +161,9 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
             if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
                 custom_vmin_vmax[metric] = [quantiles[metric][0].values, quantiles[metric][-1].values,
                                             quantiles[metric][2].values, quantiles[metric][1].values]
-            elif metric in ['NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+            elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                 custom_vmin_vmax[metric] = [-1, 1, 0.8, -0.8]
-            elif metric in ['LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+            elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                 custom_vmin_vmax[metric] = [quantiles[metric][0].values, 1, 0.8, quantiles[metric][1].values]
             elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
                             'absolute_percent_bias']:
@@ -258,9 +258,9 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                 if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
                     custom_vmin_vmax[metric] = [quantiles[metric][0].values, quantiles[metric][-1].values,
                                                 quantiles[metric][2].values, quantiles[metric][1].values]
-                elif metric in ['NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
+                elif metric in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:
                     custom_vmin_vmax[metric] = [-1, 1, 0.8, -0.8]
-                elif metric in ['LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
+                elif metric in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
                     custom_vmin_vmax[metric] = [quantiles[metric][0].values, 1, 0.8, quantiles[metric][1].values]
                 elif metric in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
                                 'absolute_percent_bias']:
