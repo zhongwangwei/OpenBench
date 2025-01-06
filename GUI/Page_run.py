@@ -92,12 +92,7 @@ class run_validation:
             st.session_state.step4_run = False
             st.session_state.step4 = False
 
-        st.divider()
-
-        def switch_button_index(select):
-            my_list = ["Home", "Validation", "Running", 'Visualization']
-            index = my_list.index(select)
-            return index
+        # st.divider()
 
         if st.session_state.status == 'Running':
             next_button_disable1 = True
@@ -109,32 +104,13 @@ class run_validation:
             else:
                 next_button_disable2 = False
 
-        def define_evaluation():
-            if st.session_state.get('switch_button2', False):
-                st.session_state.switch_button2_onclick = +1
-                st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) - 1) % 4
-                st.session_state.step4_run = False
-                st.session_state.step4 = False
+        return next_button_disable1, next_button_disable2
 
-        def define_visual():
-            if st.session_state.get('switch_button3', False):
-                st.session_state.step4 = True
-                st.session_state.switch_button3_onclick = +1
-                st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 4
+        # @timer
+        # def _lunch_errors(self, run_err):
+        #     e = RuntimeError(run_err)
+        #     st.exception(e)
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.button(':point_left: Previous step', disabled=next_button_disable1, key='switch_button2',
-                      on_click=define_evaluation,
-                      help='Press back to Evaluation page')
-        with col4:
-            st.button('Next step :point_right: ', disabled=next_button_disable2, key='switch_button3', on_click=define_visual,
-                      help='Press go to Visualization page')
-
-        @timer
-        def _lunch_errors(self, run_err):
-            e = RuntimeError(run_err)
-            st.exception(e)
 
     def __print_welcome_message(self):
         """Print a more beautiful welcome message and ASCII art."""

@@ -1,9 +1,13 @@
 import numpy as np
-import matplotlib.pyplot as plt
+import math
 from scipy.stats import gaussian_kde
 import matplotlib.cm as cm
 import matplotlib
+import matplotlib as mpl
 from matplotlib import rcParams
+import matplotlib.pyplot as plt
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
 
 from io import BytesIO
 import streamlit as st
@@ -31,10 +35,18 @@ def make_scenarios_comparison_Ridgeline_Plot(option, evaluation_item, ref_source
     global_min = option['global_min']
     global_max = option['global_max']
     x_range = np.linspace(global_min, global_max, 200)
-
+    dx = x_range[1] - x_range[0]
     # Adjust these parameters to control spacing and overlap
     y_shift_increment = 0.5
     scale_factor = 0.8
+
+    if option['colormap']:
+        cmap = mpl.colormaps[f'{option["cmap"]}'].resampled(256)(range(256))
+        R = np.broadcast_to(cmap[:, 0], (200, 256))
+        G = np.broadcast_to(cmap[:, 1], (200, 256))
+        B = np.broadcast_to(cmap[:, 2], (200, 256))
+        alpha = np.full_like(R, 1)
+        rgba = np.stack((R, G, B, alpha), axis=0)
 
     for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
 
@@ -48,9 +60,17 @@ def make_scenarios_comparison_Ridgeline_Plot(option, evaluation_item, ref_source
         y_shift = i * y_shift_increment
 
         # Plot the KDE
-        axes.fill_between(x_range, y_shift, y_range + y_shift, alpha=option['MARKERS'][sim_source]['alpha'],
-                          color=option['MARKERS'][sim_source]['lineColor'], zorder=n_plots - i)
-        axes.plot(x_range, y_range + y_shift, color='black', linewidth=option['MARKERS'][sim_source]['linewidth'])
+
+        if option['colormap']:
+            path = axes.fill_between(x_range, y_shift, y_range + y_shift, facecolor='none', lw=0.35, edgecolor='k', zorder=n_plots - i)
+            patch = PathPatch(path._paths[0], visible=False, transform=axes.transData)
+            ai = axes.imshow(rgba.transpose((1, 2, 0)), extent=[0, 1, 0, 1], transform=axes.transAxes, alpha=option['alpha'])
+            ai.set_clip_path(patch)
+            axes.plot(x_range, y_range + y_shift, color='black', linewidth=option['linewidth'])
+        else:
+            axes.fill_between(x_range, y_shift, y_range + y_shift, alpha=option['MARKERS'][sim_source]['alpha'],
+                              color=option['MARKERS'][sim_source]['lineColor'], zorder=n_plots - i)
+            axes.plot(x_range, y_range + y_shift, color='black', linewidth=option['MARKERS'][sim_source]['linewidth'])
 
         # Add labels
         axes.text(global_min, y_shift + 0.2, sim_source, fontweight='bold', ha='left', va='center')
@@ -81,6 +101,7 @@ def make_scenarios_comparison_Ridgeline_Plot(option, evaluation_item, ref_source
 
     # Set y-axis limits
     axes.set_ylim(-0.2, (n_plots - 1) * y_shift_increment + scale_factor)
+    axes.set_xlim(global_min-dx, global_max+dx)
 
     st.pyplot(fig)
 

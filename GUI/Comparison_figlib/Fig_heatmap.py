@@ -29,7 +29,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, items, cases, option)
     if cases is not None:
         df = df.loc[:, cases]
 
-
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -57,8 +56,8 @@ def make_scenarios_scores_comparison_heat_map(file, score, items, cases, option)
     ax.set_yticklabels([y.replace('_', ' ') for y in df.index], rotation=option['y_rotation'], ha=option['y_ha'])
     ax.set_xticklabels(df.columns, rotation=option['x_rotation'], ha=option['x_ha'])
 
-    ax.set_ylabel(option['ylabel'], fontsize=option['yticksize']+1)
-    ax.set_xlabel(option['xlabel'], fontsize=option['xticksize']+1)
+    ax.set_ylabel(option['ylabel'], fontsize=option['yticksize'] + 1)
+    ax.set_xlabel(option['xlabel'], fontsize=option['xticksize'] + 1)
 
     ax.set_title(option['title'], fontsize=option['title_size'])
     # Add numbers to each cell
@@ -98,7 +97,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, items, cases, option)
             bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
             bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
             x_height = bbox_transformed.height
-            cbar_ax = fig.add_axes([left, bottom - max_xtick_height-x_height - 0.1, width, 0.05])
+            cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
         else:
             cbar_ax = fig.add_axes([left, bottom - max_xtick_height - 0.1, width, 0.05])
 
@@ -212,8 +211,8 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
 
-        ax.set_ylabel(option['ylabel'], fontsize=option['yticksize']+1)
-        ax.set_xlabel(option['xlabel'], fontsize=option['xticksize']+1)
+        ax.set_ylabel(option['ylabel'], fontsize=option['yticksize'] + 1)
+        ax.set_xlabel(option['xlabel'], fontsize=option['xticksize'] + 1)
         ax.set_title(option['title'], fontsize=option['title_size'])
 
         # Add numbers to each cell
@@ -241,9 +240,9 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
                     bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
                     bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
                     x_height = bbox_transformed.height
-                    cbar_ax = fig.add_axes([left+width/6, bottom - max_xtick_height - x_height - 0.1, width/3*2, 0.05])
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.05])
                 else:
-                    cbar_ax = fig.add_axes([left/6, bottom - max_xtick_height - 0.1, width/3*2, 0.05])
+                    cbar_ax = fig.add_axes([left / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.05])
             cbar = fig.colorbar(im, cax=cbar_ax, orientation=option['colorbar_position'], extend='neither')
     elif len(df_selected.index) == 1 and score != 'scores':
         fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
@@ -273,7 +272,6 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
         else:
             custom_vmin_vmax[metric] = [0, 1, 0.8, 0.2]
 
-
         if not option['cmap']:
             option['cmap'] = 'coolwarm'
 
@@ -294,8 +292,8 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
 
-        ax.set_ylabel('Metrics', fontsize=option['yticksize'] +1)
-        ax.set_xlabel(option['xlabel'], fontsize=option['xticksize']+1)
+        ax.set_ylabel('Metrics', fontsize=option['yticksize'] + 1)
+        ax.set_xlabel(option['xlabel'], fontsize=option['xticksize'] + 1)
 
         if len(option['title']) == 0:
             option['title'] = f'Heatmap of {lb}'
@@ -330,12 +328,12 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
         path = f'{option["path"]}/{sim_source}___{ref_source}/'
 
         fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=(option['x_wise'], option['y_wise']), sharex=True)
-        fig.text(0.03, 0.5, 'Metrics', va='center', rotation='vertical', fontsize=option['yticksize']+1)
+        fig.text(0.03, 0.5, 'Metrics', va='center', rotation='vertical', fontsize=option['yticksize'] + 1)
         plt.subplots_adjust(hspace=0)
         # get the minimal and maximal value
         custom_vmin_vmax = {}
         for i, (metric, row_data) in enumerate(df_selected.iterrows()):
-            if metric in ['bias', 'mae', 'ubRMSE', 'apb', 'RMSE', 'L', 'pc_bias', 'apb']:
+            if metric in ['bias', 'mae', 'ubRMSE', 'apb', 'RMSE', 'L', 'percent_bias', 'apb']:
                 import glob
                 files = glob.glob(f'{path}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
                 datasets = [xr.open_dataset(file) for file in files]
@@ -367,7 +365,7 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             if option['show_colorbar']:
                 pos = axes[i].get_position()  # .bounds
                 left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-                cbar_ax = fig.add_axes([right + 0.02, bottom + height / 2, height, height / 4])
+                cbar_ax = fig.add_axes([right + 0.02, bottom + height / 2, height / 3 * 2, height / 4])
                 cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal', extend=option['extend'])
                 cbar.set_ticks([vmin, (vmin + vmax) / 2, vmax])
                 cbar.set_ticklabels([f'{vmin:.1f}', f'{(vmin + vmax) / 2:.1f}', f'{vmax:.1f}'])
@@ -397,7 +395,7 @@ def make_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             axes[-1].set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                      ha=option['x_ha'])
 
-        axes[-1].set_xlabel(option['xlabel'], fontsize=option['xticksize']+1)
+        axes[-1].set_xlabel(option['xlabel'], fontsize=option['xticksize'] + 1)
         axes[0].set_title(option['title'], fontsize=option['title_size'])
 
     file2 = f'{selected_item}_{sim_source}___{ref_source}_{score}'

@@ -10,7 +10,6 @@ import xarray as xr
 import numpy as np
 from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Namelist_lib.namelist_info import initial_setting
-from Namelist_lib.find_path import FindPath
 import sys
 import itertools
 import platform
@@ -52,7 +51,6 @@ class make_initional:
         self.comparisons = initial.comparisons()
         self.statistics = initial.statistics()
         self.nl = NamelistReader()
-        self.path_finder = FindPath()
 
     def find_paths_in_dict(self, d):
         # # 获取当前工作目录，并确保以标准格式输出
@@ -93,11 +91,51 @@ class make_initional:
         def define_step1():
             st.session_state.step1_general = True
 
-        if genre == '***Upload***':
-            if 'main_nml' not in st.session_state:
-                st.session_state['main_nml'] = None
-            st.session_state['main_nml'] = self.path_finder.get_file(st.session_state['main_nml'], 'upload_file', 'nml')
+        def path_change(key, fkey, path):
+            selected_dir = st.session_state[fkey]
+            if selected_dir == '..':  # 返回上一级
+                st.session_state[key] = os.path.dirname(path)
+            else:  # 进入选择的子目录
+                st.session_state[key] = os.path.join(path, selected_dir)
 
+        def get_path(key: str):
+
+            # 当前路径
+            path = st.session_state[key]
+            # 子目录查找
+            subdirectories = [
+                name for name in os.listdir(path)
+                if os.path.isdir(os.path.join(path, name))
+            ]
+            # 弹出组件
+            with st.popover(f"Find File", use_container_width=True):
+                st.write(f"**Current Path:** {path}")
+                col1, col2 = st.columns(2)
+                # 如果当前路径不是根目录，添加返回上一级
+                options = sorted(subdirectories) + (['..'] if path != '/' else [])
+                # 显示子目录
+                col1.radio(
+                    label="Select Directory:",
+                    options=options,
+                    index=None,
+                    key='upload',
+                    on_change=path_change,
+                    args=(key, 'upload', path), label_visibility="collapsed"
+                )
+                subdirfiles = [file for file in os.listdir(path) if file.endswith(".nml")]
+
+                if subdirfiles:
+                    ifile = col2.radio('file', sorted(subdirfiles), index=None, key=f'ifile', help=None,
+                                       disabled=False, horizontal=False, captions=None, label_visibility="collapsed")
+                    if ifile:
+                        return normpath(os.path.join(path, ifile))
+                    else:
+                        return None
+
+        if genre == '***Upload***':
+            if 'upload_path' not in st.session_state:
+                st.session_state.upload_path = '/'
+            st.session_state['main_nml'] = get_path(key='upload_path')
             if st.session_state.main_nml is not None:
                 st.code(f'Upload Namelist: {st.session_state.main_nml}', language='shell')
 
@@ -424,13 +462,48 @@ class make_initional:
         st.divider()
         st.write('###### :green[Base case directory]')
         if General["basedir"] is None or General["basedir"] == '': General["basedir"] = '/'
-        if os.path.isdir(os.path.abspath(General["basedir"])):
-            General["basedir"] = os.path.abspath(General["basedir"])
-        else:
-            General["basedir"] = '/'
+        General["basedir"] = os.path.abspath(General["basedir"])
+        # General["basedir"] = '/media/zhwei/data02/Plot/LS3MIP'
+        st.code(General["basedir"], language='shell')
 
-        General["basedir"] = self.path_finder.find_path(General["basedir"], "basedir")
-        st.code(f"Current Path: {General['basedir']}", language='shell')
+        def path_change(key, fkey, path):
+            selected_dir = st.session_state[fkey]
+            if selected_dir == '..':  # 返回上一级
+                General[key] = os.path.dirname(path)
+            else:  # 进入选择的子目录
+                General[key] = os.path.join(path, selected_dir)
+
+        def get_path(key: str):
+            # 当前路径
+            path = General[key]
+            # 子目录查找
+            subdirectories = [
+                name for name in os.listdir(path)
+                if os.path.isdir(os.path.join(path, name))
+            ]
+            # 弹出组件
+            with st.popover(f"Find Path", use_container_width=True):
+                st.write(f"**Current Path:** {path}")
+                # 如果当前路径不是根目录，添加返回上一级
+                options = sorted(subdirectories) + (['..'] if path != '/' else [])
+                # 显示子目录
+                st.radio(
+                    label="Select Directory:",
+                    options=options,
+                    index=None,
+                    key='basedir',
+                    on_change=path_change,
+                    args=(key, 'basedir', path), label_visibility="collapsed"
+                )
+
+        get_path(key='basedir')
+        # st.text_input('Base case directory: ', value=General["basedir"],
+        #               key="basedir",
+        #               on_change=data_editor_change,
+        #               args=("basedir", "basedir"),
+        #               placeholder="Set your case directory...",
+        #               label_visibility='collapsed')
+        # ===============================================
 
         st.write('###### :green[Num Cores]')
         left, right = st.columns((1, 3))
@@ -1549,7 +1622,6 @@ class make_reference:
         self.nl = NamelistReader()
         self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
         self.initial = initial
-        self.path_finder = FindPath()
         # self.ref_source = initial.ref_source()
         # self.ref_initial = initial.ref_info()
 
@@ -2531,8 +2603,6 @@ class make_reference:
         import itertools
         with st.container(height=None, border=True):
             key = 'general'
-            if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = '/'
-
             source_lib[key][f"root_dir"] = st.text_input(f'{i}. Set Data Dictionary: ',
                                                          value=source_lib[key][f"root_dir"],
                                                          key=f"{source}_{key}_root_dir",
@@ -2553,12 +2623,6 @@ class make_reference:
                     if source in ref_general[f'{key}_ref_source']:
                         col = next(cols)
                         if 'sub_dir' in source_lib[key].keys():
-                            # with col:
-                            # st.write(f'Set {key.replace("_", " ")} Sub-Data Dictionary:')
-                            # self.path_finder.find_subdirectories(source_lib[key][f"sub_dir"],
-                            #                                      f"{source}_general_root_dir",
-                            #                                      f"{source}_{key}_sub_dir")
-
                             source_lib[key][f"sub_dir"] = col.text_input(
                                 f'{i}. Set {key.replace("_", " ")} Sub-Data Dictionary: ',
                                 value=source_lib[key][f"sub_dir"],
@@ -2566,9 +2630,6 @@ class make_reference:
                                 on_change=ref_editor_change,
                                 args=(key, "sub_dir", source),
                                 placeholder=f"Set your Reference Dictionary...")
-
-            find_path = self.path_finder.find_path(source_lib['general'][f"root_dir"], f"{source}_general_root_dir_find")
-            st.code(f"Find Dictionary from: {find_path}", language='shell')
 
             st.session_state.step2_check.append(self.__step2_makecheck(source_lib, source))
 
@@ -2850,7 +2911,7 @@ class make_simulation():
         self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
         self.Mod_variables_defination = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_defination')
         self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
-        self.path_finder = FindPath()
+
         # self.stat = initial.stat()
 
     def find_paths_in_dict(self, d):
@@ -3965,8 +4026,6 @@ class make_simulation():
                                                              on_change=sim_editor_change,
                                                              args=(key, "fulllist", source),
                                                              placeholder=f"Set your Simulation Fulllist file...")
-            find_path = self.path_finder.find_path(source_lib['general'][f"dir"], f"{source}_general_dir_simfind")
-            st.code(f"Find Dictionary from: {find_path}", language='shell')
 
             for key, values in source_lib.items():
                 if key != 'general' and key in self.selected_items:
