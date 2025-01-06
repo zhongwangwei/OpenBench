@@ -80,7 +80,7 @@ def geo_single_average(option: dict, selected_item, refselect, simselect, ref, s
         else:
             cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
 
-        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, orientation='horizontal', spacing='uniform')
+        cb = fig.colorbar(cs, cax=cbaxes, orientation='horizontal', spacing='uniform')
         cb.solids.set_edgecolor("face")
         cb.set_label('%s' % (var), position=(0.5, bottom - 1.5))  # , labelpad=-60
 
@@ -166,6 +166,7 @@ def geo_average_diff(option: dict, selected_item, refselect, simselect, ref, sim
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
+    # Simulation --------------------------------------------------------------------------
     lat = ds_sim.lat.values
     lon = ds_sim.lon.values
     lat, lon = np.meshgrid(lat[::-1], lon)
@@ -173,43 +174,43 @@ def geo_average_diff(option: dict, selected_item, refselect, simselect, ref, sim
     ds_sim = ds_sim[simvar].where(ds_sim[simvar] > -999, np.nan).mean('time', skipna=True).transpose("lon", "lat")[:, ::-1].values
     fig, axes = plt.subplots(2, 2, figsize=(option['x_wise'], option['y_wise']), subplot_kw={'projection': ccrs.PlateCarree()})
 
-    ticks = matplotlib.ticker.MultipleLocator(base=option['colorbar_ticks'])
-
-    option['vmin'] = math.floor(np.nanmin(ds_sim))
-    option['vmax'] = math.ceil(np.nanmax(ds_sim))
-    mticks, cmap, bnd, norm = get_color_info(option['vmin'], option['vmax'], ticks, option['cpool'], option['colorbar_ticks'])
+    ticks = matplotlib.ticker.MultipleLocator(base=option['sim_colorbar_ticks'])
+    mticks, cmap, bnd, norm = get_color_info(option['sim_vmin'], option['sim_vmax'], ticks, option['cpool'],
+                                             option['sim_colorbar_ticks'])
     option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
     cs1 = axes[0][0].contourf(lon, lat, ds_sim, levels=bnd, alpha=1, cmap=cmap, norm=norm, extend='both')  # , extend='both'
     pos = axes[0][0].get_position()
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-    cbaxes = fig.add_axes([right + 0.008, bottom, 0.01, height])
-    cb = fig.colorbar(cs1, cax=cbaxes, ticks=bnd[::2], orientation='vertical', spacing='uniform')
-    cb.solids.set_edgecolor("face")
+    # cbaxes = fig.add_axes([right + 0.005, bottom + 0.05, 0.01, height - 0.05])
+    # cb = fig.colorbar(cs1, cax=cbaxes, ticks=bnd[::4], orientation='vertical', spacing='uniform')
+    # cb.solids.set_edgecolor("face")
     axes[0][0].set_title('Simulation', fontsize=option['title_size'])
 
-    option['vmin'] = math.floor(np.nanmin(ds_ref))
-    option['vmax'] = math.ceil(np.nanmin(ds_ref))
-    mticks, cmap, bnd, norm = get_color_info(option['vmin'], option['vmax'], ticks, option['cpool'], option['colorbar_ticks'])
+    # Reference =======================================================================
+    ticks = matplotlib.ticker.MultipleLocator(base=option['ref_colorbar_ticks'])
+    mticks, cmap, bnd, norm = get_color_info(option['ref_vmin'], option['ref_vmax'], ticks, option['cpool'],
+                                             option['ref_colorbar_ticks'])
     option['vmax'], option['vmin'] = mticks[-1], mticks[0]
     cs2 = axes[0][1].contourf(lon, lat, ds_ref, levels=bnd, alpha=1, cmap=cmap, norm=norm, extend='both')  # , extend='both'
     pos = axes[0][1].get_position()
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-    cbaxes = fig.add_axes([right + 0.008, bottom, 0.01, height])
-    cb = fig.colorbar(cs2, cax=cbaxes, ticks=bnd[::2], orientation='vertical', spacing='uniform')
+    cbaxes = fig.add_axes([right + 0.01, bottom + 0.05, 0.01, height - 0.05])
+    cb = fig.colorbar(cs2, cax=cbaxes, ticks=bnd[::4], orientation='vertical', spacing='uniform')
     cb.solids.set_edgecolor("face")
     axes[0][1].set_title('Reference', fontsize=option['title_size'])
 
+    # difference --------------------------------------------------------------------------------
     diff = ds_ref - ds_sim
-    option['vmin'] = math.floor(np.nanmin(diff))
-    option['vmax'] = math.ceil(np.nanmax(diff))
-    mticks, cmap, levels, normalize = get_color_info(option['vmin'], option['vmax'], ticks, option['cpool'], option['colorbar_ticks'])
+    ticks = matplotlib.ticker.MultipleLocator(base=option['diff_colorbar_ticks'])
+    mticks, cmap, levels, normalize = get_color_info(option['diff_vmin'], option['diff_vmax'], ticks, option['cpool'],
+                                                     option['diff_colorbar_ticks'])
 
-    cs3 = axes[1][0].contourf(lon, lat, diff, levels=levels, alpha=1, cmap=cmap, norm=normalize, extend='both')  # , extend='both'
+    cs3 = axes[1][0].contourf(lon, lat, diff, levels=levels, alpha=1, cmap='coolwarm', norm=normalize, extend='both')  # , extend='both'
     pos = axes[1][0].get_position()
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-    cbaxes = fig.add_axes([right + 0.01, bottom, 0.01, height])
-    cb = fig.colorbar(cs3, cax=cbaxes, ticks=levels, orientation='vertical', spacing='uniform')
+    cbaxes = fig.add_axes([right + 0.001, bottom, 0.01, height - 0.05])
+    cb = fig.colorbar(cs3, cax=cbaxes, ticks=levels[::2], orientation='vertical', spacing='uniform')
     cb.solids.set_edgecolor("face")
     axes[1][0].set_title('Difference between ref and sim', fontsize=option['title_size'])
 
@@ -222,7 +223,6 @@ def geo_average_diff(option: dict, selected_item, refselect, simselect, ref, sim
         ax.add_feature(coastline, linewidth=0.6)
         ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
         ax.add_feature(rivers, linewidth=0.5)
-
 
         if option['grid']:
             ax.gridlines(draw_labels=False, linestyle=option['grid_style'], linewidth=option['grid_linewidth'], color='k',
@@ -251,37 +251,11 @@ def geo_average_diff(option: dict, selected_item, refselect, simselect, ref, sim
 
 
 def get_color_info(vmin, vmax, ticks, cpool, colorbar_ticks):
-    # if 2 >= vmax - vmin > 1:
-    #     colorbar_ticks = 0.2
-    # elif 10 >= vmax - vmin > 5:
-    #     colorbar_ticks = 1
-    # elif 100 >= vmax - vmin > 10:
-    #     colorbar_ticks = 5
-    # elif 200 >= vmax - vmin > 100:
-    #     colorbar_ticks = 20
-    # elif 500 >= vmax - vmin > 200:
-    #     colorbar_ticks = 50
-    # elif 1000 >= vmax - vmin > 500:
-    #     colorbar_ticks = 100
-    # elif 2000 >= vmax - vmin > 1000:
-    #     colorbar_ticks = 200
-    # elif 10000 >= vmax - vmin > 2000:
-    #     colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
-    # else:
-    #     colorbar_ticks = 0.1
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    # st.write(mticks)
+
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
               mticks]
-    # if mticks[0] < vmin and mticks[-1] < vmax:
-    #     mticks = mticks[1:]
-    # elif mticks[0] > vmin and mticks[-1] > vmax:
-    #     mticks = mticks[:-1]
-    # elif mticks[0] < vmin and mticks[-1] > vmax:
-    #     mticks = mticks[1:-1]
-    # if mticks[0] == mticks[-1]:
-    #     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
-    #               mticks]
+
     if cpool is not None:
         cmap = cm.get_cmap(cpool)
         bnd = np.arange(mticks[0], mticks[-1] + colorbar_ticks / 2, colorbar_ticks / 2)
