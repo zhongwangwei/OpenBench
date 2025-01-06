@@ -10,9 +10,12 @@ import xarray as xr
 import numpy as np
 from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Namelist_lib.namelist_info import initial_setting
+from Namelist_lib.find_path import FindPath
 import sys
 import itertools
-
+import platform
+import posixpath
+from posixpath import normpath
 from mpl_toolkits.axisartist.angle_helper import select_step
 
 
@@ -49,41 +52,55 @@ class make_initional:
         self.comparisons = initial.comparisons()
         self.statistics = initial.statistics()
         self.nl = NamelistReader()
+        self.path_finder = FindPath()
 
     def find_paths_in_dict(self, d):
+        # # 获取当前工作目录，并确保以标准格式输出
+        # # 根据运行平台获取路径分隔符
+        if platform.system() == "Windows":
+            sep = '\\'
+        else:
+            sep = posixpath.sep
+
         paths = []
         for key, value in d.items():
             if isinstance(value, dict):
                 paths.extend(self.find_paths_in_dict(value))
             elif isinstance(value, str):
                 if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sys.platform.startswith('win'):
-                        d[key] = value.replace('/', '\\')
-                    elif sys.platform.startswith('linux') | sys.platform.startswith('macos'):
-                        d[key] = value.replace('\\', '/')
-                        d[key] = value.replace("'\'", "/")
-                        d[key] = value.replace("'//'", "/")
+                    if sep == '\\':
+                        path.replace(os.sep, "\\")
+                        d[key] = value.replace(os.sep, '\\')
+                    else:
+                        d[key] = value.replace(os.sep, "/")
                     paths.append((key, value))
-            # if sys.platform.startswith('linux'):
+
+            # windows_path = path.replace(os.sep, "\\")
+            # posix_path = path.replace(os.sep, "/")
+            # print(windows_path)  # 输出: folder\file.txt
+            # print(posix_path)  # 输出: folder/file.txt
         return paths
 
     def home(self):
-        st.subheader("Welcome to the Evaluation page",divider=True)
+        st.subheader("Welcome to the Evaluation page", divider=True)
         st.write(
             "##### :green[Choose whether to upload a file or create a new initial setup, and please press Next step button]")  # 请选择是上传文件，还是新建一个初始设置
         genre = st.radio(
             " What's your choice?", ["***Upload***", "***Setting***"],
             captions=["Upload your case and change a little.", "No need to upload, staring setting."], index=1,
-            horizontal=True,label_visibility='collapsed')
+            horizontal=True, label_visibility='collapsed')
 
         def define_step1():
             st.session_state.step1_general = True
 
         if genre == '***Upload***':
-            st.write('###### Please Upload :red[Main.nml] Filepath:')
-            st.session_state['main_nml'] = st.text_input(' :red[Main] Filepath: ',
-                                                         value='',
-                                                         placeholder="Please input your file path...",label_visibility='collapsed')
+            if 'main_nml' not in st.session_state:
+                st.session_state['main_nml'] = None
+            st.session_state['main_nml'] = self.path_finder.get_file(st.session_state['main_nml'], 'upload_file', 'nml')
+
+            if st.session_state.main_nml is not None:
+                st.code(f'Upload Namelist: {st.session_state.main_nml}', language='shell')
+
             if st.session_state['main_nml']:
                 if 'main_change' in st.session_state:
                     del st.session_state['main_change']
@@ -299,7 +316,6 @@ class make_initional:
         else:
             return False
 
-    
     def step1_general(self):
         if 'main_change' not in st.session_state:
             st.session_state.main_change = {'general': False,
@@ -312,7 +328,7 @@ class make_initional:
         General = self.generals
         if st.session_state.generals:
             General = st.session_state.generals
-        st.subheader('General setting Info....',divider=True)
+        st.subheader('General setting Info....', divider=True)
 
         def compare_tres_index(compare_tres_value):
             my_list = ['hour', 'day', 'month', 'year']
@@ -347,7 +363,7 @@ class make_initional:
                          on_change=data_editor_change,  # callback function
                          args=("compare_tim_res", "compare_tim_res"),
                          placeholder=f"Set your Time Resolution (default={General['compare_tim_res']})...",
-                          label_visibility='collapsed')
+                         label_visibility='collapsed')
         with col3:
             st.number_input("Compare Time zone: ", value=General["compare_tzone"],
                             key="compare_tzone",
@@ -355,7 +371,7 @@ class make_initional:
                             args=("compare_tzone", "compare_tzone"),
                             min_value=-12.0,
                             max_value=12.0,
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
         with col4:
             st.number_input("Compare Geo Resolution: ", value=General["compare_grid_res"],
                             key="compare_grid_res",
@@ -363,7 +379,7 @@ class make_initional:
                             args=("compare_grid_res", "compare_grid_res"),
                             min_value=0.0,
                             placeholder="Compare Geo Resolution...",
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
         st.divider()
         st.write('##### :blue[Extent]')  # 范围
         col1, col2, col3, col4 = st.columns(4)
@@ -379,7 +395,7 @@ class make_initional:
                             args=("max_lat", "max_lat"),
                             min_value=-90.0,
                             max_value=90.0,
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
         with col2:
             st.number_input("Min latitude: ", value=float(General["min_lat"]),
                             key="min_lat",
@@ -387,7 +403,7 @@ class make_initional:
                             args=("min_lat", "min_lat"),
                             min_value=-90.0,
                             max_value=90.0,
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
         with col3:
             st.number_input("Max Longitude: ", value=float(General["max_lon"]),
                             key="max_lon",
@@ -395,7 +411,7 @@ class make_initional:
                             args=("max_lon", "max_lon"),
                             min_value=-180.0,
                             max_value=180.0,
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
         with col4:
             st.number_input("Min Longitude: ", value=float(General["min_lon"]),
                             key="min_lon",
@@ -403,17 +419,19 @@ class make_initional:
                             args=("min_lon", "min_lon"),
                             min_value=-180.0,
                             max_value=180.0,
-                          label_visibility='collapsed')
+                            label_visibility='collapsed')
 
-        st.write('###### :green[Base case directory]')
-        st.text_input('Base case directory: ', value=General["basedir"],
-                      key="basedir",
-                      on_change=data_editor_change,
-                      args=("basedir", "basedir"),
-                      placeholder="Set your case directory...",
-                          label_visibility='collapsed')
-        # ===============================================
         st.divider()
+        st.write('###### :green[Base case directory]')
+        if General["basedir"] is None or General["basedir"] == '': General["basedir"] = '/'
+        if os.path.isdir(os.path.abspath(General["basedir"])):
+            General["basedir"] = os.path.abspath(General["basedir"])
+        else:
+            General["basedir"] = '/'
+
+        General["basedir"] = self.path_finder.find_path(General["basedir"], "basedir")
+        st.code(f"Current Path: {General['basedir']}", language='shell')
+
         st.write('###### :green[Num Cores]')
         left, right = st.columns((1, 3))
         with left:
@@ -422,14 +440,14 @@ class make_initional:
                             on_change=data_editor_change,  # callback function
                             args=("num_cores", "num_cores"),
                             placeholder="how many core will be used in Parallel computing...",
-                            format='%d',label_visibility='collapsed')
+                            format='%d', label_visibility='collapsed')
         with right:
             st.write(':information_source: How many cores will be used in Parallel computing? '
                      'Recommend core number is 5.')
 
         col1, col2, col3 = st.columns(3)
         col1.write('###### :green[Start year]')
-        col2.write('###### :green[Start year]')
+        col2.write('###### :green[End year]')
         col3.write('###### :green[Minimum year]')
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -437,41 +455,42 @@ class make_initional:
                             key="syear",
                             on_change=data_editor_change,  # callback function
                             args=("syear", "syear"),
-                            placeholder="Start year...",label_visibility='collapsed')
+                            placeholder="Start year...", label_visibility='collapsed')
 
         with col2:
             st.number_input("End year: ", format='%04d', value=General["eyear"], step=int(1),
                             key="eyear",
                             on_change=data_editor_change,  # callback function
                             args=("eyear", "eyear"),
-                            placeholder="End year...",label_visibility='collapsed')
+                            placeholder="End year...", label_visibility='collapsed')
 
         with col3:
             st.number_input("Minimum year: ", value=General["min_year"], step=1.0,
                             key="min_year",
                             on_change=data_editor_change,  # callback function
                             args=("min_year", "min_year"),
-                            placeholder="Minimum year...",label_visibility='collapsed')
+                            placeholder="Minimum year...", label_visibility='collapsed')
         st.write('')
         col1, col2, col3 = st.columns(3)
         col1.checkbox('Running Evaluation? ', value=General['evaluation'],
-                    key="evaluation",
-                    on_change=data_editor_change,  # callback function
-                    args=("evaluation", "evaluation"),
-                    )
-        col2.checkbox('Running Comparison? ', value=General['comparison'],
-                    key="comparison",
-                    on_change=data_editor_change,  # callback function
-                    args=("comparison", "comparison"),
-                    )
-        col3.checkbox('Running Statistics? ', value=General['statistics'],
-                      key="statistics",
+                      key="evaluation",
                       on_change=data_editor_change,  # callback function
-                      args=("statistics", "statistics")
+                      args=("evaluation", "evaluation"),
                       )
+        col2.checkbox('Running Comparison? ', value=General['comparison'],
+                      key="comparison",
+                      on_change=data_editor_change,  # callback function
+                      args=("comparison", "comparison"),
+                      )
+        # col3.checkbox('Running Statistics? ', value=General['statistics'],
+        #               key="statistics",
+        #               on_change=data_editor_change,  # callback function
+        #               args=("statistics", "statistics")
+        #               )
+        General['statistics'] = False
 
         # st.write(
-            # ':information_source: You can choose which one to run, if only :point_up: running comparison you should prepare the files first.')
+        # ':information_source: You can choose which one to run, if only :point_up: running comparison you should prepare the files first.')
         st.divider()
 
         # showing for detail ===============================================
@@ -480,7 +499,8 @@ class make_initional:
             General["reference_nml"] = f"{st.session_state.openbench_path}/nml/ref-{General['basename']}.nml"
         if not General["simulation_nml"] or st.session_state.step1_initial == 'Setting':
             General["simulation_nml"] = f"{st.session_state.openbench_path}/nml/sim-{General['basename']}.nml"
-        General["statistics_nml"] = f"{st.session_state.openbench_path}/nml/stats.nml"
+        if not General["statistics_nml"] or st.session_state.step1_initial == 'Setting':
+            General["statistics_nml"] = f"{st.session_state.openbench_path}/nml/stats-{General['basename']}.nml"
         General["figure_nml"] = f"{st.session_state.openbench_path}/nml/figlib.nml"
         paths = self.find_paths_in_dict(General)
 
@@ -501,7 +521,6 @@ class make_initional:
         with col4:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Metrics page')
 
-    
     def __step1_check_general(self, Generals):
 
         check_state = 0
@@ -544,7 +563,7 @@ class make_initional:
                 elif ('/' in path) & (path[0] == '/'):
                     if sys.platform.startswith('linux') | (not sys.platform.startswith('win')):
                         os_type = True
-                elif (('./' in path)|('.\\' in path)) & (path[0] == '.'):
+                elif (('./' in path) | ('.\\' in path)) & (path[0] == '.'):
                     os_type = True
                 return os_type
             else:
@@ -562,7 +581,7 @@ class make_initional:
         # return step1_main_check~
 
     # =============================================
-    
+
     def step1_metrics(self):
 
         metrics = self.metrics
@@ -581,7 +600,7 @@ class make_initional:
             scores[key] = st.session_state[key]
             st.session_state.main_change['scores'] = True
 
-        st.subheader('Metrics and Scores setting ....',divider=True)
+        st.subheader('Metrics and Scores setting ....', divider=True)
         st.write('##### :orange[Select Metrics]')
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -810,17 +829,17 @@ class make_initional:
         # return check state~
 
     # ===============================================
-    
+
     def step1_evaluation(self):
         self.__step1_set_Evaluation_Items(self.evaluation_items, self.comparisons, self.statistics)
         st.divider()
-        step1_disable=False
+        step1_disable = False
         if st.session_state.step1_main_check_general & st.session_state.step1_main_check_metrics_scores & (
                 st.session_state.step1_main_check_evaluation):
             st.session_state.step1_main_check = True
             st.session_state.step1_main_nml = False
         else:
-            step1_disable=True
+            step1_disable = True
             st.session_state.step1_main_check = False
             if not st.session_state.step1_main_check_general:
                 st.error('There exist error in general page, please check first!', icon="🚨")
@@ -856,16 +875,14 @@ class make_initional:
                 for key in st.session_state.main_change.keys():
                     st.session_state.main_change[key] = False
 
-
         make_contain = st.container()
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.button(':back: Previous step', on_click=define_step1, help='Beck to Metrics page')
         with col4:
-            st.button('Next step :soon: ', on_click=define_step2, args=(make_contain, 'make_contain'),disabled=step1_disable,
+            st.button('Next step :soon: ', on_click=define_step2, args=(make_contain, 'make_contain'), disabled=step1_disable,
                       help='Go to Simulation page')
 
-    
     def __step1_set_Evaluation_Items(self, Evaluation_Items, comparisons, statistics):
         check_list = []
         if st.session_state.evaluation_items:
@@ -882,10 +899,6 @@ class make_initional:
         def comparisons_editor_change(key, editor_key):
             comparisons[key] = st.session_state[key]
             st.session_state.main_change['comparisons'] = True
-
-        def statistics_editor_change(key, editor_key):
-            statistics[key] = st.session_state[key]
-            st.session_state.main_change['statistics'] = True
 
         st.subheader("Evaluation Items ....", divider=True)
         col1, col2 = st.columns(2)
@@ -1167,9 +1180,10 @@ class make_initional:
         check_list.append(self.__step1_check_evaluation(Evaluation_Items))
         st.divider()
 
+        st.subheader("Comparisons Items ....", divider=True)
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("Comparisons Items ....",divider=True)
+
             # st.checkbox('IGBP groupby', key="IGBP_groupby",
             #             on_change=comparisons_editor_change,
             #             args=("IGBP_groupby", "IGBP_groupby"),
@@ -1199,6 +1213,8 @@ class make_initional:
                         on_change=comparisons_editor_change,
                         args=("Whisker_Plot", "Whisker_Plot"),
                         value=comparisons['Whisker_Plot'])
+
+        with col2:
             st.checkbox('Parallel Coordinates',
                         key="Parallel_Coordinates",
                         on_change=comparisons_editor_change,
@@ -1225,55 +1241,59 @@ class make_initional:
                         args=("Ridgeline_Plot", "Ridgeline_Plot"),
                         value=comparisons['Ridgeline_Plot'])
 
-        with col2:
-            Statistics_disable = True
-            st.subheader("Statistics Items ....",divider=True)
-            st.checkbox('Mann Kendall Trend Test',
-                        key="Mann_Kendall_Trend_Test",
-                        on_change=statistics_editor_change,
-                        args=("Mann_Kendall_Trend_Test", "Mann_Kendall_Trend_Test"),
-                        disabled=Statistics_disable,
-                        value=statistics['Mann_Kendall_Trend_Test'])
-            st.checkbox('Correlation', key="Correlation",
-                        on_change=statistics_editor_change,
-                        args=("Correlation", "Correlation"),
-                        disabled=Statistics_disable,
-                        value=statistics['Correlation'])
-            st.checkbox('Standard Deviation', key="Standard_Deviation",
-                        on_change=statistics_editor_change,
-                        args=("Standard_Deviation", "Standard_Deviation"),
-                        disabled=Statistics_disable,
-                        value=statistics['Standard_Deviation'])
-            st.checkbox('Functional Response', key="Functional_Response",
-                        on_change=statistics_editor_change,
-                        args=("Functional_Response", "Functional_Response"),
-                        disabled=Statistics_disable,
-                        value=statistics['Functional_Response'])
-            st.checkbox('Hellinger Distance', key="Hellinger_Distance",
-                        on_change=statistics_editor_change,
-                        args=("Hellinger_Distance", "Hellinger_Distance"),
-                        disabled=Statistics_disable,
-                        value=statistics['Hellinger_Distance'])
-            st.checkbox('Partial Least Squares Regression', key="Partial_Least_Squares_Regression",
-                        on_change=statistics_editor_change,
-                        args=("Partial_Least_Squares_Regression", "Partial_Least_Squares_Regression"),
-                        disabled=Statistics_disable,
-                        value=statistics['Partial_Least_Squares_Regression'])
-            st.checkbox('Three Cornered Hat', key="Three_Cornered_Hat",
-                        on_change=statistics_editor_change,
-                        args=("Three_Cornered_Hat", "Three_Cornered_Hat"),
-                        disabled=Statistics_disable,
-                        value=statistics['Three_Cornered_Hat'])
-        check_list.append(self.__step1_check_comparisons_statistics(comparisons, statistics))
-        if all(check_list):
-            st.session_state.step1_main_check_evaluation = True
-        else:
-            st.session_state.step1_main_check_evaluation = False
+            # Statistics_disable = True
+            # st.subheader("Statistics Items ....", divider=True)
+            # st.checkbox('Mann Kendall Trend Test',
+            #             key="Mann_Kendall_Trend_Test",
+            #             on_change=statistics_editor_change,
+            #             args=("Mann_Kendall_Trend_Test", "Mann_Kendall_Trend_Test"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Mann_Kendall_Trend_Test'])
+            # st.checkbox('Correlation', key="Correlation",
+            #             on_change=statistics_editor_change,
+            #             args=("Correlation", "Correlation"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Correlation'])
+            # st.checkbox('Standard Deviation', key="Standard_Deviation",
+            #             on_change=statistics_editor_change,
+            #             args=("Standard_Deviation", "Standard_Deviation"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Standard_Deviation'])
+            # st.checkbox('Z Score', key="Z_Score",
+            #             on_change=statistics_editor_change,
+            #             args=("Z_Score", "Z_Score"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Z_Score'])
+            #
+            # st.checkbox('Functional Response', key="Functional_Response",
+            #             on_change=statistics_editor_change,
+            #             args=("Functional_Response", "Functional_Response"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Functional_Response'])
+            # st.checkbox('Hellinger Distance', key="Hellinger_Distance",
+            #             on_change=statistics_editor_change,
+            #             args=("Hellinger_Distance", "Hellinger_Distance"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Hellinger_Distance'])
+            # st.checkbox('Partial Least Squares Regression', key="Partial_Least_Squares_Regression",
+            #             on_change=statistics_editor_change,
+            #             args=("Partial_Least_Squares_Regression", "Partial_Least_Squares_Regression"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Partial_Least_Squares_Regression'])
+            # st.checkbox('Three Cornered Hat', key="Three_Cornered_Hat",
+            #             on_change=statistics_editor_change,
+            #             args=("Three_Cornered_Hat", "Three_Cornered_Hat"),
+            #             disabled=Statistics_disable,
+            #             value=statistics['Three_Cornered_Hat'])
+        st.session_state.step1_main_check_evaluation = self.__step1_check_comparisons(comparisons)
+        # if all(check_list):
+        #     st.session_state.step1_main_check_evaluation = True
+        # else:
+        #     st.session_state.step1_main_check_evaluation = False
         st.session_state.evaluation_items = Evaluation_Items
         st.session_state.comparisons = comparisons
         st.session_state.statistics = statistics
 
-    
     def __step1_check_evaluation(self, Evaluation_Items):
         check_state = 0
 
@@ -1300,7 +1320,7 @@ class make_initional:
         if check_state == 0:
             return True
 
-    def __step1_check_comparisons_statistics(self, comparisons, statistics):
+    def __step1_check_comparisons(self, comparisons):
         # Generals_check = False
         check_state = 0
 
@@ -1319,20 +1339,21 @@ class make_initional:
         if not st.session_state['generals']['comparison'] and any(comparisons.values()):
             st.warning(f'Please make sure choose to select comparison', icon="⚠")
 
-        es_select = {}
-        for key, value in statistics.items():
-            if isinstance(value, bool):
-                if value:
-                    es_select[key] = value
-                    score_all_false = False
+        # es_select = {}
+        # for key, value in statistics.items():
+        #     if isinstance(value, bool):
+        #         if value:
+        #             es_select[key] = value
+        #             score_all_false = False
         if score_all_false:
             check_state += 1
         else:
             formatted_keyc = ", \n".join(key.replace('_', ' ') for key in ec_select.keys())
-            formatted_keys = ", \n".join(key.replace('_', ' ') for key in es_select.keys())
-            st.info(f"Make sure your selected comparisons Item is:      :red[{formatted_keyc}] "
-                    f" \n Make sure your selected Statistics Item is:      :red[{formatted_keys}]", icon="ℹ️")
-        # TODO: whether need to add more check to satisfy needs.
+            st.info(f"Make sure your selected comparisons Item is:      :red[{formatted_keyc}] ", icon="ℹ️")
+            # formatted_keys = ", \n".join(key.replace('_', ' ') for key in es_select.keys())
+            # st.info(f"Make sure your selected comparisons Item is:      :red[{formatted_keyc}] "
+            #         f" \n Make sure your selected Statistics Item is:      :red[{formatted_keys}]", icon="ℹ️")
+        # TODO: whether you need to add more check to satisfy needs.
 
         if check_state > 0:
             return False
@@ -1340,7 +1361,6 @@ class make_initional:
             return True
         # return check state~
 
-    
     def _step1_main_nml(self):
         if st.session_state.step1_main_check & (not st.session_state.step1_main_nml):
             st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}")
@@ -1371,7 +1391,6 @@ class make_initional:
                                          'statistics': st.session_state['statistics'],
                                          }
 
-    
     def __step1_make_main_namelist(self, file_path, Generals, metrics, scores, Evaluation_Items, comparisons,
                                    statistics,
                                    classification):
@@ -1458,7 +1477,6 @@ class make_initional:
             else:
                 return False
 
-    
     def __step1_check_data(self, Generals, metrics, Evaluation_Items):
         # Generals_check = False
         check_state = 0
@@ -1531,6 +1549,7 @@ class make_reference:
         self.nl = NamelistReader()
         self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
         self.initial = initial
+        self.path_finder = FindPath()
         # self.ref_source = initial.ref_source()
         # self.ref_initial = initial.ref_info()
 
@@ -1563,7 +1582,6 @@ class make_reference:
             # if sys.platform.startswith('linux'):
         return paths
 
-    
     def step2_set(self):
         # print('Create ref namelist -------------------')
         if 'ref_change' not in st.session_state:
@@ -1645,7 +1663,6 @@ class make_reference:
         with col4:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Making page')
 
-    
     def __step2_setcheck(self, general_ref):
         check_state = 0
 
@@ -1672,7 +1689,6 @@ class make_reference:
                     np.unique(st.session_state.step2_errorlist[selected_item]))
             return True
 
-    
     def step2_make_new_refnml(self):
         if 'step2_add_nml' not in st.session_state:
             st.session_state.step2_add_nml = False
@@ -2280,7 +2296,6 @@ class make_reference:
         st.button('Finish and back to select page', on_click=define_back, args=(make_contain, 'make_contain'),
                   help='Finish add and go back to select page')
 
-    
     def __step2_make_ref_lib_namelist(self, file_path, newlib, fname):
         """
         Write a namelist from a text file.
@@ -2463,7 +2478,6 @@ class make_reference:
         st.button('Finish and back to select page', on_click=define_back, args=(remove_contain, 'remove_contain'),
                   help='Finish add and go back to select page')
 
-    
     def step2_make(self):
         if 'step2_make_check' not in st.session_state:
             st.session_state.step2_make_check = False
@@ -2507,7 +2521,6 @@ class make_reference:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Reference nml page',
                       use_container_width=True)
 
-    
     def __step2_make_ref_info(self, i, source, source_lib, file, ref_general):
         # st.write(source)
 
@@ -2518,6 +2531,8 @@ class make_reference:
         import itertools
         with st.container(height=None, border=True):
             key = 'general'
+            if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = '/'
+
             source_lib[key][f"root_dir"] = st.text_input(f'{i}. Set Data Dictionary: ',
                                                          value=source_lib[key][f"root_dir"],
                                                          key=f"{source}_{key}_root_dir",
@@ -2538,6 +2553,12 @@ class make_reference:
                     if source in ref_general[f'{key}_ref_source']:
                         col = next(cols)
                         if 'sub_dir' in source_lib[key].keys():
+                            # with col:
+                            # st.write(f'Set {key.replace("_", " ")} Sub-Data Dictionary:')
+                            # self.path_finder.find_subdirectories(source_lib[key][f"sub_dir"],
+                            #                                      f"{source}_general_root_dir",
+                            #                                      f"{source}_{key}_sub_dir")
+
                             source_lib[key][f"sub_dir"] = col.text_input(
                                 f'{i}. Set {key.replace("_", " ")} Sub-Data Dictionary: ',
                                 value=source_lib[key][f"sub_dir"],
@@ -2546,9 +2567,11 @@ class make_reference:
                                 args=(key, "sub_dir", source),
                                 placeholder=f"Set your Reference Dictionary...")
 
+            find_path = self.path_finder.find_path(source_lib['general'][f"root_dir"], f"{source}_general_root_dir_find")
+            st.code(f"Find Dictionary from: {find_path}", language='shell')
+
             st.session_state.step2_check.append(self.__step2_makecheck(source_lib, source))
 
-    
     def __step2_makecheck(self, source_lib, source):
         error_state = 0
         warning_state = 0
@@ -2621,9 +2644,8 @@ class make_reference:
                 st.session_state.step2_errorlist[source] = list(np.unique(st.session_state.step2_errorlist[source]))
             return True
 
-    
     def step2_ref_nml(self):
-        step2_disable=False
+        step2_disable = False
         if st.session_state.step2_set_check & st.session_state.step2_make_check:
             for source, path in st.session_state.ref_data['def_nml'].items():
                 source_lib = st.session_state.ref_data[source]
@@ -2642,7 +2664,7 @@ class make_reference:
             st.session_state.step2_ref_check = True
             st.session_state.step2_ref_nml = False
         else:
-            step2_disable=True
+            step2_disable = True
             if not st.session_state.step2_set_check:
                 formatted_keys = ", ".join(
                     key.replace('_', ' ') for key, value in st.session_state.step2_errorlist.items() if 1 in value)
@@ -2716,9 +2738,8 @@ class make_reference:
         with col1:
             st.button(':back: Previous step', on_click=define_step1, help='Go to Reference Making page')
         with col4:
-            st.button('Next step :soon: ', on_click=define_step2, args=(make_contain, 'make'),disabled=step2_disable,
+            st.button('Next step :soon: ', on_click=define_step2, args=(make_contain, 'make'), disabled=step2_disable,
                       help='Go to Simulation page')
-
 
     def __step2_make_ref_namelist(self, file_path, selected_items, ref_data):
         general = ref_data['general']
@@ -2829,6 +2850,8 @@ class make_simulation():
         self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
         self.Mod_variables_defination = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_defination')
         self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
+        self.path_finder = FindPath()
+        # self.stat = initial.stat()
 
     def find_paths_in_dict(self, d):
         paths = []
@@ -2847,7 +2870,6 @@ class make_simulation():
             # if sys.platform.startswith('linux'):
         return paths
 
-    
     def step3_set(self):
         # print('Create ref namelist -------------------')
         if 'sim_change' not in st.session_state:
@@ -2934,7 +2956,6 @@ class make_simulation():
         with col4:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to making page')
 
-    
     def __step3_setcheck(self, general_sim):
         check_state = 0
 
@@ -2961,7 +2982,6 @@ class make_simulation():
                     np.unique(st.session_state.step3_errorlist[selected_item]))
             return True
 
-    
     def step3_make_new_simnml(self):
         if 'step3_add_nml' not in st.session_state:
             st.session_state.step3_add_nml = True
@@ -3742,7 +3762,6 @@ class make_simulation():
         if check_state == 0:
             return True
 
-    
     def step3_mange_simcases(self):
         if 'step3_remove' not in st.session_state:
             st.session_state['step3_remove'] = False
@@ -3806,9 +3825,9 @@ class make_simulation():
             for item in st.session_state.sim_data['general'].keys():
                 for case in cases:
                     if case in st.session_state.sim_data['general'][item]:
-                        st.session_state.sim_change['general']=True
-                st.session_state.sim_data['general'][item] = [value for value in st.session_state.sim_data['general'][item] if value not in cases]
-
+                        st.session_state.sim_change['general'] = True
+                st.session_state.sim_data['general'][item] = [value for value in st.session_state.sim_data['general'][item] if
+                                                              value not in cases]
 
         def define_remove():
             st.session_state.step3_remove = True
@@ -3839,7 +3858,6 @@ class make_simulation():
         st.button('Finish and back to select page', on_click=define_back, args=(remove_contain, 'remove_contain'),
                   help='Finish add and go back to select page')
 
-    
     def step3_make(self):
         sim_general = st.session_state.sim_data['general']
         def_nml = st.session_state.sim_data['def_nml']
@@ -3874,7 +3892,6 @@ class make_simulation():
         with col4:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Simulation nml page')
 
-    
     def __step3_make_sim_info(self, i, source, source_lib, file, sim_general):
         def sim_editor_change(key, editor_key, source):
             source_lib[key][editor_key] = st.session_state[f"{source}_{key}_{editor_key}"]
@@ -3948,6 +3965,8 @@ class make_simulation():
                                                              on_change=sim_editor_change,
                                                              args=(key, "fulllist", source),
                                                              placeholder=f"Set your Simulation Fulllist file...")
+            find_path = self.path_finder.find_path(source_lib['general'][f"dir"], f"{source}_general_dir_simfind")
+            st.code(f"Find Dictionary from: {find_path}", language='shell')
 
             for key, values in source_lib.items():
                 if key != 'general' and key in self.selected_items:
@@ -3999,7 +4018,6 @@ class make_simulation():
             #     write_nml(source_lib, file)
             #     st.success("😉 Make file successfully!!! \n Please press to Next step")
 
-    
     def __step3_makecheck(self, source_lib, source):
         error_state = 0
 
@@ -4075,16 +4093,16 @@ class make_simulation():
                 st.session_state.step3_errorlist[source] = list(np.unique(st.session_state.step3_errorlist[source]))
             return True
 
-    
     def step3_sim_nml(self):
 
-        step3_disable=False
+        step3_disable = False
 
         Mod = self.sim_sources['def_Mod']
         if st.session_state.step3_set_check & st.session_state.step3_make_check:
             for source, path in st.session_state.sim_data['def_nml'].items():
                 source_lib = st.session_state.sim_data[source]
                 st.subheader(source, divider=True)
+                model_info = ''
                 for key, value in Mod.items():
                     if source_lib["general"][f"model_namelist"] == value:
                         model_info = f'Model: {key}'
@@ -4092,12 +4110,11 @@ class make_simulation():
                 key = 'general'
                 if source_lib[key]['data_type'] == 'stn':
                     path_info = path_info + f'\nFulllist File: {source_lib["general"][f"fulllist"]}'
-
                 st.code(f'''{model_info}\n{path_info}''', language='shell', line_numbers=True, wrap_lines=True)
             st.session_state.step3_sim_nml = False
             st.session_state.step3_sim_check = True
         else:
-            step3_disable=True
+            step3_disable = True
             if not st.session_state.step3_set_check:
                 formatted_keys = ", ".join(
                     key.replace('_', ' ') for key, value in st.session_state.step3_errorlist.items() if 1 in value)
@@ -4153,7 +4170,6 @@ class make_simulation():
             st.session_state.step3_nml = False
 
         def define_step2(make_contain, smake):
-            st.write()
             if not st.session_state.step3_sim_check:
                 st.session_state.step4_set = False
             else:
@@ -4164,10 +4180,10 @@ class make_simulation():
                     st.session_state.step4_set = True
                     st.session_state.step3 = True
                     st.session_state.switch_button1_onclick = +1
-                    st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 4
+                    st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 5
 
         def switch_button_index(select):
-            my_list = ["Home", "Evaluation", "Running", 'Visualization']
+            my_list = ["Home", "Evaluation", "Running", 'Visualization', 'Statistics']
             index = my_list.index(select)
             return index
 
@@ -4178,7 +4194,7 @@ class make_simulation():
             st.button(':back: Previous step', on_click=define_step1, help='Go to Simulation Making page')
         with col4:
             st.button('Next step :soon: ', help='Press to go to Run page', on_click=define_step2,
-                      args=(make_contain, 'make'),disabled=step3_disable,
+                      args=(make_contain, 'make'), disabled=step3_disable,
                       key='switch_button1')
 
     def __step3_make_sim_namelist(self, file_path, selected_items, sim_data):

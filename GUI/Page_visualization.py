@@ -83,7 +83,7 @@ class visualization_validation:
         def on_change(key):
             selection = st.session_state[key]
 
-        visual_select = option_menu(None, ["Metrics", "Scores", "Comparisons", 'Statistics'],
+        visual_select = option_menu(None, ["Metrics", "Scores", "Comparisons"], #, 'Statistics'
                                     icons=['list-task', 'easel', "list-task", 'easel'],
                                     on_change=on_change, key='visual_forshow', orientation="horizontal")
 
@@ -129,7 +129,8 @@ class visualization_validation:
                 st.info('No statistics selected!')
 
         if showing_item:
-            item = st.radio('showing_item', [k.replace("_", " ") for k in showing_item], index=None, horizontal=True,label_visibility='collapsed')
+            item = st.radio('showing_item', [k.replace("_", " ") for k in showing_item], index=None, horizontal=True,
+                            label_visibility='collapsed')
             if item:
                 self.__step5_make_show_tab(case_path, visual_select, item.replace(" ", "_"))
 
@@ -455,7 +456,8 @@ class visualization_replot_files:
         left, right = st.columns((2.5, 5))
         with left:
             plot_type = st.selectbox('Please choose your type',
-                                     ['Geo metrics replot','Time average', 'Other Functions'],  # 'Time average', 'Compare lines',
+                                     ['Geo metrics replot', 'Time average', 'Other Functions'],
+                                     # 'Time average', 'Compare lines',
                                      index=None, placeholder="Choose an option", label_visibility="visible")
         if plot_type == 'Time average':
             self.__generate_image_geo_time_average(selected_item, refselect, simselect, path)
@@ -779,71 +781,54 @@ class visualization_replot_files:
                                                index=None, label_visibility="visible", horizontal=True)
 
             with st.expander('More info', expanded=True):
-                col1,col2,col3 = st.columns((1.5,1,1))
+                col1, col2, col3 = st.columns((1.5, 1, 1))
                 option['grid'] = col1.toggle("Showing grid?", value=False, label_visibility="visible")
                 if option['grid']:
                     option['grid_style'] = col2.selectbox('Grid Line Style', ['solid', 'dotted', 'dashed', 'dashdot'],
-                                                        index=2, placeholder="Choose an option", label_visibility="visible")
+                                                          index=2, placeholder="Choose an option", label_visibility="visible")
                     option['grid_linewidth'] = col3.number_input("grid linewidth", min_value=0, value=1)
 
-
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    option['max_lat'] = col1.number_input("Max latitude: ", value=float(st.session_state['generals']["max_lat"]), key="geo_time_average_max_lat",
-                                                        min_value=-90.0, max_value=90.0)
-                    option['min_lat'] = col2.number_input("Min latitude: ", value=float(st.session_state['generals']["min_lat"]), key="geo_time_average_min_lat",
-                                                        min_value=-90.0, max_value=90.0)
-                    option['max_lon'] = col3.number_input("Max Longitude: ", value=float(st.session_state['generals']["max_lon"]), key="geo_time_average_max_lon",
-                                                        min_value=-180.0, max_value=180.0)
-                    option['min_lon'] = col4.number_input("Min Longitude: ", value=float(st.session_state['generals']["min_lon"]), key="geo_time_average_min_lon",
-                                                        min_value=-180.0, max_value=180.0)
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    option['cpool'] = st.selectbox('Colorbar',
-                                              ['RdYlGn', 'RdYlGn_r','Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r',
-                                               'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
-                                               'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
-                                               'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
-                                               'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                               'PuBu_r',
-                                               'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
-                                               'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
-                                               'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                               'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
-                                               'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
-                                               'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
-                                               'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm',
-                                               'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag',
-                                               'flag_r',
-                                               'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                               'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                               'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r',
-                                               'gist_yerg', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray',
-                                               'gray_r',
-                                               'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
-                                               'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
-                                               'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                               'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                               'summer_r',
-                                               'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c',
-                                               'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight',
-                                               'twilight_r',
-                                               'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter',
-                                               'winter_r'], index=0, placeholder="Choose an option",
-                                              label_visibility="visible")
-                with col2:
-                    option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
-                                                               index=0, placeholder="Choose an option",
-                                                               label_visibility="visible")
-                with col3:
-                    option["colorbar_ticks"] = st.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1)
-                with col4:
-                    option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
-                                                key=f"geo_time_average_extend")
+                    option['max_lat'] = col1.number_input("Max latitude: ", value=float(st.session_state['generals']["max_lat"]),
+                                                          key="geo_time_average_max_lat",
+                                                          min_value=-90.0, max_value=90.0)
+                    option['min_lat'] = col2.number_input("Min latitude: ", value=float(st.session_state['generals']["min_lat"]),
+                                                          key="geo_time_average_min_lat",
+                                                          min_value=-90.0, max_value=90.0)
+                    option['max_lon'] = col3.number_input("Max Longitude: ", value=float(st.session_state['generals']["max_lon"]),
+                                                          key="geo_time_average_max_lon",
+                                                          min_value=-180.0, max_value=180.0)
+                    option['min_lon'] = col4.number_input("Min Longitude: ", value=float(st.session_state['generals']["min_lon"]),
+                                                          key="geo_time_average_min_lon",
+                                                          min_value=-180.0, max_value=180.0)
 
+                def get_ticks(vmin, vmax):
+                    if 2 >= vmax - vmin > 1:
+                        colorbar_ticks = 0.2
+                    elif 5 >= vmax - vmin > 2:
+                        colorbar_ticks = 0.5
+                    elif 10 >= vmax - vmin > 5:
+                        colorbar_ticks = 1
+                    elif 100 >= vmax - vmin > 10:
+                        colorbar_ticks = 5
+                    elif 100 >= vmax - vmin > 50:
+                        colorbar_ticks = 20
+                    elif 200 >= vmax - vmin > 100:
+                        colorbar_ticks = 20
+                    elif 500 >= vmax - vmin > 200:
+                        colorbar_ticks = 50
+                    elif 1000 >= vmax - vmin > 500:
+                        colorbar_ticks = 100
+                    elif 2000 >= vmax - vmin > 1000:
+                        colorbar_ticks = 200
+                    elif 10000 >= vmax - vmin > 2000:
+                        colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+                    else:
+                        colorbar_ticks = 0.10
+                    return colorbar_ticks
 
-                ref_type, sim_type = ('grid','grid')
+                ref_type, sim_type = ('grid', 'grid')
                 ref_var = self.ref[refselect][selected_item][f"varname"]
                 try:
                     sim_var = self.sim[simselect][selected_item][f"varname"]
@@ -853,79 +838,224 @@ class visualization_replot_files:
 
                 option['data_path'] = path + f'/data/'
                 key_value = 'geo_time_average'
-                vmin_max_on = False
-                error = False
+
+
                 import math
-                try:
-                    if option['plot_type'] == 'Simulation average':
+                if option['plot_type'] == 'Differentiate':
+                    sim_vmin_max_on = False
+                    sim_error = False
+                    try:
                         var = sim_var
                         filename = f'{option["data_path"]}/{selected_item}_sim_{simselect}_{sim_var}.nc'
                         if len(option['title']) == 0:
                             option['title'] = 'Simulation'
-
                         ds = xr.open_dataset(filename)
-                        ds = ds[var].mean('time', skipna=True)
-                        # quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
-                        # vmax = math.ceil(quantiles[1].values)
-                        # vmin = math.floor(quantiles[0].values)
-                        vmin = math.floor(np.nanmin(ds))
-                        vmax = math.floor(np.nanmax(ds))
-                    elif option['plot_type'] == 'Reference average':
+                        ds_sim = ds[var].mean('time', skipna=True)
+                        sim_vmin = math.floor(np.nanmin(ds_sim))
+                        sim_vmax = math.floor(np.nanmax(ds_sim))
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        sim_error = True
+
+                    if not sim_error:
+                        col1, col2, col3 = st.columns((4, 2, 2))
+                        option["sim_vmin_max_on"] = col1.toggle('Setting Simulation max min', value=sim_vmin_max_on,
+                                                                key=f"{key_value}sim_vmin_max_on")
+                        if option["sim_vmin_max_on"]:
+                            try:
+                                option["sim_vmin"] = col2.number_input(f"colorbar min", value=sim_vmin)
+                                option["sim_vmax"] = col3.number_input(f"colorbar max", value=sim_vmax)
+                            except ValueError:
+                                st.error(f"Max value must larger than min value.")
+                        else:
+                            option["sim_vmin"] = sim_vmin
+                            option["sim_vmax"] = sim_vmax
+                        sim_colorbar_ticks = get_ticks(option["sim_vmin"], option["sim_vmax"])
+                    else:
+                        sim_colorbar_ticks = 0.5
+
+                    ref_vmin_max_on = False
+                    ref_error = False
+                    try:
                         var = ref_var
                         filename = f'{option["data_path"]}/{selected_item}_ref_{refselect}_{ref_var}.nc'
                         if len(option['title']) == 0:
                             option['title'] = 'Reference'
                         ds = xr.open_dataset(filename)
 
-                        ds = ds[var].mean('time', skipna=True)
-                        vmin = math.floor(np.nanmin(ds))
-                        vmax = math.floor(np.nanmax(ds))
-                        # quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
-                        #
-                        # vmax = math.ceil(quantiles[1].values)
-                        # vmin = math.floor(quantiles[0].values)
+                        ds_ref = ds[var].mean('time', skipna=True)
+                        ref_vmin = math.floor(np.nanmin(ds_ref))
+                        ref_vmax = math.floor(np.nanmax(ds_ref))
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        ref_error = True
+
+                    if not ref_error:
+                        col1, col2, col3 = st.columns((4, 2, 2))
+                        option["ref_vmin_max_on"] = col1.toggle('Setting Reference max min', value=ref_vmin_max_on,
+                                                                key=f"{key_value}ref_vmin_max_on")
+                        if option["ref_vmin_max_on"]:
+                            try:
+                                option["ref_vmin"] = col2.number_input(f"colorbar min", value=ref_vmin)
+                                option["ref_vmax"] = col3.number_input(f"colorbar max", value=ref_vmax)
+                            except ValueError:
+                                st.error(f"Max value must larger than min value.")
+                        else:
+                            option["ref_vmin"] = ref_vmin
+                            option["ref_vmax"] = ref_vmax
+                        ref_colorbar_ticks = get_ticks(option["ref_vmin"], option["ref_vmax"])
                     else:
-                        vmin_max_on=False
+                        ref_colorbar_ticks = 0.5
+
+                    diff_vmin_max_on = False
+                    diff_error = False
+                    try:
+                        diff = ds_ref - ds_sim
+                        diff_vmin = math.floor(np.nanmin(diff))
+                        diff_vmax = math.floor(np.nanmax(diff))
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        ref_error = True
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        diff_error = True
+
+                    if not diff_error:
+                        col1, col2, col3 = st.columns((4, 2, 2))
+                        option["diff_vmin_max_on"] = col1.toggle('Setting Difference max min', value=ref_vmin_max_on,
+                                                                key=f"{key_value}diff_vmin_max_on")
+                        if option["diff_vmin_max_on"]:
+                            try:
+                                option["diff_vmin"] = col2.number_input(f"colorbar min", value=diff_vmin)
+                                option["diff_vmax"] = col3.number_input(f"colorbar max", value=diff_vmax)
+                            except ValueError:
+                                st.error(f"Max value must larger than min value.")
+                        else:
+                            option["diff_vmin"] = diff_vmin
+                            option["diff_vmax"] = diff_vmax
+                        diff_colorbar_ticks = get_ticks(option["diff_vmin"], option["diff_vmax"])
+                    else:
+                        diff_colorbar_ticks = 0.5
+
+                    st.write('##### :blue[Colorbar Ticks locater]')
+                    col1, col2, col3 = st.columns((3, 3, 3))
+                    option["sim_colorbar_ticks"] = col1.number_input(f"Simulation", value=float(sim_colorbar_ticks), step=0.1)
+                    option["ref_colorbar_ticks"] = col2.number_input(f"Reference", value=float(ref_colorbar_ticks), step=0.1)
+                    option["diff_colorbar_ticks"] = col3.number_input(f"Difference", value=float(diff_colorbar_ticks), step=0.1)
+                elif option['plot_type'] == 'Simulation average' or option['plot_type'] == 'Reference average':
+                    vmin_max_on = False
+                    error = False
+                    try:
+                        if option['plot_type'] == 'Simulation average':
+                            var = sim_var
+                            filename = f'{option["data_path"]}/{selected_item}_sim_{simselect}_{sim_var}.nc'
+                            if len(option['title']) == 0:
+                                option['title'] = 'Simulation'
+
+                            ds = xr.open_dataset(filename)
+                            ds = ds[var].mean('time', skipna=True)
+                            vmin = math.floor(np.nanmin(ds))
+                            vmax = math.floor(np.nanmax(ds))
+                        elif option['plot_type'] == 'Reference average':
+                            var = ref_var
+                            filename = f'{option["data_path"]}/{selected_item}_ref_{refselect}_{ref_var}.nc'
+                            if len(option['title']) == 0:
+                                option['title'] = 'Reference'
+                            ds = xr.open_dataset(filename)
+
+                            ds = ds[var].mean('time', skipna=True)
+                            vmin = math.floor(np.nanmin(ds))
+                            vmax = math.floor(np.nanmax(ds))
+                    except Exception as e:
+                        st.error(f"Error: {e}")
                         error = True
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                    error = True
 
-                if not error:
-                    col1, col2, col3 = st.columns(3)
-
-                    option["vmin_max_on"] = col1.toggle('Setting max min', value=vmin_max_on, key=f"{key_value}vmin_max_on")
-                    if option["vmin_max_on"]:
-                        try:
-                            option["vmin"] = col2.number_input(f"colorbar min", value=vmin)
-                            option["vmax"] = col3.number_input(f"colorbar max", value=vmax)
-                        except ValueError:
-                            st.error(f"Max value must larger than min value.")
+                    if not error:
+                        col1, col2, col3 = st.columns(3)
+                        option["vmin_max_on"] = col1.toggle('Setting max min', value=vmin_max_on, key=f"{key_value}vmin_max_on")
+                        if option["vmin_max_on"]:
+                            try:
+                                option["vmin"] = col2.number_input(f"colorbar min", value=vmin)
+                                option["vmax"] = col3.number_input(f"colorbar max", value=vmax)
+                            except ValueError:
+                                st.error(f"Max value must larger than min value.")
+                        else:
+                            option["vmin"] = vmin
+                            option["vmax"] = vmax
+                        colorbar_ticks = get_ticks(option["vmin"], option["vmax"])
                     else:
-                        option["vmin"] = vmin
-                        option["vmax"] = vmax
+                        colorbar_ticks = 0.5
                 st.divider()
 
-            col1, col2,col3 = st.columns(3)
-            option["x_wise"] = col1.number_input(f"X Length", min_value=0, value=13)
-            option["y_wise"] = col2.number_input(f"y Length", min_value=0, value=6)
 
-            option["hspace"] = col1.number_input(f"hspace", min_value=0., max_value=1.0, value=0.3,step=0.1)
-            option["wspace"] = col2.number_input(f"wspace", min_value=0., max_value=1.0, value=0.1,step=0.1,)
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    option['cpool'] = st.selectbox('Colorbar',
+                                                   ['RdYlGn', 'RdYlGn_r', 'Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG',
+                                                    'BrBG_r', 'BuGn', 'BuGn_r',
+                                                    'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
+                                                    'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                                    'Oranges',
+                                                    'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
+                                                    'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                                    'PuBu_r',
+                                                    'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
+                                                    'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                                    'RdYlGn_r',
+                                                    'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                                    'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
+                                                    'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
+                                                    'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
+                                                    'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm',
+                                                    'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag',
+                                                    'flag_r',
+                                                    'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                                    'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                                    'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r',
+                                                    'gist_yerg', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray',
+                                                    'gray_r',
+                                                    'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                                    'jet_r',
+                                                    'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
+                                                    'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                                    'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                                    'summer_r',
+                                                    'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c',
+                                                    'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight',
+                                                    'twilight_r',
+                                                    'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter',
+                                                    'winter_r'], index=0, placeholder="Choose an option",
+                                                   label_visibility="visible")
+                with col2:
+                    option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
+                                                               index=0, placeholder="Choose an option",
+                                                               label_visibility="visible")
+
+                with col3:
+                    option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                                    index=0, placeholder="Choose an option", label_visibility="visible",
+                                                    key=f"geo_time_average_extend")
+                if option['plot_type'] == 'Simulation average' or option['plot_type'] == 'Reference average':
+                    with col4:
+                        option["colorbar_ticks"] = st.number_input(f"Colorbar Ticks locater", value=float(colorbar_ticks), step=0.1)
+
+            col1, col2, col3 = st.columns(3)
+            option["x_wise"] = col1.number_input(f"X Length", min_value=0, value=13)
+            option["y_wise"] = col2.number_input(f"y Length", min_value=0, value=7)
+
+            option["hspace"] = col1.number_input(f"hspace", min_value=0., max_value=1.0, value=0.45, step=0.1)
+            option["wspace"] = col2.number_input(f"wspace", min_value=0., max_value=1.0, value=0.25, step=0.1, )
 
             option['saving_format'] = col3.selectbox('Image saving format', ['png', 'jpg', 'eps'],
-                                                       index=1, placeholder="Choose an option", label_visibility="visible")
-
-
+                                                     index=1, placeholder="Choose an option", label_visibility="visible")
 
         if option['plot_type'] == 'Simulation average' or option['plot_type'] == 'Reference average':
-            geo_single_average(option, selected_item, refselect, simselect, self.ref, self.sim,var,filename)
+            geo_single_average(option, selected_item, refselect, simselect, self.ref, self.sim, var, filename)
         elif option['plot_type'] == 'Differentiate':
-            geo_average_diff(option, selected_item, refselect, simselect, self.ref, self.sim,ref_var,sim_var)
+            geo_average_diff(option, selected_item, refselect, simselect, self.ref, self.sim, ref_var, sim_var)
         else:
             st.error('please choose first!')
 
-        # buffer = geo_single_average()  # option, selected_item, refselect, simselect, self.ref, self.sim
 
     def __generate_image_geo_Compare_lines(self, selected_item, path):
         option = {}
@@ -1071,7 +1201,7 @@ class visualization_replot_files:
             if option['plot_type']:
                 with st.expander("Edited Lines", expanded=False):
                     if option['plot_type'] != 'each site':
-                        col1, col2, col3, col4,col5 = st.columns((1.5, 2, 2, 2,2))
+                        col1, col2, col3, col4, col5 = st.columns((1.5, 2, 2, 2, 2))
                         col1.write('##### :blue[Colors]')
                         col2.write('##### :blue[LineWidth]')
                         col3.write('##### :blue[Line Style]')
@@ -1081,7 +1211,7 @@ class visualization_replot_files:
                         for i in range(len(showing_items["ID"])):
                             id = showing_items["ID"].values[i]
                             st.write(id)
-                            col1, col2, col3, col4,col5 = st.columns((1.2, 2, 2, 2,2))
+                            col1, col2, col3, col4, col5 = st.columns((1.2, 2, 2, 2, 2))
                             option[id] = {}
                             color = next(colors)
                             with col1:
@@ -1090,8 +1220,9 @@ class visualization_replot_files:
                                                                            args=None, kwargs=None, disabled=False,
                                                                            label_visibility="collapsed")
                             with col2:
-                                option[f"{id}"]['linewidth'] = st.number_input(f"{id} LineWidth", min_value=0., value=2.,step=0.1,
-                                                                                label_visibility="collapsed")
+                                option[f"{id}"]['linewidth'] = st.number_input(f"{id} LineWidth", min_value=0., value=2.,
+                                                                               step=0.1,
+                                                                               label_visibility="collapsed")
                             with col3:
                                 option[f"{id}"]['linestyle'] = st.selectbox(f'{id} Line Style',
                                                                             ['solid', 'dotted', 'dashed', 'dashdot'],
@@ -1099,7 +1230,8 @@ class visualization_replot_files:
                                                                             label_visibility="collapsed")
                             with col4:
                                 option[f"{id}"]['marker'] = st.selectbox(f'{id} Line Marker',
-                                                                         ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd',
+                                                                         ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                                          'd',
                                                                           'P',
                                                                           'X'],
                                                                          index=None, placeholder="Choose an option",
@@ -1115,36 +1247,37 @@ class visualization_replot_files:
                         col4.write('##### :blue[Marker]')
                         col5.write('##### :blue[Markersize]')
 
-
-                        ids = ['site_ref','site_sim']
-                        titles=['Reference','Simulation']
-                        colors = ['#F96969','#599AD4']
-                        for id,title,color in zip(ids,titles,colors):
+                        ids = ['site_ref', 'site_sim']
+                        titles = ['Reference', 'Simulation']
+                        colors = ['#F96969', '#599AD4']
+                        for id, title, color in zip(ids, titles, colors):
                             option[id] = {}
                             st.write(f'###### :green[{title} Line]')
-                            col1, col2, col3, col4, col5 = st.columns((1.2,2, 2, 2, 2))
+                            col1, col2, col3, col4, col5 = st.columns((1.2, 2, 2, 2, 2))
                             with col1:
                                 option[f"{id}"]['color'] = st.color_picker(f'{id} ref colors', value=color, key=None, help=None,
-                                                                               on_change=None,
-                                                                               args=None, kwargs=None, disabled=False,
-                                                                               label_visibility="collapsed")
+                                                                           on_change=None,
+                                                                           args=None, kwargs=None, disabled=False,
+                                                                           label_visibility="collapsed")
                             with col2:
-                                option[f"{id}"]['lineWidth'] = st.number_input(f"{id} lineWidth", min_value=0., value=2.,step=0.1,
-                                                                                label_visibility="collapsed")
+                                option[f"{id}"]['lineWidth'] = st.number_input(f"{id} lineWidth", min_value=0., value=2.,
+                                                                               step=0.1,
+                                                                               label_visibility="collapsed")
                             with col3:
-                                option[f"{id}"]['linestyle'] = st.selectbox(f'{id} Line Style', ['solid', 'dotted', 'dashed', 'dashdot'],
+                                option[f"{id}"]['linestyle'] = st.selectbox(f'{id} Line Style',
+                                                                            ['solid', 'dotted', 'dashed', 'dashdot'],
                                                                             index=None, placeholder="Choose an option",
                                                                             label_visibility="collapsed")
                             with col4:
                                 option[f"{id}"]['marker'] = st.selectbox(f'{id} Line Marker',
-                                                                         ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P',
+                                                                         ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                                          'd', 'P',
                                                                           'X'],
                                                                          index=None, placeholder="Choose an option",
                                                                          label_visibility="collapsed")
                             with col5:
                                 option[f"{id}"]['markersize'] = st.number_input(f"{id} Markersize", min_value=0, value=10,
                                                                                 label_visibility="collapsed")
-
 
             if 'resample_disable' not in st.session_state:
                 st.session_state.resample_disable = False
@@ -1191,7 +1324,6 @@ class visualization_replot_files:
             #                                             label_visibility="visible")
             # st.write(st.session_state['resample_option'], st.session_state['groubly_option'])
 
-
         if len(option['title']) == 0 and option['plot_type'] == 'sim lines':
             option['title'] = 'Simulation'
         elif len(option['title']) == 0 and option['plot_type'] == 'ref lines':
@@ -1209,7 +1341,6 @@ class visualization_replot_files:
             sim_lines(option, showing_items, selected_item)
         else:
             st.warning('Please choose first!')
-
 
     def __generate_image_stn_index(self, item, metric, selected_item, ref, sim, path):
 
@@ -1238,100 +1369,29 @@ class visualization_replot_files:
 
             st.divider()
 
-            col1, col2, col3, col4 = st.columns(4)
-            # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'])
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'])
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'])
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'])
-
-            with col1:
-                option['cmap'] = st.selectbox('Colorbar',
-                                              ['Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r',
-                                               'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
-                                               'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
-                                               'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
-                                               'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                               'PuBu_r',
-                                               'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
-                                               'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
-                                               'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                               'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
-                                               'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
-                                               'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
-                                               'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm',
-                                               'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag',
-                                               'flag_r',
-                                               'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                               'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                               'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r',
-                                               'gist_yerg', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray',
-                                               'gray_r',
-                                               'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
-                                               'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
-                                               'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                               'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                               'summer_r',
-                                               'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c',
-                                               'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight',
-                                               'twilight_r',
-                                               'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter',
-                                               'winter_r'], index=None, placeholder="Choose an option",
-                                              label_visibility="visible")
-            with col2:
-                option['colorbar_label'] = st.text_input('colorbar label', value='Score', label_visibility="visible")
-            with col3:
-                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
-                                                           index=0, placeholder="Choose an option",
-                                                           label_visibility="visible")
-                if option["colorbar_position"] == 'vertical':
-                    left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
-                else:
-                    left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
-
-            with col4:
-                option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
-                                                key=f"{key_value}extend")
-
-            option['marker'] = col1.selectbox(f'Marker style',
-                                              ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+",
-                                               "^", "v"],
-                                              index=2,
-                                              placeholder="Choose an option",
-                                              label_visibility="visible")
-
-            option['markersize'] = col2.number_input(f"Markersize", min_value=0, value=15, step=1)
-
-            col1, col2, col3 = st.columns(3)
-            if option["colorbar_position"] == 'vertical':
-                left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
-            else:
-                left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
-            option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
-                                                          key=f"{key_value}colorbar_position_set")
-            if option['colorbar_position_set']:
+            with st.expander('More info',expanded=False):
                 col1, col2, col3, col4 = st.columns(4)
-                option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
-                option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
-                option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
-                option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
+                # min_lon, max_lon, min_lat, max_lat
+                option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'])
+                option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'])
+                option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'])
+                option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'])
+                st.divider()
+                col1, col2, col3 = st.columns((3,2,2))
+                option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{key_value}vmin_max_on")
+                error = False
+                try:
+                    import math
+                    df = pd.read_csv(f'{path}/{item}/{selected_item}_stn_{ref}_{sim}_evaluations.csv', header=0)
+                    # df = pd.read_csv(f'{path}/{item}/{selected_item}_stn_{ref}_{sim}_evaluations.csv', header=0)
+                    min_metric = -999.0
+                    max_metric = 100000.0
+                    ind0 = df[df['%s' % (metric)] > min_metric].index
+                    data_select0 = df.loc[ind0]
+                    ind1 = data_select0[data_select0['%s' % (metric)] < max_metric].index
+                    data_select = data_select0.loc[ind1]
+                    plotvar = data_select['%s' % (metric)].values
 
-            col1, col2, col3, col4 = st.columns(4)
-            option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{key_value}vmin_max_on")
-            error = False
-            try:
-                import math
-                df = pd.read_csv(f'{path}/{item}/{selected_item}_stn_{ref}_{sim}_evaluations.csv', header=0)
-                min_metric = -999.0
-                max_metric = 100000.0
-                ind0 = df[df['%s' % (metric)] > min_metric].index
-                data_select0 = df.loc[ind0]
-                ind1 = data_select0[data_select0['%s' % (metric)] < max_metric].index
-                data_select = data_select0.loc[ind1]
-                plotvar = data_select['%s' % (metric)].values
-
-                if not option["vmin_max_on"]:
                     try:
                         vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
                         if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
@@ -1349,19 +1409,112 @@ class visualization_replot_files:
                     except:
                         vmin, vmax = 0, 1
 
-                if option["vmin_max_on"]:
-                    try:
-                        option["vmin"] = col2.number_input(f"colorbar min", value=vmin)
-                        option["vmax"] = col3.number_input(f"colorbar max", value=vmax)
-                    except ValueError:
-                        st.error(f"Max value must larger than min value.")
+                    if option["vmin_max_on"]:
+                        try:
+                            option["vmin"] = col2.number_input(f"colorbar min", value=vmin)
+                            option["vmax"] = col3.number_input(f"colorbar max", value=vmax)
+
+                            min_value, max_value = np.nanmin(plotvar), np.nanmax(plotvar)
+                            if min_value < option['vmin'] and max_value > option['vmax']:
+                                oextend = 'both'
+                            elif min_value > option['vmin'] and max_value > option['vmax']:
+                                extend = 'max'
+                            elif min_value < option['vmin'] and max_value < option['vmax']:
+                                extend = 'min'
+                            else:
+                                extend = 'neither'
+                        except ValueError:
+                            st.error(f"Max value must larger than min value.")
+                    else:
+                        option["vmin"] = vmin
+                        option["vmax"] = vmax
+                        extend = 'neither'
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    error = True
+
+
+
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    option['cmap'] = st.selectbox('Colorbar',
+                                                  ['coolwarm',
+                                                   'coolwarm_r','Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r',
+                                                   'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
+                                                   'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
+                                                   'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
+                                                   'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                                   'PuBu_r',
+                                                   'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
+                                                   'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
+                                                   'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                                   'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
+                                                   'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
+                                                   'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
+                                                   'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'coolwarm',
+                                                   'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag',
+                                                   'flag_r',
+                                                   'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                                   'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                                   'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r',
+                                                   'gist_yerg', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray',
+                                                   'gray_r',
+                                                   'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
+                                                   'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
+                                                   'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                                   'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                                   'summer_r',
+                                                   'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c',
+                                                   'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight',
+                                                   'twilight_r',
+                                                   'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter',
+                                                   'winter_r'], index=0, placeholder="Choose an option",
+                                                  label_visibility="visible")
+                with col2:
+                    option['colorbar_label'] = st.text_input('colorbar label', value=metric.replace("_"," "), label_visibility="visible")
+                with col3:
+                    option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
+                                                               index=0, placeholder="Choose an option",
+                                                               label_visibility="visible")
+                    if option["colorbar_position"] == 'vertical':
+                        left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
+                    else:
+                        left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
+
+                def get_extend(extend):
+                    my_list = ['neither', 'both', 'min', 'max']
+                    index = my_list.index(extend.lower())
+                    return index
+
+                with col4:
+                    option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                                    index=get_extend(extend), placeholder="Choose an option", label_visibility="visible",
+                                                    key=f"{key_value}extend")
+
+                option['marker'] = col1.selectbox(f'Marker style',
+                                                  ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+",
+                                                   "^", "v"],
+                                                  index=2,
+                                                  placeholder="Choose an option",
+                                                  label_visibility="visible")
+
+                option['markersize'] = col2.number_input(f"Markersize", min_value=0, value=15, step=1)
+
+                col1, col2, col3 = st.columns(3)
+                if option["colorbar_position"] == 'vertical':
+                    left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
                 else:
-                    option["vmin"] = vmin
-                    option["vmax"] = vmax
-            except Exception as e:
-                st.error(f"Error: {e}")
-                error = True
-            st.divider()
+                    left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
+                option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
+                                                              key=f"{key_value}colorbar_position_set")
+                if option['colorbar_position_set']:
+                    col1, col2, col3, col4 = st.columns(4)
+                    option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
+                    option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
+                    option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
+                    option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
+
 
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1642,6 +1795,7 @@ class visualization_replot_Comparison:
                 st.divider()
                 if ref_source:
                     taylor_diagram_file = f"{dir_path}/taylor_diagram_{selected_item}_{ref_source}.txt"
+                    st.write(taylor_diagram_file)
                     try:
                         self.__taylor(taylor_diagram_file, selected_item, ref_source)
                     except FileNotFoundError:
@@ -2399,7 +2553,7 @@ class visualization_replot_Comparison:
                                                                       label_visibility="collapsed")
 
                     with col4:
-                        markers[sim_source]['faceColor'] = st.selectbox(f'{sim_source} faceColor', ['w', 'b', 'k', 'r'],
+                        markers[sim_source]['faceColor'] = st.selectbox(f'{sim_source} faceColor', ['w', 'b', 'k', 'r','none'],
                                                                         index=0, placeholder="Choose an option",
                                                                         key=f"target_{sim_source} faceColor",
                                                                         label_visibility="collapsed")
@@ -3793,31 +3947,76 @@ class visualization_replot_Comparison:
 
             sim_sources = self.sim['general'][f'{selected_item}_sim_source']
             sim_sources = get_cases(sim_sources, 'cases')
+            option['colormap']=False
 
             with st.expander("Colors setting", expanded=False):
                 markers = {}
                 datasets_filtered = []
 
+                option['colormap'] = st.toggle('Use colormap?',  key=f'{item}_colormap',value=option['colormap'])
+
                 col1, col2, col3 = st.columns(3)
                 col1.write('##### :blue[Line colors]')
                 col2.write('##### :blue[Line width]')
                 col3.write('##### :blue[Line alpha]')
+                if option['colormap']:
+                    option['cmap'] = col1.selectbox('Colorbar',
+                                                  ['coolwarm', 'Accent', 'Accent_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                                   'BuGn_r',
+                                                   'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
+                                                   'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
+                                                   'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
+                                                   'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                                   'PuBu_r',
+                                                   'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
+                                                   'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
+                                                   'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                                   'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
+                                                   'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
+                                                   'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
+                                                   'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r',
+                                                   'coolwarm_r', 'copper', 'copper_r', 'cubehelix', 'cubehelix_r', 'flag',
+                                                   'flag_r',
+                                                   'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                                   'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                                   'gist_rainbow_r', 'gist_stern', 'gist_stern_r', 'gist_yarg', 'gist_yarg_r',
+                                                   'gist_yerg', 'gnuplot', 'gnuplot2', 'gnuplot2_r', 'gnuplot_r', 'gray',
+                                                   'gray_r',
+                                                   'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
+                                                   'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
+                                                   'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                                   'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                                   'summer_r',
+                                                   'tab10', 'tab10_r', 'tab20', 'tab20_r', 'tab20b', 'tab20b_r', 'tab20c',
+                                                   'tab20c_r', 'terrain', 'terrain_r', 'turbo', 'turbo_r', 'twilight',
+                                                   'twilight_r',
+                                                   'twilight_shifted', 'twilight_shifted_r', 'viridis', 'viridis_r', 'winter',
+                                                   'winter_r'], index=0, placeholder="Choose an option",
+                                                  label_visibility="collapsed")
+                    option['linewidth'] = col2.number_input(f"Line width", min_value=0., value=1.5,
+                                                                         key=f'{item} Line width',
+                                                                         label_visibility="collapsed", step=0.1)
+                    option['alpha'] = col3.number_input(f"fill line alpha",
+                                                                     label_visibility="collapsed",
+                                                                     key=f'{item} alpha',
+                                                                     min_value=0., value=0.3, max_value=1.)
+                else:
+                    for sim_source in sim_sources:
+                        st.write(f"Case: {sim_source}")
+                        col1, col2, col3 = st.columns((1.1, 2, 2))
+                        markers[sim_source] = {}
+                        markers[sim_source]['lineColor'] = col1.color_picker(f'{sim_source} Line colors', value=next(hex_colors),
+                                                                             key=f'{item} {sim_source} colors', disabled=False,
+                                                                             label_visibility="collapsed")
+                        markers[sim_source]['linewidth'] = col2.number_input(f"{sim_source} Line width", min_value=0., value=1.5,
+                                                                             key=f'{item} {sim_source} Line width',
+                                                                             label_visibility="collapsed", step=0.1)
+                        markers[sim_source]['alpha'] = col3.number_input(f"{sim_source} fill line alpha",
+                                                                         label_visibility="collapsed",
+                                                                         key=f'{item} {sim_source} alpha',
+                                                                         min_value=0., value=0.3, max_value=1.)
 
                 for sim_source in sim_sources:
-                    st.write(f"Case: {sim_source}")
-                    col1, col2, col3 = st.columns((1.1, 2, 2))
-                    markers[sim_source] = {}
-                    markers[sim_source]['lineColor'] = col1.color_picker(f'{sim_source} Line colors', value=next(hex_colors),
-                                                                         key=f'{item} {sim_source} colors', disabled=False,
-                                                                         label_visibility="collapsed")
-                    markers[sim_source]['linewidth'] = col2.number_input(f"{sim_source} Line width", min_value=0., value=1.5,
-                                                                         key=f'{item} {sim_source} Line width',
-                                                                         label_visibility="collapsed", step=0.1)
-                    markers[sim_source]['alpha'] = col3.number_input(f"{sim_source} fill line alpha",
-                                                                     label_visibility="collapsed",
-                                                                     key=f'{item} {sim_source} alpha',
-                                                                     min_value=0., value=0.3, max_value=1.)
-
                     sim_data_type = self.sim[sim_source]['general'][f'data_type']
                     if ref_data_type == 'stn' or sim_data_type == 'stn':
                         ref_varname = self.ref[f'{selected_item}'][f'{ref_source}_varname']
