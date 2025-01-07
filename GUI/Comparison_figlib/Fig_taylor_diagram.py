@@ -756,7 +756,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             for i, xval in enumerate(X):
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markersize[i],
-                                markerfacecolor='none', #'#markerfacecolor[i],
+                                markerfacecolor=markerfacecolor[i],#markerfacecolor[i],
                                 markeredgecolor=markeredgecolor[i],
                                 markeredgewidth=2)
                     hp += tuple(h)

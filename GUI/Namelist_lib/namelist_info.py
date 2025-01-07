@@ -26,14 +26,20 @@ class initial_setting():
         info = {
             'general': {
             },
-            'def_nml':{},
+            'def_nml': {},
         }
         return info
 
     def ref(self):
         info = {
             'general': {},
-            'def_nml':{},
+            'def_nml': {},
+        }
+        return info
+
+    def stat(self):
+        info = {
+            'general': {}
         }
         return info
 
@@ -41,7 +47,7 @@ class initial_setting():
     def generals(self):
         General = {
             'basename': '',
-            'basedir': '',
+            'basedir': '/',
             'compare_tim_res': 'month',
             'compare_tzone': 0.0,
             'compare_grid_res': 0.25,
@@ -54,6 +60,8 @@ class initial_setting():
             'min_lon': -180.0,
             'reference_nml': '',
             'simulation_nml': '',
+            'statistics_nml': '',
+            'figure_nml': '',
             'num_cores': 8,
             'evaluation': True,
             'comparison': False,
@@ -271,7 +279,8 @@ class initial_setting():
             'Functional_Response': False,
             'Hellinger_Distance': False,
             'Partial_Least_Squares_Regression': False,
-            'Three_Cornered_Hat': False
+            'Three_Cornered_Hat': False,
+            'ANOVA': False
         }
         return statistics
 
@@ -3448,3 +3457,50 @@ class initial_setting():
             }
         }
         return info
+
+    def stat_list(self):
+        statistics = {
+            'Mann_Kendall_Trend_Test': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear'], 'other': ['significance_level']},
+            'Correlation': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear']},
+            'Standard_Deviation': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear']},
+            'Z_Score': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear']},
+            'Functional_Response': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear'], 'other': ['nbins']},
+            'Hellinger_Distance': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear'], 'other': ['nbins']},
+            'Partial_Least_Squares_Regression': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear']},
+            'Three_Cornered_Hat': {
+                'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
+                            'prefix', 'syear', 'eyear']}
+        }
+        return statistics
+
+    def stat_default(self):
+        default = {
+            'timezone': 0.0,
+            'data_type': 'grid',
+            'data_groupby': 'Day',
+            'dir': '',
+            'varname': '',
+            'fulllist': '',
+            'tim_res': 'Day',
+            'varunit': '',
+            'grid_res': 0.5,
+            'suffix': '',
+            'prefix': '',
+            'syear': 2001,
+            'eyear': 2020
+        }
+        return default
