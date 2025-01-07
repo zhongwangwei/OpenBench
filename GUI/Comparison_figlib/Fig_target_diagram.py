@@ -643,6 +643,8 @@ def get_single_markers(markers: dict):
         color = markers[key]['faceColor']
         symbol = markers[key]['symbol']
         SymbolColor = symbol + color
+        if color == 'none' :
+            SymbolColor = symbol + 'w'
         marker.append(SymbolColor)
         markersize.append(markers[key]['size'])
         markerfacecolor.append(color)

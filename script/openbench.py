@@ -170,7 +170,8 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
         print(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
         print("\033[1;32m" + "=" * 80 + "\033[0m")
 
-def run_statistics(main_nl, stats_nml, statistic_vars):
+
+def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     """Run statistical analysis for each statistic variable."""
     if not statistic_vars:
         return
@@ -184,9 +185,15 @@ def run_statistics(main_nl, stats_nml, statistic_vars):
     )
     
     for statistic in statistic_vars:
-        print(f"Running {statistic} analysis...")
-        stats_handler.run_analysis(statistic)
-    
+        print("\033[1;32m" + "=" * 80 + "\033[0m")
+        print(f"********************Start running {statistic} analysis...******************")
+        statistic_method = f'scenarios_{statistic}_analysis'
+        if hasattr(stats_handler, statistic_method):
+            getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
+        else:
+            print(f"Error: The {statistic} module does not exist!")
+            print(f"Please add the {statistic} function in the stats_handler class!")
+            exit(1)
     print("Statistical analysis completed.")
 
 def main():
@@ -213,7 +220,7 @@ def main():
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
 
-    UpdateFigNamelist(main_nl, fig_nml, comparison_vars)
+    UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
         start_time = time.time()
@@ -233,7 +240,7 @@ def main():
     # Run statistics if enabled
     if main_nl['general']['statistics']:
         start_time = time.time()
-        run_statistics(main_nl, stats_nml, statistic_vars)
+        run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
         statistic_time = (end_time - start_time)/60
         print(f"\n\033[1;36mStatistics process completed in {statistic_time:.2f} minutes.\033[0m")
