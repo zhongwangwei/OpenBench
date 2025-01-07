@@ -8,7 +8,6 @@ from Page_make_validation import make_initional, make_reference, make_simulation
 from Page_run import run_validation
 from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
 
-
 st.set_page_config(page_title="Home Pages", page_icon="🌍", layout="centered")
 
 
@@ -82,6 +81,7 @@ def info_2023_11_14():
         """, language='shell', line_numbers=True)
         # st.code(code, language='shell')
 
+
 def info_2023_11_30():
     st.write('##### :blue[Update in 2023-11-30]')
 
@@ -97,6 +97,7 @@ def info_2023_11_30():
                     multiple modes at the same time.
         ''', language='shell', line_numbers=True)
         # st.write("""If you are using the macos system, """)
+
 
 def openbench_flowchart():
     st.write('##### :green[Flowchart of Openbench]')
@@ -184,8 +185,14 @@ def initial_st(initial_information):
         st.session_state.switch_button3_onclick = 0
     if 'switch_button4_onclick' not in st.session_state:
         st.session_state.switch_button4_onclick = 0
+    if 'switch_button5_onclick' not in st.session_state:
+        st.session_state.switch_button5_onclick = 0
+    if 'switch_button6_onclick' not in st.session_state:
+        st.session_state.switch_button6_onclick = 0
     if 'clear_state' not in st.session_state:
         st.session_state['clear_state'] = False
+    if 'find_path' not in st.session_state:
+        st.session_state['find_path'] = {}
 
     if 'selected' not in st.session_state:
         st.session_state.selected = 'Home'
@@ -204,6 +211,8 @@ def initial_st(initial_information):
         st.session_state.sim_data = initial_information.sim()
     if 'ref_data' not in st.session_state:
         st.session_state.ref_data = initial_information.ref()
+    if 'stat_data' not in st.session_state:
+        st.session_state.stat_data = initial_information.stat()
     if 'generals' not in st.session_state:
         st.session_state.generals = {}
     if 'evaluation_items' not in st.session_state:
@@ -302,6 +311,29 @@ def initial_st(initial_information):
     if 'step5_Comparison' not in st.session_state:
         st.session_state.step5_Comparison = False
 
+
+    if 'step6_stat_set' not in st.session_state:
+        st.session_state.step6_stat_set = False
+    if 'step6_stat_setect_check' not in st.session_state:
+        st.session_state.step6_stat_setect_check = False
+    if 'step6_stat_set_check' not in st.session_state:
+        st.session_state.step6_stat_set_check = False
+    if 'step6_stat_make' not in st.session_state:
+        st.session_state.step6_stat_make = False
+    if 'step6_stat_nml' not in st.session_state:
+        st.session_state.step6_stat_nml = False
+    if 'step6_stat_check' not in st.session_state:
+        st.session_state.step6_stat_check = False
+    if 'step6_stat_run' not in st.session_state:
+        st.session_state.step6_stat_run = False
+    if 'step6_stat_figures' not in st.session_state:
+        st.session_state.step6_stat_figures = False
+    if 'step6_stat_show' not in st.session_state:
+        st.session_state.step6_stat_show = False
+    if 'step6_stat_replot' not in st.session_state:
+        st.session_state.step6_stat_replot = False
+
+
     if 'step1' not in st.session_state:
         st.session_state.step1 = False
     if 'step2' not in st.session_state:
@@ -327,6 +359,10 @@ def initial():
         st.session_state.switch_button3_onclick = 0
     if 'switch_button4_onclick' not in st.session_state:
         st.session_state.switch_button4_onclick = 0
+    if 'switch_button5_onclick' not in st.session_state:
+        st.session_state.switch_button5_onclick = 0
+    if 'switch_button6_onclick' not in st.session_state:
+        st.session_state.switch_button6_onclick = 0
     if 'clear_state_onclick' not in st.session_state:
         st.session_state.clear_state_onclick = 0
     if 'selected' not in st.session_state:
@@ -431,6 +467,18 @@ def define_step_st():
         st.session_state.step5_files = False
         st.session_state.step5_Comparison = True
 
+    def define6_show():
+        # st.session_state.step6_stat_set = False
+        # st.session_state.step6_stat_make = False
+        st.session_state.step6_stat_run = True
+        # st.session_state.step6_stat_figures = True
+        st.session_state.step6_stat_show = True
+        st.session_state.step6_stat_replot = False
+
+    def define6_replot():
+        st.session_state.step6_stat_show = False
+        st.session_state.step6_stat_replot = True
+
     return {
         'step1': {
             'initial': define1_step0,
@@ -452,6 +500,10 @@ def define_step_st():
             'figures': define5_figures,
             'files': define5_files,
             'Comparison': define5_Comparison
+        },
+        'step6': {
+            'show': define6_show,
+            'replot': define6_replot
         }
     }
 
@@ -473,7 +525,7 @@ if __name__ == "__main__":
     def switch_button_index(select):
         if select is None:
             return 0
-        my_list = ["Home", "Evaluation", "Running", 'Visualization']
+        my_list = ["Home", "Evaluation", "Running", 'Visualization', 'Statistics']
         index = my_list.index(select)
         return index
 
@@ -491,10 +543,11 @@ if __name__ == "__main__":
 
 
     if st.session_state.get('switch_button', False):
-        st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 4
+        st.session_state['menu_option'] = (switch_button_index(st.session_state.selected) + 1) % 5
         manual_select = st.session_state['menu_option']
     else:
         manual_select = None
+
     with st.sidebar:
         st.logo('./GUI/Namelist_lib/None.png', size='large', icon_image='./GUI/Namelist_lib/Openbench_Logo.png')
         st.image('./GUI/Namelist_lib/Openbench_Logo_n.png')
@@ -515,10 +568,16 @@ if __name__ == "__main__":
         if 'switch_button4' in st.session_state.keys():
             if st.session_state.switch_button4 & (st.session_state.switch_button4_onclick > 0):
                 manual_select = st.session_state['menu_option']
+        if 'switch_button5' in st.session_state.keys():
+            if st.session_state.switch_button5 & (st.session_state.switch_button5_onclick > 0):
+                manual_select = st.session_state['menu_option']
+        if 'switch_button6' in st.session_state.keys():
+            if st.session_state.switch_button6 & (st.session_state.switch_button6_onclick > 0):
+                manual_select = st.session_state['menu_option']
 
         st.session_state['selected'] = option_menu(
             menu_title="Main Menu",
-            options=["Home", "Evaluation", "Running", 'Visualization'],
+            options=["Home", "Evaluation", "Running", 'Visualization', 'Statistics'],
             icons=['house-heart', 'list-check', "list-task", "easel"],
             menu_icon="cast",
             default_index=0,
@@ -527,7 +586,6 @@ if __name__ == "__main__":
             key='menu_4'
         )
         st.button(f':point_right: Move to Next', key='switch_button')
-
 
     define_step_st()
     with st.sidebar:
@@ -568,6 +626,14 @@ if __name__ == "__main__":
             st.button(':balloon: Comparison items replot',
                       on_click=lambda: on_click_handler(step_functions['step5']['Comparison']),
                       help='Page for redraw the image', use_container_width=True)
+        if st.session_state.selected == "Statistics":
+            if st.session_state.step6_stat_run:
+                st.divider()
+                st.button(':bar_chart: Showing Figures', on_click=lambda: on_click_handler(step_functions['step6']['show']),
+                          help='Page to displays the default drawing of the system', use_container_width=True)
+                st.button(':balloon: Statistics items replot',
+                          on_click=lambda: on_click_handler(step_functions['step6']['replot']),
+                          help='Page for redraw the image', use_container_width=True)
 
     with st.sidebar:
         st.divider()
@@ -578,8 +644,6 @@ if __name__ == "__main__":
                     del st.session_state[key]
             initial_st(initial_information)
 
-
-
     Page_control = Pages_control()
     if st.session_state.selected == "Home":
         show_info()
@@ -589,3 +653,5 @@ if __name__ == "__main__":
         Page_control.run()
     if st.session_state.selected == "Visualization":
         Page_control.visual()
+    if st.session_state.selected == "Statistics":
+        Page_control.Stats()
