@@ -12,13 +12,12 @@ from joblib import Parallel, delayed
 
 from Mod_Metrics import metrics
 from Mod_Scores import scores
-from Mod_Statistics import statistics
 from figlib import *
 
 
-class ComparisonProcessing(metrics, scores, statistics):
+class ComparisonProcessing(metrics, scores):
     def __init__(self, main_nml, scores, metrics):
-        self.name = 'StatisticsDataHandler'
+        self.name = 'ComparisonDataHandler'
         self.version = '0.3'
         self.release = '0.3'
         self.date = 'June 2024'
