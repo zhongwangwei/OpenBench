@@ -58,11 +58,11 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd, cmap
 
 
-def map(file, ilon, ilat, data, option):
+def map(file, lon, lat, data, ilat, ilon, option):
     from Namelist_lib.check_font import check_font
     check = check_font()
     check.check_font(option['font'])
-    
+
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -82,13 +82,11 @@ def map(file, ilon, ilat, data, option):
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
-
     if option["map"] == 'imshow':
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
     elif option['map'] == 'contourf':
-        lon, lat = np.meshgrid(ilon, ilat)
         cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
@@ -126,7 +124,7 @@ def map(file, ilon, ilat, data, option):
     else:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],extend=option['extend'],
+    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'], extend=option['extend'],
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
@@ -143,25 +141,27 @@ def map(file, ilon, ilat, data, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Z_Score(file, option):  # outpath, source
+def draw_Hellinger_Distance(file, option):  # outpath, source
+
     ds = xr.open_dataset(file)
-    data = ds['z_score']
+    data = ds['functional_response_score']
 
     ilat = ds.lat.values
     ilon = ds.lon.values
+    lon, lat = np.meshgrid(ilon, ilat)
 
     if ilat[0] - ilat[-1] < 0:
         option['origin'] = 'lower'
     else:
         option['origin'] = 'upper'
-    map(file, ilon, ilat, data, option)
+    map(file, lon, lat, data, ilat, ilon, option)
 
 
 def prepare(icase, file, option):
     with st.container(height=None, border=True):
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'Standard Deviation', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'Functional Response', label_visibility="visible",
                                             key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
 
@@ -183,10 +183,14 @@ def prepare(icase, file, option):
         with st.expander("More info", expanded=True):
             col1, col2, col3, col4 = st.columns(4)
             # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
+            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
+                                                  key=f"{icase}_min_lon")
+            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
+                                                  key=f"{icase}_max_lon")
+            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
+                                                  key=f"{icase}_min_lat")
+            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
+                                                  key=f"{icase}_max_lat")
 
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
@@ -276,7 +280,6 @@ def prepare(icase, file, option):
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_map")
 
-
         col1, col2, col3 = st.columns(3)
         with col1:
             option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{icase}_x_wise")
@@ -295,10 +298,11 @@ def prepare(icase, file, option):
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
     # try:
-    draw_Z_Score(file, option)
+    draw_Hellinger_Distance(file, option)
     # except:
     #     st.error(f'Please check File: {file}')
 
-def make_Z_Score(dir_path, item, icase, file, item_data, option):
-    st.write('make_Z_Score')
-    prepare( icase, file, option)
+
+def make_Functional_Response(dir_path, item, icase, file, item_data, option):
+    # st.write('make_Functional_Response')
+    prepare(icase, file, option)
