@@ -1,18 +1,17 @@
 import os
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib
-from matplotlib import rcParams
-from matplotlib import colors
-from matplotlib import cm
+from io import BytesIO
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-
-from io import BytesIO
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 import streamlit as st
-
+import xarray as xr
+from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+from matplotlib import cm
+from matplotlib import colors
+from matplotlib import rcParams
 
 
 def get_index(vmin, vmax, colormap):
@@ -59,7 +58,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd, cmap
 
 
-def map(file, lon, lat, data,option):
+def map(file, ilon, ilat, data, option):
     from Namelist_lib.check_font import check_font
     check = check_font()
     check.check_font(option['font'])
@@ -85,10 +84,11 @@ def map(file, lon, lat, data,option):
     mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
 
     if option["map"] == 'imshow':
-        extent = (option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat'])
+        extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
-                       origin='lower')
+                       origin=option['origin'])
     elif option['map'] == 'contourf':
+        lon, lat = np.meshgrid(ilon, ilat)
         cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
@@ -150,12 +150,11 @@ def draw_Correlation(file, option):  # outpath, source
 
     ilat = ds.lat.values
     ilon = ds.lon.values
-    lon, lat = np.meshgrid(ilon, ilat)
-    if ilat[0] < 0:
+    if ilat[0] - ilat[-1] < 0:
         option['origin'] = 'lower'
     else:
         option['origin'] = 'upper'
-    map(file, lon, lat, data, option)
+    map(file, ilon, ilat, data, option)
 
 
 def prepare(icase, file, option):
