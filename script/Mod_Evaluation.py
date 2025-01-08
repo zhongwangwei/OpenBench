@@ -254,12 +254,9 @@ class Evaluation_grid(metrics, scores):
 
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-        if not option['set_lat_lon']:
-            extent = [self.min_lon, self.max_lon, self.min_lat, self.max_lat]
-        else:
-            extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
+        extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
 
-        if ilat[0] < 0:
+        if ilat[0] - ilat[-1] < 0:
             origin = 'lower'
         else:
             origin = 'upper'
