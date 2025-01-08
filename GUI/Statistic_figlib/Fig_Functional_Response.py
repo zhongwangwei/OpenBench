@@ -1,3 +1,4 @@
+import math
 import os
 from io import BytesIO
 
@@ -141,7 +142,7 @@ def map(file, lon, lat, data, ilat, ilon, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Hellinger_Distance(file, option):  # outpath, source
+def draw_Functional_Response(file, option):  # outpath, source
 
     ds = xr.open_dataset(file)
     data = ds['functional_response_score']
@@ -298,7 +299,7 @@ def prepare(icase, file, option):
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
     # try:
-    draw_Hellinger_Distance(file, option)
+    draw_Functional_Response(file, option)
     # except:
     #     st.error(f'Please check File: {file}')
 
