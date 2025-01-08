@@ -143,7 +143,7 @@ def map(file, lon, lat, data, ilat, ilon, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Hellinger_Distance(file, option):  # outpath, source
+def draw_Partial_Least_Squares_Regression(file, option):  # outpath, source
 
     ds = xr.open_dataset(file)
     pattern = re.compile(rf'X(\d+)')
@@ -328,11 +328,11 @@ def prepare(icase, file, option):
                 min_data, max_data = math.floor(data.min(skipna=True).values), math.ceil(
                     data.max(skipna=True).values)
             if option["vmin_max_on"]:
-                option["vmin"] = col3.number_input(f"colorbar min", value=min_data)
-                option["vmax"] = col4.number_input(f"colorbar max", value=max_data)
+                option["vmin"] = col3.number_input(f"colorbar min", value=float(min_data))
+                option["vmax"] = col4.number_input(f"colorbar max", value=float(max_data))
             else:
-                option["vmin"] = min_data
-                option["vmax"] = max_data
+                option["vmin"] = float(min_data)
+                option["vmax"] = float(max_data)
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -357,7 +357,7 @@ def prepare(icase, file, option):
                          'Please select data first.')
         st.exception(e)
     else:
-        draw_Hellinger_Distance(file, option)
+        draw_Partial_Least_Squares_Regression(file, option)
     # except:
     #     st.error(f'Please check File: {file}')
 
