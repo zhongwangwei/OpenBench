@@ -1,4 +1,6 @@
+import math
 import os
+import re
 from io import BytesIO
 
 import cartopy.crs as ccrs
@@ -58,11 +60,11 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd, cmap
 
 
-def map(file, ilon, ilat, data, option):
+def map(file, lon, lat, data, ilat, ilon, option):
     from Namelist_lib.check_font import check_font
     check = check_font()
     check.check_font(option['font'])
-    
+
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -82,13 +84,11 @@ def map(file, ilon, ilat, data, option):
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
-
     if option["map"] == 'imshow':
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
     elif option['map'] == 'contourf':
-        lon, lat = np.meshgrid(ilon, ilat)
         cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
@@ -126,7 +126,7 @@ def map(file, ilon, ilat, data, option):
     else:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],extend=option['extend'],
+    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'], extend=option['extend'],
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
@@ -143,25 +143,34 @@ def map(file, ilon, ilat, data, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Z_Score(file, option):  # outpath, source
+def draw_Hellinger_Distance(file, option):  # outpath, source
+
     ds = xr.open_dataset(file)
-    data = ds['z_score']
+    pattern = re.compile(rf'X(\d+)')
+
+    if option["var"] in ['best_n_components', 'r_squared']:
+        data = ds[option['var']]
+    else:
+        if (match := pattern.search(option["draw_X"])):
+            x = int(match.group(1))
+            data = ds[option['var']][x - 1]
 
     ilat = ds.lat.values
     ilon = ds.lon.values
+    lon, lat = np.meshgrid(ilon, ilat)
 
     if ilat[0] - ilat[-1] < 0:
         option['origin'] = 'lower'
     else:
         option['origin'] = 'upper'
-    map(file, ilon, ilat, data, option)
+    map(file, lon, lat, data, ilat, ilon, option)
 
 
 def prepare(icase, file, option):
     with st.container(height=None, border=True):
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'Standard Deviation', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'Partial Least Squares Regression', label_visibility="visible",
                                             key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
 
@@ -181,12 +190,39 @@ def prepare(icase, file, option):
                                                        key=f"{icase}_axes_linewidth")
 
         with st.expander("More info", expanded=True):
+
+            col1, col2, col3 = st.columns(3)
+            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
+                                           index=0, placeholder="Choose an option", label_visibility="visible",
+                                           key=f"{icase}_map")
+            option["var"] = col2.selectbox(f"Draw variables",
+                                           ['best_n_components', 'coefficients', 'intercepts', 'p_values', 'r_squared',
+                                            'anomaly'],
+                                           index=0, placeholder="Choose an option", label_visibility="visible",
+                                           key=f"{icase}_var")
+
+            if option["var"] in ['best_n_components', 'r_squared']:
+                disable = True
+                index = None
+            else:
+                disable = False
+                index = 0
+
+            option["draw_X"] = col3.selectbox(f"Draw Data X",
+                                              [f'X{x + 1}' for x in range(option[f"{icase}_nX"])],
+                                              disabled=disable,
+                                              index=None, placeholder="Choose an option", label_visibility="visible",
+                                              key=f"{icase}_draw_X")
+            st.divider()
             col1, col2, col3, col4 = st.columns(4)
-            # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
+            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
+                                                  key=f"{icase}_min_lon")
+            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
+                                                  key=f"{icase}_max_lon")
+            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
+                                                  key=f"{icase}_min_lat")
+            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
+                                                  key=f"{icase}_max_lat")
 
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
@@ -239,8 +275,21 @@ def prepare(icase, file, option):
                                                            label_visibility="visible")
 
             with col4:
+                def get_index(select):
+                    my_list = ['neither', 'both', 'min', 'max']
+                    index = my_list.index(select)
+                    return index
+
+                info = {'best_n_components': 'both',
+                        'coefficients': 'both',
+                        'intercepts': 'both',
+                        'p_values': 'neither',
+                        'r_squared': 'neither',
+                        'anomaly': 'both',
+                        }
                 option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
+                                                index=get_index(info[option["var"]]), placeholder="Choose an option",
+                                                label_visibility="visible",
                                                 key=f"{icase}_extend")
             if option["colorbar_position"] == 'vertical':
                 left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
@@ -262,20 +311,28 @@ def prepare(icase, file, option):
             option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
             option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
                                                          key=f"{icase}_colorbar_ticks")
+            # ds = xr.open_dataset(file)
+            # data = ds['functional_response_score']
+            ds = xr.open_dataset(file)
+            pattern = re.compile(rf'X(\d+)')
 
-            if option["vmin_max_on"]:
-                option["vmin"] = col3.number_input(f"colorbar min", value=0.)
-                option["vmax"] = col4.number_input(f"colorbar max", value=1.)
+            if option["var"] in ['best_n_components', 'r_squared']:
+                data = ds[option['var']]
             else:
-                option["vmin"] = 0.
-                option["vmax"] = 1.
-
-            st.divider()
-            col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
-                                           index=0, placeholder="Choose an option", label_visibility="visible",
-                                           key=f"{icase}_map")
-
+                if (match := pattern.search(option["draw_X"])):
+                    x = int(match.group(1))
+                    data = ds[option['var']][x - 1]
+            if option['var'] in ['p_values', 'r_squared']:
+                min_data, max_data = 0., 1.
+            else:
+                min_data, max_data = math.floor(data.min(skipna=True).values), math.ceil(
+                    data.max(skipna=True).values)
+            if option["vmin_max_on"]:
+                option["vmin"] = col3.number_input(f"colorbar min", value=min_data)
+                option["vmax"] = col4.number_input(f"colorbar max", value=max_data)
+            else:
+                option["vmin"] = min_data
+                option["vmax"] = max_data
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -295,10 +352,17 @@ def prepare(icase, file, option):
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
     # try:
-    draw_Z_Score(file, option)
+    if option["var"] not in ['best_n_components', 'r_squared'] and option["draw_X"] is None:
+        e = RuntimeError('UnboundLocalError: cannot access local variable "data" where it is not associated with a value'
+                         'Please select data first.')
+        st.exception(e)
+    else:
+        draw_Hellinger_Distance(file, option)
     # except:
     #     st.error(f'Please check File: {file}')
 
-def make_Z_Score(dir_path, item, icase, file, item_data, option):
-    st.write('make_Z_Score')
-    prepare( icase, file, option)
+
+def make_Partial_Least_Squares_Regression(dir_path, item, icase, file, item_data, option):
+    st.write('make_Partial_Least_Squares_Regression')
+    option[f"{icase}_nX"] = item_data[f"{icase}_nX"]
+    prepare(icase, file, option)
