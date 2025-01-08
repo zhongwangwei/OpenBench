@@ -57,7 +57,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
-def map(output_dir, method_name, data_sources, lon, lat, data, title, main_nml, option):
+def map(output_dir, method_name, data_sources, ilon, ilat, data, title, main_nml, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -85,13 +85,9 @@ def map(output_dir, method_name, data_sources, lon, lat, data, title, main_nml, 
         option['cmap'] = 'coolwarm'
     mticks, norm, bnd = get_index(option['vmin'], option['vmax'], option['cmap'])
 
-    if not option['set_lat_lon']:
-        extent = [main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                  main_nml['max_lat']]
-    else:
-        extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
+    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
 
-    if ilat[0] < 0:
+    if ilat[0] - ilat[-1] < 0:
         origin = 'lower'
     else:
         origin = 'upper'
@@ -103,6 +99,7 @@ def map(output_dir, method_name, data_sources, lon, lat, data, title, main_nml, 
             cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
         # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
     elif option['show_method'] == 'contourf':
+        lon, lat = np.meshgrid(ilon, ilat)
         if 'intercepts' in title:
             cs = ax.contourf(lon, lat, data, cmap=option['cmap'], extend=option['extend'])
         else:
@@ -180,9 +177,9 @@ def make_Partial_Least_Squares_Regression(output_dir, method_name, data_sources,
             }
     nX = statistic_nml[f"{data_sources[0]}_nX"]
     ds = xr.open_dataset(f"{file}.nc")
-    lat = ds.lat.values
-    lon = ds.lon.values
-    lon, lat = np.meshgrid(lon, lat)
+    ilat = ds.lat.values
+    ilon = ds.lon.values
+
     for var in ds.data_vars:
         if var not in ['best_n_components', 'r_squared']:
             for x in range(nX):
@@ -196,7 +193,7 @@ def make_Partial_Least_Squares_Regression(output_dir, method_name, data_sources,
                 else:
                     option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
                         data.max(skipna=True).values)
-                map(output_dir, method_name, data_sources, lon, lat, data, fvar, main_nml, option)
+                map(output_dir, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
         else:
             data = ds[var]
             fvar = var
@@ -208,4 +205,4 @@ def make_Partial_Least_Squares_Regression(output_dir, method_name, data_sources,
             else:
                 option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
                     data.max(skipna=True).values)
-            map(output_dir, method_name, data_sources, lon, lat, data, fvar, main_nml, option)
+            map(output_dir, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
