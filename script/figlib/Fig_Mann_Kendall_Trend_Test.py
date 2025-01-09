@@ -57,7 +57,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
-def map(output_dir, method_name, data_sources, lon, lat, data, title, p_value, significant, main_nml, option):
+def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value, significant, main_nml, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -85,13 +85,9 @@ def map(output_dir, method_name, data_sources, lon, lat, data, title, p_value, s
         option['cmap'] = 'coolwarm'
     mticks, norm, bnd = get_index(option['vmin'], option['vmax'], option['cmap'])
 
-    if not option['set_lat_lon']:
-        extent = [main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                  main_nml['max_lat']]
-    else:
-        extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
+    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
 
-    if ilat[0] < 0:
+    if ilat[0] - ilat[-1] < 0:
         origin = 'lower'
     else:
         origin = 'upper'
@@ -99,6 +95,7 @@ def map(output_dir, method_name, data_sources, lon, lat, data, title, p_value, s
     if option['show_method'] == 'imshow':
         cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
     elif option['show_method'] == 'contourf':
+        lon, lat = np.meshgrid(ilon, ilat)
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
     # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
     # cs = ax.imshow(data, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=option['extend'], origin='lower')
@@ -178,14 +175,13 @@ def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml
     p_value = ds.p_value
     significant = statistic_nml['significance_level']
 
-    lat = ds.lat.values
-    lon = ds.lon.values
-    lon, lat = np.meshgrid(lon, lat)
+    ilat = ds.lat.values
+    ilon = ds.lon.values
 
     if not option['extend']:
         option['extend'] = 'both'
     option['vmin'], option['vmax'] = math.floor(tau.min().values), math.ceil(tau.max().values)
-    map(output_dir, method_name, data_sources, lon, lat, tau, 'tau', p_value, significant, main_nml, option)
+    map(output_dir, method_name, data_sources, ilon, ilat, tau, 'tau', p_value, significant, main_nml, option)
 
     option['vmin'], option['vmax'] = -1, 1
-    map(output_dir, method_name, data_sources, lon, lat, trend, 'Trend', p_value, significant, main_nml, option)
+    map(output_dir, method_name, data_sources, ilon, ilat, trend, 'Trend', p_value, significant, main_nml, option)

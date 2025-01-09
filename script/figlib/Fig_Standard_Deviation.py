@@ -64,9 +64,9 @@ def make_Standard_Deviation(output_dir, method_name, data_sources, main_nml, sta
 
     ds = xr.open_dataset(f"{file}.nc")
     data = ds.Standard_Deviation
-    lat = ds.lat.values
-    lon = ds.lon.values
-    lon, lat = np.meshgrid(lon, lat)
+    ilat = ds.lat.values
+    ilon = ds.lon.values
+    lon, lat = np.meshgrid(ilon, ilat)
 
     option['vmin'], option['vmax'] = 0, math.ceil(data.max().values)
     if not option['extend']:
@@ -100,7 +100,9 @@ def make_Standard_Deviation(output_dir, method_name, data_sources, main_nml, sta
     else:
         extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
     # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
-    if ilat[0] < 0:
+    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
+
+    if ilat[0] - ilat[-1] < 0:
         origin = 'lower'
     else:
         origin = 'upper'

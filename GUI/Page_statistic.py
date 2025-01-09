@@ -1,23 +1,22 @@
-import glob, shutil
+import glob
+import itertools
 import os
+import re
 import time
-import streamlit as st
-from PIL import Image
-from io import StringIO
-from collections import ChainMap
-import xarray as xr
+
 # from streamlit_tags import st_tags
 import numpy as np
-from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+import streamlit as st
+from PIL import Image
+
 from Namelist_lib.namelist_info import initial_setting
-import sys
-import itertools
-from posixpath import normpath
-from mpl_toolkits.axisartist.angle_helper import select_step
-from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
+from Namelist_lib.namelist_read import NamelistReader
 from Statistic_figlib.Fig_Correlation import make_Correlation
-from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
+from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
 from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
+from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
+from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
+from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
 from Statistic_figlib.Fig_Z_Score import make_Z_Score
 
 
@@ -145,7 +144,7 @@ class process_info():
                                                        value=case_item['Data'][item])
 
     def get_Standard_Deviation(self, statistic_item, stat_SD):
-        if isinstance(stat_SD, str): stat_MK = [stat_SD]
+        if isinstance(stat_SD, str): stat_SD = [stat_SD]
         if statistic_item not in st.session_state.stat_items:
             self.statistic_one_items(statistic_item, stat_SD)
 
@@ -203,7 +202,7 @@ class process_info():
                                                        value=case_item['Data'][item])
 
     def get_Z_Score(self, statistic_item, stat_Z_Score):
-        if isinstance(stat_Z_Score, str): stat_MK = [stat_Z_Score]
+        if isinstance(stat_Z_Score, str): stat_Z_Score = [stat_Z_Score]
         if statistic_item not in st.session_state.stat_items:
             self.statistic_one_items(statistic_item, stat_Z_Score)
 
@@ -263,69 +262,6 @@ class process_info():
                                                        args=('Data', item),
                                                        value=case_item['Data'][item])
 
-    def get_Functional_Response(self, statistic_item, stat_FD):
-        if isinstance(stat_FD, str): stat_MK = [stat_FD]
-        if statistic_item not in st.session_state.stat_items:
-            self.statistic_one_items(statistic_item, stat_FD)
-
-        case_item = st.session_state.stat_items[statistic_item]
-
-        def stat_data_change(key, editor_key):
-            if editor_key is not None:
-                case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_Functional_Response"]
-            else:
-                case_item[key] = st.session_state[f"{key}_Functional_Response"]
-            st.session_state.stat_change['general'] = True
-
-        def data_text_change(key, editor_key, col):
-            custom_input = st.session_state[editor_key]
-            if '，' in custom_input:
-                custom_input = custom_input.replace('，', ',')
-            selected_options = []
-            for option in custom_input.split(','):
-                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
-                    case_item[key][option.strip()] = True
-                elif option.strip() in case_item[key]:
-                    col.warning(f'{option.strip()} has already been selected, please change!')
-            st.session_state[editor_key] = ''
-            del selected_options
-
-        with st.popover("Functional Response Infos", use_container_width=True):
-            for selected_item in self.selected_items:
-                st.subheader(f"Showing {selected_item}", divider=True)
-                cols = itertools.cycle(st.columns(2))
-                for item in case_item[selected_item].keys():
-                    col = next(cols)
-                    case_item[selected_item][item] = col.checkbox(item, key=f"{selected_item}_{item}_Functional_Response",
-                                                                  on_change=stat_data_change,
-                                                                  args=(selected_item, item),
-                                                                  value=case_item[selected_item][item])
-            st.subheader(f"New items", divider=True)
-
-            col1, col2 = st.columns((2, 2.5))
-            col1.text_input("Add more", value='',
-                            key=f"FD_input",
-                            on_change=data_text_change,
-                            args=('Data', f"FD_input", col2),
-                            placeholder='Press Enter to add more',
-                            type='default',
-                            help='Using "," to separate',
-                            label_visibility="visible")
-            cols = itertools.cycle(st.columns(2))
-            for item, value in case_item.items():
-                if isinstance(value, bool):
-                    col = next(cols)
-                    case_item[item] = col.checkbox(item, key=f"{item}_Functional_Response",
-                                                   # on_change=stat_data_change,
-                                                   # args=(item, None),
-                                                   value=case_item[item])
-            for item in case_item['Data'].keys():
-                col = next(cols)
-                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_Functional_Response",
-                                                       on_change=stat_data_change,
-                                                       args=('Data', item),
-                                                       value=case_item['Data'][item])
-
     def statistic_multi_items(self, statistic_item, stat_items):
         s_item = self.stat_list[statistic_item]
         st.session_state.stat_items[statistic_item] = {}
@@ -380,7 +316,7 @@ class process_info():
                     case_item[key]['select_list'].append(st.session_state[f"{key}_Corr_multi"])
                 else:
                     warn_container.warning(f"Multiple items selected for {sitem}")
-            elif len(st.session_state[f"{key}_TCH_multi"]) <= 1:
+            elif len(st.session_state[f"{key}_Corr_multi"]) <= 1:
                 warn_container.warning('Please select at least 2 items')
 
         def stat_data_submit(key, warn_container):
@@ -451,8 +387,98 @@ class process_info():
                                                        args=('Data', item),
                                                        value=case_item['Data'][item])
 
+    def get_Functional_Response(self, statistic_item, stat_FD):
+        if isinstance(stat_FD, str): stat_FD = [stat_FD]
+        if statistic_item not in st.session_state.stat_items:
+            self.statistic_multi_items(statistic_item, stat_FD)
+        case_item = st.session_state.stat_items[statistic_item]
+
+        def stat_data_change(key, editor_key):
+            case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_FD"]
+            st.session_state.stat_change['general'] = True
+
+        def stat_submit_change(key, warn_container):
+            if len(st.session_state[f"{key}_FD_multi"]) == 2:
+                sitem = '_'.join(st.session_state[f"{key}_FD_multi"])
+                if frozenset(st.session_state[f"{key}_FD_multi"]) not in [frozenset(item) for item in
+                                                                          case_item[key]['select_list']]:
+                    case_item[key][sitem] = True
+                    case_item[key]['select_list'].append(st.session_state[f"{key}_FD_multi"])
+                else:
+                    warn_container.warning(f"Multiple items selected for {sitem}")
+            elif len(st.session_state[f"{key}_FD_multi"]) <= 1:
+                warn_container.warning('Please select at least 2 items')
+
+        def stat_data_submit(key, warn_container):
+            stat_submit_change(key, warn_container)
+            st.session_state[f"{key}_multi"] = []
+            st.session_state.stat_change['general'] = True
+
+        def data_text_change(key, editor_key, col):
+            custom_input = st.session_state[editor_key]
+            if '，' in custom_input:
+                custom_input = custom_input.replace('，', ',')
+            selected_options = []
+            for option in custom_input.split(','):
+                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
+                    case_item[key][option.strip()] = True
+                elif option.strip() in case_item[key]:
+                    col.warning(f'{option.strip()} has already been selected, please change!')
+            st.session_state[editor_key] = ''
+            del selected_options
+
+        with st.popover("Variables Infos", use_container_width=True):
+            for selected_item in self.selected_items:
+                st.subheader(f"Showing {selected_item.replace('_', ' ')}", divider=True)
+                col1, col2 = st.columns((2.5, 1))
+                warn_container = st.container()
+                col1.multiselect(f"{selected_item} offered",
+                                 [value for value in st.session_state.stat_items[statistic_item][selected_item]['options']],
+                                 default=None,
+                                 key=f"{selected_item}_FD_multi",
+                                 max_selections=2,
+                                 placeholder="Choose an option",
+                                 label_visibility="collapsed")
+                col2.button('Submit', key=f"{selected_item}_FD_submit", on_click=stat_data_submit,
+                            args=(selected_item, warn_container), use_container_width=True)
+
+                cols = itertools.cycle(st.columns(2))
+                for skey, svalue in case_item[selected_item].items():
+                    if isinstance(svalue, bool):
+                        col = next(cols)
+                        case_item[selected_item][skey] = col.checkbox(skey, key=f"{selected_item}_{skey}_FD",
+                                                                      on_change=stat_data_change,
+                                                                      args=(selected_item, skey),
+                                                                      value=case_item[selected_item][skey])
+
+            st.divider()
+
+            st.subheader(f"New items", divider=True)
+            col1, col2 = st.columns((2, 2.5))
+            col1.text_input("Add more", value='',
+                            key=f"FD_input",
+                            on_change=data_text_change,
+                            args=('Data', f"FD_input", col2),
+                            placeholder='Press Enter to add more',
+                            type='default',
+                            help='Using "," to separate',
+                            label_visibility="visible")
+
+            cols = itertools.cycle(st.columns(2))
+            for item, value in case_item.items():
+                if isinstance(value, bool):
+                    col = next(cols)
+                    case_item[item] = col.checkbox(item, key=f"{item}_FD",
+                                                   value=case_item[item])
+            for item in case_item['Data'].keys():
+                col = next(cols)
+                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_FD",
+                                                       on_change=stat_data_change,
+                                                       args=('Data', item),
+                                                       value=case_item['Data'][item])
+
     def get_Hellinger_Distance(self, statistic_item, stat_HD):
-        if isinstance(stat_HD, str): stat_Corr = [stat_HD]
+        if isinstance(stat_HD, str): stat_HD = [stat_HD]
         if statistic_item not in st.session_state.stat_items:
             self.statistic_multi_items(statistic_item, stat_HD)
         case_item = st.session_state.stat_items[statistic_item]
@@ -470,7 +496,7 @@ class process_info():
                     case_item[key]['select_list'].append(st.session_state[f"{key}_HD_multi"])
                 else:
                     warn_container.warning(f"Multiple items selected for {sitem}")
-            elif len(st.session_state[f"{key}_TCH_multi"]) <= 1:
+            elif len(st.session_state[f"{key}_HD_multi"]) <= 1:
                 warn_container.warning('Please select at least 2 items')
 
         def stat_data_submit(key, warn_container):
@@ -542,7 +568,7 @@ class process_info():
                                                        value=case_item['Data'][item])
 
     def get_Three_Cornered_Hat(self, statistic_item, stat_TCH):
-        if isinstance(stat_TCH, str): stat_Corr = [stat_TCH]
+        if isinstance(stat_TCH, str): stat_TCH = [stat_TCH]
         if statistic_item not in st.session_state.stat_items:
             self.statistic_multi_items(statistic_item, stat_TCH)
         case_item = st.session_state.stat_items[statistic_item]
@@ -627,6 +653,96 @@ class process_info():
             for item in case_item['Data'].keys():
                 col = next(cols)
                 case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_TCH",
+                                                       on_change=stat_data_change,
+                                                       args=('Data', item),
+                                                       value=case_item['Data'][item])
+
+    def get_Partial_Least_Squares_Regression(self, statistic_item, stat_PLSR):
+        if isinstance(stat_PLSR, str): stat_PLSR = [stat_PLSR]
+        if statistic_item not in st.session_state.stat_items:
+            self.statistic_multi_items(statistic_item, stat_PLSR)
+        case_item = st.session_state.stat_items[statistic_item]
+
+        def stat_data_change(key, editor_key):
+            case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_PLSR"]
+            st.session_state.stat_change['general'] = True
+
+        def stat_submit_change(key, warn_container):
+            if len(st.session_state[f"{key}_PLSR_multi"]) >= 3:
+                sitem = '_'.join(st.session_state[f"{key}_PLSR_multi"])
+                if frozenset(st.session_state[f"{key}_PLSR_multi"]) not in [frozenset(item) for item in
+                                                                            case_item[key]['select_list']]:
+                    case_item[key][sitem] = True
+                    case_item[key]['select_list'].append(st.session_state[f"{key}_PLSR_multi"])
+                else:
+                    warn_container.warning(f"Multiple items selected for {sitem}")
+            elif len(st.session_state[f"{key}_PLSR_multi"]) <= 2:
+                warn_container.warning('Please select at least 3 items')
+
+        def stat_data_submit(key, warn_container):
+            stat_submit_change(key, warn_container)
+            st.session_state[f"{key}_PLSR_multi"] = []
+            st.session_state.stat_change['general'] = True
+
+        def data_text_change(key, editor_key, col):
+            custom_input = st.session_state[editor_key]
+            if '，' in custom_input:
+                custom_input = custom_input.replace('，', ',')
+            selected_options = []
+            for option in custom_input.split(','):
+                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
+                    case_item[key][option.strip()] = True
+                elif option.strip() in case_item[key]:
+                    col.warning(f'{option.strip()} has already been selected, please change!')
+            st.session_state[editor_key] = ''
+            del selected_options
+
+        with st.popover("Variables Infos", use_container_width=True):
+            for selected_item in self.selected_items:
+                st.subheader(f"Showing {selected_item.replace('_', ' ')}", divider=True)
+                col1, col2 = st.columns((2.5, 1))
+                warn_container = st.container()
+                col1.multiselect(f"{selected_item} offered",
+                                 [value for value in st.session_state.stat_items[statistic_item][selected_item]['options']],
+                                 default=None,
+                                 key=f"{selected_item}_PLSR_multi",
+                                 max_selections=None,
+                                 placeholder="Choose an option",
+                                 label_visibility="collapsed")
+                col2.button('Submit', key=f"{selected_item}_PLSR_submit", on_click=stat_data_submit,
+                            args=(selected_item, warn_container), use_container_width=True)
+
+                cols = itertools.cycle(st.columns(2))
+                for skey, svalue in case_item[selected_item].items():
+                    if isinstance(svalue, bool):
+                        col = next(cols)
+                        case_item[selected_item][skey] = col.checkbox(skey, key=f"{selected_item}_{skey}_PLSR",
+                                                                      on_change=stat_data_change,
+                                                                      args=(selected_item, skey),
+                                                                      value=case_item[selected_item][skey])
+            st.info('Note! The :red[First] selected item will be set as :red[Y data]!')
+            st.divider()
+
+            st.subheader(f"New items", divider=True)
+            col1, col2 = st.columns((2, 2.5))
+            col1.text_input("Add more", value='',
+                            key=f"PLSR_input",
+                            on_change=data_text_change,
+                            args=('Data', f"PLSR_input", col2),
+                            placeholder='Press Enter to add more',
+                            type='default',
+                            help='Using "," to separate',
+                            label_visibility="visible")
+
+            cols = itertools.cycle(st.columns(2))
+            for item, value in case_item.items():
+                if isinstance(value, bool):
+                    col = next(cols)
+                    case_item[item] = col.checkbox(item, key=f"{item}_PLSR",
+                                                   value=case_item[item])
+            for item in case_item['Data'].keys():
+                col = next(cols)
+                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_PLSR",
                                                        on_change=stat_data_change,
                                                        args=('Data', item),
                                                        value=case_item['Data'][item])
@@ -726,7 +842,6 @@ class visualization_statistic:
             return image
 
         st.cache_data.clear()
-        # st.divider()
         figure_path = os.path.join(case_path, 'statistics', item)
         if item == "Mann_Kendall_Trend_Test":
             st.markdown(f"""
@@ -809,49 +924,69 @@ class visualization_statistic:
                     st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
         elif item == "Functional_Response":
-            st.info(f'Functional_Response not ready yet!', icon="ℹ️")
+            st.markdown(f"""
+            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                Select Cases!
+            </div>""", unsafe_allow_html=True)
+            st.write(' ')
+            icase = st.radio("Functional Response", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            st.divider()
+            if icase:
+                filename = glob.glob(os.path.join(figure_path, f'Functional_Response_{icase}_output.*'))
+                filename = [f for f in filename if not f.endswith('.nc')]
+                try:
+                    image = load_image(filename[0])
+                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
+                except:
+                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
 
         elif (item == "Hellinger_Distance"):
-            st.info(f'Hellinger_Distance not ready yet!', icon="ℹ️")
-            # col1, col2 = st.columns((1.5, 2.5))
-            # col1.write('##### :blue[Select Variables]')
-            # iselected_item = col1.radio(item, [i.replace("_", " ") for i in self.selected_items], index=None,
-            #                             horizontal=False,
-            #                             key=f'{item}_item', label_visibility="collapsed")
-            # col2.write('##### :blue[Select Matrics and scores]')
-            # imm = col2.radio(item,
-            #                  [k.replace("_", " ") for k, v in
-            #                   dict(chain(self.metrics.items(), self.scores.items())).items()
-            #                   if v],
-            #                  index=None, horizontal=True, key=f'{item}_score', label_visibility="collapsed")
-            # st.divider()
-            # if iselected_item and imm:
-            #     selected_item = iselected_item.replace(" ", "_")
-            #     mm = imm.replace(" ", "_")
-            #     ref_sources = self.ref['general'][f'{selected_item}_ref_source']
-            #     if isinstance(ref_sources, str): ref_sources = [ref_sources]
-            #     for ref_source in ref_sources:
-            #         ffname = f'{iselected_item}: Reference -- {ref_source.replace("_", " ")} --{imm}'
-            #         filenames = glob.glob(os.path.join(figure_path, f'{item}_{selected_item}_{ref_source}_{mm}.*'))
-            #         try:
-            #             image = load_image(filenames[0])
-            #             st.image(image, caption=ffname, use_column_width="auto")
-            #         except:
-            #             if mm == 'nSpatialScore':
-            #                 st.info(f'{mm} is not supported for {item.replace("_", " ")}!', icon="ℹ️")
-            #             else:
-            #                 st.error(f'Missing Figure for {ffname}', icon="⚠")
+            st.markdown(f"""
+            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                Select Cases!
+            </div>""", unsafe_allow_html=True)
+            st.write(' ')
+            icase = st.radio("Hellinger _Distance", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            st.divider()
+            if icase:
+                filename = glob.glob(os.path.join(figure_path, f'Hellinger_Distance_{icase}_output.*'))
+                filename = [f for f in filename if not f.endswith('.nc')]
+                try:
+                    image = load_image(filename[0])
+                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
+                except:
+                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
+
 
         elif item == "Partial_Least_Squares_Regression":
-            st.info(f'Partial_Least_Squares_Regression not ready yet!', icon="ℹ️")
-            # filename = glob.glob(os.path.join(figure_path, f'SMPI_comparison_plot_comprehensive.*'))
-            # try:
-            #     image = load_image(filename[0])
-            #     st.image(image, caption='SMIP', use_column_width="auto")
-            # except:
-            #     st.error(f'Missing Figure for SMIP', icon="⚠")
-
+            st.markdown(f"""
+            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                Select Cases!
+            </div>""", unsafe_allow_html=True)
+            st.write(' ')
+            icase = st.radio("Partial Least Squares Regression", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            iclass = st.radio("Partial Least Squares Regression class",
+                              ['best_n_components', 'coefficients', 'intercepts', 'p_values', 'r_squared', 'anomaly', ],
+                              index=None, horizontal=True, key=f'{item}_class', label_visibility='collapsed')
+            st.divider()
+            if icase and iclass:
+                filename = glob.glob(os.path.join(figure_path, f'Partial_Least_Squares_Regression_{icase}_output_{iclass}*.*'))
+                filename = [f for f in filename if not f.endswith('.nc')]
+                pattern = re.compile(rf'Partial_Least_Squares_Regression_{icase}_output_{iclass}_X(\d+)')
+                for file in filename:
+                    try:
+                        image = load_image(file)
+                        if (match := pattern.search(file)):
+                            x_number = int(match.group(1))
+                            st.image(image, caption=f'Case: {icase}, {iclass} X{x_number}', use_column_width=True)
+                        else:
+                            st.image(image, caption=f'Case: {icase}, {iclass}', use_column_width=True)
+                    except:
+                        st.error(f'Missing Figure for Case: {icase}, {iclass}', icon="⚠")
         elif item == "Three_Cornered_Hat":
             st.info(f'Three_Cornered_Hat not ready yet!', icon="ℹ️")
 
@@ -951,7 +1086,6 @@ class visualization_replot_statistic:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Z_Score":
-
             icase = st.radio("Z_Score", [k for k in item_general],
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
@@ -963,47 +1097,37 @@ class visualization_replot_statistic:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Functional_Response":
-            st.info(f'Functional_Response not ready yet!', icon="ℹ️")
+            icase = st.radio("Functional Response", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            st.divider()
+            if icase:
+                file = glob.glob(os.path.join(item_path, f'Functional_Response_{icase}_output.nc'))[0]
+                try:
+                    self.__Functional_Response(item, file, icase, item_path)
+                except:
+                    st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif (item == "Hellinger_Distance"):
-            st.info(f'Hellinger_Distance not ready yet!', icon="ℹ️")
-            # col1, col2 = st.columns((1.5, 2.5))
-            # col1.write('##### :blue[Select Variables]')
-            # iselected_item = col1.radio(item, [i.replace("_", " ") for i in self.selected_items], index=None,
-            #                             horizontal=False,
-            #                             key=f'{item}_item', label_visibility="collapsed")
-            # col2.write('##### :blue[Select Matrics and scores]')
-            # imm = col2.radio(item,
-            #                  [k.replace("_", " ") for k, v in
-            #                   dict(chain(self.metrics.items(), self.scores.items())).items()
-            #                   if v],
-            #                  index=None, horizontal=True, key=f'{item}_score', label_visibility="collapsed")
-            # st.divider()
-            # if iselected_item and imm:
-            #     selected_item = iselected_item.replace(" ", "_")
-            #     mm = imm.replace(" ", "_")
-            #     ref_sources = self.ref['general'][f'{selected_item}_ref_source']
-            #     if isinstance(ref_sources, str): ref_sources = [ref_sources]
-            #     for ref_source in ref_sources:
-            #         ffname = f'{iselected_item}: Reference -- {ref_source.replace("_", " ")} --{imm}'
-            #         filenames = glob.glob(os.path.join(figure_path, f'{item}_{selected_item}_{ref_source}_{mm}.*'))
-            #         try:
-            #             image = load_image(filenames[0])
-            #             st.image(image, caption=ffname, use_column_width="auto")
-            #         except:
-            #             if mm == 'nSpatialScore':
-            #                 st.info(f'{mm} is not supported for {item.replace("_", " ")}!', icon="ℹ️")
-            #             else:
-            #                 st.error(f'Missing Figure for {ffname}', icon="⚠")
+            icase = st.radio("Hellinger Distance", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            st.divider()
+            if icase:
+                file = glob.glob(os.path.join(item_path, f'Hellinger_Distance_{icase}_output.nc'))[0]
+                # try:
+                self.__Hellinger_Distance(item, file, icase, item_path)
+                # except:
+                #     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Partial_Least_Squares_Regression":
-            st.info(f'Partial_Least_Squares_Regression not ready yet!', icon="ℹ️")
-            # filename = glob.glob(os.path.join(figure_path, f'SMPI_comparison_plot_comprehensive.*'))
-            # try:
-            #     image = load_image(filename[0])
-            #     st.image(image, caption='SMIP', use_column_width="auto")
-            # except:
-            #     st.error(f'Missing Figure for SMIP', icon="⚠")
+            icase = st.radio("Partial_Least_Squares_Regression", [k for k in item_general],
+                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            st.divider()
+            if icase:
+                file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
+                # try:
+                self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
+                # except:
+                #     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Three_Cornered_Hat":
             st.info(f'Three_Cornered_Hat not ready yet!', icon="ℹ️")
@@ -1013,20 +1137,36 @@ class visualization_replot_statistic:
         option = {}
         make_Mann_Kendall_Trend_Test(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
-    def __Correlation(self,item, file, icase, case_path):
+    def __Correlation(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
         make_Correlation(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
-    def __Standard_Deviation(self,item, file, icase, case_path):
+    def __Standard_Deviation(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
         make_Standard_Deviation(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
-    def __Z_Score(self,item, file, icase, case_path):
+    def __Z_Score(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
         make_Z_Score(case_path, item, icase, file, st.session_state.stat_data[item], option)
+
+    def __Functional_Response(self, item, file, icase, case_path):
+        st.cache_data.clear()
+        option = {}
+        make_Functional_Response(case_path, item, icase, file, st.session_state.stat_data[item], option)
+
+    def __Hellinger_Distance(self, item, file, icase, case_path):
+        st.cache_data.clear()
+        option = {}
+        make_Hellinger_Distance(case_path, item, icase, file, st.session_state.stat_data[item], option)
+
+    def __Partial_Least_Squares_Regression(self, item, file, icase, case_path):
+        st.cache_data.clear()
+        option = {}
+        make_Partial_Least_Squares_Regression(case_path, item, icase, file, st.session_state.stat_data[item], option)
+
 
 class Process_stastic(process_info, visualization_statistic, visualization_replot_statistic):
     def __init__(self, initial):
@@ -1059,9 +1199,9 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             'Correlation': 'Multi',
             'Standard_Deviation': 'Single',
             'Z_Score': 'Single',
-            'Functional_Response': 'Single',
+            'Functional_Response': 'Multi',
             'Hellinger_Distance': 'Multi',
-            'Partial_Least_Squares_Regression': 'PLSR',
+            'Partial_Least_Squares_Regression': 'Multi',
             'Three_Cornered_Hat': 'Multi'
         }
         self.set_default = initial.stat_default()
@@ -1190,11 +1330,11 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                         args=("Hellinger_Distance", "Hellinger_Distance"),
                         value=statistics['Hellinger_Distance'])
             st.checkbox('Partial Least Squares Regression', key="Partial_Least_Squares_Regression",
-                        disabled=True,
                         on_change=statistics_editor_change,
                         args=("Partial_Least_Squares_Regression", "Partial_Least_Squares_Regression"),
                         value=statistics['Partial_Least_Squares_Regression'])
             st.checkbox('Three Cornered Hat', key="Three_Cornered_Hat",
+                        disabled=True,
                         on_change=statistics_editor_change,
                         args=("Three_Cornered_Hat", "Three_Cornered_Hat"),
                         value=statistics['Three_Cornered_Hat'])
@@ -1515,25 +1655,41 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
         info_list = self.stat_info[statistic_item]
         if 'other' in info_list.keys():
-            key = info_list['other'][0]
-            if key == 'nbins':
-                f_format = '%d'
-                f_step = int(1)
-                if key not in item_data:
-                    item_data[key] = 25
-            else:
-                f_format = '%f'
-                f_step = 0.05
-                item_data[key] = 0.05
+            cols = itertools.cycle(tab.columns(2))
+            for key in info_list['other']:
+                if key == 'nbins':
+                    f_format = '%d'
+                    f_step = int(1)
+                    if key not in item_data:
+                        item_data[key] = 25
+                elif key == 'max_components':
+                    f_format = '%d'
+                    f_step = int(1)
+                    if key not in item_data:
+                        item_data[key] = 2
+                elif key == 'n_splits':
+                    f_format = '%d'
+                    f_step = int(1)
+                    if key not in item_data:
+                        item_data[key] = 5
+                elif key == 'n_jobs':
+                    f_format = '%d'
+                    f_step = int(1)
+                    if key not in item_data:
+                        item_data[key] = -1
+                else:
+                    f_format = '%f'
+                    f_step = 0.05
+                    item_data[key] = 0.05
 
-            col1, col2 = tab.columns(2)
-            item_data[key] = col1.number_input(f"Set {key.replace('_', ' ')}:",
-                                               format=f_format, step=f_step,
-                                               value=item_data[key],
-                                               key=f"{statistic_item}_{key}",
-                                               on_change=item_editor_change,
-                                               args=(statistic_item, key),
-                                               placeholder=f"Set your {statistic_item.replace('_', ' ')} {key.replace('_', ' ')}...")
+                col = next(cols)
+                item_data[key] = col.number_input(f"Set {key}:",
+                                                  format=f_format, step=f_step,
+                                                  value=item_data[key],
+                                                  key=f"{statistic_item}_{key}",
+                                                  on_change=item_editor_change,
+                                                  args=(statistic_item, key),
+                                                  placeholder=f"Set your {statistic_item.replace('_', ' ')} {key.replace('_', ' ')}...")
             tab.divider()
         colors = itertools.cycle(morandi_colors.values())
         for j, item in enumerate(stat_general[f"{statistic_item}_data_source"]):
@@ -1576,7 +1732,8 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                             if isinstance(mvalue, bool) and mvalue:
                                 if item == f"{s_item}_{ikey}_{mkey}" and 'select_list' in value.keys():
                                     for select in value['select_list']:
-                                        if mkey == '_'.join(i for i in select):
+                                        all_combinations = itertools.permutations(select)
+                                        if mkey in ['_'.join(i) for i in all_combinations]:
                                             return ikey, select
                                 elif item == f"{s_item}_Data_{mkey}" and 'select_list' not in value.keys():
                                     return ikey, None
@@ -1708,6 +1865,17 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             index = my_list.index(compare_tres_value.lower())
             return index
 
+        def get_x(item_data, item):
+            source_config = {k: v for k, v in item_data.items() if k.startswith(f"{item}_X")}
+            pattern = re.compile(rf'{item}_X(\d+)')
+            x_numbers = sorted(set([int(match.group(1)) for key in source_config.keys() if (match := pattern.search(key))]))
+
+            try:
+                max_x = max(x_numbers)
+                return max_x
+            except Exception as e:
+                st.error(f"发生错误: {e}")
+
         if sources is not None:
             if statistic_item == 'Three_Cornered_Hat' and f"{item}_nX" not in item_data:
                 col1, col2, col3 = st.columns(3)
@@ -1724,7 +1892,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         else:
             if statistic_item == 'Three_Cornered_Hat':
                 if f"{item}_nX" not in item_data:
-                    item_data[f"{item}_nX"] = 3
+                    item_data[f"{item}_nX"] = get_x(item_data, item)
                 col1, col2, col3 = st.columns(3)
                 item_data[f"{item}_nX"] = col1.number_input(f"Set n data: ",
                                                             min_value=3,
@@ -1734,103 +1902,306 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                             args=(statistic_item, f"{item}", 'n'),
                                                             placeholder=f"Set your Simulation {item}...")
                 n = item_data[f"{item}_nX"]
+            elif statistic_item == 'Partial_Least_Squares_Regression':
+                if f"{item}_nX" not in item_data:
+                    item_data[f"{item}_nX"] = get_x(item_data, item)
+                col1, col2, col3 = st.columns(3)
+                item_data[f"{item}_nX"] = col1.number_input(f"Set nX data: ",
+                                                            min_value=2,
+                                                            value=int(item_data[f"{item}_nX"]),
+                                                            key=f"{statistic_item}_{item}_nX",
+                                                            on_change=stat_editor_change,
+                                                            args=(statistic_item, f"{item}", 'n'),
+                                                            placeholder=f"Set your Simulation {item}...")
+                n = item_data[f"{item}_nX"]
             else:
                 n = 2
 
-        if variable != 'Data' and sources is not None:
-            for i, source in enumerate(sources):
-                i = i + 1
-                if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
-                    var_data = st.session_state.ref_data[source]
-                elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
-                    var_data = st.session_state.sim_data[source]
-                for i_info in info_list:
-                    if f"{item}{i}_{i_info}" not in item_data:
-                        if i_info in var_data['general'].keys():
-                            item_data[f"{item}{i}_{i_info}"] = var_data['general'][i_info]
-                        elif i_info in i_info in var_data[variable].keys():
-                            item_data[f"{item}{i}_{i_info}"] = var_data[variable][i_info]
-                        if i_info == 'varname' and i_info not in var_data[variable].keys():
-                            item_data[f"{item}{i}_{i_info}"] = \
-                                self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
-                                    i_info]
-                        if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
-                            item_data[f"{item}{i}_dir"] = var_data['general']['root_dir']
-                            if 'sub_dir' in var_data[variable]:
-                                item_data[f"{item}{i}_dir"] = var_data['general']['root_dir'] + var_data[variable]['sub_dir']
-        else:
-            for i in range(1, n + 1):
-                for i_info in info_list:
-                    if f"{item}{i}_{i_info}" not in item_data:
-                        item_data[f"{item}{i}_{i_info}"] = self.set_default[i_info]
-
-        for i in range(1, n + 1):
-            if sources is not None:
-                st.write(f'##### :violet[{sources[i - 1]}]')
+        if statistic_item != 'Partial_Least_Squares_Regression':
+            if variable != 'Data' and sources is not None:
+                for i, source in enumerate(sources):
+                    i = i + 1
+                    if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                        var_data = st.session_state.ref_data[source]
+                    elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                        var_data = st.session_state.sim_data[source]
+                    for i_info in info_list:
+                        if f"{item}{i}_{i_info}" not in item_data:
+                            if i_info in var_data['general'].keys():
+                                item_data[f"{item}{i}_{i_info}"] = var_data['general'][i_info]
+                            elif i_info in i_info in var_data[variable].keys():
+                                item_data[f"{item}{i}_{i_info}"] = var_data[variable][i_info]
+                            if i_info == 'varname' and i_info not in var_data[variable].keys():
+                                item_data[f"{item}{i}_{i_info}"] = \
+                                    self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
+                                        i_info]
+                            if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
+                                item_data[f"{item}{i}_dir"] = var_data['general']['root_dir']
+                                if 'sub_dir' in var_data[variable]:
+                                    item_data[f"{item}{i}_dir"] = var_data['general']['root_dir'] + var_data[variable]['sub_dir']
             else:
-                st.write(f'##### :violet[Input Data {i}]')
+                for i in range(1, n + 1):
+                    for i_info in info_list:
+                        if f"{item}{i}_{i_info}" not in item_data:
+                            item_data[f"{item}{i}_{i_info}"] = self.set_default[i_info]
+
+            for i in range(1, n + 1):
+                if sources is not None:
+                    st.write(f'##### :violet[{sources[i - 1]}]')
+                else:
+                    st.write(f'##### :violet[Input Data {i}]')
+                import itertools
+                cols = itertools.cycle(st.columns(3))
+                for i_info in sorted(info_list, key=str.lower):
+                    if i_info not in ["dir", "fulllist"] and f"{item}{i}_{i_info}" in item_data.keys():
+                        col = next(cols)
+                        if i_info in ['prefix', 'suffix', 'varname']:
+                            item_data[f"{item}{i}_{i_info}"] = col.text_input(f'Set {i_info}: ',
+                                                                              value=item_data[f"{item}{i}_{i_info}"],
+                                                                              key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                              on_change=stat_editor_change,
+                                                                              args=(statistic_item, f"{item}{i}", i_info),
+                                                                              placeholder=f"Set your {statistic_item.replace('_', ' ')} {i_info.replace('_', ' ')}...")
+                        elif i_info in ['timezone', 'grid_res']:
+                            item_data[f"{item}{i}_{i_info}"] = col.number_input(f"Set {i_info}: ",
+                                                                                value=float(item_data[f"{item}{i}_{i_info}"]),
+                                                                                key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                                on_change=stat_editor_change,
+                                                                                args=(statistic_item, f"{item}{i}", i_info),
+                                                                                placeholder=f"Set your Simulation {item}...")
+                        elif i_info in ['syear', 'eyear']:
+                            item_data[f"{item}{i}_{i_info}"] = col.number_input(f" Set {i_info}:",
+                                                                                format='%04d', step=int(1),
+                                                                                value=item_data[f"{item}{i}_{i_info}"],
+                                                                                key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                                on_change=stat_editor_change,
+                                                                                args=(statistic_item, f"{item}{i}", i_info),
+                                                                                placeholder=f"Set your Simulation {item}...")
+                        elif i_info == 'tim_res':
+                            item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Time Resolution: ',
+                                                                             options=('hour', 'day', 'month', 'year'),
+                                                                             index=set_data_groupby(
+                                                                                 item_data[f"{item}{i}_{i_info}"]),
+                                                                             key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                             placeholder=f"Set your Simulation Time Resolution (default={item_data[f'{item}{i}_{i_info}']})...")
+                        elif i_info == 'data_groupby':
+                            item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Data groupby: ',
+                                                                             options=('hour', 'day', 'month', 'year', 'single'),
+                                                                             index=set_data_groupby(
+                                                                                 item_data[f"{item}{i}_{i_info}"]),
+                                                                             key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                             placeholder=f"Set your Simulation Data groupby (default={item_data[f'{item}{i}_{i_info}']})...")
+                        elif i_info == 'data_type':
+                            item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Data type: ',
+                                                                             options=('stn', 'grid'),
+                                                                             index=set_data_type(
+                                                                                 item_data[f"{item}{i}_{i_info}"]),
+                                                                             key=f"{statistic_item}_{item}{i}_{i_info}",
+                                                                             placeholder=f"Set your Simulation Data type (default={item_data[f'{item}{i}_{i_info}']})...")
+                item_data[f"{item}{i}_dir"] = st.text_input(f' Set Data Dictionary: ',
+                                                            value=item_data[f"{item}{i}_dir"],
+                                                            key=f"{statistic_item}_{item}{i}_dir",
+                                                            on_change=stat_editor_change,
+                                                            args=(statistic_item, f"{item}{i}", "dir",),
+                                                            placeholder=f"Set your Simulation Dictionary...")
+                if item_data[f"{item}{i}_data_type"] == 'stn':
+                    item_data[f"{item}{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                                                                     value=item_data[f"{item}{i}_fulllist"],
+                                                                     key=f"{statistic_item}_{item}{i}_fulllist",
+                                                                     on_change=stat_editor_change,
+                                                                     args=(statistic_item, f"{item}{i}", "fulllist"),
+                                                                     placeholder=f"Set your Simulation Fulllist file...")
+                else:
+                    item_data[f"{item}{i}_fulllist"] = ''
+                st.divider()
+                st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}{i}", statistic_item))
+        else:
+            if variable != 'Data' and sources is not None:
+                for i, source in enumerate(sources):
+                    if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                        var_data = st.session_state.ref_data[source]
+                    elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                        var_data = st.session_state.sim_data[source]
+                    if i == 0:
+                        for i_info in info_list:
+                            if f"{item}_Y_{i_info}" not in item_data:
+                                if i_info in var_data['general'].keys():
+                                    item_data[f"{item}_Y_{i_info}"] = var_data['general'][i_info]
+                                elif i_info in i_info in var_data[variable].keys():
+                                    item_data[f"{item}_Y_{i_info}"] = var_data[variable][i_info]
+                                if i_info == 'varname' and i_info not in var_data[variable].keys():
+                                    item_data[f"{item}_Y_{i_info}"] = \
+                                        self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
+                                            i_info]
+                                if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
+                                    item_data[f"{item}_Y_dir"] = var_data['general']['root_dir']
+                                    if 'sub_dir' in var_data[variable]:
+                                        item_data[f"{item}_Y_dir"] = var_data['general']['root_dir'] + var_data[variable][
+                                            'sub_dir']
+                    else:
+                        if f"{item}_X{i}_{i_info}" not in item_data:
+                            if i_info in var_data['general'].keys():
+                                item_data[f"{item}_X{i}_{i_info}"] = var_data['general'][i_info]
+                            elif i_info in i_info in var_data[variable].keys():
+                                item_data[f"{item}_X{i}_{i_info}"] = var_data[variable][i_info]
+                            if i_info == 'varname' and i_info not in var_data[variable].keys():
+                                item_data[f"{item}_X{i}_{i_info}"] = \
+                                    self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
+                                        i_info]
+                            if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
+                                item_data[f"{item}_X{i}_dir"] = var_data['general']['root_dir']
+                                if 'sub_dir' in var_data[variable]:
+                                    item_data[f"{item}_X{i}_dir"] = var_data['general']['root_dir'] + var_data[variable][
+                                        'sub_dir']
+            else:
+                for i_info in info_list:
+                    if f"{item}_Y_{i_info}" not in item_data:
+                        item_data[f"{item}_Y_{i_info}"] = self.set_default[i_info]
+                for i in range(1, n + 1):
+                    for i_info in info_list:
+                        if f"{item}_X{i}_{i_info}" not in item_data:
+                            item_data[f"{item}_X{i}_{i_info}"] = self.set_default[i_info]
+
+            if sources is not None:
+                st.write(f'##### :violet[{sources[0]}]')
+            else:
+                st.write(f'##### :violet[Input Data Y]')
             import itertools
             cols = itertools.cycle(st.columns(3))
             for i_info in sorted(info_list, key=str.lower):
-                if i_info not in ["dir", "fulllist"] and f"{item}{i}_{i_info}" in item_data.keys():
+                if i_info not in ["dir", "fulllist"] and f"{item}_Y_{i_info}" in item_data.keys():
                     col = next(cols)
                     if i_info in ['prefix', 'suffix', 'varname']:
-                        item_data[f"{item}{i}_{i_info}"] = col.text_input(f'Set {i_info}: ',
-                                                                          value=item_data[f"{item}{i}_{i_info}"],
-                                                                          key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                          on_change=stat_editor_change,
-                                                                          args=(statistic_item, f"{item}{i}", i_info),
-                                                                          placeholder=f"Set your {statistic_item.replace('_', ' ')} {i_info.replace('_', ' ')}...")
+                        item_data[f"{item}_Y_{i_info}"] = col.text_input(f'Set {i_info}: ',
+                                                                         value=item_data[f"{item}_Y_{i_info}"],
+                                                                         key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                         on_change=stat_editor_change,
+                                                                         args=(statistic_item, f"{item}_Y", i_info),
+                                                                         placeholder=f"Set your {statistic_item.replace('_', ' ')} {i_info.replace('_', ' ')}...")
                     elif i_info in ['timezone', 'grid_res']:
-                        item_data[f"{item}{i}_{i_info}"] = col.number_input(f"Set {i_info}: ",
-                                                                            value=float(item_data[f"{item}{i}_{i_info}"]),
-                                                                            key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                            on_change=stat_editor_change,
-                                                                            args=(statistic_item, f"{item}{i}", i_info),
-                                                                            placeholder=f"Set your Simulation {item}...")
+                        item_data[f"{item}_Y_{i_info}"] = col.number_input(f"Set {i_info}: ",
+                                                                           value=float(item_data[f"{item}_Y_{i_info}"]),
+                                                                           key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                           on_change=stat_editor_change,
+                                                                           args=(statistic_item, f"{item}_Y", i_info),
+                                                                           placeholder=f"Set your Simulation {item}...")
                     elif i_info in ['syear', 'eyear']:
-                        item_data[f"{item}{i}_{i_info}"] = col.number_input(f" Set {i_info}:",
-                                                                            format='%04d', step=int(1),
-                                                                            value=item_data[f"{item}{i}_{i_info}"],
-                                                                            key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                            on_change=stat_editor_change,
-                                                                            args=(statistic_item, f"{item}{i}", i_info),
-                                                                            placeholder=f"Set your Simulation {item}...")
+                        item_data[f"{item}_Y_{i_info}"] = col.number_input(f" Set {i_info}:",
+                                                                           format='%04d', step=int(1),
+                                                                           value=item_data[f"{item}_Y_{i_info}"],
+                                                                           key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                           on_change=stat_editor_change,
+                                                                           args=(statistic_item, f"{item}_Y", i_info),
+                                                                           placeholder=f"Set your Simulation {item}...")
                     elif i_info == 'tim_res':
-                        item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Time Resolution: ',
-                                                                         options=('hour', 'day', 'month', 'year'),
-                                                                         index=set_data_groupby(item_data[f"{item}{i}_{i_info}"]),
-                                                                         key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                         placeholder=f"Set your Simulation Time Resolution (default={item_data[f'{item}{i}_{i_info}']})...")
+                        item_data[f"{item}_Y_{i_info}"] = col.selectbox(f' Set Time Resolution: ',
+                                                                        options=('hour', 'day', 'month', 'year'),
+                                                                        index=set_data_groupby(
+                                                                            item_data[f"{item}_Y_{i_info}"]),
+                                                                        key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                        placeholder=f"Set your Simulation Time Resolution (default={item_data[f'{item}_Y_{i_info}']})...")
                     elif i_info == 'data_groupby':
-                        item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Data groupby: ',
-                                                                         options=('hour', 'day', 'month', 'year', 'single'),
-                                                                         index=set_data_groupby(item_data[f"{item}{i}_{i_info}"]),
-                                                                         key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                         placeholder=f"Set your Simulation Data groupby (default={item_data[f'{item}{i}_{i_info}']})...")
+                        item_data[f"{item}_Y_{i_info}"] = col.selectbox(f' Set Data groupby: ',
+                                                                        options=('hour', 'day', 'month', 'year', 'single'),
+                                                                        index=set_data_groupby(
+                                                                            item_data[f"{item}_Y_{i_info}"]),
+                                                                        key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                        placeholder=f"Set your Simulation Data groupby (default={item_data[f'{item}_Y_{i_info}']})...")
                     elif i_info == 'data_type':
-                        item_data[f"{item}{i}_{i_info}"] = col.selectbox(f' Set Data type: ',
-                                                                         options=('stn', 'grid'),
-                                                                         index=set_data_type(item_data[f"{item}{i}_{i_info}"]),
-                                                                         key=f"{statistic_item}_{item}{i}_{i_info}",
-                                                                         placeholder=f"Set your Simulation Data type (default={item_data[f'{item}{i}_{i_info}']})...")
-            item_data[f"{item}{i}_dir"] = st.text_input(f' Set Data Dictionary: ',
-                                                        value=item_data[f"{item}{i}_dir"],
-                                                        key=f"{statistic_item}_{item}{i}_dir",
-                                                        on_change=stat_editor_change,
-                                                        args=(statistic_item, f"{item}{i}", "dir",),
-                                                        placeholder=f"Set your Simulation Dictionary...")
-            if item_data[f"{item}{i}_data_type"] == 'stn':
-                item_data[f"{item}{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
-                                                                 value=item_data[f"{item}{i}_fulllist"],
-                                                                 key=f"{statistic_item}_{item}{i}_fulllist",
-                                                                 on_change=stat_editor_change,
-                                                                 args=(statistic_item, f"{item}{i}", "fulllist"),
-                                                                 placeholder=f"Set your Simulation Fulllist file...")
+                        item_data[f"{item}_Y_{i_info}"] = col.selectbox(f' Set Data type: ',
+                                                                        options=('stn', 'grid'),
+                                                                        index=set_data_type(
+                                                                            item_data[f"{item}_Y_{i_info}"]),
+                                                                        key=f"{statistic_item}_{item}_Y_{i_info}",
+                                                                        placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_Y_{i_info}']})...")
+            item_data[f"{item}_Y_dir"] = st.text_input(f' Set Data Dictionary: ',
+                                                       value=item_data[f"{item}_Y_dir"],
+                                                       key=f"{statistic_item}_{item}_Y_dir",
+                                                       on_change=stat_editor_change,
+                                                       args=(statistic_item, f"{item}_Y", "dir",),
+                                                       placeholder=f"Set your Simulation Dictionary...")
+            if item_data[f"{item}_Y_data_type"] == 'stn':
+                item_data[f"{item}_Y_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                                                                value=item_data[f"{item}_Y_fulllist"],
+                                                                key=f"{statistic_item}_{item}_Y_fulllist",
+                                                                on_change=stat_editor_change,
+                                                                args=(statistic_item, f"{item}_Y", "fulllist"),
+                                                                placeholder=f"Set your Simulation Fulllist file...")
             else:
-                item_data[f"{item}{i}_fulllist"] = ''
+                item_data[f"{item}_Y_fulllist"] = ''
             st.divider()
-            st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}{i}", statistic_item))
+            st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}_Y", statistic_item))
+
+            for i in range(1, n + 1):
+                if sources is not None:
+                    st.write(f'##### :violet[{sources[i - 1]}]')
+                else:
+                    st.write(f'##### :violet[Input Data X{i}]')
+                import itertools
+                cols = itertools.cycle(st.columns(3))
+                for i_info in sorted(info_list, key=str.lower):
+                    if i_info not in ["dir", "fulllist"] and f"{item}_X{i}_{i_info}" in item_data.keys():
+                        col = next(cols)
+                        if i_info in ['prefix', 'suffix', 'varname']:
+                            item_data[f"{item}_X{i}_{i_info}"] = col.text_input(f'Set {i_info}: ',
+                                                                                value=item_data[f"{item}_X{i}_{i_info}"],
+                                                                                key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                                on_change=stat_editor_change,
+                                                                                args=(statistic_item, f"{item}_X{i}", i_info),
+                                                                                placeholder=f"Set your {statistic_item.replace('_', ' ')} {i_info.replace('_', ' ')}...")
+                        elif i_info in ['timezone', 'grid_res']:
+                            item_data[f"{item}_X{i}_{i_info}"] = col.number_input(f"Set {i_info}: ",
+                                                                                  value=float(item_data[f"{item}_X{i}_{i_info}"]),
+                                                                                  key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                                  on_change=stat_editor_change,
+                                                                                  args=(statistic_item, f"{item}_X{i}", i_info),
+                                                                                  placeholder=f"Set your Simulation {item}...")
+                        elif i_info in ['syear', 'eyear']:
+                            item_data[f"{item}_X{i}_{i_info}"] = col.number_input(f" Set {i_info}:",
+                                                                                  format='%04d', step=int(1),
+                                                                                  value=item_data[f"{item}_X{i}_{i_info}"],
+                                                                                  key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                                  on_change=stat_editor_change,
+                                                                                  args=(statistic_item, f"{item}_X{i}", i_info),
+                                                                                  placeholder=f"Set your Simulation {item}...")
+                        elif i_info == 'tim_res':
+                            item_data[f"{item}_X{i}_{i_info}"] = col.selectbox(f' Set Time Resolution: ',
+                                                                               options=('hour', 'day', 'month', 'year'),
+                                                                               index=set_data_groupby(
+                                                                                   item_data[f"{item}_X{i}_{i_info}"]),
+                                                                               key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                               placeholder=f"Set your Simulation Time Resolution (default={item_data[f'{item}_X{i}_{i_info}']})...")
+                        elif i_info == 'data_groupby':
+                            item_data[f"{item}_X{i}_{i_info}"] = col.selectbox(f' Set Data groupby: ',
+                                                                               options=('hour', 'day', 'month', 'year', 'single'),
+                                                                               index=set_data_groupby(
+                                                                                   item_data[f"{item}_X{i}_{i_info}"]),
+                                                                               key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                               placeholder=f"Set your Simulation Data groupby (default={item_data[f'{item}_X{i}_{i_info}']})...")
+                        elif i_info == 'data_type':
+                            item_data[f"{item}_X{i}_{i_info}"] = col.selectbox(f' Set Data type: ',
+                                                                               options=('stn', 'grid'),
+                                                                               index=set_data_type(
+                                                                                   item_data[f"{item}_X{i}_{i_info}"]),
+                                                                               key=f"{statistic_item}_{item}_X{i}_{i_info}",
+                                                                               placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_X{i}_{i_info}']})...")
+                item_data[f"{item}_X{i}_dir"] = st.text_input(f' Set Data Dictionary: ',
+                                                              value=item_data[f"{item}_X{i}_dir"],
+                                                              key=f"{statistic_item}_{item}_X{i}_dir",
+                                                              on_change=stat_editor_change,
+                                                              args=(statistic_item, f"{item}_X{i}", "dir",),
+                                                              placeholder=f"Set your Simulation Dictionary...")
+                if item_data[f"{item}_X{i}_data_type"] == 'stn':
+                    item_data[f"{item}_X{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                                                                       value=item_data[f"{item}_X{i}_fulllist"],
+                                                                       key=f"{statistic_item}_{item}_X{i}_fulllist",
+                                                                       on_change=stat_editor_change,
+                                                                       args=(statistic_item, f"{item}_X{i}", "fulllist"),
+                                                                       placeholder=f"Set your Simulation Fulllist file...")
+                else:
+                    item_data[f"{item}_X{i}_fulllist"] = ''
+                st.divider()
+                st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}_X{i}", statistic_item))
 
     def __step6_makecheck(self, source_lib, item, source):
         error_state = 0
@@ -1928,21 +2299,35 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                     elif self.stat_class[statistic_item] == 'Multi':
                         for casename in general[f'{statistic_item}_data_source']:
                             lines.append(f"\n#casename: {casename}\n")
-                            if statistic_item == 'Three_Cornered_Hat':
+                            if statistic_item == 'Partial_Least_Squares_Regression':
                                 n = stat_data[statistic_item][f'{casename}_nX']
                                 lines.append(
                                     f"    {casename}_nX =  {stat_data[statistic_item][f'{casename}_nX']}\n")
-                            else:
-                                n = 2
-
-                            for i in range(1, n + 1):
                                 for key in add_list:
                                     lines.append(
-                                        f"    {casename}{i}_{key} =  {stat_data[statistic_item][f'{casename}{i}_{key}']}\n")
+                                        f"    {casename}_Y_{key} =  {stat_data[statistic_item][f'{casename}_Y_{key}']}\n")
                                 lines.append("\n")
+
+                                for i in range(1, n + 1):
+                                    for key in add_list:
+                                        lines.append(
+                                            f"    {casename}_X{i}_{key} =  {stat_data[statistic_item][f'{casename}_X{i}_{key}']}\n")
+                                    lines.append("\n")
+                            else:
+                                if statistic_item == 'Three_Cornered_Hat':
+                                    n = stat_data[statistic_item][f'{casename}_nX']
+                                    lines.append(
+                                        f"    {casename}_nX =  {stat_data[statistic_item][f'{casename}_nX']}\n")
+                                else:
+                                    n = 2
+                                for i in range(1, n + 1):
+                                    for key in add_list:
+                                        lines.append(
+                                            f"    {casename}{i}_{key} =  {stat_data[statistic_item][f'{casename}{i}_{key}']}\n")
+                                    lines.append("\n")
                     if 'other' in info_list.keys():
-                        key = info_list['other'][0]
-                        lines.append(f"    {key} =  {stat_data[statistic_item][f'{key}']}\n")
+                        for key in info_list['other']:
+                            lines.append(f"    {key} =  {stat_data[statistic_item][f'{key}']}\n")
                     lines.append(end_line)
 
                 for line in lines:
