@@ -64,9 +64,9 @@ def make_Functional_Response(output_dir, method_name, data_sources, main_nml, st
 
     ds = xr.open_dataset(f"{file}.nc")
     data = ds.functional_response_score
-    lat = ds.lat.values
-    lon = ds.lon.values
-    lon, lat = np.meshgrid(lon, lat)
+    ilat = ds.lat.values
+    ilon = ds.lon.values
+    lon, lat = np.meshgrid(ilon, ilat)
 
     option['vmin'], option['vmax'] = 0, 1
     if not option['extend']:
@@ -94,13 +94,9 @@ def make_Functional_Response(output_dir, method_name, data_sources, main_nml, st
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
     mticks, norm, bnd = get_index(option['vmin'], option['vmax'], option['cmap'])
-    if not option['set_lat_lon']:
-        extent = [main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                  main_nml['max_lat']]
-    else:
-        extent = [option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']]
+    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
 
-    if ilat[0] < 0:
+    if ilat[0] - ilat[-1] < 0:
         origin = 'lower'
     else:
         origin = 'upper'
