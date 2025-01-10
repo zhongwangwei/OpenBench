@@ -18,7 +18,7 @@ import streamlit as st
 
 
 def geo_single_average(option: dict, selected_item, refselect, simselect, ref, sim, var, filename):
-    font = {'family': 'Times New Roman'}
+    font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
     params = {'backend': 'ps',
@@ -128,7 +128,7 @@ def geo_single_average(option: dict, selected_item, refselect, simselect, ref, s
 
 def geo_average_diff(option: dict, selected_item, refselect, simselect, ref, sim, refvar, simvar):
     from matplotlib import colors
-    font = {'family': 'Times New Roman'}
+    font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
     params = {'backend': 'ps',

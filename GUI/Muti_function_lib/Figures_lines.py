@@ -9,10 +9,11 @@ import matplotlib
 from io import BytesIO
 import streamlit as st
 
-font = {'family': 'Times new roman'}
-matplotlib.rc('font', **font)
+
 
 def ref_lines(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -78,6 +79,8 @@ def ref_lines(option: dict, showing_items, selected_item):
         st.error('Please make sure your files were generated correctly.')
 
 def sim_lines(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -132,6 +135,8 @@ def sim_lines(option: dict, showing_items, selected_item):
         st.error('Please make sure your files were generated correctly.')
 
 def each_line(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -230,6 +235,8 @@ def each_line(option: dict, showing_items, selected_item):
 
 
 def geo_Compare_lines(option: dict, selected_item, ref, sim):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['labelsize'],
               'axes.linewidth': option['axes_linewidth'],

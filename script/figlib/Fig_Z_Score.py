@@ -63,7 +63,7 @@ def make_Z_Score(output_dir, method_name, data_sources, main_nml, statistic_nml,
     file = os.path.join(output_dir, f"{method_name}", filename)
 
     ds = xr.open_dataset(f"{file}.nc")
-    data = ds.z_score
+    data = ds.Z_Score
     ilat = ds.lat.values
     ilon = ds.lon.values
     lon, lat = np.meshgrid(ilon, ilat)
