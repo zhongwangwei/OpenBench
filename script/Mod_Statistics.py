@@ -1,23 +1,27 @@
 # -*- coding: utf-8 -*-
-import glob
-import logging
-import os
-import re
-import shutil
-import warnings
-from typing import List, Dict, Any
-
-import dask.array as da
 import numpy as np
-import pandas as pd
 import xarray as xr
-from joblib import Parallel, delayed
 from scipy import stats
+from joblib import Parallel, delayed
+import dask.array as da
+import os
+import glob
+import importlib
+import logging
+from typing import List, Dict, Any, Tuple
 
+import pandas as pd
+import re
+from joblib import Parallel, delayed
+import warnings
+from dask.diagnostics import ProgressBar
+import shutil
 from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
+from figlib import *
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 
 class statistics_calculate:
@@ -336,7 +340,15 @@ class statistics_calculate:
             hist = hist / hist.sum()
 
             # Calculate Hellinger distance
+
+            # 公式计算问题
+            # hellinger_dist = np.sqrt(1 - np.sum(np.sqrt(hist)))
             hellinger_dist = np.sqrt(np.sum(np.sqrt(hist)))
+
+            # print(hist)
+            # print(type(hist))
+            # print(hellinger_dist)
+            # print(type(hellinger_dist))
 
             return hellinger_dist
 
@@ -484,9 +496,11 @@ class statistics_calculate:
         #     raise ValueError("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
 
         # Prepare data
+        # Prepare data
         Y_data = Y_vars.values
         X_data = np.array([x.values for x in X_vars])
         X_data = np.moveaxis(X_data, 0, 1)  # Reshape to (time, n_variables, lat, lon)
+        # print(X_data.shape)
 
         # Standardize data
         X_mean = np.mean(X_data, axis=0)
@@ -1254,8 +1268,8 @@ class BasicProcessing(statistics_calculate):
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix='.nc') as temp_input, \
-                tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
-                tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
+             tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
+             tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
             data.to_netcdf(temp_input.name)
             self.create_target_grid_file(temp_grid.name, new_grid)
 
@@ -1426,6 +1440,7 @@ class BasicProcessing(statistics_calculate):
     }
 
 
+
 class StatisticsProcessing(BasicProcessing):
     def __init__(self, main_nml, stats_nml, output_dir, num_cores=-1):
         super().__init__(main_nml)
@@ -1497,7 +1512,7 @@ class StatisticsProcessing(BasicProcessing):
                                          option)
 
     def scenarios_Correlation_analysis(self, statistic_method, statistic_nml, option):
-        # self.setup_output_directories(statistic_method)
+        self.setup_output_directories(statistic_method)
 
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
@@ -1516,7 +1531,7 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [f'{source}1', f'{source}2']
-            # self.run_analysis(source.strip(), sources, statistic_method)
+            self.run_analysis(source.strip(), sources, statistic_method)
             make_Correlation(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
 
     def scenarios_Standard_Deviation_analysis(self, statistic_method, statistic_nml, option):
@@ -1564,7 +1579,7 @@ class StatisticsProcessing(BasicProcessing):
             self.run_analysis(source.strip(), sources, statistic_method)
             make_Hellinger_Distance(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
 
-    def scenarios_Z_score_analysis(self, statistic_method, statistic_nml, option):
+    def scenarios_Z_Score_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
@@ -1584,7 +1599,7 @@ class StatisticsProcessing(BasicProcessing):
         for source in data_sources:
             sources = [source.strip()]
             self.run_analysis(source.strip(), sources, statistic_method)
-            make_Z_score(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            # make_Z_Score(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
 
     def scenarios_Three_Cornered_Hat_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)

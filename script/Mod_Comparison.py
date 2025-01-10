@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
-
+from Mod_Statistics import statistics_calculate
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 from figlib import *
 
 
-class ComparisonProcessing(metrics, scores):
+class ComparisonProcessing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
         self.name = 'ComparisonDataHandler'
         self.version = '0.3'
