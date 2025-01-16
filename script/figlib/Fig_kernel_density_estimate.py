@@ -29,7 +29,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
         # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
-        # colors = cm.Set3(np.linspace(0, 1, len(datasets_filtered)))
         # Create a list to store line objects for the legend
         lines = []
         # Plot each KDE
@@ -37,8 +36,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
             sim_source = sim_sources[i]
 
             try:
-                lower_bound, upper_bound = np.percentile(data, 1.5), np.percentile(data, 98.5)
-                filtered_data = data
+                if varname in ['KGE', 'KGESS', 'NSE']:
+                    filtered_data = np.where(data < -1, -1, data)
+                else:
+                    filtered_data = data
 
                 kde = gaussian_kde(filtered_data)
                 covariance_matrix = kde.covariance
@@ -46,10 +47,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
                 kde.covariance = covariance_matrix
                 
                 # Set x-axis range for KGE and KGESS
-                if varname in ['KGE', 'KGESS']:
-                    x_values = np.linspace(-1, 1, 100)
-                else:
-                    x_values = np.linspace(filtered_data.min(), filtered_data.max(), 100)
+                x_values = np.linspace(filtered_data.min(), filtered_data.max(), 100)
                     
                 density = kde(x_values)
 

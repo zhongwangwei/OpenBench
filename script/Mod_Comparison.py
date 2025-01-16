@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
-from Mod_Statistics import statistics_calculate
+
 from Mod_Metrics import metrics
 from Mod_Scores import scores
+from Mod_Statistics import statistics_calculate
 from figlib import *
 
 
@@ -639,10 +640,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             std_sim = self.stat_standard_deviation(simfile).mean().values
                             output_file.write(f"{std_sim}\t")
                             stds[i + 1] = std_sim
-                            cor_sim = self.correlation(simfile, reffile).mean(skipna=True).values
+                            cor_result = self.correlation(simfile, reffile)
+                            cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
                             output_file.write(f"{cor_sim}\t")
                             cors[i + 1] = cor_sim
-                            RMS_sim = self.CRMSD(simfile, reffile).mean(skipna=True).values
+                            RMS_result = self.CRMSD(simfile, reffile)
+                            RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
                             output_file.write(f"{RMS_sim}\t")
                             RMSs[i + 1] = RMS_sim
                             std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
