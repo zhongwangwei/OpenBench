@@ -1130,11 +1130,11 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                try:
-                    file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
-                    self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
-                except:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
+                # try:
+                file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
+                self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
+                # except:
+                #     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Three_Cornered_Hat":
             st.info(f'Three_Cornered_Hat not ready yet!', icon="ℹ️")
@@ -1382,7 +1382,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
     def _main_nml(self):
         if st.session_state.step6_stat_setect_check:
-            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}")
+            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}", wrap_lines=True)
             if not os.path.exists(st.session_state.casepath):
                 os.makedirs(st.session_state.casepath)
             classification = self.classification
@@ -1869,7 +1869,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         try:
             item_data[f"{item}_dir"] = self.path_finder.find_path(item_data[f"{item}_dir"], f"{statistic_item}_{item}_dir",
                                                                   ['stat_change', statistic_item])
-            st.code(f"Set Data Dictionary: {item_data[f'{item}_dir']}", language='shell')
+            st.code(f"Set Data Dictionary: {item_data[f'{item}_dir']}", language='shell', wrap_lines=True)
         except PermissionError as e:
             if e:
                 item_data[f"{item}_dir"] = '/'
@@ -1980,8 +1980,8 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                 varname = var_data[variable]['varname']
                             if i_info == 'varname' and i_info not in var_data[variable].keys():
                                 item_data[f"{item}{i}_{i_info}"] = \
-                                self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
-                                    i_info]
+                                    self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
+                                        i_info]
                             elif i_info == 'dir':
                                 item_data[f"{item}{i}_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
                                                                            st.session_state.main_data['general']['basename'],
@@ -2071,7 +2071,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                     item_data[f"{item}{i}_dir"] = self.path_finder.find_path(item_data[f"{item}{i}_dir"],
                                                                              f"{statistic_item}_{item}{i}_dir",
                                                                              ['stat_change', statistic_item])
-                    st.code(f"Set Data Dictionary: {item_data[f'{item}{i}_dir']}", language='shell')
+                    st.code(f"Set Data Dictionary: {item_data[f'{item}{i}_dir']}", language='shell', wrap_lines=True)
                 except PermissionError as e:
                     if e:
                         item_data[f"{item}{i}_dir"] = '/'
@@ -2082,7 +2082,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                                  f"{statistic_item}_{item}{i}_fulllist",
                                                                                  'csv',
                                                                                  ['stat_change', statistic_item])
-                    st.code(f"Set Fulllist File: {item_data[f'{item}{i}_fulllist']}", language='shell')
+                    st.code(f"Set Fulllist File: {item_data[f'{item}{i}_fulllist']}", language='shell', wrap_lines=True)
                     # item_data[f"{item}{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
                     #                                                  value=item_data[f"{item}{i}_fulllist"],
                     #                                                  key=f"{statistic_item}_{item}{i}_fulllist",
@@ -2148,7 +2148,8 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                             i_info]
                                 elif i_info == 'dir':
                                     item_data[f"{item}_X{i}_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
-                                                                                 st.session_state.main_data['general']['basename'],
+                                                                                 st.session_state.main_data['general'][
+                                                                                     'basename'],
                                                                                  'output',
                                                                                  'data')
                                 elif i_info in ['syear', 'eyear']:
@@ -2179,7 +2180,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                             item_data[f"{item}_X{i}_{i_info}"] = self.set_default[i_info]
 
             if sources is not None:
-                st.write(f'##### :violet[{sources[0]}]')
+                st.write(f'##### :violet[Y data: {sources[0]}]')
             else:
                 st.write(f'##### :violet[Input Data Y]')
             import itertools
@@ -2241,7 +2242,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 item_data[f"{item}_Y_dir"] = self.path_finder.find_path(item_data[f"{item}_Y_dir"],
                                                                         f"{statistic_item}_{item}_Y_dir",
                                                                         ['stat_change', statistic_item])
-                st.code(f"Set Data Dictionary: {item_data[f'{item}_Y_dir']}", language='shell')
+                st.code(f"Set Data Dictionary: {item_data[f'{item}_Y_dir']}", language='shell', wrap_lines=True)
             except PermissionError as e:
                 if e:
                     item_data[f"{item}_Y_dir"] = '/'
@@ -2252,7 +2253,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                             f"{statistic_item}_{item}_Y_fulllist",
                                                                             'csv',
                                                                             ['stat_change', statistic_item])
-                st.code(f"Set Fulllist File: {item_data[f'{item}_Y_fulllist']}", language='shell')
+                st.code(f"Set Fulllist File: {item_data[f'{item}_Y_fulllist']}", language='shell', wrap_lines=True)
                 # item_data[f"{item}_Y_fulllist"] = st.text_input(f'Set Fulllist File: ',
                 #                                                 value=item_data[f"{item}_Y_fulllist"],
                 #                                                 key=f"{statistic_item}_{item}_Y_fulllist",
@@ -2265,7 +2266,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}_Y", statistic_item))
             for i in range(1, n + 1):
                 if sources is not None:
-                    st.write(f'##### :violet[{sources[i]}]')
+                    st.write(f'##### :violet[X{i} data: {sources[i]}]')
                 else:
                     st.write(f'##### :violet[Input Data X{i}]')
                 import itertools
@@ -2322,7 +2323,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                     item_data[f"{item}_X{i}_dir"] = self.path_finder.find_path(item_data[f"{item}_X{i}_dir"],
                                                                                f"{statistic_item}_{item}_X{i}_dir",
                                                                                ['stat_change', statistic_item])
-                    st.code(f"Set Data Dictionary: {item_data[f'{item}_X{i}_dir']}", language='shell')
+                    st.code(f"Set Data Dictionary: {item_data[f'{item}_X{i}_dir']}", language='shell', wrap_lines=True)
                 except PermissionError as e:
                     if e:
                         item_data[f"{item}_X{i}_dir"] = '/'
@@ -2333,7 +2334,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                                    f"{statistic_item}_{item}_X{i}_fulllist",
                                                                                    'csv',
                                                                                    ['stat_change', statistic_item])
-                    st.code(f"Set Fulllist File: {item_data[f'{item}_X{i}_fulllist']}", language='shell')
+                    st.code(f"Set Fulllist File: {item_data[f'{item}_X{i}_fulllist']}", language='shell', wrap_lines=True)
 
                     # item_data[f"{item}_X{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
                     #                                                    value=item_data[f"{item}_X{i}_fulllist"],

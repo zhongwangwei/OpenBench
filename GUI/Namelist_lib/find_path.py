@@ -11,7 +11,7 @@ class FindPath:
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
 
-    def has_permission(self,path):
+    def has_permission(self, path):
         return os.access(path, os.R_OK)  # 检查是否有读取权限
 
     def __update_path(self, path: str, key: str, change_list):
@@ -28,7 +28,7 @@ class FindPath:
         subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
         with st.popover(f"Find Path", use_container_width=True):
             st.code(f"Current Path: {st.session_state['find_path'][key]}")
-            options =  (['<- Back SPACE'] if path != '/' else [])+sorted(subdirectories)
+            options = (['<- Back SPACE'] if path != '/' else []) + sorted(subdirectories)
             st.radio(
                 label="Select Directory:",
                 options=options,
@@ -93,7 +93,8 @@ class FindPath:
         with st.popover(f"Find Path", use_container_width=True):
             st.code(f"Current Sub Path: {os.path.relpath(st.session_state['find_path'][key], root_path)}")
             options = (
-                ['<- Back SPACE'] if not os.path.samefile(st.session_state['find_path'][key], root_path) else [])+sorted(subdirectories)
+                          ['<- Back SPACE'] if not os.path.samefile(st.session_state['find_path'][key],
+                                                                    root_path) else []) + sorted(subdirectories)
             st.radio(
                 label="Select Directory:",
                 options=options,
@@ -123,7 +124,7 @@ class FindPath:
             elif not st.session_state['find_path'][sub_key].startswith(root_path):
                 st.session_state['find_path'][sub_key] = root_path
 
-        self.__update_sub_path(st.session_state['find_path'][sub_key], sub_key, root_path,change_list)
+        self.__update_sub_path(st.session_state['find_path'][sub_key], sub_key, root_path, change_list)
         if not os.path.samefile(st.session_state['find_path'][sub_key], root_path):
             sub_dir = os.path.relpath(st.session_state['find_path'][sub_key], root_path)
             if sub_dir.endswith(sep):
@@ -135,8 +136,8 @@ class FindPath:
             return None
             # return os.path.relpath(st.session_state['find_path'][sub_key], root_path)
 
-    def __update_file(self, path: str, key: str, file_type: str,change_list):
-        def path_change(key, ipath,change_list):
+    def __update_file(self, path: str, key: str, file_type: str, change_list):
+        def path_change(key, ipath, change_list):
             selected_dir = st.session_state[key]
             if selected_dir == '<- Back SPACE':  # 返回上一级
                 st.session_state['find_path'][key] = os.path.dirname(ipath)
@@ -150,37 +151,58 @@ class FindPath:
         with st.popover(f"Find Path", use_container_width=True):
             st.code(f"Current Path: {st.session_state['find_path'][key]}")
             col1, col2 = st.columns(2)
-            options = (['<- Back SPACE'] if path != '/' else [])+sorted(subdirectories)
+            options = (['<- Back SPACE'] if path != '/' else []) + sorted(subdirectories)
             col1.radio(
                 label="Select Directory:",
                 options=options,
                 index=None,
                 key=key,
                 on_change=path_change,
-                args=(key, path,change_list),
+                args=(key, path, change_list),
                 label_visibility="collapsed"
             )
             subdirfiles = [file for file in os.listdir(path) if file.endswith(file_type)]
 
+            def get_index(subdirfiles, f_value):
+                if f_value in subdirfiles:
+                    index = subdirfiles.index(f_value)
+                    return index
+                else:
+                    return None
+
+            if st.session_state['find_file'][key] is not None:
+                index = get_index(subdirfiles, st.session_state['find_file'][key])
+            else:
+                index = None
+
             if subdirfiles:
-                ifile = col2.radio('file', sorted(subdirfiles), index=None, key=f'{key}_ifile', help=None,
+                ifile = col2.radio('file', sorted(subdirfiles), index=index, key=f'{key}_ifile', help=None,
                                    disabled=False, horizontal=False, captions=None, label_visibility="collapsed")
-                if ifile:
+                if ifile is not None:
                     st.session_state['find_file'][key] = ifile
                 else:
-                    st.session_state['find_file'][key] = None
+                    if st.session_state['find_file'][key] is not None:
+                        file = normpath(os.path.join(st.session_state['find_path'][key], st.session_state['find_file'][key]))
+                        if not os.path.isfile(file):
+                            st.session_state['find_file'][key] = None
 
     # @staticmethod
-    def get_file(self, path: str, key: str, file_type: str,change_list:list):
+    def get_file(self, path: str, key: str, file_type: str, change_list: list):
         if 'find_path' not in st.session_state:
             st.session_state['find_path'] = {}
         if 'find_file' not in st.session_state:
             st.session_state['find_file'] = {}
 
         if key not in st.session_state['find_path']:
-            st.session_state['find_path'][key] = path
+            if path is not None:
+                st.session_state['find_path'][key] = os.path.dirname(path)
+            else:
+                st.session_state['find_path'][key] = path
         if key not in st.session_state['find_file']:
-            st.session_state['find_file'][key] = None
+            if path is not None:
+                st.session_state['find_file'][key] = os.path.basename(path)
+            else:
+                st.session_state['find_file'][key] = None
 
         if st.session_state['find_path'][key] is None:
             if platform.system() == 'Windows':
@@ -204,6 +226,6 @@ class FindPath:
                 else:
                     st.warning(f'Input path: :red[{st.session_state["find_path"][key]}]is not a directory. Reset path as "/"')
                     st.session_state['find_path'][key] = '/'
-        self.__update_file(st.session_state['find_path'][key], key, file_type,change_list)
+        self.__update_file(st.session_state['find_path'][key], key, file_type, change_list)
         if st.session_state['find_file'][key] is not None:
             return normpath(os.path.join(st.session_state['find_path'][key], st.session_state['find_file'][key]))

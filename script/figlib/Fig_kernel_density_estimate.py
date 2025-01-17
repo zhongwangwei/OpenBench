@@ -36,8 +36,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
             sim_source = sim_sources[i]
 
             try:
-                if varname in ['KGE', 'KGESS', 'NSE']:
-                    filtered_data = np.where(data < -1, -1, data)
+                lower_bound, upper_bound = np.percentile(data, 5), np.percentile(data, 95)
+                if varname in ['KGE', 'KGESS','NSE']:
+                    if lower_bound< -1:
+                        filtered_data = np.where(data < -1, -1, data)
                 else:
                     filtered_data = data
 
