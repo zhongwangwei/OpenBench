@@ -39,7 +39,9 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
                         edgecolor=option["boxpropsedgecolor"])
     if varname in ['KGE', 'KGESS', 'NSE']:
         for i, data in enumerate(datasets_filtered):
-            datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
+            lower_bound = np.percentile(data, 5)
+            if lower_bound < -1:
+                datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
 
     # Create the whisker plot
     plt.boxplot(datasets_filtered, labels=[f'{i}' for i in sim_sources],

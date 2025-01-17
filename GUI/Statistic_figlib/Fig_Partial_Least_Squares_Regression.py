@@ -154,6 +154,9 @@ def draw_Partial_Least_Squares_Regression(file, option):  # outpath, source
         if (match := pattern.search(option["draw_X"])):
             x = int(match.group(1))
             data = ds[option['var']][x - 1]
+            if option["var"] == 'intercepts':
+                n = math.floor(math.log10(data.max(skipna=True)))
+                data = data * 10**(n*-1)
 
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -200,19 +203,25 @@ def prepare(icase, file, option):
                                             'anomaly'],
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_var")
-
             if option["var"] in ['best_n_components', 'r_squared']:
-                disable = True
-                index = None
+                X_index = None
+                X_disable = True
+                option["draw_X"] = col3.selectbox(f"Draw Data X",
+                                                  [f'X{x + 1}' for x in range(option[f"{icase}_nX"])],
+                                                  index=X_index, disabled=X_disable,
+                                                  placeholder="Choose an option", label_visibility="visible",
+                                                  key=f"{icase}_draw1")
             else:
-                disable = False
-                index = 0
+                X_index = 0
+                X_disable = False
+                option["draw_X"] = col3.selectbox(f"Draw Data X",
+                                                  [f'X{x + 1}' for x in range(option[f"{icase}_nX"])],
+                                                  index=X_index, disabled=X_disable,
+                                                  placeholder="Choose an option", label_visibility="visible",
+                                                  key=f"{icase}_draw2")
+            ds = xr.open_dataset(file)
+            pattern = re.compile(rf'X(\d+)')
 
-            option["draw_X"] = col3.selectbox(f"Draw Data X",
-                                              [f'X{x + 1}' for x in range(option[f"{icase}_nX"])],
-                                              disabled=disable,
-                                              index=None, placeholder="Choose an option", label_visibility="visible",
-                                              key=f"{icase}_draw_X")
             st.divider()
             col1, col2, col3, col4 = st.columns(4)
             option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
@@ -265,7 +274,15 @@ def prepare(icase, file, option):
                                               key=f'{icase}_cmap',
                                               label_visibility="visible")
             with col2:
-                option['colorbar_label'] = st.text_input('colorbar label',
+                value = ''
+                if option["var"] =='intercepts':
+                    if (match := pattern.search(option["draw_X"])):
+                        x = int(match.group(1))
+                        data = ds[option['var']][x - 1]
+                        n = math.floor(math.log10(data.max(skipna=True)))
+                    # value = rf'$10^{{{n}}}$'
+                    value = rf'10e{n}'
+                option['colorbar_label'] = st.text_input('colorbar label',value=value,
                                                          key=f"{icase}_colorbar_label",
                                                          label_visibility="visible")
             with col3:
@@ -313,8 +330,6 @@ def prepare(icase, file, option):
                                                          key=f"{icase}_colorbar_ticks")
             # ds = xr.open_dataset(file)
             # data = ds['functional_response_score']
-            ds = xr.open_dataset(file)
-            pattern = re.compile(rf'X(\d+)')
 
             if option["var"] in ['best_n_components', 'r_squared']:
                 data = ds[option['var']]
@@ -353,13 +368,9 @@ def prepare(icase, file, option):
 
     # try:
     if option["var"] not in ['best_n_components', 'r_squared'] and option["draw_X"] is None:
-        e = RuntimeError('UnboundLocalError: cannot access local variable "data" where it is not associated with a value'
-                         'Please select data first.')
-        st.exception(e)
+        st.error('Please select X data first!')
     else:
         draw_Partial_Least_Squares_Regression(file, option)
-    # except:
-    #     st.error(f'Please check File: {file}')
 
 
 def make_Partial_Least_Squares_Regression(dir_path, item, icase, file, item_data, option):

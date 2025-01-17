@@ -3,7 +3,7 @@ import numpy as np
 import sys
 
 
-class initial_setting():
+class initial_setting:
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
         self.info = "Store initialization information"

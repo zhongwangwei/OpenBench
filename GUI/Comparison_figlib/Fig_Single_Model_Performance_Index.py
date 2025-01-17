@@ -10,10 +10,10 @@ from matplotlib import rcParams
 import scipy.stats as sts
 from io import BytesIO
 import streamlit as st
+import itertools
 
 
-def make_scenarios_comparison_Single_Model_Performance_Index(option, file, evaluation_items, ref_nml):
-    st.json(option)
+def draw_scenarios_comparison_Single_Model_Performance_Index(option, file, evaluation_items, ref_nml):
     # Read the SMPI data
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -71,9 +71,10 @@ def make_scenarios_comparison_Single_Model_Performance_Index(option, file, evalu
             # color = color_map(i * max_ref_sources + j)
 
             # Plot
-            for k, (value, size) in enumerate(zip(I2_values, sizes)):
-                ax.scatter(value, 0, s=size*option["n"], facecolors=option['COLORS'][item], edgecolors=option['COLORS'][item], alpha=0.8)
-                ax.scatter(value, 0, s=size * 0.01*option["n"], facecolors='white', edgecolors='none')
+            for k, (value, size, label) in enumerate(zip(I2_values, sizes, labels)):
+                ax.scatter(value, 0, s=size * option["n"], facecolors=option['COLORS'][label], edgecolors=option['COLORS'][label],
+                           alpha=0.8,label=label)
+                ax.scatter(value, 0, s=size * 0.01 * option["n"], facecolors='white', edgecolors='none')
 
             # Annotate labels
             for k, value in enumerate(I2_values):
@@ -122,20 +123,30 @@ def make_scenarios_comparison_Single_Model_Performance_Index(option, file, evalu
             #    ax.set_title(f"Reference: {ref_source}", fontsize=16)
             if not option["var_loc"]:
                 if j == 0:
-                    ax.text(option["x_posi"], option["y_posi"], item.replace('_', ' '), rotation=option["y_rotation"], va='center', ha=option['y_ha'],
+                    ax.text(option["x_posi"], option["y_posi"], item.replace('_', ' '), rotation=option["y_rotation"],
+                            va='center', ha=option['y_ha'],
                             transform=ax.transAxes, fontsize=option['yticksize'])
         if option["var_loc"]:
-            ax.text(option["x_posi"], option["y_posi"], item.replace('_', ' '), rotation=option["x_rotation"], va='center', ha=option['x_ha'],
-                        transform=ax.transAxes, fontsize=option['xlabelsize'])
+            ax.text(option["x_posi"], option["y_posi"], item.replace('_', ' '), rotation=option["x_rotation"], va='center',
+                    ha=option['x_ha'], transform=ax.transAxes, fontsize=option['xticksize'])
 
     # Overall title
     # fig.suptitle("Single Model Performance Index Comparison", fontsize=16, y=1.02)
+    if not option["legend_on"]:
+        ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'],
+                  loc=option["loc"], ncol=option["ncol"])
+
+    else:
+        ax.legend( shadow=False, frameon=False, fontsize=option['fontsize'],
+                  bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=option["ncol"])
 
     # X-axis label
     if not option["var_loc"]:
-        fig.supxlabel(option['xlabel'], ha=option['x_ha'], fontsize=option['xticksize']+1, rotation=option["x_rotation"])
+        fig.supxlabel(option['xlabel'], ha=option['x_ha'], fontsize=option['xticksize'] + 1, rotation=option["x_rotation"])
     else:
-        fig.supylabel(option['ylabel'], ha=option['y_ha'], fontsize=option['yticksize']+1, rotation=option["y_rotation"])
+        fig.supylabel(option['ylabel'], ha=option['y_ha'], fontsize=option['yticksize'] + 1, rotation=option["y_rotation"])
+
+
 
     # plt.savefig(f"{basedir}/output/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.png", dpi=300,
     #             bbox_inches='tight')
@@ -150,3 +161,151 @@ def make_scenarios_comparison_Single_Model_Performance_Index(option, file, evalu
     st.download_button('Download image', buffer, file_name=f'SMPI_comparison_plot_comprehensive.{option["saving_format"]}',
                        mime=f"image/{option['saving_format']}",
                        type="secondary", disabled=False, use_container_width=False)
+
+
+def make_scenarios_comparison_Single_Model_Performance_Index(file, selected_items, ref, item):
+    option = {}
+    with st.container(height=None, border=True):
+        col1, col2, col3, col4 = st.columns((4, 3, 3, 3))
+        option['title'] = col1.text_input('Title',
+                                          value=f"",
+                                          label_visibility="visible",
+                                          key=f"{item} title")
+        option['title_size'] = col2.number_input("Title label size", min_value=0, value=15, key=f"{item}_title_size")
+        option['fontsize'] = col3.number_input("Font size", min_value=0, value=15,
+                                               key=f'{item}_fontsize')
+        option['tick'] = col4.number_input("Tick size", min_value=0, value=15,
+                                           key=f'{item}_ticksize')
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+        col1, col2, col3 = st.columns((2, 1, 1))
+        option["var_loc"] = col1.toggle('Put Variable labels in X axis?', value=False, key=f"{item}_var_loc")
+        option['yticksize'] = col2.number_input("Y ticks size", min_value=0, value=17, key=f"{item}_ytick")
+        option['xticksize'] = col3.number_input("X ticks size", min_value=0, value=17, key=f"{item}_xtick")
+        if not option["var_loc"]:
+            option['xlabel'] = col1.text_input('X label', value='Single Model Performance Index',
+                                               label_visibility="visible",
+                                               key=f"{item}_xlabel")
+            option['ylabel'] = ''
+        else:
+            option['ylabel'] = col1.text_input('Y labels', value='Single Model Performance Index',
+                                               label_visibility="visible",
+                                               key=f"{item}_ylabel")
+            option['xlabel'] = ''
+
+        st.divider()
+
+        def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+            with st.popover(title, use_container_width=True):
+                st.subheader(f"Showing Variables", divider=True)
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__Single_Model_Performance_Index",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error('You must choose one item!')
+
+        if isinstance(selected_items, str): selected_items = [selected_items]
+        items = get_cases(selected_items, 'Selected Variables')
+
+        with st.expander("Other informations setting", expanded=False):
+            col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+            if not option["var_loc"]:
+                option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=0,
+                                                         key=f"{item}_x_rotation")
+                option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'],
+                                                index=2, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_x_ha")
+                option["y_rotation"] = col3.number_input(f"Y rotation", min_value=-90, max_value=90, value=0,
+                                                         key=f"{item}_y_rotation")
+                option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'],
+                                                index=0, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_y_ha")
+                option["x_posi"] = col1.number_input(f"Y label position of X", value=-0.02, step=0.05,
+                                                     key=f"{item}x_posi")
+                option["y_posi"] = col2.number_input(f"Y label position of Y", value=0.5, step=0.05,
+                                                     key=f"{item}y_posi")
+            else:
+                option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=0,
+                                                         key=f"{item}_x_rotation")
+                option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'],
+                                                index=2, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_x_ha")
+                option["y_rotation"] = col3.number_input(f"Y rotation", min_value=-90, max_value=90, value=90,
+                                                         key=f"{item}_y_rotation")
+                option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'],
+                                                index=0, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_y_ha")
+                option["x_posi"] = col1.number_input(f"X label position of X", value=0.5, step=0.05,
+                                                     key=f"{item}x_posi")
+                option["y_posi"] = col2.number_input(f"X label position of Y", value=-1.1, step=0.05,
+                                                     key=f"{item}y_posi")
+            option["n"] = col3.number_input(f"marker size multi", value=1., step=0.1,
+                                            key=f"{item}_n")
+            st.divider()
+            st.write("##### :blue[Marker Color]")
+            import matplotlib.colors as mcolors
+            import matplotlib.cm as cm
+            df = pd.read_csv(file, sep='\t')
+            sim_sources = df['Simulation'].unique()
+            hex_colors = [cm.get_cmap('Set3')(c) for c in np.linspace(0, 1, len(sim_sources))]
+            colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+            cols = itertools.cycle(st.columns(4))
+            markers = {}
+            for sim_source in sim_sources:
+                col = next(cols)
+                col.write(f":orange[{sim_source}]")
+                markers[sim_source] = col.color_picker(f'{sim_source} colors', value=next(colors),
+                                                       key=f"{item}_{sim_source}_colors",
+                                                       disabled=False,
+                                                       label_visibility="collapsed")
+
+            st.divider()
+            option["legend_on"] = st.toggle('Turn on to set the location of the legend manually', value=True,
+                                            key=f'{item}_legend_on')
+            col1, col2, col3, col4 = st.columns(4)
+            option["ncol"] = col1.number_input("N cols", value=1, min_value=1, format='%d', key=f'{item}_ncol')
+            if not option["legend_on"]:
+                option["loc"] = col2.selectbox("Legend location",
+                                               ['best', 'right', 'left', 'upper left', 'upper right', 'lower left',
+                                                'lower right',
+                                                'upper center',
+                                                'lower center', 'center left', 'center right'], index=0,
+                                               placeholder="Choose an option",
+                                               label_visibility="visible", key=f'{item}_loc')
+            else:
+                option["bbox_to_anchor_x"] = col3.number_input("X position of legend", value=1.4, key=f'{item}_bbox_to_anchor_x',step=0.1)
+                option["bbox_to_anchor_y"] = col4.number_input("Y position of legend", value=3.5, key=f'{item}_bbox_to_anchor_y',step=0.1)
+
+            col1, col2, col3 = st.columns((3, 3, 2))
+            option["hspace"] = col1.number_input(f"hspace", step=0.1, value=0.0)
+            option["wspace"] = col2.number_input(f"wspace", min_value=0., max_value=1.0, value=0.1)
+
+        option['COLORS'] = markers
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{item}_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{item}_saving_format")
+        with col2:
+            if not option["var_loc"]:
+                y_wide = len(items)
+            else:
+                y_wide = len(items) * 2
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=y_wide, key=f"{item}_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
+
+    if items:
+        draw_scenarios_comparison_Single_Model_Performance_Index(option, file, items, ref)

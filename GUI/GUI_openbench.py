@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 import os
 import streamlit as st
 from streamlit_option_menu import option_menu
-from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 from Page_control import Pages_control
 from Page_make_validation import make_initional, make_reference, make_simulation
@@ -516,7 +517,6 @@ def on_click_handler(step_func):
 
 
 if __name__ == "__main__":
-    # print('Home page -------------------!!!')
 
     initial_information = initial_setting()
     initial_st(initial_information)
