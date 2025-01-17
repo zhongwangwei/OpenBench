@@ -1,23 +1,28 @@
-import glob
-import itertools
-import os
-import re
+import glob, shutil
+import os, re
 import time
-
-# from streamlit_tags import st_tags
-import numpy as np
 import streamlit as st
 from PIL import Image
-
+from io import StringIO
+from collections import ChainMap
+import xarray as xr
+# from streamlit_tags import st_tags
+from Namelist_lib.find_path import FindPath
+import numpy as np
+from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Namelist_lib.namelist_info import initial_setting
-from Namelist_lib.namelist_read import NamelistReader
-from Statistic_figlib.Fig_Correlation import make_Correlation
-from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
-from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
+import sys
+import subprocess
+import itertools
+from posixpath import normpath
+from mpl_toolkits.axisartist.angle_helper import select_step
 from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
-from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
+from Statistic_figlib.Fig_Correlation import make_Correlation
 from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
+from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
 from Statistic_figlib.Fig_Z_Score import make_Z_Score
+from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
+from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
 
 
 class process_info():
@@ -905,23 +910,24 @@ class visualization_statistic:
                     st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
         elif item == "Z_Score":
-            st.markdown(f"""
-            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                Select Cases!
-            </div>""", unsafe_allow_html=True)
-            st.write(' ')
-            icase = st.radio("Z_Score", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-
-                filename = glob.glob(os.path.join(figure_path, f'Z_Score_{icase}_output.*'))
-                filename = [f for f in filename if not f.endswith('.nc')]
-                try:
-                    image = load_image(filename[0])
-                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
-                except:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
+            st.info(f'Z_Score not ready yet!', icon="ℹ️")
+            # st.markdown(f"""
+            # <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+            #     Select Cases!
+            # </div>""", unsafe_allow_html=True)
+            # st.write(' ')
+            # icase = st.radio("Z_Score", [k for k in item_general],
+            #                  index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            # st.divider()
+            # if icase:
+            #
+            #     filename = glob.glob(os.path.join(figure_path, f'Z_Score_{icase}_output.*'))
+            #     filename = [f for f in filename if not f.endswith('.nc')]
+            #     try:
+            #         image = load_image(filename[0])
+            #         st.image(image, caption=f'Case: {icase}', use_column_width=True)
+            #     except:
+            #         st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
         elif item == "Functional_Response":
             st.markdown(f"""
@@ -1056,8 +1062,8 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Mann_Kendall_Trend_Test_{icase}_output.nc'))[0]
                 try:
+                    file = glob.glob(os.path.join(item_path, f'Mann_Kendall_Trend_Test_{icase}_output.nc'))[0]
                     self.__Mann_Kendall_Trend_Test(item, file, icase, item_path)
                 except FileNotFoundError:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
@@ -1067,8 +1073,8 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Correlation_{icase}_output.nc'))[0]
                 try:
+                    file = glob.glob(os.path.join(item_path, f'Correlation_{icase}_output.nc'))[0]
                     self.__Correlation(item, file, icase, item_path)
                 except:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
@@ -1079,30 +1085,31 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Standard_Deviation_{icase}_output.nc'))[0]
                 try:
+                    file = glob.glob(os.path.join(item_path, f'Standard_Deviation_{icase}_output.nc'))[0]
                     self.__Standard_Deviation(item, file, icase, item_path)
                 except:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Z_Score":
-            icase = st.radio("Z_Score", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                file = glob.glob(os.path.join(item_path, f'Z_Score_{icase}_output.nc'))[0]
-                try:
-                    self.__Z_Score(item, file, icase, item_path)
-                except:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
-
+            st.info(f'Z_Score not ready yet!', icon="ℹ️")
+            # icase = st.radio("Z_Score", [k for k in item_general],
+            #                  index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
+            # st.divider()
+            # if icase:
+            #     file = glob.glob(os.path.join(item_path, f'Z_Score_{icase}_output.nc'))[0]
+            #     try:
+            #         self.__Z_Score(item, file, icase, item_path)
+            #     except:
+            #         st.error(f'Missing File for Case: {icase}', icon="⚠")
+        #
         elif item == "Functional_Response":
             icase = st.radio("Functional Response", [k for k in item_general],
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Functional_Response_{icase}_output.nc'))[0]
                 try:
+                    file = glob.glob(os.path.join(item_path, f'Functional_Response_{icase}_output.nc'))[0]
                     self.__Functional_Response(item, file, icase, item_path)
                 except:
                     st.error(f'Missing File for Case: {icase}', icon="⚠")
@@ -1112,19 +1119,19 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Hellinger_Distance_{icase}_output.nc'))[0]
-                # try:
-                self.__Hellinger_Distance(item, file, icase, item_path)
-                # except:
-                #     st.error(f'Missing File for Case: {icase}', icon="⚠")
+                try:
+                    file = glob.glob(os.path.join(item_path, f'Hellinger_Distance_{icase}_output.nc'))[0]
+                    self.__Hellinger_Distance(item, file, icase, item_path)
+                except:
+                    st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Partial_Least_Squares_Regression":
             icase = st.radio("Partial_Least_Squares_Regression", [k for k in item_general],
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
                 # try:
+                file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
                 self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
                 # except:
                 #     st.error(f'Missing File for Case: {icase}', icon="⚠")
@@ -1172,6 +1179,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
     def __init__(self, initial):
         self.author = "Qingchen Xu/xuqingchen23@163.com"
         self.nl = NamelistReader()
+        self.path_finder = FindPath()
         # self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
         self.initial = initial
         self.stat_data = initial.stat()
@@ -1374,7 +1382,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
     def _main_nml(self):
         if st.session_state.step6_stat_setect_check:
-            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}")
+            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}", wrap_lines=True)
             if not os.path.exists(st.session_state.casepath):
                 os.makedirs(st.session_state.casepath)
             classification = self.classification
@@ -1767,17 +1775,36 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 var_data = st.session_state.sim_data[source]
             for i_info in info_list:
                 if f"{item}_{i_info}" not in item_data:
-                    if i_info in var_data['general'].keys():
-                        item_data[f"{item}_{i_info}"] = var_data['general'][i_info]
-                    elif i_info in i_info in var_data[variable].keys():
-                        item_data[f"{item}_{i_info}"] = var_data[variable][i_info]
+                    if 'varname' not in var_data[variable].keys():
+                        varname = self.nl.read_namelist(var_data['general']['model_namelist'])[variable]['varname']
+                    else:
+                        varname = var_data[variable]['varname']
                     if i_info == 'varname' and i_info not in var_data[variable].keys():
                         item_data[f"{item}_{i_info}"] = self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
                             i_info]
-                    if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
-                        item_data[f"{item}_dir"] = var_data['general']['root_dir']
-                        if 'sub_dir' in var_data[variable]:
-                            item_data[f"{item}_dir"] = var_data['general']['root_dir'] + var_data[variable]['sub_dir']
+                    elif i_info == 'dir':
+                        item_data[f"{item}_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
+                                                                st.session_state.main_data['general']['basename'], 'output',
+                                                                'data')
+                    elif i_info in ['syear', 'eyear']:
+                        item_data[f"{item}_{i_info}"] = st.session_state.main_data['general'][i_info]
+                    elif i_info == 'prefix':
+                        if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                            item_data[f"{item}_{i_info}"] = f'{variable}_ref_{source}_{varname}'
+                        elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                            item_data[f"{item}_{i_info}"] = f'{variable}_sim_{source}_{varname}'
+                    elif i_info == 'suffix':
+                        item_data[f"{item}_{i_info}"] = ''
+                    elif i_info == 'data_groupby':
+                        item_data[f"{item}_{i_info}"] = 'single'
+                    elif i_info == 'grid_res':
+                        item_data[f"{item}_grid_res"] = st.session_state.main_data['general']['compare_grid_res']
+                    else:
+                        if i_info in var_data['general'].keys():
+                            item_data[f"{item}_{i_info}"] = var_data['general'][i_info]
+                        elif i_info in var_data[variable].keys():
+                            item_data[f"{item}_{i_info}"] = var_data[variable][i_info]
+
         elif variable == 'Data':
             for i_info in info_list:
                 if f"{item}_{i_info}" not in item_data:
@@ -1832,12 +1859,21 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                   index=set_data_type(item_data[f"{item}_{i_info}"]),
                                                                   key=f"{statistic_item}_{item}_{i_info}",
                                                                   placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_{i_info}']})...")
-        item_data[f"{item}_dir"] = st.text_input(f' Set Data Dictionary: ',
-                                                 value=item_data[f"{item}_dir"],
-                                                 key=f"{statistic_item}_{item}_dir",
-                                                 on_change=stat_editor_change,
-                                                 args=(statistic_item, item, "dir",),
-                                                 placeholder=f"Set your Simulation Dictionary...")
+        # item_data[f"{item}_dir"] = st.text_input(f' Set Data Dictionary: ',
+        #                                          value=item_data[f"{item}_dir"],
+        #                                          key=f"{statistic_item}_{item}_dir",
+        #                                          on_change=stat_editor_change,
+        #                                          args=(statistic_item, item, "dir",),
+        #                                          placeholder=f"Set your Simulation Dictionary...")
+        if not item_data[f"{item}_dir"]: item_data[f"{item}_dir"] = '/'
+        try:
+            item_data[f"{item}_dir"] = self.path_finder.find_path(item_data[f"{item}_dir"], f"{statistic_item}_{item}_dir",
+                                                                  ['stat_change', statistic_item])
+            st.code(f"Set Data Dictionary: {item_data[f'{item}_dir']}", language='shell', wrap_lines=True)
+        except PermissionError as e:
+            if e:
+                item_data[f"{item}_dir"] = '/'
+
         if item_data[f"{item}_data_type"] == 'stn':
             item_data[f"{item}_fulllist"] = st.text_input(f'{i}. Set Fulllist File: ',
                                                           value=item_data[f"{item}_fulllist"],
@@ -1887,6 +1923,16 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                             args=(statistic_item, f"{item}", 'n'),
                                                             placeholder=f"Set your Simulation {item}...")
                 n = item_data[f"{item}X"]
+            elif statistic_item == 'Partial_Least_Squares_Regression':
+                col1, col2, col3 = st.columns(3)
+                item_data[f"{item}_nX"] = col1.number_input(f"Set nX data: ",
+                                                            min_value=2,
+                                                            value=int(len(sources) - 1),
+                                                            key=f"{statistic_item}_{item}_nX",
+                                                            on_change=stat_editor_change,
+                                                            args=(statistic_item, f"{item}", 'n'),
+                                                            placeholder=f"Set your Simulation {item}...")
+                n = item_data[f"{item}_nX"]
             else:
                 n = len(sources)
         else:
@@ -1925,20 +1971,42 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                         var_data = st.session_state.ref_data[source]
                     elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
                         var_data = st.session_state.sim_data[source]
+
                     for i_info in info_list:
                         if f"{item}{i}_{i_info}" not in item_data:
-                            if i_info in var_data['general'].keys():
-                                item_data[f"{item}{i}_{i_info}"] = var_data['general'][i_info]
-                            elif i_info in i_info in var_data[variable].keys():
-                                item_data[f"{item}{i}_{i_info}"] = var_data[variable][i_info]
+                            if 'varname' not in var_data[variable].keys():
+                                varname = self.nl.read_namelist(var_data['general']['model_namelist'])[variable]['varname']
+                            else:
+                                varname = var_data[variable]['varname']
                             if i_info == 'varname' and i_info not in var_data[variable].keys():
                                 item_data[f"{item}{i}_{i_info}"] = \
                                     self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
                                         i_info]
-                            if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
-                                item_data[f"{item}{i}_dir"] = var_data['general']['root_dir']
-                                if 'sub_dir' in var_data[variable]:
-                                    item_data[f"{item}{i}_dir"] = var_data['general']['root_dir'] + var_data[variable]['sub_dir']
+                            elif i_info == 'dir':
+                                item_data[f"{item}{i}_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
+                                                                           st.session_state.main_data['general']['basename'],
+                                                                           'output',
+                                                                           'data')
+                            elif i_info in ['syear', 'eyear']:
+                                item_data[f"{item}{i}_{i_info}"] = st.session_state.main_data['general'][i_info]
+                            elif i_info == 'prefix':
+                                if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                                    item_data[f"{item}{i}_{i_info}"] = f'{variable}_ref_{source}_{varname}'
+                                elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                                    item_data[f"{item}{i}_{i_info}"] = f'{variable}_sim_{source}_{varname}'
+                            elif i_info == 'suffix':
+                                item_data[f"{item}{i}_{i_info}"] = ''
+                            elif i_info == 'data_groupby':
+                                item_data[f"{item}{i}_{i_info}"] = 'single'
+                            elif i_info == 'grid_res':
+                                item_data[f"{item}{i}_grid_res"] = st.session_state.main_data['general']['compare_grid_res']
+                            else:
+                                if i_info in var_data['general'].keys():
+                                    item_data[f"{item}{i}_{i_info}"] = var_data['general'][i_info]
+                                elif i_info in var_data[variable].keys():
+                                    item_data[f"{item}{i}_{i_info}"] = var_data[variable][i_info]
+
+
             else:
                 for i in range(1, n + 1):
                     for i_info in info_list:
@@ -1998,19 +2066,29 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                                  item_data[f"{item}{i}_{i_info}"]),
                                                                              key=f"{statistic_item}_{item}{i}_{i_info}",
                                                                              placeholder=f"Set your Simulation Data type (default={item_data[f'{item}{i}_{i_info}']})...")
-                item_data[f"{item}{i}_dir"] = st.text_input(f' Set Data Dictionary: ',
-                                                            value=item_data[f"{item}{i}_dir"],
-                                                            key=f"{statistic_item}_{item}{i}_dir",
-                                                            on_change=stat_editor_change,
-                                                            args=(statistic_item, f"{item}{i}", "dir",),
-                                                            placeholder=f"Set your Simulation Dictionary...")
+                if not item_data[f"{item}{i}_dir"]: item_data[f"{item}{i}_dir"] = '/'
+                try:
+                    item_data[f"{item}{i}_dir"] = self.path_finder.find_path(item_data[f"{item}{i}_dir"],
+                                                                             f"{statistic_item}_{item}{i}_dir",
+                                                                             ['stat_change', statistic_item])
+                    st.code(f"Set Data Dictionary: {item_data[f'{item}{i}_dir']}", language='shell', wrap_lines=True)
+                except PermissionError as e:
+                    if e:
+                        item_data[f"{item}{i}_dir"] = '/'
+
                 if item_data[f"{item}{i}_data_type"] == 'stn':
-                    item_data[f"{item}{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
-                                                                     value=item_data[f"{item}{i}_fulllist"],
-                                                                     key=f"{statistic_item}_{item}{i}_fulllist",
-                                                                     on_change=stat_editor_change,
-                                                                     args=(statistic_item, f"{item}{i}", "fulllist"),
-                                                                     placeholder=f"Set your Simulation Fulllist file...")
+                    if not item_data[f"{item}{i}_fulllist"]: item_data[f"{item}{i}_fulllist"] = None
+                    item_data[f"{item}{i}_fulllist"] = self.path_finder.get_file(item_data[f"{item}{i}_fulllist"],
+                                                                                 f"{statistic_item}_{item}{i}_fulllist",
+                                                                                 'csv',
+                                                                                 ['stat_change', statistic_item])
+                    st.code(f"Set Fulllist File: {item_data[f'{item}{i}_fulllist']}", language='shell', wrap_lines=True)
+                    # item_data[f"{item}{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                    #                                                  value=item_data[f"{item}{i}_fulllist"],
+                    #                                                  key=f"{statistic_item}_{item}{i}_fulllist",
+                    #                                                  on_change=stat_editor_change,
+                    #                                                  args=(statistic_item, f"{item}{i}", "fulllist"),
+                    #                                                  placeholder=f"Set your Simulation Fulllist file...")
                 else:
                     item_data[f"{item}{i}_fulllist"] = ''
                 st.divider()
@@ -2025,34 +2103,73 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                     if i == 0:
                         for i_info in info_list:
                             if f"{item}_Y_{i_info}" not in item_data:
-                                if i_info in var_data['general'].keys():
-                                    item_data[f"{item}_Y_{i_info}"] = var_data['general'][i_info]
-                                elif i_info in i_info in var_data[variable].keys():
-                                    item_data[f"{item}_Y_{i_info}"] = var_data[variable][i_info]
+                                if 'varname' not in var_data[variable].keys():
+                                    varname = self.nl.read_namelist(var_data['general']['model_namelist'])[variable]['varname']
+                                else:
+                                    varname = var_data[variable]['varname']
                                 if i_info == 'varname' and i_info not in var_data[variable].keys():
                                     item_data[f"{item}_Y_{i_info}"] = \
                                         self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
                                             i_info]
-                                if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
-                                    item_data[f"{item}_Y_dir"] = var_data['general']['root_dir']
-                                    if 'sub_dir' in var_data[variable]:
-                                        item_data[f"{item}_Y_dir"] = var_data['general']['root_dir'] + var_data[variable][
-                                            'sub_dir']
+                                elif i_info == 'dir':
+                                    item_data[f"{item}_Y_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
+                                                                              st.session_state.main_data['general']['basename'],
+                                                                              'output',
+                                                                              'data')
+                                elif i_info in ['syear', 'eyear']:
+                                    item_data[f"{item}_Y_{i_info}"] = st.session_state.main_data['general'][i_info]
+                                elif i_info == 'prefix':
+                                    if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                                        item_data[f"{item}_Y_{i_info}"] = f'{variable}_ref_{source}_{varname}'
+                                    elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                                        item_data[f"{item}_Y_{i_info}"] = f'{variable}_sim_{source}_{varname}'
+                                elif i_info == 'suffix':
+                                    item_data[f"{item}_Y_{i_info}"] = ''
+                                elif i_info == 'data_groupby':
+                                    item_data[f"{item}_Y_{i_info}"] = 'single'
+                                elif i_info == 'grid_res':
+                                    item_data[f"{item}_Y_grid_res"] = st.session_state.main_data['general']['compare_grid_res']
+                                else:
+                                    if i_info in var_data['general'].keys():
+                                        item_data[f"{item}_Y_{i_info}"] = var_data['general'][i_info]
+                                    elif i_info in var_data[variable].keys():
+                                        item_data[f"{item}_Y_{i_info}"] = var_data[variable][i_info]
+
                     else:
-                        if f"{item}_X{i}_{i_info}" not in item_data:
-                            if i_info in var_data['general'].keys():
-                                item_data[f"{item}_X{i}_{i_info}"] = var_data['general'][i_info]
-                            elif i_info in i_info in var_data[variable].keys():
-                                item_data[f"{item}_X{i}_{i_info}"] = var_data[variable][i_info]
-                            if i_info == 'varname' and i_info not in var_data[variable].keys():
-                                item_data[f"{item}_X{i}_{i_info}"] = \
-                                    self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
-                                        i_info]
-                            if 'dir' not in var_data['general'].keys() and 'dir' not in var_data[variable].keys():
-                                item_data[f"{item}_X{i}_dir"] = var_data['general']['root_dir']
-                                if 'sub_dir' in var_data[variable]:
-                                    item_data[f"{item}_X{i}_dir"] = var_data['general']['root_dir'] + var_data[variable][
-                                        'sub_dir']
+                        for i_info in info_list:
+                            if f"{item}_X{i}_{i_info}" not in item_data:
+                                if 'varname' not in var_data[variable].keys():
+                                    varname = self.nl.read_namelist(var_data['general']['model_namelist'])[variable]['varname']
+                                else:
+                                    varname = var_data[variable]['varname']
+                                if i_info == 'varname' and i_info not in var_data[variable].keys():
+                                    item_data[f"{item}_X{i}_{i_info}"] = \
+                                        self.nl.read_namelist(var_data['general']['model_namelist'])[variable][
+                                            i_info]
+                                elif i_info == 'dir':
+                                    item_data[f"{item}_X{i}_dir"] = os.path.join(st.session_state.main_data['general']['basedir'],
+                                                                                 st.session_state.main_data['general'][
+                                                                                     'basename'],
+                                                                                 'output',
+                                                                                 'data')
+                                elif i_info in ['syear', 'eyear']:
+                                    item_data[f"{item}_X{i}_{i_info}"] = st.session_state.main_data['general'][i_info]
+                                elif i_info == 'prefix':
+                                    if source in st.session_state.ref_data['general'][f"{variable}_ref_source"]:
+                                        item_data[f"{item}_X{i}_{i_info}"] = f'{variable}_ref_{source}_{varname}'
+                                    elif source in st.session_state.sim_data['general'][f"{variable}_sim_source"]:
+                                        item_data[f"{item}_X{i}_{i_info}"] = f'{variable}_sim_{source}_{varname}'
+                                elif i_info == 'suffix':
+                                    item_data[f"{item}_X{i}_{i_info}"] = ''
+                                elif i_info == 'data_groupby':
+                                    item_data[f"{item}_X{i}_{i_info}"] = 'single'
+                                elif i_info == 'grid_res':
+                                    item_data[f"{item}_X{i}_grid_res"] = st.session_state.main_data['general']['compare_grid_res']
+                                else:
+                                    if i_info in var_data['general'].keys():
+                                        item_data[f"{item}_X{i}_{i_info}"] = var_data['general'][i_info]
+                                    elif i_info in var_data[variable].keys():
+                                        item_data[f"{item}_X{i}_{i_info}"] = var_data[variable][i_info]
             else:
                 for i_info in info_list:
                     if f"{item}_Y_{i_info}" not in item_data:
@@ -2063,7 +2180,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                             item_data[f"{item}_X{i}_{i_info}"] = self.set_default[i_info]
 
             if sources is not None:
-                st.write(f'##### :violet[{sources[0]}]')
+                st.write(f'##### :violet[Y data: {sources[0]}]')
             else:
                 st.write(f'##### :violet[Input Data Y]')
             import itertools
@@ -2114,27 +2231,42 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                             item_data[f"{item}_Y_{i_info}"]),
                                                                         key=f"{statistic_item}_{item}_Y_{i_info}",
                                                                         placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_Y_{i_info}']})...")
-            item_data[f"{item}_Y_dir"] = st.text_input(f' Set Data Dictionary: ',
-                                                       value=item_data[f"{item}_Y_dir"],
-                                                       key=f"{statistic_item}_{item}_Y_dir",
-                                                       on_change=stat_editor_change,
-                                                       args=(statistic_item, f"{item}_Y", "dir",),
-                                                       placeholder=f"Set your Simulation Dictionary...")
+            # item_data[f"{item}_Y_dir"] = st.text_input(f' Set Data Dictionary: ',
+            #                                            value=item_data[f"{item}_Y_dir"],
+            #                                            key=f"{statistic_item}_{item}_Y_dir",
+            #                                            on_change=stat_editor_change,
+            #                                            args=(statistic_item, f"{item}_Y", "dir",),
+            #                                            placeholder=f"Set your Simulation Dictionary...")
+            if not item_data[f"{item}_Y_dir"]: item_data[f"{item}_Y_dir"] = '/'
+            try:
+                item_data[f"{item}_Y_dir"] = self.path_finder.find_path(item_data[f"{item}_Y_dir"],
+                                                                        f"{statistic_item}_{item}_Y_dir",
+                                                                        ['stat_change', statistic_item])
+                st.code(f"Set Data Dictionary: {item_data[f'{item}_Y_dir']}", language='shell', wrap_lines=True)
+            except PermissionError as e:
+                if e:
+                    item_data[f"{item}_Y_dir"] = '/'
+
             if item_data[f"{item}_Y_data_type"] == 'stn':
-                item_data[f"{item}_Y_fulllist"] = st.text_input(f'Set Fulllist File: ',
-                                                                value=item_data[f"{item}_Y_fulllist"],
-                                                                key=f"{statistic_item}_{item}_Y_fulllist",
-                                                                on_change=stat_editor_change,
-                                                                args=(statistic_item, f"{item}_Y", "fulllist"),
-                                                                placeholder=f"Set your Simulation Fulllist file...")
+                if not item_data[f"{item}_Y_fulllist"]: item_data[f"{item}_Y_fulllist"] = None
+                item_data[f"{item}_Y_fulllist"] = self.path_finder.get_file(item_data[f"{item}_Y_fulllist"],
+                                                                            f"{statistic_item}_{item}_Y_fulllist",
+                                                                            'csv',
+                                                                            ['stat_change', statistic_item])
+                st.code(f"Set Fulllist File: {item_data[f'{item}_Y_fulllist']}", language='shell', wrap_lines=True)
+                # item_data[f"{item}_Y_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                #                                                 value=item_data[f"{item}_Y_fulllist"],
+                #                                                 key=f"{statistic_item}_{item}_Y_fulllist",
+                #                                                 on_change=stat_editor_change,
+                #                                                 args=(statistic_item, f"{item}_Y", "fulllist"),
+                #                                                 placeholder=f"Set your Simulation Fulllist file...")
             else:
                 item_data[f"{item}_Y_fulllist"] = ''
             st.divider()
             st.session_state.step6_check.append(self.__step6_makecheck(item_data, f"{item}_Y", statistic_item))
-
             for i in range(1, n + 1):
                 if sources is not None:
-                    st.write(f'##### :violet[{sources[i - 1]}]')
+                    st.write(f'##### :violet[X{i} data: {sources[i]}]')
                 else:
                     st.write(f'##### :violet[Input Data X{i}]')
                 import itertools
@@ -2185,19 +2317,31 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                                    item_data[f"{item}_X{i}_{i_info}"]),
                                                                                key=f"{statistic_item}_{item}_X{i}_{i_info}",
                                                                                placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_X{i}_{i_info}']})...")
-                item_data[f"{item}_X{i}_dir"] = st.text_input(f' Set Data Dictionary: ',
-                                                              value=item_data[f"{item}_X{i}_dir"],
-                                                              key=f"{statistic_item}_{item}_X{i}_dir",
-                                                              on_change=stat_editor_change,
-                                                              args=(statistic_item, f"{item}_X{i}", "dir",),
-                                                              placeholder=f"Set your Simulation Dictionary...")
+                if f"{item}_X{i}_dir" not in item_data: item_data[f"{item}_X{i}_dir"] = '/'
+                if not item_data[f"{item}_X{i}_dir"]: item_data[f"{item}_X{i}_dir"] = '/'
+                try:
+                    item_data[f"{item}_X{i}_dir"] = self.path_finder.find_path(item_data[f"{item}_X{i}_dir"],
+                                                                               f"{statistic_item}_{item}_X{i}_dir",
+                                                                               ['stat_change', statistic_item])
+                    st.code(f"Set Data Dictionary: {item_data[f'{item}_X{i}_dir']}", language='shell', wrap_lines=True)
+                except PermissionError as e:
+                    if e:
+                        item_data[f"{item}_X{i}_dir"] = '/'
                 if item_data[f"{item}_X{i}_data_type"] == 'stn':
-                    item_data[f"{item}_X{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
-                                                                       value=item_data[f"{item}_X{i}_fulllist"],
-                                                                       key=f"{statistic_item}_{item}_X{i}_fulllist",
-                                                                       on_change=stat_editor_change,
-                                                                       args=(statistic_item, f"{item}_X{i}", "fulllist"),
-                                                                       placeholder=f"Set your Simulation Fulllist file...")
+                    if f"{item}_X{i}_fulllist" not in item_data: item_data[f"{item}_X{i}_fulllist"] = None
+                    if not item_data[f"{item}_X{i}_fulllist"]: item_data[f"{item}_X{i}_fulllist"] = None
+                    item_data[f"{item}_X{i}_fulllist"] = self.path_finder.get_file(item_data[f"{item}_X{i}_fulllist"],
+                                                                                   f"{statistic_item}_{item}_X{i}_fulllist",
+                                                                                   'csv',
+                                                                                   ['stat_change', statistic_item])
+                    st.code(f"Set Fulllist File: {item_data[f'{item}_X{i}_fulllist']}", language='shell', wrap_lines=True)
+
+                    # item_data[f"{item}_X{i}_fulllist"] = st.text_input(f'Set Fulllist File: ',
+                    #                                                    value=item_data[f"{item}_X{i}_fulllist"],
+                    #                                                    key=f"{statistic_item}_{item}_X{i}_fulllist",
+                    #                                                    on_change=stat_editor_change,
+                    #                                                    args=(statistic_item, f"{item}_X{i}", "fulllist"),
+                    #                                                    placeholder=f"Set your Simulation Fulllist file...")
                 else:
                     item_data[f"{item}_X{i}_fulllist"] = ''
                 st.divider()
@@ -2421,12 +2565,12 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
         log_file.close()
         if status._current_state != "error":
-            sleep(1)
+            time.sleep(1)
             st.session_state['status_message'] = f"***Evaluation done***"
             status.update(label=f"***Evaluation done***", state="complete", expanded=False)
         elif status._current_state == "error":
             st.session_state['status_message'] = f"***:red[Evaluation Error]***"
-            sleep(0.5)
+            time.sleep(0.5)
             status.update(label=f"***:red[Evaluation Error]***", state="error", expanded=False)
 
         return status._current_state
@@ -2444,7 +2588,13 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         warning_keywords = ['Warning']
         warning_pattern = re.compile("|".join(warning_keywords), re.IGNORECASE)
 
-        if error_pattern.search(line):
+        if warning_pattern.search(line.strip()) and error_pattern.search(line) and not wskip_next_line:
+            status.write(f"***:orange[{line.strip()}]***")
+            wskip_next_line = True
+        elif wskip_next_line:
+            status.write(f"***:orange[{line.strip()}]***")
+            wskip_next_line = False
+        elif error_pattern.search(line):
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
             status.write(f"***:red[{line.strip()}]***")
             if python_error_pattern.search(line) and not custom_error_pattern.search(line):

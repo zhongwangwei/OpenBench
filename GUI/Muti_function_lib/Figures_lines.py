@@ -1,5 +1,5 @@
 import os
-
+import itertools
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -9,10 +9,11 @@ import matplotlib
 from io import BytesIO
 import streamlit as st
 
-font = {'family': 'Times new roman'}
-matplotlib.rc('font', **font)
+
 
 def ref_lines(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -78,6 +79,8 @@ def ref_lines(option: dict, showing_items, selected_item):
         st.error('Please make sure your files were generated correctly.')
 
 def sim_lines(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -132,6 +135,8 @@ def sim_lines(option: dict, showing_items, selected_item):
         st.error('Please make sure your files were generated correctly.')
 
 def each_line(option: dict, showing_items, selected_item):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['fontsize'],
               'grid.linewidth': 0.2,
@@ -228,8 +233,167 @@ def each_line(option: dict, showing_items, selected_item):
         st.button(f':point_right: Next Site', key='Next_Site')
 
 
+def make_stn_lines(showing_items, selected_item, refselect, simselect, path, vars, unit):
+    option = {}
+    option['data_path'] = path + f'/data/stn_{refselect}_{simselect}/'
+    option['vars'] = vars
+    option['units'] = unit
+    with st.container(border=True):
+        st.write('##### :orange[Replot Type]')
+        col1, col2 = st.columns((2, 1.5))
+        option['plot_type'] = col1.radio('Please choose your type', ['sim lines', 'ref lines', 'each site'],
+                                         index=None, label_visibility="collapsed", horizontal=True)
+        st.divider()
+        if option['plot_type'] == 'sim lines':
+            title = 'Simulation'
+            ylabel = f"{selected_item} [{unit[1]}]"
+        elif option['plot_type'] == 'ref lines':
+            title = 'Reference'
+            ylabel = f"{selected_item} [{unit[0]}]"
+        else:
+            title = ''
+            ylabel = ''
+
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+
+            option['title'] = st.text_input('Title',value=title, label_visibility="visible")
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=20)
+            option['fontsize'] = st.number_input("Font size", min_value=0, value=17)
+
+        with col2:
+            option['xlabel'] = st.text_input('X label',value='Time', label_visibility="visible")
+            option['xticksize'] = st.number_input("xtick size", min_value=0, value=17)
+
+
+        with col3:
+            option['ylabel'] = st.text_input('Y label',value=ylabel, label_visibility="visible")
+            option['yticksize'] = st.number_input("ytick size", min_value=0, value=17)
+
+        col1, col2 = st.columns((2, 1.5))
+        option['grid'] = col1.toggle("Showing grid?", value=False, label_visibility="visible")
+        if option['grid']:
+            option['grid_style'] = col2.selectbox('Grid Line Style', ['solid', 'dotted', 'dashed', 'dashdot'],
+                                                  index=2, placeholder="Choose an option", label_visibility="visible")
+
+
+        import matplotlib.colors as mcolors
+        from matplotlib import cm
+
+        hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF',
+                      '#F8961E', '#277DA1', '#5A189A']
+        colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+        if option['plot_type']:
+            with st.expander("Edited Lines", expanded=False):
+                if option['plot_type'] != 'each site':
+                    col1, col2, col3, col4, col5 = st.columns((1.5, 2, 2, 2, 2))
+                    col1.write('##### :blue[Colors]')
+                    col2.write('##### :blue[LineWidth]')
+                    col3.write('##### :blue[Line Style]')
+                    col4.write('##### :blue[Marker]')
+                    col5.write('##### :blue[Markersize]')
+
+                    for i in range(len(showing_items["ID"])):
+                        id = showing_items["ID"].values[i]
+                        st.write(id)
+                        col1, col2, col3, col4, col5 = st.columns((1.2, 2, 2, 2, 2))
+                        option[id] = {}
+                        color = next(colors)
+                        with col1:
+                            option[f"{id}"]['color'] = st.color_picker(f'{id} colors', value=color, key=None, help=None,
+                                                                       on_change=None,
+                                                                       args=None, kwargs=None, disabled=False,
+                                                                       label_visibility="collapsed")
+                        with col2:
+                            option[f"{id}"]['linewidth'] = st.number_input(f"{id} LineWidth", min_value=0., value=2.,
+                                                                           step=0.1,
+                                                                           label_visibility="collapsed")
+                        with col3:
+                            option[f"{id}"]['linestyle'] = st.selectbox(f'{id} Line Style',
+                                                                        ['solid', 'dotted', 'dashed', 'dashdot'],
+                                                                        index=None, placeholder="Choose an option",
+                                                                        label_visibility="collapsed")
+                        with col4:
+                            option[f"{id}"]['marker'] = st.selectbox(f'{id} Line Marker',
+                                                                     ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                                      'd',
+                                                                      'P',
+                                                                      'X'],
+                                                                     index=None, placeholder="Choose an option",
+                                                                     label_visibility="collapsed")
+                        with col5:
+                            option[f"{id}"]['markersize'] = st.number_input(f"{id} Markersize", min_value=0, value=10,
+                                                                            label_visibility="collapsed")
+                elif option['plot_type'] == 'each site':
+                    col1, col2, col3, col4, col5 = st.columns((1.4, 2, 2, 2, 2))
+                    col1.write('##### :blue[Colors]')
+                    col2.write('##### :blue[LineWidth]')
+                    col3.write('##### :blue[Linestyle]')
+                    col4.write('##### :blue[Marker]')
+                    col5.write('##### :blue[Markersize]')
+
+                    ids = ['site_ref', 'site_sim']
+                    titles = ['Reference', 'Simulation']
+                    colors = ['#F96969', '#599AD4']
+                    for id, title, color in zip(ids, titles, colors):
+                        option[id] = {}
+                        st.write(f'###### :green[{title} Line]')
+                        col1, col2, col3, col4, col5 = st.columns((1.2, 2, 2, 2, 2))
+                        with col1:
+                            option[f"{id}"]['color'] = st.color_picker(f'{id} ref colors', value=color, key=None, help=None,
+                                                                       on_change=None,
+                                                                       args=None, kwargs=None, disabled=False,
+                                                                       label_visibility="collapsed")
+                        with col2:
+                            option[f"{id}"]['lineWidth'] = st.number_input(f"{id} lineWidth", min_value=0., value=2.,
+                                                                           step=0.1,
+                                                                           label_visibility="collapsed")
+                        with col3:
+                            option[f"{id}"]['linestyle'] = st.selectbox(f'{id} Line Style',
+                                                                        ['solid', 'dotted', 'dashed', 'dashdot'],
+                                                                        index=None, placeholder="Choose an option",
+                                                                        label_visibility="collapsed")
+                        with col4:
+                            option[f"{id}"]['marker'] = st.selectbox(f'{id} Line Marker',
+                                                                     ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                                      'd', 'P',
+                                                                      'X'],
+                                                                     index=None, placeholder="Choose an option",
+                                                                     label_visibility="collapsed")
+                        with col5:
+                            option[f"{id}"]['markersize'] = st.number_input(f"{id} Markersize", min_value=0, value=10,
+                                                                            label_visibility="collapsed")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=17)
+            option['font'] = st.selectbox('Image saving format',
+                                            ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                             'Helvetica',
+                                             'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                            index=0, placeholder="Choose an option", label_visibility="visible",
+                                            key=f"font")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6)
+        with col3:
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible")
+
+
+    if option['plot_type'] == 'each site':
+        each_line(option, showing_items, selected_item)
+    elif option['plot_type'] == 'ref lines':
+        ref_lines(option, showing_items, selected_item)
+    elif option['plot_type'] == 'sim lines':
+        sim_lines(option, showing_items, selected_item)
+    else:
+        st.warning('Please choose first!')
+
 
 def geo_Compare_lines(option: dict, selected_item, ref, sim):
+    font = {'family': option['font']}
+    matplotlib.rc('font', **font)
     params = {'backend': 'ps',
               'axes.labelsize': option['labelsize'],
               'axes.linewidth': option['axes_linewidth'],

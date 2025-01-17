@@ -38,24 +38,20 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             global_max = max([d[1] for d in bound])
             global_min = min([d[0] for d in bound])
 
-            if varname in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mean_absolute_error', 'ssq', 've',
-                           'absolute_percent_bias']:
-                global_min = global_min * 0 - 0.2
-            elif varname in [ 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:
-                global_max = global_max * 0 + 0.2
-            elif varname in ['NSE', 'KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
-                global_min = -1
+            if varname in ['NSE', 'KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
+                if global_min < -1:
+                    global_min = -1
                 global_max = 1
-            # global_min = min(data.min() for data in datasets_filtered)
-            # global_max = max(data.max() for data in datasets_filtered)
             x_range = np.linspace(global_min, global_max, 200)
-
+            dx = x_range[1] - x_range[0]
             # Adjust these parameters to control spacing and overlap
             y_shift_increment = 0.5
             scale_factor = 0.8
 
             for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
-                filtered_data = data[(data >= global_min) & (data <= global_max)]
+                filtered_data = data
+                if varname in ['KGE', 'NSE', 'KGESS']:
+                    filtered_data = np.where(data < -1, -1, data)
 
                 kde = gaussian_kde(filtered_data)
                 y_range = kde(x_range)
@@ -72,15 +68,18 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
                 # Add labels
                 axes.text(global_min, y_shift + 0.2, sim_source, fontweight='bold', ha='left', va='center')
                 # Calculate and plot median
-                median = np.median(filtered_data)
-                index_closest = (np.abs(x_range - median)).argmin()
-                y_target = y_range[index_closest]
-                axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
-                            linewidth=option['vlinewidth'], zorder=n_plots + 1)
+                median = np.median(data)
+                if varname in ['KGE', 'NSE', 'KGESS'] and median <= global_min:
+                    pass
+                else:
+                    index_closest = (np.abs(x_range - median)).argmin()
+                    y_target = y_range[index_closest]
+                    axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
+                                linewidth=option['vlinewidth'], zorder=n_plots + 1)
 
-                # Add median value text
-                axes.text(median, y_shift + y_target, f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
-                          zorder=n_plots + 2)
+                    # Add median value text
+                    axes.text(median, y_shift + y_target, f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
+                              zorder=n_plots + 2)
 
             # Customize the plot
             axes.set_yticks([])
@@ -106,6 +105,7 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
 
             # Set y-axis limits
             axes.set_ylim(-0.2, (n_plots - 1) * y_shift_increment + scale_factor)
+            axes.set_xlim(global_min - dx, global_max + dx)
 
             # Adjust layout and save
             plt.tight_layout()

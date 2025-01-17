@@ -37,11 +37,15 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
     if option["patch_artist"]:
         boxprops = dict(linewidth=option["boxpropslinewidth"], facecolor=option["boxpropsfacecolor"],
                         edgecolor=option["boxpropsedgecolor"])
+    if varname in ['KGE', 'KGESS', 'NSE']:
+        for i, data in enumerate(datasets_filtered):
+            lower_bound = np.percentile(data, 5)
+            if lower_bound < -1:
+                datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
 
     # Create the whisker plot
     plt.boxplot(datasets_filtered, labels=[f'{i}' for i in sim_sources],
                 vert=option['vert'],
-
                 showfliers=option['showfliers'],
                 flierprops=dict(marker=option["flierpropsmarker"], markerfacecolor=option["flierpropsmarkerfacecolor"],
                                 markersize=option["flierpropsmarkersize"],

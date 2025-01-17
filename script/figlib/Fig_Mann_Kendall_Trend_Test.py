@@ -91,11 +91,10 @@ def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value,
         origin = 'lower'
     else:
         origin = 'upper'
-
+    lon, lat = np.meshgrid(ilon, ilat)
     if option['show_method'] == 'imshow':
         cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
     elif option['show_method'] == 'contourf':
-        lon, lat = np.meshgrid(ilon, ilat)
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
     # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
     # cs = ax.imshow(data, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=option['extend'], origin='lower')
@@ -170,9 +169,15 @@ def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml
 
     ds = xr.open_dataset(f"{file}.nc")
     trend = ds.trend
+    if trend.ndim == 3 and trend.shape[0] == 1:
+        trend = trend.squeeze(axis=0)
     tau = ds.tau
+    if tau.ndim == 3 and tau.shape[0] == 1:
+        tau = tau.squeeze(axis=0)
     # significant = ds.significance
     p_value = ds.p_value
+    if p_value.ndim == 3 and p_value.shape[0] == 1:
+        p_value = p_value.squeeze(axis=0)
     significant = statistic_nml['significance_level']
 
     ilat = ds.lat.values
@@ -180,7 +185,10 @@ def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml
 
     if not option['extend']:
         option['extend'] = 'both'
-    option['vmin'], option['vmax'] = math.floor(tau.min().values), math.ceil(tau.max().values)
+    try:
+        option['vmin'], option['vmax'] = math.floor(tau.min(skipna=True).values), math.ceil(tau.max(skipna=True).values)
+    except:
+        option['vmin'], option['vmax']= -1, 1
     map(output_dir, method_name, data_sources, ilon, ilat, tau, 'tau', p_value, significant, main_nml, option)
 
     option['vmin'], option['vmax'] = -1, 1

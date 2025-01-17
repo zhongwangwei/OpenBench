@@ -1,14 +1,10 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
-
-# from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Namelist_lib.namelist_info import initial_setting
 from Page_make_validation import make_initional, make_reference, make_simulation
 from Page_run import run_validation
-from Page_statistic import Process_stastic
 from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
-
-
-# st.set_page_config(page_title="Validation Pages", page_icon="🌍", layout="wide")
+from Page_statistic import Process_stastic
 
 class Pages_control:
     def __init__(self):

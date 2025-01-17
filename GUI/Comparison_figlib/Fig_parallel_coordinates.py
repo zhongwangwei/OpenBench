@@ -60,6 +60,7 @@ def make_scenarios_comparison_parallel_coordinates(option, file, evaluation_item
                                        models_to_highlight_by_line=option["models_to_highlight_by_line"],
                                        models_to_highlight_markers=['.'],
                                        models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                                       models_to_highlight_markers_alpha=option['models_to_highlight_markers_alpha'],
                                        debug=False,
                                        figsize=figsize,
                                        colormap='tab20',
@@ -87,9 +88,8 @@ def make_scenarios_comparison_parallel_coordinates(option, file, evaluation_item
     buffer.seek(0)
 
     st.download_button('Download image', buffer, file_name=f'{filename}.{option["saving_format"]}',
-                         mime=f"image/{option['saving_format']}",
-                         type="secondary", disabled=False, use_container_width=False)
-
+                       mime=f"image/{option['saving_format']}",
+                       type="secondary", disabled=False, use_container_width=False)
 
 
 def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score, select_items, sim_cases):
@@ -161,6 +161,7 @@ def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score,
                                        models_to_highlight_by_line=option["models_to_highlight_by_line"],
                                        models_to_highlight_markers=True,
                                        models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                                       models_to_highlight_markers_alpha=option['models_to_highlight_markers_alpha'],
                                        debug=False,
                                        figsize=figsize,
                                        colormap='tab20',
@@ -194,7 +195,8 @@ def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score,
     next_disable = False
     if len(all_combinations) <= 1:
         next_disable = True
-    col3.button(f':point_right: Next Case', key='Next_item', disabled=next_disable,help='Press to change reference items')
+    col3.button(f':point_right: Next Case', key='Next_item', disabled=next_disable, help='Press to change reference items')
+
 
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):
@@ -370,6 +372,7 @@ def parallel_coordinate_plot(
         models_to_highlight_labels=None,
         models_to_highlight_markers=["s", "o", "^", "*", ],
         models_to_highlight_markers_size=22,
+        models_to_highlight_markers_alpha=1.0,
         fig=None,
         ax=None,
         figsize=(15, 5),
@@ -637,6 +640,7 @@ def parallel_coordinate_plot(
                     c=color,
                     label=label,
                     markersize=models_to_highlight_markers_size,
+                    alpha=models_to_highlight_markers_alpha,
                 )
 
             mh_index += 1

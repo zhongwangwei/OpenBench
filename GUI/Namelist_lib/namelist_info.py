@@ -3,7 +3,7 @@ import numpy as np
 import sys
 
 
-class initial_setting():
+class initial_setting:
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
         self.info = "Store initialization information"
@@ -65,7 +65,8 @@ class initial_setting():
             'num_cores': 8,
             'evaluation': True,
             'comparison': False,
-            'statistics': False
+            'statistics': False,
+            'debug_mode': True,
         }
         return General
 
@@ -3480,7 +3481,7 @@ class initial_setting():
                             'prefix', 'syear', 'eyear'], 'other': ['nbins']},
             'Partial_Least_Squares_Regression': {
                 'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
-                            'prefix', 'syear', 'eyear']},
+                            'prefix', 'syear', 'eyear'], 'other': ['max_components', 'n_splits', 'n_jobs',]},
             'Three_Cornered_Hat': {
                 'general': ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res', 'suffix',
                             'prefix', 'syear', 'eyear']}
