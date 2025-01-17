@@ -12,6 +12,20 @@ from Page_visualization import visualization_validation, visualization_replot_fi
 st.set_page_config(page_title="Home Pages", page_icon="🌍", layout="centered")
 
 
+def info_2025_01_17():
+    st.write('##### :blue[Update in 2025-01-17]')
+
+    with st.expander("Show update (2025-01-17)"):
+        st.code('''
+                The code has been updated, including solving the instability of upload paths and files,
+                adding a debug button to the Evaluation page.
+                Updated code fixing some functions of the visualization page,
+                and adding some new function options. 
+                This update fixes some Statistical issues, including information misalignment after selecting a data source, 
+                and issues with the Plotting module.
+        ''', language='shell', line_numbers=True)
+
+
 def info_2023_11_14():
     st.write('##### :orange[Introduction for connect host]')
 
@@ -167,6 +181,7 @@ def show_info():
     st.subheader('Welcome to The Open Source Land Surface Model Benchmarking System Graphical User Interface!', divider=True)
 
     # st.divider()
+    info_2025_01_17()
     openbench_flowchart()
     info_2023_11_14()
     info_2023_11_30()
@@ -312,7 +327,6 @@ def initial_st(initial_information):
     if 'step5_Comparison' not in st.session_state:
         st.session_state.step5_Comparison = False
 
-
     if 'step6_stat_set' not in st.session_state:
         st.session_state.step6_stat_set = False
     if 'step6_stat_setect_check' not in st.session_state:
@@ -333,7 +347,6 @@ def initial_st(initial_information):
         st.session_state.step6_stat_show = False
     if 'step6_stat_replot' not in st.session_state:
         st.session_state.step6_stat_replot = False
-
 
     if 'step1' not in st.session_state:
         st.session_state.step1 = False
