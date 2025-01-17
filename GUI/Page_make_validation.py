@@ -1,22 +1,21 @@
+# -*- coding: utf-8 -*-
 import glob, shutil
 import os
+import sys
+import itertools
+import platform
+import posixpath
+from posixpath import normpath
 import time
 import streamlit as st
 from PIL import Image
 from io import StringIO
 from collections import ChainMap
 import xarray as xr
-# from streamlit_tags import st_tags
 import numpy as np
-from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 from Namelist_lib.find_path import FindPath
-import sys
-import itertools
-import platform
-import posixpath
-from posixpath import normpath
-from mpl_toolkits.axisartist.angle_helper import select_step
 
 
 def timer(func):
@@ -55,8 +54,7 @@ class make_initional:
         self.path_finder = FindPath()
 
     def find_paths_in_dict(self, d):
-        # # 获取当前工作目录，并确保以标准格式输出
-        # # 根据运行平台获取路径分隔符
+
         if platform.system() == "Windows":
             sep = '\\'
         else:
@@ -74,11 +72,6 @@ class make_initional:
                     else:
                         d[key] = value.replace(os.sep, "/")
                     paths.append((key, value))
-
-            # windows_path = path.replace(os.sep, "\\")
-            # posix_path = path.replace(os.sep, "/")
-            # print(windows_path)  # 输出: folder\file.txt
-            # print(posix_path)  # 输出: folder/file.txt
         return paths
 
     def home(self):
@@ -96,10 +89,11 @@ class make_initional:
         if genre == '***Upload***':
             if 'main_nml' not in st.session_state:
                 st.session_state['main_nml'] = None
-            st.session_state['main_nml'] = self.path_finder.get_file(st.session_state['main_nml'], 'upload_file', 'nml')
+            st.session_state['main_nml'] = self.path_finder.get_file(st.session_state['main_nml'], 'upload_file', 'nml',
+                                                                     [None, None])
 
             if st.session_state.main_nml is not None:
-                st.code(f'Upload Namelist: {st.session_state.main_nml}', language='shell')
+                st.code(f'Upload Namelist: {st.session_state.main_nml}', language='shell', wrap_lines=True)
 
             if st.session_state['main_nml']:
                 if 'main_change' in st.session_state:
@@ -428,9 +422,8 @@ class make_initional:
             General["basedir"] = os.path.abspath(General["basedir"])
         else:
             General["basedir"] = '/'
-
-        General["basedir"] = self.path_finder.find_path(General["basedir"], "basedir")
-        st.code(f"Current Path: {General['basedir']}", language='shell')
+        General["basedir"] = self.path_finder.find_path(General["basedir"], "basedir", ['main_change', 'general'])
+        st.code(f"Current Path: {General['basedir']}", language='shell', wrap_lines=True)
 
         st.write('###### :green[Num Cores]')
         left, right = st.columns((1, 3))
@@ -482,11 +475,11 @@ class make_initional:
                       on_change=data_editor_change,  # callback function
                       args=("comparison", "comparison"),
                       )
-        # col3.checkbox('Running Statistics? ', value=General['statistics'],
-        #               key="statistics",
-        #               on_change=data_editor_change,  # callback function
-        #               args=("statistics", "statistics")
-        #               )
+        col3.checkbox('Debug Model? ', value=General['debug_mode'],
+                      key="debug_mode",
+                      on_change=data_editor_change,  # callback function
+                      args=("debug_mode", "debug_mode")
+                      )
         General['statistics'] = False
 
         # st.write(
@@ -1363,7 +1356,7 @@ class make_initional:
 
     def _step1_main_nml(self):
         if st.session_state.step1_main_check & (not st.session_state.step1_main_nml):
-            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}")
+            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}", wrap_lines=True)
             if not os.path.exists(st.session_state.casepath):
                 os.makedirs(st.session_state.casepath)
             classification = self.classification
@@ -1411,7 +1404,7 @@ class make_initional:
 
                     max_key_length = max(len(key) for key in Generals.keys())
                     for key in list(Generals.keys()):
-                        lines.append(f"    {key:<{max_key_length}}={Generals[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Generals[f'{key}']}\n")
                     lines.append(end_line)
 
                     lines.append("&evaluation_items\n")
@@ -1420,51 +1413,51 @@ class make_initional:
                         "  #*******************Ecosystem and Carbon Cycle****************\n")
                     max_key_length = max(len(key) for key in Evaluation_Items.keys())
                     for key in list(sorted(classification["Ecosystem and Carbon Cycle"], key=None, reverse=False)):
-                        lines.append(f"    {key:<{max_key_length}}={Evaluation_Items[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Evaluation_Items[f'{key}']}\n")
 
                     lines.append("  #**************************************************************\n\n\n"
                                  "  #*******************      Hydrology Cycle      ****************\n")
                     for key in list(sorted(classification["Hydrology Cycle"], key=None, reverse=False)):
-                        lines.append(f"    {key:<{max_key_length}}={Evaluation_Items[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Evaluation_Items[f'{key}']}\n")
 
                     lines.append("  #**************************************************************\n\n\n"
                                  "  #*******************  Radiation and Energy Cycle  *************\n")
                     for key in list(sorted(classification["Radiation and Energy Cycle"], key=None, reverse=False)):
-                        lines.append(f"    {key:<{max_key_length}}={Evaluation_Items[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Evaluation_Items[f'{key}']}\n")
 
                     lines.append("  #**************************************************************\n\n\n"
                                  "  #*******************         Forcings      **********************\n")
                     for key in list(sorted(classification["Forcings"], key=None, reverse=False)):
-                        lines.append(f"    {key:<{max_key_length}}={Evaluation_Items[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Evaluation_Items[f'{key}']}\n")
 
                     lines.append("  #**************************************************************\n\n\n"
                                  "  #*******************         Human Activity      **********************\n")
                     for key in list(sorted(classification["Human Activity"], key=None, reverse=False)):
-                        lines.append(f"    {key:<{max_key_length}}={Evaluation_Items[f'{key}']}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {Evaluation_Items[f'{key}']}\n")
                     lines.append(end_line)
 
                     lines.append("&metrics\n")
                     max_key_length = max(len(key) for key in metrics.keys())
                     for key, value in metrics.items():
-                        lines.append(f"    {key:<{max_key_length}}={value}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {value}\n")
                     lines.append(end_line)
 
                     max_key_length = max(len(key) for key in scores.keys())
                     lines.append("&scores\n")
                     for key, value in scores.items():
-                        lines.append(f"    {key:<{max_key_length}}={value}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {value}\n")
                     lines.append(end_line)
 
                     max_key_length = max(len(key) for key in comparisons.keys())
                     lines.append("&comparisons\n")
                     for key, value in comparisons.items():
-                        lines.append(f"    {key:<{max_key_length}}={value}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {value}\n")
                     lines.append(end_line)
 
                     max_key_length = max(len(key) for key in statistics.keys())
                     lines.append("&statistics\n")
                     for key, value in statistics.items():
-                        lines.append(f"    {key:<{max_key_length}}={value}\n")
+                        lines.append(f"    {key:<{max_key_length}}= {value}\n")
                     lines.append(end_line)
 
                     for line in lines:
@@ -1566,20 +1559,24 @@ class make_reference:
         st.session_state.tittles = self.tittles
 
     def find_paths_in_dict(self, d):
+
+        if platform.system() == "Windows":
+            sep = '\\'
+        else:
+            sep = posixpath.sep
+
         paths = []
         for key, value in d.items():
             if isinstance(value, dict):
                 paths.extend(self.find_paths_in_dict(value))
             elif isinstance(value, str):
                 if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sys.platform.startswith('win'):
-                        d[key] = value.replace('/', '\\')
-                    elif sys.platform.startswith('linux') | sys.platform.startswith('macos'):
-                        d[key] = value.replace('\\', '/')
-                        d[key] = value.replace("'\'", "/")
-                        d[key] = value.replace("'//'", "/")
+                    if sep == '\\':
+                        path.replace(os.sep, "\\")
+                        d[key] = value.replace(os.sep, '\\')
+                    else:
+                        d[key] = value.replace(os.sep, "/")
                     paths.append((key, value))
-            # if sys.platform.startswith('linux'):
         return paths
 
     def step2_set(self):
@@ -2494,8 +2491,8 @@ class make_reference:
                     if source not in st.session_state.ref_data:
                         st.session_state.ref_data[source] = self.nl.read_namelist(path)
                     tab.subheader(f':blue[{source} Reference checking ....]', divider=True)
-                    with tab:  # .expander(f"###### Cases: {source}", expanded=True)
-                        self.__step2_make_ref_info(i, source, st.session_state.ref_data[source], path, ref_general)  # self.ref
+                    with tab:
+                        self.__step2_make_ref_info(i, source, st.session_state.ref_data[source], path, ref_general)
                 except Exception as e:
                     st.error(f'Error: {e}')
             if all(st.session_state.step2_check):
@@ -2522,7 +2519,6 @@ class make_reference:
                       use_container_width=True)
 
     def __step2_make_ref_info(self, i, source, source_lib, file, ref_general):
-        # st.write(source)
 
         def ref_editor_change(key, editor_key, source):
             source_lib[key][editor_key] = st.session_state[f"{source}_{key}_{editor_key}"]
@@ -2532,20 +2528,29 @@ class make_reference:
         with st.container(height=None, border=True):
             key = 'general'
             if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = '/'
-
-            source_lib[key][f"root_dir"] = st.text_input(f'{i}. Set Data Dictionary: ',
-                                                         value=source_lib[key][f"root_dir"],
-                                                         key=f"{source}_{key}_root_dir",
-                                                         on_change=ref_editor_change,
-                                                         args=(key, "root_dir", source),
-                                                         placeholder=f"Set your Reference Dictionary...")
+            find_path = self.path_finder.find_path(source_lib['general'][f"root_dir"], f"{source}_general_root_dir",
+                                                   ['ref_change', source])
+            st.code(f"Dictionary: {find_path}", language='shell', wrap_lines=True)
+            source_lib[key][f"root_dir"] = find_path
+            # source_lib[key][f"root_dir"] = st.text_input(f'{i}. Set Data Dictionary: ',
+            #                                              value=source_lib[key][f"root_dir"],
+            #                                              key=f"{source}_{key}_root_dir",
+            #                                              on_change=ref_editor_change,
+            #                                              args=(key, "root_dir", source),
+            #                                              placeholder=f"Set your Reference Dictionary...")
             if source_lib[key]['data_type'] == 'stn':
-                source_lib[key][f"fulllist"] = st.text_input(f'{i}. Set Fulllist File: ',
-                                                             value=source_lib[key][f"fulllist"],
-                                                             key=f"{source}_{key}_fulllist",
-                                                             on_change=ref_editor_change,
-                                                             args=(key, "fulllist", source),
-                                                             placeholder=f"Set your Reference Fulllist file...")
+                # source_lib[key][f"fulllist"] = st.text_input(f'{i}. Set Fulllist File: ',
+                #                                              value=source_lib[key][f"fulllist"],
+                #                                              key=f"{source}_{key}_fulllist",
+                #                                              on_change=ref_editor_change,
+                #                                              args=(key, "fulllist", source),
+                #                                              placeholder=f"Set your Reference Fulllist file...")
+                if 'fulllist' not in source_lib[key]: source_lib[key][f"fulllist"] = None
+                if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
+                source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"],
+                                                                         f"{source}_{key}_fulllist",
+                                                                         'csv', ['ref_change', source])
+                st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
 
             cols = itertools.cycle(st.columns(2))
             for key, values in source_lib.items():
@@ -2553,22 +2558,21 @@ class make_reference:
                     if source in ref_general[f'{key}_ref_source']:
                         col = next(cols)
                         if 'sub_dir' in source_lib[key].keys():
-                            # with col:
-                            # st.write(f'Set {key.replace("_", " ")} Sub-Data Dictionary:')
-                            # self.path_finder.find_subdirectories(source_lib[key][f"sub_dir"],
-                            #                                      f"{source}_general_root_dir",
-                            #                                      f"{source}_{key}_sub_dir")
-
-                            source_lib[key][f"sub_dir"] = col.text_input(
-                                f'{i}. Set {key.replace("_", " ")} Sub-Data Dictionary: ',
-                                value=source_lib[key][f"sub_dir"],
-                                key=f"{source}_{key}_sub_dir",
-                                on_change=ref_editor_change,
-                                args=(key, "sub_dir", source),
-                                placeholder=f"Set your Reference Dictionary...")
-
-            find_path = self.path_finder.find_path(source_lib['general'][f"root_dir"], f"{source}_general_root_dir_find")
-            st.code(f"Find Dictionary from: {find_path}", language='shell')
+                            with col:
+                                st.write(f'Set {key.replace("_", " ")} Sub-Data Dictionary:')
+                                if not source_lib[key][f"sub_dir"]: source_lib[key][f"sub_dir"] = ''
+                                source_lib[key][f"sub_dir"] = self.path_finder.find_subdirectories(source_lib[key][f"sub_dir"],
+                                                                                                   f"{source}_general_root_dir",
+                                                                                                   f"{source}_{key}_sub_dir",
+                                                                                                   ['ref_change', source])
+                                st.code(f"Sub-Dir: {source_lib[key][f'sub_dir']}", language='shell', wrap_lines=True)
+                            # source_lib[key][f"sub_dir"] = col.text_input(
+                            #     f'{i}. Set {key.replace("_", " ")} Sub-Data Dictionary: ',
+                            #     value=source_lib[key][f"sub_dir"],
+                            #     key=f"{source}_{key}_sub_dir",
+                            #     on_change=ref_editor_change,
+                            #     args=(key, "sub_dir", source),
+                            #     placeholder=f"Set your Reference Dictionary...")
 
             st.session_state.step2_check.append(self.__step2_makecheck(source_lib, source))
 
@@ -2609,7 +2613,7 @@ class make_reference:
         for var in source_lib.keys():
             if var != 'general':
                 for key in source_lib[var].keys():
-                    if key in ['sub_dir', 'varname', 'varunit']:  #
+                    if key in ['varname', 'varunit']:  #
                         if var in self.selected_items and source in st.session_state.ref_data['general'][
                             f'{var}_ref_source']:
                             if len(source_lib[var][key]) < 1:
@@ -2618,6 +2622,16 @@ class make_reference:
                                 error_state += 1
                         if len(source_lib[var][key]) < 1:
                             warning_state += 1
+                    elif key == 'sub_dir':
+                        if source_lib[var][key] is None:
+                            st.error(f'{var}: {key} should be a string, please check.',
+                                     icon="⚠")
+                            warning_state += 1
+                        else:
+                            if len(source_lib[var][key]) < 1:
+                                st.error(f'{var}: {key} should be a string longer than one, please check.',
+                                         icon="⚠")
+                                warning_state += 1
                     elif key in ['prefix', 'suffix']:
                         if len(source_lib[var]['prefix']) < 1 and len(source_lib[var]['suffix']) < 1:
                             warning_state += 1
@@ -2770,72 +2784,8 @@ class make_reference:
 
                     return True
 
-    # 
-    # def __step2_make_ref_namelist(self, file_path, selected_items, ref_data):
-    #     general = st.session_state.ref_data['general']
-    #     norm_list = ['_timezone', '_data_type', '_data_groupby', '_dir', '_varname', '_varunit', '_fulllist',
-    #                  '_tim_res',
-    #                  '_geo_res',
-    #                  '_suffix', '_prefix', '_syear', '_eyear']
-    #     streamflow_list = ['_timezone', '_data_type', '_data_groupby', '_dir', '_varname', '_varunit', '_fulllist',
-    #                        '_tim_res',
-    #                        '_geo_res',
-    #                        '_suffix', '_prefix', '_syear', '_eyear', '_max_uparea', '_min_uparea']
-    #
-    #     with st.spinner('Making namelist... Please wait.'):
-    #         if st.session_state.step2_ref_check:
-    #             st.write("Making namelist...")
-    #             with open(file_path, 'w') as f:
-    #                 lines = []
-    #                 end_line = "/\n\n\n"
-    #
-    #                 lines.append("&general\n")
-    #                 for item in selected_items:
-    #                     lines.append(f"    {item}_ref_source = {','.join(ref_data['general'][f'{item}_ref_source'])}\n")
-    #                 lines.append(end_line)
-    #                 # for key in list(ref_data['general'].keys()):
-    #                 #     if key[:-11] in selected_items:
-    #                 #         lines.append(f"    {key} = {','.join(ref_data['general'][key])}\n")
-    #                 # lines.append(end_line)
-    #
-    #                 for item in selected_items:
-    #                     if item == 'Streamflow':
-    #                         lines.append(f"&{item}\n")
-    #                         for casename in ref_data['general'][f'{item}_ref_source']:
-    #                             lines.append(f"\n#source: {casename}\n")
-    #                             for key in streamflow_list:
-    #                                 if (key in ['_geo_res', '_suffix', '_prefix', '_syear', '_eyear']) & (
-    #                                         st.session_state.ref_data[item][f"{casename}_data_type"] == 'stn'):
-    #                                     lines.append(f"    {casename}{key} =  \n")
-    #                                 elif (key in ['_fulllist']) & (
-    #                                         st.session_state.ref_data[item][f"{casename}_data_type"] == 'geo'):
-    #                                     lines.append(f"    {casename}{key} =  \n")
-    #                                 else:
-    #                                     lines.append(f"    {casename}{key} =  {ref_data[item][f'{casename}{key}']}\n")
-    #                         lines.append(end_line)
-    #                     else:
-    #                         lines.append(f"&{item}\n")
-    #                         for casename in ref_data['general'][f'{item}_ref_source']:
-    #                             lines.append(f"\n#source: {casename}\n")
-    #                             for key in norm_list:
-    #                                 if (key in ['_geo_res', '_suffix', '_prefix', '_syear', '_eyear']) & (
-    #                                         st.session_state.ref_data[item][f"{casename}_data_type"] == 'stn'):
-    #                                     lines.append(f"    {casename}{key} =  \n")
-    #                                 elif (key in ['_fulllist']) & (
-    #                                         st.session_state.ref_data[item][f"{casename}_data_type"] == 'geo'):
-    #                                     lines.append(f"    {casename}{key} =  \n")
-    #                                 else:
-    #                                     lines.append(f"    {casename}{key} =  {ref_data[item][f'{casename}{key}']}\n")
-    #                         lines.append(end_line)
-    #
-    #                 for line in lines:
-    #                     f.write(line)
-    #                 time.sleep(2)
-    #
-    #                 return True
 
-
-class make_simulation():
+class make_simulation:
     def __init__(self, initial):
         self.author = "Qingchen Xu/xuqingchen23@163.com"
         self.classification = initial.classification()
@@ -2854,20 +2804,24 @@ class make_simulation():
         # self.stat = initial.stat()
 
     def find_paths_in_dict(self, d):
+
+        if platform.system() == "Windows":
+            sep = '\\'
+        else:
+            sep = posixpath.sep
+
         paths = []
         for key, value in d.items():
             if isinstance(value, dict):
                 paths.extend(self.find_paths_in_dict(value))
             elif isinstance(value, str):
                 if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sys.platform.startswith('win'):
-                        d[key] = value.replace('/', '\\')
-                    elif sys.platform.startswith('linux') | sys.platform.startswith('macos'):
-                        d[key] = value.replace('\\', '/')
-                        d[key] = value.replace("'\'", "/")
-                        d[key] = value.replace("'//'", "/")
+                    if sep == '\\':
+                        path.replace(os.sep, "\\")
+                        d[key] = value.replace(os.sep, '\\')
+                    else:
+                        d[key] = value.replace(os.sep, "/")
                     paths.append((key, value))
-            # if sys.platform.startswith('linux'):
         return paths
 
     def step3_set(self):
@@ -3458,33 +3412,42 @@ class make_simulation():
                                                                   on_change=sim_main_change,
                                                                   args=(f"suffix", 'new_simlib_suffix'),
                                                                   placeholder=f"Set your Simulation suffix...")
-                newlib['general']['dir'] = st.text_input(f'Set Data Dictionary: ',
-                                                         value='',
-                                                         key=f"new_simlib_root_dir",
-                                                         on_change=sim_main_change,
-                                                         args=(f"root_dir", 'new_simlib_root_dir'),
-                                                         placeholder=f"Set your Simulation Dictionary...")
+
+                # newlib['general']['dir'] = st.text_input(f'Set Data Dictionary: ',
+                #                                          value='',
+                #                                          key=f"new_simlib_root_dir",
+                #                                          on_change=sim_main_change,
+                #                                          args=(f"root_dir", 'new_simlib_root_dir'),
+                #                                          placeholder=f"Set your Simulation Dictionary...")
                 newlib['general'][f"fulllist"] = ''
             else:
                 info_list = ['sub_dir', 'varname', 'varunit']
-                newlib['general']['dir'] = st.text_input(f'Set Data Dictionary: ',
-                                                         value='',
-                                                         key=f"new_simlib_root_dir",
-                                                         on_change=sim_main_change,
-                                                         args=(f"root_dir", 'new_simlib_root_dir'),
-                                                         placeholder=f"Set your Simulation Dictionary...")
-
-                newlib['general'][f"fulllist"] = st.text_input(f'Set Station Fulllist File: ',
-                                                               value='',
-                                                               key=f"new_simlib_fulllist",
-                                                               on_change=sim_main_change,
-                                                               args=(f"fulllist", 'new_simlib_fulllist'),
-                                                               placeholder=f"Set your Simulation Fulllist file...")
+                if 'fulllist' not in newlib['fulllist']: newlib['general']['fulllist'] = None
+                if not newlib['general'][f"fulllist"]: newlib['general'][f"fulllist"] = None
+                newlib['general'][f"fulllist"] = self.path_finder.get_file(newlib['general'][f"fulllist"],
+                                                                           f"new_simlib_fulllist",
+                                                                           'csv', [None, None])
+                st.code(f"Set Fulllist File: {newlib['general'][f'fulllist']}", language='shell', wrap_lines=True)
+                # newlib['general'][f"fulllist"] = st.text_input(f'Set Station Fulllist File: ',
+                #                                                value='',
+                #                                                key=f"new_simlib_fulllist",
+                #                                                on_change=sim_main_change,
+                #                                                args=(f"fulllist", 'new_simlib_fulllist'),
+                #                                                placeholder=f"Set your Simulation Fulllist file...")
                 newlib['general']['grid_res'] = ''
                 newlib['general']['syear'] = ''
                 newlib['general']['eyear'] = ''
                 newlib['general']['suffix'] = ''
                 newlib['general']['prefix'] = ''
+            if 'dir' not in newlib['general']: newlib['general']['dir'] = '/'
+            if not newlib['general']['dir']: newlib['general']['dir'] = '/'
+            try:
+                newlib['general']['dir'] = self.path_finder.find_path(newlib['general']['dir'], f"new_simlib_root_dir",
+                                                                      [None, None])
+                st.code(f"Set Data Dictionary: {newlib['general']['dir']}", language='shell', wrap_lines=True)
+            except PermissionError as e:
+                if e:
+                    newlib['general']['dir'] = '/'
             st.divider()
             st.write(f':point_down: If some item is differ to {newlib["Mod"]} variables, press to change')
             col1, col2 = st.columns((2, 1.2))
@@ -3512,10 +3475,20 @@ class make_simulation():
                         cols = itertools.cycle(st.columns(3))
                         for info in newlib['info_list']:
                             col = next(cols)
-                            newlib[variable][info] = col.text_input(info_lists[info]['title'],
-                                                                    value=info_lists[info]['value'],
-                                                                    key=f"{variable}_{info}_sim",
-                                                                    placeholder=f"Set your Simulation Var...")
+                            if info == 'sub_dir':
+                                with col:
+                                    if 'sub_dir' not in newlib[variable]: newlib[variable][info] = info_lists[info]['value']
+                                    if not newlib[variable][info]: newlib[variable][info] = ''
+                                    newlib[variable][info] = self.path_finder.find_subdirectories(newlib[variable][info],
+                                                                                                  f"new_simlib_root_dir",
+                                                                                                  f"{variable}_{info}_sim",
+                                                                                                  [None, None])
+                                    st.code(f"Sub-Dir: {newlib[variable][info]}", language='shell', wrap_lines=True)
+                            else:
+                                newlib[variable][info] = col.text_input(info_lists[info]['title'],
+                                                                        value=info_lists[info]['value'],
+                                                                        key=f"{variable}_{info}_sim",
+                                                                        placeholder=f"Set your Simulation Var...")
 
         disable = False
         check = self.__step3_check_newcase_namelist(newlib)
@@ -3639,7 +3612,10 @@ class make_simulation():
                         variable = variable.replace(' ', '_')
                         lines.append(f"&{variable}\n")
                         for info in newlib['info_list']:
-                            lines.append(f"    {info} = {newlib[variable][info]}\n")
+                            if newlib[variable][info] is None:
+                                lines.append(f"    {info} = \n")
+                            else:
+                                lines.append(f"    {info} = {newlib[variable][info]}\n")
                         lines.append(end_line)
                 for line in lines:
                     f.write(line)
@@ -3788,7 +3764,7 @@ class make_simulation():
                     if case in sim_sources['def_nml']:
                         if os.path.exists(sim_sources['def_nml'][case]):
                             os.remove(sim_sources['def_nml'][case])
-                            st.code(f"Remove file: {sim_sources['def_nml'][case]}")
+                            st.code(f"Remove file: {sim_sources['def_nml'][case]}", wrap_lines=True)
                         else:
                             st.warning(f"{case} already removed or file doesn't exist!")
                     else:
@@ -3912,7 +3888,7 @@ class make_simulation():
             key = 'general'
             cols = itertools.cycle(st.columns(3))
             for item in source_lib[key].keys():
-                if item not in ["model_namelist", "dir", "fulllist"]:
+                if item not in ["model_namelist", "root_dir", "fulllist"]:
                     col = next(cols)
                     if item in ['prefix', 'suffix']:
                         source_lib[key][item] = col.text_input(f'{i}. Set {item}: ',
@@ -3951,22 +3927,23 @@ class make_simulation():
                                                               options=('stn', 'grid'),
                                                               index=set_data_type(source_lib[key][item]),
                                                               placeholder=f"Set your Simulation Data type (default={source_lib[key][item]})...")
+            if "root_dir" not in source_lib[key]: source_lib[key][f"root_dir"] = '/'
+            if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = '/'
+            try:
+                source_lib[key][f"root_dir"] = self.path_finder.find_path(source_lib[key][f"root_dir"],
+                                                                          f"{source}_general_root_dir",
+                                                                          ['sim_change', source])
+                st.code(f"Set Data Dictionary: {source_lib[key][f'root_dir']}", language='shell', wrap_lines=True)
+            except PermissionError as e:
+                if e:
+                    source_lib[key][f"root_dir"] = '/'
 
-            source_lib[key][f"dir"] = st.text_input(f'{i}. Set Data Dictionary: ',
-                                                    value=source_lib[key][f"dir"],
-                                                    key=f"{source}_{key}_dir",
-                                                    on_change=sim_editor_change,
-                                                    args=(key, "dir", source),
-                                                    placeholder=f"Set your Simulation Dictionary...")
             if source_lib[key]['data_type'] == 'stn':
-                source_lib[key][f"fulllist"] = st.text_input(f'{i}. Set Fulllist File: ',
-                                                             value=source_lib[key][f"fulllist"],
-                                                             key=f"{source}_{key}_fulllist",
-                                                             on_change=sim_editor_change,
-                                                             args=(key, "fulllist", source),
-                                                             placeholder=f"Set your Simulation Fulllist file...")
-            find_path = self.path_finder.find_path(source_lib['general'][f"dir"], f"{source}_general_dir_simfind")
-            st.code(f"Find Dictionary from: {find_path}", language='shell')
+                if "fulllist" not in source_lib[key]: source_lib[key][f"fulllist"] = None
+                if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
+                source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"], f"{source}_{key}_fulllist",
+                                                                         'csv', ['sim_change', source])
+                st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
 
             for key, values in source_lib.items():
                 if key != 'general' and key in self.selected_items:
@@ -3974,49 +3951,33 @@ class make_simulation():
                         st.divider()
                         st.write(f'##### :blue[{key.replace("_", " ")}]')
                         cols = itertools.cycle(st.columns(2))
-                        for info in source_lib[key].keys():
+                        for info in sorted(source_lib[key].keys(), key=lambda x: (x == "sub_dir", x)):
                             col = next(cols)
-                            source_lib[key][info] = col.text_input(
-                                f'{i}. Set {info}: ',
-                                value=source_lib[key][info],
-                                key=f"{source}_{key}_{info}",
-                                on_change=sim_editor_change,
-                                args=(key, info, source),
-                                placeholder=f"Set your Reference Dictionary...")
+                            if info == 'sub_dir':
+                                with col:
+                                    if info not in source_lib[key]: source_lib[key][info] = ''
+                                    if not source_lib[key][info]: source_lib[key][info] = ''
+                                    source_lib[key][info] = self.path_finder.find_subdirectories(source_lib[key][info],
+                                                                                                 f"{source}_general_root_dir",
+                                                                                                 f"{source}_{key}_{info}",
+                                                                                                 ['sim_change', source])
+                                    st.code(f"Sub-Dir: {source_lib[key][f'sub_dir']}", language='shell', wrap_lines=True)
+                            else:
+                                source_lib[key][info] = col.text_input(
+                                    f'{i}. Set {info}: ',
+                                    value=source_lib[key][info],
+                                    key=f"{source}_{key}_{info}",
+                                    on_change=sim_editor_change,
+                                    args=(key, info, source),
+                                    placeholder=f"Set your Reference Dictionary...")
+
+                            # if not source_lib[key][f"sub_dir"]: source_lib[key][f"sub_dir"] = ''
+                            # source_lib[key][f"sub_dir"] = self.path_finder.find_subdirectories(source_lib[key][f"sub_dir"],
+                            #                                                                    f"{source}_general_root_dir",
+                            #                                                                    f"{source}_{key}_sub_dir")
+                            # st.code(f"Sub-Dir: {source_lib[key][f'sub_dir']}", language='shell')
 
             st.session_state.step3_check.append(self.__step3_makecheck(source_lib, source))
-
-            # st.divider()
-
-            # def write_nml(nml_dict, output_file):
-            #     """
-            #     将字典数据重新写回 .nml 文件。
-            #     """
-            #     with open(output_file, 'w') as f:
-            #         # 确保 'general' 部分总是第一个
-            #         if 'general' in nml_dict:
-            #             f.write(f'&general\n')
-            #             max_key_length = max(len(key) for key in nml_dict['general'].keys())
-            #             for key, value in nml_dict['general'].items():
-            #                 f.write(f'  {key:<{max_key_length}} = {value}\n')
-            #             f.write('/\n\n')
-            #
-            #         # 写入其他部分
-            #         for section, variables in nml_dict.items():
-            #             if section == 'general':
-            #                 continue  # 'general' 已经处理过了
-            #             f.write(f'&{section}\n')
-            #             for key, value in variables.items():
-            #                 f.write(f'  {key} = {value}\n')
-            #             f.write('/\n\n')
-            #     del f
-            #
-            # col1, col2 = st.columns((2, 1))
-            # col1.write(
-            #     ':information_source: If you change :red[Dictionary Path], Press this button to save :point_right:')
-            # if col2.button('Make namelist', help='Yes, this is the one.', key=f'{i}_remake', use_container_width=True):
-            #     write_nml(source_lib, file)
-            #     st.success("😉 Make file successfully!!! \n Please press to Next step")
 
     def __step3_makecheck(self, source_lib, source):
         error_state = 0
@@ -4026,7 +3987,7 @@ class make_simulation():
         model_key = "model_namelist"
         timezone_key = "timezone"
         data_groupby_key = "data_groupby"
-        dir_key = "dir"
+        dir_key = "root_dir"
         tim_res_key = "tim_res"
 
         # 这之后的要区分检查--------------------------------
@@ -4106,7 +4067,7 @@ class make_simulation():
                 for key, value in Mod.items():
                     if source_lib["general"][f"model_namelist"] == value:
                         model_info = f'Model: {key}'
-                path_info = f'Root Dictionary: {source_lib["general"][f"dir"]}'
+                path_info = f'Root Dictionary: {source_lib["general"][f"root_dir"]}'
                 key = 'general'
                 if source_lib[key]['data_type'] == 'stn':
                     path_info = path_info + f'\nFulllist File: {source_lib["general"][f"fulllist"]}'
@@ -4147,7 +4108,13 @@ class make_simulation():
                         continue  # 'general' 已经处理过了
                     f.write(f'&{section}\n')
                     for key, value in variables.items():
-                        f.write(f'  {key} = {value}\n')
+                        if key != 'sub_dir':
+                            f.write(f'  {key} = {value}\n')
+                        else:
+                            if value is None:
+                                f.write(f'  {key} = \n')
+                            else:
+                                f.write(f'  {key} = {value}\n')
                     f.write('/\n\n')
             del f
 

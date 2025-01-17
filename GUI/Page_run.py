@@ -2,19 +2,17 @@
 import glob
 import os
 import re
-import subprocess
-import time
-import streamlit as st
-from PIL import Image
-from collections import ChainMap
-import xarray as xr
-import numpy as np
-from tqdm import tqdm
-from stqdm import stqdm
-from time import sleep
-import pandas as pd
 import sys
 import io
+import subprocess
+import time
+from time import sleep
+import streamlit as st
+import xarray as xr
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from stqdm import stqdm
 
 
 def timer(func):
@@ -110,7 +108,6 @@ class run_validation:
         # def _lunch_errors(self, run_err):
         #     e = RuntimeError(run_err)
         #     st.exception(e)
-
 
     def __print_welcome_message(self):
         """Print a more beautiful welcome message and ASCII art."""
