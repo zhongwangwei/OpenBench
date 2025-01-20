@@ -1035,16 +1035,16 @@ class LC_groupby(metrics, scores):
                                 print('Error: No scores for IGBP class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'IGBP_groupby')
-        if os.path.exists(metricsdir_path):
-            shutil.rmtree(metricsdir_path)
-        print(f"Re-creating output directory: {metricsdir_path}")
+        #if os.path.exists(metricsdir_path):
+        #    shutil.rmtree(metricsdir_path)
+        #print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
         scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'IGBP_groupby')
-        if os.path.exists(scoresdir_path):
-            shutil.rmtree(scoresdir_path)
-        print(f"Re-creating output directory: {scoresdir_path}")
+        #if os.path.exists(scoresdir_path):
+        #    shutil.rmtree(scoresdir_path)
+        #print(f"Re-creating output directory: {scoresdir_path}")
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
@@ -1251,16 +1251,16 @@ class LC_groupby(metrics, scores):
                                 print('Error: No scores for PFT class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'PFT_groupby')
-        if os.path.exists(metricsdir_path):
-            shutil.rmtree(metricsdir_path)
-        print(f"Re-creating output directory: {metricsdir_path}")
+        #if os.path.exists(metricsdir_path):
+       #     shutil.rmtree(metricsdir_path)
+        #print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
         scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'PFT_groupby')
-        if os.path.exists(scoresdir_path):
-            shutil.rmtree(scoresdir_path)
-        print(f"Re-creating output directory: {scoresdir_path}")
+        #if os.path.exists(scoresdir_path):
+       #     shutil.rmtree(scoresdir_path)
+        #print(f"Re-creating output directory: {scoresdir_path}")
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
