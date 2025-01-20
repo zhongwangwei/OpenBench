@@ -109,7 +109,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         try:
             del data, datasets_filtered, MLINES, lines, kde, covariance_matrix, x_values, density, line
         except:
-            del data, datasets_filtered, MLINES, lines, x_values, line
+            pass
 
 
 def generate_lines(data_names, option):
