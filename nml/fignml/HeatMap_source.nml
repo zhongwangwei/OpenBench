@@ -12,7 +12,7 @@
   y_ha              = right  # 'right', 'left', 'center'
 
   ticks_format      = .2f
-  fontsize          = 15
+  fontsize          = 13
 
   cmap              = coolwarm
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
