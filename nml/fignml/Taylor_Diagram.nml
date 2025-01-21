@@ -1,9 +1,9 @@
 &general
   title             =
   title_size        = 18
-  STDlabelsize      = 14
-  CORlabelsize      = 14
-  RMSlabelsize      = 14
+  STDlabelsize      = 13
+  CORlabelsize      = 13
+  RMSlabelsize      = 13
   fontsize          = 14 # to contral legend font zise
   axes_linewidth    = 1
 
@@ -32,7 +32,7 @@
 
   markerLegend      = on # 'on' 'off'
   MARKERSsize       = 10
-  faceColor         =  w
+  faceColor         =  none # none, white ..... if None, without color fill in markers
 
   set_legend        =  false      # 'True', 'False' if false then will use default setting to plot legend
   bbox_to_anchor_x  =  1.4

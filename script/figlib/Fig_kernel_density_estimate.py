@@ -1,3 +1,5 @@
+import math
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,21 +38,20 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
             sim_source = sim_sources[i]
 
             try:
-                lower_bound, upper_bound = np.percentile(data, 5), np.percentile(data, 95)
-                if varname in ['KGE', 'KGESS','NSE']:
-                    if lower_bound< -1:
+                lower_bound = np.min(data)
+                filtered_data = data
+                if varname in ['KGE', 'KGESS', 'NSE']:
+                    if lower_bound < -1:
                         filtered_data = np.where(data < -1, -1, data)
-                else:
-                    filtered_data = data
 
                 kde = gaussian_kde(filtered_data)
                 covariance_matrix = kde.covariance
                 covariance_matrix += np.eye(covariance_matrix.shape[0]) * 1e-6  # Regularization
                 kde.covariance = covariance_matrix
-                
+
                 # Set x-axis range for KGE and KGESS
                 x_values = np.linspace(filtered_data.min(), filtered_data.max(), 100)
-                    
+
                 density = kde(x_values)
 
                 # Store the line object
@@ -63,7 +64,8 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
                 plt.fill_between(x_values, density, color=MLINES[sim_source]['lineColor'],
                                  alpha=MLINES[sim_source]['alpha'])
 
-            except:
+            except Exception as e:
+                print(e)
                 print(
                     f"Error: {evaluation_item} {ref_source} {sim_source} {varname} Kernel Density Estimate failed!")  # ValueError: array must not contain infs or NaNs
 
@@ -73,12 +75,14 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         else:
             legend_title = ''
 
+        ncol = option["ncol"]
         if not option["set_legend"]:
+            ncol = int(math.ceil(len(sim_sources) / 10))
             ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
-                      loc=option["loc"], ncol=option["ncol"])
+                      loc=option["loc"], ncol=ncol)
         else:
             ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
-                      bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=option["ncol"])
+                      bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=ncol)
 
         if option['grid']:
             ax.grid(linestyle=option['grid_style'], alpha=0.7, linewidth=option['grid_linewidth'])  # 绘制图中虚线 透明度0.3
@@ -98,7 +102,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         else:
             yticklabel = option['yticklabel']
 
-
         plt.xlabel(xticklabel, fontsize=option['xtick'] + 1)
         plt.ylabel(yticklabel, fontsize=option['ytick'] + 1)
         plt.title(title, fontsize=option['title_fontsize'])
@@ -109,7 +112,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         try:
             del data, datasets_filtered, MLINES, lines, kde, covariance_matrix, x_values, density, line
         except:
-            pass
+            del data, datasets_filtered, MLINES, lines, x_values, line
 
 
 def generate_lines(data_names, option):
