@@ -247,9 +247,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'IGBP_groupby')
 
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         try:
@@ -446,8 +446,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'PFT_groupby')
 
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
         print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
