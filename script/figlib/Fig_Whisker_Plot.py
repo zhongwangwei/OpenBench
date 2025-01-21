@@ -39,7 +39,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
                         edgecolor=option["boxpropsedgecolor"])
     if varname in ['KGE', 'KGESS', 'NSE']:
         for i, data in enumerate(datasets_filtered):
-            lower_bound = np.percentile(data, 5)
+            lower_bound = np.min(data)
             if lower_bound < -1:
                 datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
 
