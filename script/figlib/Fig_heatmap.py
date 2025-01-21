@@ -30,6 +30,9 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
               'text.usetex': False}
     rcParams.update(params)
 
+    option['x_wise'] = len(df.index)
+    option['y_wise'] = len(df.columns)
+
     fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
     if option['vmin_max_on']:
         vmin, vmax = option['vmin'], option['vmax']
@@ -94,14 +97,14 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
                 bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
                 x_height = bbox_transformed.height
                 if len(df.columns) < 6:
-                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
+                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.02])
                 else:
-                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.05])
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - x_height - 0.1, width / 3 * 2, 0.02])
             else:
                 if len(df.columns) < 6:
-                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.05])
+                    cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.02])
                 else:
-                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.05])
+                    cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.02])
     else:
         cbar_ax = fig.add_axes(option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"],
                                option["colorbar_height"])

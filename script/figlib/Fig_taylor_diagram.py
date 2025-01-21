@@ -962,7 +962,6 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
 
             # Shift figure to include legend
             plt.gcf().subplots_adjust(right=0.6)
-
             # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
             if option['legend']['set_legend']:
@@ -1091,6 +1090,8 @@ def _get_single_markers(markers: dict):
         color = markers[key]['faceColor']
         symbol = markers[key]['symbol']
         SymbolColor = symbol + color
+        if color == 'none':
+            SymbolColor = symbol + 'w'
         marker.append(SymbolColor)
         markersize.append(markers[key]['size'])
         markerfacecolor.append(color)
@@ -1388,7 +1389,7 @@ def _default_options(CORs: list) -> dict:
     option['colormap'] = 'on'
 
     option['labelrms'] = 'RMSD'
-    option['labelweight'] = 'bold'  # weight of the x/y labels ('light', 'normal', 'bold', ...)
+    option['labelweight'] = 'normal'  # weight of the x/y labels ('light', 'normal', 'bold', ...)
     option['locationcolorbar'] = 'NorthOutside'
 
     option['markercolor'] = None
@@ -1396,7 +1397,7 @@ def _default_options(CORs: list) -> dict:
     option['markerdisplayed'] = 'marker'
     option['markerlabel'] = ''
     option['markerlabelcolor'] = 'k'
-    option['markerlayout'] = [15, None]
+    option['markerlayout'] = [10, None]
     option['markerlegend'] = 'off'
     option['legend'] = dict(set_legend=False, bbox_to_anchor_x=1.4, bbox_to_anchor_y=1.1)
 
@@ -2119,7 +2120,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
     fontSize = rcParams.get('font.size') + 2
     lineWidth = rcParams.get('lines.linewidth')
     fontFamily = rcParams.get('font.family')
-
     if option['numberpanels'] == 1:
         # Single panel
 
@@ -2149,9 +2149,9 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
             lab = 'Correlation Coefficient'
 
             if option['titlecorshape'] == 'curved':
-                DA = 15
+                DA = 20
                 c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
-                dd = 1.1 * axes['rmax']
+                dd = 1.15 * axes['rmax']
                 for ii, ith in enumerate(c):
                     cur_x = dd * np.cos(ith * np.pi / 180)
                     cur_y = dd * np.sin(ith * np.pi / 180)
