@@ -1,6 +1,6 @@
 &general
   #*******************  Radiation and Energy Cycle  *************
-  Sensible_Heat_ref_source                  = GLEAM4.1a_monthly      #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND，GLEAM4.1a_monthly  #stn: PLUMBER2
+  Sensible_Heat_ref_source                  = GLEAM4.2a_monthly      #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND，GLEAM4.2a_monthly  #stn: PLUMBER2
   Latent_Heat_ref_source                    = ILAMB_monthly,FLUXCOM,ERA5LAND,PLUMBER2             #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND                     #stn: PLUMBER2
   Ground_Heat_ref_source                    = ILAMB_monthly          #Grid: ILAMB_monthly，#stn:PLUMBER2
   Net_Radiation_ref_source                  = CERES_EBAF_Ed4.2       #Grid: ILAMB_monthly, FLUXCOM, ERA5LAND,CERES_EBAF_Ed4.2,Rn-Xu2022          #stn: PLUMBER2
@@ -26,11 +26,11 @@
   
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration_ref_source                       = GLEAM4.1a_monthly #,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024,GLEAM_hybird_PLUMBER2   # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
-  Canopy_Transpiration_ref_source                     = GLEAM4.1a_monthly  # Grid: GLEAM4.1a_monthly,FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024   stn: Transpiration_GLEAM_hybird
-  Canopy_Interception_ref_source                      = GLEAM4.1a_monthly          # Grid: Ei_Lian_etal,GLEAM4.1a_monthly
-  Open_Water_Evaporation_ref_source                   = GLEAM4.1a_monthly          # Grid: 
-  Soil_Evaporation_ref_source                         = GLEAM4.1a_monthly          # Grid: 
+  Evapotranspiration_ref_source                       = GLEAM4.2a_monthly #,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024,GLEAM_hybird_PLUMBER2   # Grid: GLEAM4.2a_monthly,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024    stn: GLEAM_hybird_PLUMBER2
+  Canopy_Transpiration_ref_source                     = GLEAM4.2a_monthly  # Grid: GLEAM4.2a_monthly,FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024   stn: Transpiration_GLEAM_hybird
+  Canopy_Interception_ref_source                      = GLEAM4.2a_monthly          # Grid: Ei_Lian_etal,GLEAM4.2a_monthly
+  Open_Water_Evaporation_ref_source                   = GLEAM4.2a_monthly          # Grid: 
+  Soil_Evaporation_ref_source                         = GLEAM4.2a_monthly          # Grid: 
   Total_Runoff_ref_source                             = ILAMB_monthly              # Grid: ILAMB_monthly,ERA5LAND,GRFR,GRADES,LORA,GRUN_ENSEMBLE,CNRD
 
   ###Snow#### 
@@ -40,8 +40,8 @@
   Permafrost_ref_source                               = ILAMB_monthly
  
   ###Soil####
-  Surface_Soil_Moisture_ref_source                    = GLEAM4.1a_monthly           #GLEAM4.1a_monthly, ERA5LAND,ILAMB_monthly,SMAPL3
-  Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.1a_monthly           #GLEAM4.1a_monthly
+  Surface_Soil_Moisture_ref_source                    = GLEAM4.2a_monthly           #GLEAM4.2a_monthly, ERA5LAND,ILAMB_monthly,SMAPL3
+  Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.2a_monthly           #GLEAM4.2a_monthly
                           
 
   ###  Groundwater ####
@@ -114,7 +114,7 @@
 FLUXCOM                    = ./nml/Ref_variables_defination/Composite/FLUXCOM.nml
 FLUXCOM-X-BASE_monthly     = ./nml/Ref_variables_defination/Composite/FLUXCOM-X-BASE_monthly.nml
 ILAMB_monthly              = ./nml/Ref_variables_defination/Composite/ILAMB_monthly.nml
-GLEAM4.1a_monthly          = ./nml/Ref_variables_defination/Composite/GLEAM4.1a_monthly.nml
+GLEAM4.2a_monthly          = ./nml/Ref_variables_defination/Composite/GLEAM4.2a_monthly.nml
 ERA5LAND                   = ./nml/Ref_variables_defination/Composite/ERA5Land_daily.nml
 PLUMBER2                   = ./nml/Ref_variables_defination/Composite/PLUMBER2.nml
 
