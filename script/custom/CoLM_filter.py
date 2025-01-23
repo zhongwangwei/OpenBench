@@ -9,7 +9,16 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       num_value = int(num_value) if num_value else 1   
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m', 'month', 'mon']:
-         pass
+         # Handle river-related variables for monthly data
+         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
+                         'rivdph', 'rivvel', 'fldout', 'fldsto', 'flddph', 'fldfrc',
+                         'fldare', 'sfcelv', 'totout', 'totsto', 'storge', 'pthflw',
+                         'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
+                         'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
+            if info.debug_mode:
+               print('Adjusting time values for monthly river data...')
+            # No time adjustment needed for monthly river data
+            ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=15)
       elif time_unit.lower() in ['y', 'year', '1y', '1year']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
@@ -18,7 +27,7 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)      
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          if info.debug_mode:
-            print('Adjusting time values for yearly CoLM output ...')
+            print('Adjusting time values for hourly CoLM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
       print('tim_res error')
