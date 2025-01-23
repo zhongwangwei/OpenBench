@@ -19,6 +19,8 @@
   evaluation        = True # True #False
   comparison        = False  #
   statistics        = False
+  debug_mode        = True
+
 /
 
 &evaluation_items
