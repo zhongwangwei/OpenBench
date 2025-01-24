@@ -27,7 +27,7 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)      
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          if info.debug_mode:
-            print('Adjusting time values for hourly CoLM output ...')
+            print('Adjusting time values for yearly CoLM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
       print('tim_res error')
