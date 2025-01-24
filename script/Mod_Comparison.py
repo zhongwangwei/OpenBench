@@ -448,7 +448,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         #if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -462,9 +462,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_HeatMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'HeatMap')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         for score in scores:
@@ -516,9 +516,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Taylor_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Taylor_Diagram')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -658,9 +658,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Target_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Target_Diagram')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -790,9 +790,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Kernel_Density_Estimate_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Kernel_Density_Estimate')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -876,9 +876,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Parallel_Coordinates_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -981,9 +981,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         # scenarios_portrait_plot is special, need to recalculate the scores and metrics
         # read the simulation source and reference source
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Portrait_Plot_seasonal')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1199,9 +1199,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Whisker_Plot')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1294,9 +1294,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Relative_Score')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1403,9 +1403,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics,
                                                             option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Single_Model_Performance_Index')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1558,9 +1558,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-        print(f"Re-creating output directory: {dir_path}")
+        #if os.path.exists(dir_path):
+        #    shutil.rmtree(dir_path)
+        #print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 

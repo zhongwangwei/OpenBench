@@ -47,8 +47,8 @@ class BaseDatasetProcessing:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
             self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
             output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
-            shutil.rmtree(output_dir, ignore_errors=True)
-            print(f"Re-creating output directory: {output_dir}")
+            #shutil.rmtree(output_dir, ignore_errors=True)
+            #print(f"Re-creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
@@ -159,12 +159,14 @@ class BaseDatasetProcessing:
                     return ds.squeeze() 
 
 
+
     def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
         # Ensure the dataset has a proper time index
         ds = self.check_time(ds, syear, eyear, tim_res)
         # Apply model-specific time adjustments
-        ds = self.apply_model_specific_time_adjustment(ds,datasource,syear,eyear,tim_res)
+        if self.sim_data_type != 'stn':
+            ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds
 

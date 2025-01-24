@@ -6,6 +6,7 @@ from typing import Dict, Any, Tuple, List, Union
 import numpy as np
 import pandas as pd
 import xarray as xr
+from joblib import Parallel, delayed
 
 
 class NamelistReader:
@@ -632,23 +633,23 @@ class GeneralInfoReader(NamelistReader):
         self.stn_list['use_eyear'] = self.use_eyear
         self.stn_list['Flag'] = self.stn_list.apply(self._station_filter_criteria, axis=1)
         if self.sim_data_type == 'stn':
-            required_var = self.sim_varname
-            for iii in range(len(self.stn_list['ID'])):
-                if self.stn_list['Flag'][iii]:
-                    with xr.open_dataset(self.stn_list['sim_dir'][iii]) as df:
-                        if required_var not in df.data_vars:
-                            print(
-                                f"Warning: Required variable '{required_var}' not found in dataset for station ID {self.stn_list['ID'][iii]}")
-                            self.stn_list.at[iii, 'Flag'] = False
+            flagged_stations = self.stn_list[self.stn_list['Flag']].copy()
+            invalid_stations = self._process_station_batch(
+                flagged_stations,
+                self.sim_varname,
+                'sim_dir'
+            )
+            if invalid_stations:
+                self.stn_list.loc[self.stn_list['ID'].isin(invalid_stations), 'Flag'] = False
         if self.ref_data_type == 'stn':
-            required_var = self.ref_varname
-            for iii in range(len(self.stn_list['ID'])):
-                if self.stn_list['Flag'][iii]:
-                    with xr.open_dataset(self.stn_list['ref_dir'][iii]) as df:
-                        if required_var not in df.data_vars:
-                            print(
-                                f"Warning: Required variable '{required_var}' not found in dataset for station ID {self.stn_list['ID'][iii]}")
-                            self.stn_list.at[iii, 'Flag'] = False
+            flagged_stations = self.stn_list[self.stn_list['Flag']].copy()
+            invalid_stations = self._process_station_batch(
+                flagged_stations,
+                self.ref_varname,
+                'ref_dir'
+            )
+            if invalid_stations:
+                self.stn_list.loc[self.stn_list['ID'].isin(invalid_stations), 'Flag'] = False
 
         self.stn_list = self.stn_list[self.stn_list['Flag']]
         print(f"Total number of stations selected: {len(self.stn_list)}")
@@ -678,3 +679,41 @@ class GeneralInfoReader(NamelistReader):
     def to_dict(self):
         """Convert the instance attributes to a dictionary."""
         return self.__dict__
+
+    def _check_station_file(self, station_info, required_var, file_path):
+        """Helper function to check if required variable exists in station file."""
+        try:
+            with xr.open_dataset(file_path, engine='netcdf4', chunks={}) as ds:
+                has_var = required_var in ds.data_vars
+            return {
+                'ID': station_info['ID'],
+                'valid': has_var,
+                'error': None if has_var else f"Required variable '{required_var}' not found"
+            }
+        except Exception as e:
+            return {
+                'ID': station_info['ID'],
+                'valid': False,
+                'error': f"Error reading file: {str(e)}"
+            }
+
+    def _process_station_batch(self, stations_df, required_var, dir_column, n_jobs=-1):
+        """Process a batch of stations in parallel."""
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(self._check_station_file)(
+                row,
+                required_var,
+                row[dir_column]
+            )
+            for _, row in stations_df.iterrows()
+        )
+        
+        # Process results and update flags
+        invalid_stations = []
+        for result in results:
+            if not result['valid']:
+                invalid_stations.append(result['ID'])
+                if result['error']:
+                    print(f"Warning: Station ID {result['ID']}: {result['error']}")
+        
+        return invalid_stations
