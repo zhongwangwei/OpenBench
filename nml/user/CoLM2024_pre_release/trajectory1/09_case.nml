@@ -1,0 +1,19 @@
+&general
+   model_namelist    = ./nml/Mod_variables_defination/CoLM.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  month
+   dir = ./data/simulation/trajectory1/09/history/
+   fulllist =
+   tim_res =  month
+   grid_res = 0.5
+   suffix =  
+   prefix =  09_case_hist_
+   syear =  2001
+   eyear =  2009
+/
+
+&Gross_Primary_Productivity
+   varname =  f_assim
+   varunit =  mol m-2 s-1
+/

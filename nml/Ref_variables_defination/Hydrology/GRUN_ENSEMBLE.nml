@@ -4,14 +4,14 @@
    data_type         =  grid
    data_groupby      =  Single
    tim_res           =  Month
-   grid_res          =  0.25
-   syear             =  1961
-   eyear             =  2018
+   grid_res          =  0.5
+   syear             =  1901
+   eyear             =  2019
 /
 
 &Total_Runoff
-varname           =  qtot
-varunit           =  mm month-1
-prefix            =  CNRDv1.0_61_18Monthly
+varname           =  Runoff
+varunit           =  mm day-1
+prefix            = G-RUN_ENSEMBLE_MMM
 suffix            =  
 /

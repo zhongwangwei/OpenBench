@@ -1,0 +1,35 @@
+&general
+    Gross_Primary_Productivity_sim_source     =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Evapotranspiration_sim_source             =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Canopy_Transpiration_sim_source           =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Canopy_Interception_sim_source            =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Soil_Evaporation_sim_source               =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Total_Runoff_sim_source                   =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Latent_Heat_sim_source                    =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Sensible_Heat_sim_source                  =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Surface_Soil_Moisture_sim_source          =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Root_Zone_Soil_Moisture_sim_source        =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Net_Radiation_sim_source                  =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Surface_Upward_SW_Radiation_sim_source    =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Surface_Soil_Temperature_sim_source       =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Ground_Heat_sim_source                    =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Albedo_sim_source                         =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Surface_Upward_LW_Radiation_sim_source    =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8
+    Surface_Net_SW_Radiation_sim_source       =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8     
+    Surface_Net_LW_Radiation_sim_source       =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8     
+    Surface_Net_SW_Radiation_sim_source       =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8     
+    Surface_Downward_SW_Radiation_sim_source  =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8   
+    Surface_Downward_LW_Radiation_sim_source  =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8   
+    Streamflow_sim_source                     =  igbp-cb-1,igbp-cb-2,igbp-cb-3,igbp-cb-4,igbp-cb-5,igbp-cb-6,igbp-cb-7,igbp-cb-8      
+/
+
+&def_nml
+igbp-cb-1=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-1.nml
+igbp-cb-2=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-2.nml
+igbp-cb-3=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-3.nml
+igbp-cb-4=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-4.nml
+igbp-cb-5=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-5.nml
+igbp-cb-6=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-6.nml
+igbp-cb-7=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-7.nml
+igbp-cb-8=./nml/user/CoLM2024_pre_release/station/nml/igbp-cb-8.nml
+/

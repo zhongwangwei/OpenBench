@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
 
-
+ 
 def make_scenarios_scores_comparison_heat_map(file, score, option):
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
@@ -32,6 +32,19 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
 
     option['x_wise'] = len(df.index)
     option['y_wise'] = len(df.columns)
+
+    # Add minimum size constraints for small datasets
+    if option['x_wise'] < 3:
+        option['x_wise'] = max(3, option['x_wise'])
+    if option['y_wise'] < 3:
+        option['y_wise'] = max(3, option['y_wise'])
+        
+    # Adjust font sizes for small datasets
+    if len(df.index) <= 2 or len(df.columns) <= 2:
+        option['fontsize'] = min(option['fontsize'], 8)
+        option['xtick'] = min(option['xtick'], 12)
+        option['ytick'] = min(option['ytick'], 12)
+        option['title_size'] = min(option['title_size'], 12)
 
     fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
     if option['vmin_max_on']:
