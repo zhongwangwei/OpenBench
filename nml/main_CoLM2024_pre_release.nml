@@ -1,5 +1,5 @@
 &general
-  basename=CoLM2024_pre_release_trajectory1_20250123
+  basename=CoLM2024_pre_release_trajectory1_20250125
   basedir=./output/       #
   compare_tim_res   = Month                        #
   compare_tzone     = UTC                          # time zone 8:Beijing time
@@ -16,7 +16,7 @@
   statistics_nml    = ./nml/stats.nml
   figure_nml        = ./nml/figlib.nml
   num_cores         = 46  #-1 # how many core will be used in Parallel computing
-  evaluation        = False # True #False
+  evaluation        = True # True #False
   comparison        = True  #
   statistics        = False
   debug_mode        = True
@@ -25,7 +25,7 @@
 &evaluation_items
   #========================Evaluation_Items====================
   #*******************Ecosystem and Carbon Cycle****************
-  Gross_Primary_Productivity = True
+  Gross_Primary_Productivity = False
   Ecosystem_Respiration      = False
   Net_Ecosystem_Exchange     = False
 
@@ -41,9 +41,9 @@
 
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration   =True
-  Canopy_Transpiration =True
-  Canopy_Interception  =True
+  Evapotranspiration   =False
+  Canopy_Transpiration =False
+  Canopy_Interception  =False
   Ground_Evaporation   =False
   Water_Evaporation    =False
   Soil_Evaporation     =False
@@ -57,8 +57,8 @@
   Permafrost=False
  
   ###Soil####
-  Surface_Soil_Moisture=True
-  Root_Zone_Soil_Moisture=True
+  Surface_Soil_Moisture=False
+  Root_Zone_Soil_Moisture=False
 
   ###  Groundwater ####
   Water_Table_Depth=False
@@ -68,9 +68,9 @@
   #**************************************************************
 
   #*******************  Radiation and Energy Cycle  *************
-  Net_Radiation=True   
-  Latent_Heat=True
-  Sensible_Heat=True
+  Net_Radiation=False   
+  Latent_Heat=False
+  Sensible_Heat=False
   Ground_Heat=False
   Albedo=False
   Surface_Upward_SW_Radiation=False
