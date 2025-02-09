@@ -17,6 +17,7 @@
   figure_nml        = ./nml/figlib.nml
   num_cores         = 16  #-1 # how many core will be used in Parallel computing
   evaluation        = True # True #False
+  weight            = None # area, mass
   comparison        = False  #
   statistics        = False
   debug_mode        = True

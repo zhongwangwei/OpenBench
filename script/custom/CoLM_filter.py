@@ -321,7 +321,7 @@ def filter_CoLM(info,ds):   #update info as well
 
    if info.item == "Terrestrial_Water_Storage_Change":
       try:
-         TWS=ds['f_wat']+ds['f_wa']+ds['f_wdsrf'] #+ds['f_wetwat']
+         TWS=ds['f_wat']+ds['f_wa']+ds['f_wdsrf']+ds['f_wetwat']
          # Initialize TWSC with same shape as TWS but filled with NaN values
          ds['Terrestrial_Water_Storage_Change'] = TWS.copy()
          ds['Terrestrial_Water_Storage_Change'][0,:,:] = np.nan
