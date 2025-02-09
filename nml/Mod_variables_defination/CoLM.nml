@@ -195,6 +195,11 @@ varunit           =  m3 m-3
 varname           =  f_t_grnd
 varunit           =  K
 
+&Terrestrial_Water_Storage_Change
+varname           =  
+varunit           =  mm
+/
+
 ###River####
 &Streamflow
 varname         =  outflw

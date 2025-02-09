@@ -10,7 +10,7 @@
 /
 
 &Surface_Soil_Moisture
-varname           =  sm_0_5
+varname           =  soil_moisture #sm_0_5
 varunit           =  unitless
 prefix            =  SMAPL3_05deg_monthly_2016_2020
 suffix            =  
