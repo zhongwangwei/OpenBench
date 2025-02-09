@@ -506,7 +506,31 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             else:
                                 ds = xr.open_dataset(
                                     f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                overall_mean = ds[score].mean(skipna=True).values
+                                                                   
+                                if self.weight.lower() == 'area':
+                                    weights = np.cos(np.deg2rad(ds.lat))
+                                    overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                elif self.weight.lower() == 'mass':
+                                    # Get reference data for flux weighting
+                                    o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
+                                        f'{self.ref_varname}']
+                                    
+                                    # Calculate area weights (cosine of latitude)
+                                    area_weights = np.cos(np.deg2rad(ds.lat))
+                                    
+                                    # Calculate absolute flux weights
+                                    flux_weights = np.abs(o.mean('time'))
+                                    
+                                    # Combine area and flux weights
+                                    combined_weights = area_weights * flux_weights
+                                    
+                                    # Normalize weights to sum to 1
+                                    normalized_weights = combined_weights / combined_weights.sum()
+                                    
+                                    # Calculate weighted mean
+                                    overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                else:
+                                    overall_mean = ds[score].mean(skipna=True).values
 
                             overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                             output_file.write(f"{overall_mean_str}\t")
@@ -637,18 +661,60 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             simfile = \
                                 xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
-                            std_sim = self.stat_standard_deviation(simfile).mean().values
+                            
+                            std_sim_result = self.stat_standard_deviation(simfile)
+                            cor_result = self.correlation(simfile, reffile)
+                            RMS_result = self.CRMSD(simfile, reffile)
+
+                            if self.weight.lower() == 'area':
+                                weights = np.cos(np.deg2rad(ds.lat))
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(skipna=True).values
+                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(weights).mean(skipna=True).values
+                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(weights).mean(skipna=True).values
+                            elif self.weight.lower() == 'mass':
+                                # Calculate area weights (cosine of latitude)
+                                area_weights = np.cos(np.deg2rad(ds.lat))     
+                                # Calculate absolute flux weights
+                                flux_weights = np.abs(reffile.mean('time'))
+                                # Combine area and flux weights
+                                combined_weights = area_weights * flux_weights
+                                # Normalize weights to sum to 1
+                                normalized_weights = combined_weights / combined_weights.sum()
+                                # Calculate weighted mean
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(normalized_weights).mean(skipna=True).values
+                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights).mean(skipna=True).values
+                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights).mean(skipna=True).values
+                            else:
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).mean(skipna=True).values
+                                cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
+                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
+                                
+
                             output_file.write(f"{std_sim}\t")
                             stds[i + 1] = std_sim
-                            cor_result = self.correlation(simfile, reffile)
-                            cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
+
                             output_file.write(f"{cor_sim}\t")
                             cors[i + 1] = cor_sim
-                            RMS_result = self.CRMSD(simfile, reffile)
-                            RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
+
                             output_file.write(f"{RMS_sim}\t")
                             RMSs[i + 1] = RMS_sim
-                            std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
+
+                            if self.weight.lower() == 'area':
+                                weights = np.cos(np.deg2rad(reffile.lat))
+                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(weights).mean(skipna=True).values
+                            elif self.weight.lower() == 'mass':
+                                # Calculate area weights (cosine of latitude)
+                                area_weights = np.cos(np.deg2rad(reffile.lat))
+                                # Calculate absolute flux weights
+                                flux_weights = np.abs(reffile.mean('time'))
+                                # Combine area and flux weights
+                                combined_weights = area_weights * flux_weights
+                                # Normalize weights to sum to 1
+                                normalized_weights = combined_weights / combined_weights.sum()
+                                # Calculate weighted mean
+                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(normalized_weights).mean(skipna=True).values
+                            else:
+                                std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
                         stds[0] = std_ref
 
                     output_file.write(f"{std_ref}\n")
@@ -774,7 +840,24 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
 
-                            bias_sim = self.bias(simfile, reffile).mean(skipna=True).values
+                            bias_sim_result = self.bias(simfile, reffile)
+                            if self.weight.lower() == 'area':
+                                weights = np.cos(np.deg2rad(reffile.lat))
+                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(weights).mean(skipna=True).values
+                            elif self.weight.lower() == 'mass':
+                                # Calculate area weights (cosine of latitude)
+                                area_weights = np.cos(np.deg2rad(reffile.lat))
+                                # Calculate absolute flux weights
+                                flux_weights = np.abs(reffile.mean('time'))
+                                # Combine area and flux weights
+                                combined_weights = area_weights * flux_weights
+                                # Normalize weights to sum to 1
+                                normalized_weights = combined_weights / combined_weights.sum()
+                                # Calculate weighted mean
+                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(normalized_weights).mean(skipna=True).values
+                            else:
+                                bias_sim = bias_sim_result.mean(skipna=True).values
+
                             output_file.write(f"{bias_sim}\t")
                             biases[i] = bias_sim
                             rmse_sim = self.RMSE(simfile, reffile).mean(skipna=True).values
@@ -949,7 +1032,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for score in scores:
                                 ds = xr.open_dataset(
                                     f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                kk = ds[score].mean(skipna=True).values
+                                if self.weight.lower() == 'area':
+                                    weights = np.cos(np.deg2rad(reffile.lat))
+                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(skipna=True).values
+                                elif self.weight.lower() == 'mass':
+                                    # Calculate area weights (cosine of latitude)
+                                    area_weights = np.cos(np.deg2rad(reffile.lat))
+                                    # Calculate absolute flux weights
+                                    flux_weights = np.abs(reffile.mean('time'))
+                                    # Combine area and flux weights
+                                    combined_weights = area_weights * flux_weights
+                                    # Normalize weights to sum to 1
+                                    normalized_weights = combined_weights / combined_weights.sum()
+                                    # Calculate weighted mean
+                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(normalized_weights).mean(skipna=True).values
+                                else:
+                                    kk = ds[score].mean(skipna=True).values
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                 output_file.write(f"{kk_str}\t")
                             for metric in metrics:
@@ -1013,8 +1111,23 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     f'{casedir}/output/comparisons/Portrait_Plot_seasonal/{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
             except:
                 pass
-
-            return np.nanmean(pb)
+            if self.weight.lower() == 'area':
+                weights = np.cos(np.deg2rad(o.lat))
+                pb = pb.where(np.isfinite(pb), np.nan).weighted(weights).mean(skipna=True)
+            elif self.weight.lower() == 'mass':
+                # Calculate area weights (cosine of latitude)
+                area_weights = np.cos(np.deg2rad(o.lat))
+                # Calculate absolute flux weights
+                flux_weights = np.abs(o.mean('time'))
+                # Combine area and flux weights
+                combined_weights = area_weights * flux_weights
+                # Normalize weights to sum to 1
+                normalized_weights = combined_weights / combined_weights.sum()
+                # Calculate weighted mean
+                pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights).mean(skipna=True)
+            else:
+                pb = pb.mean(skipna=True)
+            return pb
 
         output_file_path = f"{dir_path}/Portrait_Plot_seasonal.txt"
 
@@ -1190,9 +1303,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     sys.exit(1)
                         output_file.write("\n")
 
-                    # print("===============================================================================")
-                    # print(" ")
-                    # print(" ")
+
 
         make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                          option)

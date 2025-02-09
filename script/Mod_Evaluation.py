@@ -1010,9 +1010,34 @@ class LC_groupby(metrics, scores):
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         output_file.write(f"{score}\t")
+                                       
+                                        if self.weight.lower() == 'area':
+                                            weights = np.cos(np.deg2rad(ds.lat))
+                                            overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == 'mass':
+                                            # Get reference data for flux weighting
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
+                                                f'{self.ref_varname}']
+                                            
+                                            # Calculate area weights (cosine of latitude)
+                                            area_weights = np.cos(np.deg2rad(ds.lat))
+                                            
+                                            # Calculate absolute flux weights
+                                            flux_weights = np.abs(o.mean('time'))
+                                            
+                                            # Combine area and flux weights
+                                            combined_weights = area_weights * flux_weights
+                                            
+                                            # Normalize weights to sum to 1
+                                            normalized_weights = combined_weights / combined_weights.sum()
+                                            
+                                            # Calculate weighted mean
+                                            overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                        else:
+                                            overall_mean = ds[score].mean(skipna=True).values
 
                                         # Calculate and write the overall mean first
-                                        overall_mean = ds[score].mean(skipna=True).values
+                                        # overall_mean = ds[score].mean(skipna=True).values
                                         overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                                         for i in range(1, 18):
@@ -1020,7 +1045,32 @@ class LC_groupby(metrics, scores):
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                             ds1.to_netcdf(
                                                 f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
-                                            mean_value = ds1[score].mean(skipna=True).values
+                                            
+                                            if self.weight.lower() == 'area':
+                                                weights = np.cos(np.deg2rad(ds.lat))
+                                                mean_value = ds1[score].weighted(weights).mean(skipna=True).values
+                                            elif self.weight.lower() == 'mass':
+                                                # Get reference data for flux weighting
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
+                                                    f'{self.ref_varname}']
+                                                
+                                                # Calculate area weights (cosine of latitude)
+                                                area_weights = np.cos(np.deg2rad(ds.lat))
+                                                
+                                                # Calculate absolute flux weights
+                                                flux_weights = np.abs(o.mean('time'))
+                                                
+                                                # Combine area and flux weights
+                                                combined_weights = area_weights * flux_weights
+                                                
+                                                # Normalize weights to sum to 1
+                                                normalized_weights = combined_weights / combined_weights.sum()
+                                                
+                                                # Calculate weighted mean
+                                                mean_value = ds1[score].weighted(normalized_weights).mean(skipna=True).values
+                                            else:
+                                                mean_value = ds1[score].mean(skipna=True).values                                            
+                                            
                                             mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
                                             output_file.write(f"{mean_value_str}\t")
                                         output_file.write(f"{overall_mean_str}\t")  # Write overall mean
@@ -1228,7 +1278,32 @@ class LC_groupby(metrics, scores):
                                         output_file.write(f"{score}\t")
 
                                         # Calculate and write the overall mean first
-                                        overall_mean = ds[score].mean(skipna=True).values
+                                       
+                                        if self.weight.lower() == 'area':
+                                            weights = np.cos(np.deg2rad(ds.lat))
+                                            overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == 'mass':
+                                            # Get reference data for flux weighting
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
+                                                f'{self.ref_varname}']
+                                            
+                                            # Calculate area weights (cosine of latitude)
+                                            area_weights = np.cos(np.deg2rad(ds.lat))
+                                            
+                                            # Calculate absolute flux weights
+                                            flux_weights = np.abs(o.mean('time'))
+                                            
+                                            # Combine area and flux weights
+                                            combined_weights = area_weights * flux_weights
+                                            
+                                            # Normalize weights to sum to 1
+                                            normalized_weights = combined_weights / combined_weights.sum()
+                                            
+                                            # Calculate weighted mean
+                                            overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                        else:
+                                            overall_mean = ds[score].mean(skipna=True).values
+
                                         overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
                                         for i in range(0, 16):
@@ -1236,7 +1311,33 @@ class LC_groupby(metrics, scores):
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
                                                 f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
-                                            mean_value = ds1[score].mean(skipna=True).values
+                                            # Calculate and write the overall mean first
+                                            if self.weight.lower() == 'area':
+                                                weights = np.cos(np.deg2rad(ds.lat))
+                                                mean_value = ds1[score].weighted(weights).mean(skipna=True).values
+                                            elif self.weight.lower() == 'mass':
+                                                # Get reference data for flux weighting
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
+                                                    f'{self.ref_varname}']
+                                                
+                                                # Calculate area weights (cosine of latitude)
+                                                area_weights = np.cos(np.deg2rad(ds.lat))
+                                                
+                                                # Calculate absolute flux weights
+                                                flux_weights = np.abs(o.mean('time'))
+                                                
+                                                # Combine area and flux weights
+                                                combined_weights = area_weights * flux_weights
+                                                
+                                                # Normalize weights to sum to 1
+                                                normalized_weights = combined_weights / combined_weights.sum()
+                                                
+                                                # Calculate weighted mean
+                                                mean_value = ds1[score].weighted(normalized_weights).mean(skipna=True).values
+                                            else:
+                                                mean_value = ds1[score].mean(skipna=True).values                                            
+                                            
+                                            #mean_value = ds1[score].mean(skipna=True).values
                                             mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
                                             output_file.write(f"{mean_value_str}\t")
                                         output_file.write(f"{overall_mean_str}\t")  # Write overall mean
