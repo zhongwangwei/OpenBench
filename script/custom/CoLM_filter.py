@@ -311,7 +311,6 @@ def filter_CoLM(info,ds):   #update info as well
 
    if info.item == "Urban_Anthropogenic_Heat_Flux":
       try:
-         #f_fhac+f_fach+f_fhah+f_fvehc+f_fmeta+f_fwst
          ds['Urban_Anthropogenic_Heat_Flux']=ds['f_fhac']+ds['f_fach']+ds['f_fhah']+ds['f_fvehc']+ds['f_fmeta']+ds['f_fwst']
          info.sim_varname=['Urban_Anthropogenic_Heat_Flux']
          info.sim_varunit='W m-2'
@@ -319,3 +318,16 @@ def filter_CoLM(info,ds):   #update info as well
          print(f"Urban Anthropogenic Heat Flux calculation processing ERROR: {e}")
          return info, None
       return info, ds['Urban_Anthropogenic_Heat_Flux']
+
+   if info.item == "Terrestrial_Water_Storage_Change":
+      try:
+         TWS=ds['f_wat']+ds['f_wa']+ds['f_wdsrf'] #+ds['f_wetwat']
+         # Initialize TWSC with same shape as TWS but filled with NaN values
+         ds['Terrestrial_Water_Storage_Change'] = TWS.copy()
+         ds['Terrestrial_Water_Storage_Change'][0,:,:] = np.nan
+         # Calculate TWSC as difference between consecutive time steps
+         ds['Terrestrial_Water_Storage_Change'][1:,:,:] = TWS[1:,:,:] - TWS[:-1,:,:]
+         info.sim_varname=['Terrestrial_Water_Storage_Change']
+         info.sim_varunit='mm'
+      except:
+         print('Terrestrial Water Storage Change calculation processing ERROR!!!')

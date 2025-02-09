@@ -49,8 +49,7 @@
   Water_Storage_In_Aquifer_ref_source                 = 
   Depth_Of_Surface_Water_ref_source                   = 
   Groundwater_Recharge_Rate_ref_source                =
-  Terrestrial_Water_Storage_Anomaly_ref_source        = GRACE-REC          # Grid: GRACE-REC,GRACE-DeAs, ILAMB_monthly    
-
+  Terrestrial_Water_Storage_Change_ref_source         = GRiCE         # Grid: GRACE-REC,GRACE-DeAs, ILAMB_monthly, GRiCE  
   #*******************      Human Activity    **********************
   ###Crop
   Crop_Yield_Corn_ref_source                = CropYield_GDHY             # Grid: CropYield_GDHY, CropYield_SPAM
@@ -144,7 +143,8 @@ SMCI                       = ./nml/Ref_variables_defination/Hydrology/SMCI.nml
 
 snowex23                   = 
 GRACE-REC                  = ./nml/Ref_variables_defination/Hydrology/GRACE-REC.nml
-GRACE-SeDA                  = ./nml/Ref_variables_defination/Hydrology/GRACE-SeDA.nml
+GRACE-SeDA                 = ./nml/Ref_variables_defination/Hydrology/GRACE-SeDA.nml
+GRiCE                      = ./nml/Ref_variables_defination/Hydrology/GRACE-GRiCE.nml
 
 #Crop
 CropYield_GDHY             = ./nml/Ref_variables_defination/Crop/CropYield_GDHY.nml
