@@ -51,6 +51,74 @@ class Evaluation_grid(metrics, scores):
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
         pb_da.to_netcdf(f'{self.casedir}/output/scores/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
 
+    def process_unit(self,ref_unit,sim_unit,metric):
+        all_metrics_units = {
+            'percent_bias': '%',  # Percent Bias
+            'absolute_percent_bias': '%',  # Absolute Percent Bias
+            'bias': 'Same as input data',  # Bias
+            'mean_absolute_error': 'Same as input data',  # Mean Absolute Error
+            'RMSE': 'Same as input data',  # Root Mean Squared Error
+            'MSE': 'Square of input data unit',  # Mean Squared Error
+            'ubRMSE': 'Same as input data',  # Unbiased Root Mean Squared Error
+            'CRMSD': 'Same as input data',  # Centered Root Mean Square Difference
+            'nrmse': 'Unitless',  # Normalized Root Mean Square Error
+            'L': 'Unitless',  # Likelihood
+            'correlation': 'Unitless',  # correlation coefficient
+            'correlation_R2': 'Unitless',  # correlation coefficient R2
+            'NSE': 'Unitless',  # Nash Sutcliffe efficiency coefficient
+            'LNSE': 'Unitless',  # natural logarithm of NSE coefficient
+            'KGE': 'Unitless',  # Kling-Gupta Efficiency
+            'KGESS': 'Unitless',  # Normalized Kling-Gupta Efficiency
+            'kappa_coeff': 'Unitless',  # Kappa coefficient
+            'rv': 'Unitless',  # Relative variability (amplitude ratio)
+            'ubNSE': 'Unitless',  # Unbiased Nash Sutcliffe efficiency coefficient
+            'ubKGE': 'Unitless',  # Unbiased Kling-Gupta Efficiency
+            'ubcorrelation': 'Unitless',  # Unbiased correlation
+            'ubcorrelation_R2': 'Unitless',  # correlation coefficient R2
+            'pc_max': '%',  # the bias of the maximum value
+            'pc_min': '%',  # the bias of the minimum value
+            'pc_ampli': '%',  # the bias of the amplitude value
+            'rSD': 'Unitless',  # Ratio of standard deviations
+            'PBIAS_HF': '%',  # Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
+            'PBIAS_LF': '%',  # Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
+            'SMPI': 'Unitless',  # https://docs.esmvaltool.org/en/latest/recipes/recipe_smpi.html
+            'ggof': 'Unitless',  # Graphical Goodness of Fit
+            'gof': 'Unitless',  # Numerical Goodness-of-fit measures
+            'KGEkm': 'Unitless',  # Kling-Gupta Efficiency with knowable-moments
+            'KGElf': 'Unitless',  # Kling-Gupta Efficiency for low values
+            'KGEnp': 'Unitless',  # Non-parametric version of the Kling-Gupta Efficiency
+            'md': 'Unitless',  # Modified Index of Agreement
+            'mNSE': 'Unitless',  # Modified Nash-Sutcliffe efficiency
+            'pbiasfdc': '%',  # Percent Bias in the Slope of the Midsegment of the Flow Duration Curve
+            'pfactor': '%',  # the percent of observations that are within the given uncertainty bounds.
+            'rd': 'Unitless',  # Relative Index of Agreement
+            'rfactor': 'Unitless',
+            # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
+            'rNSE': 'Unitless',  # Relative Nash-Sutcliffe efficiency
+            'rSpearman': 'Unitless',  # Spearman’s rank correlation coefficient
+            'rsr': 'Unitless',  # Ratio of RMSE to the standard deviation of the observations
+            'sKGE': 'Unitless',  # Split Kling-Gupta Efficiency
+            'ssq': 'Square of input data unit',  # Sum of the Squared Residuals
+            'valindex': 'Unitless',  # Valid Indexes
+            've': 'Unitless',  # Volumetric Efficiency
+            'wNSE': 'Unitless',  # Weighted Nash-Sutcliffe efficiency
+            'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
+            'index_agreement': 'Unitless',  # Index of agreement
+        }
+
+        unit = all_metrics_units[metric]
+        if unit == 'Unitless':
+            return '[Unitless]'
+        elif unit == '%':
+            return '[%]'
+        elif unit == 'Same as input data':
+            return f'[{ref_unit}]'
+        elif unit == 'Square of input data unit':
+            return rf'[${ref_unit}^{{2}}$]'
+        else:
+            print('Warning: Missing metric unit!')
+            return '[None]'
+
     def make_Evaluation(self, **kwargs):
         o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[
             f'{self.ref_varname}']
@@ -68,7 +136,7 @@ class Evaluation_grid(metrics, scores):
                 print(f'calculating metric: {metric}')
                 self.process_metric(metric, s, o)
             else:
-                print('No such metric')
+                print(f'No such metric: {metric}')
                 sys.exit(1)
 
         for score in self.scores:
@@ -76,7 +144,7 @@ class Evaluation_grid(metrics, scores):
                 print(f'calculating score: {score}')
                 self.process_score(score, s, o)
             else:
-                print('No such score')
+                print(f'No such score: {score}')
                 sys.exit(1)
 
         print("\033[1;32m" + "=" * 80 + "\033[0m")
@@ -114,7 +182,7 @@ class Evaluation_grid(metrics, scores):
         for metric in self.metrics:
             option = self.fig_nml['make_geo_plot_index']
             print(f'plotting metric: {metric}')
-            option['colorbar_label'] = metric.replace('_', ' ')
+            option['colorbar_label'] = metric.replace('_', ' ') +' '+ self.process_unit(self.ref_varunit,self.sim_varunit, metric)
             # Set default extend option if not specified
             if 'extend' not in option:
                 option['extend'] = 'both'  # Default value
@@ -554,6 +622,74 @@ class Evaluation_stn(metrics, scores):
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
 
+    def process_unit(self,ref_unit,sim_unit,metric):
+        all_metrics_units = {
+            'percent_bias': '%',  # Percent Bias
+            'absolute_percent_bias': '%',  # Absolute Percent Bias
+            'bias': 'Same as input data',  # Bias
+            'mean_absolute_error': 'Same as input data',  # Mean Absolute Error
+            'RMSE': 'Same as input data',  # Root Mean Squared Error
+            'MSE': 'Square of input data unit',  # Mean Squared Error
+            'ubRMSE': 'Same as input data',  # Unbiased Root Mean Squared Error
+            'CRMSD': 'Same as input data',  # Centered Root Mean Square Difference
+            'nrmse': 'Unitless',  # Normalized Root Mean Square Error
+            'L': 'Unitless',  # Likelihood
+            'correlation': 'Unitless',  # correlation coefficient
+            'correlation_R2': 'Unitless',  # correlation coefficient R2
+            'NSE': 'Unitless',  # Nash Sutcliffe efficiency coefficient
+            'LNSE': 'Unitless',  # natural logarithm of NSE coefficient
+            'KGE': 'Unitless',  # Kling-Gupta Efficiency
+            'KGESS': 'Unitless',  # Normalized Kling-Gupta Efficiency
+            'kappa_coeff': 'Unitless',  # Kappa coefficient
+            'rv': 'Unitless',  # Relative variability (amplitude ratio)
+            'ubNSE': 'Unitless',  # Unbiased Nash Sutcliffe efficiency coefficient
+            'ubKGE': 'Unitless',  # Unbiased Kling-Gupta Efficiency
+            'ubcorrelation': 'Unitless',  # Unbiased correlation
+            'ubcorrelation_R2': 'Unitless',  # correlation coefficient R2
+            'pc_max': '%',  # the bias of the maximum value
+            'pc_min': '%',  # the bias of the minimum value
+            'pc_ampli': '%',  # the bias of the amplitude value
+            'rSD': 'Unitless',  # Ratio of standard deviations
+            'PBIAS_HF': '%',  # Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
+            'PBIAS_LF': '%',  # Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
+            'SMPI': 'Unitless',  # https://docs.esmvaltool.org/en/latest/recipes/recipe_smpi.html
+            'ggof': 'Unitless',  # Graphical Goodness of Fit
+            'gof': 'Unitless',  # Numerical Goodness-of-fit measures
+            'KGEkm': 'Unitless',  # Kling-Gupta Efficiency with knowable-moments
+            'KGElf': 'Unitless',  # Kling-Gupta Efficiency for low values
+            'KGEnp': 'Unitless',  # Non-parametric version of the Kling-Gupta Efficiency
+            'md': 'Unitless',  # Modified Index of Agreement
+            'mNSE': 'Unitless',  # Modified Nash-Sutcliffe efficiency
+            'pbiasfdc': '%',  # Percent Bias in the Slope of the Midsegment of the Flow Duration Curve
+            'pfactor': '%',  # the percent of observations that are within the given uncertainty bounds.
+            'rd': 'Unitless',  # Relative Index of Agreement
+            'rfactor': 'Unitless',
+            # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
+            'rNSE': 'Unitless',  # Relative Nash-Sutcliffe efficiency
+            'rSpearman': 'Unitless',  # Spearman’s rank correlation coefficient
+            'rsr': 'Unitless',  # Ratio of RMSE to the standard deviation of the observations
+            'sKGE': 'Unitless',  # Split Kling-Gupta Efficiency
+            'ssq': 'Square of input data unit',  # Sum of the Squared Residuals
+            'valindex': 'Unitless',  # Valid Indexes
+            've': 'Unitless',  # Volumetric Efficiency
+            'wNSE': 'Unitless',  # Weighted Nash-Sutcliffe efficiency
+            'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
+            'index_agreement': 'Unitless',  # Index of agreement
+        }
+
+        unit = all_metrics_units[metric]
+        if unit == 'Unitless':
+            return '[Unitless]'
+        elif unit == '%':
+            return '[%]'
+        elif unit == 'Same as input data':
+            return f'[{ref_unit}]'
+        elif unit == 'Square of input data unit':
+            return rf'[${ref_unit}^{{2}}$]'
+        else:
+            print('Warning: Missing metric unit!')
+            return '[None]'
+
     def make_plot_index(self):
 
         def get_ticks(vmin, vmax):
@@ -591,7 +727,7 @@ class Evaluation_stn(metrics, scores):
                 self.fig_nml['make_geo_plot_index']['extend'] = 'both'  # Default value
             option['extend'] = self.fig_nml['make_geo_plot_index']['extend']
             print(f'plotting metric: {metric}')
-            option['colorbar_label'] = metric.replace('_', ' ')
+            option['colorbar_label'] = metric.replace('_', ' ')+' ' + self.process_unit(self.ref_varunit,self.sim_varunit, metric)
             min_metric = -999.0
             max_metric = 100000.0
             # print(df['%s'%(metric)])
@@ -928,7 +1064,8 @@ class LC_groupby(metrics, scores):
                     for i, sim_source in enumerate(sim_sources):
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-
+                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             print(f"warning: station data is not supported for IGBP class comparison")
                             pass
@@ -1016,8 +1153,8 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
-                                                f'{self.ref_varname}']
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                f'{ref_varname}']
                                             
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -1032,7 +1169,7 @@ class LC_groupby(metrics, scores):
                                             normalized_weights = combined_weights / combined_weights.sum()
                                             
                                             # Calculate weighted mean
-                                            overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                            overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         else:
                                             overall_mean = ds[score].mean(skipna=True).values
 
@@ -1051,8 +1188,8 @@ class LC_groupby(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
-                                                    f'{self.ref_varname}']
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                    f'{ref_varname}']
                                                 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
@@ -1067,7 +1204,7 @@ class LC_groupby(metrics, scores):
                                                 normalized_weights = combined_weights / combined_weights.sum()
                                                 
                                                 # Calculate weighted mean
-                                                mean_value = ds1[score].weighted(normalized_weights).mean(skipna=True).values
+                                                mean_value = ds1[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                             else:
                                                 mean_value = ds1[score].mean(skipna=True).values                                            
                                             
@@ -1194,6 +1331,8 @@ class LC_groupby(metrics, scores):
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             print(f"warning: station data is not supported for PFT class comparison")
                         else:
@@ -1284,8 +1423,8 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
-                                                f'{self.ref_varname}']
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                f'{ref_varname}']
                                             
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -1300,7 +1439,7 @@ class LC_groupby(metrics, scores):
                                             normalized_weights = combined_weights / combined_weights.sum()
                                             
                                             # Calculate weighted mean
-                                            overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                            overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         else:
                                             overall_mean = ds[score].mean(skipna=True).values
 
@@ -1317,8 +1456,8 @@ class LC_groupby(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
-                                                    f'{self.ref_varname}']
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                    f'{ref_varname}']
                                                 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
@@ -1333,7 +1472,7 @@ class LC_groupby(metrics, scores):
                                                 normalized_weights = combined_weights / combined_weights.sum()
                                                 
                                                 # Calculate weighted mean
-                                                mean_value = ds1[score].weighted(normalized_weights).mean(skipna=True).values
+                                                mean_value = ds1[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                             else:
                                                 mean_value = ds1[score].mean(skipna=True).values                                            
                                             
