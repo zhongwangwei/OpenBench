@@ -483,6 +483,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 for evaluation_item in evaluation_items:
                     sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                     ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
                     # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str): sim_sources = [sim_sources]
                     if isinstance(ref_sources, str): ref_sources = [ref_sources]
@@ -498,6 +499,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         for sim_source in sim_sources:
                             ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                             sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
 
                             if ref_data_type == 'stn' or sim_data_type == 'stn':
                                 file = f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
@@ -512,8 +515,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                 elif self.weight.lower() == 'mass':
                                     # Get reference data for flux weighting
-                                    o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{self.ref_varname}.nc')[
-                                        f'{self.ref_varname}']
+                                    o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                        f'{ref_varname}']
                                     
                                     # Calculate area weights (cosine of latitude)
                                     area_weights = np.cos(np.deg2rad(ds.lat))
@@ -528,7 +531,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     normalized_weights = combined_weights / combined_weights.sum()
                                     
                                     # Calculate weighted mean
-                                    overall_mean = ds[score].weighted(normalized_weights).mean(skipna=True).values
+                                    overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
                                     overall_mean = ds[score].mean(skipna=True).values
 
@@ -667,13 +670,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             RMS_result = self.CRMSD(simfile, reffile)
 
                             if self.weight.lower() == 'area':
-                                weights = np.cos(np.deg2rad(ds.lat))
+                                weights = np.cos(np.deg2rad(reffile.lat))
                                 std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(skipna=True).values
                                 cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(weights).mean(skipna=True).values
                                 RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(weights).mean(skipna=True).values
                             elif self.weight.lower() == 'mass':
                                 # Calculate area weights (cosine of latitude)
-                                area_weights = np.cos(np.deg2rad(ds.lat))     
+                                area_weights = np.cos(np.deg2rad(reffile.lat))
                                 # Calculate absolute flux weights
                                 flux_weights = np.abs(reffile.mean('time'))
                                 # Combine area and flux weights
@@ -681,9 +684,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(normalized_weights).mean(skipna=True).values
-                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights).mean(skipna=True).values
-                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights).mean(skipna=True).values
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                             else:
                                 std_sim = std_sim_result.where(np.isfinite(std_sim_result)).mean(skipna=True).values
                                 cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
@@ -712,7 +715,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(normalized_weights).mean(skipna=True).values
+                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                             else:
                                 std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
                         stds[0] = std_ref
@@ -854,7 +857,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(normalized_weights).mean(skipna=True).values
+                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                             else:
                                 bias_sim = bias_sim_result.mean(skipna=True).values
 
@@ -1045,7 +1048,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     # Normalize weights to sum to 1
                                     normalized_weights = combined_weights / combined_weights.sum()
                                     # Calculate weighted mean
-                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(normalized_weights).mean(skipna=True).values
+                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
                                     kk = ds[score].mean(skipna=True).values
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
@@ -1124,7 +1127,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 # Normalize weights to sum to 1
                 normalized_weights = combined_weights / combined_weights.sum()
                 # Calculate weighted mean
-                pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights).mean(skipna=True)
+                pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True)
             else:
                 pb = pb.mean(skipna=True)
             return pb
