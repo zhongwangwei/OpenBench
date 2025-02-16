@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 
 # 定义根目录
-root_dir = "/share/home/dq013/zhwei/OpenBench/20250120/data/simulation/single_point_test"  # 替换为你的实际路径
+root_dir = "/share/home/dq013/zhwei/OpenBench/20250120/data/simulation/single_point_test"  # 替换为实际路径
 output_dir = "./output"  # 输出 CSV 文件的目录
 
 # 创建输出目录（如果不存在）

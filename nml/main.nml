@@ -21,7 +21,7 @@
   comparison        = False  #
   statistics        = False
   debug_mode        = True
-
+  unified_mask      = True
 /
 
 &evaluation_items

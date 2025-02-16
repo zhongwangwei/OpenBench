@@ -16,13 +16,15 @@ import os
 import shutil
 import sys
 import time
-
+import glob
+import xarray as xr
+import numpy as np
 from Mod_Comparison import ComparisonProcessing
 from Mod_DatasetProcessing import DatasetProcessing
 from Mod_Evaluation import Evaluation_grid, Evaluation_stn, LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
-
+from Mod_Preprocessing import check_required_nml, run_files_check
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
@@ -86,9 +88,6 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
     """Run the evaluation process for each item."""
     for evaluation_item in evaluation_items:
         print(f"Start running {evaluation_item} evaluation...")
-        if evaluation_item not in sim_nml:
-            print(f"Error: {evaluation_item} is not in the simulation namelist!")
-            exit(1)
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
@@ -97,32 +96,39 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
         # Rearrange reference sources to put station data first
         ref_sources = sorted(ref_sources, key=lambda x: 0 if ref_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
-        print(f'ref_sources: {ref_sources}')
         # Rearrange simulation sources to put station data first
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
-        print(f'sim_sources: {sim_sources}')
 
-
+        for ref_source in ref_sources:
+            onetimeref=True
+            for sim_source in sim_sources:
+                process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
+                onetimeref=False
 
         for ref_source in ref_sources:
             onetimeref=True
             for sim_source in sim_sources:
                 process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
                 onetimeref=False
-
-    LC = LC_groupby(main_nl, score_vars, metric_vars)
-    basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
-    LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+ 
+ 
+    main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')   
+    main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')   
+    if main_nl['general']['IGBP_groupby']:
+        LC = LC_groupby(main_nl, score_vars, metric_vars)
+        basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+        LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                          fig_nml['IGBP_groupby'])
-    LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+    if main_nl['general']['PFT_groupby']:
+        LC = LC_groupby(main_nl, score_vars, metric_vars)
+        basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+        LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                         fig_nml['PFT_groupby'])
 
-def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
-    """Process a single evaluation for given sources."""
+def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
     print(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
-    
     # Add ref_source and sim_source to general_info
     general_info['ref_source'] = ref_source
     general_info['sim_source'] = sim_source
@@ -141,7 +147,27 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     shutil.rmtree(scratch_dir, ignore_errors=True)
     print(f"Re-creating output directory: {scratch_dir}")
     os.makedirs(scratch_dir)
-    
+    if main_nl['general']['unified_mask']:
+        if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
+            pass
+        else:
+            # Mask the observation data with simulation data to ensure consistent coverage
+            print("Mask the observation data with all simulation datasets to ensure consistent coverage")
+            o = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+                f'{general_info["ref_varname"]}']
+            s = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
+                f'{general_info["sim_varname"]}']
+            s['time'] = o['time'] 
+            mask1 = np.isnan(s) | np.isnan(o)
+            o.values[mask1] = np.nan        
+            o.to_netcdf(f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')
+        
+
+
+def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
+    """Process a single evaluation for given sources."""
+    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
+    general_info = general_info_object.to_dict()
     # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
         evaluater = Evaluation_stn(general_info,fig_nml)
@@ -170,7 +196,6 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
         print(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
         print("\033[1;32m" + "=" * 80 + "\033[0m")
 
-
 def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     """Run statistical analysis for each statistic variable."""
     if not statistic_vars:
@@ -196,6 +221,7 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
             exit(1)
     print("Statistical analysis completed.")
 
+
 def main():
     """Main function to orchestrate the evaluation process."""
     print_welcome_message()
@@ -217,10 +243,16 @@ def main():
     comparison_vars = nl.select_variables(main_nl['comparisons']).keys()
     statistic_vars = nl.select_variables(main_nl['statistics']).keys()
     
+    # Check required files before proceeding
+    check_required_nml(main_nl, sim_nml, ref_nml, evaluation_items)
+
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
 
     UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
+
+    run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml)
+    
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
         start_time = time.time()

@@ -120,6 +120,8 @@ class NamelistReader:
         return namelist
 
 
+
+
 class UpdateNamelist(NamelistReader):
     def __init__(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], ref_nml: Dict[str, Any], evaluation_items: List[str]):
         # Initialize with general settings
@@ -140,7 +142,7 @@ class UpdateNamelist(NamelistReader):
         # Process reference sources
         for ref_source in ref_sources:
             self._process_ref_source(evaluation_item, ref_source, ref_nml)
-
+        
         # Process simulation sources
         for sim_source in sim_sources:
             self._process_sim_source(evaluation_item, sim_source, sim_nml)
@@ -193,12 +195,24 @@ class UpdateNamelist(NamelistReader):
         if sim_nml[evaluation_item][f'{sim_source}_data_type'] == 'stn':
             self._set_attribute(sim_nml, evaluation_item, sim_source, 'fulllist', tmp, 'sim')
 
-    def _read_source_namelist(self, nml: Dict[str, Any], evaluation_item: str, source: str, source_type: str):
-        """Read the namelist for a given source."""
+    def _read_source_namelist(self, nml: Dict[str, Any], evaluation_item: str, source: str, source_type: str) -> Dict[str, Any]:
+        """Read the namelist for a given source with file existence check."""
         try:
-            return self.read_namelist(nml[evaluation_item][f"{source}"])
+            file_path = nml[evaluation_item][f"{source}"]
         except:
-            return self.read_namelist(nml['def_nml'][f"{source}"])
+            try:
+                file_path = nml['def_nml'][f"{source}"]
+            except KeyError:
+                raise KeyError(f"Could not find namelist path for {source} in {evaluation_item} or def_nml")
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Namelist file not found: {file_path}")
+        if not os.path.isfile(file_path):
+            raise IsADirectoryError(f"Expected file but found directory: {file_path}")
+        if not os.access(file_path, os.R_OK):
+            raise PermissionError(f"No read permission for file: {file_path}")
+
+        return self.read_namelist(file_path)
 
     def _set_attribute(self, nml: Dict[str, Any], evaluation_item: str, source: str, attr: str, tmp: Dict[str, Any],
                        source_type: str):
@@ -219,21 +233,43 @@ class UpdateNamelist(NamelistReader):
                     nml[evaluation_item][key] = None  # Set to None if missing
 
     def _set_dir_attribute(self, nml: Dict[str, Any], evaluation_item: str, source: str, tmp: Dict[str, Any], source_type: str):
-        """Set the directory attribute for a source."""
+        """Set the directory attribute for a source with directory existence check."""
         try:
             root_dir = tmp['general']['root_dir']
-            sub_dir = tmp[evaluation_item]['sub_dir']
-            nml[evaluation_item][f'{source}_dir'] = os.path.join(root_dir, sub_dir)
-        except KeyError:
+            if not os.path.exists(root_dir):
+                raise FileNotFoundError(f"Root directory not found: {root_dir}")
+            if not os.path.isdir(root_dir):
+                raise NotADirectoryError(f"Expected directory but found file: {root_dir}")
+            
             try:
-                nml[evaluation_item][f'{source}_dir'] = tmp['general']['root_dir']
+                sub_dir = tmp[evaluation_item]['sub_dir']
+                full_dir = os.path.join(root_dir, sub_dir)
             except KeyError:
-                print("dir is missing in namelist")
+                full_dir = root_dir
+
+            if not os.path.exists(full_dir):
+                raise FileNotFoundError(f"Data directory not found: {full_dir}")
+            if not os.path.isdir(full_dir):
+                raise NotADirectoryError(f"Expected directory but found file: {full_dir}")
+            if not os.access(full_dir, os.R_OK):
+                raise PermissionError(f"No read permission for directory: {full_dir}")
+
+            nml[evaluation_item][f'{source}_dir'] = full_dir
+        except KeyError:
+            print("dir is missing in namelist")
 
     def _set_model_attribute(self, nml: Dict[str, Any], evaluation_item: str, source: str, attr: str, tmp: Dict[str, Any]):
-        """Set model-related attributes for a simulation source."""
+        """Set model-related attributes for a simulation source with file existence check."""
         try:
-            model_nml = self.read_namelist(tmp['general']['model_namelist'])
+            model_namelist_path = tmp['general']['model_namelist']
+            if not os.path.exists(model_namelist_path):
+                raise FileNotFoundError(f"Model namelist file not found: {model_namelist_path}")
+            if not os.path.isfile(model_namelist_path):
+                raise IsADirectoryError(f"Expected file but found directory: {model_namelist_path}")
+            if not os.access(model_namelist_path, os.R_OK):
+                raise PermissionError(f"No read permission for file: {model_namelist_path}")
+
+            model_nml = self.read_namelist(model_namelist_path)
             try:
                 nml[evaluation_item][f'{source}_{attr}'] = model_nml['general'][attr]
             except KeyError:

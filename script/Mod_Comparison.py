@@ -27,10 +27,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.general_config = self.main_nml['general']
         # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        # self.min_lon        = self.main_nml['general']['min_lon']
-        # self.max_lon        = self.main_nml['general']['max_lon']
-        # self.min_lat        = self.main_nml['general']['min_lat']
-        # self.max_lat        = self.main_nml['general']['max_lat']
+        
+        # Add default weight attribute
+        self.weight = self.main_nml['general'].get('weight', 'none')  # Default to 'none' if not specified
+        
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
