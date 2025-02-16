@@ -95,7 +95,7 @@ class Evaluation_grid(metrics, scores):
             'rfactor': 'Unitless',
             # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
             'rNSE': 'Unitless',  # Relative Nash-Sutcliffe efficiency
-            'rSpearman': 'Unitless',  # Spearman’s rank correlation coefficient
+            'rSpearman': 'Unitless',  # Spearman's rank correlation coefficient
             'rsr': 'Unitless',  # Ratio of RMSE to the standard deviation of the observations
             'sKGE': 'Unitless',  # Split Kling-Gupta Efficiency
             'ssq': 'Square of input data unit',  # Sum of the Squared Residuals
@@ -119,13 +119,14 @@ class Evaluation_grid(metrics, scores):
             print('Warning: Missing metric unit!')
             return '[None]'
 
+
     def make_Evaluation(self, **kwargs):
         o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[
             f'{self.ref_varname}']
         s = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')[
             f'{self.sim_varname}']
 
-        s['time'] = o['time']
+        s['time'] = o['time'] 
 
         mask1 = np.isnan(s) | np.isnan(o)
         s.values[mask1] = np.nan
@@ -666,7 +667,7 @@ class Evaluation_stn(metrics, scores):
             'rfactor': 'Unitless',
             # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
             'rNSE': 'Unitless',  # Relative Nash-Sutcliffe efficiency
-            'rSpearman': 'Unitless',  # Spearman’s rank correlation coefficient
+            'rSpearman': 'Unitless',  # Spearman's rank correlation coefficient
             'rsr': 'Unitless',  # Ratio of RMSE to the standard deviation of the observations
             'sKGE': 'Unitless',  # Split Kling-Gupta Efficiency
             'ssq': 'Square of input data unit',  # Sum of the Squared Residuals
@@ -963,6 +964,8 @@ class LC_groupby(metrics, scores):
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
         self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
+        # Set default weight method to 'none'
+        self.weight = self.main_nml['general'].get('weight', 'none')
         # this should be done in read_namelist
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)

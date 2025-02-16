@@ -158,8 +158,6 @@ class BaseDatasetProcessing:
                 except:   
                     return ds.squeeze() 
 
-
-
     def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
         # Ensure the dataset has a proper time index
