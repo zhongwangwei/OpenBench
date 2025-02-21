@@ -131,8 +131,8 @@
   Diurnal_Max_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND 
   Diurnal_Min_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND
   Diurnal_Temperature_Range_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,
-  Surface_Downward_SW_Radiation_ref_source            =  CERES_EBAF_Ed4.2        # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_3
-  Surface_Downward_LW_Radiation_ref_source            =  CERES_EBAF_Ed4.2        # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR,CARE,CLARA_3
+  Surface_Downward_SW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_3
+  Surface_Downward_LW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR,CARE,CLARA_3
   Surface_Relative_Humidity_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND
   Surface_Specific_Humidity_ref_source                =  ERA5LAND                # Grid: MSWX,ERA5LAND,SMAPL4
   Precipitation_ref_source                            =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND, MSWEP,GPCPv3.2_monthly,GPCPv3.2_daily,CN05.1
