@@ -15,7 +15,7 @@ varunit           =  w m-2
 prefix            =  SDLmm
 suffix            =   
 syear             =  1979
-eyear             =  2020
+eyear             =  2024
 /
 &Surface_Downward_SW_Radiation
 sub_dir           =  surface_downwelling_shortwave_flux/processed
