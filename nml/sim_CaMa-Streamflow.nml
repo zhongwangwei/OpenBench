@@ -1,6 +1,0 @@
-&general
-    Streamflow_sim_source                   = CaMa_Streamflow
-    Inundation_Fraction_sim_source          = CaMa_Streamflow
-&def_nml
-CaMa_Streamflow                      = ./nml/user/CaMa_Streamflow/CaMa_Streamflow.nml
-/
