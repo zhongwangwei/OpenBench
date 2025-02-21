@@ -1,8 +1,0 @@
-&general
-    Urban_Anthropogenic_Heat_Flux_sim_source     = CoLM2024Urban
-/
-
-&def_nml
-CoLM2024Urban=./nml/user/Urban/CoLM2024Urban.nml
-/
-

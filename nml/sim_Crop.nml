@@ -1,9 +1,0 @@
-&general
-    Crop_Yield_Corn_sim_source     = CoLM2024
-    Crop_Yield_Rice_sim_source     = CoLM2024
-/
-
-&def_nml
-CoLM2024=./nml/user/Crop/US_crop.nml
-/
-

@@ -1,9 +1,0 @@
-&general
-    Gross_Primary_Productivity_sim_source     = CoLM2024
-    Evapotranspiration_sim_source             = CoLM2024
-/
-
-&def_nml
-CoLM2024=./nml/user/GPP/CoLM2024.nml
-/
-
