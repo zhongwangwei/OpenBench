@@ -69,6 +69,8 @@ The system generates various outputs including:
 - Zhongwang Wei (zhongwang007@gmail.com)
 - PhD student: Qingchen Xu  
 - MS student: Fan Bai
+- PhD student: Zixin Wei
+
 
 ## Version
 
