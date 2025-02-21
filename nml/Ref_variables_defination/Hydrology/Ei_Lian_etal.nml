@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./data/reference/grid_ref/grid_ref/Water/Ei_Lian_etal
+   root_dir          =  ./data/reference/grid_ref/Water/Ei_Lian_etal
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year
