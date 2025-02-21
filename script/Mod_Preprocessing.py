@@ -278,13 +278,13 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 print(f"Error: The simulation file {file_path} does not exist!")
                 sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'year':
-            for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
+            for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}{general_info["sim_suffix"]}.nc')
                 if not os.path.exists(file_path):
                     print(f"Error: The simulation file {file_path} does not exist!")
                     sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'month':
-            for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
+            for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}*{general_info["sim_suffix"]}.nc')
                 file_count = len(glob.glob(file_path))
                 if file_count != 12:
