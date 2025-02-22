@@ -204,23 +204,6 @@ def filter_CoLM(info,ds):   #update info as well
          return info, None
       return info, ds['Precipitation']
       
-   if info.item == "Surface_Downward_SW_Radiation":
-      try:
-         ds['Surface_Downward_SW_Radiation']=ds['f_xy_solarin']
-         info.sim_varname=['Surface_Downward_SW_Radiation']
-         info.sim_varunit='W m-2'
-      except:
-         print('Surface Downward SW Radiation calculation processing ERROR!!!')
-      return info, ds['Surface_Downward_SW_Radiation']
-
-   if info.item == "Surface_Downward_LW_Radiation":
-      try:
-         ds['Surface_Downward_LW_Radiation']=ds['f_xy_frl']
-         info.sim_varname=['Surface_Downward_LW_Radiation']
-         info.sim_varunit='W m-2'
-      except:
-         print('Surface Downward LW Radiation calculation processing ERROR!!!')
-      return info, ds['Surface_Downward_LW_Radiation']
 
    if info.item == "Surface_Net_SW_Radiation":
       try:
