@@ -127,6 +127,14 @@ class Evaluation_grid(metrics, scores):
             f'{self.sim_varname}']
 
         s['time'] = o['time'] 
+        if self.item == 'Terrestrial_Water_Storage_Change':
+            # Calculate time difference while preserving coordinates
+            s_values = s.values
+            s_values[1:,:,:] = s_values[1:,:,:] - s_values[:-1,:,:]
+            s_values[0,:,:] = np.nan
+            s.values = s_values
+            # Save s to original file
+            s.to_netcdf(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
 
         mask1 = np.isnan(s) | np.isnan(o)
         s.values[mask1] = np.nan
@@ -452,9 +460,9 @@ class Evaluation_stn(metrics, scores):
         print("=======================================")
         print(" ")
         print(" ")
-        print(f"send {self.ref_varname} evaluation to {self.ref_varname}_{self.sim_varname}_metric.csv'")
+        print(f"send {self.ref_varname} evaluation to {self.ref_varname}_{self.sim_varname}_metrics.csv'")
         station_list.to_csv(
-            f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metric.csv',
+            f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metrics.csv',
             index=False)
         station_list.to_csv(
             f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',
