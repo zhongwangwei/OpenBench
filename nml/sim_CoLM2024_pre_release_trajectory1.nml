@@ -20,7 +20,7 @@
     Surface_Net_SW_Radiation_sim_source       = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case         
     Surface_Downward_SW_Radiation_sim_source  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
     Surface_Downward_LW_Radiation_sim_source  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
-
+    Terrestrial_Water_Storage_Change_sim_source = 12_case #,02_case,03_case #,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
 /
 
 &def_nml

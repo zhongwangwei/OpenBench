@@ -17,6 +17,7 @@
     Single_Model_Performance_Index_source  = ./nml/fignml/Single_Model_Performance_Index.nml
     Relative_Score_source                  = ./nml/fignml/Relative_Score.nml
     Ridgeline_Plot_source                  = ./nml/fignml/Ridgeline_Plot.nml
+    Diff_Plot_source                       = ./nml/fignml/Diff_Plot.nml
 /
 
 &statistic_nml

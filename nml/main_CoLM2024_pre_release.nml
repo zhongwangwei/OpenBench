@@ -52,7 +52,7 @@
   Water_Evaporation    =False
   Soil_Evaporation     =False
   Total_Runoff         =True
-  Terrestrial_Water_Storage_Anomaly=False
+  Terrestrial_Water_Storage_Change=True
 
   ###Snow#### 
   Snow_Water_Equivalent=False
@@ -222,6 +222,7 @@ Portrait_Plot_seasonal          =   False
 Single_Model_Performance_Index  =   False
 Relative_Score                  =   False
 Ridgeline_Plot                  =   True
+Diff_Plot                       =   False     
 /
 
 
