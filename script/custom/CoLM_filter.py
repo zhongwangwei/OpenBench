@@ -280,23 +280,6 @@ def filter_CoLM(info,ds):   #update info as well
          print(f"Surface Albedo calculation processing ERROR: {e}")
          return info, None
       return info, ds['Albedo']
-   if info.item == "Terrestrial_Water_Storage_Change":
-      #f_xxx is the average value, and several variables with ***_inst are instantaneous
-      #need to double check the calculation method
-      try:
-         w1=ds['f_wat'][1:,:,:]+ds['f_wa'][1:,:,:]+ds['f_wdsrf'][1:,:,:]+ds['f_wetwat'][1:,:,:]
-         w0=ds['f_wat'][:-1,:,:]+ds['f_wa'][:-1,:,:]+ds['f_wdsrf'][:-1,:,:]+ds['f_wetwat'][:-1,:,:]
-         tmp=w1-w0
-         #set first time step of Terrestrial_Water_Storage_Change to nan, and then set other time steps to tmp
-         ds['Terrestrial_Water_Storage_Change']=ds['f_wat'].copy()
-         ds['Terrestrial_Water_Storage_Change'][0,:,:]=np.nan
-         ds['Terrestrial_Water_Storage_Change'][1:,:,:]=tmp
-         info.sim_varname=['Terrestrial_Water_Storage_Change']
-         info.sim_varunit='mm'
-      except:
-         print('Terrestrial Water Storage Change calculation processing ERROR!!!')
-         return info, None
-      return info, ds['Terrestrial_Water_Storage_Change']
 
 
    if info.item == "Surface_Wind_Speed":
@@ -320,15 +303,20 @@ def filter_CoLM(info,ds):   #update info as well
          return info, None
       return info, ds['Urban_Anthropogenic_Heat_Flux']
 
-   if info.item == "Terrestrial_Water_Storage_Change":
-      try:
-         TWS=ds['f_wat']+ds['f_wa']+ds['f_wdsrf']+ds['f_wetwat']
-         # Initialize TWSC with same shape as TWS but filled with NaN values
-         ds['Terrestrial_Water_Storage_Change'] = TWS.copy()
-         ds['Terrestrial_Water_Storage_Change'][0,:,:] = np.nan
-         # Calculate TWSC as difference between consecutive time steps
-         ds['Terrestrial_Water_Storage_Change'][1:,:,:] = TWS[1:,:,:] - TWS[:-1,:,:]
-         info.sim_varname=['Terrestrial_Water_Storage_Change']
-         info.sim_varunit='mm'
-      except:
-         print('Terrestrial Water Storage Change calculation processing ERROR!!!')
+    if info.item == "Terrestrial_Water_Storage_Change":
+         try:
+            #if the variable value is nan, set the value to 0
+            ds['f_wat']=ds['f_wat'].fillna(0)
+            ds['f_wa']=ds['f_wa'].fillna(0)
+            ds['f_wdsrf']=ds['f_wdsrf'].fillna(0)
+            ds['f_wetwat']=ds['f_wetwat'].fillna(0)
+            TWS=ds['f_wat']+ds['f_wa']+ds['f_wdsrf']+ds['f_wetwat']
+
+            ds['Terrestrial_Water_Storage_Change'] = TWS.copy()
+
+            info.sim_varname=['Terrestrial_Water_Storage_Change']
+            info.sim_varunit='mm'
+         except:
+            print('Terrestrial Water Storage Change calculation processing ERROR!!!')
+            return info, None
+         return info, ds['Terrestrial_Water_Storage_Change']

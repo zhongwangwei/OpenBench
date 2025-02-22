@@ -10,11 +10,15 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import matplotlib.cm as cm
+import matplotlib.ticker
+
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 from Mod_Statistics import statistics_calculate
 from figlib import *
-
 
 class ComparisonProcessing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
@@ -1791,3 +1795,573 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         'wk': 'W',
         'weekly': 'W',
     }
+
+    def scenarios_Diff_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        """
+        Compare metrics and scores between different simulations:
+        1. Calculate ensemble mean across all simulations
+        2. Calculate anomalies from ensemble mean for each simulation
+        3. Calculate pairwise differences between simulations
+        4. Plot the results
+        Parameters:
+            basedir: base directory path
+            sim_nml: simulation namelist
+            ref_nml: reference namelist 
+            evaluation_items: list of evaluation items
+            scores: list of scores to compare
+            metrics: list of metrics to compare
+            option: additional options
+        """
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Diff_Comparison')
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+            #print(f"Error: Directory {dir_path} does not exist")
+            #print("Please run the evaluation first")
+            #sys.exit(1)
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+            
+            # Convert to lists if needed
+            if isinstance(sim_sources, str): 
+                sim_sources = [sim_sources]
+            if isinstance(ref_sources, str):
+                ref_sources = [ref_sources]
+
+            for ref_source in ref_sources:
+                # Skip if only one simulation source
+                if len(sim_sources) < 2:
+                    continue
+                # Check data types for all simulation sources
+                data_types = []
+                for sim_source in sim_sources:
+                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                    data_types.append(sim_data_type)
+
+                # Check if both 'stn' and grid data exist
+                if 'stn' in data_types and any(dt != 'stn' for dt in data_types):
+                    print(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
+                    print("All simulation sources must be either station data or gridded data")
+                    continue
+
+                
+                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+
+                if ref_data_type == 'stn':
+                    # Process metrics for station data
+                    for metric in metrics:
+                        try:
+                            # Load all station data for this metric
+                            all_station_data = []
+                            for sim_source in sim_sources:
+                                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                file_path = f"{basedir}/output/metrics/stn_{ref_source}_{sim_source}/{evaluation_item}_{ref_varname}_{sim_varname}_metrics.csv"
+                                df = pd.read_csv(file_path, sep=',', header=0)
+                                all_station_data.append(df[metric])
+                            
+                            # Convert to DataFrame for easier handling
+                            station_df = pd.concat(all_station_data, axis=1)
+                            station_df.columns = sim_sources
+                            
+                            # Calculate ensemble mean
+                            ensemble_mean = station_df.mean(axis=1)
+                            ensemble_df = pd.DataFrame({'ID': df['ID'], f'{metric}_ensemble_mean': ensemble_mean})
+                            ensemble_df.to_csv(os.path.join(dir_path,
+                                f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{metric}.csv'), index=False)
+                            
+                            # Calculate anomalies for each simulation
+                            for sim_source in sim_sources:
+                                anomaly = station_df[sim_source] - ensemble_mean
+                                anomaly_df = pd.DataFrame({
+                                    'ID': df['ID'],
+                                    f'{metric}_anomaly': anomaly
+                                })
+                                anomaly_df.to_csv(os.path.join(dir_path,
+                                    f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{metric}_anomaly.csv'), index=False)
+                                
+                        except Exception as e:
+                            print(f"Error processing station ensemble calculations for metric {metric}: {e}")
+
+                    # Process scores for station data
+                    for score in scores:
+                        try:
+                            # Load all station data for this score
+                            all_station_data = []
+                            for sim_source in sim_sources:
+                                file_path = f"{basedir}/output/scores/stn_{ref_source}_{sim_source}/{evaluation_item}_{ref_varname}_{sim_varname}_scores.csv"
+                                df = pd.read_csv(file_path, sep=',', header=0)
+                                all_station_data.append(df[score])
+                            
+                            # Convert to DataFrame for easier handling
+                            station_df = pd.concat(all_station_data, axis=1)
+                            station_df.columns = sim_sources
+                            
+                            # Calculate ensemble mean
+                            ensemble_mean = station_df.mean(axis=1)
+                            ensemble_df = pd.DataFrame({'ID': df['ID'], f'{score}_ensemble_mean': ensemble_mean})
+                            ensemble_df.to_csv(os.path.join(dir_path,
+                                f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{score}.csv'), index=False)
+                            
+                            # Calculate anomalies for each simulation
+                            for sim_source in sim_sources:
+                                anomaly = station_df[sim_source] - ensemble_mean
+                                anomaly_df = pd.DataFrame({
+                                    'ID': df['ID'],
+                                    f'{score}_anomaly': anomaly
+                                })
+                                anomaly_df.to_csv(os.path.join(dir_path,
+                                    f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{score}_anomaly.csv'), index=False)
+                                
+                        except Exception as e:
+                            print(f"Error processing station ensemble calculations for score {score}: {e}")
+
+                    # Calculate pairwise differences for metrics (station data)
+                    for metric in metrics:
+                        for i, sim1 in enumerate(sim_sources):
+                            sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
+                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                                sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
+                                try:
+                                    df1 = pd.read_csv(
+                                        f"{basedir}/output/metrics/stn_{ref_source}_{sim1}/{evaluation_item}_{ref_varname}_{sim_varname_1}_metrics.csv") 
+                                    df2 = pd.read_csv(
+                                        f"{basedir}/output/metrics/stn_{ref_source}_{sim2}/{evaluation_item}_{ref_varname}_{sim_varname_2}_metrics.csv")
+                                    
+                                    diff = df1[metric] - df2[metric]
+                                    diff_df = pd.DataFrame({
+                                        'ID': df1['ID'],
+                                        f'{metric}_diff': diff
+                                    })
+                                    
+                                    output_file = os.path.join(dir_path,
+                                        f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{metric}_diff.csv')
+                                    diff_df.to_csv(output_file, index=False)
+                                    
+                                except Exception as e:
+                                    print(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
+
+                    # Calculate pairwise differences for scores (station data)
+                    for score in scores:
+                        for i, sim1 in enumerate(sim_sources):
+                            sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
+                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                                sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
+                                try:
+                                    df1 = pd.read_csv(
+                                        f"{basedir}/output/scores/stn_{ref_source}_{sim1}/{evaluation_item}_{ref_varname}_{sim_varname_1}_scores.csv")
+                                    df2 = pd.read_csv(
+                                        f"{basedir}/output/scores/stn_{ref_source}_{sim2}/{evaluation_item}_{ref_varname}_{sim_varname_2}_scores.csv")
+                                    
+                                    diff = df1[score] - df2[score]
+                                    diff_df = pd.DataFrame({
+                                        'ID': df1['ID'],
+                                        f'{score}_diff': diff
+                                    })
+                                    
+                                    output_file = os.path.join(dir_path,
+                                        f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{score}_diff.csv')
+                                    diff_df.to_csv(output_file, index=False)
+                                    
+                                except Exception as e:
+                                    print(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")                    
+                else:
+                    # Calculate ensemble means and anomalies for metrics
+                    for metric in metrics:
+                        try:
+                        # Load all simulation data for this metric
+                            datasets = []
+                            for sim_source in sim_sources:
+                                print(sim_source)
+                                print(f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                ds = xr.open_dataset(
+                                   f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                datasets.append(ds[metric])
+                                exit()        
+                            # Calculate ensemble mean
+                            ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
+                            
+                            # Save ensemble mean
+                            ds_mean = xr.Dataset()
+                            ds_mean[f'{metric}_ensemble_mean'] = ensemble_mean
+                            ds_mean.attrs['description'] = f'Ensemble mean of {metric} across all simulations'
+                            output_file = os.path.join(dir_path,
+                                f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{metric}.nc')
+                            ds_mean.to_netcdf(output_file)
+                            
+                            # Calculate and save anomalies for each simulation
+                            for sim_source, ds in zip(sim_sources, datasets):
+                                anomaly = ds - ensemble_mean
+                                ds_anom = xr.Dataset()
+                                ds_anom[f'{metric}_anomaly'] = anomaly
+                                ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
+                                output_file = os.path.join(dir_path,
+                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_anomaly.nc')
+                                ds_anom.to_netcdf(output_file)
+                            
+                        except Exception as e:
+                            print(f"Error processing ensemble calculations for metric {metric}: {e}")
+
+                    # Calculate ensemble means and anomalies for scores
+                    for score in scores:
+                        try:
+                            # Load all simulation data for this score
+                            datasets = []
+                            for sim_source in sim_sources:
+                                ds = xr.open_dataset(
+                                    f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                datasets.append(ds[score])
+                            
+                            # Calculate ensemble mean
+                            ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
+                            
+                            # Save ensemble mean
+                            ds_mean = xr.Dataset()
+                            ds_mean[f'{score}_ensemble_mean'] = ensemble_mean
+                            ds_mean.attrs['description'] = f'Ensemble mean of {score} across all simulations'
+                            output_file = os.path.join(dir_path,
+                                f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{score}.nc')
+                            ds_mean.to_netcdf(output_file)
+                            
+                            # Calculate and save anomalies for each simulation
+                            for sim_source, ds in zip(sim_sources, datasets):
+                                anomaly = ds - ensemble_mean
+                                ds_anom = xr.Dataset()
+                                ds_anom[f'{score}_anomaly'] = anomaly
+                                ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
+                                output_file = os.path.join(dir_path,
+                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_anomaly.nc')
+                                ds_anom.to_netcdf(output_file)
+                            
+                        except Exception as e:
+                            print(f"Error processing ensemble calculations for score {score}: {e}")
+
+                    # Compare metrics between pairs
+                    for metric in metrics:
+                        for i, sim1 in enumerate(sim_sources):
+                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                                try:
+                                    ds1 = xr.open_dataset(
+                                        f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc')
+                                    ds2 = xr.open_dataset(
+                                        f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc')
+
+                                    diff = ds1[metric] - ds2[metric]
+                                    
+                                    ds_out = xr.Dataset()
+                                    ds_out[f'{metric}_diff'] = diff
+                                    ds_out.attrs['description'] = f'Difference in {metric} between {sim1} and {sim2}'
+                                    
+                                    output_file = os.path.join(dir_path, 
+                                        f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{metric}_diff.nc')
+                                    ds_out.to_netcdf(output_file)
+                                    
+                                except Exception as e:
+                                    print(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
+
+                    # Compare scores between pairs
+                    for score in scores:
+                        for i, sim1 in enumerate(sim_sources):
+                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                                try:
+                                    ds1 = xr.open_dataset(
+                                        f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc')
+                                    ds2 = xr.open_dataset(
+                                        f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc')
+
+                                    diff = ds1[score] - ds2[score]
+                                    
+                                    ds_out = xr.Dataset()
+                                    ds_out[f'{score}_diff'] = diff
+                                    ds_out.attrs['description'] = f'Difference in {score} between {sim1} and {sim2}'
+                                    
+                                    output_file = os.path.join(dir_path,
+                                        f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{score}_diff.nc')
+                                    ds_out.to_netcdf(output_file)
+                                    
+                                except Exception as e:
+                                    print(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
+
+                    def plot_grid_map(colormap, normalize, levels, xitem, k, mticks, option):
+                        # Plot settings
+                        import numpy as np
+                        import xarray as xr
+                        import cartopy.crs as ccrs
+                        import cartopy.feature as cfeature
+                        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+
+                        from matplotlib import rcParams
+
+                        font = {'family': option['font']}
+                        matplotlib.rc('font', **font)
+
+                        params = {'backend': 'ps',
+                                'axes.labelsize': option['labelsize'],
+                                'grid.linewidth': 0.2,
+                                'font.size': option['labelsize'],
+                                'xtick.labelsize': option['xtick'],
+                                'xtick.direction': 'out',
+                                'ytick.labelsize': option['ytick'],
+                                'ytick.direction': 'out',
+                                'savefig.bbox': 'tight',
+                                'axes.unicode_minus': False,
+                                'text.usetex': False}
+                        rcParams.update(params)
+
+                        # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
+                        ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
+
+                        # Extract variables
+                        ilat = ds.lat.values
+                        ilon = ds.lon.values
+                        lat, lon = np.meshgrid(ilat[::-1], ilon)
+
+                        var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
+                        min_value, max_value = np.nanmin(var), np.nanmax(var)
+                        if min_value < option['vmin'] and max_value > option['vmax']:
+                            option['extend'] = 'both'
+                        elif min_value > option['vmin'] and max_value > option['vmax']:
+                            option['extend'] = 'max'
+                        elif min_value < option['vmin'] and max_value < option['vmax']:
+                            option['extend'] = 'min'
+                        else:
+                            option['extend'] = 'neither'
+
+                        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
+                        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+                        extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
+
+                        if ilat[0] - ilat[-1] < 0:
+                            origin = 'lower'
+                        else:
+                            origin = 'upper'
+
+                        if option['show_method'] == 'imshow':
+                            cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+                                        origin=origin)
+                        elif option['show_method'] == 'contourf':
+                            cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+
+                        coastline = cfeature.NaturalEarthFeature(
+                            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+                        rivers = cfeature.NaturalEarthFeature(
+                            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
+                        ax.add_feature(cfeature.LAND, facecolor='0.8')
+                        ax.add_feature(coastline, linewidth=0.6)
+                        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
+                        ax.add_feature(rivers, linewidth=0.5)
+                        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+
+                        if not option['set_lat_lon']:
+                            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+                            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
+                            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
+                        else:
+                            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+                            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
+                            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+                        lon_formatter = LongitudeFormatter()
+                        lat_formatter = LatitudeFormatter()
+                        ax.xaxis.set_major_formatter(lon_formatter)
+                        ax.yaxis.set_major_formatter(lat_formatter)
+
+                        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
+                        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
+                        plt.title(option['title'], fontsize=option['title_size'])
+
+                        if not option['colorbar_position_set']:
+                            pos = ax.get_position()  # .bounds
+                            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+                            if option['colorbar_position'] == 'horizontal':
+                                if len(option['xticklabel']) == 0:
+                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
+                                else:
+                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
+                            else:
+                                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+                        else:
+                            cbaxes = fig.add_axes(
+                                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
+
+                        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                                        extend=option['extend'],
+                                        orientation=option['colorbar_position'])
+                        cb.solids.set_edgecolor("face")
+
+                        plt.savefig(
+                            f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
+                            format=f'{option["saving_format"]}', dpi=option['dpi'])
+                        plt.close()
+
+
+                    def plot_stn_map( stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mticks, option):
+                        from pylab import rcParams
+                        import cartopy.crs as ccrs
+                        import cartopy.feature as cfeature
+                        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+                        import matplotlib
+                        import matplotlib.pyplot as plt
+                        ### Plot settings
+                        font = {'family': option['font']}
+                        matplotlib.rc('font', **font)
+
+                        params = {'backend': 'ps',
+                                'axes.labelsize': option['labelsize'],
+                                'grid.linewidth': 0.2,
+                                'font.size': option['labelsize'],
+                                'xtick.labelsize': option['xtick'],
+                                'xtick.direction': 'out',
+                                'ytick.labelsize': option['ytick'],
+                                'ytick.direction': 'out',
+                                'savefig.bbox': 'tight',
+                                'axes.unicode_minus': False,
+                                'text.usetex': False}
+                        rcParams.update(params)
+                        # Add check for empty or all-NaN array
+                        if len(metric) == 0 or np.all(np.isnan(metric)):
+                            print(f"Warning: No valid data for {varname}. Skipping plot.")
+                            return
+
+                        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
+                        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+                        # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
+                        min_value, max_value = np.nanmin(metric), np.nanmax(metric)
+                        if min_value < option['vmin'] and max_value > option['vmax']:
+                            option['extend'] = 'both'
+                        elif min_value > option['vmin'] and max_value > option['vmax']:
+                            option['extend'] = 'max'
+                        elif min_value < option['vmin'] and max_value < option['vmax']:
+                            option['extend'] = 'min'
+                        else:
+                            option['extend'] = 'neither'
+
+                        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, marker=option['marker'],
+                                        edgecolors='none', alpha=0.9)
+                        coastline = cfeature.NaturalEarthFeature(
+                            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+                        rivers = cfeature.NaturalEarthFeature(
+                            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
+                        ax.add_feature(cfeature.LAND, facecolor='0.8')
+                        ax.add_feature(coastline, linewidth=0.6)
+                        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
+                        ax.add_feature(rivers, linewidth=0.5)
+                        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+
+                        if not option['set_lat_lon']:
+                            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+                            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
+                            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
+                        else:
+                            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+                            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
+                            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+                        lon_formatter = LongitudeFormatter()
+                        lat_formatter = LatitudeFormatter()
+                        ax.xaxis.set_major_formatter(lon_formatter)
+                        ax.yaxis.set_major_formatter(lat_formatter)
+
+                        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
+                        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
+                        plt.title(option['title'], fontsize=option['title_size'])
+
+                        if not option['colorbar_position_set']:
+                            pos = ax.get_position()  # .bounds
+                            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+                            if option['colorbar_position'] == 'horizontal':
+                                if len(option['xticklabel']) == 0:
+                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
+                                else:
+                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
+                            else:
+                                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+                        else:
+                            cbaxes = fig.add_axes(
+                                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
+
+                        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+                                        extend=option['extend'],
+                                        orientation=option['colorbar_position'])
+                        cb.solids.set_edgecolor("face")
+                        # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
+                        plt.savefig(
+                            f'{self.casedir}/output/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option["saving_format"]}',
+                            format=f'{option["saving_format"]}', dpi=option['dpi'])
+                        plt.close()
+
+
+                    # Add plotting function for anomalies and differences
+                    def plot_diff_results(data_type, item_type, evaluation_item, ref_source, sim_source, data, option):
+                        """
+                        Plot anomalies or differences for metrics/scores
+                        data_type: 'anomaly' or 'difference'
+                        item_type: 'metric' or 'score'
+                        """
+                        plot_option = self.fig_nml['make_stn_plot_index'].copy()
+                        plot_option.update(option)
+                        
+                        # Set plot parameters based on data type
+                        if data_type == 'anomaly':
+                            plot_option['title'] = f'{evaluation_item} {item_type} anomaly for {sim_source}'
+                            plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for anomalies
+                        else:  # difference
+                            plot_option['title'] = f'{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}'
+                            plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for differences
+                            
+                        plot_option['colorbar_ticks'] = get_ticks(plot_option['vmin'], plot_option['vmax'])
+                        plot_option['cmap'] = 'RdBu_r'  # Diverging colormap for anomalies/differences
+                        
+                        # Calculate ticks
+                        ticks = matplotlib.ticker.MultipleLocator(base=plot_option['colorbar_ticks'])
+                        mticks = ticks.tick_values(vmin=plot_option['vmin'], vmax=plot_option['vmax'])
+                        mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
+                        
+                        # Create colormap
+                        cmap = cm.get_cmap(plot_option['cmap'])
+                        bnd = np.arange(plot_option['vmin'], plot_option['vmax'] + plot_option['colorbar_ticks'] / 2, 
+                                       plot_option['colorbar_ticks'] / 2)
+                        norm = colors.BoundaryNorm(bnd, cmap.N)
+                        
+                        # For station data
+                        if isinstance(data, pd.DataFrame):
+                            try:
+                                lon_select = data['ref_lon'].values
+                                lat_select = data['ref_lat'].values
+                            except:
+                                lon_select = data['sim_lon'].values
+                                lat_select = data['sim_lat'].values
+                                
+                            plotvar = data[f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}'].values
+                            
+                            plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, 
+                                            f'{data_type}_{item_type}', 'comparisons/Diff_Comparison', mticks, plot_option)
+                        
+                        # For gridded data
+                        else:  # xarray Dataset
+                            plot_grid_map(cmap, norm, bnd, f'{data_type}_{item_type}', 'comparisons/Diff_Comparison', 
+                                         mticks, plot_option)
+
+                    # After calculating anomalies for metrics
+                    for sim_source in sim_sources:
+                        plot_diff_results('anomaly', 'metric', evaluation_item, ref_source, sim_source, anomaly_df, option)
+                    
+                    # After calculating differences for metrics
+                    for i, sim1 in enumerate(sim_sources):
+                        for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            plot_diff_results('difference', 'metric', evaluation_item, ref_source, 
+                                            (sim1, sim2), diff_df, option)
+                    
+                    # After calculating anomalies for scores
+                    for sim_source in sim_sources:
+                        plot_diff_results('anomaly', 'score', evaluation_item, ref_source, sim_source, anomaly_df, option)
+                    
+                    # After calculating differences for scores
+                    for i, sim1 in enumerate(sim_sources):
+                        for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            plot_diff_results('difference', 'score', evaluation_item, ref_source, 
+                                            (sim1, sim2), diff_df, option)
+
+    
+
