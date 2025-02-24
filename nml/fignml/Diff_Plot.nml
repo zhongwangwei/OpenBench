@@ -30,6 +30,8 @@
   colorbar_width    =  0.5
   colorbar_height   =  0.03
 
+  marker            =  o  # '.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"
+  markersize        =  15
 
   vmin_max_on       = false  # 'True', 'False' Be cautious about this option, if turn on then all the metrics and scores will share the same max/min values
   vmin              = 0

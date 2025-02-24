@@ -2,7 +2,6 @@
 import glob
 import os
 import re
-import shutil
 import sys
 
 import numpy as np
@@ -10,15 +9,11 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import matplotlib.cm as cm
-import matplotlib.ticker
-
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 from Mod_Statistics import statistics_calculate
 from figlib import *
+
 
 class ComparisonProcessing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
@@ -31,10 +26,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.general_config = self.main_nml['general']
         # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        
+
         # Add default weight attribute
         self.weight = self.main_nml['general'].get('weight', 'none')  # Default to 'none' if not specified
-        
+
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
@@ -251,9 +246,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'IGBP_groupby')
 
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         try:
@@ -450,9 +445,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'PFT_groupby')
 
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -466,9 +461,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_HeatMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'HeatMap')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         for score in scores:
@@ -513,27 +508,28 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             else:
                                 ds = xr.open_dataset(
                                     f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                                                   
+
                                 if self.weight.lower() == 'area':
                                     weights = np.cos(np.deg2rad(ds.lat))
                                     overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                 elif self.weight.lower() == 'mass':
                                     # Get reference data for flux weighting
-                                    o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                    o = xr.open_dataset(
+                                        f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                         f'{ref_varname}']
-                                    
+
                                     # Calculate area weights (cosine of latitude)
                                     area_weights = np.cos(np.deg2rad(ds.lat))
-                                    
+
                                     # Calculate absolute flux weights
                                     flux_weights = np.abs(o.mean('time'))
-                                    
+
                                     # Combine area and flux weights
                                     combined_weights = area_weights * flux_weights
-                                    
+
                                     # Normalize weights to sum to 1
                                     normalized_weights = combined_weights / combined_weights.sum()
-                                    
+
                                     # Calculate weighted mean
                                     overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
@@ -547,9 +543,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Taylor_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Taylor_Diagram')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -668,14 +664,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             simfile = \
                                 xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
-                            
+
                             std_sim_result = self.stat_standard_deviation(simfile)
                             cor_result = self.correlation(simfile, reffile)
                             RMS_result = self.CRMSD(simfile, reffile)
 
                             if self.weight.lower() == 'area':
                                 weights = np.cos(np.deg2rad(reffile.lat))
-                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(skipna=True).values
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(
+                                    skipna=True).values
                                 cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(weights).mean(skipna=True).values
                                 RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(weights).mean(skipna=True).values
                             elif self.weight.lower() == 'mass':
@@ -688,14 +685,16 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(
+                                    normalized_weights.fillna(0)).mean(skipna=True).values
+                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights.fillna(0)).mean(
+                                    skipna=True).values
+                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights.fillna(0)).mean(
+                                    skipna=True).values
                             else:
                                 std_sim = std_sim_result.where(np.isfinite(std_sim_result)).mean(skipna=True).values
                                 cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
                                 RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
-                                
 
                             output_file.write(f"{std_sim}\t")
                             stds[i + 1] = std_sim
@@ -708,7 +707,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                             if self.weight.lower() == 'area':
                                 weights = np.cos(np.deg2rad(reffile.lat))
-                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(weights).mean(skipna=True).values
+                                std_ref = self.stat_standard_deviation(reffile).where(
+                                    np.isfinite(self.stat_standard_deviation(reffile))).weighted(weights).mean(skipna=True).values
                             elif self.weight.lower() == 'mass':
                                 # Calculate area weights (cosine of latitude)
                                 area_weights = np.cos(np.deg2rad(reffile.lat))
@@ -719,7 +719,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                std_ref = self.stat_standard_deviation(reffile).where(np.isfinite(self.stat_standard_deviation(reffile))).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                std_ref = self.stat_standard_deviation(reffile).where(
+                                    np.isfinite(self.stat_standard_deviation(reffile))).weighted(
+                                    normalized_weights.fillna(0)).mean(skipna=True).values
                             else:
                                 std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
                         stds[0] = std_ref
@@ -731,9 +733,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Target_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Target_Diagram')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -850,7 +852,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             bias_sim_result = self.bias(simfile, reffile)
                             if self.weight.lower() == 'area':
                                 weights = np.cos(np.deg2rad(reffile.lat))
-                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(weights).mean(skipna=True).values
+                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(weights).mean(
+                                    skipna=True).values
                             elif self.weight.lower() == 'mass':
                                 # Calculate area weights (cosine of latitude)
                                 area_weights = np.cos(np.deg2rad(reffile.lat))
@@ -861,7 +864,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Normalize weights to sum to 1
                                 normalized_weights = combined_weights / combined_weights.sum()
                                 # Calculate weighted mean
-                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                bias_sim = bias_sim_result.where(np.isfinite(bias_sim_result)).weighted(
+                                    normalized_weights.fillna(0)).mean(skipna=True).values
                             else:
                                 bias_sim = bias_sim_result.mean(skipna=True).values
 
@@ -880,9 +884,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Kernel_Density_Estimate_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Kernel_Density_Estimate')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -966,9 +970,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Parallel_Coordinates_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1041,7 +1045,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                 if self.weight.lower() == 'area':
                                     weights = np.cos(np.deg2rad(reffile.lat))
-                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(skipna=True).values
+                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(
+                                        skipna=True).values
                                 elif self.weight.lower() == 'mass':
                                     # Calculate area weights (cosine of latitude)
                                     area_weights = np.cos(np.deg2rad(reffile.lat))
@@ -1052,7 +1057,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     # Normalize weights to sum to 1
                                     normalized_weights = combined_weights / combined_weights.sum()
                                     # Calculate weighted mean
-                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(
+                                        normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
                                     kk = ds[score].mean(skipna=True).values
                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
@@ -1086,9 +1092,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         # scenarios_portrait_plot is special, need to recalculate the scores and metrics
         # read the simulation source and reference source
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Portrait_Plot_seasonal')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1310,16 +1316,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     sys.exit(1)
                         output_file.write("\n")
 
-
-
         make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                          option)
 
     def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Whisker_Plot')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1412,9 +1416,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
 
         dir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'Relative_Score')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1521,9 +1525,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics,
                                                             option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Single_Model_Performance_Index')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1676,9 +1680,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
-        #if os.path.exists(dir_path):
+        # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
-        #print(f"Re-creating output directory: {dir_path}")
+        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1816,17 +1820,17 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
-            #print(f"Error: Directory {dir_path} does not exist")
-            #print("Please run the evaluation first")
-            #sys.exit(1)
+            # print(f"Error: Directory {dir_path} does not exist")
+            # print("Please run the evaluation first")
+            # sys.exit(1)
 
         for evaluation_item in evaluation_items:
             # Get simulation sources
             sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
             ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-            
+
             # Convert to lists if needed
-            if isinstance(sim_sources, str): 
+            if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
                 ref_sources = [ref_sources]
@@ -1847,7 +1851,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     print("All simulation sources must be either station data or gridded data")
                     continue
 
-                
                 ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
 
@@ -1859,30 +1862,40 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             all_station_data = []
                             for sim_source in sim_sources:
                                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                file_path = f"{basedir}/output/metrics/stn_{ref_source}_{sim_source}/{evaluation_item}_{ref_varname}_{sim_varname}_metrics.csv"
+                                file_path = f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                                 df = pd.read_csv(file_path, sep=',', header=0)
                                 all_station_data.append(df[metric])
-                            
+
                             # Convert to DataFrame for easier handling
                             station_df = pd.concat(all_station_data, axis=1)
                             station_df.columns = sim_sources
-                            
+
                             # Calculate ensemble mean
                             ensemble_mean = station_df.mean(axis=1)
                             ensemble_df = pd.DataFrame({'ID': df['ID'], f'{metric}_ensemble_mean': ensemble_mean})
                             ensemble_df.to_csv(os.path.join(dir_path,
-                                f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{metric}.csv'), index=False)
-                            
+                                                            f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{metric}.csv'),
+                                               index=False)
+
                             # Calculate anomalies for each simulation
                             for sim_source in sim_sources:
+                                try:
+                                    lon_select = df['ref_lon'].values
+                                    lat_select = df['ref_lat'].values
+                                except:
+                                    lon_select = df['sim_lon'].values
+                                    lat_select = df['sim_lat'].values
                                 anomaly = station_df[sim_source] - ensemble_mean
                                 anomaly_df = pd.DataFrame({
                                     'ID': df['ID'],
+                                    'lat': lat_select,
+                                    'lon': lon_select,
                                     f'{metric}_anomaly': anomaly
                                 })
                                 anomaly_df.to_csv(os.path.join(dir_path,
-                                    f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{metric}_anomaly.csv'), index=False)
-                                
+                                                               f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{metric}_anomaly.csv'),
+                                                  index=False)
+
                         except Exception as e:
                             print(f"Error processing station ensemble calculations for metric {metric}: {e}")
 
@@ -1892,30 +1905,40 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Load all station data for this score
                             all_station_data = []
                             for sim_source in sim_sources:
-                                file_path = f"{basedir}/output/scores/stn_{ref_source}_{sim_source}/{evaluation_item}_{ref_varname}_{sim_varname}_scores.csv"
+                                file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                                 df = pd.read_csv(file_path, sep=',', header=0)
                                 all_station_data.append(df[score])
-                            
+
                             # Convert to DataFrame for easier handling
                             station_df = pd.concat(all_station_data, axis=1)
                             station_df.columns = sim_sources
-                            
+
                             # Calculate ensemble mean
                             ensemble_mean = station_df.mean(axis=1)
                             ensemble_df = pd.DataFrame({'ID': df['ID'], f'{score}_ensemble_mean': ensemble_mean})
                             ensemble_df.to_csv(os.path.join(dir_path,
-                                f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{score}.csv'), index=False)
-                            
+                                                            f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{score}.csv'),
+                                               index=False)
+
                             # Calculate anomalies for each simulation
                             for sim_source in sim_sources:
+                                try:
+                                    lon_select = df['ref_lon'].values
+                                    lat_select = df['ref_lat'].values
+                                except:
+                                    lon_select = df['sim_lon'].values
+                                    lat_select = df['sim_lat'].values
                                 anomaly = station_df[sim_source] - ensemble_mean
                                 anomaly_df = pd.DataFrame({
                                     'ID': df['ID'],
+                                    'lat': lat_select,
+                                    'lon': lon_select,
                                     f'{score}_anomaly': anomaly
                                 })
                                 anomaly_df.to_csv(os.path.join(dir_path,
-                                    f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{score}_anomaly.csv'), index=False)
-                                
+                                                               f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{score}_anomaly.csv'),
+                                                  index=False)
+
                         except Exception as e:
                             print(f"Error processing station ensemble calculations for score {score}: {e}")
 
@@ -1923,24 +1946,32 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     for metric in metrics:
                         for i, sim1 in enumerate(sim_sources):
                             sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
-                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                 sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
                                 try:
                                     df1 = pd.read_csv(
-                                        f"{basedir}/output/metrics/stn_{ref_source}_{sim1}/{evaluation_item}_{ref_varname}_{sim_varname_1}_metrics.csv") 
+                                        f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
                                     df2 = pd.read_csv(
-                                        f"{basedir}/output/metrics/stn_{ref_source}_{sim2}/{evaluation_item}_{ref_varname}_{sim_varname_2}_metrics.csv")
-                                    
+                                        f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
+
                                     diff = df1[metric] - df2[metric]
+                                    try:
+                                        lon_select = df1['ref_lon'].values
+                                        lat_select = df1['ref_lat'].values
+                                    except:
+                                        lon_select = df1['sim_lon'].values
+                                        lat_select = df1['sim_lat'].values
                                     diff_df = pd.DataFrame({
                                         'ID': df1['ID'],
+                                        'lat': lat_select,
+                                        'lon': lon_select,
                                         f'{metric}_diff': diff
                                     })
-                                    
+
                                     output_file = os.path.join(dir_path,
-                                        f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{metric}_diff.csv')
+                                                               f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{metric}_diff.csv')
                                     diff_df.to_csv(output_file, index=False)
-                                    
+
                                 except Exception as e:
                                     print(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
 
@@ -1948,50 +1979,57 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     for score in scores:
                         for i, sim1 in enumerate(sim_sources):
                             sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
-                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                 sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
                                 try:
                                     df1 = pd.read_csv(
-                                        f"{basedir}/output/scores/stn_{ref_source}_{sim1}/{evaluation_item}_{ref_varname}_{sim_varname_1}_scores.csv")
+                                        f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
                                     df2 = pd.read_csv(
-                                        f"{basedir}/output/scores/stn_{ref_source}_{sim2}/{evaluation_item}_{ref_varname}_{sim_varname_2}_scores.csv")
-                                    
+                                        f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
+
                                     diff = df1[score] - df2[score]
+                                    try:
+                                        lon_select = df1['ref_lon'].values
+                                        lat_select = df1['ref_lat'].values
+                                    except:
+                                        lon_select = df1['sim_lon'].values
+                                        lat_select = df1['sim_lat'].values
                                     diff_df = pd.DataFrame({
                                         'ID': df1['ID'],
+                                        'lat': lat_select,
+                                        'lon': lon_select,
                                         f'{score}_diff': diff
                                     })
-                                    
+
                                     output_file = os.path.join(dir_path,
-                                        f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{score}_diff.csv')
+                                                               f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{score}_diff.csv')
                                     diff_df.to_csv(output_file, index=False)
-                                    
+
                                 except Exception as e:
-                                    print(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")                    
+                                    print(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
                 else:
                     # Calculate ensemble means and anomalies for metrics
                     for metric in metrics:
                         try:
-                        # Load all simulation data for this metric
+                            # Load all simulation data for this metric
                             datasets = []
                             for sim_source in sim_sources:
                                 print(sim_source)
                                 print(f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                 ds = xr.open_dataset(
-                                   f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                    f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                 datasets.append(ds[metric])
-                                exit()        
                             # Calculate ensemble mean
                             ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
-                            
+
                             # Save ensemble mean
                             ds_mean = xr.Dataset()
                             ds_mean[f'{metric}_ensemble_mean'] = ensemble_mean
                             ds_mean.attrs['description'] = f'Ensemble mean of {metric} across all simulations'
                             output_file = os.path.join(dir_path,
-                                f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{metric}.nc')
+                                                       f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{metric}.nc')
                             ds_mean.to_netcdf(output_file)
-                            
+
                             # Calculate and save anomalies for each simulation
                             for sim_source, ds in zip(sim_sources, datasets):
                                 anomaly = ds - ensemble_mean
@@ -1999,9 +2037,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom[f'{metric}_anomaly'] = anomaly
                                 ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
                                 output_file = os.path.join(dir_path,
-                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_anomaly.nc')
+                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_anomaly.nc')
                                 ds_anom.to_netcdf(output_file)
-                            
+
                         except Exception as e:
                             print(f"Error processing ensemble calculations for metric {metric}: {e}")
 
@@ -2014,18 +2052,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds = xr.open_dataset(
                                     f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                 datasets.append(ds[score])
-                            
+
                             # Calculate ensemble mean
                             ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
-                            
+
                             # Save ensemble mean
                             ds_mean = xr.Dataset()
                             ds_mean[f'{score}_ensemble_mean'] = ensemble_mean
                             ds_mean.attrs['description'] = f'Ensemble mean of {score} across all simulations'
                             output_file = os.path.join(dir_path,
-                                f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{score}.nc')
+                                                       f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{score}.nc')
                             ds_mean.to_netcdf(output_file)
-                            
+
                             # Calculate and save anomalies for each simulation
                             for sim_source, ds in zip(sim_sources, datasets):
                                 anomaly = ds - ensemble_mean
@@ -2033,16 +2071,16 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom[f'{score}_anomaly'] = anomaly
                                 ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
                                 output_file = os.path.join(dir_path,
-                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_anomaly.nc')
+                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_anomaly.nc')
                                 ds_anom.to_netcdf(output_file)
-                            
+
                         except Exception as e:
                             print(f"Error processing ensemble calculations for score {score}: {e}")
 
                     # Compare metrics between pairs
                     for metric in metrics:
                         for i, sim1 in enumerate(sim_sources):
-                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                 try:
                                     ds1 = xr.open_dataset(
                                         f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc')
@@ -2050,22 +2088,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc')
 
                                     diff = ds1[metric] - ds2[metric]
-                                    
+
                                     ds_out = xr.Dataset()
                                     ds_out[f'{metric}_diff'] = diff
                                     ds_out.attrs['description'] = f'Difference in {metric} between {sim1} and {sim2}'
-                                    
-                                    output_file = os.path.join(dir_path, 
-                                        f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{metric}_diff.nc')
+
+                                    output_file = os.path.join(dir_path,
+                                                               f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{metric}_diff.nc')
                                     ds_out.to_netcdf(output_file)
-                                    
+
                                 except Exception as e:
                                     print(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
 
                     # Compare scores between pairs
                     for score in scores:
                         for i, sim1 in enumerate(sim_sources):
-                            for j, sim2 in enumerate(sim_sources[i+1:], i+1):
+                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                 try:
                                     ds1 = xr.open_dataset(
                                         f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc')
@@ -2073,295 +2111,19 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc')
 
                                     diff = ds1[score] - ds2[score]
-                                    
+
                                     ds_out = xr.Dataset()
                                     ds_out[f'{score}_diff'] = diff
                                     ds_out.attrs['description'] = f'Difference in {score} between {sim1} and {sim2}'
-                                    
+
                                     output_file = os.path.join(dir_path,
-                                        f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{score}_diff.nc')
+                                                               f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{score}_diff.nc')
                                     ds_out.to_netcdf(output_file)
-                                    
+
                                 except Exception as e:
                                     print(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
 
-                    def plot_grid_map(colormap, normalize, levels, xitem, k, mticks, option):
-                        # Plot settings
-                        import numpy as np
-                        import xarray as xr
-                        import cartopy.crs as ccrs
-                        import cartopy.feature as cfeature
-                        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-
-                        from matplotlib import rcParams
-
-                        font = {'family': option['font']}
-                        matplotlib.rc('font', **font)
-
-                        params = {'backend': 'ps',
-                                'axes.labelsize': option['labelsize'],
-                                'grid.linewidth': 0.2,
-                                'font.size': option['labelsize'],
-                                'xtick.labelsize': option['xtick'],
-                                'xtick.direction': 'out',
-                                'ytick.labelsize': option['ytick'],
-                                'ytick.direction': 'out',
-                                'savefig.bbox': 'tight',
-                                'axes.unicode_minus': False,
-                                'text.usetex': False}
-                        rcParams.update(params)
-
-                        # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-                        ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
-
-                        # Extract variables
-                        ilat = ds.lat.values
-                        ilon = ds.lon.values
-                        lat, lon = np.meshgrid(ilat[::-1], ilon)
-
-                        var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
-                        min_value, max_value = np.nanmin(var), np.nanmax(var)
-                        if min_value < option['vmin'] and max_value > option['vmax']:
-                            option['extend'] = 'both'
-                        elif min_value > option['vmin'] and max_value > option['vmax']:
-                            option['extend'] = 'max'
-                        elif min_value < option['vmin'] and max_value < option['vmax']:
-                            option['extend'] = 'min'
-                        else:
-                            option['extend'] = 'neither'
-
-                        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-                        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-                        extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
-
-                        if ilat[0] - ilat[-1] < 0:
-                            origin = 'lower'
-                        else:
-                            origin = 'upper'
-
-                        if option['show_method'] == 'imshow':
-                            cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
-                                        origin=origin)
-                        elif option['show_method'] == 'contourf':
-                            cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
-
-                        coastline = cfeature.NaturalEarthFeature(
-                            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
-                        rivers = cfeature.NaturalEarthFeature(
-                            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
-                        ax.add_feature(cfeature.LAND, facecolor='0.8')
-                        ax.add_feature(coastline, linewidth=0.6)
-                        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
-                        ax.add_feature(rivers, linewidth=0.5)
-                        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
-
-                        if not option['set_lat_lon']:
-                            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
-                            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
-                            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
-                        else:
-                            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-                            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-                            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
-                        lon_formatter = LongitudeFormatter()
-                        lat_formatter = LatitudeFormatter()
-                        ax.xaxis.set_major_formatter(lon_formatter)
-                        ax.yaxis.set_major_formatter(lat_formatter)
-
-                        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
-                        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
-                        plt.title(option['title'], fontsize=option['title_size'])
-
-                        if not option['colorbar_position_set']:
-                            pos = ax.get_position()  # .bounds
-                            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-                            if option['colorbar_position'] == 'horizontal':
-                                if len(option['xticklabel']) == 0:
-                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
-                                else:
-                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
-                            else:
-                                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
-                        else:
-                            cbaxes = fig.add_axes(
-                                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-
-                        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
-                                        extend=option['extend'],
-                                        orientation=option['colorbar_position'])
-                        cb.solids.set_edgecolor("face")
-
-                        plt.savefig(
-                            f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
-                            format=f'{option["saving_format"]}', dpi=option['dpi'])
-                        plt.close()
-
-
-                    def plot_stn_map( stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mticks, option):
-                        from pylab import rcParams
-                        import cartopy.crs as ccrs
-                        import cartopy.feature as cfeature
-                        from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-                        import matplotlib
-                        import matplotlib.pyplot as plt
-                        ### Plot settings
-                        font = {'family': option['font']}
-                        matplotlib.rc('font', **font)
-
-                        params = {'backend': 'ps',
-                                'axes.labelsize': option['labelsize'],
-                                'grid.linewidth': 0.2,
-                                'font.size': option['labelsize'],
-                                'xtick.labelsize': option['xtick'],
-                                'xtick.direction': 'out',
-                                'ytick.labelsize': option['ytick'],
-                                'ytick.direction': 'out',
-                                'savefig.bbox': 'tight',
-                                'axes.unicode_minus': False,
-                                'text.usetex': False}
-                        rcParams.update(params)
-                        # Add check for empty or all-NaN array
-                        if len(metric) == 0 or np.all(np.isnan(metric)):
-                            print(f"Warning: No valid data for {varname}. Skipping plot.")
-                            return
-
-                        fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-                        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-                        # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-                        min_value, max_value = np.nanmin(metric), np.nanmax(metric)
-                        if min_value < option['vmin'] and max_value > option['vmax']:
-                            option['extend'] = 'both'
-                        elif min_value > option['vmin'] and max_value > option['vmax']:
-                            option['extend'] = 'max'
-                        elif min_value < option['vmin'] and max_value < option['vmax']:
-                            option['extend'] = 'min'
-                        else:
-                            option['extend'] = 'neither'
-
-                        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, marker=option['marker'],
-                                        edgecolors='none', alpha=0.9)
-                        coastline = cfeature.NaturalEarthFeature(
-                            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
-                        rivers = cfeature.NaturalEarthFeature(
-                            'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
-                        ax.add_feature(cfeature.LAND, facecolor='0.8')
-                        ax.add_feature(coastline, linewidth=0.6)
-                        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
-                        ax.add_feature(rivers, linewidth=0.5)
-                        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
-
-                        if not option['set_lat_lon']:
-                            ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
-                            ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
-                            ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
-                        else:
-                            ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-                            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-                            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
-                        lon_formatter = LongitudeFormatter()
-                        lat_formatter = LatitudeFormatter()
-                        ax.xaxis.set_major_formatter(lon_formatter)
-                        ax.yaxis.set_major_formatter(lat_formatter)
-
-                        ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
-                        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
-                        plt.title(option['title'], fontsize=option['title_size'])
-
-                        if not option['colorbar_position_set']:
-                            pos = ax.get_position()  # .bounds
-                            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-                            if option['colorbar_position'] == 'horizontal':
-                                if len(option['xticklabel']) == 0:
-                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
-                                else:
-                                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
-                            else:
-                                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
-                        else:
-                            cbaxes = fig.add_axes(
-                                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-
-                        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
-                                        extend=option['extend'],
-                                        orientation=option['colorbar_position'])
-                        cb.solids.set_edgecolor("face")
-                        # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
-                        plt.savefig(
-                            f'{self.casedir}/output/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option["saving_format"]}',
-                            format=f'{option["saving_format"]}', dpi=option['dpi'])
-                        plt.close()
-
-
-                    # Add plotting function for anomalies and differences
-                    def plot_diff_results(data_type, item_type, evaluation_item, ref_source, sim_source, data, option):
-                        """
-                        Plot anomalies or differences for metrics/scores
-                        data_type: 'anomaly' or 'difference'
-                        item_type: 'metric' or 'score'
-                        """
-                        plot_option = self.fig_nml['make_stn_plot_index'].copy()
-                        plot_option.update(option)
-                        
-                        # Set plot parameters based on data type
-                        if data_type == 'anomaly':
-                            plot_option['title'] = f'{evaluation_item} {item_type} anomaly for {sim_source}'
-                            plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for anomalies
-                        else:  # difference
-                            plot_option['title'] = f'{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}'
-                            plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for differences
-                            
-                        plot_option['colorbar_ticks'] = get_ticks(plot_option['vmin'], plot_option['vmax'])
-                        plot_option['cmap'] = 'RdBu_r'  # Diverging colormap for anomalies/differences
-                        
-                        # Calculate ticks
-                        ticks = matplotlib.ticker.MultipleLocator(base=plot_option['colorbar_ticks'])
-                        mticks = ticks.tick_values(vmin=plot_option['vmin'], vmax=plot_option['vmax'])
-                        mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
-                        
-                        # Create colormap
-                        cmap = cm.get_cmap(plot_option['cmap'])
-                        bnd = np.arange(plot_option['vmin'], plot_option['vmax'] + plot_option['colorbar_ticks'] / 2, 
-                                       plot_option['colorbar_ticks'] / 2)
-                        norm = colors.BoundaryNorm(bnd, cmap.N)
-                        
-                        # For station data
-                        if isinstance(data, pd.DataFrame):
-                            try:
-                                lon_select = data['ref_lon'].values
-                                lat_select = data['ref_lat'].values
-                            except:
-                                lon_select = data['sim_lon'].values
-                                lat_select = data['sim_lat'].values
-                                
-                            plotvar = data[f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}'].values
-                            
-                            plot_stn_map(lon_select, lat_select, plotvar, cmap, norm, 
-                                            f'{data_type}_{item_type}', 'comparisons/Diff_Comparison', mticks, plot_option)
-                        
-                        # For gridded data
-                        else:  # xarray Dataset
-                            plot_grid_map(cmap, norm, bnd, f'{data_type}_{item_type}', 'comparisons/Diff_Comparison', 
-                                         mticks, plot_option)
-
-                    # After calculating anomalies for metrics
-                    for sim_source in sim_sources:
-                        plot_diff_results('anomaly', 'metric', evaluation_item, ref_source, sim_source, anomaly_df, option)
-                    
-                    # After calculating differences for metrics
-                    for i, sim1 in enumerate(sim_sources):
-                        for j, sim2 in enumerate(sim_sources[i+1:], i+1):
-                            plot_diff_results('difference', 'metric', evaluation_item, ref_source, 
-                                            (sim1, sim2), diff_df, option)
-                    
-                    # After calculating anomalies for scores
-                    for sim_source in sim_sources:
-                        plot_diff_results('anomaly', 'score', evaluation_item, ref_source, sim_source, anomaly_df, option)
-                    
-                    # After calculating differences for scores
-                    for i, sim1 in enumerate(sim_sources):
-                        for j, sim2 in enumerate(sim_sources[i+1:], i+1):
-                            plot_diff_results('difference', 'score', evaluation_item, ref_source, 
-                                            (sim1, sim2), diff_df, option)
-
-    
-
+                # After calculating anomalies for metrics
+                make_scenarios_comparison_Diff_Plot(dir_path, metrics, scores, evaluation_item, ref_source, sim_sources,
+                                                    self.general_config, sim_nml,
+                                                    ref_data_type, option)
