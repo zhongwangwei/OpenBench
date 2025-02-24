@@ -10,7 +10,7 @@
 /
 
 &Terrestrial_Water_Storage_Change
-varname           =  TWSC
+varname           =  twsc
 varunit           =  cm
 prefix            =  GRAiCE_twsc_ensmean
 suffix            =  
