@@ -81,33 +81,54 @@ def process_unit(ref_unit, metric):
         return '[None]'
 
 
-def get_ticks(vmin, vmax):
-    if 2 >= vmax - vmin > 1:
-        colorbar_ticks = 0.2
-    elif 5 >= vmax - vmin > 2:
-        colorbar_ticks = 0.5
-    elif 10 >= vmax - vmin > 5:
-        colorbar_ticks = 1
-    elif 50 >= vmax - vmin > 10:
-        colorbar_ticks = 5
-    elif 100 >= vmax - vmin > 50:
-        colorbar_ticks = 20
-    elif 200 >= vmax - vmin > 100:
-        colorbar_ticks = 20
-    elif 500 >= vmax - vmin > 200:
-        colorbar_ticks = 50
-    elif 1000 >= vmax - vmin > 500:
-        colorbar_ticks = 100
-    elif 2000 >= vmax - vmin > 1000:
-        colorbar_ticks = 200
-    elif 10000 >= vmax - vmin > 2000:
-        colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
-    else:
-        colorbar_ticks = 0.10
-    return colorbar_ticks
+def get_index(vmin, vmax, colormap):
+    import math
+    def get_ticks(vmin, vmax):
+        if 2 >= vmax - vmin > 1:
+            colorbar_ticks = 0.2
+        elif 5 >= vmax - vmin > 2:
+            colorbar_ticks = 0.5
+        elif 10 >= vmax - vmin > 5:
+            colorbar_ticks = 1
+        elif 50 >= vmax - vmin > 10:
+            colorbar_ticks = 5
+        elif 100 >= vmax - vmin > 50:
+            colorbar_ticks = 20
+        elif 200 >= vmax - vmin > 100:
+            colorbar_ticks = 20
+        elif 500 >= vmax - vmin > 200:
+            colorbar_ticks = 50
+        elif 1000 >= vmax - vmin > 500:
+            colorbar_ticks = 100
+        elif 2000 >= vmax - vmin > 1000:
+            colorbar_ticks = 200
+        elif 10000 >= vmax - vmin > 2000:
+            colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+        else:
+            colorbar_ticks = 0.10
+        return colorbar_ticks
+
+    # Calculate ticks
+    colorbar_ticks = get_ticks(vmin, vmax)
+    ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
+    mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
+    mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
+              mticks]
+    if mticks[0] < vmin and mticks[-1] < vmax:
+        mticks = mticks[1:]
+    elif mticks[0] > vmin and mticks[-1] > vmax:
+        mticks = mticks[:-1]
+    elif mticks[0] < vmin and mticks[-1] > vmax:
+        mticks = mticks[1:-1]
+
+    cmap = cm.get_cmap(colormap)
+    bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
+    norm = colors.BoundaryNorm(bnd, cmap.N)
+
+    return cmap, mticks, norm, bnd
 
 
-def plot_grid_map(basedir, filename, main_nml, colormap, normalize, levels, xitem, mticks, option):
+def plot_grid_map(basedir, filename, main_nml, xitem, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -133,6 +154,18 @@ def plot_grid_map(basedir, filename, main_nml, colormap, normalize, levels, xite
     lat, lon = np.meshgrid(ilat[::-1], ilon)
 
     var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
+    max_value = max(abs(np.nanmin(var)), np.nanmax(var))
+    min_value = max_value * -1
+    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    option['vmin'], option['vmax'] = mticks[0], mticks[-1]
+    if min_value < option['vmin'] and max_value > option['vmax']:
+        option['extend'] = 'both'
+    elif min_value > option['vmin'] and max_value > option['vmax']:
+        option['extend'] = 'max'
+    elif min_value < option['vmin'] and max_value < option['vmax']:
+        option['extend'] = 'min'
+    else:
+        option['extend'] = 'neither'
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -144,10 +177,10 @@ def plot_grid_map(basedir, filename, main_nml, colormap, normalize, levels, xite
         origin = 'upper'
 
     if option['show_method'] == 'imshow':
-        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+        cs = ax.imshow(ds[xitem].values, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=origin)
     elif option['show_method'] == 'contourf':
-        cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+        cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -202,7 +235,7 @@ def plot_grid_map(basedir, filename, main_nml, colormap, normalize, levels, xite
     plt.close()
 
 
-def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, cmap, norm, varname, mticks, option):
+def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, varname, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -222,6 +255,19 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, cmap, no
     if len(metric) == 0 or np.all(np.isnan(metric)):
         print(f"Warning: No valid data for {varname}. Skipping plot.")
         return
+
+    max_value = max(abs(np.nanmin(metric)), np.nanmax(metric))
+    min_value = max_value * -1
+    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    option['vmin'], option['vmax'] = mticks[0], mticks[-1]
+    if min_value < option['vmin'] and max_value > option['vmax']:
+        option['extend'] = 'both'
+    elif min_value > option['vmin'] and max_value > option['vmax']:
+        option['extend'] = 'max'
+    elif min_value < option['vmin'] and max_value < option['vmax']:
+        option['extend'] = 'min'
+    else:
+        option['extend'] = 'neither'
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -310,29 +356,17 @@ def plot_diff_results(basedir, data_type, item_type, evaluation_item, ref_source
     # Set plot parameters based on data type
     if data_type == 'anomaly':
         plot_option['title'] = f'{evaluation_item} {item_type} anomaly for {sim_source}'
-        plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for anomalies
-        if not plot_option['colorbar_label']:
-            plot_option['colorbar_label'] = sim_nml[f'{evaluation_item}'][f'{sim_source}_varunit']
+        # if not plot_option['colorbar_label']:
+        unit = sim_nml[f'{evaluation_item}'][f'{sim_source}_varunit']
+        plot_option['colorbar_label'] = process_unit(unit, item_type)
     else:
         plot_option['title'] = f'{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}'
-        plot_option['vmin'], plot_option['vmax'] = -1, 1  # Symmetric around 0 for differences
-        if not plot_option['colorbar_label']:
-            plot_option['colorbar_label'] = sim_nml[f'{evaluation_item}'][f'{sim_source[0]}_varunit']
+        # if not plot_option['colorbar_label']:
+        unit = sim_nml[f'{evaluation_item}'][f'{sim_source[0]}_varunit']
+        plot_option['colorbar_label'] = process_unit(unit, item_type)
 
-    plot_option['extend'] = 'neither'
-    plot_option['colorbar_ticks'] = get_ticks(plot_option['vmin'], plot_option['vmax'])
-    plot_option['cmap'] = 'RdBu_r'  # Diverging colormap for anomalies/differences
-
-    # Calculate ticks
-    ticks = matplotlib.ticker.MultipleLocator(base=plot_option['colorbar_ticks'])
-    mticks = ticks.tick_values(vmin=plot_option['vmin'], vmax=plot_option['vmax'])
-    mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
-
-    # Create colormap
-    cmap = cm.get_cmap(plot_option['cmap'])
-    bnd = np.arange(plot_option['vmin'], plot_option['vmax'] + plot_option['colorbar_ticks'] / 2,
-                    plot_option['colorbar_ticks'] / 2)
-    norm = colors.BoundaryNorm(bnd, cmap.N)
+    if not plot_option['cmap']:
+        plot_option['cmap'] = 'RdBu_r'  # Diverging colormap for anomalies/differences
 
     # For station data
     if ref_data_type == 'stn':
@@ -340,15 +374,12 @@ def plot_diff_results(basedir, data_type, item_type, evaluation_item, ref_source
         lon_select = data['lon'].values
         lat_select = data['lat'].values
         plotvar = data[f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}'].values
-
-        plot_stn_map(basedir, filename, lon_select, lat_select, plotvar, main_nml, cmap, norm,
-                     f'{data_type}_{item_type}', mticks, plot_option)
+        plot_stn_map(basedir, filename, lon_select, lat_select, plotvar, main_nml, f'{data_type}_{item_type}', plot_option)
 
     # For gridded data
     else:  # xarray Dataset
-        plot_grid_map(basedir, filename, main_nml, cmap, norm, bnd,
-                      f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}',
-                      mticks, plot_option)
+        plot_grid_map(basedir, filename, main_nml,
+                      f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}', plot_option)
 
 
 def make_scenarios_comparison_Diff_Plot(basedir, metrics, scores, evaluation_item, ref_source, sim_sources, main_nml, sim_nml,
