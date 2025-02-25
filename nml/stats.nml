@@ -1,234 +1,213 @@
 &general
-Mann_Kendall_Trend_Test_data_source = MK_Test_Data
-Correlation_data_source = Corr_Data1,Corr_Data2
-Standard_Deviation_data_source = SD_Data
-Z_Score_data_source = Z_Score_Data
-functional_response_data_source = FR_Data
-hellinger_distance_data_source = HD_Data1, HD_Data2
-tch_data_source = TCH_Data1, TCH_Data2, TCH_Data3
-Partial_Least_Squares_Regression_data_source = PLSR_Data_Y, PLSR_Data_X1,PLSR_Data_X2
-anova_data_source = ANOVA_Data_Y, ANOVA_Data_X1,ANOVA_Data_X2
+    Mann_Kendall_Trend_Test_data_source          = MK_Test_Canopy_Interception_CESM2
+    Correlation_data_source                      = Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL
+    Standard_Deviation_data_source               = SD_Data
+    Z_Score_data_source                          = Z_Score_Evapotranspiration_ET_Xu_etal_2024
+    Functional_Response_data_source              = FR_Data
+    Hellinger_Distance_data_source               = HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly
+    Partial_Least_Squares_Regression_data_source = PLSR_Data
 /
+
 
 &Mann_Kendall_Trend_Test
-MK_Test_Data_timezone     = 0
-MK_Test_Data_data_type    = geo
-MK_Test_Data_data_groupby = Single
-MK_Test_Data_dir          = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-MK_Test_Dat_fulllist      =  
-MK_Test_Data_varname      = slhf
-MK_Test_Data_tim_res      = monthly
-MK_Test_Data_geo_res      = 0.5
-MK_Test_Data_suffix       = Latent_Heat_ref_ERA5LAND_slhf
-MK_Test_Data_prefix       = 
-MK_Test_Data_syear        = 1996
-MK_Test_Data_eyear        = 2005
-significance_level        = 0.05
+
+#casename: MK_Test_Canopy_Interception_CESM2
+    MK_Test_Canopy_Interception_CESM2_timezone =  0.0
+    MK_Test_Canopy_Interception_CESM2_data_type =  grid
+    MK_Test_Canopy_Interception_CESM2_data_groupby =  single
+    MK_Test_Canopy_Interception_CESM2_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    MK_Test_Canopy_Interception_CESM2_fulllist =  
+    MK_Test_Canopy_Interception_CESM2_varname =  evspsblveg
+    MK_Test_Canopy_Interception_CESM2_tim_res =  month
+    MK_Test_Canopy_Interception_CESM2_grid_res =  1.25
+    MK_Test_Canopy_Interception_CESM2_suffix =  
+    MK_Test_Canopy_Interception_CESM2_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    MK_Test_Canopy_Interception_CESM2_syear =  2003
+    MK_Test_Canopy_Interception_CESM2_eyear =  2009
+    significance_level =  0.05
 /
+
 
 &Correlation
-Corr_Data1_timezone = 0
-Corr_Data1_data_type = geo
-Corr_Data1_data_groupby = Single
-Corr_Data1_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-Corr_Data1_varname = slhf
-Corr_Data1_tim_res = Month
-Corr_Data1_geo_res = 0.5
-Corr_Data1_suffix = Latent_Heat_ref_ERA5LAND_slhf
-Corr_Data1_prefix = 
-Corr_Data1_syear = 1996
-Corr_Data1_eyear = 2005
 
-Corr_Data2_timezone = 0
-Corr_Data2_data_type = geo
-Corr_Data2_data_groupby = Single
-Corr_Data2_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-Corr_Data2_varname = slhf
-Corr_Data2_tim_res = Month
-Corr_Data2_geo_res = 0.5
-Corr_Data2_suffix = Latent_Heat_ref_ERA5LAND_slhf
-Corr_Data2_prefix = 
-Corr_Data2_syear = 1996
-Corr_Data2_eyear = 2005
+#casename: Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_timezone =  0.0
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_data_type =  grid
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_data_groupby =  single
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_fulllist =  
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_varname =  Ei
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_tim_res =  month
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_grid_res =  0.1
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_suffix =  
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_prefix =  Canopy_Interception_ref_GLEAM4.1a_monthly_Ei
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_syear =  2003
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL1_eyear =  2009
+
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_timezone =  0.0
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_data_type =  grid
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_data_groupby =  single
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_fulllist =  
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_varname =  evspsblveg
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_tim_res =  month
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_grid_res =  1.25
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_suffix =  
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_prefix =  Canopy_Interception_sim_UKESM1-0-LL_evspsblveg
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_syear =  2003
+    Corr_Canopy_Interception_GLEAM4.1a_monthly_UKESM1-0-LL2_eyear =  2009
 
 /
+
 
 &Standard_Deviation
-SD_Data_timezone = 0
-SD_Data_data_type = geo
-SD_Data_data_groupby = Single
-SD_Data_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-SD_Data_varname = slhf
-SD_Data_tim_res = monthly
-SD_Data_geo_res = 0.5
-SD_Data_suffix = Latent_Heat_ref_ERA5LAND_slhf
-SD_Data_prefix = 
-SD_Data_syear = 1996
-SD_Data_eyear = 2005
+
+#casename: SD_Data
+    SD_Data_timezone =  0.0
+    SD_Data_data_type =  grid
+    SD_Data_data_groupby =  single
+    SD_Data_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    SD_Data_fulllist =  
+    SD_Data_varname =  evspsbl
+    SD_Data_tim_res =  month
+    SD_Data_grid_res =  0.5
+    SD_Data_suffix =  Evapotranspiration_sim_CESM2_evspsbl
+    SD_Data_prefix =  
+    SD_Data_syear =  1996
+    SD_Data_eyear =  2005
 /
+
 
 &Z_Score
-Z_Score_Data_timezone = 0
-Z_Score_Data_data_type = geo
-Z_Score_Data_data_groupby = Single
-Z_Score_Data_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-Z_Score_Data_varname = slhf
-Z_Score_Data_tim_res = monthly
-Z_Score_Data_geo_res = 0.5
-Z_Score_Data_suffix = Latent_Heat_ref_ERA5LAND_slhf
-Z_Score_Data_prefix = 
-Z_Score_Data_syear = 1996
-Z_Score_Data_eyear = 2005
+
+#casename: Z_Score_Evapotranspiration_ET_Xu_etal_2024
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_timezone =  0.0
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_data_type =  grid
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_data_groupby =  single
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_fulllist =  
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_varname =  ET
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_tim_res =  month
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_grid_res =  1.25
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_suffix =  
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_prefix =  Evapotranspiration_ref_ET_Xu_etal_2024_ET
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_syear =  2003
+    Z_Score_Evapotranspiration_ET_Xu_etal_2024_eyear =  2009
 /
+
 
 &Functional_Response
-FR_Data_timezone = 0
-FR_Data_data_type = geo
-FR_Data_data_groupby = Single
-FR_Data_dir = /path/to/functional_response_data
-FR_Data_varname = fr_variable
-FR_Data_varunit = unit
-FR_Data_tim_res = Year
-FR_Data_geo_res = 0.5
-FR_Data_suffix = FR
-FR_Data_prefix = 
-FR_Data_syear = 2000
-FR_Data_eyear = 2020
-nbins = 25
+
+#casename: FR_Data
+    FR_Data1_timezone =  0.0
+    FR_Data1_data_type =  grid
+    FR_Data1_data_groupby =  single
+    FR_Data1_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    FR_Data1_fulllist =  
+    FR_Data1_varname =  evspsbl
+    FR_Data1_tim_res =  month
+    FR_Data1_grid_res =  1.25
+    FR_Data1_suffix =  
+    FR_Data1_prefix =  Evapotranspiration_sim_CESM2_evspsbl
+    FR_Data1_syear =  2003
+    FR_Data1_eyear =  2009
+
+    FR_Data2_timezone =  0.0
+    FR_Data2_data_type =  grid
+    FR_Data2_data_groupby =  single
+    FR_Data2_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    FR_Data2_fulllist =  
+    FR_Data2_varname =  evspsbl
+    FR_Data2_tim_res =  month
+    FR_Data2_grid_res =  1.25
+    FR_Data2_suffix =  
+    FR_Data2_prefix =  Evapotranspiration_sim_CMCC-ESM2_evspsbl
+    FR_Data2_syear =  2003
+    FR_Data2_eyear =  2009
+
+    nbins =  25
 /
+
 
 &Hellinger_Distance
-HD_Data1_timezone = 0
-HD_Data1_data_type = geo
-HD_Data1_data_groupby = Single
-HD_Data1_dir = /path/to/hellinger_distance_data1
-HD_Data1_varname = hd_variable1
-HD_Data1_varunit = unit1
-HD_Data1_tim_res = Year
-HD_Data1_geo_res = 0.5
-HD_Data1_suffix = HD1
-HD_Data1_prefix = 
-HD_Data1_syear = 2000
-HD_Data1_eyear = 2020
-HD_Data2_timezone = 0
-HD_Data2_data_type = geo
-HD_Data2_data_groupby = Single
-HD_Data2_dir = /path/to/hellinger_distance_data2
-HD_Data2_varname = hd_variable2
-HD_Data2_varunit = unit2
-HD_Data2_tim_res = Year
-HD_Data2_geo_res = 0.5
-HD_Data2_suffix = HD2
-HD_Data2_prefix = 
-HD_Data2_syear = 2000
-HD_Data2_eyear = 2020
-nbins = 25
+
+#casename: HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_timezone =  0.0
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_data_type =  grid
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_data_groupby =  single
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_fulllist =  
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_varname =  evspsblveg
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_tim_res =  month
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_grid_res =  1.25
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_suffix =  
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_prefix =  Canopy_Interception_sim_UKESM1-0-LL_evspsblveg
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_syear =  2003
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly1_eyear =  2009
+
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_timezone =  0.0
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_data_type =  grid
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_data_groupby =  single
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_fulllist =  
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_varname =  Ei
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_tim_res =  month
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_grid_res =  0.1
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_suffix =  
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_prefix =  Canopy_Interception_ref_GLEAM4.1a_monthly_Ei
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_syear =  2003
+    HD_Canopy_Interception_UKESM1-0-LL_GLEAM4.1a_monthly2_eyear =  2009
+
+    nbins =  25
 /
 
-&TCH
-TCH_Data1_timezone = 0
-TCH_Data1_data_type = geo
-TCH_Data1_data_groupby = Single
-TCH_Data1_dir = /path/to/tch_data1
-TCH_Data1_varname = tch_variable1
-TCH_Data1_varunit = unit1
-TCH_Data1_tim_res = Year
-TCH_Data1_geo_res = 0.5
-TCH_Data1_suffix = TCH1
-TCH_Data1_prefix = 
-TCH_Data1_syear = 2000
-TCH_Data1_eyear = 2020
-TCH_Data2_timezone = 0
-TCH_Data2_data_type = geo
-TCH_Data2_data_groupby = Single
-TCH_Data2_dir = /path/to/tch_data2
-TCH_Data2_varname = tch_variable2
-TCH_Data2_varunit = unit2
-TCH_Data2_tim_res = Year
-TCH_Data2_geo_res = 0.5
-TCH_Data2_suffix = TCH2
-TCH_Data2_prefix = 
-TCH_Data2_syear = 2000
-TCH_Data2_eyear = 2020
-TCH_Data3_timezone = 0
-TCH_Data3_data_type = geo
-TCH_Data3_data_groupby = Single
-TCH_Data3_dir = /path/to/tch_data3
-TCH_Data3_varname = tch_variable3
-TCH_Data3_varunit = unit3
-TCH_Data3_tim_res = Year
-TCH_Data3_geo_res = 0.5
-TCH_Data3_suffix = TCH3
-TCH_Data3_prefix = 
-TCH_Data3_syear = 2000
-TCH_Data3_eyear = 2020
-/
 
 &Partial_Least_Squares_Regression
-PLSR_Data_Y_timezone = 0
-PLSR_Data_Y_data_type = geo
-PLSR_Data_Y_data_groupby = Single
-PLSR_Data_Y_dir = /path/to/plsr_data_y
-PLSR_Data_Y_varname = plsr_variable_y
-PLSR_Data_Y_varunit = unit_y
-PLSR_Data_Y_tim_res = Year
-PLSR_Data_Y_geo_res = 0.5
-PLSR_Data_Y_suffix = PLSR_Y
-PLSR_Data_Y_prefix = 
-PLSR_Data_Y_syear = 2000
-PLSR_Data_Y_eyear = 2020
 
-PLSR_Data_X1_timezone = 0 
-PLSR_Data_X1_data_type = geo
-PLSR_Data_X1_data_groupby = Single
-PLSR_Data_X1_dir = /path/to/plsr_data_x
-PLSR_Data_X1_varname = plsr_variable_x
-PLSR_Data_X1_varunit = unit_x
-PLSR_Data_X1_tim_res = Year
-PLSR_Data_X1_geo_res = 0.5
-PLSR_Data_X1_suffix = PLSR_X
-PLSR_Data_X1_prefix = 
-PLSR_Data_X1_syear = 2000
-PLSR_Data_X1_eyear = 2020
-PLSR_Data_X1_type  = Independent
+#casename: PLSR_Data
+    PLSR_Data_nX =  2
+    PLSR_Data_Y_timezone =  0.0
+    PLSR_Data_Y_data_type =  grid
+    PLSR_Data_Y_data_groupby =  single
+    PLSR_Data_Y_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    PLSR_Data_Y_fulllist =  
+    PLSR_Data_Y_varname =  Ei
+    PLSR_Data_Y_tim_res =  month
+    PLSR_Data_Y_grid_res =  1.25
+    PLSR_Data_Y_suffix =  
+    PLSR_Data_Y_prefix =  Canopy_Interception_ref_GLEAM4.1a_monthly_Ei
+    PLSR_Data_Y_syear =  2003
+    PLSR_Data_Y_eyear =  2009
 
-PLSR_Data_X2_timezone = 0 
-PLSR_Data_X2_data_type = geo
-PLSR_Data_X2_data_groupby = Single
-PLSR_Data_X2_dir = /path/to/plsr_data_x
-PLSR_Data_X2_varname = plsr_variable_x
-PLSR_Data_X2_varunit = unit_x
-PLSR_Data_X2_tim_res = Year
-PLSR_Data_X2_geo_res = 0.5
-PLSR_Data_X2_suffix = PLSR_X
-PLSR_Data_X2_prefix = 
-PLSR_Data_X2_syear = 2000
-PLSR_Data_X2_eyear = 2020
+    PLSR_Data_X1_timezone =  0.0
+    PLSR_Data_X1_data_type =  grid
+    PLSR_Data_X1_data_groupby =  single
+    PLSR_Data_X1_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    PLSR_Data_X1_fulllist =  
+    PLSR_Data_X1_varname =  evspsbl
+    PLSR_Data_X1_tim_res =  month
+    PLSR_Data_X1_grid_res =  0.5
+    PLSR_Data_X1_suffix =  
+    PLSR_Data_X1_prefix =  Evapotranspiration_sim_CESM2_evspsbl
+    PLSR_Data_X1_syear =  2003
+    PLSR_Data_X1_eyear =  2009
+
+    PLSR_Data_X2_timezone =  0.0
+    PLSR_Data_X2_data_type =  grid
+    PLSR_Data_X2_data_groupby =  single
+    PLSR_Data_X2_dir =  /share/home/dq013/xuqch3/Streamlit/case_test/LS3MIP/output/data/
+    PLSR_Data_X2_fulllist =  
+    PLSR_Data_X2_varname =  evspsbl
+    PLSR_Data_X2_tim_res =  month
+    PLSR_Data_X2_grid_res =  0.5
+    PLSR_Data_X2_suffix =  
+    PLSR_Data_X2_prefix =  Evapotranspiration_sim_CMCC-ESM2_evspsbl
+    PLSR_Data_X2_syear =  2003
+    PLSR_Data_X2_eyear =  2009
+
+    max_components =  2
+    n_splits =  5
+    n_jobs =  -1
 /
 
-&ANOVA
-ANOVA_Data_Y_timezone = 0
-ANOVA_Data_Y_data_type = geo
-ANOVA_Data_Y_data_groupby = Single
-ANOVA_Data_Y_dir = /path/to/anova_data_y
-ANOVA_Data_Y_varname = anova_variable_y
-ANOVA_Data_Y_varunit = unit_y
-ANOVA_Data_Y_tim_res = Year
-ANOVA_Data_Y_geo_res = 0.5
-ANOVA_Data_Y_suffix = ANOVA_Y
-ANOVA_Data_Y_prefix = 
-ANOVA_Data_Y_syear = 2000
-ANOVA_Data_Y_eyear = 2020
-ANOVA_Data_X_timezone = 0
-ANOVA_Data_X_data_type = geo
-ANOVA_Data_X_data_groupby = Single
-ANOVA_Data_X_dir = /path/to/anova_data_x
-ANOVA_Data_X_varname = anova_variable_x
-ANOVA_Data_X_varunit = unit_x
-ANOVA_Data_X_tim_res = Year
-ANOVA_Data_X_geo_res = 0.5
-ANOVA_Data_X_suffix = ANOVA_X
-ANOVA_Data_X_prefix = 
-ANOVA_Data_X_syear = 2000
-ANOVA_Data_X_eyear = 2020
-/
+

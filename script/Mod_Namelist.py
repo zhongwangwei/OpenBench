@@ -120,8 +120,6 @@ class NamelistReader:
         return namelist
 
 
-
-
 class UpdateNamelist(NamelistReader):
     def __init__(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], ref_nml: Dict[str, Any], evaluation_items: List[str]):
         # Initialize with general settings
@@ -142,7 +140,7 @@ class UpdateNamelist(NamelistReader):
         # Process reference sources
         for ref_source in ref_sources:
             self._process_ref_source(evaluation_item, ref_source, ref_nml)
-        
+
         # Process simulation sources
         for sim_source in sim_sources:
             self._process_sim_source(evaluation_item, sim_source, sim_nml)
@@ -240,7 +238,7 @@ class UpdateNamelist(NamelistReader):
                 raise FileNotFoundError(f"Root directory not found: {root_dir}")
             if not os.path.isdir(root_dir):
                 raise NotADirectoryError(f"Expected directory but found file: {root_dir}")
-            
+
             try:
                 sub_dir = tmp[evaluation_item]['sub_dir']
                 full_dir = os.path.join(root_dir, sub_dir)
@@ -745,7 +743,7 @@ class GeneralInfoReader(NamelistReader):
             )
             for _, row in stations_df.iterrows()
         )
-        
+
         # Process results and update flags
         invalid_stations = []
         for result in results:
@@ -753,5 +751,5 @@ class GeneralInfoReader(NamelistReader):
                 invalid_stations.append(result['ID'])
                 if result['error']:
                     print(f"Warning: Station ID {result['ID']}: {result['error']}")
-        
+
         return invalid_stations
