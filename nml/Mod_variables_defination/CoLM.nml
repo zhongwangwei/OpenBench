@@ -134,7 +134,7 @@ varname           =  f_rsur_se
 varunit           =  mm s-1
 /
 
-Infiltration Excess Surface Runoff
+&Infiltration Excess Surface Runoff
 varname           =  f_rsur_ie
 varunit           =  mm s-1
 /
