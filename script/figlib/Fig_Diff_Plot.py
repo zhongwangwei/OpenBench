@@ -1,14 +1,21 @@
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+import itertools
+import sys
 import matplotlib
+import matplotlib.pylab as pylab
 import matplotlib.pyplot as plt
-# Plot settings
+from matplotlib import colors
+from matplotlib import cm
 import numpy as np
 import pandas as pd
+from matplotlib import rcParams
+
+# Plot settings
+import numpy as np
 import xarray as xr
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from matplotlib import cm
-from matplotlib import colors
+
 from matplotlib import rcParams
 
 
@@ -66,19 +73,21 @@ def process_unit(ref_unit, metric):
         'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
         'index_agreement': 'Unitless',  # Index of agreement
     }
-
-    unit = all_metrics_units[metric]
-    if unit == 'Unitless':
-        return '[Unitless]'
-    elif unit == '%':
-        return '[%]'
-    elif unit == 'Same as input data':
-        return f'[{ref_unit}]'
-    elif unit == 'Square of input data unit':
-        return rf'[${ref_unit}^{{2}}$]'
-    else:
-        print('Warning: Missing metric unit!')
+    if metric not in all_metrics_units.keys():
         return '[None]'
+    else:
+        unit = all_metrics_units[metric]
+        if unit == 'Unitless':
+            return '[Unitless]'
+        elif unit == '%':
+            return '[%]'
+        elif unit == 'Same as input data':
+            return f'[{ref_unit}]'
+        elif unit == 'Square of input data unit':
+            return rf'[${ref_unit}^{{2}}$]'
+        else:
+            print('Warning: Missing metric unit!')
+            return '[None]'
 
 
 def get_index(vmin, vmax, colormap):
