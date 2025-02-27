@@ -105,7 +105,6 @@ def make_plot_index_grid(self):
         else:
             colorbar_ticks = 0.10
         return colorbar_ticks
-
     for metric in self.metrics:
         option = self.fig_nml['make_geo_plot_index']
         print(f'plotting metric: {metric}')

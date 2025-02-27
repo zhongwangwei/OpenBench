@@ -3,6 +3,7 @@ import re
 import shutil
 import sys
 import warnings
+import logging
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -28,25 +29,27 @@ class Evaluation_grid(metrics, scores):
         self.fig_nml = fig_nml
         os.makedirs(self.casedir + '/output/', exist_ok=True)
 
-        print(" ")
-        print("\033[1;32m╔═══════════════════════════════════════════════════════════════╗\033[0m")
-        print("\033[1;32m║                Evaluation processes starting!                 ║\033[0m")
-        print("\033[1;32m╚═══════════════════════════════════════════════════════════════╝\033[0m")
-        print("\n")
+        logging.info(" ")
+        logging.info("╔═══════════════════════════════════════════════════════════════╗")
+        logging.info("║                Evaluation processes starting!                 ║")
+        logging.info("╚═══════════════════════════════════════════════════════════════╝")
+        logging.info(" ")
 
     def process_metric(self, metric, s, o, vkey=''):
         pb = getattr(self, metric)(s, o)
         pb = pb.squeeze()
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
-        pb_da.to_netcdf(
-            f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
+        output_path = f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc'
+        pb_da.to_netcdf(output_path)
+        logging.info(f"Saved metric {metric} to {output_path}")
 
     def process_score(self, score, s, o, vkey=''):
         pb = getattr(self, score)(s, o)
         pb = pb.squeeze()
         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
-        pb_da.to_netcdf(f'{self.casedir}/output/scores/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
-
+        output_path = f'{self.casedir}/output/scores/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc'
+        pb_da.to_netcdf(output_path)
+        logging.info(f"Saved score {score} to {output_path}")
 
     def make_Evaluation(self, **kwargs):
         o = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')[
@@ -56,6 +59,7 @@ class Evaluation_grid(metrics, scores):
 
         s['time'] = o['time'] 
         if self.item == 'Terrestrial_Water_Storage_Change':
+            logging.info("Processing Terrestrial Water Storage Change...")
             # Calculate time difference while preserving coordinates
             s_values = s.values
             s_values[1:,:,:] = s_values[1:,:,:] - s_values[:-1,:,:]
@@ -67,24 +71,25 @@ class Evaluation_grid(metrics, scores):
         mask1 = np.isnan(s) | np.isnan(o)
         s.values[mask1] = np.nan
         o.values[mask1] = np.nan
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
+        logging.info("=" * 80)
+        
         for metric in self.metrics:
             if hasattr(self, metric):
-                print(f'calculating metric: {metric}')
+                logging.info(f'Calculating metric: {metric}')
                 self.process_metric(metric, s, o)
             else:
-                print(f'No such metric: {metric}')
+                logging.error(f'No such metric: {metric}')
                 sys.exit(1)
 
         for score in self.scores:
             if hasattr(self, score):
-                print(f'calculating score: {score}')
+                logging.info(f'Calculating score: {score}')
                 self.process_score(score, s, o)
             else:
-                print(f'No such score: {score}')
+                logging.error(f'No such score: {score}')
                 sys.exit(1)
 
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
+        logging.info("=" * 80)
         make_plot_index_grid(self)
         return
 
@@ -100,10 +105,10 @@ class Evaluation_stn(metrics, scores):
         if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
 
-        print('Evaluation processes starting!')
-        print("=======================================")
-        print(" ")
-        print(" ")
+        logging.info('Evaluation processes starting!')
+        logging.info("=======================================")
+        logging.info(" ")
+        logging.info(" ")
 
     def make_evaluation(self):
         # read station information
@@ -131,36 +136,31 @@ class Evaluation_stn(metrics, scores):
                 if hasattr(self, metric):
                     pb = getattr(self, metric)(s, o)
                     station_list.loc[iik, f'{metric}'] = pb.values
-                #  self.plot_stn(s.squeeze(),o.squeeze(),station_list['ID'][iik],self.ref_varname, float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),float(station_list['correlation'][iik]))
                 else:
-                    print('No such metric')
+                    logging.error('No such metric')
                     sys.exit(1)
 
             for score in self.scores:
                 if hasattr(self, score):
                     pb = getattr(self, score)(s, o)
-
                 else:
-                    print('No such score')
+                    logging.error('No such score')
                     sys.exit(1)
 
-            print("=======================================")
-            print(" ")
-            print(" ")
+            logging.info("=======================================")
+            logging.info(" ")
+            logging.info(" ")
 
-        print('Comparison dataset prepared!')
-        print("=======================================")
-        print(" ")
-        print(" ")
-        print(f"send {self.ref_varname} evaluation to {self.ref_varname}_{self.sim_varname}_metrics.csv'")
-        station_list.to_csv(
-            f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metrics.csv',
-            index=False)
-        station_list.to_csv(
-            f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv',
-            index=False)
+        logging.info('Comparison dataset prepared!')
+        logging.info("=======================================")
+        logging.info(" ")
+        logging.info(" ")
+        output_path = f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metrics.csv'
+        logging.info(f"Saving evaluation to {output_path}")
+        station_list.to_csv(output_path, index=False)
+        output_path = f'{self.casedir}/output/scores/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_scores.csv'
+        station_list.to_csv(output_path, index=False)
 
-    
     def make_evaluation_parallel(self, station_list, iik):
         s = xr.open_dataset(
             f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
@@ -206,7 +206,7 @@ class Evaluation_stn(metrics, scores):
                                   float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),
                                   float(station_list['correlation'][iik]), lat_lon)
             else:
-                print(f'No such metric: {metric}')
+                logging.error(f'No such metric: {metric}')
                 sys.exit(1)
 
         for score in self.scores:
@@ -218,7 +218,7 @@ class Evaluation_stn(metrics, scores):
                 else:
                     row[f'{score}'] = -9999.0
             else:
-                print('No such score')
+                logging.error('No such score')
                 sys.exit(1)
 
         if 'ref_lat' in station_list:
@@ -233,31 +233,24 @@ class Evaluation_stn(metrics, scores):
     def make_evaluation_P(self):
         stnlist = f"{self.casedir}/stn_list.txt"
         station_list = pd.read_csv(stnlist, header=0)
-        num_cores = os.cpu_count()  ##用来计算现在可以获得多少cpu核心。 也可以用multipocessing.cpu_count(),或者随意设定<=cpu核心数的数值
-        # shutil.rmtree(f'{self.casedir}/output',ignore_errors=True)
-        # creat tmp directory
-        # os.makedirs(f'{self.casedir}/output', exist_ok=True)
-
-        # loop the keys in self.variables
-        # loop the keys in self.variables to get the metric output
-        # for metric in self.metrics.keys():
-        #    station_list[f'{metric}']=[-9999.0] * len(station_list['ID'])
-        # if self.ref_source.lower() == 'grdc':
-
+        num_cores = os.cpu_count()
+        
         results = Parallel(n_jobs=-1)(
             delayed(self.make_evaluation_parallel)(station_list, iik) for iik in range(len(station_list['ID'])))
         station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
-        print('Evaluation finished')
-        print("=======================================")
-        print(" ")
-        print(" ")
-        print(f"send evaluation to {self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations")
-        print(f"send evaluation to {self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations")
-
-        station_list.to_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
-                            index=False)
-        station_list.to_csv(f'{self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
-                            index=False)
+        logging.info('Evaluation finished')
+        logging.info("=======================================")
+        logging.info(" ")
+        logging.info(" ")
+        
+        output_path = f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv'
+        logging.info(f"Saving evaluation to {output_path}")
+        station_list.to_csv(output_path, index=False)
+        
+        output_path = f'{self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv'
+        logging.info(f"Saving evaluation to {output_path}")
+        station_list.to_csv(output_path, index=False)
+        
         make_plot_index_stn(self)
 
