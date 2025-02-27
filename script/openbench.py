@@ -172,11 +172,11 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
         evaluater = Evaluation_stn(general_info,fig_nml)
         evaluater.make_evaluation_P()
+        evaluater.make_plot_index_stn()
+
     else:
         evaluater = Evaluation_grid(general_info,fig_nml)
         evaluater.make_Evaluation()
-    
-    evaluater.make_plot_index()
 
 def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml):
     """Run the comparison process for each comparison variable."""
