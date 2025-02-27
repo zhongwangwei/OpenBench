@@ -21,8 +21,8 @@
   statistics        = False   # True: show statistics
   debug_mode        = True    # True: show debug information
   weight            = area # area, mass  # weight for metrics and scores
-  IGBP_groupby      = False   # True: show metics and scores grouped by IGBP
-  PFT_groupby       = False   # True: show metics and scores grouped by PFT
+  IGBP_groupby      = True   # True: show metics and scores grouped by IGBP
+  PFT_groupby       = True   # True: show metics and scores grouped by PFT
   unified_mask      = True    # True: mask the observation data with all simulation datasets to ensure consistent coverage
 /
 
