@@ -395,7 +395,6 @@ class Evaluation_grid(metrics, scores):
             format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
 
-
 class Evaluation_stn(metrics, scores):
     def __init__(self, info, fig_nml):
         self.name = 'Evaluation_point'
@@ -955,7 +954,6 @@ class Evaluation_stn(metrics, scores):
                             index=False)
         station_list.to_csv(f'{self.casedir}/output/metrics/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                             index=False)
-
 
 class LC_groupby(metrics, scores):
     def __init__(self, main_nml, scores, metrics):
