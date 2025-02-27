@@ -21,7 +21,8 @@ import xarray as xr
 import numpy as np
 from Mod_Comparison import ComparisonProcessing
 from Mod_DatasetProcessing import DatasetProcessing
-from Mod_Evaluation import Evaluation_grid, Evaluation_stn, LC_groupby
+from Mod_Evaluation import Evaluation_grid, Evaluation_stn
+from Mod_Landcover_Groupby import LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
 from Mod_Preprocessing import check_required_nml, run_files_check
