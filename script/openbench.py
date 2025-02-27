@@ -26,6 +26,8 @@ from Mod_Landcover_Groupby import LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
 from Mod_Preprocessing import check_required_nml, run_files_check
+import logging
+from datetime import datetime
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
@@ -68,10 +70,22 @@ def setup_directories(main_nl):
         'scratch': os.path.join(base_path, 'scratch'),
         'metrics': os.path.join(base_path, 'output', 'metrics'),
         'scores': os.path.join(base_path, 'output', 'scores'),
-        'data': os.path.join(base_path, 'output', 'data')
+        'data': os.path.join(base_path, 'output', 'data'),
+        'log': os.path.join(base_path, 'log')
     }
     for dir_path in directories.values():
         os.makedirs(dir_path, exist_ok=True)
+    
+    # Configure logging
+    log_file = os.path.join(directories['log'], f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
     return directories
 
 def load_namelists(nl, main_nl):
@@ -88,7 +102,7 @@ def load_namelists(nl, main_nl):
 def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml):
     """Run the evaluation process for each item."""
     for evaluation_item in evaluation_items:
-        print(f"Start running {evaluation_item} evaluation...")
+        logging.info(f"Start running {evaluation_item} evaluation...")
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
@@ -127,7 +141,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                                         fig_nml['PFT_groupby'])
 
 def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
-    print(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
+    logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
     # Add ref_source and sim_source to general_info
@@ -140,20 +154,20 @@ def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, 
     if onetimeref==True:
         dataset_processer.process('ref')
     else:
-        print("Skip processing ref data")
+        logging.info("Skip processing ref data")
     dataset_processer.process('sim')
     
     # Clear scratch directory
     scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
     shutil.rmtree(scratch_dir, ignore_errors=True)
-    print(f"Re-creating output directory: {scratch_dir}")
+    logging.info(f"Re-creating output directory: {scratch_dir}")
     os.makedirs(scratch_dir)
     if main_nl['general']['unified_mask']:
         if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
             pass
         else:
             # Mask the observation data with simulation data to ensure consistent coverage
-            print("Mask the observation data with all simulation datasets to ensure consistent coverage")
+            logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
             o = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
                 f'{general_info["ref_varname"]}']
             s = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
@@ -173,7 +187,6 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
         evaluater = Evaluation_stn(general_info,fig_nml)
         evaluater.make_evaluation_P()
-        evaluater.make_plot_index_stn()
 
     else:
         evaluater = Evaluation_grid(general_info,fig_nml)
@@ -234,6 +247,8 @@ def main():
     # Setup directories
     setup_directories(main_nl)
     
+    logging.info("Starting OpenBench evaluation process...")
+    
     # Load namelists
     ref_nml, sim_nml, stats_nml, fig_nml = load_namelists(nl, main_nl)
     
@@ -249,9 +264,7 @@ def main():
 
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
-
     UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
-
     run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml)
     
     # Run evaluation if enabled
@@ -260,7 +273,7 @@ def main():
         run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml['Validation'])
         end_time = time.time()
         evaluation_time = (end_time - start_time)/60
-        print(f"\n\033[1;36mEvaluation process completed in {evaluation_time:.2f} minutes.\033[0m")
+        logging.info(f"Evaluation process completed in {evaluation_time:.2f} minutes.")
 
     # Run comparison if enabled
     if main_nl['general']['comparison']:
@@ -268,7 +281,7 @@ def main():
         run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml['Comparison'])
         end_time = time.time()
         comparison_time = (end_time - start_time)/60
-        print(f"\n\033[1;36mComparison process completed in {comparison_time:.2f} minutes.\033[0m")
+        logging.info(f"Comparison process completed in {comparison_time:.2f} minutes.")
 
     # Run statistics if enabled
     if main_nl['general']['statistics']:
@@ -276,7 +289,9 @@ def main():
         run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
         statistic_time = (end_time - start_time)/60
-        print(f"\n\033[1;36mStatistics process completed in {statistic_time:.2f} minutes.\033[0m")
+        logging.info(f"Statistics process completed in {statistic_time:.2f} minutes.")
+    
+    logging.info("OpenBench evaluation process completed successfully.")
 
 if __name__ == '__main__':
     main()
