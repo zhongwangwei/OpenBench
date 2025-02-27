@@ -51,7 +51,7 @@
   Ground_Evaporation   =False
   Water_Evaporation    =False
   Soil_Evaporation     =False
-  Total_Runoff         =True
+  Total_Runoff         =False
   Terrestrial_Water_Storage_Change=True
 
   ###Snow#### 
