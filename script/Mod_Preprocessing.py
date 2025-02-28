@@ -24,12 +24,6 @@ class FileChecker:
         self.date = 'Mar 2024'
         self.author = "Your Name"
         
-        # Configure logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
-        )
-        self.logger = logging.getLogger(__name__)
 
     def check_files(self, files: Union[str, List[str]], raise_error: bool = True) -> Tuple[bool, List[str]]:
         """
@@ -51,10 +45,11 @@ class FileChecker:
         missing_files = []
         for file_path in files:
             if not os.path.exists(file_path):
-                self.logger.error(f"File not found: {file_path}")
+                logging.error(f"File not found: {file_path}")
                 missing_files.append(file_path)
 
         if missing_files and raise_error:
+            logging.error(f"Required files not found: {', '.join(missing_files)}")
             raise FileNotFoundError(f"Required files not found: {', '.join(missing_files)}")
             
         return len(missing_files) == 0, missing_files
@@ -82,12 +77,12 @@ class FileChecker:
                 if create:
                     try:
                         os.makedirs(dir_path, exist_ok=True)
-                        self.logger.info(f"Created directory: {dir_path}")
+                        logging.info(f"Created directory: {dir_path}")
                     except Exception as e:
-                        self.logger.error(f"Failed to create directory {dir_path}: {str(e)}")
+                        logging.error(f"Failed to create directory {dir_path}: {str(e)}")
                         missing_dirs.append(dir_path)
                 else:
-                    self.logger.error(f"Directory not found: {dir_path}")
+                    logging.error(f"Directory not found: {dir_path}")
                     missing_dirs.append(dir_path)
                     
         return len(missing_dirs) == 0, missing_dirs
@@ -114,7 +109,7 @@ class FileChecker:
         if required_dirs:
             dirs_exist, missing_dirs = self.check_directories(required_dirs, create_dirs)
             if not dirs_exist:
-                self.logger.error(f"Missing directories: {', '.join(missing_dirs)}")
+                logging.error(f"Missing directories: {', '.join(missing_dirs)}")
                 all_valid = False
                 
         if required_files:
@@ -127,8 +122,8 @@ class FileChecker:
 def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=None):
     """Check all required files before running the evaluation system."""
     file_checker = FileChecker()
-    print("**************************************************")
-    print(f"\033[1;32mStart checking required nml files\033[0m")
+    logging.info("**************************************************")
+    logging.info(f"\033[1;32mStart checking required nml files\033[0m")
     # Required namelist files
     required_files = [
         main_nl["general"]["reference_nml"],
@@ -153,7 +148,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
             create_dirs=True,
             raise_error=True
         ):
-            print("\033[1;31mError: Failed to create required directories.\033[0m")
+            logging.error("\033[1;31mError: Failed to create required directories.\033[0m")
             sys.exit(1)
             
         # Then check required files
@@ -161,7 +156,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
             required_files=required_files,
             raise_error=True
         ):
-            print("\033[1;31mError: Missing required files.\033[0m")
+            logging.error("\033[1;31mError: Missing required files.\033[0m")
             sys.exit(1)
 
         # Check reference data files if ref_nml and evaluation_items are provided
@@ -171,47 +166,47 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
                 ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
                 #check if ref_sources is empty
                 if not ref_sources:
-                    print("**************************************************")
-                    print(f"\033[1;31mError: {evaluation_item} has no reference sources!\033[0m")
-                    print(f"Please add the {evaluation_item} reference sources in the reference namelist!")
-                    print(f"Or check the evaluation items is correct or not: {evaluation_items}")
-                    print("**************************************************")
+                    logging.error("**************************************************")
+                    logging.error(f"Error: {evaluation_item} has no reference sources!")
+                    logging.error(f"Please add the {evaluation_item} reference sources in the reference namelist!")
+                    logging.error(f"Or check the evaluation items is correct or not: {evaluation_items}")
+                    logging.error("**************************************************")
                     sys.exit(1)
                 
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
                 #check if sim_sources is empty
                 if not sim_sources:
-                    print("**************************************************")
-                    print(f"\033[1;31mError: {evaluation_item} has no simulation sources!\033[0m")
-                    print(f"Please add the {evaluation_item} simulation sources in the simulation namelist!")
-                    print(f"Or check the evaluation items is correct or not: {evaluation_items}")
-                    print("**************************************************")
+                    logging.error("**************************************************")
+                    logging.error(f"Error: {evaluation_item} has no simulation sources!")
+                    logging.error(f"Please add the {evaluation_item} simulation sources in the simulation namelist!")
+                    logging.error(f"Or check the evaluation items is correct or not: {evaluation_items}")
+                    logging.error("**************************************************")
                     sys.exit(1)
                 for source in ref_sources:
                     # Construct path to variable-specific namelist
                     var_nml_path = ref_nml['def_nml'][source]                    
                     if not os.path.exists(var_nml_path):
-                        print("**************************************************")
-                        print(f"\033[1;31mError: Variable namelist not found: {var_nml_path}\033[0m")
-                        print("**************************************************")
+                        logging.error("**************************************************")
+                        logging.error(f"Error: Variable namelist not found: {var_nml_path}")
+                        logging.error("**************************************************")
                         sys.exit(1)
 
                 for source in sim_sources:
                     # Construct path to variable-specific namelist
                     var_nml_path = sim_nml['def_nml'][source]                    
                     if not os.path.exists(var_nml_path):
-                        print("**************************************************")
-                        print(f"\033[1;31mError: Variable namelist not found: {var_nml_path}\033[0m")
-                        print("**************************************************")
+                        logging.error("**************************************************")
+                        logging.error(f"Error: Variable namelist not found: {var_nml_path}")
+                        logging.error("**************************************************")
                         sys.exit(1)
-        print("\033[1;32mDone\033[0m")
-        print("**************************************************")
+        logging.info("\033[1;32mDone\033[0m")
+        logging.info("**************************************************")
 
         return True
         
     except FileNotFoundError as e:
-        print(f"\033[1;31mError: {str(e)}\033[0m")
+        logging.error(f"Error: {str(e)}")
         sys.exit(1)
 
 def run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml):
@@ -233,8 +228,8 @@ def run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sc
 
 def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
     """Check the files for the given variables."""
-    print(f"**************************************************")
-    print(f"\033[1;32mChecking files for {evaluation_item} - ref: {ref_source} - sim: {sim_source}!\033[0m")
+    logging.info("**************************************************")
+    logging.info(f"Checking files for {evaluation_item} - ref: {ref_source} - sim: {sim_source}!")
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, 
                                           comparison_vars, statistic_vars, evaluation_item, 
                                           sim_source, ref_source)
@@ -246,13 +241,13 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
         if general_info['ref_data_groupby'].lower() == 'single':
             file_path = os.path.join(general_info['ref_dir'], f"{general_info['ref_prefix']}{general_info['ref_suffix']}.nc")
             if not os.path.exists(file_path):
-                print(f"Error: The reference file {file_path} does not exist!")
+                logging.error(f"Error: The reference file {file_path} does not exist!")
                 sys.exit(1)
         elif general_info['ref_data_groupby'].lower() == 'year':
             for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
                 file_path = os.path.join(general_info['ref_dir'], f'{general_info['ref_prefix']}{year}{general_info['ref_suffix']}.nc')
                 if not os.path.exists(file_path):
-                    print(f"Error: The reference file {file_path} does not exist!")
+                    logging.error(f"Error: The reference file {file_path} does not exist!")
                     sys.exit(1)
         elif general_info['ref_data_groupby'].lower() == 'month':
             for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
@@ -260,43 +255,43 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 file_count = len(glob.glob(file_path))
                 #check if the file_count is 12
                 if file_count != 12:
-                    print(f"Error: The reference file {file_path} does not have 12 months!")
+                    logging.error(f"Error: The reference file {file_path} does not have 12 months!")
                     sys.exit(1)
         else:
-            print(f"The reference data groupby is not checked in current version!")
+            logging.error(f"The reference data groupby is not checked in current version!")
 
     elif general_info['ref_data_type'] == 'stn':
-        print(f"The reference data type is station!,which is not checked in current version!")
+        logging.error(f"The reference data type is station!,which is not checked in current version!")
     else:
-        print(f"The reference data type is not supported!")
+        logging.error(f"The reference data type is not supported!")
         sys.exit(1)
 
     if general_info['sim_data_type'] == 'grid':
         if general_info['sim_data_groupby'] == 'single':
             file_path = os.path.join(general_info['sim_dir'], f"{general_info['sim_prefix']}{general_info['sim_suffix']}.nc")
             if not os.path.exists(file_path):
-                print(f"Error: The simulation file {file_path} does not exist!")
+                logging.error(f"Error: The simulation file {file_path} does not exist!")
                 sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'year':
             for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}{general_info["sim_suffix"]}.nc')
                 if not os.path.exists(file_path):
-                    print(f"Error: The simulation file {file_path} does not exist!")
+                    logging.error(f"Error: The simulation file {file_path} does not exist!")
                     sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'month':
             for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}*{general_info["sim_suffix"]}.nc')
                 file_count = len(glob.glob(file_path))
                 if file_count != 12:
-                    print(f"Error: The simulation file {file_path} does not have 12 months!")
+                    logging.error(f"Error: The simulation file {file_path} does not have 12 months!")
                     sys.exit(1)
         else:
-            print(f"The simulation data groupby is not checked in current version!")
+            logging.error(f"The simulation data groupby is not checked in current version!")
     elif general_info['sim_data_type'] == 'stn':
-        print(f"The simulation data type is station!,which is not checked in current version!")
+        logging.error(f"The simulation data type is station!,which is not checked in current version!")
     else:
-        print(f"The simulation data type is not supported!")
+        logging.error(f"The simulation data type is not supported!")
         sys.exit(1)
 
-    print(f"\033[1;32mDone\033[0m")
-    print(f"**************************************************")
+    logging.info("Done")
+    logging.info("**************************************************")

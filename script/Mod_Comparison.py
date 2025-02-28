@@ -3,6 +3,7 @@ import glob
 import os
 import re
 import sys
+import logging
 
 import numpy as np
 import pandas as pd
@@ -38,7 +39,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
         if not match:
+            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
             raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+
         value, unit = match.groups()
         if not value:
             value = 1

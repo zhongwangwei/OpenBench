@@ -11,3 +11,6 @@
 script/Evapotranspiration_sim_CoLM2024_f_fevpa.nc
 script/Evapotranspiration_ref_ET_Xu_etal_2024_ET.nc
 单位转换.pdf
+/data
+/output
+/.cursor
