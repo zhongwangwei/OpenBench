@@ -194,28 +194,33 @@ def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_
 
 def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml):
     """Run the comparison process for each comparison variable."""
+    logging.info(" ")
+    logging.info("╔═══════════════════════════════════════════════════════════════╗")
+    logging.info("║                Comparison processes starting!                 ║")
+    logging.info("╚═══════════════════════════════════════════════════════════════╝")
+    logging.info(" ")
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
 
     for cvar in comparison_vars:
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
-        print(f"********************Start running {cvar} comparison...******************")
+        logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
+        logging.info(f"********************Start running {cvar} comparison...******************")
         comparison_method = f'scenarios_{cvar}_comparison'
         if hasattr(ch, comparison_method):
             getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, fig_nml[cvar])
         else:
-            print(f"Error: The {cvar} module does not exist!")
-            print(f"Please add the {cvar} function in the Comparison_handle class!")
+            logging.error(f"Error: The {cvar} module does not exist!")
+            logging.error(f"Please add the {cvar} function in the Comparison_handle class!")
             exit(1)
-        print(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
+        logging.info(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
+        logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
 
 def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     """Run statistical analysis for each statistic variable."""
     if not statistic_vars:
         return
-    
-    print("Running statistical analysis...")
+
+    logging.info("Running statistical analysis...")
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     stats_handler = StatisticsProcessing(
         main_nl, stats_nml,
@@ -224,16 +229,16 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     )
     
     for statistic in statistic_vars:
-        print("\033[1;32m" + "=" * 80 + "\033[0m")
-        print(f"********************Start running {statistic} analysis...******************")
+        logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
+        logging.info(f"********************Start running {statistic} analysis...******************")
         statistic_method = f'scenarios_{statistic}_analysis'
         if hasattr(stats_handler, statistic_method):
             getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
         else:
-            print(f"Error: The {statistic} module does not exist!")
-            print(f"Please add the {statistic} function in the stats_handler class!")
+            logging.error(f"Error: The {statistic} module does not exist!")
+            logging.error(f"Please add the {statistic} function in the stats_handler class!")
             exit(1)
-    print("Statistical analysis completed.")
+    logging.info("Statistical analysis completed.")
 
 
 def main():

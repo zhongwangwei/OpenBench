@@ -63,6 +63,7 @@ class statistics_calculate:
         if isinstance(data1, xr.DataArray) and isinstance(data2, xr.DataArray):
             return xr.corr(data1, data2, dim="time").to_dataset(name=f"correlation")
         else:
+            logging.error("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
             raise TypeError("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
 
     def stat_standard_deviation(self, data):
@@ -476,6 +477,7 @@ class statistics_calculate:
             from sklearn.cross_decomposition import PLSRegression
             from sklearn.model_selection import cross_val_score, TimeSeriesSplit
         except ImportError:
+            logging.error("scikit-learn is required for this function")
             raise ImportError("scikit-learn is required for this function")
         from scipy.stats import t
 
@@ -695,6 +697,7 @@ class statistics_calculate:
             # If it's a DataArray, apply the test directly
             return _apply_mann_kendall(data, significance_level)
         else:
+            logging.error("Input must be an xarray Dataset or DataArray")
             raise TypeError("Input must be an xarray Dataset or DataArray")
 
     def stat_False_Discovery_Rate(self, *variables, alpha=0.05):
@@ -805,8 +808,10 @@ class statistics_calculate:
             elif analysis_type == 'oneway':
                 from scipy.stats import f_oneway
             else:
+                logging.error("Invalid analysis_type. Choose 'oneway' or 'twoway'")
                 raise ValueError("Invalid analysis_type. Choose 'oneway' or 'twoway'")
         except ImportError as e:
+            logging.error(f"{e.name} is required for this function")
             raise ImportError(f"{e.name} is required for this function")
         from joblib import Parallel, delayed
 
@@ -815,6 +820,7 @@ class statistics_calculate:
         X_vars = [var for var in variables if '_Y' not in var.name]
 
         if len(Y_vars) != 1:
+            logging.error("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
             raise ValueError("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
 
         Y_data = Y_vars[0]
@@ -948,7 +954,7 @@ class statistics_calculate:
         filename_parts = [method_name] + data_sources
         filename = "_".join(filename_parts) + "_output.nc"
         output_file = os.path.join(self.output_dir, f"{method_name}", filename)
-        print(f"Saving {method_name} output to {output_file}")
+        logging.info(f"Saving {method_name} output to {output_file}")
         if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
             if isinstance(result, xr.DataArray):
                 result = result.to_dataset(name=f"{method_name}")
@@ -966,7 +972,7 @@ class statistics_calculate:
         else:
             # If the result is not xarray object, we might need to handle it differently
             # For now, let's just print it
-            print(f"Result of {method_name}: {result}")
+            logging.info(f"Result of {method_name}: {result}")
 
 
 class BasicProcessing(statistics_calculate):
@@ -986,6 +992,7 @@ class BasicProcessing(statistics_calculate):
 
     def check_file_exist(self, file: str) -> str:
         if not os.path.exists(file):
+            logging.error(f"File '{file}' not found.")
             raise FileNotFoundError(f"File '{file}' not found.")
         return file
 
@@ -1081,7 +1088,7 @@ class BasicProcessing(statistics_calculate):
 
         # Check for duplicate time values
         if ds['time'].to_index().has_duplicates:
-            print("Warning: Duplicate time values found. Removing duplicates...")
+            logging.warning("Warning: Duplicate time values found. Removing duplicates...")
             # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds['time'], return_index=True)
             ds = ds.isel(time=index)
@@ -1117,6 +1124,7 @@ class BasicProcessing(statistics_calculate):
             tim_freq = f'{num_value}{unit}E'
             # print(f"Time resolution is {tim_res}, set the time resolution as {tim_freq}")
         else:
+            logging.error(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
             raise ValueError(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
 
         # if the time is not in the correct frequency, resample it
@@ -1161,9 +1169,9 @@ class BasicProcessing(statistics_calculate):
             # print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0:
-                print("Time series is not complete. Missing time values found: ")
+                logging.warning("Time series is not complete. Missing time values found: ")
                 print(missing_times)
-                print('Filling missing time values with np.nan')
+                logging.info('Filling missing time values with np.nan')
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
@@ -1174,7 +1182,7 @@ class BasicProcessing(statistics_calculate):
 
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
         if (eyear < syear) or (ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59')) is None):
-            print(f"Error: Attempting checking the data time range.")
+            logging.error(f"Error: Attempting checking the data time range.")
             exit()
         else:
             return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
@@ -1298,7 +1306,7 @@ class BasicProcessing(statistics_calculate):
                 # self.process_method(method_name, data_sources)
 
     def process_method(self, method_name, data_sources):
-        print(f"Processing {method_name}...")
+        logging.info(f"Processing {method_name}...")
         method_config = self.stats_nml[method_name]
 
         data_sources = [ds.strip() for ds in data_sources.split(',')]
@@ -1311,7 +1319,6 @@ class BasicProcessing(statistics_calculate):
         self.generate_output(method_name, processed_data, method_config)
 
     def process_data_source(self, source: str, config: Dict[str, Any]) -> xr.Dataset:
-        print(source)
         source_config = {k: v for k, v in config.items() if k.startswith(source)}
         dirx = source_config[f'{source}_dir']
         syear = int(source_config[f'{source}_syear'])
@@ -1321,7 +1328,7 @@ class BasicProcessing(statistics_calculate):
         groupby = source_config[f'{source}_data_groupby'].lower()
         suffix = source_config[f'{source}_suffix']
         prefix = source_config[f'{source}_prefix']
-        print(f"Processing data source '{source}' from '{dirx}'...")
+        logging.info(f"Processing data source '{source}' from '{dirx}'...")
 
         if groupby == 'single':
             ds = self.process_single_groupby(dirx, suffix, prefix, varname, syear, eyear, time_freq)
@@ -1380,19 +1387,19 @@ class BasicProcessing(statistics_calculate):
         else:
             ds = data_list[0]
 
-        print(f"Saving {method_name} output to {output_file}")
+        logging.info(f"Saving {method_name} output to {output_file}")
         ds.to_netcdf(output_file)
 
     def run(self):
         self.process_all_methods()
-        print("All statistical data processing completed.")
+        logging.info("All statistical data processing completed.")
 
     def save_result(self, method_name: str, result, data_sources: List[str]) -> xr.Dataset:
         # Remove the existing output directory
         filename_parts = [method_name] + data_sources
         filename = "_".join(filename_parts) + "_output.nc"
         output_file = os.path.join(self.output_dir, f"{method_name}", filename)
-        print(f"Saving {method_name} output to {output_file}")
+        logging.info(f"Saving {method_name} output to {output_file}")
         if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
             if isinstance(result, xr.DataArray):
                 result = result.to_dataset(name=f"{method_name}")
@@ -1410,7 +1417,7 @@ class BasicProcessing(statistics_calculate):
         else:
             # If the result is not xarray object, we might need to handle it differently
             # For now, let's just print it
-            print(f"Result of {method_name}: {result}")
+            logging.info(f"Result of {method_name}: {result}")
 
     coordinate_map = {
         'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon',
@@ -1465,6 +1472,7 @@ class StatisticsProcessing(BasicProcessing):
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
         if not match:
+            logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
             raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
         value, unit = match.groups()
         if not value:
@@ -1474,6 +1482,7 @@ class StatisticsProcessing(BasicProcessing):
         # Get the corresponding pandas frequency
         freq = self.freq_map.get(unit.lower())
         if not freq:
+            logging.error(f"Unsupported time unit: {unit}")
             raise ValueError(f"Unsupported time unit: {unit}")
         self.compare_tim_res = f'{value}{freq}'
 
@@ -1493,7 +1502,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1517,7 +1526,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1539,7 +1548,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1562,7 +1571,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1584,7 +1593,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1606,7 +1615,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1621,7 +1630,7 @@ class StatisticsProcessing(BasicProcessing):
         for source in data_sources:
             nX = int(statistic_nml[f'{source}_nX'])
             if nX < 3:
-                print('Error: Three Cornered Hat method must be at least 3 dataset.')
+                logging.error('Error: Three Cornered Hat method must be at least 3 dataset.')
                 exit(1)
             sources = [f'{source}{i}' for i in range(1, nX + 1)]
             self.run_analysis(source.strip(), sources, statistic_method)
@@ -1633,7 +1642,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1658,7 +1667,7 @@ class StatisticsProcessing(BasicProcessing):
         # Load data sources for this method
         data_sources_key = f'{statistic_method}_data_source'
         if data_sources_key not in self.general_config:
-            print(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
             return
 
             # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
@@ -1691,11 +1700,12 @@ class StatisticsProcessing(BasicProcessing):
                 try:
                     Y_vars = self.process_data_source(sources[0].strip(), self.stats_nml[statistic_method])
                 except:
+                    logging.error("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
                     raise ValueError(
                         "No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
 
             if len(data_list) == 0:
-                print(f"Warning: No data sources found for '{statistic_method}'.")
+                logging.error(f"Warning: No data sources found for '{statistic_method}'.")
                 exit()
             # Remap data
             data_list = self.remap_data(data_list)
@@ -1704,4 +1714,4 @@ class StatisticsProcessing(BasicProcessing):
             result = method_function(*data_list)
             self.save_result(statistic_method, result, [source])
         else:
-            print(f"Warning: Analysis method '{statistic_method}' not implemented.")
+            logging.warning(f"Warning: Analysis method '{statistic_method}' not implemented.")

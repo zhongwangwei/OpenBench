@@ -1,14 +1,22 @@
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
+import itertools
+import sys
+import math
 import matplotlib
+import matplotlib.pylab as pylab
 import matplotlib.pyplot as plt
-# Plot settings
+from matplotlib import colors
+from matplotlib import cm
 import numpy as np
 import pandas as pd
+from matplotlib import rcParams
+
+# Plot settings
+import numpy as np
 import xarray as xr
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from matplotlib import cm
-from matplotlib import colors
+
 from matplotlib import rcParams
 
 
@@ -66,23 +74,25 @@ def process_unit(ref_unit, metric):
         'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
         'index_agreement': 'Unitless',  # Index of agreement
     }
-
-    unit = all_metrics_units[metric]
-    if unit == 'Unitless':
-        return '[Unitless]'
-    elif unit == '%':
-        return '[%]'
-    elif unit == 'Same as input data':
-        return f'[{ref_unit}]'
-    elif unit == 'Square of input data unit':
-        return rf'[${ref_unit}^{{2}}$]'
-    else:
-        print('Warning: Missing metric unit!')
+    if metric not in all_metrics_units.keys():
         return '[None]'
+    else:
+        unit = all_metrics_units[metric]
+        if unit == 'Unitless':
+            return '[Unitless]'
+        elif unit == '%':
+            return '[%]'
+        elif unit == 'Same as input data':
+            return f'[{ref_unit}]'
+        elif unit == 'Square of input data unit':
+            return rf'[${ref_unit}^{{2}}$]'
+        else:
+            print('Warning: Missing metric unit!')
+            return '[None]'
 
 
 def get_index(vmin, vmax, colormap):
-    import math
+
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
             colorbar_ticks = 0.2
@@ -90,10 +100,12 @@ def get_index(vmin, vmax, colormap):
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
             colorbar_ticks = 1
-        elif 50 >= vmax - vmin > 10:
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 2
+        elif 50 >= vmax - vmin > 20:
             colorbar_ticks = 5
         elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 20
+            colorbar_ticks = 10
         elif 200 >= vmax - vmin > 100:
             colorbar_ticks = 20
         elif 500 >= vmax - vmin > 200:
@@ -128,7 +140,7 @@ def get_index(vmin, vmax, colormap):
     return cmap, mticks, norm, bnd
 
 
-def plot_grid_map(basedir, filename, main_nml, xitem, option):
+def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -154,9 +166,21 @@ def plot_grid_map(basedir, filename, main_nml, xitem, option):
     lat, lon = np.meshgrid(ilat[::-1], ilon)
 
     var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
-    max_value = max(abs(np.nanmin(var)), np.nanmax(var))
-    min_value = max_value * -1
-    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    if not option["vmin_max_on"]:
+        if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF', 'NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff',
+                      'rSpearman']:
+            quantiles = ds[xitem].quantile([0.05, 0.95], dim=['lat', 'lon'])
+            max_value = math.ceil(quantiles[1].values)
+            min_value = math.floor(quantiles[0].values)
+            if metric == 'percent_bias':
+                if max_value > 100:
+                    max_value = 100
+                if min_value < -100:
+                    min_value = -100
+        else:
+            min_value, max_value = np.nanmin(var), np.nanmax(var)
+
+    cmap, mticks, norm, bnd = get_index(max(abs(min_value), max_value) * -1, max(abs(min_value), max_value), option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
@@ -235,7 +259,7 @@ def plot_grid_map(basedir, filename, main_nml, xitem, option):
     plt.close()
 
 
-def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, varname, option):
+def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, varname, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -256,9 +280,21 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, varname,
         print(f"Warning: No valid data for {varname}. Skipping plot.")
         return
 
-    max_value = max(abs(np.nanmin(metric)), np.nanmax(metric))
-    min_value = max_value * -1
-    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    if not option["vmin_max_on"]:
+        if var in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF', 'NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff',
+                      'rSpearman']:
+            quantiles = [np.nanpercentile(metric, 5), np.nanpercentile(metric, 95)]
+            max_value = math.ceil(quantiles[1])
+            min_value = math.floor(quantiles[0])
+            if var == 'percent_bias':
+                if max_value > 100:
+                    max_value = 100
+                if min_value < -100:
+                    min_value = -100
+        else:
+            min_value, max_value = np.nanmin(metric), np.nanmax(metric)
+
+    cmap, mticks, norm, bnd = get_index(max(abs(min_value), max_value) * -1, max(abs(min_value), max_value), option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
@@ -374,11 +410,12 @@ def plot_diff_results(basedir, data_type, item_type, evaluation_item, ref_source
         lon_select = data['lon'].values
         lat_select = data['lat'].values
         plotvar = data[f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}'].values
-        plot_stn_map(basedir, filename, lon_select, lat_select, plotvar, main_nml, f'{data_type}_{item_type}', plot_option)
+        plot_stn_map(basedir, filename, lon_select, lat_select, plotvar, main_nml, item_type, f'{data_type}_{item_type}',
+                     plot_option)
 
     # For gridded data
     else:  # xarray Dataset
-        plot_grid_map(basedir, filename, main_nml,
+        plot_grid_map(basedir, filename, main_nml, item_type,
                       f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}', plot_option)
 
 
