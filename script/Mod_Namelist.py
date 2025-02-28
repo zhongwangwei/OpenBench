@@ -48,6 +48,7 @@ class NamelistReader:
         elif val in ('n', 'no', 'f', 'false', 'off', '0'):
             return 0
         else:
+            logging.error(f"Invalid truth value: {val}")
             raise ValueError(f"Invalid truth value: {val}")
 
     @staticmethod
@@ -204,13 +205,17 @@ class UpdateNamelist(NamelistReader):
             try:
                 file_path = nml['def_nml'][f"{source}"]
             except KeyError:
+                logging.error(f"Could not find namelist path for {source} in {evaluation_item} or def_nml")
                 raise KeyError(f"Could not find namelist path for {source} in {evaluation_item} or def_nml")
 
         if not os.path.exists(file_path):
+            logging.error(f"Namelist file not found: {file_path}")
             raise FileNotFoundError(f"Namelist file not found: {file_path}")
         if not os.path.isfile(file_path):
+            logging.error(f"Expected file but found directory: {file_path}")
             raise IsADirectoryError(f"Expected file but found directory: {file_path}")
         if not os.access(file_path, os.R_OK):
+            logging.error(f"No read permission for file: {file_path}")
             raise PermissionError(f"No read permission for file: {file_path}")
 
         return self.read_namelist(file_path)
@@ -230,7 +235,7 @@ class UpdateNamelist(NamelistReader):
                 elif attr in ['model', 'varname', 'varunit']:
                     self._set_model_attribute(nml, evaluation_item, source, attr, tmp)
                 else:
-                    print(f"Warning: {attr} is missing in namelist for {evaluation_item} - {source}")
+                    logging.warning(f"Warning: {attr} is missing in namelist for {evaluation_item} - {source}")
                     nml[evaluation_item][key] = None  # Set to None if missing
 
     def _set_dir_attribute(self, nml: Dict[str, Any], evaluation_item: str, source: str, tmp: Dict[str, Any], source_type: str):
@@ -238,8 +243,10 @@ class UpdateNamelist(NamelistReader):
         try:
             root_dir = tmp['general']['root_dir']
             if not os.path.exists(root_dir):
+                logging.error(f"Root directory not found: {root_dir}")
                 raise FileNotFoundError(f"Root directory not found: {root_dir}")
             if not os.path.isdir(root_dir):
+                logging.error(f"Expected directory but found file: {root_dir}")
                 raise NotADirectoryError(f"Expected directory but found file: {root_dir}")
             
             try:
@@ -249,10 +256,13 @@ class UpdateNamelist(NamelistReader):
                 full_dir = root_dir
 
             if not os.path.exists(full_dir):
+                logging.error(f"Data directory not found: {full_dir}")
                 raise FileNotFoundError(f"Data directory not found: {full_dir}")
             if not os.path.isdir(full_dir):
+                logging.error(f"Expected directory but found file: {full_dir}")
                 raise NotADirectoryError(f"Expected directory but found file: {full_dir}")
             if not os.access(full_dir, os.R_OK):
+                logging.error(f"No read permission for directory: {full_dir}")
                 raise PermissionError(f"No read permission for directory: {full_dir}")
 
             nml[evaluation_item][f'{source}_dir'] = full_dir
@@ -543,6 +553,7 @@ class GeneralInfoReader(NamelistReader):
         resolutions = [self.compare_tim_res, self.ref_tim_res, self.sim_tim_res]
         for res in resolutions:
             if not self._is_valid_resolution(res):
+                logging.error(f"Invalid time resolution: {res}")
                 raise ValueError(f"Invalid time resolution: {res}")
 
         # Convert resolutions to comparable units
@@ -627,6 +638,7 @@ class GeneralInfoReader(NamelistReader):
         else:
             self._apply_default_filter()
             if len(self.stn_list) == 0:
+                logging.error("No stations selected. Check filter criteria.")
                 raise ValueError("No stations selected. Check filter criteria.")
 
             self.stn_list.to_csv(f"{self.casedir}/stn_list.txt", index=False)

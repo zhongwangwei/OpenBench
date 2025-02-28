@@ -137,7 +137,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                print("now processing the evaluation item: ", evaluation_item)
+                logging.info("now processing the evaluation item: ", evaluation_item)
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -151,7 +151,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         # if isinstance(sim_data_type, str): sim_data_type = [sim_data_type]
 
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            print(f"warning: station data is not supported for IGBP class comparison")
+                            logging.warning(f"warning: station data is not supported for IGBP class comparison")
                             pass
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
@@ -257,8 +257,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         try:
             _IGBP_class_remap_cdo()
         except Exception as e:
-            print(f"CDO remapping failed: {e}")
-            print("Falling back to xarray-regrid remapping...")
+            logging.error(f"CDO remapping failed: {e}")
+            logging.error("Falling back to xarray-regrid remapping...")
             _IGBP_class_remap(self)
 
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
@@ -341,7 +341,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                print("now processing the evaluation item: ", evaluation_item)
+                logging.info("now processing the evaluation item: ", evaluation_item)
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -352,7 +352,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            print(f"warning: station data is not supported for PFT class comparison")
+                            logging.warning(f"warning: station data is not supported for PFT class comparison")
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
@@ -457,8 +457,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         try:
             _PFT_class_remap_cdo(self)
         except Exception as e:
-            print(f"CDO remapping failed: {e}")
-            print("Falling back to xarray-regrid remapping...")
+            logging.error(f"CDO remapping failed: {e}")
+            logging.error("Falling back to xarray-regrid remapping...")
             _PFT_class_remap(self)
         _scenarios_PFT_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
@@ -1168,7 +1168,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                print("now processing the evaluation item: ", evaluation_item)
+                logging.info("now processing the evaluation item: ", evaluation_item)
                 # read the simulation source and reference source
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
@@ -1290,7 +1290,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     output_file.write(f"{kk_str}\t")
 
                                 else:
-                                    print('No such metric: ', metric)
+                                    logging.error('No such metric: ', metric)
                                     sys.exit(1)
 
                             for score in scores:
@@ -1315,7 +1315,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                     output_file.write(f"{kk_str}\t")
                                 else:
-                                    print('No such score: ', score)
+                                    logging.error('No such score: ', score)
                                     sys.exit(1)
                         output_file.write("\n")
 
@@ -1372,7 +1372,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, score,
                                                                datasets_filtered, option)
                     except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!")
+                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!")
 
             for metric in metrics:
                 for ref_source in ref_sources:
@@ -1414,7 +1414,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                                datasets_filtered, option)
                     except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
+                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
 
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
 
@@ -1445,7 +1445,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         all_files = glob.glob(file_pattern)
 
                         if not all_files:
-                            print(f"No files found for pattern: {file_pattern}")
+                            logging.warning(f"No files found for pattern: {file_pattern}")
                             continue
 
                         combined_relative_scores = pd.DataFrame()
@@ -1460,7 +1460,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 dfs.append(df1)
 
                                 if not dfs:
-                                    print(f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
+                                    logging.warning(f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
                                     continue
 
                                 # Combine all dataframes
@@ -1485,14 +1485,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 index=False  # Exclude the row index
                             )
                         else:
-                            print(f"No valid data found for {evaluation_item}, {ref_source}")  # More specific message
+                            logging.warning(f"No valid data found for {evaluation_item}, {ref_source}")  # More specific message
 
                     else:
                         for score in scores:
                             file_pattern = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc'
                             all_files = glob.glob(file_pattern)
                             if not all_files:
-                                print(f"No files found for pattern: {file_pattern}")
+                                logging.warning(f"No files found for pattern: {file_pattern}")
                                 continue
                             # Read all files and combine into a single dataset
                             datasets = []
@@ -1501,7 +1501,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 datasets.append(ds)
 
                             if not datasets:
-                                print(f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
+                                logging.warning(f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
                                 continue
 
                             combined_ds = xr.concat(datasets, dim='file')
@@ -1598,7 +1598,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 smpi_da.to_netcdf(
                     f'{casedir}/output/comparisons/Single_Model_Performance_Index/{item}_ref_{ref_source}_sim_{sim_source}_SMPI_grid.nc')
             except Exception as e:
-                print(f"Error saving grid-based SMPI: {e}")
+                logging.error(f"Error saving grid-based SMPI: {e}")
 
             return smpi, smpi_lower, smpi_upper
 
@@ -1674,8 +1674,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             smpi, lower, upper = process_smpi(basedir, evaluation_item, ref_source, sim_source, s, o)
                             output_file.write(f"{smpi:.4f}\t{lower:.4f}\t{upper:.4f}\n")
 
-                print(f"Completed SMPI calculation for {evaluation_item}")
-                print("===============================================================================")
+                logging.info(f"Completed SMPI calculation for {evaluation_item}")
+                logging.info("===============================================================================")
         # After all calculations are done, call the plotting function
         make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option)
 
@@ -1728,7 +1728,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         make_scenarios_comparison_Ridgeline_Plot(dir_path, evaluation_item, ref_source, sim_sources, score,
                                                                  datasets_filtered, option)
                     except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Ridgeline_Plot failed!")
+                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Ridgeline_Plot failed!")
 
             for metric in metrics:
                 for ref_source in ref_sources:
@@ -1770,7 +1770,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         make_scenarios_comparison_Ridgeline_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                                  datasets_filtered, option)
                     except:
-                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
     def to_dict(self):
         return self.__dict__
@@ -1850,8 +1850,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 # Check if both 'stn' and grid data exist
                 if 'stn' in data_types and any(dt != 'stn' for dt in data_types):
-                    print(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
-                    print("All simulation sources must be either station data or gridded data")
+                    logging.warning(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
+                    logging.warning("All simulation sources must be either station data or gridded data")
                     continue
 
                 ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
@@ -1900,7 +1900,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                   index=False)
 
                         except Exception as e:
-                            print(f"Error processing station ensemble calculations for metric {metric}: {e}")
+                            logging.error(f"Error processing station ensemble calculations for metric {metric}: {e}")
 
                     # Process scores for station data
                     for score in scores:
@@ -1943,7 +1943,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                   index=False)
 
                         except Exception as e:
-                            print(f"Error processing station ensemble calculations for score {score}: {e}")
+                            logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
 
                     # Calculate pairwise differences for metrics (station data)
                     for metric in metrics:
@@ -1976,7 +1976,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     diff_df.to_csv(output_file, index=False)
 
                                 except Exception as e:
-                                    print(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
+                                    logging.error(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
 
                     # Calculate pairwise differences for scores (station data)
                     for score in scores:
@@ -2009,7 +2009,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     diff_df.to_csv(output_file, index=False)
 
                                 except Exception as e:
-                                    print(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
+                                    logging.error(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
                 else:
                     # Calculate ensemble means and anomalies for metrics
                     for metric in metrics:
@@ -2017,8 +2017,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Load all simulation data for this metric
                             datasets = []
                             for sim_source in sim_sources:
-                                print(sim_source)
-                                print(f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                 ds = xr.open_dataset(
                                     f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                 datasets.append(ds[metric])
@@ -2044,7 +2042,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom.to_netcdf(output_file)
 
                         except Exception as e:
-                            print(f"Error processing ensemble calculations for metric {metric}: {e}")
+                            logging.error(f"Error processing ensemble calculations for metric {metric}: {e}")
 
                     # Calculate ensemble means and anomalies for scores
                     for score in scores:
@@ -2078,7 +2076,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom.to_netcdf(output_file)
 
                         except Exception as e:
-                            print(f"Error processing ensemble calculations for score {score}: {e}")
+                            logging.error(f"Error processing ensemble calculations for score {score}: {e}")
 
                     # Compare metrics between pairs
                     for metric in metrics:
@@ -2101,7 +2099,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     ds_out.to_netcdf(output_file)
 
                                 except Exception as e:
-                                    print(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
+                                    logging.error(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
 
                     # Compare scores between pairs
                     for score in scores:
@@ -2124,9 +2122,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     ds_out.to_netcdf(output_file)
 
                                 except Exception as e:
-                                    print(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
+                                    logging.error(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
 
                 # After calculating anomalies for metrics
                 make_scenarios_comparison_Diff_Plot(dir_path, metrics, scores, evaluation_item, ref_source, sim_sources,
                                                     self.general_config, sim_nml,
                                                     ref_data_type, option)
+
+
