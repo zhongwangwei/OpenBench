@@ -73,13 +73,14 @@ class BaseDatasetProcessing:
         data_params = self.get_data_params(datasource)
         
         if data_params['data_type'] != 'stn':
-            print(f"Processing {data_params['data_type']} data")
+            logging.info(f"Processing {data_params['data_type']} data")
             self.process_grid_data(data_params)
         else:
             self.process_station_data(data_params)
 
     def check_dataset(self, ds: xr.Dataset) -> xr.Dataset:
         if not isinstance(ds, xr.Dataset):
+            logging.error("Input data must be a xarray dataset.")
             raise ValueError("Input data must be a xarray dataset.")
         return ds
 
@@ -205,9 +206,9 @@ class BaseDatasetProcessing:
             #print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0:
-                print("Time series is not complete. Missing time values found: ")
+                logging.warning("Time series is not complete. Missing time values found: ")
                 print(missing_times)
-                print('Filling missing time values with np.nan')
+                logging.info('Filling missing time values with np.nan')
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
@@ -257,7 +258,7 @@ class BaseDatasetProcessing:
 
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
         if (eyear < syear) or (ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59')) is None):
-            print(f"Error: Attempting checking the data time range.")
+            logging.error(f"Error: Attempting checking the data time range.")
             exit()
         else:
             return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
@@ -265,12 +266,14 @@ class BaseDatasetProcessing:
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
+            logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
             raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
         
         value, unit = match.groups()
         value = int(value)
         freq = self.freq_map.get(unit.lower())
         if not freq:
+            logging.error(f"Unsupported time unit: {unit}")
             raise ValueError(f"Unsupported time unit: {unit}")
         
         time_index = pd.date_range(start=f'{startx}-01-01T00:00:00', end=f'{endx}-12-31T59:59:59', freq=f'{value}{freq}')
@@ -306,6 +309,7 @@ class BaseDatasetProcessing:
 
     def check_file_exist(self, file: str) -> str:
         if not os.path.exists(file):
+            logging.error(f"File '{file}' not found.")
             raise FileNotFoundError(f"File '{file}' not found.")
         return file
 
@@ -355,7 +359,7 @@ class BaseDatasetProcessing:
             converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
             ds = ds.copy(data=converted_data)
             ds.attrs['units'] = new_unit
-            print(f"Converted unit from {varunit} to {new_unit}")
+            logging.info(f"Converted unit from {varunit} to {new_unit}")
             return ds, new_unit
         except ValueError as e:
             logging.warning(f"Warning: {str(e)}. Attempting specific conversion.")
@@ -378,6 +382,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         varname = self.ref_varname if datasource == 'ref' else self.sim_varname
     # Check if the variable exists in the dataset
         if varname[0] not in stn_data:
+            logging.error(f"Variable '{varname[0]}' not found in the station data.")
             raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
         
         ds = stn_data[varname[0]]
@@ -441,6 +446,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         elif datasource == 'sim':
             return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
         else:
+            logging.error(f"Invalid datasource: {datasource}")
             raise ValueError(f"Invalid datasource: {datasource}")
 
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
@@ -512,6 +518,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         
         data_source = data_params['datasource']
         if data_source not in ['ref', 'sim']:
+            logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
         
         if self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
@@ -569,6 +576,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
         if data_source not in ['ref', 'sim']:
+            logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
         
         var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')

@@ -1,6 +1,6 @@
 import os
 import shutil
-
+import logging
 class FileProcessing:
    def __init__(self):
       self.name = 'DatasetPreprocessing'
@@ -12,11 +12,13 @@ class FileProcessing:
    
    def check_file_exist(self, file_path):
       if not os.path.exists(file_path):
+         logging.error(f"File not found: {file_path}")
          raise FileNotFoundError(f"File not found: {file_path}")
       return 
    
    def check_dir_exist(self, dir_path):
       if not os.path.exists(dir_path):
+         logging.error(f"Directory not found: {dir_path}")
          raise FileNotFoundError(f"Directory not found: {dir_path}")
       return 
    

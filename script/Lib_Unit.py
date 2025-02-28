@@ -1,3 +1,4 @@
+import logging
 class UnitProcessing:
 	def __init__(self, info):
 		self.name = 'plotting'
@@ -83,10 +84,10 @@ class UnitProcessing:
 				'kg ha-1': lambda x: x / 1000,
 			},
 		}
-		print(f'Converting {input_unit} to base unit...')
+		logging.info(f'Converting {input_unit} to base unit...')
 		for base_unit, conversions in conversion_factors.items():
 			if input_unit == base_unit:
-				print(f'No conversion needed for {input_unit}')
+				logging.info(f'No conversion needed for {input_unit}')
 				return data, base_unit
 
 			elif input_unit in conversions:
@@ -94,7 +95,7 @@ class UnitProcessing:
 				return converted_data, base_unit
 		
 		# If no conversion is found after checking all base units
-		print(f'No conversion found for {input_unit}')
+		logging.error(f'No conversion found for {input_unit}')
 		raise ValueError(f'Unsupported input unit: {input_unit}')
 
 	@staticmethod
@@ -105,6 +106,7 @@ class UnitProcessing:
 		if hasattr(UnitProcessing, f'Unit_{self.item}'):
 			return getattr(UnitProcessing, f'Unit_{self.item}')(self, data, unit)
 		else:
+			logging.error(f"Unit conversion for {self.item} is not supported!")
 			raise ValueError(f"Unit conversion for {self.item} is not supported!")
 
 	@staticmethod
