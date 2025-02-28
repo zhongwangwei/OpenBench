@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /share/home/dq013/zhwei/OpenBench/Data_ref/grid_ref/Water/GRAiCE/processed/
+   root_dir          =  ./data/reference/grid_ref/Water/GRAiCE/processed/
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Single

@@ -41,7 +41,7 @@ class BaseDatasetProcessing:
             if not hasattr(self, attr):
                 setattr(self, attr, config.get(attr, 'M'))
                 if self.debug_mode:
-                    print(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
+                    logging.warning(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
@@ -140,7 +140,7 @@ class BaseDatasetProcessing:
         
         # Check for duplicate time values
         if ds['time'].to_index().has_duplicates:
-            print("Warning: Duplicate time values found. Removing duplicates...")
+            logging.warning("Warning: Duplicate time values found. Removing duplicates...")
             # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds['time'], return_index=True)
             ds = ds.isel(time=index)
@@ -223,7 +223,7 @@ class BaseDatasetProcessing:
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
             ds = custom_time_adjustment(self, ds,syear,eyear,tim_res)
         except (ImportError, AttributeError):
-            #logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
+            logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
             pass
         return ds
 
@@ -358,7 +358,7 @@ class BaseDatasetProcessing:
             print(f"Converted unit from {varunit} to {new_unit}")
             return ds, new_unit
         except ValueError as e:
-            print(f"Warning: {str(e)}. Attempting specific conversion.")
+            logging.warning(f"Warning: {str(e)}. Attempting specific conversion.")
             exit()
         #return ds, varunit
 
@@ -384,6 +384,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         
         # Check the time dimension
         if 'time' not in ds.dims:
+            logging.error("Time dimension not found in the station data.")
             raise ValueError("Time dimension not found in the station data.")
         
         # Ensure the time coordinate is datetime

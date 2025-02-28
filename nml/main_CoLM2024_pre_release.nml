@@ -17,12 +17,12 @@
   figure_nml        = ./nml/figlib.nml
   num_cores         = 46  #-1 # how many core will be used in Parallel computing
   evaluation        = True # True #False
-  comparison        = True  # True:  comparison 
+  comparison        = False  # True:  comparison 
   statistics        = False   # True: show statistics
   debug_mode        = True    # True: show debug information
   weight            = area # area, mass  # weight for metrics and scores
-  IGBP_groupby      = False   # True: show metics and scores grouped by IGBP
-  PFT_groupby       = False   # True: show metics and scores grouped by PFT
+  IGBP_groupby      = True   # True: show metics and scores grouped by IGBP
+  PFT_groupby       = True   # True: show metics and scores grouped by PFT
   unified_mask      = True    # True: mask the observation data with all simulation datasets to ensure consistent coverage
 /
 
@@ -51,7 +51,7 @@
   Ground_Evaporation   =False
   Water_Evaporation    =False
   Soil_Evaporation     =False
-  Total_Runoff         =True
+  Total_Runoff         =False
   Terrestrial_Water_Storage_Change=True
 
   ###Snow#### 

@@ -17,18 +17,27 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
                print('Adjusting time values for monthly river data...')
-            # No time adjustment needed for monthly river data
             ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=15)
       elif time_unit.lower() in ['y', 'year', '1y', '1year']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
          if info.debug_mode:
             print('Adjusting time values for daily CoLM output...')
-         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)      
+         
+         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)     
+
+            # Handle river-related variables for monthly data
+         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
+                         'rivdph', 'rivvel', 'fldout', 'fldsto', 'flddph', 'fldfrc',
+                         'fldare', 'sfcelv', 'totout', 'totsto', 'storge', 'pthflw',
+                         'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
+                         'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
+            if info.debug_mode:
+               print('Adjusting time values for daily river data...')
+            ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-         if info.debug_mode:
-            print('Adjusting time values for yearly CoLM output ...')
-         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
+         pass
+
    else:
       print('tim_res error')
       exit()
