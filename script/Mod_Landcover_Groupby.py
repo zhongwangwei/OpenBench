@@ -3,7 +3,7 @@ import re
 import shutil
 import sys
 import warnings
-
+import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +37,7 @@ class LC_groupby(metrics, scores):
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
         if not match:
+            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
             raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
         value, unit = match.groups()
         if not value:
@@ -124,7 +125,7 @@ class LC_groupby(metrics, scores):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                print("now processing the evaluation item: ", evaluation_item)
+                logging.info(f"Processing evaluation item: {evaluation_item}")
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -137,7 +138,7 @@ class LC_groupby(metrics, scores):
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            print(f"warning: station data is not supported for IGBP class comparison")
+                            logging.warning(f"warning: station data is not supported for IGBP class comparison")
                             pass
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'IGBP_groupby',
@@ -190,7 +191,7 @@ class LC_groupby(metrics, scores):
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
                             else:
-                                print('Error: No metrics for IGBP class comparison')
+                                logging.error('Error: No metrics for IGBP class comparison')
 
                             if len(self.scores) > 0:
                                 dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'IGBP_groupby',
@@ -289,7 +290,7 @@ class LC_groupby(metrics, scores):
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
                             else:
-                                print('Error: No scores for IGBP class comparison')
+                                logging.error('Error: No scores for IGBP class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'IGBP_groupby')
         #if os.path.exists(metricsdir_path):
@@ -308,8 +309,8 @@ class LC_groupby(metrics, scores):
         try:
             _IGBP_class_remap_cdo()
         except Exception as e:
-            print(f"CDO remapping failed: {e}")
-            print("Falling back to xarray-regrid remapping...")
+            logging.error(f"CDO remapping failed: {e}")
+            logging.info("Falling back to xarray-regrid remapping...")
             _IGBP_class_remap(self)
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
@@ -459,7 +460,7 @@ class LC_groupby(metrics, scores):
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
                                 # print(f"PFT class metrics comparison results are saved to {output_file_path}")
                             else:
-                                print('Error: No scores for PFT class comparison')
+                                logging.error('Error: No scores for PFT class comparison')
 
                             if len(self.scores) > 0:
                                 dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'PFT_groupby',
@@ -558,7 +559,7 @@ class LC_groupby(metrics, scores):
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"PFT class scores comparison results are saved to {output_file_path2}")
                             else:
-                                print('Error: No scores for PFT class comparison')
+                                logging.error('Error: No scores for PFT class comparison')
 
         metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'PFT_groupby')
         #if os.path.exists(metricsdir_path):
@@ -577,7 +578,7 @@ class LC_groupby(metrics, scores):
         try:
             _PFT_class_remap_cdo(self)
         except Exception as e:
-            print(f"CDO remapping failed: {e}")
-            print("Falling back to xarray-regrid remapping...")
+            logging.error(f"CDO remapping failed: {e}")
+            logging.info("Falling back to xarray-regrid remapping...")
             _PFT_class_remap(self)
         _scenarios_PFT_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
