@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
-
+import logging
 
 class NamelistReader:
     """
@@ -26,6 +26,7 @@ class NamelistReader:
 
         # Ignore all numpy warnings
         np.seterr(all='ignore')
+        
 
     @staticmethod
     def strtobool(val: str) -> int:
@@ -256,17 +257,20 @@ class UpdateNamelist(NamelistReader):
 
             nml[evaluation_item][f'{source}_dir'] = full_dir
         except KeyError:
-            print("dir is missing in namelist")
+            logging.error("dir is missing in namelist")
 
     def _set_model_attribute(self, nml: Dict[str, Any], evaluation_item: str, source: str, attr: str, tmp: Dict[str, Any]):
         """Set model-related attributes for a simulation source with file existence check."""
         try:
             model_namelist_path = tmp['general']['model_namelist']
             if not os.path.exists(model_namelist_path):
+                logging.error(f"Model namelist file not found: {model_namelist_path}")
                 raise FileNotFoundError(f"Model namelist file not found: {model_namelist_path}")
             if not os.path.isfile(model_namelist_path):
+                logging.error(f"Expected file but found directory: {model_namelist_path}")
                 raise IsADirectoryError(f"Expected file but found directory: {model_namelist_path}")
             if not os.access(model_namelist_path, os.R_OK):
+                logging.error(f"No read permission for file: {model_namelist_path}")
                 raise PermissionError(f"No read permission for file: {model_namelist_path}")
 
             model_nml = self.read_namelist(model_namelist_path)
@@ -276,9 +280,9 @@ class UpdateNamelist(NamelistReader):
                 try:
                     nml[evaluation_item][f'{source}_{attr}'] = model_nml[evaluation_item][attr]
                 except KeyError:
-                    print(f"{attr} is missing in namelist")
+                    logging.error(f"{attr} is missing in namelist")
         except KeyError:
-            print(f"{attr} is missing in namelist")
+            logging.error(f"{attr} is missing in namelist")
 
 
 class UpdateFigNamelist(NamelistReader):
@@ -435,10 +439,10 @@ class GeneralInfoReader(NamelistReader):
 
         # if self.sim_varname is empty, then set it to item
         if self.sim_varname is None or self.sim_varname == '':
-            print(f"Warning: sim_varname is not specified in namelist. Using item name: {self.item}")
+            logging.warning(f"Warning: sim_varname is not specified in namelist. Using item name: {self.item}")
             self.sim_varname = self.item
         if self.ref_varname is None or self.ref_varname == '':
-            print(f"Warning: ref_varname is not specified in namelist. Using item name: {self.item}")
+            logging.warning(f"Warning: ref_varname is not specified in namelist. Using item name: {self.item}")
             self.ref_varname = self.item
 
     def _initialize_attributes(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any],
@@ -482,7 +486,7 @@ class GeneralInfoReader(NamelistReader):
                     try:
                         setattr(self, f'{source_type}_fulllist', str(nml['general'][f'{source}_fulllist']))
                     except:
-                        print(f'read {source_type}_fulllist namelist error')
+                        logging.error(f'read {source_type}_fulllist namelist error')
             try:
                 setattr(self, f'{source_type}_max_uparea', str(nml[item][f'{source}_max_uparea']))
                 setattr(self, f'{source_type}_min_uparea', str(nml[item][f'{source}_min_uparea']))
@@ -496,17 +500,18 @@ class GeneralInfoReader(NamelistReader):
         self.ref_data_type = self.ref_data_type.lower()
         self.sim_data_type = self.sim_data_type.lower()
         if self.ref_data_type not in ['stn', 'grid'] or self.sim_data_type not in ['stn', 'grid']:
+            logging.error("Invalid data type. Must be 'stn' or 'grid'.")
             raise ValueError("Invalid data type. Must be 'stn' or 'grid'.")
 
     def _process_time_resolutions(self):
         """Process and normalize time resolutions for comparison, reference, and simulation data."""
         if self.ref_tim_res == '':
-            print(f"ref_tim_res is empty")
+            logging.warning("ref_tim_res is empty")
             self.ref_tim_res = self.compare_tim_res
-            print(f"Warning: ref_tim_res was not specified. Using compare_tim_res: {self.compare_tim_res}")
+            logging.warning(f"Warning: ref_tim_res was not specified. Using compare_tim_res: {self.compare_tim_res}")
         if self.sim_tim_res == '':
             self.sim_tim_res = self.compare_tim_res
-            print(f"Warning: sim_tim_res was not specified. Using compare_tim_res: {self.compare_tim_res}")
+            logging.warning(f"Warning: sim_tim_res was not specified. Using compare_tim_res: {self.compare_tim_res}")
         self.compare_tim_res, self.compare_tim_unit = self._normalize_time_resolution(self.compare_tim_res)
         self.ref_tim_res, self.ref_tim_unit = self._normalize_time_resolution(self.ref_tim_res)
         self.sim_tim_res, self.sim_tim_unit = self._normalize_time_resolution(self.sim_tim_res)
@@ -526,6 +531,7 @@ class GeneralInfoReader(NamelistReader):
             tim_res = f'1{tim_res}'
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
+            logging.error(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
             raise ValueError(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
         num_value, unit = match.groups()
         num_value = int(num_value)
@@ -545,6 +551,7 @@ class GeneralInfoReader(NamelistReader):
         sim_td = self._resolution_to_timedelta(self.sim_tim_res)
 
         if ref_td > compare_td or sim_td > compare_td:
+            logging.error("Reference or simulation time resolution is larger than comparison time resolution")
             raise ValueError("Reference or simulation time resolution is larger than comparison time resolution")
 
     def _is_valid_resolution(self, resolution: str) -> bool:
@@ -556,6 +563,7 @@ class GeneralInfoReader(NamelistReader):
         """Convert a resolution string to a Pandas Timedelta."""
         match = re.match(r'(\d+)([YMWDHS])', resolution)
         if not match:
+            logging.error(f"Invalid resolution format: {resolution}")
             raise ValueError(f"Invalid resolution format: {resolution}")
 
         value, unit = match.groups()
@@ -574,7 +582,8 @@ class GeneralInfoReader(NamelistReader):
             try:
                 self._read_and_merge_station_lists()
             except:
-                print(f"Warning: No station list found for {self.item}. reading station list from custom module")
+                logging.warning(f"Warning: No station list found for {self.item}. reading station list from custom module")
+                #print(f"Warning: No station list found for {self.item}. reading station list from custom module")
             self._filter_stations()
         else:
             self._set_use_years()
@@ -628,7 +637,7 @@ class GeneralInfoReader(NamelistReader):
             custom_module = importlib.import_module(f"custom.{self.ref_source}_filter")
             return getattr(custom_module, f"filter_{self.ref_source}")
         except (ImportError, AttributeError):
-            print(f"Custom filter for {self.ref_source} not available/or contains errors. Using default filter.")
+            logging.warning(f"Custom filter for {self.ref_source} not available/or contains errors. Using default filter.")
             return None
 
     def _apply_default_filter(self):
@@ -690,8 +699,8 @@ class GeneralInfoReader(NamelistReader):
                 self.stn_list.loc[self.stn_list['ID'].isin(invalid_stations), 'Flag'] = False
 
         self.stn_list = self.stn_list[self.stn_list['Flag']]
-        print(f"Total number of stations selected: {len(self.stn_list)}")
-        print(self.stn_list)
+        logging.info(f"Total number of stations selected: {len(self.stn_list)}")
+        logging.info(self.stn_list)
 
     def _station_filter_criteria(self, row):
         """Define criteria for filtering stations."""
@@ -709,9 +718,9 @@ class GeneralInfoReader(NamelistReader):
             self.use_syear = max(int(self.syear), int(self.sim_syear), int(self.ref_syear))
             self.use_eyear = min(int(self.eyear), int(self.sim_eyear), int(self.ref_eyear))
         except ValueError as e:
-            print(f"Error converting years to integers: {e}")
-            print(f"syear: {self.syear}, sim_syear: {self.sim_syear}, ref_syear: {self.ref_syear}")
-            print(f"eyear: {self.eyear}, sim_eyear: {self.sim_eyear}, ref_eyear: {self.ref_eyear}")
+            logging.error(f"Error converting years to integers: {e}")
+            logging.error(f"syear: {self.syear}, sim_syear: {self.sim_syear}, ref_syear: {self.ref_syear}")
+            logging.error(f"eyear: {self.eyear}, sim_eyear: {self.sim_eyear}, ref_eyear: {self.ref_eyear}")
             raise
 
     def to_dict(self):
@@ -752,6 +761,6 @@ class GeneralInfoReader(NamelistReader):
             if not result['valid']:
                 invalid_stations.append(result['ID'])
                 if result['error']:
-                    print(f"Warning: Station ID {result['ID']}: {result['error']}")
+                    logging.warning(f"Warning: Station ID {result['ID']}: {result['error']}")
         
         return invalid_stations
