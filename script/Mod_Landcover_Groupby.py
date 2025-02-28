@@ -392,7 +392,7 @@ class LC_groupby(metrics, scores):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                print("now processing the evaluation item: ", evaluation_item)
+                logging.info("now processing the evaluation item: ", evaluation_item)
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -405,7 +405,7 @@ class LC_groupby(metrics, scores):
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            print(f"warning: station data is not supported for PFT class comparison")
+                            logging.warning(f"warning: station data is not supported for PFT class comparison")
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')

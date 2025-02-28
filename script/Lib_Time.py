@@ -9,7 +9,7 @@ from dask.diagnostics import ProgressBar
 import warnings
 import pandas as pd
 import re
-
+import logging
 
 class timelib:
     def __init__(self):
@@ -38,7 +38,7 @@ class timelib:
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
         print("Checking time coordinate...")
         if 'time' not in ds.coords:
-            print("The dataset does not contain a 'time' coordinate.")
+            logging.info("The dataset does not contain a 'time' coordinate.")
             # Based on the syear and eyear, create a time index
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             ds = ds.expand_dims('time')  # Ensure 'time' dimension exists
@@ -57,7 +57,7 @@ class timelib:
         else:
             # Check for duplicate time values and remove them
             if ds['time'].to_index().duplicated().any():
-                print("Duplicate time values found. Removing duplicates.")
+                logging.info("Duplicate time values found. Removing duplicates.")
                 _, unique_indices = np.unique(ds['time'], return_index=True)
                 ds = ds.isel(time=unique_indices)
 

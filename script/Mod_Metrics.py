@@ -2,7 +2,7 @@
 import numpy as np
 import sys
 import xarray as xr
-
+import logging
 class metrics:
     """
     A class for calculating various statistical metrics for model evaluation.
@@ -34,6 +34,7 @@ class metrics:
         """
         # Ensure inputs are xarray DataArrays
         if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
+            logging.error('Inputs must be xarray DataArrays')
             raise TypeError("Inputs must be xarray DataArrays")
 
         # Align time dimensions
