@@ -18,6 +18,7 @@ from dask.diagnostics import ProgressBar
 import shutil
 from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
 from figlib import *
+from Mod_DatasetProcessing import BaseDatasetProcessing
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -245,6 +246,11 @@ class statistics_calculate:
         """
         import pandas as pd
 
+        if isinstance(v, xr.Dataset):
+            v = list(v.data_vars.values())[0]
+        if isinstance(u, xr.Dataset):
+            u = list(u.data_vars.values())[0]
+
         nbins = self.stats_nml['Functional_Response']['nbins']
 
         def calc_functional_response(v_series, u_series):
@@ -403,8 +409,8 @@ class statistics_calculate:
                 F = f / (K ** (2 * len(S)))
                 return F
 
-            N = arr.shape[1]
             S = np.cov(arr.T)
+            N = arr.shape[1]
             u = np.ones((1, N - 1))
             R = np.zeros((N, N))
             R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, np.linalg.inv(S)), u.T))
@@ -493,14 +499,14 @@ class statistics_calculate:
         n_jobs = self.stats_nml['Partial_Least_Squares_Regression']['n_jobs']
 
         Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
-        X_vars = variables[1:]  # [var for var in variables if '_Y' not in var.name]
+        X_vars = list(variables[1:])  # [var for var in variables if '_Y' not in var.name]
         # if not Y_vars:
         #     raise ValueError("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
 
         # Prepare data
-        # Prepare data
+
         Y_data = Y_vars.values
-        X_data = np.array([x.values for x in X_vars])
+        X_data = np.concatenate([x.values[np.newaxis] for x in X_vars], axis=0)
         X_data = np.moveaxis(X_data, 0, 1)  # Reshape to (time, n_variables, lat, lon)
         # print(X_data.shape)
 
@@ -975,7 +981,7 @@ class statistics_calculate:
             logging.info(f"Result of {method_name}: {result}")
 
 
-class BasicProcessing(statistics_calculate):
+class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
     def __init__(self, info):
         """
         Initialize the Statistics class.
@@ -990,50 +996,7 @@ class BasicProcessing(statistics_calculate):
         self.author = "Zhongwang Wei"
         self.__dict__.update(info)
 
-    def check_file_exist(self, file: str) -> str:
-        if not os.path.exists(file):
-            logging.error(f"File '{file}' not found.")
-            raise FileNotFoundError(f"File '{file}' not found.")
-        return file
-
-    def select_var(self, VarFile: str, varname: List[str]) -> xr.Dataset:
-        if isinstance(varname, str): varname = [varname]
-        try:
-            try:
-                ds = xr.open_dataset(VarFile)  # .squeeze()
-            except:
-                ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
-        except Exception as e:
-            logging.error(f"Failed to open dataset: {VarFile}")
-            logging.error(f"Error: {str(e)}")
-            raise
-        ds = ds[varname[0]].astype('float32')
-        return ds
-
-    def combine_year(self, year: int, dirx: str, suffix: str, prefix: str, varname: List[str]) -> xr.Dataset:
-        try:
-            var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
-        except:
-            var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
-        datasets = []
-        for file in var_files:
-            file = self.check_file_exist(file)
-            ds = self.select_var(file, varname)
-            datasets.append(ds)
-        data0 = xr.concat(datasets, dim="time").sortby('time')
-        return data0
-
-    def check_coordinate(self, ds: xr.Dataset):
-        for coord in ds.coords:
-            if coord in self.coordinate_map:
-                ds = ds.rename({coord: self.coordinate_map[coord]})
-        if 'lon' in ds.coords:
-            ds['lon'] = (ds['lon'] + 180) % 360 - 180
-            # Reindex the dataset
-            ds = ds.reindex(lon=sorted(ds.lon.values))
-        return ds
-
-    def check_time(self, ds: xr.Dataset, syear: int, eyear: int, time_freq: str) -> xr.Dataset:
+    def check_time_freq(self, time_freq: str) -> xr.Dataset:
         if not [time_freq][0].isdigit():
             time_freq = f'1{time_freq}'
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', time_freq)
@@ -1044,148 +1007,68 @@ class BasicProcessing(statistics_calculate):
             time_freq = f'{num_value}{unit}'
         else:
             raise ValueError(f"Invalid time resolution format: {time_freq}. Use '3month', '6hr', etc.")
+        return time_freq
 
-        if 'time' not in ds.coords:
-            print("The dataset does not contain a 'time' coordinate.")
-            # Based on the syear and eyear, create a time index
-            lon = ds.lon.values
-            lat = ds.lat.values
-            data = ds.values
-            time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=time_freq)
-            try:
-                ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
-                                 coords={'time': time_index, 'lat': lat, 'lon': lon})
-            except:
-                try:
-                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
-                                     coords={'time': time_index, 'lon': lon, 'lat': lat})
-                except:
-                    ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
-                                     coords={'lat': lat, 'lon': lon, 'time': time_index})
-            ds1 = ds1.transpose('time', 'lat', 'lon')
-            return ds1[f'{ds.name}'], time_freq
+    def process_data_source(self, source: str, config: Dict[str, Any]) -> xr.Dataset:
+        source_config = {k: v for k, v in config.items() if k.startswith(source)}
+        dirx = source_config[f'{source}_dir']
+        syear = int(source_config[f'{source}_syear'])
+        eyear = int(source_config[f'{source}_eyear'])
+        time_freq = source_config[f'{source}_tim_res']
+        time_freq = self.check_time_freq(time_freq)
+        varname = source_config[f'{source}_varname']
+        groupby = source_config[f'{source}_data_groupby'].lower()
+        suffix = source_config[f'{source}_suffix']
+        prefix = source_config[f'{source}_prefix']
+        logging.info(f"Processing data source '{source}' from '{dirx}'...")
 
-        if not hasattr(ds['time'], 'dt'):
-            try:
-                ds['time'] = pd.to_datetime(ds['time'])
-            except:
-                lon = ds.lon.values
-                lat = ds.lat.values
-                data = ds.values
-                time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=time_freq)
-                try:
-                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
-                                     coords={'time': time_index, 'lat': lat, 'lon': lon})
-                except:
-                    try:
-                        ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
-                                         coords={'time': time_index, 'lon': lon, 'lat': lat})
-                    except:
-                        ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
-                                         coords={'lat': lat, 'lon': lon, 'time': time_index})
-                    ds1 = ds1.transpose('time', 'lat', 'lon')
-                    return ds1[f'{ds.name}'], time_freq
-
-        # Check for duplicate time values
-        if ds['time'].to_index().has_duplicates:
-            logging.warning("Warning: Duplicate time values found. Removing duplicates...")
-            # Remove duplicates by keeping the first occurrence
-            _, index = np.unique(ds['time'], return_index=True)
-            ds = ds.isel(time=index)
-
-        # Ensure time is sorted
-        ds = ds.sortby('time')
-        try:
-            return ds.transpose('time', 'lat', 'lon')[f'{ds.name}'], time_freq
-        except:
-            try:
-                return ds.transpose('time', 'lat', 'lon'), time_freq
-            except:
-                try:
-                    return ds.transpose('time', 'lon', 'lat'), time_freq
-                except:
-                    return ds.squeeze(), time_freq
-
-    def check_time_bk(self, ds, time_freq):
-        if 'time' not in ds.coords:
-            raise ValueError("Time dimension not found in the dataset.")
-        # if the time is not in datetime64 format, convert it
-        if not np.issubdtype(ds.time.dtype, np.datetime64):
-            ds['time'] = pd.to_datetime(ds.time.values)
-        if not [time_freq][0].isdigit():
-            tim_freq = f'1{time_freq}'
-            # print(
-            #     f"Warning: the time resolution format of dataset is not correct, set the number as 1, the time resolution is {tim_res}")
-        match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_freq)
-        if match:
-            num_value, unit = match.groups()
-            num_value = int(num_value) if num_value else 1
-            unit = self.freq_map.get(unit.lower())
-            tim_freq = f'{num_value}{unit}E'
-            # print(f"Time resolution is {tim_res}, set the time resolution as {tim_freq}")
+        if groupby == 'single':
+            ds = self.process_single_groupby(dirx, suffix, prefix, varname, syear, eyear, time_freq)
+        elif groupby == 'year':
+            years = range(syear, eyear + 1)
+            ds_list = Parallel(n_jobs=self.num_cores)(
+                delayed(self.process_yearly_groupby)(dirx, suffix, prefix, varname, year, year, time_freq)
+                for year in years
+            )
+            ds = xr.concat(ds_list, dim='time')
         else:
-            logging.error(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
-            raise ValueError(f"Invalid time resolution format: {tim_res}. Use '3month', '6hr', etc.")
-
-        # if the time is not in the correct frequency, resample it
-        return ds, tim_freq
-
-    def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
-        """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
-        # Ensure the dataset has a proper time index
-        ds, tim_res = self.check_time(ds, syear, eyear, tim_res)
-        ds = self.make_time_integrity(ds, syear, eyear, tim_res)
+            logging.info(f"Combining data to one file...")
+            years = range(syear, eyear + 1)
+            ds_list = Parallel(n_jobs=self.num_cores)(
+                delayed(self.process_other_groupby)(dirx, suffix, prefix, varname, year, year, time_freq)
+                for year in years
+            )
+            ds = xr.concat(ds_list, dim='time')
         return ds
 
-    def check_dataset_time_integrity_bk(self, ds, syear, eyear, time_freq):
-        try:
-            ds['time'] = ds['time'].to_index().to_datetimeindex()
-        except:
-            pass
-        time_index = pd.date_range(start=f'{syear}-01-01', end=f'{eyear}-12-31', freq=time_freq)
-        ds = ds.reindex(time=time_index)
+    def process_single_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
+                               time_freq: str) -> xr.Dataset:
+        VarFile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
+        if isinstance(varname, str): varname = [varname]
+        ds = self.select_var(syear, eyear, time_freq, VarFile, varname, 'stat')
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
         return ds
 
-    def make_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
-        if match:
-            num_value, time_unit = match.groups()
-            num_value = int(num_value) if num_value else 1
-            time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
-            if time_unit.lower() in ['m', 'month', 'mon']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
-            elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
-            elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
-                ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-
-            time_var = ds.time
-            time_values = time_var
-            # Create a complete time series based on the specified time frequency and range
-            # Compare the actual time with the complete time series to find the missing time
-            # print('Checking time series completeness...')
-            missing_times = time_index[~np.isin(time_index, time_values)]
-            if len(missing_times) > 0:
-                logging.warning("Time series is not complete. Missing time values found: ")
-                print(missing_times)
-                logging.info('Filling missing time values with np.nan')
-                # Fill missing time values with np.nan
-                ds = ds.reindex(time=time_index)
-                ds = ds.where(ds.time.isin(time_values), np.nan)
-            else:
-                # print('Time series is complete.')
-                pass
+    def process_yearly_groupby(self, dirx: str, suffix: str, prefix, varname: List[str], syear: int, eyear: int,
+                               time_freq: str) -> xr.Dataset:
+        VarFile = self.check_file_exist(os.path.join(dirx, f'{prefix}{syear}{suffix}.nc'))
+        if isinstance(varname, str): varname = [varname]
+        ds = self.select_var(syear, eyear, time_freq, VarFile, varname, 'stat')
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
         return ds
 
-    def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
-        if (eyear < syear) or (ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59')) is None):
-            logging.error(f"Error: Attempting checking the data time range.")
-            exit()
-        else:
-            return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
+    def process_other_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
+                              time_freq: str) -> xr.Dataset:
+        if isinstance(varname, str): varname = [varname]
+        ds = self.combine_year(syear, dirx, dirx, suffix, prefix, varname, 'stat', time_freq)
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
+        return ds
+
+    def load_and_process_dataset(self, ds: xr.Dataset, syear: str, eyear: str, time_freq) -> xr.Dataset:
+        ds = self.check_coordinate(ds)
+        ds = self.check_dataset_time_integrity(ds, syear, eyear, time_freq, 'stat')
+        ds = self.select_timerange(ds, syear, eyear)
+        return ds
 
     def remap_data(self, data_list):
         """
@@ -1269,23 +1152,23 @@ class BasicProcessing(statistics_calculate):
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import xesmf as xe
         regridder = xe.Regridder(data, new_grid, 'conservative')
-        return regridder(data)
+        ds = regridder(data)
+        return list(ds.data_vars.values())[0]
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import subprocess
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix='.nc') as temp_input, \
-             tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
-             tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
+                tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
+                tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
             data.to_netcdf(temp_input.name)
             self.create_target_grid_file(temp_grid.name, new_grid)
 
-            cmd = f"cdo -s -remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
-            subprocess.run(cmd, shell=True, check=False)
-
-            return xr.open_dataset(temp_output.name)
-            # return list(xr.open_dataset(temp_output.name).data_vars.values())[0]
+            cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
+            subprocess.run(cmd, shell=True, check=True)
+            ds = xr.open_dataset(temp_output.name)
+            return list(ds.data_vars.values())[0]
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         min_lon = self.main_nml['general']['min_lon']
@@ -1298,101 +1181,6 @@ class BasicProcessing(statistics_calculate):
             f.write(f"xinc = {self.compare_grid_res}\n")
             f.write(f"yfirst = {min_lat + self.compare_grid_res / 2}\n")
             f.write(f"yinc = {self.compare_grid_res}\n")
-
-    def process_all_methods(self):
-        for method, data_sources in self.general_config.items():
-            if method.endswith('_data_source'):
-                method_name = method.replace('_data_source', '')
-                # self.process_method(method_name, data_sources)
-
-    def process_method(self, method_name, data_sources):
-        logging.info(f"Processing {method_name}...")
-        method_config = self.stats_nml[method_name]
-
-        data_sources = [ds.strip() for ds in data_sources.split(',')]
-        processed_data = []
-
-        for source in data_sources:
-            data = self.process_data_source(source, method_config)
-            processed_data.append(data)
-
-        self.generate_output(method_name, processed_data, method_config)
-
-    def process_data_source(self, source: str, config: Dict[str, Any]) -> xr.Dataset:
-        source_config = {k: v for k, v in config.items() if k.startswith(source)}
-        dirx = source_config[f'{source}_dir']
-        syear = int(source_config[f'{source}_syear'])
-        eyear = int(source_config[f'{source}_eyear'])
-        time_freq = source_config[f'{source}_tim_res']
-        varname = source_config[f'{source}_varname']
-        groupby = source_config[f'{source}_data_groupby'].lower()
-        suffix = source_config[f'{source}_suffix']
-        prefix = source_config[f'{source}_prefix']
-        logging.info(f"Processing data source '{source}' from '{dirx}'...")
-
-        if groupby == 'single':
-            ds = self.process_single_groupby(dirx, suffix, prefix, varname, syear, eyear, time_freq)
-        elif groupby == 'year':
-            # ds = self.process_yearly_groupby(dirx, suffix, prefix, varname, syear, eyear, time_freq)
-            years = range(syear, eyear + 1)
-            ds_list = []
-            for year in years:
-                ds_list.append(self.process_yearly_groupby(dirx, suffix, prefix, varname, year, year, time_freq, ))
-            # ds_list = Parallel(n_jobs=self.num_cores)(
-            #     delayed(self.process_yearly_groupby)(dirx, suffix, prefix, varname, year, year, time_freq, )
-            #     for year in years
-            # )
-            ds = xr.concat(ds_list, dim='time')
-        else:
-            logging.info(f"Combining data to one file...")
-            years = range(syear, eyear + 1)
-            ds_list = Parallel(n_jobs=self.num_cores)(
-                delayed(self.process_other_groupby)(dirx, suffix, prefix, varname, year, year, time_freq)
-                for year in years
-            )
-            ds = xr.concat(ds_list, dim='time')
-        return ds
-
-    def process_single_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
-                               time_freq: str) -> xr.Dataset:
-        varfile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
-        ds = self.select_var(varfile, varname)
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
-        return ds
-
-    def process_yearly_groupby(self, dirx: str, suffix: str, prefix, varname: List[str], syear: int, eyear: int,
-                               time_freq: str) -> xr.Dataset:
-        varfiles = self.check_file_exist(os.path.join(dirx, f'{prefix}{syear}{suffix}.nc'))
-        ds = self.select_var(varfiles, varname)
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
-        return ds
-
-    def process_other_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
-                              time_freq: str) -> xr.Dataset:
-        ds = self.combine_year(syear, dirx, suffix, prefix, varname)
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
-        return ds
-
-    def load_and_process_dataset(self, ds: xr.Dataset, syear: str, eyear: str, time_freq) -> xr.Dataset:
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, syear, eyear, time_freq)
-        ds = self.select_timerange(ds, syear, eyear)
-        return ds
-
-    def generate_output(self, method_name, data_list, config):
-        output_file = os.path.join(self.output_dir, f"{method_name}" f"{method_name}_output.nc")
-
-        if len(data_list) > 1:
-            ds = xr.merge(data_list)
-        else:
-            ds = data_list[0]
-
-        logging.info(f"Saving {method_name} output to {output_file}")
-        ds.to_netcdf(output_file)
-
-    def run(self):
-        self.process_all_methods()
-        logging.info("All statistical data processing completed.")
 
     def save_result(self, method_name: str, result, data_sources: List[str]) -> xr.Dataset:
         # Remove the existing output directory
@@ -1447,7 +1235,6 @@ class BasicProcessing(statistics_calculate):
     }
 
 
-
 class StatisticsProcessing(BasicProcessing):
     def __init__(self, main_nml, stats_nml, output_dir, num_cores=-1):
         super().__init__(main_nml)
@@ -1497,6 +1284,29 @@ class StatisticsProcessing(BasicProcessing):
             os.makedirs(os.path.join(self.output_dir, f"{statistic_method}"))
 
     # Basic statistical methods
+    def scenarios_Basic_analysis(self, statistic_method, statistic_nml, option):
+        self.setup_output_directories(statistic_method)
+        logging.info(f"Processing {statistic_method}")
+        # Load data sources for this method
+        data_sources_key = f'{statistic_method}_data_source'
+        if data_sources_key not in self.general_config:
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            return
+
+            # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
+        data_source_config = self.general_config.get(f'{statistic_method}_data_source', '')
+
+        # Check if the data_source_config is a string; if not, handle it appropriately
+        if isinstance(data_source_config, str):
+            data_sources = data_source_config.split(',')
+        else:
+            # Assuming data_source_config is a list or another iterable; adjust as necessary
+            data_sources = data_source_config  # If it's already a list, no need to split
+        for source in data_sources:
+            sources = [source.strip()]
+            self.run_analysis(source.strip(), sources, statistic_method)
+            make_Basic(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+
     def scenarios_Mann_Kendall_Trend_Test_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
         # Load data sources for this method
@@ -1634,7 +1444,7 @@ class StatisticsProcessing(BasicProcessing):
                 exit(1)
             sources = [f'{source}{i}' for i in range(1, nX + 1)]
             self.run_analysis(source.strip(), sources, statistic_method)
-            # make_Correlation(self.output_dir, statistic_method, [source], statistic_nml, option)
+            # make_Three_Cornered_Hat(self.output_dir, statistic_method, [source], statistic_nml, option)
 
     def scenarios_Partial_Least_Squares_Regression_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)

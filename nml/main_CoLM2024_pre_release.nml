@@ -227,6 +227,11 @@ Diff_Plot                       =   False
 
 
 &statistics
+Mean                               = True
+Median                             = True
+Max                                = True
+Min                                = True
+Sum                                = True
 Mann_Kendall_Trend_Test            = False
 Correlation                        = False
 Standard_Deviation                 = False
@@ -234,6 +239,5 @@ Z_Score                            = False
 Functional_Response                = False
 Hellinger_Distance                 = False
 Partial_Least_Squares_Regression   = False
-Three_Cornered_Hat                 = False
-
+#Three_Cornered_Hat                 = False
 /
