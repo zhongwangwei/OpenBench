@@ -202,7 +202,7 @@ class Evaluation_stn(metrics, scores):
                         lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
                     else:
                         lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
-                    self.plot_stn(s.squeeze(), o.squeeze(), station_list['ID'][iik], self.ref_varname,
+                    plot_stn(self, s.squeeze(), o.squeeze(), station_list['ID'][iik], self.ref_varname,
                                   float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),
                                   float(station_list['correlation'][iik]), lat_lon)
             else:
@@ -225,7 +225,7 @@ class Evaluation_stn(metrics, scores):
             lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
         else:
             lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
-        self.plot_stn(s, o, station_list['ID'][iik], self.ref_varname, float(row['RMSE']), float(row['KGESS']),
+        plot_stn(self, s, o, station_list['ID'][iik], self.ref_varname, float(row['RMSE']), float(row['KGESS']),
                       float(row['correlation']), lat_lon)
         return row
         # return station_list
