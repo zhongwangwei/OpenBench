@@ -16,8 +16,8 @@ from Lib_Unit import UnitProcessing
 from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
 
 
-#logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-#logging.getLogger("xarray").setLevel(logging.WARNING)
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logging.getLogger("xarray").setLevel(logging.WARNING)
 
 class BaseDatasetProcessing:
     def __init__(self, config: Dict[str, Any]):
@@ -35,20 +35,21 @@ class BaseDatasetProcessing:
         else:
             self.minyear = int(self.use_syear)
             self.maxyear = int(self.use_eyear)
-      
+
         essential_attrs = ['sim_tim_res', 'ref_tim_res', 'compare_tim_res']
         for attr in essential_attrs:
             if not hasattr(self, attr):
                 setattr(self, attr, config.get(attr, 'M'))
                 if self.debug_mode:
-                    logging.warning(f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
+                    logging.warning(
+                        f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
             self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
             output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
-            #shutil.rmtree(output_dir, ignore_errors=True)
-            #print(f"Re-creating output directory: {output_dir}")
+            # shutil.rmtree(output_dir, ignore_errors=True)
+            # print(f"Re-creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
@@ -61,7 +62,7 @@ class BaseDatasetProcessing:
             'prefix': getattr(self, f"{datasource}_prefix"),
             'suffix': getattr(self, f"{datasource}_suffix"),
             'datasource': datasource,  # This should be 'ref' or 'sim'
-            'data_type': getattr(self, f"{datasource}_data_type"), 
+            'data_type': getattr(self, f"{datasource}_data_type"),
         }
 
     def process(self, datasource: str) -> None:
@@ -71,7 +72,7 @@ class BaseDatasetProcessing:
 
     def _preprocess(self, datasource: str) -> None:
         data_params = self.get_data_params(datasource)
-        
+
         if data_params['data_type'] != 'stn':
             logging.info(f"Processing {data_params['data_type']} data")
             self.process_grid_data(data_params)
@@ -93,79 +94,88 @@ class BaseDatasetProcessing:
         for coord in ds.coords:
             if coord in self.coordinate_map:
                 ds = ds.rename({coord: self.coordinate_map[coord]})
-        #if the longitude is not between -180 and 180, convert it to the equivalent value between -180 and 180
+        # if the longitude is not between -180 and 180, convert it to the equivalent value between -180 and 180
         if 'lon' in ds.coords:
             ds['lon'] = (ds['lon'] + 180) % 360 - 180
             # Reindex the dataset
             ds = ds.reindex(lon=sorted(ds.lon.values))
         return ds
-    
+
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
         if 'time' not in ds.coords:
             print("The dataset does not contain a 'time' coordinate.")
             # Based on the syear and eyear, create a time index
-            lon=ds.lon.values
-            lat=ds.lat.values
-            data=ds.values
+            lon = ds.lon.values
+            lat = ds.lat.values
+            data = ds.values
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             # Check data dimension, if it is 2-dimensional, reshape to 3-dimensional
             if data.ndim == 2:
                 data = data.reshape((1, data.shape[0], data.shape[1]))
             try:
-                ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
+                ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
+                                 coords={'time': time_index, 'lat': lat, 'lon': lon})
             except:
                 try:
-                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)}, coords={'time': time_index, 'lon': lon, 'lat': lat})
+                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
+                                     coords={'time': time_index, 'lon': lon, 'lat': lat})
                 except:
-                    ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon','time'], data)}, coords={'lat': lat, 'lon': lon,'time': time_index})
-            ds1=ds1.transpose('time','lat','lon')
+                    ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
+                                     coords={'lat': lat, 'lon': lon, 'time': time_index})
+            ds1 = ds1.transpose('time', 'lat', 'lon')
             return ds1[f'{ds.name}']
-        
+
         if not hasattr(ds['time'], 'dt'):
             try:
                 ds['time'] = pd.to_datetime(ds['time'])
             except:
-                lon=ds.lon.values
-                lat=ds.lat.values
-                data=ds.values
+                lon = ds.lon.values
+                lat = ds.lat.values
+                data = ds.values
                 time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
                 try:
-                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)}, coords={'time': time_index, 'lat': lat, 'lon': lon})
+                    ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
+                                     coords={'time': time_index, 'lat': lat, 'lon': lon})
                 except:
                     try:
-                        ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)}, coords={'time': time_index, 'lon': lon, 'lat': lat})
+                        ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
+                                         coords={'time': time_index, 'lon': lon, 'lat': lat})
                     except:
-                        ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon','time'], data)}, coords={'lat': lat, 'lon': lon,'time': time_index})
-                    ds1=ds1.transpose('time','lat','lon')
+                        ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
+                                         coords={'lat': lat, 'lon': lon, 'time': time_index})
+                    ds1 = ds1.transpose('time', 'lat', 'lon')
                     return ds1[f'{ds.name}']
-        
+
         # Check for duplicate time values
         if ds['time'].to_index().has_duplicates:
             logging.warning("Warning: Duplicate time values found. Removing duplicates...")
             # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds['time'], return_index=True)
             ds = ds.isel(time=index)
-        
+
         # Ensure time is sorted
         ds = ds.sortby('time')
         try:
-            return ds.transpose('time','lat','lon')[f'{ds.name}']
+            return ds.transpose('time', 'lat', 'lon')[f'{ds.name}']
         except:
             try:
-                return ds.transpose('time','lat','lon')
+                return ds.transpose('time', 'lat', 'lon')
             except:
                 try:
-                    return ds.transpose('time','lon','lat')
-                except:   
-                    return ds.squeeze() 
+                    return ds.transpose('time', 'lon', 'lat')
+                except:
+                    return ds.squeeze()
 
     def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
         # Ensure the dataset has a proper time index
         ds = self.check_time(ds, syear, eyear, tim_res)
         # Apply model-specific time adjustments
-        if self.sim_data_type != 'stn':
-            ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
+        if datasource == 'stat':
+            pass
+        else:
+            if self.sim_data_type != 'stn':
+                ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds
 
@@ -203,7 +213,7 @@ class BaseDatasetProcessing:
             time_values = time_var
             # Create a complete time series based on the specified time frequency and range 
             # Compare the actual time with the complete time series to find the missing time
-            #print('Checking time series completeness...')
+            # print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0:
                 logging.warning("Time series is not complete. Missing time values found: ")
@@ -213,16 +223,17 @@ class BaseDatasetProcessing:
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
             else:
-                #print('Time series is complete.')
+                # print('Time series is complete.')
                 pass
         return ds
-  
-    def apply_model_specific_time_adjustment(self, ds: xr.Dataset, datasource: str,syear: int, eyear: int, tim_res: str) -> xr.Dataset:
+
+    def apply_model_specific_time_adjustment(self, ds: xr.Dataset, datasource: str, syear: int, eyear: int,
+                                             tim_res: str) -> xr.Dataset:
         model = self.sim_model if datasource == 'sim' else self.ref_source
         try:
             custom_module = importlib.import_module(f"custom.{model}_filter")
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
-            ds = custom_time_adjustment(self, ds,syear,eyear,tim_res)
+            ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
         except (ImportError, AttributeError):
             logging.warning(f"No custom time adjustment found for {model}. Using original time values.")
             pass
@@ -231,29 +242,32 @@ class BaseDatasetProcessing:
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
         try:
             try:
-                ds = xr.open_dataset(VarFile) #.squeeze()
+                ds = xr.open_dataset(VarFile)  # .squeeze()
             except:
-                ds = xr.open_dataset(VarFile, decode_times=False) #.squeeze()
+                ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
             raise
         try:
-            ds = self.apply_custom_filter(datasource, ds).astype('float32') 
+            ds = self.apply_custom_filter(datasource, ds).astype('float32')
         except:
-            ds = ds[varname[0]].astype('float32') 
+            ds = ds[varname[0]].astype('float32')
         return ds
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset) -> xr.Dataset:
-        model = self.sim_model if datasource == 'sim' else self.ref_source
-        try:
-            logging.info(f"Loading custom variable filter for {model}")
-            custom_module = importlib.import_module(f"custom.{model}_filter")
-            custom_filter = getattr(custom_module, f"filter_{model}")
-            self, ds = custom_filter(self, ds)
-        except AttributeError:
-            logging.warning(f"Custom filter function for {model} not found.")
-            raise
+        if datasource == 'stat':
+            pass
+        else:
+            model = self.sim_model if datasource == 'sim' else self.ref_source
+            try:
+                logging.info(f"Loading custom variable filter for {model}")
+                custom_module = importlib.import_module(f"custom.{model}_filter")
+                custom_filter = getattr(custom_module, f"filter_{model}")
+                self, ds = custom_filter(self, ds)
+            except AttributeError:
+                logging.warning(f"Custom filter function for {model} not found.")
+                raise
         return ds
 
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
@@ -268,20 +282,21 @@ class BaseDatasetProcessing:
         if not match:
             logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
             raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-        
+
         value, unit = match.groups()
         value = int(value)
         freq = self.freq_map.get(unit.lower())
         if not freq:
             logging.error(f"Unsupported time unit: {unit}")
             raise ValueError(f"Unsupported time unit: {unit}")
-        
+
         time_index = pd.date_range(start=f'{startx}-01-01T00:00:00', end=f'{endx}-12-31T59:59:59', freq=f'{value}{freq}')
         ds = xr.Dataset({'data': ('time', np.nan * np.ones(len(time_index)))}, coords={'time': time_index})
         orig_ds_reindexed = dfx1.reindex(time=ds.time)
         return xr.merge([ds, orig_ds_reindexed]).drop_vars('data')
 
-    def split_year(self, ds: xr.Dataset, casedir: str, suffix: str, prefix: str, use_syear: int, use_eyear: int, datasource: str) -> None:
+    def split_year(self, ds: xr.Dataset, casedir: str, suffix: str, prefix: str, use_syear: int, use_eyear: int,
+                   datasource: str) -> None:
         def save_year(casedir: str, suffix: str, prefix: str, ds: xr.Dataset, year: int) -> None:
             ds_year = ds.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
             ds_year.attrs = {}
@@ -295,7 +310,8 @@ class BaseDatasetProcessing:
         )
         ds.close()
 
-    def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str, tim_res: str) -> xr.Dataset:
+    def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str,
+                     tim_res: str) -> xr.Dataset:
         try:
             var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
         except:
@@ -313,7 +329,7 @@ class BaseDatasetProcessing:
             raise FileNotFoundError(f"File '{file}' not found.")
         return file
 
-    def check_all(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str], 
+    def check_all(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                   groupby: str, casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         if groupby == 'single':
             self.preprocess_single_file(dirx, syear, eyear, tim_res, varunit, varname, casedir, suffix, prefix, datasource)
@@ -322,8 +338,8 @@ class BaseDatasetProcessing:
         else:
             self.preprocess_yearly_files(dirx, syear, eyear, tim_res, varunit, varname, casedir, suffix, prefix, datasource)
 
-    def preprocess_single_file(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str], 
-                            casedir: str, suffix: str, prefix: str, datasource: str) -> None:
+    def preprocess_single_file(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
+                               casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         logging.info('The dataset groupby is Single --> split it to Year')
         varfile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
         ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
@@ -333,18 +349,18 @@ class BaseDatasetProcessing:
         ds, varunit = self.process_units(ds, varunit)
         self.split_year(ds, casedir, suffix, prefix, syear, eyear, datasource)
 
-    def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str], 
-                                 casedir: str, suffix: str, prefix: str, datasource: str) -> None:
+    def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
+                                    casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         logging.info('The dataset groupby is not Year --> combine it to Year')
-        ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource,tim_res)
+        ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
         ds, varunit = self.process_units(ds, varunit)
         ds = self.select_timerange(ds, syear, eyear)
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
-    def preprocess_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str], 
-                             casedir: str, suffix: str, prefix: str, datasource: str) -> None:
+    def preprocess_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
+                                casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         varfiles = self.check_file_exist(os.path.join(dirx, f'{prefix}{syear}{suffix}.nc'))
         ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
         ds = self.check_coordinate(ds)
@@ -354,7 +370,7 @@ class BaseDatasetProcessing:
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
-        #if not UnitProcessing.check_units(self.ref_varunit.lower(), self.sim_varunit.lower()):
+        # if not UnitProcessing.check_units(self.ref_varunit.lower(), self.sim_varunit.lower()):
         try:
             converted_data, new_unit = UnitProcessing.convert_unit(ds.values, varunit.lower())
             ds = ds.copy(data=converted_data)
@@ -364,10 +380,11 @@ class BaseDatasetProcessing:
         except ValueError as e:
             logging.warning(f"Warning: {str(e)}. Attempting specific conversion.")
             exit()
-        #return ds, varunit
+        # return ds, varunit
 
     def to_dict(self) -> Dict[str, Any]:
         return self.__dict__
+
 
 class StationDatasetProcessing(BaseDatasetProcessing):
     def process_station_data(self, data_params: Dict[str, Any]) -> None:
@@ -380,46 +397,46 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
         varname = self.ref_varname if datasource == 'ref' else self.sim_varname
-    # Check if the variable exists in the dataset
+        # Check if the variable exists in the dataset
         if varname[0] not in stn_data:
             logging.error(f"Variable '{varname[0]}' not found in the station data.")
             raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
-        
+
         ds = stn_data[varname[0]]
-        
+
         # Check the time dimension
         if 'time' not in ds.dims:
             logging.error("Time dimension not found in the station data.")
             raise ValueError("Time dimension not found in the station data.")
-        
+
         # Ensure the time coordinate is datetime
         if not np.issubdtype(ds.time.dtype, np.datetime64):
             ds['time'] = pd.to_datetime(ds.time.values)
-        
+
         # Select the time range before resampling
         ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
-        
+
         # Resample only if there's data in the selected time range
         if len(ds.time) > 0:
             ds = ds.resample(time=self.compare_tim_res).mean()
         else:
             logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
             return None  # or return an empty dataset with the correct structure
-        
-        #ds = ds.resample(time=self.compare_tim_res).mean()
+
+        # ds = ds.resample(time=self.compare_tim_res).mean()
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
-        
-        #if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
+
+        # if not UnitProcessing.check_units(self.ref_varunit, self.sim_varunit):
         #    ds, _ = UnitProcessing.process_unit(self, ds, getattr(self, f"{datasource}_varunit"))
-        
+
         ds = self.select_timerange(ds, start_year, end_year)
-        return ds #.where((ds > -1e20) & (ds < 1e20), np.nan)
+        return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
 
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
         station = station_list.iloc[index]
         start_year = int(station['use_syear'])
-        end_year = int(station['use_eyear'])     
+        end_year = int(station['use_eyear'])
         file_path = f'{station["sim_dir"]}' if datasource == 'sim' else f'{station["ref_dir"]}'
         with xr.open_dataset(file_path) as stn_data:
             processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
@@ -435,13 +452,13 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         station = station_list.iloc[index]
         start_year = int(station['use_syear'])
         end_year = int(station['use_eyear'])
-        
+
         station_data = self.extract_single_station_data(dataset, station, datasource)
         processed_data = self.process_extracted_data(station_data, start_year, end_year)
         self.save_extracted_data(processed_data, station, datasource)
 
     def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
-        if  datasource == 'ref':
+        if datasource == 'ref':
             return dataset.sel(lat=[station['sim_lat']], lon=[station['sim_lon']], method="nearest")
         elif datasource == 'sim':
             return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
@@ -451,7 +468,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
         data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
-        data = data #.where((data > -1e20) & (data < 1e20), np.nan)
+        data = data  # .where((data > -1e20) & (data < 1e20), np.nan)
         return data.resample(time=self.compare_tim_res).mean()
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
@@ -459,6 +476,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                        f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
         data.to_netcdf(output_file)
         logging.info(f"Saved extracted station data to {output_file}")
+
 
 class GridDatasetProcessing(BaseDatasetProcessing):
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
@@ -475,9 +493,9 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             self.process_yearly_files(data_params)
 
     def process_single_file(self, data_params: Dict[str, Any]) -> None:
-        self.check_all(data_params['data_dir'], self.minyear, self.maxyear, 
+        self.check_all(data_params['data_dir'], self.minyear, self.maxyear,
                        data_params['tim_res'], data_params['varunit'],
-                       data_params['varname'], 'single', self.casedir, 
+                       data_params['varname'], 'single', self.casedir,
                        data_params['suffix'], data_params['prefix'], data_params['datasource'])
         setattr(self, f"{data_params['datasource']}_data_groupby", 'year')
 
@@ -497,16 +515,16 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         years = range(self.minyear, self.maxyear + 1)
         Parallel(n_jobs=self.num_cores)(
             delayed(self.check_all)(
-                data_params['data_dir'], 
-                year, 
+                data_params['data_dir'],
                 year,
-                data_params['tim_res'], 
-                data_params['varunit'], 
-                data_params['varname'],  
+                year,
+                data_params['tim_res'],
+                data_params['varunit'],
+                data_params['varname'],
                 data_params['data_groupby'],
-                self.casedir, 
-                data_params['suffix'], 
-                data_params['prefix'], 
+                self.casedir,
+                data_params['suffix'],
+                data_params['prefix'],
                 data_params['datasource']
             )
             for year in years
@@ -515,12 +533,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
     def remap_and_combine_data(self, data_params: Dict[str, Any]) -> None:
         data_dir = f"{self.casedir}/scratch"
         years = range(self.minyear, self.maxyear + 1)
-        
+
         data_source = data_params['datasource']
         if data_source not in ['ref', 'sim']:
             logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
-        
+
         if self.ref_data_type != 'stn' and self.sim_data_type != 'stn':
             Parallel(n_jobs=self.num_cores)(
                 delayed(self._make_grid_parallel)(data_source,
@@ -539,7 +557,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         # print(var_files)
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
-            #ds = ds.where((ds > -1e10) & (ds < 1e10), np.nan)
+            # ds = ds.where((ds > -1e10) & (ds < 1e10), np.nan)
             output_file = self.get_output_filename(data_params)
             with ProgressBar():
                 ds.to_netcdf(output_file)
@@ -578,7 +596,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         if data_source not in ['ref', 'sim']:
             logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
-        
+
         var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
         if self.debug_mode:
             logging.info(f"Processing {var_file} for year {year}")
@@ -598,11 +616,11 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                 data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
             except:
                 data = convert_to_wgs84_scipy(data, self.compare_grid_res)
-        
+
         # Convert longitude values
         lon = data['lon'].values
         lon_adjusted = np.where(lon > 180, lon - 360, lon)
-        
+
         # Create a new DataArray with adjusted longitude values
         new_lon = xr.DataArray(lon_adjusted, dims='lon', attrs=data['lon'].attrs)
 
@@ -611,12 +629,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
         # If needed, sort the dataset by the new longitude values
         data = data.sortby('lon')
-        
+
         return data
 
     def remap_data(self, data: xr.Dataset) -> xr.Dataset:
         new_grid = self.create_target_grid()
-        
+
         remapping_methods = [
             self.remap_interpolate,
             self.remap_xesmf,
@@ -648,12 +666,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         )
         target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
         # Convert sparse arrays to dense arrays
-        data_regrid = data.regrid.conservative(target_dataset,nan_threshold=0)
-        #data_regrid = data_regrid.compute()
+        data_regrid = data.regrid.conservative(target_dataset, nan_threshold=0)
+        # data_regrid = data_regrid.compute()
 
         return data_regrid
-        #target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
-        #return data.regrid.conservative(target_dataset,nan_threshold=0)
+        # target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
+        # return data.regrid.conservative(target_dataset,nan_threshold=0)
 
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import xesmf as xe
@@ -665,15 +683,14 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix='.nc') as temp_input, \
-             tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
-             tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
-            
+                tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
+                tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
             data.to_netcdf(temp_input.name)
             self.create_target_grid_file(temp_grid.name, new_grid)
-            
+
             cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
             subprocess.run(cmd, shell=True, check=True)
-            
+
             return xr.open_dataset(temp_output.name)
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
@@ -690,12 +707,13 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         # Convert sparse arrays to dense arrays
         data = data.resample(time=self.compare_tim_res).mean()
         data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
-        
+
         varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
-        
+
         out_file = f'{self.casedir}/tmp/{data_source}_{varname}_remap_{year}.nc'
         data.to_netcdf(out_file)
         logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
+
 
 class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
     def __init__(self, config: Dict[str, Any]):
@@ -704,4 +722,3 @@ class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
     def process(self, datasource: str) -> None:
         super().process(datasource)
         # Add any additional processing specific to this class if needed
-

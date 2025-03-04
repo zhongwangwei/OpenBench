@@ -1,13 +1,98 @@
 &general
-Mann_Kendall_Trend_Test_data_source = MK_Test_Data
-Correlation_data_source = Corr_Data1,Corr_Data2
-Standard_Deviation_data_source = SD_Data
-Z_Score_data_source = Z_Score_Data
-functional_response_data_source = FR_Data
-hellinger_distance_data_source = HD_Data1, HD_Data2
-tch_data_source = TCH_Data1, TCH_Data2, TCH_Data3
-Partial_Least_Squares_Regression_data_source = PLSR_Data_Y, PLSR_Data_X1,PLSR_Data_X2
-anova_data_source = ANOVA_Data_Y, ANOVA_Data_X1,ANOVA_Data_X2
+    Mean_data_source                             = Mean_Data
+    Median_data_source                           = Median_Data
+    Min_data_source                             = Min_Data
+    Max_data_source                             = Max_Data
+    Sum_data_source                             = Sum_Data
+    Mann_Kendall_Trend_Test_data_source          = MK_Test_Data
+    Correlation_data_source                      = Corr_Data.1a_monthly_UKESM1-0-LL
+    Standard_Deviation_data_source                = SD_Data
+    Z_Score_data_source                          = Z_Score_Data
+    Functional_Response_data_source              = FR_Data
+    Hellinger_Distance_data_source               = HD_Data
+    Three_Cornered_Hat_data_source               = TCH_Data
+    Partial_Least_Squares_Regression_data_source = PLSR_Data
+/
+
+&Mean
+#casename: MK_Test_Canopy_Interception_CESM2
+    Mean_Data_timezone =  0.0
+    Mean_Data_data_type =  grid
+    Mean_Data_data_groupby =  single
+    Mean_Data_dir =  /media/zhwei/data02/Streamlit/case_test/LS3MIP/output/data
+    Mean_Data_fulllist =
+    Mean_Data_varname =  evspsblveg
+    Mean_Data_tim_res =  month
+    Mean_Data_grid_res =  1.25
+    Mean_Data_suffix =
+    Mean_Data_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    Mean_Data_syear =  2003
+    Mean_Data_eyear =  2009
+/
+
+&Median
+
+#casename: MK_Test_Canopy_Interception_CESM2
+    Median_Data_timezone =  0.0
+    Median_Data_data_type =  grid
+    Median_Data_data_groupby =  single
+    Median_Data_dir =  /media/zhwei/data02/Streamlit/case_test/LS3MIP/output/data
+    Median_Data_fulllist =
+    Median_Data_varname =  evspsblveg
+    Median_Data_tim_res =  month
+    Median_Data_grid_res =  1.25
+    Median_Data_suffix =
+    Median_Data_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    Median_Data_syear =  2003
+    Median_Data_eyear =  2009
+/
+&Min
+
+#casename: MK_Test_Canopy_Interception_CESM2
+    Min_Data_timezone =  0.0
+    Min_Data_data_type =  grid
+    Min_Data_data_groupby =  single
+    Min_Data_dir =  /media/zhwei/data02/Streamlit/case_test/LS3MIP/output/data
+    Min_Data_fulllist =
+    Min_Data_varname =  evspsblveg
+    Min_Data_tim_res =  month
+    Min_Data_grid_res =  1.25
+    Min_Data_suffix =
+    Min_Data_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    Min_Data_syear =  2003
+    Min_Data_eyear =  2009
+/
+&Max
+
+#casename: MK_Test_Canopy_Interception_CESM2
+    Max_Data_timezone =  0.0
+    Max_Data_data_type =  grid
+    Max_Data_data_groupby =  single
+    Max_Data_dir =  /media/zhwei/data02/Streamlit/case_test/LS3MIP/output/data
+    Max_Data_fulllist =
+    Max_Data_varname =  evspsblveg
+    Max_Data_tim_res =  month
+    Max_Data_grid_res =  1.25
+    Max_Data_suffix =
+    Max_Data_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    Max_Data_syear =  2003
+    Max_Data_eyear =  2009
+/
+&Sum
+
+#casename: MK_Test_Canopy_Interception_CESM2
+    Sum_Data_timezone =  0.0
+    Sum_Data_data_type =  grid
+    Sum_Data_data_groupby =  single
+    Sum_Data_dir =  /media/zhwei/data02/Streamlit/case_test/LS3MIP/output/data
+    Sum_Data_fulllist =
+    Sum_Data_varname =  evspsblveg
+    Sum_Data_tim_res =  month
+    Sum_Data_grid_res =  1.25
+    Sum_Data_suffix =
+    Sum_Data_prefix =  Canopy_Interception_sim_CESM2_evspsblveg
+    Sum_Data_syear =  2003
+    Sum_Data_eyear =  2009
 /
 
 &Mann_Kendall_Trend_Test
@@ -107,7 +192,7 @@ HD_Data1_varunit = unit1
 HD_Data1_tim_res = Year
 HD_Data1_geo_res = 0.5
 HD_Data1_suffix = HD1
-HD_Data1_prefix = 
+HD_Data1_prefix =
 HD_Data1_syear = 2000
 HD_Data1_eyear = 2020
 HD_Data2_timezone = 0
@@ -119,7 +204,7 @@ HD_Data2_varunit = unit2
 HD_Data2_tim_res = Year
 HD_Data2_geo_res = 0.5
 HD_Data2_suffix = HD2
-HD_Data2_prefix = 
+HD_Data2_prefix =
 HD_Data2_syear = 2000
 HD_Data2_eyear = 2020
 nbins = 25
@@ -135,7 +220,7 @@ TCH_Data1_varunit = unit1
 TCH_Data1_tim_res = Year
 TCH_Data1_geo_res = 0.5
 TCH_Data1_suffix = TCH1
-TCH_Data1_prefix = 
+TCH_Data1_prefix =
 TCH_Data1_syear = 2000
 TCH_Data1_eyear = 2020
 TCH_Data2_timezone = 0
@@ -147,7 +232,7 @@ TCH_Data2_varunit = unit2
 TCH_Data2_tim_res = Year
 TCH_Data2_geo_res = 0.5
 TCH_Data2_suffix = TCH2
-TCH_Data2_prefix = 
+TCH_Data2_prefix =
 TCH_Data2_syear = 2000
 TCH_Data2_eyear = 2020
 TCH_Data3_timezone = 0
@@ -159,7 +244,7 @@ TCH_Data3_varunit = unit3
 TCH_Data3_tim_res = Year
 TCH_Data3_geo_res = 0.5
 TCH_Data3_suffix = TCH3
-TCH_Data3_prefix = 
+TCH_Data3_prefix =
 TCH_Data3_syear = 2000
 TCH_Data3_eyear = 2020
 /
@@ -174,11 +259,11 @@ PLSR_Data_Y_varunit = unit_y
 PLSR_Data_Y_tim_res = Year
 PLSR_Data_Y_geo_res = 0.5
 PLSR_Data_Y_suffix = PLSR_Y
-PLSR_Data_Y_prefix = 
+PLSR_Data_Y_prefix =
 PLSR_Data_Y_syear = 2000
 PLSR_Data_Y_eyear = 2020
 
-PLSR_Data_X1_timezone = 0 
+PLSR_Data_X1_timezone = 0
 PLSR_Data_X1_data_type = geo
 PLSR_Data_X1_data_groupby = Single
 PLSR_Data_X1_dir = /path/to/plsr_data_x
@@ -187,12 +272,12 @@ PLSR_Data_X1_varunit = unit_x
 PLSR_Data_X1_tim_res = Year
 PLSR_Data_X1_geo_res = 0.5
 PLSR_Data_X1_suffix = PLSR_X
-PLSR_Data_X1_prefix = 
+PLSR_Data_X1_prefix =
 PLSR_Data_X1_syear = 2000
 PLSR_Data_X1_eyear = 2020
 PLSR_Data_X1_type  = Independent
 
-PLSR_Data_X2_timezone = 0 
+PLSR_Data_X2_timezone = 0
 PLSR_Data_X2_data_type = geo
 PLSR_Data_X2_data_groupby = Single
 PLSR_Data_X2_dir = /path/to/plsr_data_x
@@ -201,7 +286,7 @@ PLSR_Data_X2_varunit = unit_x
 PLSR_Data_X2_tim_res = Year
 PLSR_Data_X2_geo_res = 0.5
 PLSR_Data_X2_suffix = PLSR_X
-PLSR_Data_X2_prefix = 
+PLSR_Data_X2_prefix =
 PLSR_Data_X2_syear = 2000
 PLSR_Data_X2_eyear = 2020
 /

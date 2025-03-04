@@ -78,12 +78,13 @@ def setup_directories(main_nl):
     
     # Configure logging
     log_file = os.path.join(directories['log'], f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+    print('OpenBench Log File: {}'.format(log_file))
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_file),
-            logging.StreamHandler()
+            logging.StreamHandler(stream=sys.stdout),
         ]
     )
     return directories
@@ -231,7 +232,10 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     for statistic in statistic_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
-        statistic_method = f'scenarios_{statistic}_analysis'
+        if statistic in ['Mean','Median','Max','Min','Sum']:
+            statistic_method = f'scenarios_Basic_analysis'
+        else:
+            statistic_method = f'scenarios_{statistic}_analysis'
         if hasattr(stats_handler, statistic_method):
             getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
         else:
