@@ -7,7 +7,6 @@ from figlib.Fig_kernel_density_estimate import make_scenarios_comparison_Kernel_
 from figlib.Fig_geo_plot_index import make_geo_plot_index
 from figlib.Fig_stn_plot_index import make_stn_plot_index
 from figlib.Fig_LC_based_heat_map import make_LC_based_heat_map
-from figlib.Fig_plot_stn import plot_stn
 from figlib.Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
 from figlib.Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
 from figlib.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
@@ -20,7 +19,7 @@ from figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
 from figlib.Fig_Z_Score import make_Z_Score
 from figlib.Fig_Functional_Response import make_Functional_Response
 from figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
-from figlib.Fig_Basic_Plot import make_plot_index_stn, make_plot_index_grid
+from figlib.Fig_Basic_Plot import make_plot_index_stn, make_plot_index_grid, plot_stn
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
     "make_scenarios_scores_comparison_heat_map",
@@ -31,7 +30,6 @@ __all__ = [
     "make_geo_plot_index",
     "make_stn_plot_index",
     "make_LC_based_heat_map",
-    "plot_stn",
     "make_scenarios_comparison_Whisker_Plot",
     "make_scenarios_comparison_Single_Model_Performance_Index",
     "make_scenarios_comparison_Ridgeline_Plot",
@@ -46,4 +44,5 @@ __all__ = [
     'make_Partial_Least_Squares_Regression',
     'make_plot_index_stn',
     'make_plot_index_grid',
+    'plot_stn',
     ]
