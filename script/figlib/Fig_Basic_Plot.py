@@ -647,7 +647,7 @@ def make_plot_index_stn(self):
             # bnd = np.linspace(mticks[0], mticks[-1], 11)
             bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
             norm = colors.BoundaryNorm(bnd, cmap.N)
-        splot_stn_map(self,lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', mticks, option)
+        plot_stn_map(self,lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', mticks, option)
 
     for score in self.scores:
         option = self.fig_nml['make_stn_plot_index']
