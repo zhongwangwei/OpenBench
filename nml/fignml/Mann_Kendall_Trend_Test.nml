@@ -8,6 +8,8 @@
   labelsize         = 17
   axes_linewidth    = 1
 
+  significance_level = 0.05
+
   set_lat_lon       = False  # 'True', 'False' Turn on this option, the map will be plot by your setting.
   min_lon           = -180
   max_lon           = 180
@@ -18,7 +20,7 @@
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm', ,'RdYlBu'
 
-  show_method       = imshow # contourf, imshow
+  show_method       = None # interpolate, None
   colorbar_position = horizontal
   extend            = both    # 'neither', 'both', 'min', 'max'
 #  colorbar_ticks    = 0.1
