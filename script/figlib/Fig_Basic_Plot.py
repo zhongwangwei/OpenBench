@@ -703,7 +703,6 @@ def make_plot_index_stn(self):
             cmap = colors.ListedColormap(cpool)
             bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
             norm = colors.BoundaryNorm(bnd, cmap.N)
-
         plot_stn_map(self,lon_select, lat_select, plotvar, cmap, norm, score, 'scores', mticks, option)
 
 
