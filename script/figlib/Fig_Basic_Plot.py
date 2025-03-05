@@ -703,7 +703,6 @@ def make_plot_index_stn(self):
             cmap = colors.ListedColormap(cpool)
             bnd = np.arange(option["vmin"], option["vmax"] + option['colorbar_ticks'] / 2, option['colorbar_ticks'] / 2)
             norm = colors.BoundaryNorm(bnd, cmap.N)
-
         plot_stn_map(self,lon_select, lat_select, plotvar, cmap, norm, score, 'scores', mticks, option)
 
 
@@ -777,7 +776,7 @@ def make_Basic(output_dir, method_name, data_sources, main_nml, statistic_nml,
     if not option['cmap']:
         option['cmap'] = 'coolwarm'
     min_value, max_value = np.nanmin(data), np.nanmax(data)
-    cmap, mticks, norm, bnd = get_index(option['vmin'], option['vmax'], option['cmap'])
+    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
     option['vmax'], option['vmin'] = mticks[-1], mticks[0]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
