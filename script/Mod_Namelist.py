@@ -9,6 +9,7 @@ import xarray as xr
 from joblib import Parallel, delayed
 import logging
 
+
 class NamelistReader:
     """
     A class for reading and processing namelist files.
@@ -26,7 +27,6 @@ class NamelistReader:
 
         # Ignore all numpy warnings
         np.seterr(all='ignore')
-        
 
     @staticmethod
     def strtobool(val: str) -> int:
@@ -122,8 +122,6 @@ class NamelistReader:
         return namelist
 
 
-
-
 class UpdateNamelist(NamelistReader):
     def __init__(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], ref_nml: Dict[str, Any], evaluation_items: List[str]):
         # Initialize with general settings
@@ -144,7 +142,7 @@ class UpdateNamelist(NamelistReader):
         # Process reference sources
         for ref_source in ref_sources:
             self._process_ref_source(evaluation_item, ref_source, ref_nml)
-        
+
         # Process simulation sources
         for sim_source in sim_sources:
             self._process_sim_source(evaluation_item, sim_source, sim_nml)
@@ -248,7 +246,7 @@ class UpdateNamelist(NamelistReader):
             if not os.path.isdir(root_dir):
                 logging.error(f"Expected directory but found file: {root_dir}")
                 raise NotADirectoryError(f"Expected directory but found file: {root_dir}")
-            
+
             try:
                 sub_dir = tmp[evaluation_item]['sub_dir']
                 full_dir = os.path.join(root_dir, sub_dir)
@@ -341,7 +339,11 @@ class UpdateFigNamelist(NamelistReader):
     def _process_comparison_source(self, fig_nml: Dict[str, Any], comparison: str):
         """Process a single simulation source for an evaluation item."""
         # Read the namelist for this simulation source
-        tmp = self._read_source_namelist(fig_nml, f'{comparison}_source', 'Comparison')
+        if comparison in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+            tmp = self._read_source_namelist(fig_nml, f'Basic_source', 'Comparison')
+            tmp['general']['key'] = comparison
+        else:
+            tmp = self._read_source_namelist(fig_nml, f'{comparison}_source', 'Comparison')
         # Initialize the evaluation item dictionary if it doesn't exist
         fig_nml['Comparison'].setdefault(comparison, {})
         fig_nml['Comparison'][comparison] = tmp['general']
@@ -349,10 +351,7 @@ class UpdateFigNamelist(NamelistReader):
     def _process_statistic_source(self, fig_nml: Dict[str, Any], statistic: str):
         """Process a single simulation source for an evaluation item."""
         # Read the namelist for this simulation source
-        if statistic in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
-            tmp = self._read_source_namelist(fig_nml, f'Basic_source', 'Statistic')
-        else:
-            tmp = self._read_source_namelist(fig_nml, f'{statistic}_source', 'Statistic')
+        tmp = self._read_source_namelist(fig_nml, f'{statistic}_source', 'Statistic')
         # Initialize the evaluation item dictionary if it doesn't exist
         fig_nml['Statistic'].setdefault(statistic, {})
         fig_nml['Statistic'][statistic] = tmp['general']
@@ -597,7 +596,7 @@ class GeneralInfoReader(NamelistReader):
                 self._read_and_merge_station_lists()
             except:
                 logging.warning(f"Warning: No station list found for {self.item}. reading station list from custom module")
-                #print(f"Warning: No station list found for {self.item}. reading station list from custom module")
+                # print(f"Warning: No station list found for {self.item}. reading station list from custom module")
             self._filter_stations()
         else:
             self._set_use_years()
@@ -769,7 +768,7 @@ class GeneralInfoReader(NamelistReader):
             )
             for _, row in stations_df.iterrows()
         )
-        
+
         # Process results and update flags
         invalid_stations = []
         for result in results:
@@ -777,5 +776,5 @@ class GeneralInfoReader(NamelistReader):
                 invalid_stations.append(result['ID'])
                 if result['error']:
                     logging.warning(f"Warning: Station ID {result['ID']}: {result['error']}")
-        
+
         return invalid_stations

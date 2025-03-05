@@ -245,7 +245,7 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 sys.exit(1)
         elif general_info['ref_data_groupby'].lower() == 'year':
             for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
-                file_path = os.path.join(general_info['ref_dir'], f'{general_info['ref_prefix']}{year}{general_info['ref_suffix']}.nc')
+                file_path = os.path.join(general_info['ref_dir'], f'{general_info["ref_prefix"]}{year}{general_info["ref_suffix"]}.nc')
                 if not os.path.exists(file_path):
                     logging.error(f"Error: The reference file {file_path} does not exist!")
                     sys.exit(1)
