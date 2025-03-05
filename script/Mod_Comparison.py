@@ -1460,7 +1460,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 dfs.append(df1)
 
                                 if not dfs:
-                                    logging.warning(f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
+                                    logging.warning(
+                                        f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
                                     continue
 
                                 # Combine all dataframes
@@ -1770,7 +1771,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         make_scenarios_comparison_Ridgeline_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                                  datasets_filtered, option)
                     except:
-                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                        logging.error(
+                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
     def to_dict(self):
         return self.__dict__
@@ -2129,4 +2131,299 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     self.general_config, sim_nml,
                                                     ref_data_type, option)
 
+    def scenarios_Basic_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        """
+        Calculate all the data (including input data,metrics,scores):
+        1. Calculate ensemble mean, median, min, max
+        2. Calculate sum value for each input
+        4. Plot the results
+        """
+        basic_method = option['key']
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', basic_method)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
 
+        def calculate_basic_parallel(station_list, iik, evaluation_item, ref_source, sim_source, ref_varname, sim_varname):
+            s = xr.open_dataset(
+                f"{basedir}/output/data/stn_{ref_source}_{sim_source}/{evaluation_item}_sim_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+                sim_varname].squeeze()
+            o = xr.open_dataset(
+                f"{basedir}/output/data/stn_{ref_source}_{sim_source}/{evaluation_item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
+                ref_varname].squeeze()
+            s['time'] = o['time']
+            mask1 = np.isnan(s) | np.isnan(o)
+            s.values[mask1] = np.nan
+            o.values[mask1] = np.nan
+
+            row = {}
+            method_function = getattr(self, f"stat_{basic_method.lower()}", None)
+            result_s = method_function(*[s])
+            result_o = method_function(*[o])
+            try:
+                row['ref_value'] = result_o.values
+            except:
+                row['ref_value'] = -9999.0
+            try:
+                row['sim_value'] = result_s.values
+            except:
+                row['sim_value'] = -9999.0
+            return row
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+            # Convert to lists if needed
+            if isinstance(sim_sources, str):
+                sim_sources = [sim_sources]
+            if isinstance(ref_sources, str):
+                ref_sources = [ref_sources]
+
+            for ref_source in ref_sources:
+                # Skip if only one simulation source
+                if len(sim_sources) < 2:
+                    continue
+
+                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+
+                if ref_data_type == 'stn':
+                    try:
+                        stnlist = f"{basedir}/stn_list.txt"
+                        station_list = pd.read_csv(stnlist, header=0)
+                        for sim_source in sim_sources:
+                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                            results = Parallel(n_jobs=-1)(
+                                delayed(calculate_basic_parallel)(station_list, iik, evaluation_item, ref_source, sim_source,
+                                                                  ref_varname, sim_varname) for iik in
+                                range(len(station_list['ID'])))
+                            basic_data = pd.concat([station_list.copy(), pd.DataFrame(results)], axis=1)
+                            output_path = f'{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv'
+                            logging.info(f"Saving evaluation to {output_path}")
+                            basic_data.to_csv(output_path, index=False)
+                            make_stn_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
+                else:
+                    try:
+                        ds = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                            f'{ref_varname}']
+                        method_function = getattr(self, f"stat_{basic_method.lower()}", None)
+                        result = method_function(*[ds])
+                        output_path = f'{dir_path}/{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc'
+                        self.save_result(output_path, basic_method, result)
+                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing Grid {basic_method} calculations for {ref_source}: {e}")
+
+            for sim_source in sim_sources:
+                if len(sim_sources) < 2:
+                    continue
+
+                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                if sim_data_type != 'stn':
+                    try:
+                        ds = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
+                            f'{sim_varname}']
+                        method_function = getattr(self, f"stat_{basic_method.lower()}", None)
+                        result = method_function(*[ds])
+                        output_path = f'{dir_path}/{evaluation_item}_sim_{sim_source}_{sim_varname}_{basic_method}.nc'
+                        self.save_result(output_path, basic_method, result)
+                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing station {basic_method} calculations for {sim_source}: {e}")
+
+    def scenarios_Mann_Kendall_Trend_Test_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        method_name = 'Mann_Kendall_Trend_Test'
+        method_function = getattr(self, f"stat_{method_name.lower()}", None)
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Mann_Kendall_Trend_Test')
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+            # Convert to lists if needed
+            if isinstance(sim_sources, str):
+                sim_sources = [sim_sources]
+            if isinstance(ref_sources, str):
+                ref_sources = [ref_sources]
+
+            for sim_source in sim_sources:
+                # Skip if only one simulation source
+                if len(sim_sources) < 2:
+                    continue
+
+                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+
+                if sim_data_type != 'stn':
+                    try:
+                        sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
+                            f'{sim_varname}']
+                        result = method_function(*[sim], option['significance_level'])
+                        output_file = f'{dir_path}/Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'
+                        self.save_result(output_file, method_name, result)
+                        make_Mann_Kendall_Trend_Test(output_file, method_name, sim_source, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
+            for ref_source in ref_sources:
+                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+
+                if ref_data_type != 'stn':
+                    try:
+                        ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                            f'{ref_varname}']
+                        result = method_function(*[ref], option['significance_level'])
+                        output_file = f'{dir_path}/Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                        self.save_result(output_file, method_name, result)
+                        make_Mann_Kendall_Trend_Test(output_file, method_name, ref_source, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
+
+    def scenarios_Standard_Deviation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        method_name = 'Standard_Deviation'
+        method_function = getattr(self, f"stat_{method_name.lower()}", None)
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', method_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+            # Convert to lists if needed
+            if isinstance(sim_sources, str):
+                sim_sources = [sim_sources]
+            if isinstance(ref_sources, str):
+                ref_sources = [ref_sources]
+
+            for sim_source in sim_sources:
+                # Skip if only one simulation source
+                if len(sim_sources) < 2:
+                    continue
+
+                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+
+                if sim_data_type != 'stn':
+                    try:
+                        sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
+                            f'{sim_varname}']
+                        result = method_function(*[sim])
+                        output_file = f'{dir_path}/{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'
+                        self.save_result(output_file, method_name, result)
+                        make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
+
+            for ref_source in ref_sources:
+                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+
+                if ref_data_type != 'stn':
+                    try:
+                        ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                            f'{ref_varname}']
+                        result = method_function(*[ref])
+                        output_file = f'{dir_path}/{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                        self.save_result(output_file, method_name, result)
+                        make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing {basic_method} calculations for {evaluation_item} {ref_source}: {e}")
+
+    def scenarios_Functional_Response_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        method_name = 'Functional_Response'
+        method_function = getattr(self, f"stat_{method_name.lower()}", None)
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', method_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+            # Convert to lists if needed
+            if isinstance(sim_sources, str):
+                sim_sources = [sim_sources]
+            if isinstance(ref_sources, str):
+                ref_sources = [ref_sources]
+
+            for ref_source in ref_sources:
+                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                    f'{ref_varname}']
+
+                if ref_data_type != 'stn':
+                    for sim_source in sim_sources:
+                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+
+                        sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
+                            f'{sim_varname}']
+                        try:
+                            result = method_function(*[ref, sim], option['nbins'])
+
+                            output_file = f'{dir_path}/{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc'
+                            self.save_result(output_file, method_name, result)
+                            make_Functional_Response(output_file, method_name, sim_source, self.main_nml['general'], option)
+                        except Exception as e:
+                            logging.error(
+                                f"Error processing {method_name} calculations for {evaluation_item} {ref_source} {sim_source}: {e}")
+
+    def scenarios_Correlation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        method_name = 'Correlation'
+        method_function = getattr(self, f"stat_{method_name.lower()}", None)
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', method_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        for evaluation_item in evaluation_items:
+            # Get simulation sources
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            # Convert to lists if needed
+            if isinstance(sim_sources, str):
+                sim_sources = [sim_sources]
+
+            for i, sim1 in enumerate(sim_sources):
+                for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                    try:
+                        sim_varname1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
+                        sim_varname2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
+                        ds1 = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim1}_{sim_varname1}.nc')[
+                            f'{sim_varname1}']
+                        ds2 = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')[
+                            f'{sim_varname2}']
+                        result = method_function(*[ds1,ds2])
+                        output_file = f'{dir_path}/{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc'
+                        self.save_result(output_file, method_name, result)
+                        make_Correlation(output_file, method_name, self.main_nml['general'], option)
+                    except Exception as e:
+                        logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}")
+
+
+    def save_result(self, output_file, method_name, result):
+        # Remove the existing output directory
+        # logging.info(f"Saving {method_name} output to {output_file}")
+        if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
+            if isinstance(result, xr.DataArray):
+                result = result.to_dataset(name=f"{method_name}")
+            result['lat'].attrs['standard_name'] = 'latitude'
+            result['lat'].attrs['long_name'] = 'latitude'
+            result['lat'].attrs['units'] = 'degrees_north'
+            result['lat'].attrs['axis'] = 'Y'
+            result['lon'].attrs['standard_name'] = 'longitude'
+            result['lon'].attrs['long_name'] = 'longitude'
+            result['lon'].attrs['units'] = 'degrees_east'
+            result['lon'].attrs['axis'] = 'X'
+            result.to_netcdf(output_file)
+        else:
+            logging.info(f"Result of {method_name}: {result}")

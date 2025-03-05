@@ -21,10 +21,12 @@ def get_index(vmin, vmax, colormap):
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
             colorbar_ticks = 1
-        elif 100 >= vmax - vmin > 10:
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 2
+        elif 50 >= vmax - vmin > 20:
             colorbar_ticks = 5
         elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 20
+            colorbar_ticks = 10
         elif 200 >= vmax - vmin > 100:
             colorbar_ticks = 20
         elif 500 >= vmax - vmin > 200:
@@ -38,7 +40,7 @@ def get_index(vmin, vmax, colormap):
         else:
             colorbar_ticks = 0.10
         return colorbar_ticks
-
+    
     colorbar_ticks = get_ticks(vmin, vmax)
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
@@ -57,7 +59,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
-def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value, significant, main_nml, option):
+def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, significant, main_nml, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -74,10 +76,6 @@ def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value,
               'text.usetex': False}
     rcParams.update(params)
 
-    filename_parts = [method_name] + data_sources
-    filename = "_".join(filename_parts) + "_output"
-    file = os.path.join(output_dir, f"{method_name}", filename)
-
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
@@ -92,10 +90,11 @@ def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value,
     else:
         origin = 'upper'
     lon, lat = np.meshgrid(ilon, ilat)
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
+
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
     # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
     # cs = ax.imshow(data, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=option['extend'], origin='lower')
 
@@ -155,19 +154,14 @@ def map(output_dir, method_name, data_sources, ilon, ilat, data, title, p_value,
     cb.solids.set_edgecolor("face")
     # 绘制地图
 
-    plt.savefig(f'{file}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
+    file2 = file[:-3]
+    plt.savefig(f'{file2}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
                 dpi=option['dpi'])
     plt.close()
 
 
-def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml, statistic_nml,
-                                 option):  # outpath, source
-
-    filename_parts = [method_name] + data_sources
-    filename = "_".join(filename_parts) + "_output"
-    file = os.path.join(output_dir, f"{method_name}", filename)
-
-    ds = xr.open_dataset(f"{file}.nc")
+def make_Mann_Kendall_Trend_Test(file, method_name, data_sources, main_nml, option):
+    ds = xr.open_dataset(f"{file}")
     trend = ds.trend
     if trend.ndim == 3 and trend.shape[0] == 1:
         trend = trend.squeeze(axis=0)
@@ -178,7 +172,8 @@ def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml
     p_value = ds.p_value
     if p_value.ndim == 3 and p_value.shape[0] == 1:
         p_value = p_value.squeeze(axis=0)
-    significant = statistic_nml['significance_level']
+
+    significant = option['significance_level']
 
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -188,8 +183,8 @@ def make_Mann_Kendall_Trend_Test(output_dir, method_name, data_sources, main_nml
     try:
         option['vmin'], option['vmax'] = math.floor(tau.min(skipna=True).values), math.ceil(tau.max(skipna=True).values)
     except:
-        option['vmin'], option['vmax']= -1, 1
-    map(output_dir, method_name, data_sources, ilon, ilat, tau, 'tau', p_value, significant, main_nml, option)
+        option['vmin'], option['vmax'] = -1, 1
+    map(file, method_name, data_sources, ilon, ilat, tau, 'tau', p_value, significant, main_nml, option)
 
     option['vmin'], option['vmax'] = -1, 1
-    map(output_dir, method_name, data_sources, ilon, ilat, trend, 'Trend', p_value, significant, main_nml, option)
+    map(file, method_name, data_sources, ilon, ilat, trend, 'Trend', p_value, significant, main_nml, option)
