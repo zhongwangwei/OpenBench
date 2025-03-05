@@ -18,15 +18,16 @@
     Relative_Score_source                  = ./nml/fignml/Relative_Score.nml
     Ridgeline_Plot_source                  = ./nml/fignml/Ridgeline_Plot.nml
     Diff_Plot_source                       = ./nml/fignml/Diff_Plot.nml
+    Basic_source                           = ./nml/fignml/Basic.nml
+    Mann_Kendall_Trend_Test_source         = ./nml/fignml/Mann_Kendall_Trend_Test.nml
+    Correlation_source                     = ./nml/fignml/Correlation.nml
+    Standard_Deviation_source              = ./nml/fignml/Standard_Deviation.nml
 /
 
 &statistic_nml
-    Mann_Kendall_Trend_Test_source            = ./nml/fignml/Mann_Kendall_Trend_Test.nml
-    Correlation_source                        = ./nml/fignml/Correlation.nml
-    Standard_Deviation_source                 = ./nml/fignml/Standard_Deviation.nml
     Z_Score_source                            = ./nml/fignml/Z_Score.nml
     Functional_Response_source                = ./nml/fignml/Functional_Response.nml
-#    Three_Cornered_Hat_source                 = ./nml/fignml/Three_Cornered_Hat.nml
+    Three_Cornered_Hat_source                 = ./nml/fignml/Three_Cornered_Hat.nml
     Hellinger_Distance_source                 = ./nml/fignml/Hellinger_Distance.nml
     Partial_Least_Squares_Regression_source   = ./nml/fignml/Partial_Least_Squares_Regression.nml
 /
