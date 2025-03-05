@@ -349,7 +349,10 @@ class UpdateFigNamelist(NamelistReader):
     def _process_statistic_source(self, fig_nml: Dict[str, Any], statistic: str):
         """Process a single simulation source for an evaluation item."""
         # Read the namelist for this simulation source
-        tmp = self._read_source_namelist(fig_nml, f'{statistic}_source', 'Statistic')
+        if statistic in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+            tmp = self._read_source_namelist(fig_nml, f'Basic_source', 'Statistic')
+        else:
+            tmp = self._read_source_namelist(fig_nml, f'{statistic}_source', 'Statistic')
         # Initialize the evaluation item dictionary if it doesn't exist
         fig_nml['Statistic'].setdefault(statistic, {})
         fig_nml['Statistic'][statistic] = tmp['general']
