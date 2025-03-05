@@ -210,33 +210,31 @@ The_Ideal_Point_score     = False       #
 /
 
 &comparisons
-#IGBP_groupby                   =   False
-#PFT_groupby                    =   False
-HeatMap                         =   True
-Taylor_Diagram                  =   True
-Target_Diagram                  =   False
-Kernel_Density_Estimate         =   True
-Whisker_Plot                    =   True
-Parallel_Coordinates            =   False
-Portrait_Plot_seasonal          =   False
-Single_Model_Performance_Index  =   False
-Relative_Score                  =   False
-Ridgeline_Plot                  =   True
-Diff_Plot                       =   False     
+HeatMap                         = False
+Taylor_Diagram                  = False
+Target_Diagram                  = False
+Kernel_Density_Estimate         = False
+Whisker_Plot                    = False
+Parallel_Coordinates            = False
+Portrait_Plot_seasonal          = False
+Single_Model_Performance_Index  = False
+Relative_Score                  = False
+Ridgeline_Plot                  = False
+Diff_Plot                       = False
+Mean                            = False
+Median                          = False
+Max                             = False
+Min                             = False
+Sum                             = False
+Mann_Kendall_Trend_Test         = False
+Correlation                     = True
+Standard_Deviation              = False
+Functional_Response             = False
 /
 
 
 &statistics
-Mean                               = True
-Median                             = True
-Max                                = True
-Min                                = True
-Sum                                = True
-Mann_Kendall_Trend_Test            = False
-Correlation                        = False
-Standard_Deviation                 = False
 Z_Score                            = False
-Functional_Response                = False
 Hellinger_Distance                 = False
 Partial_Least_Squares_Regression   = False
 #Three_Cornered_Hat                 = False

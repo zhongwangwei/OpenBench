@@ -105,7 +105,7 @@ class statistics_calculate:
         Returns:
             xarray.DataArray: Mean of the input data
         """
-        return data.mean(dim="time")
+        return data.mean(dim="time", skipna=True)
 
     def stat_median(self, data):
         """
@@ -117,7 +117,7 @@ class statistics_calculate:
         Returns:
             xarray.DataArray: Median of the input data
         """
-        return data.median(dim="time")
+        return data.median(dim="time", skipna=True)
 
     def stat_max(self, data):
         """
@@ -129,7 +129,7 @@ class statistics_calculate:
         Returns:
             xarray.DataArray: Max of the input data
         """
-        return data.max(dim="time")
+        return data.max(dim="time", skipna=True)
 
     def stat_min(self, data):
         """
@@ -141,7 +141,7 @@ class statistics_calculate:
         Returns:
             xarray.DataArray: Min of the input data
         """
-        return data.min(dim="time")
+        return data.min(dim="time", skipna=True)
 
     def stat_sum(self, data):
         """
@@ -153,7 +153,7 @@ class statistics_calculate:
         Returns:
             xarray.DataArray: Sum of the input data
         """
-        return data.sum(dim="time")
+        return data.sum(dim="time", skipna=True)
 
     def stat_variance(self, data):
         """
@@ -231,7 +231,7 @@ class statistics_calculate:
         return data.rolling(time=window)
 
     # Advanced statistical methods
-    def stat_functional_response(self, v, u):
+    def stat_functional_response(self, v, u, nbins):
         """
         Calculate the functional response score for each grid point along the time dimension.
 
@@ -251,7 +251,7 @@ class statistics_calculate:
         if isinstance(u, xr.Dataset):
             u = list(u.data_vars.values())[0]
 
-        nbins = self.stats_nml['Functional_Response']['nbins']
+        # nbins = self.stats_nml['Functional_Response']['nbins']
 
         def calc_functional_response(v_series, u_series):
             # Remove NaN values
@@ -613,7 +613,7 @@ class statistics_calculate:
 
         return ds
 
-    def stat_mann_kendall_trend_test(self, data):
+    def stat_mann_kendall_trend_test(self, data, significance_level):
         """
         Calculates the Mann-Kendall trend test for a time series using scipy's kendalltau.
 
@@ -623,7 +623,8 @@ class statistics_calculate:
         Returns:
             xarray.Dataset: Dataset containing trend test results for each variable and grid point.
         """
-        significance_level = self.stats_nml.get('mann_kendall_trend_test', {}).get('significance_level', 0.05)
+
+        # significance_level = self.stats_nml.get('mann_kendall_trend_test', {}).get('significance_level', 0.05)
 
         def _apply_mann_kendall(da, significance_level):
             """

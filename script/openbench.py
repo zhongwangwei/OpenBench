@@ -28,9 +28,11 @@ from Mod_Statistics import StatisticsProcessing
 from Mod_Preprocessing import check_required_nml, run_files_check
 import logging
 from datetime import datetime
+
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
+
 
 def print_welcome_message():
     """Print a more beautiful welcome message and ASCII art."""
@@ -58,9 +60,10 @@ def print_welcome_message():
     print("  * Customizable benchmarking")
     print("\n\033[1;32m" + "=" * 80 + "\033[0m")
     print("\033[1;35mInitializing OpenBench Evaluation System...\033[0m")
-   # input("\033[1mPress Enter to begin the benchmarking process...\033[0m")
+    # input("\033[1mPress Enter to begin the benchmarking process...\033[0m")
     print("\033[1;32m" + "=" * 80 + "\033[0m")
     print("\n")
+
 
 def setup_directories(main_nl):
     """Create necessary directories for the evaluation process."""
@@ -75,7 +78,7 @@ def setup_directories(main_nl):
     }
     for dir_path in directories.values():
         os.makedirs(dir_path, exist_ok=True)
-    
+
     # Configure logging
     log_file = os.path.join(directories['log'], f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
     print('OpenBench Log File: {}'.format(log_file))
@@ -89,6 +92,7 @@ def setup_directories(main_nl):
     )
     return directories
 
+
 def load_namelists(nl, main_nl):
     """Load reference, simulation, and statistics namelists."""
     ref_nml = nl.read_namelist(main_nl["general"]["reference_nml"])
@@ -100,7 +104,9 @@ def load_namelists(nl, main_nl):
     fig_nml = nl.read_namelist(main_nl["general"]["figure_nml"])
     return ref_nml, sim_nml, stats_nml, fig_nml
 
-def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml):
+
+def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
+                   fig_nml):
     """Run the evaluation process for each item."""
     for evaluation_item in evaluation_items:
         logging.info(f"Start running {evaluation_item} evaluation...")
@@ -116,34 +122,38 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
 
         for ref_source in ref_sources:
-            onetimeref=True
+            onetimeref = True
             for sim_source in sim_sources:
-                process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
-                onetimeref=False
+                process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                             evaluation_item, sim_source, ref_source, fig_nml)
+                onetimeref = False
 
         for ref_source in ref_sources:
-            onetimeref=True
+            onetimeref = True
             for sim_source in sim_sources:
-                process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml)
-                onetimeref=False
- 
- 
-    main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')   
-    main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')   
+                process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
+                                   statistic_vars, evaluation_item, sim_source, ref_source, fig_nml)
+                onetimeref = False
+
+    main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')
+    main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')
     if main_nl['general']['IGBP_groupby']:
         LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
-                                         fig_nml['IGBP_groupby'])
+                                             fig_nml['IGBP_groupby'])
     if main_nl['general']['PFT_groupby']:
         LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
-                                        fig_nml['PFT_groupby'])
+                                            fig_nml['PFT_groupby'])
 
-def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
+
+def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
+                 sim_source, ref_source, fig_nml):
     logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
-    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
+    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                                            evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
     # Add ref_source and sim_source to general_info
     general_info['ref_source'] = ref_source
@@ -151,13 +161,13 @@ def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, 
 
     dataset_processer = DatasetProcessing(general_info)
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        onetimeref=True
-    if onetimeref==True:
+        onetimeref = True
+    if onetimeref == True:
         dataset_processer.process('ref')
     else:
         logging.info("Skip processing ref data")
     dataset_processer.process('sim')
-    
+
     # Clear scratch directory
     scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
     shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -169,31 +179,36 @@ def process_mask(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, 
         else:
             # Mask the observation data with simulation data to ensure consistent coverage
             logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
-            o = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+            o = xr.open_dataset(
+                f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
                 f'{general_info["ref_varname"]}']
-            s = xr.open_dataset(f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
+            s = xr.open_dataset(
+                f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
                 f'{general_info["sim_varname"]}']
-            s['time'] = o['time'] 
+            s['time'] = o['time']
             mask1 = np.isnan(s) | np.isnan(o)
-            o.values[mask1] = np.nan        
-            o.to_netcdf(f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')
-        
+            o.values[mask1] = np.nan
+            o.to_netcdf(
+                f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')
 
 
-def process_evaluation(onetimeref,main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source,fig_nml):
+def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                       evaluation_item, sim_source, ref_source, fig_nml):
     """Process a single evaluation for given sources."""
-    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item, sim_source, ref_source)
+    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                                            evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
     # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        evaluater = Evaluation_stn(general_info,fig_nml)
+        evaluater = Evaluation_stn(general_info, fig_nml)
         evaluater.make_evaluation_P()
 
     else:
-        evaluater = Evaluation_grid(general_info,fig_nml)
+        evaluater = Evaluation_grid(general_info, fig_nml)
         evaluater.make_Evaluation()
 
-def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml):
+
+def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars, fig_nml):
     """Run the comparison process for each comparison variable."""
     logging.info(" ")
     logging.info("╔═══════════════════════════════════════════════════════════════╗")
@@ -206,7 +221,10 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
     for cvar in comparison_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {cvar} comparison...******************")
-        comparison_method = f'scenarios_{cvar}_comparison'
+        if cvar in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+            comparison_method = f'scenarios_Basic_comparison'
+        else:
+            comparison_method = f'scenarios_{cvar}_comparison'
         if hasattr(ch, comparison_method):
             getattr(ch, comparison_method)(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, fig_nml[cvar])
         else:
@@ -215,6 +233,7 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
             exit(1)
         logging.info(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
+
 
 def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     """Run statistical analysis for each statistic variable."""
@@ -228,14 +247,10 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
         os.path.join(basedir, 'output', 'statistics'),
         num_cores=main_nl['general']['num_cores']
     )
-    
+
     for statistic in statistic_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
-        if statistic in ['Mean','Median','Max','Min','Sum']:
-            statistic_method = f'scenarios_Basic_analysis'
-        else:
-            statistic_method = f'scenarios_{statistic}_analysis'
         if hasattr(stats_handler, statistic_method):
             getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
         else:
@@ -248,48 +263,51 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
 def main():
     """Main function to orchestrate the evaluation process."""
     print_welcome_message()
-    
+
     # Initialize NamelistReader and load main namelist
     nl = NamelistReader()
     main_nl = nl.read_namelist(sys.argv[1])
 
     # Setup directories
     setup_directories(main_nl)
-    
+
     logging.info("Starting OpenBench evaluation process...")
-    
+
     # Load namelists
     ref_nml, sim_nml, stats_nml, fig_nml = load_namelists(nl, main_nl)
-    
+
     # Select variables based on main namelist settings
     evaluation_items = nl.select_variables(main_nl['evaluation_items']).keys()
     metric_vars = nl.select_variables(main_nl['metrics']).keys()
     score_vars = nl.select_variables(main_nl['scores']).keys()
     comparison_vars = nl.select_variables(main_nl['comparisons']).keys()
     statistic_vars = nl.select_variables(main_nl['statistics']).keys()
-    
+
     # Check required files before proceeding
     check_required_nml(main_nl, sim_nml, ref_nml, evaluation_items)
 
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
     UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
-    run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml)
-    
+    run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
+                    fig_nml)
+
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
         start_time = time.time()
-        run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,fig_nml['Validation'])
+        run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
+                       fig_nml['Validation'])
         end_time = time.time()
-        evaluation_time = (end_time - start_time)/60
+        evaluation_time = (end_time - start_time) / 60
         logging.info(f"Evaluation process completed in {evaluation_time:.2f} minutes.")
 
     # Run comparison if enabled
     if main_nl['general']['comparison']:
         start_time = time.time()
-        run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,fig_nml['Comparison'])
+        run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,
+                       fig_nml['Comparison'])
         end_time = time.time()
-        comparison_time = (end_time - start_time)/60
+        comparison_time = (end_time - start_time) / 60
         logging.info(f"Comparison process completed in {comparison_time:.2f} minutes.")
 
     # Run statistics if enabled
@@ -297,10 +315,11 @@ def main():
         start_time = time.time()
         run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
-        statistic_time = (end_time - start_time)/60
+        statistic_time = (end_time - start_time) / 60
         logging.info(f"Statistics process completed in {statistic_time:.2f} minutes.")
-    
+
     logging.info("OpenBench evaluation process completed successfully.")
+
 
 if __name__ == '__main__':
     main()
