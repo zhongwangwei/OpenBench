@@ -1819,7 +1819,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             metrics: list of metrics to compare
             option: additional options
         """
-        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Diff_Comparison')
+        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Diff_Plot')
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
