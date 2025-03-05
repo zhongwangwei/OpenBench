@@ -7,7 +7,6 @@ from figlib.Fig_kernel_density_estimate import make_scenarios_comparison_Kernel_
 from figlib.Fig_geo_plot_index import make_geo_plot_index
 from figlib.Fig_stn_plot_index import make_stn_plot_index
 from figlib.Fig_LC_based_heat_map import make_LC_based_heat_map
-from figlib.Fig_plot_stn import plot_stn
 from figlib.Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
 from figlib.Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
 from figlib.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
@@ -32,7 +31,6 @@ __all__ = [
     "make_geo_plot_index",
     "make_stn_plot_index",
     "make_LC_based_heat_map",
-    "plot_stn",
     "make_scenarios_comparison_Whisker_Plot",
     "make_scenarios_comparison_Single_Model_Performance_Index",
     "make_scenarios_comparison_Ridgeline_Plot",
@@ -48,5 +46,7 @@ __all__ = [
     'make_plot_index_stn',
     'make_plot_index_grid',
     'plot_stn',
+
     'make_Basic',
 ]
+
