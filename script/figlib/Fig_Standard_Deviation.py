@@ -21,10 +21,12 @@ def get_index(vmin, vmax, colormap):
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
             colorbar_ticks = 1
-        elif 100 >= vmax - vmin > 10:
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 2
+        elif 50 >= vmax - vmin > 20:
             colorbar_ticks = 5
         elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 20
+            colorbar_ticks = 10
         elif 200 >= vmax - vmin > 100:
             colorbar_ticks = 20
         elif 500 >= vmax - vmin > 200:
@@ -57,12 +59,8 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
-def make_Standard_Deviation(output_dir, method_name, data_sources, main_nml, statistic_nml, option):
-    filename_parts = [method_name] + data_sources
-    filename = "_".join(filename_parts) + "_output"
-    file = os.path.join(output_dir, f"{method_name}", filename)
-
-    ds = xr.open_dataset(f"{file}.nc")
+def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
+    ds = xr.open_dataset(f"{file}")
     data = ds.Standard_Deviation
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -107,10 +105,10 @@ def make_Standard_Deviation(output_dir, method_name, data_sources, main_nml, sta
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
 
     # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
     coastline = cfeature.NaturalEarthFeature(
@@ -163,6 +161,7 @@ def make_Standard_Deviation(output_dir, method_name, data_sources, main_nml, sta
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
-    plt.savefig(f'{file}.{option["saving_format"]}', format=f'{option["saving_format"]}',
+    file2 = file[:-3]
+    plt.savefig(f'{file2}.{option["saving_format"]}', format=f'{option["saving_format"]}',
                 dpi=option['dpi'])
     plt.close()
