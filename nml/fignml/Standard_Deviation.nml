@@ -23,7 +23,7 @@
 #  colorbar_ticks    = 0.1
   colorbar_label    =
 
-  show_method       = imshow # contourf, imshow
+  show_method       = None # interpolate, None
   colorbar_position_set = False  # 'True', 'False'
   colorbar_left     =  0.26
   colorbar_bottom   =  0.14
