@@ -251,6 +251,7 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     for statistic in statistic_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
+        statistic_method = f'scenarios_{statistic}_analysis'
         if hasattr(stats_handler, statistic_method):
             getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
         else:
