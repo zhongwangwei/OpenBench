@@ -129,8 +129,8 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
     ax.xaxis.set_major_formatter(lon_formatter)
     ax.yaxis.set_major_formatter(lat_formatter)
 
-    if option['title'] is None:
-        option['title'] = f'Mann-Kendall Test Results ({title})'
+    if not option['title'] :
+        option['title'] = f'Mann-Kendall Test Results ({title}) on significant level: {significant:.3f}'
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
     plt.title(option['title'], fontsize=option['title_size'])

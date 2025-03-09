@@ -62,11 +62,11 @@ def get_index(vmin, vmax, colormap):
     return cmap, mticks, norm, bnd
 
 
-def make_stn_plot_index(file, method_name, main_nml, option):
+def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # read the data
     df = pd.read_csv(file, header=0)
     # loop the keys in self.variables to get the metric output
-    for type in ['ref_value', 'sim_value']:
+    for type, source in zip(['ref_value', 'sim_value'], sources):
         min_metric = -999.0
         max_metric = 100000.0
 
@@ -154,7 +154,10 @@ def make_stn_plot_index(file, method_name, main_nml, option):
 
         ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
         ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
-        plt.title(option['title'], fontsize=option['title_size'])
+        title = option['title']
+        if not option['title']:
+            title = f'{source} {method_name}'
+        plt.title(title, fontsize=option['title_size'])
 
         if not option['colorbar_position_set']:
             pos = ax.get_position()  # .bounds
@@ -176,5 +179,5 @@ def make_stn_plot_index(file, method_name, main_nml, option):
         cb.solids.set_edgecolor("face")
 
         filename2 = file[:-4]
-        plt.savefig(f'{filename2}.{option["saving_format"]}', format=f'{option["saving_format"]}', dpi=option['dpi'])
+        plt.savefig(f'{filename2}_{type}.{option["saving_format"]}', format=f'{option["saving_format"]}', dpi=option['dpi'])
         plt.close()
