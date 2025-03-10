@@ -5,7 +5,9 @@ from streamlit_option_menu import option_menu
 from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 from Page_control import Pages_control
-from Page_make_validation import make_initional, make_reference, make_simulation
+from Page_make_validation import make_initional
+from Page_make_reference import make_reference
+from Page_make_simulation import make_simulation
 from Page_run import run_validation
 from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
 
@@ -67,7 +69,6 @@ def info_2023_11_14():
         $ conda install -c conda-forge numpy pandas xarray matplotlib cartopy scipy dask joblib netCDF4 flox
         $ pip install streamlit
         $ pip install streamlit_option_menu
-        $ pip install stqdm 
         """, language='shell', line_numbers=True)
         st.write('######  Use the xesmf and Cdo packages under Linux or Mac OS')
         st.code("""
@@ -264,6 +265,10 @@ def initial_st(initial_information):
         st.session_state.step1_evaluation = False
     if 'step1_main_check_evaluation' not in st.session_state:
         st.session_state.step1_main_check_evaluation = False
+    if 'step1_comparison' not in st.session_state:
+        st.session_state.step1_comparison = False
+    if 'step1_main_check_comparison' not in st.session_state:
+        st.session_state.step1_main_check_comparison = False
     if 'step1_nml_count' not in st.session_state:
         st.session_state.step1_nml_count = 0
 

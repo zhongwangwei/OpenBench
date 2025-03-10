@@ -42,7 +42,10 @@ def get_index(vmin, vmax, colormap, option):
             colorbar_ticks = 0.10
         return colorbar_ticks
 
-    colorbar_ticks = get_ticks(vmin, vmax)
+    if not option['vmin_max_on']:
+        colorbar_ticks = get_ticks(vmin, vmax)
+    else:
+        colorbar_ticks = option['colorbar_ticks']
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
@@ -94,14 +97,22 @@ def map(file, ilon, ilat, data, p_value, significant, option):
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'], option)
+
+    if not option['vmin_max_on']:
+        min_value = np.nanmin(data)
+        max_value = np.nanmax(data)
+        mticks, norm, bnd, cmap = get_index(min_value, max_value, option['cmap'], option)
+    else:
+        mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'], option)
+
     lon, lat = np.meshgrid(ilon, ilat)
-    if option["map"] == 'imshow':
+
+    if option['map'] == 'interpolate':
+        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
+    else:
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
-    elif option['map'] == 'contourf':
-        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -117,8 +128,8 @@ def map(file, ilon, ilat, data, p_value, significant, option):
                     zorder=3)
 
     ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -1 * option["xtick"])[::-1], crs=ccrs.PlateCarree())
+    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -1 * option["ytick"])[::-1], crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -174,11 +185,12 @@ def draw_Mann_Kendall_Trend_Test(file, option):  # outpath, source
     map(file, ilon, ilat, data, p_value, significant, option)
 
 
-def prepare(icase, file, option):
+def prepare(dir_path, file, selected_item, source, option):
+    icase = f"{selected_item}_{source}_MK"
     with st.container(height=None, border=True):
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'MK test', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'{selected_item} ({source}) MK test', label_visibility="visible",
                                             key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
 
@@ -204,7 +216,11 @@ def prepare(icase, file, option):
             option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'])
             option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'])
             option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'])
-
+            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                                key=f"{icase}xtick")
+            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                                key=f"{icase}ytick")
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
                                               ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
@@ -277,19 +293,21 @@ def prepare(icase, file, option):
 
             col1, col2, col3, col4 = st.columns(4)
             option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
-                                                         key=f"{icase}_colorbar_ticks")
+
 
             if option["vmin_max_on"]:
+                option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
+                                                             key=f"{icase}_colorbar_ticks")
                 option["vmin"] = col3.number_input(f"colorbar min", value=-1.)
                 option["vmax"] = col4.number_input(f"colorbar max", value=1.)
             else:
+                option["colorbar_ticks"] = 0.5
                 option["vmin"] = -1.
                 option["vmax"] = 1.
 
             st.divider()
             col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
+            option["map"] = col1.selectbox(f"Draw map", ['None', 'interpolate'],
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_map")
             option['show_option'] = col2.selectbox(f"Draw option", ['tau', 'trend'],
@@ -311,22 +329,20 @@ def prepare(icase, file, option):
             option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6, key=f"{icase}_y_wise")
             option['font'] = st.selectbox('Image saving format',
                                           ["Times New Roman", "Arial", "Verdana", "Helvetica", "Georgia",
-                                                                "Courier", "Liberation Sans", "Liberation Serif", "FreeSans",
-                                                                "PT Sans", "Source Sans Pro", "Ubuntu Sans", "Noto Sans", "Muli",
-                                                                "Montserrat","sans-serif"],
+                                           "Courier", "Liberation Sans", "Liberation Serif", "FreeSans",
+                                           "PT Sans", "Source Sans Pro", "Ubuntu Sans", "Noto Sans", "Muli",
+                                           "Montserrat", "sans-serif"],
                                           index=0, placeholder="Choose an option", label_visibility="visible",
                                           key=f"{icase}_font")
 
         with col3:
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
-    try:
-        draw_Mann_Kendall_Trend_Test(file, option)
-    except:
-        st.error(f'Please check File: {file}')
+    # try:
+    draw_Mann_Kendall_Trend_Test(os.path.join(dir_path, file), option)
+    # except:
+    #     st.error(f'Please check File: {file}')
 
 
-def make_Mann_Kendall_Trend_Test(dir_path, item, icase, file, item_data, option):
-    st.write('make_Mann_Kendall_Trend_Test')
-    option['significance_level'] = item_data['significance_level']
-    prepare(icase, file, option)
+def make_Mann_Kendall_Trend_Test_Plot(dir_path, file, selected_item, source, option):
+    prepare(dir_path, file, selected_item, source, option)

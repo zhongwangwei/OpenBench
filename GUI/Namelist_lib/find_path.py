@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 
-class FindPath:
+class FindPath():
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
 
@@ -73,14 +73,16 @@ class FindPath:
         self.__update_path(st.session_state['find_path'][key], key, change_list)
         return st.session_state['find_path'][key]
 
-    def __update_sub_path(self, sub_path: str, key: str, root_path: str, change_list: list):
-        def path_change(key, ipath, change_list):
+    def __update_sub_path(self, sub_path: str, sub_key: str, root_path: str, change_list: list):
+        def path_change(key, ipath, change_list,container):
             selected_dir = st.session_state[key]
             if selected_dir == '<- Back SPACE':  # 返回上一级
                 st.session_state['find_path'][key] = os.path.dirname(ipath)
             else:
                 if self.has_permission(os.path.join(ipath, selected_dir)):
                     st.session_state['find_path'][key] = os.path.join(ipath, selected_dir)
+            container.code(f"Current Sub Path: {os.path.relpath(st.session_state['find_path'][key], ipath)}")
+
             if change_list[0] is not None and change_list[1] is not None:
                 st.session_state[change_list[0]][change_list[1]] = True
 
@@ -90,18 +92,19 @@ class FindPath:
             subdirectories = [name for name in os.listdir(os.path.join(sub_path)) if
                               os.path.isdir(os.path.join(sub_path, name))]
 
-        with st.popover(f"Find Path", use_container_width=True):
-            st.code(f"Current Sub Path: {os.path.relpath(st.session_state['find_path'][key], root_path)}")
+        popover = st.popover(f"Find Path", use_container_width=True)
+        with popover:
+            # st.code(f"Current Sub Path: {os.path.relpath(st.session_state['find_path'][sub_key], root_path)}")
             options = (
-                          ['<- Back SPACE'] if not os.path.samefile(st.session_state['find_path'][key],
+                          ['<- Back SPACE'] if not os.path.samefile(st.session_state['find_path'][sub_key],
                                                                     root_path) else []) + sorted(subdirectories)
             st.radio(
                 label="Select Directory:",
                 options=options,
                 index=None,
-                key=key,
+                key=sub_key,
                 on_change=path_change,
-                args=(key, st.session_state['find_path'][key], change_list),
+                args=(sub_key, st.session_state['find_path'][sub_key], change_list,popover),
                 label_visibility="collapsed"
             )
 
@@ -113,7 +116,6 @@ class FindPath:
             sep = '\\'
         else:
             sep = posixpath.sep
-
         if sub_path == sep:
             sub_path = ''
             st.session_state['find_path'][sub_key] = root_path
@@ -123,8 +125,8 @@ class FindPath:
                 st.session_state['find_path'][sub_key] = root_path
             elif not st.session_state['find_path'][sub_key].startswith(root_path):
                 st.session_state['find_path'][sub_key] = root_path
-
         self.__update_sub_path(st.session_state['find_path'][sub_key], sub_key, root_path, change_list)
+
         if not os.path.samefile(st.session_state['find_path'][sub_key], root_path):
             sub_dir = os.path.relpath(st.session_state['find_path'][sub_key], root_path)
             if sub_dir.endswith(sep):
@@ -139,11 +141,13 @@ class FindPath:
     def __update_file(self, path: str, key: str, file_type: str, change_list):
         def path_change(key, ipath, change_list):
             selected_dir = st.session_state[key]
+
             if selected_dir == '<- Back SPACE':  # 返回上一级
                 st.session_state['find_path'][key] = os.path.dirname(ipath)
-            else:  # 进入选择的子目录
+            else:
                 if self.has_permission(os.path.join(ipath, selected_dir)):
                     st.session_state['find_path'][key] = os.path.join(ipath, selected_dir)
+            # st.write(st.session_state['find_path'][key])
             if change_list[0] is not None and change_list[1] is not None:
                 st.session_state[change_list[0]][change_list[1]] = True
 
@@ -161,7 +165,8 @@ class FindPath:
                 args=(key, path, change_list),
                 label_visibility="collapsed"
             )
-            subdirfiles = [file for file in os.listdir(path) if file.endswith(file_type)]
+            path = st.session_state['find_path'][key]
+            subdirfiles = [file for file in os.listdir(path) if file.endswith(f".{file_type}")]
 
             def get_index(subdirfiles, f_value):
                 if f_value in subdirfiles:
