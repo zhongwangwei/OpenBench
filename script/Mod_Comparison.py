@@ -2202,7 +2202,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             output_path = f'{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv'
                             logging.info(f"Saving evaluation to {output_path}")
                             basic_data.to_csv(output_path, index=False)
-                            make_stn_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                            make_stn_plot_index(output_path, basic_method, self.main_nml['general'], (ref_source,sim_source),option)
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                 else:
