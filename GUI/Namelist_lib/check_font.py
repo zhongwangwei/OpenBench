@@ -7,7 +7,7 @@ from matplotlib import font_manager
 import matplotlib.font_manager as fm
 import subprocess
 
-class check_font:
+class check_font():
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen23@163.com"
         self.font_file = matplotlib.matplotlib_fname()

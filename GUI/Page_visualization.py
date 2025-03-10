@@ -158,7 +158,7 @@ class visualization_validation:
                             try:
                                 image = load_image(filtered_list[0])
                                 st.image(image, caption=f'Reference: {ref_source}, Simulation: {sim_source}',
-                                         use_column_width=True)
+                                         use_container_width=True)
                             except:
                                 st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source}', icon="⚠")
                         else:
@@ -170,7 +170,7 @@ class visualization_validation:
                                 try:
                                     image = load_image(filtered_list[0])
                                     st.image(image, caption=f'Reference: {ref_source}, Simulation: {sim_source}',
-                                             use_column_width=True)
+                                             use_container_width=True)
                                 except:
                                     st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source}', icon="⚠")
                             else:
@@ -181,7 +181,7 @@ class visualization_validation:
         elif visual_select == "Comparisons":
             st.cache_data.clear()
             st.divider()
-            figure_path = os.path.join(case_path, visual_select.lower(), item)
+            figure_path = str(os.path.join(case_path, visual_select.lower(), item))
 
             if item == "HeatMap":
                 st.write('#### :blue[Select Scores!]')
@@ -193,7 +193,7 @@ class visualization_validation:
                     filename = glob.glob(os.path.join(figure_path, f'scenarios_{score}_comparison_heatmap.*'))[0]
                     if os.path.exists(filename):
                         image = load_image(filename)
-                        st.image(image, caption=f'Scores: {iscore}', use_column_width=True)
+                        st.image(image, caption=f'Scores: {iscore}', use_container_width=True)
                     else:
                         st.error(f'Missing Figure for Scores: {iscore}', icon="⚠")
 
@@ -212,7 +212,7 @@ class visualization_validation:
                         filename = [f for f in filename if not f.endswith('.txt')][0]
                         if os.path.exists(filename):
                             image = load_image(filename)
-                            st.image(image, caption=f'Reference: {ref_source}', use_column_width=True)
+                            st.image(image, caption=f'Reference: {ref_source}', use_container_width=True)
                         else:
                             st.error(f'Missing Figure for {selected_item.replace("_", " ")} Reference: {ref_source}', icon="⚠")
 
@@ -243,7 +243,7 @@ class visualization_validation:
                             filename = glob.glob(os.path.join(figure_path, f'{selected_item}_{ref_source}_{mm}.*'))
                             try:
                                 image = load_image(filename[0])
-                                st.image(image, caption=f'Reference: {ref_source}', use_column_width="auto")
+                                st.image(image, caption=f'Reference: {ref_source}', use_container_width="auto")
                             except:
                                 st.error(f'Missing Figure for Reference: {ref_source}', icon="⚠")
                 elif showing_format == '***Matrics***':
@@ -261,7 +261,7 @@ class visualization_validation:
                             filename = glob.glob(os.path.join(figure_path, f'{score}_{"_".join(item_combination)}.*'))
                             try:
                                 image = load_image(filename[0])
-                                st.image(image, caption=f'Reference: {", ".join(item_combination)}', use_column_width="auto")
+                                st.image(image, caption=f'Reference: {", ".join(item_combination)}', use_container_width="auto")
                             except:
                                 st.error(f'Missing Figure for Reference:{", ".join(item_combination)}', icon="⚠")
 
@@ -293,7 +293,7 @@ class visualization_validation:
                                 os.path.join(figure_path, f'Parallel_Coordinates_Plot_{mm}_{selected_item}_{ref_source}.*'))
                             try:
                                 image = load_image(filename[0])
-                                st.image(image, caption=f'Reference: {ref_source.replace(" ", "_")}', use_column_width="auto")
+                                st.image(image, caption=f'Reference: {ref_source.replace(" ", "_")}', use_container_width="auto")
                             except:
                                 st.error(f'Missing Figure for Reference: {ref_source.replace(" ", "_")}', icon="⚠")
                 elif showing_format == '***Matrics***':
@@ -312,7 +312,7 @@ class visualization_validation:
                                 os.path.join(figure_path, f'Parallel_Coordinates_Plot_{score}_{"_".join(item_combination)}.*'))
                             try:
                                 image = load_image(filename[0])
-                                st.image(image, caption=f'References: {", ".join(item_combination)}', use_column_width="auto")
+                                st.image(image, caption=f'References: {", ".join(item_combination)}', use_container_width="auto")
                             except:
                                 st.error(f'Missing Figure for Reference: {", ".join(item_combination)}', icon="⚠")
 
@@ -338,7 +338,7 @@ class visualization_validation:
                         filenames = glob.glob(os.path.join(figure_path, f'{item}_{selected_item}_{ref_source}_{mm}.*'))
                         try:
                             image = load_image(filenames[0])
-                            st.image(image, caption=ffname, use_column_width="auto")
+                            st.image(image, caption=ffname, use_container_width="auto")
                         except:
                             if mm == 'nSpatialScore':
                                 st.info(f'{mm} is not supported for {item.replace("_", " ")}!', icon="ℹ️")
@@ -349,15 +349,342 @@ class visualization_validation:
                 filename = glob.glob(os.path.join(figure_path, f'SMPI_comparison_plot_comprehensive.*'))
                 try:
                     image = load_image(filename[0])
-                    st.image(image, caption='SMIP', use_column_width="auto")
+                    st.image(image, caption='SMIP', use_container_width="auto")
                 except:
                     st.error(f'Missing Figure for SMIP', icon="⚠")
 
             elif item == "Relative_Score":
                 st.info(f'Relative_Score not ready yet!', icon="ℹ️")
 
-        elif visual_select == "Statistics":
-            st.info(f'Statistics not ready yet!', icon="ℹ️")
+            elif item == "Diff_Plot":
+                col1, col2, col3 = st.columns((1, 1.2, 2))
+                col1.write("##### :green[Please choose!]")
+                showing_format = col1.radio(
+                    "Parallel_Coordinates", ["***Anomaly***", "***Differentiate***"], index=None, horizontal=False, key=item,
+                    label_visibility="collapsed")
+                col2.write("##### :green[Please choose!]")
+                iselected_item = col2.radio("Parallel_Coordinates", [f'***{i.replace("_", " ")}***' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+                col3.write("##### :green[Please choose!]")
+                mm = col3.radio("metric", [f'***{key.replace("_", " ")}***' for key, value in self.metrics.items() if value] + [
+                    f'***{key.replace("_", " ")}***' for key, value in self.scores.items() if value],
+                                index=None, horizontal=True,
+                                key=f'{item}_metrics', label_visibility="collapsed")
+
+                st.divider()
+                if showing_format and iselected_item and mm:
+                    mm = mm.replace("***", "").replace(" ", "_")
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                    ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+
+                    col1, col2 = st.columns(2)
+                    col1.write("##### :green[Please choose Reference!]")
+                    ref_source = col1.radio(
+                        "Reference", [i for i in ref_sources],
+                        index=None, horizontal=False, key=f'{item}_Reference',
+                        label_visibility="collapsed")
+                    col2.write("##### :green[Please choose!]")
+                    col21, col22 = col2.columns(2)
+                    sim_source = col21.radio("sim_sources",
+                                             [i for i in sim_sources],
+                                             index=None, horizontal=False, key=f'{item}_simulation', label_visibility="collapsed")
+                    st.divider()
+                    if ref_source and sim_source:
+                        ref_data_type = self.ref[ref_source]['general']['data_type']
+                        if showing_format == '***Anomaly***':
+                            if ref_data_type != 'stn':
+                                file = f'{selected_item}_ref_{ref_source}_sim_{sim_source}_{mm}_anomaly'
+                                filename = glob.glob(
+                                    os.path.join(figure_path,
+                                                 f'{selected_item}_ref_{ref_source}_sim_{sim_source}_{mm}_anomaly.*'))
+                                filename = [f for f in filename if not f.endswith('.nc')]
+                            else:
+                                file = f'{selected_item}_stn_{ref_source}_sim_{sim_source}_{mm}_anomaly*'
+                                filename = glob.glob(os.path.join(figure_path, file))
+                                filename = [f for f in filename if not f.endswith('.csv')]
+                            try:
+                                image = load_image(filename[0])
+                                st.image(image, caption=f'File: {file}', use_container_width="auto")
+                            except:
+                                st.error(f'Missing Figure for File: {file}', icon="⚠")
+                        else:
+                            sim_source1 = col22.radio("sim_sources1",
+                                                      [i for i in sim_sources if i != sim_source],
+                                                      index=None, horizontal=False, key=f'{item}_simulation1',
+                                                      label_visibility="collapsed")
+                            if sim_source1:
+                                if ref_data_type != 'stn':
+                                    file = f'{selected_item}_ref_{ref_source}_{sim_source}_vs_{sim_source1}_{mm}_diff.*'
+                                    filenames = glob.glob(os.path.join(figure_path, file))
+                                    if len(filenames) == 0:
+                                        file = f'{selected_item}_ref_{ref_source}_{sim_source1}_vs_{sim_source}_{mm}_diff.*'
+                                        filenames = glob.glob(os.path.join(figure_path, file))
+                                    filenames = [f for f in filenames if not f.endswith('.nc')]
+                                else:
+                                    sim_varname_1 = self.sim[sim_source][selected_item][f'varname']
+                                    sim_varname_2 = self.sim[sim_source1][selected_item][f'varname']
+
+                                    file = f"{selected_item}_stn_{ref_source}_{sim_source}_{sim_varname_1}_vs_{sim_source1}_{sim_varname_2}_{mm}_diff.*"
+                                    filenames = glob.glob(os.path.join(figure_path, file))
+                                    if len(filenames) == 0:
+                                        file = f"{selected_item}_stn_{ref_source}_{sim_source1}_{sim_varname_2}_vs_{sim_source}_{sim_varname_1}_{mm}_diff.*"
+                                        filenames = glob.glob(os.path.join(figure_path, file))
+                                    filenames = [f for f in filenames if not f.endswith('.csv')]
+
+                                for filename in filenames:
+                                    try:
+                                        image = load_image(filename)
+                                        st.image(image, caption=f'File: {filename.replace(f"{figure_path}", "")[1:]}',
+                                                 use_container_width="auto")
+                                    except:
+                                        st.error(f'Missing Figure for File: {filename.replace(f"{figure_path}", "")[1:]}',
+                                                 icon="⚠")
+
+                                if len(filenames) == 0:
+                                    st.error(f'Missing Figure for File: {selected_item}_ref_{ref_source}_{sim_source}_{mm}_diff',
+                                             icon="⚠")
+
+            elif item in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+                col1, col2, col3 = st.columns(3)
+                col1.write("##### :green[Items!]")
+                iselected_item = col1.radio("Basic Plot", [f'***{i.replace("_", " ")}***' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+                col2.write("##### :green[Please choose!]")
+                type = col2.radio("type", ['***Reference***', '***Simulation***'],
+                                  index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+                if iselected_item:
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+
+                if type == '***Reference***':
+                    itype = 'ref'
+                    sources = self.ref['general'][f'{selected_item}_ref_source']
+                elif type == '***Simulation***':
+                    itype = 'sim'
+                    sources = self.sim['general'][f'{selected_item}_sim_source']
+                else:
+                    sources = None
+                    st.info('Please choose showing type!')
+
+                if iselected_item and type:
+                    col3.write("##### :green[Sources!]")
+                    source = col3.radio("col3", [source for source in sources],
+                                        index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                    st.divider()
+                    if source and type == '***Reference***':
+                        data_type = self.ref[source]['general']['data_type']
+                    elif source and type == '***Simulation***':
+                        data_type = self.sim[source]['general']['data_type']
+
+                    if source:
+                        if data_type != 'stn':
+                            filenames = glob.glob(
+                                os.path.join(figure_path, f'{selected_item}_{itype}_{source}_*_{item}.*'))
+                            filenames = [f for f in filenames if not f.endswith('.nc')]
+                            for filename in filenames:
+                                try:
+                                    image = load_image(filename)
+                                    st.image(image, caption=f'File: {filename.replace(f"{figure_path}/", "")}',
+                                             use_container_width="auto")
+                                except:
+                                    st.error(f'Missing Figure for File: {filename.replace(f"{figure_path}/", "")}', icon="⚠")
+
+                            if len(filenames) == 0:
+                                st.error(f'Missing Figure for File: {selected_item} {itype} {source} {item}',
+                                         icon="⚠")
+                        elif data_type == 'stn':
+
+                            if type == '***Reference***':
+                                sources1 = self.sim['general'][f'{selected_item}_sim_source']
+                            elif type == '***Simulation***':
+                                sources1 = self.ref['general'][f'{selected_item}_ref_source']
+                            else:
+                                sources1 = None
+                                st.info('Please choose showing type!')
+                            source1 = col3.radio("sources1", [source for source in sources1],
+                                                 index=None, horizontal=False, key=f'{item}_source1',
+                                                 label_visibility="collapsed")
+                            if source1:
+
+                                try:
+                                    filenames = glob.glob(
+                                        os.path.join(figure_path, f'{selected_item}_stn*{source}_{source1}*{item}_*.*'))
+                                except:
+                                    filenames = glob.glob(
+                                        os.path.join(figure_path, f'{selected_item}_stn*{source1}_{source}*{item}_*.*'))
+
+                                filenames = [f for f in filenames if not f.endswith('.csv')]
+                                for filename in filenames:
+                                    try:
+                                        image = load_image(filename)
+                                        st.image(image, caption=f'File: {filename.replace(f"{figure_path}/", "")}',
+                                                 use_container_width="auto")
+                                    except:
+                                        st.error(f'Missing Figure for File: {filename.replace(f"{figure_path}/", "")}', icon="⚠")
+
+                                if len(filenames) == 0:
+                                    st.error(f'Missing Figure for File: {selected_item} {source} {item}', icon="⚠")
+
+            elif item == "Mann_Kendall_Trend_Test":
+                st.markdown(f"""
+                <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                    Select Cases!
+                </div>""", unsafe_allow_html=True)
+                st.write(' ')
+
+                col1, col2, col3 = st.columns(3)
+                iselected_item = col1.radio("Mann_Kendall_Trend_Test_item",
+                                            [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+                type = col2.radio("Mann_Kendall_Trend_Test_type", ['Reference', 'Simulation'],
+                                  index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+
+                if iselected_item and type:
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                    if type == 'Reference':
+                        itype = 'ref'
+                        sources = self.ref['general'][f'{selected_item}_ref_source']
+                    elif type == 'Simulation':
+                        itype = 'sim'
+                        sources = self.sim['general'][f'{selected_item}_sim_source']
+
+                    source = col3.radio("Mann_Kendall_Trend_Test_source", [source for source in sources],
+                                        index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                    st.divider()
+                    if source:
+                        if type == 'Reference':
+                            data_type = self.ref[source]['general']['data_type']
+                        elif type == 'Simulation':
+                            data_type = self.sim[source]['general']['data_type']
+
+                        if data_type == 'stn':
+                            st.info('Function for station data is still on develop!')
+                        else:
+                            tau = glob.glob(
+                                os.path.join(figure_path, f'Mann_Kendall_Trend_Test_{selected_item}_{itype}_{source}*tau.*'))[0]
+                            trend = glob.glob(
+                                os.path.join(figure_path, f'Mann_Kendall_Trend_Test_{selected_item}_{itype}_{source}*Trend.*'))[0]
+                            if os.path.exists(tau):
+                                image = load_image(tau)
+                                st.image(image, caption=f'Case: {selected_item} {source} tau', use_container_width=True)
+                            else:
+                                st.error(f'Missing Figure for Case: {selected_item} {source}', icon="⚠")
+                            if os.path.exists(trend):
+                                image = load_image(trend)
+                                st.image(image, caption=f'Case: {selected_item} {source} trend', use_container_width=True)
+                            else:
+                                st.error(f'Missing Figure for Case: {selected_item} {source}', icon="⚠")
+
+            elif item == "Correlation":
+                st.markdown(f"""
+                <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                    Select Cases!
+                </div>""", unsafe_allow_html=True)
+                st.write(' ')
+
+                col1, col2 = st.columns(2)
+                iselected_item = col1.radio("Correlation_item", [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+
+                if iselected_item:
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                    sources = self.sim['general'][f'{selected_item}_sim_source']
+                    if isinstance(sources, str): sources = [sources]
+                    source = col2.radio("Correlation_source", [source for source in sources],
+                                        index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+
+                    st.divider()
+                    if source:
+                        filename = glob.glob(os.path.join(figure_path, f'Correlation_{selected_item}*{source}*.*'))
+                        filename = [f for f in filename if not f.endswith('.nc')]
+                        for file in filename:
+                            try:
+                                image = load_image(file)
+                                st.image(image, caption=f'Case: {file.replace(f"{figure_path}", "")[1:].replace("_", " ")}',
+                                         use_container_width=True)
+                            except:
+                                st.error(f'Missing Figure for Case: {file.replace(f"{figure_path}", "")[1:].replace("_", " ")}',
+                                         icon="⚠")
+
+            elif item == "Standard_Deviation":
+                st.markdown(f"""
+                <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                    Select Cases!
+                </div>""", unsafe_allow_html=True)
+                st.write(' ')
+
+                col1, col2, col3 = st.columns(3)
+                iselected_item = col1.radio("Standard_Deviation_item",
+                                            [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+                type = col2.radio("Standard_Deviation_type", ['Reference', 'Simulation'],
+                                  index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+
+                if iselected_item and type:
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                    if type == 'Reference':
+                        itype = 'ref'
+                        sources = self.ref['general'][f'{selected_item}_ref_source']
+                    elif type == 'Simulation':
+                        itype = 'sim'
+                        sources = self.sim['general'][f'{selected_item}_sim_source']
+
+                    if isinstance(sources, str): sources = [sources]
+                    source = col3.radio("Standard_Deviation_source", [source for source in sources],
+                                        index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                    st.divider()
+                    if source:
+                        if type == 'Reference':
+                            data_type = self.ref[source]['general']['data_type']
+                        elif type == 'Simulation':
+                            data_type = self.sim[source]['general']['data_type']
+
+                        if data_type == 'stn':
+                            st.info('Function for station data is still on develop!')
+                        else:
+                            filename = glob.glob(
+                                os.path.join(figure_path, f'Standard_Deviation_{selected_item}_{itype}_{source}*.*'))
+                            filename = [f for f in filename if not f.endswith('.nc')]
+                            try:
+                                image = load_image(filename[0])
+                                st.image(image, caption=f'Case: {selected_item} {source}', use_container_width=True)
+                            except:
+                                st.error(f'Missing Figure for Case: {selected_item} {source}', icon="⚠")
+
+            elif item == "Functional_Response":
+                st.markdown(f"""
+                <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+                    Select Cases!
+                </div>""", unsafe_allow_html=True)
+                st.write(' ')
+
+                col1, col2, col3 = st.columns(3)
+                iselected_item = col1.radio("Functional_Response_item",
+                                            [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                            index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+                if iselected_item:
+                    selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                    ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+                    sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    ref_source = col2.radio("Functional_Response_refsource", [source for source in ref_sources],
+                                            index=None, horizontal=False, key=f'{item}_refsource', label_visibility="collapsed")
+                    sim_source = col3.radio("Functional_Response_simsource", [source for source in sim_sources],
+                                            index=None, horizontal=False, key=f'{item}_simsource', label_visibility="collapsed")
+                    st.divider()
+                    if ref_source and sim_source:
+                        filename = glob.glob(
+                            os.path.join(figure_path, f'Functional_Response_{selected_item}_ref_{ref_source}_sim_{sim_source}.*'))
+                        filename = [f for f in filename if not f.endswith('.nc')]
+                        try:
+                            image = load_image(filename[0])
+                            st.image(image, caption=f'Case: {selected_item} ref:{ref_source} sim:{sim_source}',
+                                     use_container_width=True)
+                        except:
+                            st.error(f'Missing Figure for Case: {selected_item} ref:{ref_source} sim:{sim_source}', icon="⚠")
 
 
 class visualization_replot_files:
@@ -671,7 +998,7 @@ class visualization_replot_files:
         make_geo_plot_index(item, metric, selected_item, ref, sim, path)
 
     def __generate_image_geo_time_average(self, selected_item, refselect, simselect, path):
-        make_geo_time_average(selected_item, refselect, simselect, path, self.ref, self.sim,self.nl)
+        make_geo_time_average(selected_item, refselect, simselect, path, self.ref, self.sim, self.nl)
 
     def __generate_image_geo_Compare_lines(self, selected_item, path):
         option = {}
@@ -783,14 +1110,13 @@ class visualization_replot_files:
         geo_Compare_lines(option, selected_item, self.ref, self.sim)
 
 
-
 class visualization_replot_Comparison:
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
         self.coauthor = "Zhongwang Wei/@gmail.com"
 
         # self.classification = initial.classification()
-
+        self.nl = NamelistReader()
         # ------------------------
         self.ref = st.session_state.ref_data
         self.sim = st.session_state.sim_data
@@ -816,11 +1142,12 @@ class visualization_replot_Comparison:
             if not showing_item:
                 st.info('No comparison item selected!')
 
-        showing_item = ['PFT_groupby', 'IGBP_groupby'] + showing_item
-        tabs = st.tabs([k.replace("_", " ") for k in showing_item])
-        for i, item in enumerate(showing_item):
-            with tabs[i]:
-                self._prepare(case_path, item)
+            if self.generals['evaluation']:
+                showing_item = ['PFT_groupby', 'IGBP_groupby'] + showing_item
+            tabs = st.tabs([k.replace("_", " ") for k in showing_item])
+            for i, item in enumerate(showing_item):
+                with tabs[i]:
+                    self._prepare(case_path, item)
 
     def _prepare(self, case_path, item):
         st.cache_data.clear()
@@ -878,7 +1205,6 @@ class visualization_replot_Comparison:
                     self.__heatmap(heatmap_file, score)
                 except FileNotFoundError:
                     st.error(f'Missing File for Score: {iscore}', icon="⚠")
-
         elif (item == "Taylor_Diagram"):
             st.cache_data.clear()
             st.write('##### :blue[Select Variables]')
@@ -898,7 +1224,6 @@ class visualization_replot_Comparison:
                         self.__taylor(taylor_diagram_file, selected_item, ref_source)
                     except FileNotFoundError:
                         st.error(f'Missing File for {iselected_item} Reference: {ref_source}', icon="⚠")
-
         elif (item == "Target_Diagram"):
             st.cache_data.clear()
             st.write('##### :blue[Select Variables]')
@@ -918,7 +1243,6 @@ class visualization_replot_Comparison:
                         self.__target(target_diagram_file, selected_item, ref_source)
                     except FileNotFoundError:
                         st.error(f'Missing File for {iselected_item} Reference: {ref_source}', icon="⚠")
-
         elif item == "Portrait_Plot_seasonal":
             st.cache_data.clear()
             col1, col2 = st.columns((1, 2))
@@ -967,7 +1291,6 @@ class visualization_replot_Comparison:
                                                             score, item + '_score')
                     except FileNotFoundError:
                         st.error(f'Missing File for {iscore}')
-
         elif item == "Parallel_Coordinates":
             st.cache_data.clear()
             col1, col2 = st.columns((1, 2))
@@ -1016,7 +1339,6 @@ class visualization_replot_Comparison:
                                                           score, item + '_score')
                     except FileNotFoundError:
                         st.error(f'Missing File for {iscore}')
-
         elif item == "Kernel_Density_Estimate":
             st.cache_data.clear()
             col1, col2 = st.columns((1.5, 2.5))
@@ -1086,23 +1408,263 @@ class visualization_replot_Comparison:
                 if ref_source:
                     self.__Ridgeline_Plot(f"{self.generals['basedir']}/{self.generals['basename']}", selected_item, mm,
                                           ref_source)
-
         elif item == "Single_Model_Performance_Index":
             try:
                 self.__Single_Model_Performance_Index(dir_path + "/SMPI_comparison.txt", self.selected_items, self.ref, item)
             except FileNotFoundError:
                 st.error(f'Missing SMIP', icon="⚠")
+        elif item == "Diff_Plot":
+            col1, col2, col3 = st.columns((1, 1.2, 2))
+            col1.write("##### :green[Please choose!]")
+            data_type = col1.radio(
+                "Parallel_Coordinates", ["Anomaly", "Difference"], index=None, horizontal=False, key=item,
+                label_visibility="collapsed")
+            col2.write("##### :green[Please choose!]")
+            iselected_item = col2.radio("Parallel_Coordinates", [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            col3.write("##### :green[Please choose!]")
+            mm = col3.radio("metric", [f'{key.replace("_", " ")}' for key, value in self.metrics.items() if value] + [
+                f'{key.replace("_", " ")}' for key, value in self.scores.items() if value],
+                            index=None, horizontal=True,
+                            key=f'{item}_metrics', label_visibility="collapsed")
+
+            st.divider()
+            if data_type and iselected_item and mm:
+                selected_item = iselected_item.replace(" ", "_")
+                mm = mm.replace(" ", "_")
+                ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+                if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                if isinstance(sim_sources, str): sim_sources = [sim_sources]
+
+                if len(sim_sources) > 4 or len(ref_sources) > 4:
+                    set_sourese = st.expander("", expanded=True)
+                    col1, col2 = set_sourese.columns((1.8, 2.2))
+                else:
+                    col1, col2 = st.columns((1.8, 2.2))
+
+                col1.write("##### :green[Please choose Reference!]")
+                ref_source = col1.radio(
+                    "Reference", [i for i in ref_sources],
+                    index=None, horizontal=False, key=f'{item}_Reference',
+                    label_visibility="collapsed")
+                col2.write("##### :green[Please choose!]")
+                col21, col22 = col2.columns(2)
+                sim_source = col21.radio("sim_sources",
+                                         [i for i in sim_sources],
+                                         index=None, horizontal=False, key=f'{item}_simulation', label_visibility="collapsed")
+                st.divider()
+                if ref_source and sim_source:
+                    ref_data_type = self.ref[ref_source]['general'][f'data_type']
+                    if ref_data_type == 'stn':
+                        if data_type == 'Anomaly':
+                            file = f'{selected_item}_stn_{ref_source}_sim_{sim_source}_{mm}_anomaly.csv'
+                            self.__Diff_Plot(dir_path, file, selected_item, mm, ref_source, sim_source,
+                                             data_type, ref_data_type)
+                        else:
+                            sim_source1 = col22.radio("sim_sources1",
+                                                      [i for i in sim_sources if i != sim_source],
+                                                      index=None, horizontal=False, key=f'{item}_simulation1',
+                                                      label_visibility="collapsed")
+                            if sim_source1:
+                                sim_varname_1 = self.sim[sim_source][selected_item][f'varname']
+                                sim_varname_2 = self.sim[sim_source1][selected_item][f'varname']
+                                file = f'{selected_item}_stn_{ref_source}_{sim_source}_{sim_varname_1}_vs_{sim_source1}_{sim_varname_2}_{mm}_diff.csv'
+                                if not os.path.exists(os.path.join(dir_path, file)):
+                                    file = f'{selected_item}_stn_{ref_source}_{sim_source1}_{sim_varname_2}_vs_{sim_source}_{sim_varname_1}_{mm}_diff.csv'
+                                self.__Diff_Plot(dir_path, file, selected_item, mm, ref_source, (sim_source, sim_source1),
+                                                 data_type, ref_data_type)
+                    else:
+                        if data_type == 'Anomaly':
+                            file = f'{selected_item}_ref_{ref_source}_sim_{sim_source}_{mm}_anomaly.nc'
+                            self.__Diff_Plot(dir_path, file, selected_item, mm, ref_source, sim_source, data_type, ref_data_type)
+                        else:
+                            sim_source1 = col22.radio("sim_sources1",
+                                                      [i for i in sim_sources if i != sim_source],
+                                                      index=None, horizontal=False, key=f'{item}_simulation1',
+                                                      label_visibility="collapsed")
+                            if sim_source1:
+                                file = f'{selected_item}_ref_{ref_source}_{sim_source}_vs_{sim_source1}_{mm}_diff.nc'
+                                if not os.path.exists(os.path.join(dir_path, file)):
+                                    file = f'{selected_item}_ref_{ref_source}_{sim_source1}_vs_{sim_source}_{mm}_diff.nc'
+                                self.__Diff_Plot(dir_path, file, selected_item, mm, ref_source, (sim_source, sim_source1),
+                                                 data_type, ref_data_type)
+        elif item in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+            col1, col2, col3 = st.columns(3)
+            col1.write("##### :green[Items!]")
+            iselected_item = col1.radio("Basic Plot", [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            col2.write("##### :green[Please choose!]")
+            type = col2.radio("type", ['Reference', 'Simulation'],
+                              index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+
+            if iselected_item and type:
+                selected_item = iselected_item.replace(" ", "_")
+                if type == 'Reference':
+                    itype = 'ref'
+                    sources = self.ref['general'][f'{selected_item}_ref_source']
+                elif type == 'Simulation':
+                    itype = 'sim'
+                    sources = self.sim['general'][f'{selected_item}_sim_source']
+
+                col3.write("##### :green[Sources!]")
+                source = col3.radio("col3", [source for source in sources],
+                                    index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                st.divider()
+
+                if source:
+                    try:
+                        data_type = self.ref[source]['general']['data_type']
+                    except:
+                        data_type = self.sim[source]['general']['data_type']
+
+                    if data_type != 'stn':
+                        filenames = glob.glob(
+                            os.path.join(dir_path, f'{selected_item}_{itype}_{source}_*_{item}.*'))
+                        filenames = [f for f in filenames if f.endswith('.nc')][0]
+                        self.__Basic_Plot(dir_path, os.path.basename(filenames), selected_item, source, item, data_type)
+                    else:
+                        if type == 'Reference':
+                            sources1 = self.sim['general'][f'{selected_item}_sim_source']
+                        elif type == 'Simulation':
+                            sources1 = self.ref['general'][f'{selected_item}_ref_source']
+
+                        source1 = col3.radio("sources1", [source for source in sources1],
+                                             index=None, horizontal=False, key=f'{item}_source1',
+                                             label_visibility="collapsed")
+                        if source1:
+                            filenames = f'{selected_item}_stn_{source}_{source1}_{item}.csv'
+                            self.__Basic_Plot(dir_path, filenames, selected_item, (source, source1), item, data_type)
+        elif item == "Mann_Kendall_Trend_Test":
+            col1, col2, col3 = st.columns(3)
+            iselected_item = col1.radio("Mann_Kendall_Trend_Test_item",
+                                        [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            type = col2.radio("Mann_Kendall_Trend_Test_type", ['Reference', 'Simulation'],
+                              index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+
+            if iselected_item and type:
+                itype = type[:3].lower()
+                selected_item = iselected_item.replace(" ", "_")
+                try:
+                    sources = self.ref['general'][f'{selected_item}_ref_source']
+                except:
+                    sources = self.sim['general'][f'{selected_item}_sim_source']
+                if isinstance(sources, str): sources = [sources]
+                source = col3.radio("Mann_Kendall_Trend_Test_source", [source for source in sources],
+                                    index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                st.divider()
+                if source:
+                    try:
+                        data_type = self.ref[source]['general']['data_type']
+                        varname = self.ref[source][selected_item]['varname']
+                    except:
+                        data_type = self.sim[source]['general']['data_type']
+                        varname = self.sim[source][selected_item]['varname']
+
+                    if data_type == 'stn':
+                        st.info('Function for station data is still on develop!')
+                    else:
+                        file = f'Mann_Kendall_Trend_Test_{selected_item}_{itype}_{source}_{varname}.nc'
+                        try:
+                            self.__Mann_Kendall_Trend_Test(dir_path, file, selected_item, source)
+                        except:
+                            st.error(f'Missing File for Case: {selected_item} {source}', icon="⚠")
+        elif item == "Correlation":
+            col1, col2 = st.columns((1.8, 2.2))
+            iselected_item = col1.radio("Correlation_item", [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            col21, col22 = col2.columns(2)
+            if iselected_item:
+                selected_item = iselected_item.replace(" ", "_")
+                sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                sim_source = col21.radio("Correlation_source", [source for source in sim_sources],
+                                         index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+
+                st.divider()
+                if sim_source:
+                    sim_source1 = col22.radio("sim_sources1",
+                                              [i for i in sim_sources if i != sim_source],
+                                              index=None, horizontal=False, key=f'{item}_simulation1',
+                                              label_visibility="collapsed")
+                    if sim_source1:
+                        file = f'Correlation_{selected_item}_{sim_source}_and_{sim_source1}.nc'
+                        if not os.path.exists(os.path.join(dir_path, file)):
+                            file = f'Correlation_{selected_item}_{sim_source1}_and_{sim_source}.nc'
+                        self.__Correlation(dir_path, file, selected_item, (sim_source, sim_source1))
+        elif item == "Standard_Deviation":
+            st.cache_data.clear()
+            col1, col2, col3 = st.columns(3)
+            iselected_item = col1.radio("Standard_Deviation_item",
+                                        [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            type = col2.radio("Standard_Deviation_type", ['Reference', 'Simulation'],
+                              index=None, horizontal=False, key=f'{item}_type', label_visibility="collapsed")
+
+            if iselected_item and type:
+                selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                itype = type[:3].lower()
+                try:
+                    sources = self.ref['general'][f'{selected_item}_ref_source']
+                except:
+                    sources = self.sim['general'][f'{selected_item}_sim_source']
+
+                if isinstance(sources, str): sources = [sources]
+                source = col3.radio("Standard_Deviation_source", [source for source in sources],
+                                    index=None, horizontal=False, key=f'{item}_source', label_visibility="collapsed")
+                st.divider()
+                if source:
+                    try:
+                        data_type = self.ref[source]['general']['data_type']
+                        varname = self.ref[source][selected_item]['varname']
+                    except:
+                        data_type = self.sim[source]['general']['data_type']
+                        varname = self.sim[source][selected_item]['varname']
+
+                    if data_type == 'stn':
+                        st.info('Function for station data is still on develop!')
+                    else:
+                        file = f'Standard_Deviation_{selected_item}_{itype}_{source}_{varname}.nc'
+                        self.__Standard_Deviation(dir_path, file, selected_item, source)
+        elif item == "Functional_Response":
+
+            col1, col2, col3 = st.columns(3)
+            iselected_item = col1.radio("Functional_Response_item",
+                                        [f'{i.replace("_", " ")}' for i in self.selected_items],
+                                        index=None, horizontal=False, key=f'{item}_item', label_visibility="collapsed")
+            if iselected_item:
+                selected_item = iselected_item.replace("***", "").replace(" ", "_")
+                ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+                sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                ref_source = col2.radio("Functional_Response_refsource", [source for source in ref_sources],
+                                        index=None, horizontal=False, key=f'{item}_refsource', label_visibility="collapsed")
+                sim_source = col3.radio("Functional_Response_simsource", [source for source in sim_sources],
+                                        index=None, horizontal=False, key=f'{item}_simsource', label_visibility="collapsed")
+                st.divider()
+                if ref_source and sim_source:
+                    data_type = self.ref[ref_source]['general']['data_type']
+                    if data_type != 'stn':
+                        file = f'Functional_Response_{selected_item}_ref_{ref_source}_sim_{sim_source}.nc'
+                        self.__Functional_Response(dir_path, file, selected_item, ref_source, sim_source)
+                    else:
+                        st.info('Function for station data is still on develop!')
+
+
+
 
         elif item == "Relative_Score":
             st.info(f'Relative_Score not ready yet!', icon="ℹ️")
 
     def __heatmap(self, dir_path, score):
         st.cache_data.clear()
-        make_scenarios_scores_comparison_heat_map(dir_path, score,self.selected_items,self.sim)
+        make_scenarios_scores_comparison_heat_map(dir_path, score, self.selected_items, self.sim)
 
     def __heatmap_groupby(self, item, file, selected_item, score, sim_source, ref_source, dir_path):
         st.cache_data.clear()
-        make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_source, dir_path,self.metrics,self.scores)
+        make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_source, dir_path, self.metrics, self.scores)
 
     def __taylor(self, dir_path, selected_item, ref_source):
         st.cache_data.clear()
@@ -1434,13 +1996,12 @@ class visualization_replot_Comparison:
 
     def __Kernel_Density_Estimate(self, dir_path, selected_item, score, ref_source):
         st.cache_data.clear()
-        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, selected_item, score, ref_source,self.ref,self.sim,self.scores)
-
+        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, selected_item, score, ref_source, self.ref, self.sim,
+                                                          self.scores)
 
     def __Whisker_Plot(self, dir_path, selected_item, score, ref_source):
         st.cache_data.clear()
-        make_scenarios_comparison_Whisker_Plot(dir_path, selected_item, score, ref_source,self.ref,self.sim,self.scores)
-
+        make_scenarios_comparison_Whisker_Plot(dir_path, selected_item, score, ref_source, self.ref, self.sim, self.scores)
 
     def __Portrait_Plot_seasonal_variable(self, file, selected_item, score, ref_source, item):
         st.cache_data.clear()
@@ -1897,9 +2458,9 @@ class visualization_replot_Comparison:
                                                                                    label_visibility="collapsed")
                     col3.write("###### :orange[Marker alpha]")
                     option['models_to_highlight_markers_alpha'] = col3.number_input(f"markers alpha",
-                                                        label_visibility="collapsed",
-                                                        key=f'{item} alpha',
-                                                        min_value=0., value=0.8, max_value=1.)
+                                                                                    label_visibility="collapsed",
+                                                                                    key=f'{item} alpha',
+                                                                                    min_value=0., value=0.8, max_value=1.)
 
                 colors = {}
                 import matplotlib.colors as mcolors
@@ -1975,7 +2536,6 @@ class visualization_replot_Comparison:
             with col4:
                 option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0., value=1., step=0.1,
                                                            key=f"{item}_axes_linewidth")
-
 
             st.divider()
 
@@ -2060,9 +2620,9 @@ class visualization_replot_Comparison:
                                                                                    label_visibility="collapsed")
                     col3.write("###### :orange[Marker alpha]")
                     option['models_to_highlight_markers_alpha'] = col3.number_input(f"markers alpha",
-                                                        label_visibility="collapsed",
-                                                        key=f'{item} alpha',
-                                                        min_value=0., value=0.8, max_value=1.)
+                                                                                    label_visibility="collapsed",
+                                                                                    key=f'{item} alpha',
+                                                                                    min_value=0., value=0.8, max_value=1.)
 
                 colors = {}
 
@@ -2114,8 +2674,53 @@ class visualization_replot_Comparison:
         st.cache_data.clear()
         make_scenarios_comparison_Single_Model_Performance_Index(file, selected_items, ref, item)
 
-
     def __Ridgeline_Plot(self, dir_path, selected_item, score, ref_source):
         st.cache_data.clear()
-        make_scenarios_comparison_Ridgeline_Plot(dir_path, selected_item, score, ref_source,self.ref,self.sim,self.scores)
+        make_scenarios_comparison_Ridgeline_Plot(dir_path, selected_item, score, ref_source, self.ref, self.sim, self.scores)
 
+    def __Diff_Plot(self, dir_path, file, selected_item, score, ref_source, sim_source, showing_format, ref_data_type):
+        st.cache_data.clear()
+        option = {}
+        ref_unit = self.ref[ref_source][selected_item]['varunit']
+        make_scenarios_comparison_Diff_Plot(dir_path, file, selected_item, score, ref_source, sim_source, showing_format,
+                                            ref_data_type, ref_unit, option)
+
+    def __Basic_Plot(self, dir_path, file, selected_item, source, item, data_type):
+        st.cache_data.clear()
+        option = {}
+        if data_type != 'stn':
+            try:
+                unit = self.ref[source][selected_item]['varunit']
+            except:
+                unit = self.sim[source][selected_item]['varunit']
+        else:
+            try:
+                unit = self.ref[source[0]][selected_item]['varunit']
+            except:
+                unit = self.sim[source[0]][selected_item]['varunit']
+
+        make_Basic_Plot(dir_path, file, selected_item, source, item, unit, data_type, option)
+
+    def __Mann_Kendall_Trend_Test(self, dir_path, file, selected_item, source):
+        st.cache_data.clear()
+        option = {}
+        figure_nml = self.nl.read_namelist(st.session_state['generals']['figure_nml'])
+        item_nml = self.nl.read_namelist(figure_nml['comparison_nml']['Mann_Kendall_Trend_Test_source'])
+        option['significance_level'] = item_nml['general']['significance_level']
+        del figure_nml, item_nml
+        make_Mann_Kendall_Trend_Test_Plot(dir_path, file, selected_item, source, option)
+
+    def __Correlation(self, dir_path, file, selected_item, sources):
+        st.cache_data.clear()
+        option = {}
+        make_Correlation_Plot(dir_path, file, selected_item, sources, option)
+
+    def __Standard_Deviation(self, dir_path, file, selected_item, source):
+        st.cache_data.clear()
+        option = {}
+        make_Standard_Deviation_Plot(dir_path, file, selected_item, source, option)
+
+    def __Functional_Response(self, dir_path, file, selected_item,ref_source, sim_source):
+        st.cache_data.clear()
+        option = {}
+        make_Functional_Response_Plot(dir_path, file, selected_item, ref_source, sim_source, option)
