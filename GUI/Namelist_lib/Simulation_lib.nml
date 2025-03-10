@@ -1,33 +1,46 @@
 &general
-    Case_lib = Global_Grid_50km_PFT_VG, Global_Grid_50km_PC_VG, Global_Grid_50km_IGBP_VG, Global_Grid_2x2_PFT_VG_BGC, Global_Grid_2x2_PC_VG_BGC, Global_Grid_50km_PFT_VG-BB, Global_Grid_50km_PC_VG-BB, Global_cama
+    Case_lib = UKESM1-0-LL, IPSL-CM6A-LR, CESM2, MIROC6, E3SM-1-1, CMCC-ESM2, HadGEM3-GC31-LL, 01_case, 02_case, 03_case, 04_case, 05_case, 06_case, 07_case, 08_case, 09_case, 10_case, 11_case, 12_case, sin_test
 /
 
 
 &def_nml
-    Global_Grid_50km_PFT_VG    = ./nml/user/Global_Grid_50km_PFT_VG.nml
-    Global_Grid_50km_PC_VG     = ./nml/user/Global_Grid_50km_PC_VG.nml
-    Global_Grid_50km_IGBP_VG   = ./nml/user/Global_Grid_50km_IGBP_VG.nml
-    Global_Grid_2x2_PFT_VG_BGC = ./nml/user/Global_Grid_2x2_PFT_VG_BGC.nml
-    Global_Grid_2x2_PC_VG_BGC  = ./nml/user/Global_Grid_2x2_PC_VG_BGC.nml
-    Global_Grid_50km_PFT_VG-BB = ./nml/user/Global_Grid_50km_PFT_VG-BB.nml
-    Global_Grid_50km_PC_VG-BB  = ./nml/user/Global_Grid_50km_PC_VG-BB.nml
-    Global_Grid_2x2_crop       = ./nml/user/Global_Grid_2x2_crop.nml
-    Global_cama                = ./nml/user/Global_cama.nml
+    Global_cama     = ./nml/user/Global_cama.nml
+    UKESM1-0-LL     = ./nml/user/LS3MIP/UKESM1-0-LL.nml
+    IPSL-CM6A-LR    = ./nml/user/LS3MIP/IPSL-CM6A-LR.nml
+    CESM2           = ./nml/user/LS3MIP/CESM2.nml
+    MIROC6          = ./nml/user/LS3MIP/MIROC6.nml
+    E3SM-1-1        = ./nml/user/LS3MIP/E3SM-1-1.nml
+    CMCC-ESM2       = ./nml/user/LS3MIP/CMCC-ESM2.nml
+    HadGEM3-GC31-LL = ./nml/user/LS3MIP/HadGEM3-GC31-LL.nml
+    01_case         = ./nml/user/CoLM2024_pre_release/01_case.nml
+    02_case         = ./nml/user/CoLM2024_pre_release/02_case.nml
+    03_case         = ./nml/user/CoLM2024_pre_release/03_case.nml
+    04_case         = ./nml/user/CoLM2024_pre_release/04_case.nml
+    05_case         = ./nml/user/CoLM2024_pre_release/05_case.nml
+    06_case         = ./nml/user/CoLM2024_pre_release/06_case.nml
+    07_case         = ./nml/user/CoLM2024_pre_release/07_case.nml
+    08_case         = ./nml/user/CoLM2024_pre_release/08_case.nml
+    09_case         = ./nml/user/CoLM2024_pre_release/09_case.nml
+    10_case         = ./nml/user/CoLM2024_pre_release/10_case.nml
+    11_case         = ./nml/user/CoLM2024_pre_release/11_case.nml
+    12_case         = ./nml/user/CoLM2024_pre_release/12_case.nml
+    sin_test        = /media/zhwei/data02/Streamlit/Openbench/nml/user/sin_test.nml
 /
 
 
 &def_Mod
-    MATSIRO   = ./nml/Mod_variables_defination/MATSIRO.nml
-    JULES7    = ./nml/Mod_variables_defination/JULES7.nml
-    GLDAS2    = ./nml/Mod_variables_defination/GLDAS2.nml
-    VIC5      = ./nml/Mod_variables_defination/VIC5.nml
-    BCCAVIM   = ./nml/Mod_variables_defination/BCCAVIM.nml
-    LS3MIP    = ./nml/Mod_variables_defination/LS3MIP.nml
-    NoahMP5   = ./nml/Mod_variables_defination/NoahMP5.nml
-    CaMaFlood = ./nml/Mod_variables_defination/CaMaFlood.nml
-    CLM5      = ./nml/Mod_variables_defination/CLM5.nml
-    LEM2      = ./nml/Mod_variables_defination/LEM2.nml
-    CoLM      = ./nml/Mod_variables_defination/CoLM.nml
+    MATSIRO    = ./nml/Mod_variables_defination/MATSIRO.nml
+    JULES7     = ./nml/Mod_variables_defination/JULES7.nml
+    GLDAS2     = ./nml/Mod_variables_defination/GLDAS2.nml
+    VIC5       = ./nml/Mod_variables_defination/VIC5.nml
+    BCCAVIM    = ./nml/Mod_variables_defination/BCCAVIM.nml
+    LS3MIP     = ./nml/Mod_variables_defination/LS3MIP.nml
+    NoahMP5    = ./nml/Mod_variables_defination/NoahMP5.nml
+    CaMaFlood  = ./nml/Mod_variables_defination/CaMaFlood.nml
+    CLM5       = ./nml/Mod_variables_defination/CLM5.nml
+    LEM2       = ./nml/Mod_variables_defination/LEM2.nml
+    CoLM       = ./nml/Mod_variables_defination/CoLM.nml
+    test_model = /media/zhwei/data02/Streamlit/Openbench/nml/Mod_variables_defination/test_model.nml
 /
 
 

@@ -15,20 +15,24 @@ from matplotlib import colors
 from matplotlib import rcParams
 
 
-def get_index(vmin, vmax, colormap):
+def get_index(vmin, vmax, colormap,option):
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
             colorbar_ticks = 0.2
         elif 5 >= vmax - vmin > 2:
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 100 >= vmax - vmin > 10:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
+            colorbar_ticks = 1.
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 5.
+        elif 50 >= vmax - vmin > 20:
+            colorbar_ticks = 10
+        elif 80 >= vmax - vmin > 50:
+            colorbar_ticks = 15
+        elif 100 >= vmax - vmin > 80:
             colorbar_ticks = 20
         elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
+            colorbar_ticks = 25
         elif 500 >= vmax - vmin > 200:
             colorbar_ticks = 50
         elif 1000 >= vmax - vmin > 500:
@@ -40,8 +44,10 @@ def get_index(vmin, vmax, colormap):
         else:
             colorbar_ticks = 0.10
         return colorbar_ticks
-
-    colorbar_ticks = get_ticks(vmin, vmax)
+    if not option['vmin_max_on']:
+        colorbar_ticks = get_ticks(vmin, vmax)
+    else:
+        colorbar_ticks = option['colorbar_ticks']
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
@@ -59,7 +65,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd, cmap
 
 
-def map(file, lon, lat, data, ilat, ilon, option):
+def map(file, ilon, ilat, data, option):
     from Namelist_lib.check_font import check_font
     check = check_font()
     check.check_font(option['font'])
@@ -82,13 +88,17 @@ def map(file, lon, lat, data, ilat, ilon, option):
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
-    if option["map"] == 'imshow':
+
+    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'],option)
+
+
+    if option['map'] == 'interpolate':
+        lon, lat = np.meshgrid(ilon, ilat)
+        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
+    else:
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
-    elif option['map'] == 'contourf':
-        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -101,8 +111,8 @@ def map(file, lon, lat, data, ilat, ilon, option):
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -1 * option["xtick"])[::-1], crs=ccrs.PlateCarree())
+    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -1 * option["ytick"])[::-1], crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -125,7 +135,7 @@ def map(file, lon, lat, data, ilat, ilon, option):
     else:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'], extend=option['extend'],
+    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],extend=option['extend'],
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
@@ -142,27 +152,26 @@ def map(file, lon, lat, data, ilat, ilon, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Functional_Response(file, option):  # outpath, source
+def draw_Correlation(file, option):  # outpath, source
 
     ds = xr.open_dataset(file)
-    data = ds['functional_response_score']
+    data = ds['correlation']
 
     ilat = ds.lat.values
     ilon = ds.lon.values
-    lon, lat = np.meshgrid(ilon, ilat)
-
     if ilat[0] - ilat[-1] < 0:
         option['origin'] = 'lower'
     else:
         option['origin'] = 'upper'
-    map(file, lon, lat, data, ilat, ilon, option)
+    map(file, ilon, ilat, data, option)
 
 
-def prepare(icase, file, option):
+def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
+    icase = f"{selected_item}_{sources[0]}_{sources[1]}_Cor"
     with st.container(height=None, border=True):
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'Functional Response', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'Correlation', label_visibility="visible",
                                             key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
 
@@ -184,14 +193,15 @@ def prepare(icase, file, option):
         with st.expander("More info", expanded=True):
             col1, col2, col3, col4 = st.columns(4)
             # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
-                                                  key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
-                                                  key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
-                                                  key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
-                                                  key=f"{icase}_max_lat")
+            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],key=f"{icase}_min_lon")
+            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
+            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
+            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
+            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                                key=f"{icase}xtick")
+            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                                key=f"{icase}ytick")
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
@@ -269,17 +279,18 @@ def prepare(icase, file, option):
                                                          key=f"{icase}_colorbar_ticks")
 
             if option["vmin_max_on"]:
-                option["vmin"] = col3.number_input(f"colorbar min", value=0.)
+                option["vmin"] = col3.number_input(f"colorbar min", value=-1.)
                 option["vmax"] = col4.number_input(f"colorbar max", value=1.)
             else:
-                option["vmin"] = 0.
+                option["vmin"] = -1.
                 option["vmax"] = 1.
 
             st.divider()
             col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
+            option["map"] = col1.selectbox(f"Draw map",['None', 'interpolate'],
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_map")
+
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -299,11 +310,11 @@ def prepare(icase, file, option):
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
     # try:
-    draw_Functional_Response(file, option)
+    draw_Correlation(os.path.join(dir_path,file), option)
     # except:
     #     st.error(f'Please check File: {file}')
 
 
-def make_Functional_Response(dir_path, item, icase, file, item_data, option):
-    # st.write('make_Functional_Response')
-    prepare(icase, file, option)
+# def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
+#     st.write('make_Correlation')
+#     prepare(dir_path, file, selected_item, sources, option)

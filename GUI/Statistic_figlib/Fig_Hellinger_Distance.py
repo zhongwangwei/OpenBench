@@ -15,20 +15,24 @@ from matplotlib import colors
 from matplotlib import rcParams
 
 
-def get_index(vmin, vmax, colormap):
+def get_index(vmin, vmax, colormap,option):
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
             colorbar_ticks = 0.2
         elif 5 >= vmax - vmin > 2:
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 100 >= vmax - vmin > 10:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
+            colorbar_ticks = 1.
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 5.
+        elif 50 >= vmax - vmin > 20:
+            colorbar_ticks = 10
+        elif 80 >= vmax - vmin > 50:
+            colorbar_ticks = 15
+        elif 100 >= vmax - vmin > 80:
             colorbar_ticks = 20
         elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
+            colorbar_ticks = 25
         elif 500 >= vmax - vmin > 200:
             colorbar_ticks = 50
         elif 1000 >= vmax - vmin > 500:
@@ -40,8 +44,10 @@ def get_index(vmin, vmax, colormap):
         else:
             colorbar_ticks = 0.10
         return colorbar_ticks
-
-    colorbar_ticks = get_ticks(vmin, vmax)
+    if not option['vmin_max_on']:
+        colorbar_ticks = get_ticks(vmin, vmax)
+    else:
+        colorbar_ticks = option['colorbar_ticks']
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
@@ -82,13 +88,13 @@ def map(file, lon, lat, data, ilat, ilon, option):
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
-    if option["map"] == 'imshow':
+    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'],option)
+    if option["map"] == 'interpolate':
+        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
+    else:
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
-    elif option['map'] == 'contourf':
-        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -101,8 +107,8 @@ def map(file, lon, lat, data, ilat, ilon, option):
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -1 * option["xtick"])[::-1], crs=ccrs.PlateCarree())
+    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -1 * option["ytick"])[::-1], crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -192,7 +198,11 @@ def prepare(icase, file, option):
                                                   key=f"{icase}_min_lat")
             option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
                                                   key=f"{icase}_max_lat")
-
+            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                                key=f"{icase}xtick")
+            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                                key=f"{icase}ytick")
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
                                               ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
@@ -265,19 +275,21 @@ def prepare(icase, file, option):
 
             col1, col2, col3, col4 = st.columns(4)
             option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
-                                                         key=f"{icase}_colorbar_ticks")
+
 
             if option["vmin_max_on"]:
+                option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
+                                                             key=f"{icase}_colorbar_ticks")
                 option["vmin"] = col3.number_input(f"colorbar min", value=1.)
                 option["vmax"] = col4.number_input(f"colorbar max", value=3.)
             else:
+                option["colorbar_ticks"] = 0.5
                 option["vmin"] = 1.
                 option["vmax"] = 3.
 
             st.divider()
             col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
+            option["map"] = col1.selectbox(f"Draw map", ['None', 'interpolate'],
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_map")
 
@@ -305,5 +317,4 @@ def prepare(icase, file, option):
 
 
 def make_Hellinger_Distance(dir_path, item, icase, file, item_data, option):
-    # st.write('make_Hellinger_Distance')
     prepare(icase, file, option)
