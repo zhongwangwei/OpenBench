@@ -9,19 +9,19 @@ import xarray as xr
 # from streamlit_tags import st_tags
 from Namelist_lib.find_path import FindPath
 import numpy as np
-from Namelist_lib.namelist_read import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+from Namelist_lib.namelist_read import NamelistReader  # , GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Namelist_lib.namelist_info import initial_setting
 import sys
 import subprocess
 import itertools
 from posixpath import normpath
 from mpl_toolkits.axisartist.angle_helper import select_step
-from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
-from Statistic_figlib.Fig_Correlation import make_Correlation
-from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
+# from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
+# from Statistic_figlib.Fig_Correlation import make_Correlation
+# from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
+# from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
 from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
 from Statistic_figlib.Fig_Z_Score import make_Z_Score
-from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
 from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
 
 
@@ -848,68 +848,7 @@ class visualization_statistic:
 
         st.cache_data.clear()
         figure_path = os.path.join(case_path, 'statistics', item)
-        if item == "Mann_Kendall_Trend_Test":
-            st.markdown(f"""
-            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                Select Cases!
-            </div>""", unsafe_allow_html=True)
-            st.write(' ')
-            # st.write('#### :blue[Select Cases!]')
-            icase = st.radio("Mann_Kendall_Trend_Test", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                tau = glob.glob(os.path.join(figure_path, f'Mann_Kendall_Trend_Test_{icase}_output_tau.*'))[0]
-                trend = glob.glob(os.path.join(figure_path, f'Mann_Kendall_Trend_Test_{icase}_output_Trend.*'))[0]
-                if os.path.exists(tau):
-                    image = load_image(tau)
-                    st.image(image, caption=f'Case: {icase} tau', use_column_width=True)
-                else:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-                if os.path.exists(trend):
-                    image = load_image(trend)
-                    st.image(image, caption=f'Case: {icase} trend', use_column_width=True)
-                else:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-        elif (item == "Correlation"):
-            st.markdown(f"""
-            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                Select Cases!
-            </div>""", unsafe_allow_html=True)
-            st.write(' ')
-            icase = st.radio("Correlation", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                filename = glob.glob(os.path.join(figure_path, f'Correlation_{icase}_output.*'))
-                filename = [f for f in filename if not f.endswith('.nc')]
-                try:
-                    image = load_image(filename[0])
-                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
-                except:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-        elif item == "Standard_Deviation":
-            st.markdown(f"""
-            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                Select Cases!
-            </div>""", unsafe_allow_html=True)
-            st.write(' ')
-            icase = st.radio("Standard_Deviation", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                filename = glob.glob(os.path.join(figure_path, f'Standard_Deviation_{icase}_output.*'))
-                filename = [f for f in filename if not f.endswith('.nc')]
-                try:
-                    image = load_image(filename[0])
-                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
-                except:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-        elif item == "Z_Score":
+        if item == "Z_Score":
             st.info(f'Z_Score not ready yet!', icon="ℹ️")
             # st.markdown(f"""
             # <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
@@ -925,27 +864,9 @@ class visualization_statistic:
             #     filename = [f for f in filename if not f.endswith('.nc')]
             #     try:
             #         image = load_image(filename[0])
-            #         st.image(image, caption=f'Case: {icase}', use_column_width=True)
+            #         st.image(image, caption=f'Case: {icase}', use_container_width=True)
             #     except:
             #         st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-        elif item == "Functional_Response":
-            st.markdown(f"""
-            <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                Select Cases!
-            </div>""", unsafe_allow_html=True)
-            st.write(' ')
-            icase = st.radio("Functional Response", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                filename = glob.glob(os.path.join(figure_path, f'Functional_Response_{icase}_output.*'))
-                filename = [f for f in filename if not f.endswith('.nc')]
-                try:
-                    image = load_image(filename[0])
-                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
-                except:
-                    st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
 
         elif (item == "Hellinger_Distance"):
@@ -962,7 +883,7 @@ class visualization_statistic:
                 filename = [f for f in filename if not f.endswith('.nc')]
                 try:
                     image = load_image(filename[0])
-                    st.image(image, caption=f'Case: {icase}', use_column_width=True)
+                    st.image(image, caption=f'Case: {icase}', use_container_width=True)
                 except:
                     st.error(f'Missing Figure for Case: {icase}', icon="⚠")
 
@@ -988,9 +909,9 @@ class visualization_statistic:
                         image = load_image(file)
                         if (match := pattern.search(file)):
                             x_number = int(match.group(1))
-                            st.image(image, caption=f'Case: {icase}, {iclass} X{x_number}', use_column_width=True)
+                            st.image(image, caption=f'Case: {icase}, {iclass} X{x_number}', use_container_width=True)
                         else:
-                            st.image(image, caption=f'Case: {icase}, {iclass}', use_column_width=True)
+                            st.image(image, caption=f'Case: {icase}, {iclass}', use_container_width=True)
                     except:
                         st.error(f'Missing Figure for Case: {icase}, {iclass}', icon="⚠")
         elif item == "Three_Cornered_Hat":
@@ -1142,17 +1063,17 @@ class visualization_replot_statistic:
     def __Mann_Kendall_Trend_Test(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
-        make_Mann_Kendall_Trend_Test(case_path, item, icase, file, st.session_state.stat_data[item], option)
+        # make_Mann_Kendall_Trend_Test(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Correlation(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
-        make_Correlation(case_path, item, icase, file, st.session_state.stat_data[item], option)
+        # make_Correlation(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Standard_Deviation(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
-        make_Standard_Deviation(case_path, item, icase, file, st.session_state.stat_data[item], option)
+        # make_Standard_Deviation(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Z_Score(self, item, file, icase, case_path):
         st.cache_data.clear()
@@ -1162,7 +1083,7 @@ class visualization_replot_statistic:
     def __Functional_Response(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
-        make_Functional_Response(case_path, item, icase, file, st.session_state.stat_data[item], option)
+        # make_Functional_Response(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Hellinger_Distance(self, item, file, icase, case_path):
         st.cache_data.clear()
@@ -1234,19 +1155,18 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         if 'stat_errorlist' not in st.session_state:
             st.session_state.stat_errorlist = {'set': {}}
 
-        if self.main_data['general']["statistics_nml"] or st.session_state.step1_initial == 'Upload':
-            st.session_state.stat_data = self.nl.read_namelist(self.main_data['general']["statistics_nml"])
-            if self.__upload_stat_check(self.main_data, self.main_data['general']["statistics_nml"]):
-                st.session_state.stat_data = self.nl.read_namelist(self.main_data['general']["statistics_nml"])
-                check = False
-            else:
-                check = True
-            st.session_state.step6_stat_nml = True
+        # st.session_state.step1_initial   = 'setting'
+        if st.session_state.step1_initial == 'Upload':
+            try:
+                if self.__upload_stat_check(self.main_data, self.main_data['general']["statistics_nml"]):
+                    st.session_state.stat_data = self.nl.read_namelist(self.main_data['general']["statistics_nml"])
+                    st.session_state.step6_stat_nml = True
+            except:
+                st.session_state.step6_stat_nml = False
 
         self._select_items()
 
         self._select_cases()
-        # st.write('###### :red[识别顺序打乱呢？？还是直接不管了？]')
         st.divider()
 
         def define_step2(make_contain, make):
@@ -1306,33 +1226,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         # statistics['ANOVA']=False
         col1, col2 = st.columns(2)
         with col1:
-            st.checkbox('Mann Kendall Trend Test',
-                        key="Mann_Kendall_Trend_Test",
-                        on_change=statistics_editor_change,
-                        args=("Mann_Kendall_Trend_Test", "Mann_Kendall_Trend_Test"),
-                        value=statistics['Mann_Kendall_Trend_Test'])
-            st.checkbox('Correlation', key="Correlation",
-                        on_change=statistics_editor_change,
-                        args=("Correlation", "Correlation"),
-                        value=statistics['Correlation'])
-            st.checkbox('Standard Deviation', key="Standard_Deviation",
-                        on_change=statistics_editor_change,
-                        args=("Standard_Deviation", "Standard_Deviation"),
-                        value=statistics['Standard_Deviation'])
-            st.checkbox('Z Score', key="Z_Score",
-                        on_change=statistics_editor_change,
-                        args=("Z_Score", "Z_Score"),
-                        value=statistics['Z_Score'])
-            st.checkbox('ANOVA', key="ANOVA",
-                        on_change=statistics_editor_change,
-                        disabled=True,
-                        args=("ANOVA", "ANOVA"),
-                        value=statistics['ANOVA'])
-        with col2:
-            st.checkbox('Functional Response', key="Functional_Response",
-                        on_change=statistics_editor_change,
-                        args=("Functional_Response", "Functional_Response"),
-                        value=statistics['Functional_Response'])
             st.checkbox('Hellinger Distance', key="Hellinger_Distance",
                         on_change=statistics_editor_change,
                         args=("Hellinger_Distance", "Hellinger_Distance"),
@@ -1341,11 +1234,39 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                         on_change=statistics_editor_change,
                         args=("Partial_Least_Squares_Regression", "Partial_Least_Squares_Regression"),
                         value=statistics['Partial_Least_Squares_Regression'])
+            st.checkbox('Z Score', key="Z_Score",
+                        on_change=statistics_editor_change,
+                        args=("Z_Score", "Z_Score"),
+                        value=statistics['Z_Score'])
+
+        with col2:
             st.checkbox('Three Cornered Hat', key="Three_Cornered_Hat",
                         disabled=True,
                         on_change=statistics_editor_change,
                         args=("Three_Cornered_Hat", "Three_Cornered_Hat"),
                         value=statistics['Three_Cornered_Hat'])
+            st.checkbox('ANOVA', key="ANOVA",
+                        on_change=statistics_editor_change,
+                        disabled=True,
+                        args=("ANOVA", "ANOVA"),
+                        value=statistics['ANOVA'])
+            # st.checkbox('Functional Response', key="Functional_Response",
+            #             on_change=statistics_editor_change,
+            #             args=("Functional_Response", "Functional_Response"),
+            #             value=statistics['Functional_Response'])
+            # st.checkbox('Mann Kendall Trend Test',
+            #             key="Mann_Kendall_Trend_Test",
+            #             on_change=statistics_editor_change,
+            #             args=("Mann_Kendall_Trend_Test", "Mann_Kendall_Trend_Test"),
+            #             value=statistics['Mann_Kendall_Trend_Test'])
+            # st.checkbox('Correlation', key="Correlation",
+            #             on_change=statistics_editor_change,
+            #             args=("Correlation", "Correlation"),
+            #             value=statistics['Correlation'])
+            # st.checkbox('Standard Deviation', key="Standard_Deviation",
+            #             on_change=statistics_editor_change,
+            #             args=("Standard_Deviation", "Standard_Deviation"),
+            #             value=statistics['Standard_Deviation'])
 
         st.session_state.step6_stat_setect_check = self.__stat_check_items(statistics)
         st.session_state.statistics = statistics
@@ -1496,10 +1417,9 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 return False
 
     def _select_cases(self):
-        stat_general = self.stat_data
+        stat_general = self.stat_data['general']
         if st.session_state.stat_data['general']:
             stat_general = st.session_state.stat_data['general']
-
         if 'stat_items' not in st.session_state:
             st.session_state.stat_items = {}
 
@@ -1529,6 +1449,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         formatted_keys = " \n---------------------------------------------------------------------\n".join(
             f'{key.replace("_", " ")}: {", ".join(value for value in stat_general[f"{key}_data_source"] if value)}'
             for key in st.session_state.statistic_items)
+        st.session_state.stat_data['general'] = stat_general
         st.code(formatted_keys, language='shell', line_numbers=True, wrap_lines=True)
         st.session_state.step6_stat_set_check = self.__stat_setcheck(stat_general)
 
@@ -1565,7 +1486,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             st.session_state.step6_make_check = False
         statistic_items = st.session_state.statistic_items
         stat_general = st.session_state.stat_data['general']
-
         if statistic_items:
             st.session_state.step6_check = []
             for i, statistic_item, tab in zip(range(len(statistic_items)), statistic_items, st.tabs(statistic_items)):
@@ -1701,12 +1621,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             tab.divider()
         colors = itertools.cycle(morandi_colors.values())
         for j, item in enumerate(stat_general[f"{statistic_item}_data_source"]):
-            # tab.markdown(f"""
-            # <div style='background-color: #B5C4B1; padding: 5px; border-radius: 10px;'>
-            #     <p style="font-size:18px; font-weight:bold; color:#6E617F; border-bottom:3px solid #6E617F; padding: 5px;">
-            #     {item.replace(f"{self.stat_list[statistic_item]}_", "")} ....
-            # </div>
-            # """, unsafe_allow_html=True)
             color = next(colors)
             tab.markdown(f"""
             <div style="font-size:18px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
@@ -1814,9 +1728,16 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 if f"{item}_{i_info}" not in item_data:
                     item_data[f"{item}_{i_info}"] = self.set_default[i_info]
 
+        all_list = ['timezone', 'data_type', 'data_groupby', 'dir', 'fulllist', 'varname', 'tim_res', 'grid_res',
+                    'suffix', 'prefix', 'syear', 'eyear']
+        sorted_info_list = []
+        for ilist in all_list:
+            if ilist in info_list:
+                sorted_info_list.append(ilist)
+        # st.write(sorted_info_list)
         import itertools
         cols = itertools.cycle(st.columns(3))
-        for i_info in sorted(info_list, key=str.lower):
+        for i_info in sorted_info_list:
             if i_info not in ["dir", "fulllist"] and f"{item}_{i_info}" in item_data.keys():
                 col = next(cols)
                 if i_info in ['prefix', 'suffix', 'varname']:
@@ -1912,6 +1833,8 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             except Exception as e:
                 st.error(f"发生错误: {e}")
 
+        all_list = ['data_type', 'data_groupby', 'tim_res', 'suffix', 'prefix', 'timezone', 'dir', 'fulllist',
+                    'syear', 'eyear', 'grid_res', 'varname']
         if sources is not None:
             if statistic_item == 'Three_Cornered_Hat' and f"{item}_nX" not in item_data:
                 col1, col2, col3 = st.columns(3)
@@ -2019,8 +1942,12 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 else:
                     st.write(f'##### :violet[Input Data {i}]')
                 import itertools
+                sorted_info_list = []
+                for ilist in all_list:
+                    if ilist in info_list:
+                        sorted_info_list.append(ilist)
                 cols = itertools.cycle(st.columns(3))
-                for i_info in sorted(info_list, key=str.lower):
+                for i_info in sorted_info_list:  # sorted(info_list, key=str.lower):
                     if i_info not in ["dir", "fulllist"] and f"{item}{i}_{i_info}" in item_data.keys():
                         col = next(cols)
                         if i_info in ['prefix', 'suffix', 'varname']:
@@ -2184,8 +2111,12 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             else:
                 st.write(f'##### :violet[Input Data Y]')
             import itertools
+            sorted_info_list = []
+            for ilist in all_list:
+                if ilist in info_list:
+                    sorted_info_list.append(ilist)
             cols = itertools.cycle(st.columns(3))
-            for i_info in sorted(info_list, key=str.lower):
+            for i_info in sorted_info_list:#sorted(info_list, key=str.lower):
                 if i_info not in ["dir", "fulllist"] and f"{item}_Y_{i_info}" in item_data.keys():
                     col = next(cols)
                     if i_info in ['prefix', 'suffix', 'varname']:
@@ -2498,11 +2429,10 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
         col1, col2, col4 = st.columns(3)
         st.divider()
-
         if col1.button('Run', use_container_width=True):
             status = st.status(label="***Running Evaluation...***", expanded=False)
             st.session_state.stat_status = self.Openbench_processing(status)
-            st.info('More info please check task_log_stat.txt')
+            st.info(f'More info please check {st.session_state.stat_running_log_file}')
         elif col4.button('Pass', use_container_width=True):
             st.session_state.stat_status = 'complete'
 
@@ -2546,10 +2476,10 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             stderr=subprocess.STDOUT,  # subprocess.PIPE,
             bufsize=1,
             universal_newlines=True,
-
         )
+        if 'stat_running_log_file' not in st.session_state:
+            st.session_state.stat_running_log_file = ''
 
-        log_file = open("task_log_stat.txt", "w", encoding='utf-8')
         i = 0
         for line in p.stdout:
             if re.search(r'\033\[[0-9;]*m', line):
@@ -2557,13 +2487,13 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             if i <= 15:
                 pass
             else:
+                if "OpenBench Log File: " in line:
+                    st.session_state.running_log_file = line.replace('OpenBench Log File: ', '')
                 return_status = self.__process_line(line, status)
                 if return_status:
                     return status._current_state
-            log_file.write(line)
             i = i + 1
 
-        log_file.close()
         if status._current_state != "error":
             time.sleep(1)
             st.session_state['status_message'] = f"***Evaluation done***"
@@ -2578,7 +2508,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
     def __process_line(self, line, status):
         eskip_next_line = False
         wskip_next_line = False
-        error_keywords = ["error", "failed", "exception", "traceback"]
+        error_keywords = [" - ERROR -","error", "failed", "exception", "traceback"]
         error_keywords1 = ['File "', '", line']
         error_pattern = re.compile("|".join(error_keywords), re.IGNORECASE)
         error_file_pattern = re.compile("|".join(error_keywords1), re.IGNORECASE)
@@ -2587,14 +2517,11 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         stop_next_line = False
         warning_keywords = ['Warning']
         warning_pattern = re.compile("|".join(warning_keywords), re.IGNORECASE)
+        log_warning_pattern = re.compile("|".join([' - WARNNING -']), re.IGNORECASE)
 
-        if warning_pattern.search(line.strip()) and error_pattern.search(line) and not wskip_next_line:
-            status.write(f"***:orange[{line.strip()}]***")
-            wskip_next_line = True
-        elif wskip_next_line:
-            status.write(f"***:orange[{line.strip()}]***")
-            wskip_next_line = False
-        elif error_pattern.search(line):
+
+
+        if error_pattern.search(line):
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
             status.write(f"***:red[{line.strip()}]***")
             if python_error_pattern.search(line) and not custom_error_pattern.search(line):
@@ -2610,6 +2537,9 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
             status.write(f"***:red[{line.strip()}]***")
             eskip_next_line = False
+
+        elif log_warning_pattern.search(line.strip()) and not wskip_next_line:
+            status.write(f"***:orange[{line.strip()}]***")
 
         elif warning_pattern.search(line.strip()) and not wskip_next_line:
             status.write(f"***:orange[{line.strip()}]***")

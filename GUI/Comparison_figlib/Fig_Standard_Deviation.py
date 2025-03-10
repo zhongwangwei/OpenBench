@@ -15,20 +15,25 @@ from matplotlib import colors
 from matplotlib import rcParams
 
 
-def get_index(vmin, vmax, colormap):
+
+def get_index(vmin, vmax, colormap,option):
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
             colorbar_ticks = 0.2
         elif 5 >= vmax - vmin > 2:
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 100 >= vmax - vmin > 10:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
+            colorbar_ticks = 1.
+        elif 20 >= vmax - vmin > 10:
+            colorbar_ticks = 5.
+        elif 50 >= vmax - vmin > 20:
+            colorbar_ticks = 10
+        elif 80 >= vmax - vmin > 50:
+            colorbar_ticks = 15
+        elif 100 >= vmax - vmin > 80:
             colorbar_ticks = 20
         elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
+            colorbar_ticks = 25
         elif 500 >= vmax - vmin > 200:
             colorbar_ticks = 50
         elif 1000 >= vmax - vmin > 500:
@@ -40,8 +45,10 @@ def get_index(vmin, vmax, colormap):
         else:
             colorbar_ticks = 0.10
         return colorbar_ticks
-
-    colorbar_ticks = get_ticks(vmin, vmax)
+    if not option['vmin_max_on']:
+        colorbar_ticks = get_ticks(vmin, vmax)
+    else:
+        colorbar_ticks = option['colorbar_ticks']
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
@@ -82,15 +89,15 @@ def map(file, ilon, ilat, data, option):
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'])
+    mticks, norm, bnd, cmap = get_index(option['vmin'], option['vmax'], option['cmap'],option)
 
-    if option["map"] == 'imshow':
+    if option['map'] == 'interpolate':
+        lon, lat = np.meshgrid(ilon, ilat)
+        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
+    else:
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
-    elif option['map'] == 'contourf':
-        lon, lat = np.meshgrid(ilon, ilat)
-        cs = ax.contourf(lon, lat, data, cmap=cmap, levels=bnd, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -103,8 +110,8 @@ def map(file, ilon, ilat, data, option):
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
-    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -1 * option["xtick"])[::-1], crs=ccrs.PlateCarree())
+    ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -1 * option["ytick"])[::-1], crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -144,10 +151,9 @@ def map(file, ilon, ilat, data, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Correlation(file, option):  # outpath, source
-
+def draw_Standard_Deviation(file, option):  # outpath, source
     ds = xr.open_dataset(file)
-    data = ds['correlation']
+    data = ds['Standard_Deviation']
 
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -158,11 +164,14 @@ def draw_Correlation(file, option):  # outpath, source
     map(file, ilon, ilat, data, option)
 
 
-def prepare(icase, file, option):
+def make_Standard_Deviation_Plot(dir_path, file, selected_item, source, option):
+    icase = f"SD_{selected_item}_{source}"
+    # Figure_container = st.container(height=None, border=False)
+
     with st.container(height=None, border=True):
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'Correlation', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'Standard Deviation', label_visibility="visible",
                                             key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
 
@@ -188,7 +197,11 @@ def prepare(icase, file, option):
             option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
             option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
             option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
-
+            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                                key=f"{icase}xtick")
+            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                                key=f"{icase}ytick")
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 option['cmap'] = st.selectbox('Colorbar',
                                               ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
@@ -261,19 +274,21 @@ def prepare(icase, file, option):
 
             col1, col2, col3, col4 = st.columns(4)
             option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
-                                                         key=f"{icase}_colorbar_ticks")
+
 
             if option["vmin_max_on"]:
-                option["vmin"] = col3.number_input(f"colorbar min", value=-1.)
+                option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
+                                                             key=f"{icase}_colorbar_ticks")
+                option["vmin"] = col3.number_input(f"colorbar min", value=0.)
                 option["vmax"] = col4.number_input(f"colorbar max", value=1.)
             else:
-                option["vmin"] = -1.
+                option["colorbar_ticks"] = 0.5
+                option["vmin"] = 0.
                 option["vmax"] = 1.
 
             st.divider()
             col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map", ['imshow', 'contourf'],
+            option["map"] = col1.selectbox(f"Draw map", ['None', 'interpolate'],
                                            index=0, placeholder="Choose an option", label_visibility="visible",
                                            key=f"{icase}_map")
 
@@ -296,11 +311,12 @@ def prepare(icase, file, option):
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
     # try:
-    draw_Correlation(file, option)
+    # with Figure_container:
+    draw_Standard_Deviation(os.path.join(dir_path,file), option)
     # except:
     #     st.error(f'Please check File: {file}')
 
 
-def make_Correlation(dir_path, item, icase, file, item_data, option):
-    st.write('make_Correlation')
-    prepare(icase, file, option)
+# def make_Standard_Deviation_Plot(dir_path, item, icase, file, item_data, option):
+#     # st.write('make_Standard_Deviation')
+#     prepare( icase, file, option)
