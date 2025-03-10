@@ -11,9 +11,12 @@ from Comparison_figlib.Fig_kernel_density_estimate import make_scenarios_compari
 from Comparison_figlib.Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
 from Comparison_figlib.Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
 from Comparison_figlib.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
-
-
-
+from Comparison_figlib.Fig_Diff_Plot import make_scenarios_comparison_Diff_Plot
+from Comparison_figlib.Fig_Basic_Plot import make_Basic_Plot
+from Comparison_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test_Plot
+from Comparison_figlib.Fig_Correlation import make_Correlation_Plot
+from Comparison_figlib.Fig_Standard_Deviation import make_Standard_Deviation_Plot
+from Comparison_figlib.Fig_Functional_Response import make_Functional_Response_Plot
 
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
@@ -29,4 +32,11 @@ __all__ = [
     "make_scenarios_comparison_Whisker_Plot",
     "make_scenarios_comparison_Single_Model_Performance_Index",
     "make_scenarios_comparison_Ridgeline_Plot",
-    ]
+    'make_scenarios_comparison_Diff_Plot',
+
+    'make_Basic_Plot',
+    'make_Mann_Kendall_Trend_Test_Plot',
+    'make_Correlation_Plot',
+    'make_Standard_Deviation_Plot',
+    'make_Functional_Response_Plot',
+]

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 from Namelist_lib.namelist_info import initial_setting
-from Page_make_validation import make_initional, make_reference, make_simulation
+from Page_make_validation import make_initional
+from Page_make_reference import make_reference
+from Page_make_simulation import make_simulation
 from Page_run import run_validation
 from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
 from Page_statistic import Process_stastic
@@ -30,6 +32,7 @@ class Pages_control:
                 not st.session_state.step1_general) & (
                 not st.session_state.step1_metrics) & (
                 not st.session_state.step1_evaluation) & (
+                not st.session_state.step1_comparison) & (
                 not st.session_state.step2_set):
             nml_data.home()
 
@@ -37,6 +40,7 @@ class Pages_control:
                 st.session_state.step1_general) & (
                 not st.session_state.step1_metrics) & (
                 not st.session_state.step1_evaluation) & (
+                not st.session_state.step1_comparison) & (
                 not st.session_state.step2_set):
             nml_data.step1_general()
 
@@ -44,6 +48,7 @@ class Pages_control:
                 st.session_state.step1_general) & (
                 st.session_state.step1_metrics) & (
                 not st.session_state.step1_evaluation) & (
+                not st.session_state.step1_comparison) & (
                 not st.session_state.step2_set):
             nml_data.step1_metrics()
 
@@ -51,8 +56,17 @@ class Pages_control:
                 st.session_state.step1_general) & (
                 st.session_state.step1_metrics) & (
                 st.session_state.step1_evaluation) & (
+                not st.session_state.step1_comparison) & (
                 not st.session_state.step2_set):
             nml_data.step1_evaluation()
+
+        if (
+                st.session_state.step1_general) & (
+                st.session_state.step1_metrics) & (
+                st.session_state.step1_evaluation) & (
+                st.session_state.step1_comparison) & (
+                not st.session_state.step2_set):
+            nml_data.step1_comparison()
 
         if (
                 st.session_state.step2_set & (

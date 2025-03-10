@@ -11,8 +11,8 @@ import streamlit as st
 import xarray as xr
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from stqdm import stqdm
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+from streamlit.runtime import get_instance
 
 
 def timer(func):
@@ -65,8 +65,8 @@ class run_validation:
         if col1.button('Run', use_container_width=True):
             status = st.status(label="***Running Evaluation...***", expanded=False)
             st.session_state.status = self.Openbench_processing(status)
-            st.info('More info please check task_log.txt')
-        elif col4.button('Pass', use_container_width=True):
+            st.info(f'More info please check {st.session_state.running_log_file}')
+        if col4.button('Pass', use_container_width=True):
             st.session_state.status = 'complete'
             # st.session_state['status_message'] = "***Running Pages...***"
 
@@ -79,7 +79,6 @@ class run_validation:
         #             status.update(label=st.session_state['status_message'], state="error", expanded=False)
         #         elif st.session_state['status_message'] == f"***Evaluation done***":
         #             status.update(label=st.session_state['status_message'], state="complete", expanded=False)
-
 
         if st.session_state.status == 'complete':
             st.session_state.step4_run = True
@@ -144,37 +143,35 @@ class run_validation:
         # {"=" * 80}
 
     @timer
-    def Openbench_processing(self,status):
+    def Openbench_processing(self, status):
         st.divider()
+
         p = subprocess.Popen(
             f'python -u {st.session_state.openbench_path}/script/openbench.py {st.session_state["main_nml"]}',
             shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # subprocess.PIPE,
-            bufsize=1,
-            universal_newlines=True,
-            # text=True,
-            # encoding='utf-8',
-            # errors='ignore',
+            stdout=subprocess.PIPE,  # 捕获 stdout
+            stderr=subprocess.STDOUT,  # 将 stderr 重定向到 stdout
+            bufsize=1,  # 行缓冲
+            universal_newlines=True,  # 文本模式
         )
+        if 'running_log_file' not in st.session_state:
+            st.session_state.running_log_file = ''
 
-        # st.session_state.run_string = ''
-        log_file = open("task_log.txt", "w", encoding='utf-8')
         i = 0
         for line in p.stdout:
             if re.search(r'\033\[[0-9;]*m', line):
                 line = re.sub(r'\033\[[0-9;]*m', '', line)
-            
             if i <= 15:
                 pass
             else:
+                if "OpenBench Log File: " in line:
+                    st.session_state.running_log_file = line.replace('OpenBench Log File: ', '')
                 return_status = self.__process_line(line, status)
                 if return_status:
                     return status._current_state
-            log_file.write(line)
             i = i + 1
 
-        log_file.close()
+
         if status._current_state != "error":
             sleep(1)
             st.session_state['status_message'] = f"***Evaluation done***"
@@ -183,13 +180,12 @@ class run_validation:
             st.session_state['status_message'] = f"***:red[Evaluation Error]***"
             sleep(0.5)
             status.update(label=f"***:red[Evaluation Error]***", state="error", expanded=False)
-
         return status._current_state
 
-    def __process_line(self,line,status):
+    def __process_line(self, line, status):
         eskip_next_line = False
         wskip_next_line = False
-        error_keywords = ["error", "failed", "exception", "traceback"]
+        error_keywords = [" - ERROR -","error", "failed", "exception", "traceback"]
         error_keywords1 = ['File "', '", line']
         error_pattern = re.compile("|".join(error_keywords), re.IGNORECASE)
         error_file_pattern = re.compile("|".join(error_keywords1), re.IGNORECASE)
@@ -198,6 +194,9 @@ class run_validation:
         stop_next_line = False
         warning_keywords = ['Warning']
         warning_pattern = re.compile("|".join(warning_keywords), re.IGNORECASE)
+        log_warning_pattern = re.compile("|".join([' - WARNNING -']), re.IGNORECASE)
+
+
 
         if error_pattern.search(line):
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
@@ -215,6 +214,9 @@ class run_validation:
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
             status.write(f"***:red[{line.strip()}]***")
             eskip_next_line = False
+
+        elif log_warning_pattern.search(line.strip()) and not wskip_next_line:
+            status.write(f"***:orange[{line.strip()}]***")
 
         elif warning_pattern.search(line.strip()) and not wskip_next_line:
             status.write(f"***:orange[{line.strip()}]***")

@@ -102,7 +102,7 @@ def make_Functional_Response(file, method_name, data_sources, main_nml,  option)
 
     if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
-    else
+    else:
         cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
         
     coastline = cfeature.NaturalEarthFeature(
