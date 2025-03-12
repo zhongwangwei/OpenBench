@@ -88,7 +88,10 @@ model=CoLM
    varunit =  unitless
 /
 
-
+&Soil_Carbon
+   varname =  f_totsom
+   varunit =  g C m-2
+/
 ##################################################################################
 
 

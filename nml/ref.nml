@@ -20,7 +20,7 @@
   Biomass_ref_source                        = ILAMB_monthly                                  # Grid: ILAMB_monthly, FLUXCOM,CEDA,Biomass_Huang2021, Biomass_XU2021
   BurnedArea_ref_source                     = ILAMB_monthly                                  # Grid: ILAMB_monthly, GFED5,CEDA
   Leaf_Area_Index_ref_source                = LAI_Yuan2011                                   # Grid: Lin2023, GIMMS_LAI4g,SMAPL4  Stn: LAI_Yuan2011 
-  Soil_Carbon_ref_source                    = ILAMB_monthly                 
+  Soil_Carbon_ref_source                    = Soilgrid                                       # ILAMB_monthly, Soilgrid
   Nitrogen_Fixation_ref_source              = ILAMB_monthly
   Methane                                   = ILAMB_monthly                                  # Grid: ILAMB_monthly   stn: CH4_FluxnetANN,
 
@@ -161,7 +161,7 @@ Biomass_Huang2021          = ./nml/Ref_variables_defination/Ecosystem/Biomass_Hu
 Biomass_XU2021             = ./nml/Ref_variables_defination/Ecosystem/Biomass_XU2021.nml
 GFED5                      = ./nml/Ref_variables_defination/Ecosystem/GFED5.nml
 CEDA                       = ./nml/Ref_variables_defination/Ecosystem/CEDA.nml
-
+Soilgrid.                  = ./nml/Ref_variables_defination/Ecosystem/SoilGridV2.nml
 #Energy
 CERES_EBAF_Ed4.2           = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR                = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
