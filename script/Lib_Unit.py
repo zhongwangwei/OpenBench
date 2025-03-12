@@ -83,6 +83,9 @@ class UnitProcessing:
 			't ha-1': {
 				'kg ha-1': lambda x: x / 1000,
 			},
+			'kg C m-3': {
+				'g C m-2': lambda x: x * 1000,
+			},
 		}
 		logging.info(f'Converting {input_unit} to base unit...')
 		for base_unit, conversions in conversion_factors.items():
