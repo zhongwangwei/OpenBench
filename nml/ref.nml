@@ -250,7 +250,8 @@ MSWX                      = ./nml/Ref_variables_defination/Forcing/MSWX.nml
 MSWEP                     = ./nml/Ref_variables_defination/Forcing/MSWEP.nml
 CERES_EBAF_Ed4.2          = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR               = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
+CARE                      = ./nml/Ref_variables_defination/Energy/CARE.nml
 
-#Defination
+#Definition
 CLM5                      = ./nml/Ref_variables_defination/Defination/CLM5.nml
 /
