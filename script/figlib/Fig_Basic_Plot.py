@@ -275,13 +275,15 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     if not option['set_lat_lon']:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -440,13 +442,15 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     if not option['set_lat_lon']:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -833,15 +837,17 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                       main_nml['max_lat']])
+                       main_nml['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
                       crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
                       crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
