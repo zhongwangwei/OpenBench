@@ -22,19 +22,19 @@ def get_index(vmin, vmax, colormap):
         elif 5 >= vmax - vmin > 2:
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
+            colorbar_ticks = 1.
         elif 100 >= vmax - vmin > 10:
-            colorbar_ticks = 5
+            colorbar_ticks = 5.
         elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 20
+            colorbar_ticks = 20.
         elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
+            colorbar_ticks = 20.
         elif 500 >= vmax - vmin > 200:
-            colorbar_ticks = 50
+            colorbar_ticks = 50.
         elif 1000 >= vmax - vmin > 500:
-            colorbar_ticks = 100
+            colorbar_ticks = 100.
         elif 2000 >= vmax - vmin > 1000:
-            colorbar_ticks = 200
+            colorbar_ticks = 200.
         elif 10000 >= vmax - vmin > 2000:
             colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
         else:

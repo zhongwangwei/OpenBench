@@ -13,7 +13,7 @@ from io import StringIO
 from collections import ChainMap
 import xarray as xr
 import numpy as np
-from Namelist_lib.namelist_read import NamelistReader
+from Namelist_lib.namelist_read import NamelistReader, Process_home_nml
 from Namelist_lib.namelist_info import initial_setting
 from Namelist_lib.find_path import FindPath
 
@@ -36,14 +36,6 @@ class make_initional:
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
         self.initial = initial
         self.classification = initial.classification()
-        self.sim_info = initial.sim_info()
-        self.ref_source = initial.ref_source()
-        self.ref_info = initial.ref_info()
-        # ------------------------
-        # self.main = initial.main()
-        # self.ref = initial.ref()
-        # self.sim = initial.sim()
-        # ----------------------------
         self.generals = initial.generals()
         self.evaluation_items = initial.evaluation_items()
         self.metrics = initial.metrics()
@@ -51,33 +43,13 @@ class make_initional:
         self.comparisons = initial.comparisons()
         self.statistics = initial.statistics()
         self.nl = NamelistReader()
+        self.Process_nml = Process_home_nml(self.initial)
         self.path_finder = FindPath()
-
-    def find_paths_in_dict(self, d):
-
-        if platform.system() == "Windows":
-            sep = '\\'
-        else:
-            sep = posixpath.sep
-
-        paths = []
-        for key, value in d.items():
-            if isinstance(value, dict):
-                paths.extend(self.find_paths_in_dict(value))
-            elif isinstance(value, str):
-                if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sep == '\\':
-                        path.replace(os.sep, "\\")
-                        d[key] = value.replace(os.sep, '\\')
-                    else:
-                        d[key] = value.replace(os.sep, "/")
-                    paths.append((key, value))
-        return paths
 
     def home(self):
         st.subheader("Welcome to the Evaluation page", divider=True)
         st.write(
-            "##### :green[Choose whether to upload a file or create a new initial setup, and please press Next step button]")  # 请选择是上传文件，还是新建一个初始设置
+            "##### :green[Choose to upload a file or create a new initial setup, and please press Next step button]")  # 请选择是上传文件，还是新建一个初始设置
         genre = st.radio(
             " What's your choice?", ["***Upload***", "***Setting***"],
             captions=["Upload your case and change a little.", "No need to upload, staring setting."], index=1,
@@ -87,59 +59,9 @@ class make_initional:
             st.session_state.step1_general = True
 
         if genre == '***Upload***':
-            if 'main_nml' not in st.session_state:
-                st.session_state['main_nml'] = None
-            st.session_state['main_nml'] = self.path_finder.get_file(st.session_state['main_nml'], 'upload_file', 'nml',
-                                                                     [None, None])
-
-            if st.session_state.main_nml is not None:
-                st.code(f'Upload Namelist: {st.session_state.main_nml}', language='shell', wrap_lines=True)
-
-            if st.session_state['main_nml']:
-                if 'main_change' in st.session_state:
-                    del st.session_state['main_change']
-                if not os.path.exists(st.session_state['main_nml']):
-                    e = FileNotFoundError(f'[Errno 2] No such file or directory: "{st.session_state["main_nml"]}"')
-                    st.exception(e)
-                    check = True
-                else:
-                    main_data = self.nl.read_namelist(st.session_state['main_nml'])
-                    ref_path = main_data['general']["reference_nml"]
-                    sim_path = main_data['general']["simulation_nml"]
-                    if (not os.path.exists(ref_path)) | (not os.path.exists(sim_path)):
-                        if not os.path.exists(ref_path):
-                            e = FileNotFoundError(f'[Errno 2] No such file or directory: "{ref_path}"')
-                            st.exception(e)
-                        if not os.path.exists(sim_path):
-                            e = FileNotFoundError(f'[Errno 2] No such file or directory: "{sim_path}"')
-                            st.exception(e)
-                        check = True
-                    else:
-                        check = self.__initial_nml(main_data)
-                    st.session_state.step1_initial = 'Upload'
-
-            else:
-                st.warning('Please input your file path!')
-                check = True
-
+            check = self.Process_nml.Upload()
         elif genre == '***Setting***':
-            if 'main_change' in st.session_state:
-                del st.session_state['main_change']
-            check = False
-            st.session_state.step1_initial = 'Setting'
-            if st.session_state:
-                for key, value in st.session_state.items():
-                    if key in ['main_path', 'validation_path', 'main_data', 'sim_data', 'ref_data']:
-                        del st.session_state[key]
-                    elif isinstance(value, int) & ('count' in key):
-                        st.session_state[key] = 0
-                    elif isinstance(value, bool) & (key not in ['switch_button']):
-                        st.session_state[key] = False
-                    st.session_state.main_path = os.getcwd()
-                    st.session_state.validation_path = os.path.abspath(os.path.join(os.getcwd(), 'CoLM-Evaluation'))
-                    st.session_state.main_data = self.initial.main()
-                    st.session_state.sim_data = self.initial.sim()
-                    st.session_state.ref_data = self.initial.ref()
+            check = self.Process_nml.Setting()
         else:
             st.write("You didn\'t select.")
             check = True
@@ -148,167 +70,6 @@ class make_initional:
         col1, col2, col3, col4 = st.columns(4)
         with col4:
             st.button('Next step :soon: ', on_click=define_step1, disabled=check)
-
-    def __initial_nml(self, main_data):
-        ref_path = main_data['general']["reference_nml"]
-        sim_path = main_data['general']["simulation_nml"]
-        check = True
-
-        st.session_state.main_data = self.initial.main()
-        st.session_state.ref_data = self.initial.ref()
-        st.session_state.sim_data = self.initial.sim()
-
-        st.session_state.main_data = main_data
-        st.session_state.generals = main_data['general']
-        st.session_state.evaluation_items = main_data['evaluation_items']
-        st.session_state.metrics = main_data['metrics']
-        st.session_state.scores = main_data['scores']
-        st.session_state.comparisons = main_data['comparisons']
-        st.session_state.statistics = main_data['statistics']
-        if isinstance(main_data['general']['compare_tzone'], str):
-            if main_data['general']['compare_tzone'] == 'UTC':
-                st.session_state.generals['compare_tzone'] = 0.0
-        elif isinstance(main_data['general']['compare_tzone'], int):
-            st.session_state.generals['compare_tzone'] = float(main_data['general']['compare_tzone'])
-
-        if self.__upload_ref_check(main_data, ref_path):
-            st.session_state.ref_data = self.nl.read_namelist(ref_path)
-            check = False
-        else:
-            check = True
-        if self.__upload_sim_check(main_data, sim_path):
-            st.session_state.sim_data = self.nl.read_namelist(sim_path)
-            check = False
-        else:
-            check = True
-
-        st.session_state.step1 = True
-        st.session_state.step1_main_nml = True
-        st.session_state.step2 = True
-        st.session_state.step2_ref_nml = True
-        st.session_state.step3 = True
-        st.session_state.step3_sim_nml = True
-        return check
-
-    def __upload_ref_check(self, main_data, ref_path):
-        ref_data = self.nl.read_namelist(ref_path)
-        selected_items = [k for k, v in main_data['evaluation_items'].items() if v]
-
-        error = 0
-        sources = []
-
-        for key in selected_items:
-            if isinstance(ref_data['general'][f"{key}_ref_source"], str): ref_data['general'][f"{key}_ref_source"] = [
-                ref_data['general'][f"{key}_ref_source"]]
-            for value in ref_data['general'][f"{key}_ref_source"]:
-                if value not in sources:
-                    sources.append(value)
-
-        for source in sources:
-            if not os.path.exists(ref_data['def_nml'][source]):
-                e = FileNotFoundError(f'[Errno 2] No such file or directory: "{ref_data["def_nml"][source]}"')
-                st.exception(e)
-                error = +1
-
-        if error == 0:
-            ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
-            for selected_item in selected_items:
-                if isinstance(ref_sources['general'][selected_item], str): ref_sources['general'][selected_item] = [
-                    ref_sources['general'][selected_item]]
-                for item in ref_data['general'][f"{selected_item}_ref_source"]:
-                    if item not in ref_sources['general'][selected_item]:
-                        ref_sources['general'][selected_item].append(item)
-                        ref_sources['def_nml'][item] = ref_data['def_nml'][item]
-
-            with open('./GUI/Namelist_lib/Reference_lib.nml', 'w') as f1:
-                lines = []
-                end_line = "/\n\n\n"
-                lines.append("&general\n")
-                max_key_length = max(len(key) for key in ref_sources['general'].keys())
-                for key in list(ref_sources['general'].keys()):
-                    value = ref_sources['general'][f'{key}']
-                    if isinstance(value, str): value = [value]
-                    lines.append(f"    {key:<{max_key_length}} = {', '.join(value)}\n")
-                lines.append(end_line)
-
-                lines.append("&def_nml\n")
-                max_key_length = max(len(key) for key in ref_sources['def_nml'].keys())
-                for key in list(ref_sources['def_nml'].keys()):
-                    lines.append(f"    {key:<{max_key_length}} = {ref_sources['def_nml'][f'{key}']}\n")
-                lines.append(end_line)
-                for line in lines:
-                    f1.write(line)
-            return True
-        else:
-            return False
-
-    def __upload_sim_check(self, main_data, sim_path):
-        sim_data = self.nl.read_namelist(sim_path)
-        selected_items = [k for k, v in main_data['evaluation_items'].items() if v]
-        error = 0
-        sources = []
-        Mods = {}
-        for key in selected_items:
-            if isinstance(sim_data['general'][f"{key}_sim_source"], str): sim_data['general'][f"{key}_sim_source"] = [
-                sim_data['general'][f"{key}_sim_source"]]
-            for value in sim_data['general'][f"{key}_sim_source"]:
-                if value not in sources:
-                    sources.append(value)
-
-        for source in sources:
-            if not os.path.exists(sim_data['def_nml'][source]):
-                e = FileNotFoundError(f'[Errno 2] No such file or directory: "{sim_data["def_nml"][source]}"')
-                st.exception(e)
-                error = +1
-            else:
-                Mod_path = self.nl.read_namelist(sim_data['def_nml'][source])['general']['model_namelist']
-                Mod = self.nl.read_namelist(Mod_path)['general']['model']
-                if Mod not in Mods:
-                    Mods[Mod] = Mod_path
-
-        if error == 0:
-            sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
-            if isinstance(sim_sources['general']['Case_lib'], str): sim_sources['general']['Case_lib'] = [
-                sim_sources['general']['Case_lib']]
-            for selected_item in selected_items:
-                if isinstance(sim_data['general'][f"{selected_item}_sim_source"], str): sim_data['general'][
-                    f"{selected_item}_sim_source"] = [
-                    sim_data['general'][f"{selected_item}_sim_source"]]
-                for item in sim_data['general'][f"{selected_item}_sim_source"]:
-                    if item not in sim_sources['general']['Case_lib']:
-                        sim_sources['general']['Case_lib'].append(item)
-                        sim_sources['def_nml'][item] = sim_data['def_nml'][item]
-            for Mod in Mods:
-                if Mod not in sim_sources['def_Mod']:
-                    sim_sources['def_Mod'][Mod] = Mods[Mod]
-
-            with open('./GUI/Namelist_lib/Simulation_lib.nml', 'w') as f1:
-                lines = []
-                end_line = "/\n\n\n"
-                lines.append("&general\n")
-                max_key_length = max(len(key) for key in sim_sources['general'].keys())
-                for key in list(sim_sources['general'].keys()):
-                    value = sim_sources['general'][f'{key}']
-                    if isinstance(value, str): value = [value]
-                    lines.append(f"    {key:<{max_key_length}} = {', '.join(value)}\n")
-                lines.append(end_line)
-
-                lines.append("&def_nml\n")
-                max_key_length = max(len(key) for key in sim_sources['def_nml'].keys())
-                for key in list(sim_sources['def_nml'].keys()):
-                    lines.append(f"    {key:<{max_key_length}} = {sim_sources['def_nml'][f'{key}']}\n")
-                lines.append(end_line)
-
-                lines.append("&def_Mod\n")
-                max_key_length = max(len(key) for key in sim_sources['def_Mod'].keys())
-                for key in list(sim_sources['def_Mod'].keys()):
-                    lines.append(f"    {key:<{max_key_length}} = {sim_sources['def_Mod'][f'{key}']}\n")
-                lines.append(end_line)
-                for line in lines:
-                    f1.write(line)
-            return True
-        else:
-            return False
 
     def step1_general(self):
         if 'main_change' not in st.session_state:
@@ -389,6 +150,7 @@ class make_initional:
                             args=("max_lat", "max_lat"),
                             min_value=-90.0,
                             max_value=90.0,
+                            format="%0.3f",
                             label_visibility='collapsed')
         with col2:
             st.number_input("Min latitude: ", value=float(General["min_lat"]),
@@ -397,6 +159,7 @@ class make_initional:
                             args=("min_lat", "min_lat"),
                             min_value=-90.0,
                             max_value=90.0,
+                            format="%0.3f",
                             label_visibility='collapsed')
         with col3:
             st.number_input("Max Longitude: ", value=float(General["max_lon"]),
@@ -405,6 +168,7 @@ class make_initional:
                             args=("max_lon", "max_lon"),
                             min_value=-180.0,
                             max_value=180.0,
+                            format="%0.3f",
                             label_visibility='collapsed')
         with col4:
             st.number_input("Min Longitude: ", value=float(General["min_lon"]),
@@ -413,15 +177,16 @@ class make_initional:
                             args=("min_lon", "min_lon"),
                             min_value=-180.0,
                             max_value=180.0,
+                            format="%0.3f",
                             label_visibility='collapsed')
 
         st.divider()
         st.write('###### :green[Base case directory]')
-        if General["basedir"] is None or General["basedir"] == '': General["basedir"] = '/'
+        if General["basedir"] is None or General["basedir"] == '': General["basedir"] = './'
         if os.path.isdir(os.path.abspath(General["basedir"])):
             General["basedir"] = os.path.abspath(General["basedir"])
         else:
-            General["basedir"] = '/'
+            General["basedir"] = './'
         General["basedir"] = self.path_finder.find_path(General["basedir"], "basedir", ['main_change', 'general'])
         st.code(f"Current Path: {General['basedir']}", language='shell', wrap_lines=True)
 
@@ -516,20 +281,17 @@ class make_initional:
                       args=("unified_mask", "unified_mask")
                       )
 
-        # st.write(
-        # ':information_source: You can choose which one to run, if only :point_up: running comparison you should prepare the files first.')
         st.divider()
 
         # showing for detail ===============================================
         st.session_state.casepath = f'{os.path.join(General["basedir"], General["basename"])}'
         if not General["reference_nml"] or st.session_state.step1_initial == 'Setting':
-            General["reference_nml"] = f"{st.session_state.openbench_path}/nml/ref-{General['basename']}.nml"
+            General["reference_nml"] = f"./nml/ref-{General['basename']}.nml"
         if not General["simulation_nml"] or st.session_state.step1_initial == 'Setting':
-            General["simulation_nml"] = f"{st.session_state.openbench_path}/nml/sim-{General['basename']}.nml"
+            General["simulation_nml"] = f"./nml/sim-{General['basename']}.nml"
         if not General["statistics_nml"] or st.session_state.step1_initial == 'Setting':
-            General["statistics_nml"] = f"{st.session_state.openbench_path}/nml/stats-{General['basename']}.nml"
-        General["figure_nml"] = f"{st.session_state.openbench_path}/nml/figlib.nml"
-        paths = self.find_paths_in_dict(General)
+            General["statistics_nml"] = f"./nml/stats-{General['basename']}.nml"
+        General["figure_nml"] = f"./nml/figlib.nml"
 
         st.session_state.step1_main_check_general = self.__step1_check_general(General)
 
@@ -553,7 +315,7 @@ class make_initional:
         check_state = 0
         for key, value in Generals.items():
             if isinstance(value, str):
-                if len(value) <= 1:
+                if len(value) < 1:
                     st.warning(f'{key} should be a string longer than one, please check {key}.', icon="⚠")
                     check_state += 1
             elif isinstance(value, bool):
@@ -581,31 +343,10 @@ class make_initional:
             st.warning(f" End year should be larger than Start year, please check.", icon="⚠")
             check_state += 1
 
-        def get_os_type(path):
-            os_type = False
-            if path:
-                if ('\\' in path) and (':' in path):
-                    if sys.platform.startswith('win'):
-                        os_type = True
-                elif ('/' in path) & (path[0] == '/'):
-                    if sys.platform.startswith('linux') | (not sys.platform.startswith('win')):
-                        os_type = True
-                elif (('./' in path) | ('.\\' in path)) & (path[0] == '.'):
-                    os_type = True
-                return os_type
-            else:
-                return os_type
-
-        basedir_type = get_os_type(Generals['basedir'])
-        if not basedir_type:
-            check_state += 1
-            st.error('Please make sure your path is right!', icon="⚠")
-
         if check_state > 0:
             return False
         if check_state == 0:
             return True
-        # return step1_main_check~
 
     # =============================================
 
@@ -841,19 +582,16 @@ class make_initional:
             st.error(f'Please choose at least one Metrics or Scores!', icon="🚨")
             check_state += 1
         else:
-            # with st.container(border=True):
             if len(metrics_select) >= 1:
                 m_select = ", ".join(m for m in metrics_select)
                 st.info(f'Make sure your select Metrics is: \n:red[{m_select}]', icon="ℹ️")
             if len(scores_select) >= 1:
                 s_select = ", ".join(s for s in scores_select)
                 st.info(f'Make sure your select Scores is: \n:red[{s_select}]', icon="ℹ️")
-        # st.info(f"Make sure your selected Evaluation Item is:    \n{formatted_keys}", icon="ℹ️")
         if check_state > 0:
             return False
         if check_state == 0:
             return True
-        # return check state~
 
     # ===============================================
 
@@ -1159,12 +897,7 @@ class make_initional:
             st.checkbox("River Water Level", key="River_Water_Level", on_change=Evaluation_Items_editor_change,
                         args=("River_Water_Level", "River_Water_Level"), value=Evaluation_Items["River_Water_Level"])
         # -------------------------------
-        check_list.append(self.__step1_check_evaluation(Evaluation_Items))
-
-        if all(check_list):
-            st.session_state.step1_main_check_evaluation = True
-        else:
-            st.session_state.step1_main_check_evaluation = False
+        st.session_state.step1_main_check_evaluation = self.__step1_check_evaluation(Evaluation_Items)
         st.session_state.evaluation_items = Evaluation_Items
 
     def __step1_check_evaluation(self, Evaluation_Items):
@@ -1194,11 +927,12 @@ class make_initional:
             return True
 
     def step1_comparison(self):
-        self.__step1_set_Comparison_Items(self.comparisons, self.statistics)
+        self.__step1_set_Comparison_Items(self.comparisons)
         st.divider()
+
         step1_disable = False
         if st.session_state.step1_main_check_general & st.session_state.step1_main_check_metrics_scores & (
-                st.session_state.step1_main_check_evaluation):
+                st.session_state.step1_main_check_evaluation) & st.session_state.step1_main_check_comparison:
             st.session_state.step1_main_check = True
             st.session_state.step1_main_nml = False
         else:
@@ -1210,6 +944,8 @@ class make_initional:
                 st.error('There exist error in metrics and scores page, please check first!', icon="🚨")
             if not st.session_state.step1_main_check_evaluation:
                 st.error('There exist error in evaluation page, please check first!', icon="🚨")
+            if not st.session_state.step1_main_check_comparison:
+                st.error('There exist error in Comparison page, please check first!', icon="🚨")
             st.session_state.step1_main_nml = False
         st.session_state['main_data'] = {'general': st.session_state['generals'],
                                          'metrics': st.session_state['metrics'],
@@ -1246,13 +982,10 @@ class make_initional:
             st.button('Next step :soon: ', on_click=define_step2, args=(make_contain, 'make_contain'), disabled=step1_disable,
                       help='Go to Simulation page')
 
-    def __step1_set_Comparison_Items(self, comparisons, statistics):
+    def __step1_set_Comparison_Items(self, comparisons):
         check_list = []
-
         if st.session_state.comparisons:
             comparisons = st.session_state.comparisons
-        if st.session_state.statistics:
-            statistics = st.session_state.statistics
 
         def comparisons_editor_change(key, editor_key):
             comparisons[key] = st.session_state[key]
@@ -1408,30 +1141,29 @@ class make_initional:
             #             args=("Three_Cornered_Hat", "Three_Cornered_Hat"),
             #             disabled=Statistics_disable,
             #             value=statistics['Three_Cornered_Hat'])
+
         st.session_state.step1_main_check_comparison = self.__step1_check_comparisons(comparisons)
         st.session_state.comparisons = comparisons
-        st.session_state.statistics = statistics
 
     def __step1_check_comparisons(self, comparisons):
-        # Generals_check = False
         check_state = 0
 
         ec_select = {}
-        score_all_false = False
+        comparisons_all_false = True
         for key, value in comparisons.items():
             if isinstance(value, bool):
                 if value:
                     ec_select[key] = value
-                    score_all_false = False
+                    comparisons_all_false = False
                     if key == 'HeatMap':
                         if not any(st.session_state.scores.values()):
                             st.warning(f'HeatMap need scores, Please choose at least one Scores!', icon="⚠")
-                            score_all_false = True
-        if not st.session_state['generals']['comparison'] or not any(comparisons.values()):
-            st.warning(f'Please make sure choose to select comparison', icon="⚠")
+                            check_state += 1
 
-        if score_all_false:
-            check_state += 1
+        if comparisons_all_false:
+            if st.session_state['generals']['comparison']:
+                st.error(f'Please make sure choose to select comparison', icon="⚠")
+                check_state += 1
         else:
             formatted_keyc = ", \n".join(key.replace('_', ' ') for key in ec_select.keys())
             st.info(f"Make sure your selected comparisons Item is:      :red[{formatted_keyc}] ", icon="ℹ️")
@@ -1443,7 +1175,7 @@ class make_initional:
 
     def _step1_main_nml(self):
         if st.session_state.step1_main_check & (not st.session_state.step1_main_nml):
-            st.code(f"Make sure your namelist path is: \n{st.session_state.openbench_path}", wrap_lines=True)
+            st.code(f"Make sure your namelist path is: \n{st.session_state.namelist_path}", wrap_lines=True)
             if not os.path.exists(st.session_state.casepath):
                 os.makedirs(st.session_state.casepath)
             classification = self.classification
@@ -1472,8 +1204,7 @@ class make_initional:
                                          }
 
     def __step1_make_main_namelist(self, file_path, Generals, metrics, scores, Evaluation_Items, comparisons,
-                                   statistics,
-                                   classification):
+                                   statistics, classification):
         """
         Write a namelist from a text file.
 
@@ -1553,74 +1284,15 @@ class make_initional:
                     del max_key_length
                     time.sleep(0.8)
 
-                    return True
+                with open(Generals['statistics_nml'], 'w') as f:
+                    lines = []
+                    end_line = "/\n\n\n"
+                    lines.append("&general\n")
+                    lines.append(end_line)
+                    for line in lines:
+                        f.write(line)
+                    time.sleep(0.8)
+                return True
+
             else:
                 return False
-
-    def __step1_check_data(self, Generals, metrics, Evaluation_Items):
-        # Generals_check = False
-        check_state = 0
-        for key, value in Generals.items():
-            if isinstance(value, str):
-                if len(value) <= 1:
-                    st.warning(f'{key} should be a string longer than one, please check {key}.', icon="⚠")
-                    check_state += 1
-            elif isinstance(value, bool):
-                if value not in [True, False]:
-                    st.warning(f'{key} should be True or False, please check {key}.', icon="⚠")
-                    check_state += 1
-            elif isinstance(value, int):
-                if key in ['num_cores', 'syear', 'eyear']:
-                    if not isinstance(value, int):
-                        st.warning(f'{key} should be in integer format, please check {key}.', icon="⚠")
-                        check_state += 1
-            elif isinstance(value, float):
-                if key in ['min_year', 'max_lat', 'min_lat', 'max_lon', 'min_lon']:
-                    if not isinstance(value, float) or not (value == value):  # 检查是否是 NaN
-                        st.warning(f'{key} should be in float format, please check {key}.', icon="⚠")
-                        check_state += 1
-            elif value is None:
-                if key in ['compare_tres', 'compare_tzone']:
-                    st.warning(f'{key} It can not be empty, please check {key}.', icon="⚠")
-                    check_state += 1
-            else:
-                st.warning(f'Unsupported data types {type(value)} for {key}, please check {key}.', icon="⚠")
-                check_state += 1
-        if Generals['eyear'] < Generals['syear']:
-            st.warning(f" End year should be larger than Start year, please check.", icon="⚠")
-            check_state += 1
-
-        ei_all_false = True
-        for key, value in Evaluation_Items.items():
-            if isinstance(value, bool):
-                if value not in [True, False]:
-                    st.warning(f'{key} should be True or False, please check {key}.', icon="⚠")
-                    check_state += 1
-                if value:
-                    ei_all_false = False
-
-        if ei_all_false:
-            st.warning(f'Please choose at least one Evaluation Item!', icon="⚠")
-            check_state += 1
-
-        metrics_all_false = True
-        for key, value in metrics.items():
-            if isinstance(value, bool):
-                if value not in [True, False]:
-                    st.warning(f'{key} should be True or False, please check {key}.', icon="⚠")
-                    check_state += 1
-                if value:
-                    metrics_all_false = False
-        if metrics_all_false:
-            st.warning(f'Please choose at least one Metrics!', icon="⚠")
-            check_state += 1
-
-        if check_state > 0:
-            return False
-        if check_state == 0:
-            return True
-        # return check state~
-
-
-
-

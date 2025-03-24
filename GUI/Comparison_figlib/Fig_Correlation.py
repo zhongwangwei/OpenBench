@@ -23,22 +23,18 @@ def get_index(vmin, vmax, colormap,option):
             colorbar_ticks = 0.5
         elif 10 >= vmax - vmin > 5:
             colorbar_ticks = 1.
-        elif 20 >= vmax - vmin > 10:
+        elif 100 >= vmax - vmin > 10:
             colorbar_ticks = 5.
-        elif 50 >= vmax - vmin > 20:
-            colorbar_ticks = 10
-        elif 80 >= vmax - vmin > 50:
-            colorbar_ticks = 15
-        elif 100 >= vmax - vmin > 80:
-            colorbar_ticks = 20
+        elif 100 >= vmax - vmin > 50:
+            colorbar_ticks = 20.
         elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 25
+            colorbar_ticks = 20.
         elif 500 >= vmax - vmin > 200:
-            colorbar_ticks = 50
+            colorbar_ticks = 50.
         elif 1000 >= vmax - vmin > 500:
-            colorbar_ticks = 100
+            colorbar_ticks = 100.
         elif 2000 >= vmax - vmin > 1000:
-            colorbar_ticks = 200
+            colorbar_ticks = 200.
         elif 10000 >= vmax - vmin > 2000:
             colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
         else:
@@ -65,7 +61,7 @@ def get_index(vmin, vmax, colormap,option):
     return mticks, norm, bnd, cmap
 
 
-def map(file, ilon, ilat, data, option):
+def map(Figure_show,file, ilon, ilat, data, option):
     from Namelist_lib.check_font import check_font
     check = check_font()
     check.check_font(option['font'])
@@ -139,7 +135,7 @@ def map(file, ilon, ilat, data, option):
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     file2 = os.path.basename(file)[:-3]
     # 将图像保存到 BytesIO 对象
@@ -152,7 +148,7 @@ def map(file, ilon, ilat, data, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Correlation(file, option):  # outpath, source
+def draw_Correlation(Figure_show,file, option):  # outpath, source
 
     ds = xr.open_dataset(file)
     data = ds['correlation']
@@ -163,12 +159,16 @@ def draw_Correlation(file, option):  # outpath, source
         option['origin'] = 'lower'
     else:
         option['origin'] = 'upper'
-    map(file, ilon, ilat, data, option)
+    map(Figure_show,file, ilon, ilat, data, option)
 
 
-def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
+def make_Correlation_Plot(dir_path, file, selected_item, sources):
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Map_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Map', 'Save'])
+
+    option = {}
     icase = f"{selected_item}_{sources[0]}_{sources[1]}_Cor"
-    with st.container(height=None, border=True):
+    with Labels_tab:
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
             option['title'] = st.text_input('Title', value=f'Correlation', label_visibility="visible",
@@ -189,109 +189,109 @@ def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
             option['fontsize'] = st.number_input("Fontsize", min_value=0, value=17, key=f"{icase}_fontsize")
             option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
                                                        key=f"{icase}_axes_linewidth")
+    with Map_tab:
+        col1, col2, col3, col4 = st.columns(4)
+        option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],key=f"{icase}_min_lon")
+        option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
+        option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
+        option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
+        option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                            key=f"{icase}xtick")
+        option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                            key=f"{icase}ytick")
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        option["map"] = col1.selectbox(f"Draw map",['None', 'interpolate'],
+                                       index=0, placeholder="Choose an option", label_visibility="visible",
+                                       key=f"{icase}_map")
 
-        with st.expander("More info", expanded=True):
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            option['cmap'] = st.selectbox('Colorbar',
+                                          ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                           'BuGn_r',
+                                           'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
+                                           'GnBu_r',
+                                           'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                           'Oranges',
+                                           'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
+                                           'Pastel1_r',
+                                           'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                           'PuBu_r',
+                                           'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
+                                           'RdBu_r',
+                                           'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                           'RdYlGn_r',
+                                           'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                           'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
+                                           'YlGnBu_r',
+                                           'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
+                                           'afmhot_r',
+                                           'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
+                                           'brg_r',
+                                           'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
+                                           'copper_r',
+                                           'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                           'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                           'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                           'gist_rainbow_r', 'gray', 'gray_r',
+                                           'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                           'jet_r',
+                                           'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
+                                           'ocean_r',
+                                           'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                           'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                           'summer_r',
+                                           'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                           'winter_r'], index=0, placeholder="Choose an option",
+                                          key=f'{icase}_cmap',
+                                          label_visibility="visible")
+        with col2:
+            option['colorbar_label'] = st.text_input('colorbar label',
+                                                     key=f"{icase}_colorbar_label",
+                                                     label_visibility="visible")
+        with col3:
+            option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
+                                                       key=f"{icase}_colorbar_position",
+                                                       index=0, placeholder="Choose an option",
+                                                       label_visibility="visible")
+
+        with col4:
+            option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                            index=0, placeholder="Choose an option", label_visibility="visible",
+                                            key=f"{icase}_extend")
+        if option["colorbar_position"] == 'vertical':
+            left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
+        else:
+            left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
+
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
+                                                      key=f"{icase}_colorbar_position_set")
+        if option['colorbar_position_set']:
             col1, col2, col3, col4 = st.columns(4)
-            # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],key=f"{icase}_max_lat")
-            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
-                                                key=f"{icase}xtick")
-            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
-                                                key=f"{icase}ytick")
-            col1, col2, col3, col4 = st.columns(4)
+            option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
+            option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
+            option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
+            option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
 
-            with col1:
-                option['cmap'] = st.selectbox('Colorbar',
-                                              ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
-                                               'BuGn_r',
-                                               'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
-                                               'GnBu_r',
-                                               'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
-                                               'Oranges',
-                                               'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
-                                               'Pastel1_r',
-                                               'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                               'PuBu_r',
-                                               'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
-                                               'RdBu_r',
-                                               'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
-                                               'RdYlGn_r',
-                                               'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                               'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
-                                               'YlGnBu_r',
-                                               'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
-                                               'afmhot_r',
-                                               'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
-                                               'brg_r',
-                                               'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
-                                               'copper_r',
-                                               'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
-                                               'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                               'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                               'gist_rainbow_r', 'gray', 'gray_r',
-                                               'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
-                                               'jet_r',
-                                               'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
-                                               'ocean_r',
-                                               'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                               'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                               'summer_r',
-                                               'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
-                                               'winter_r'], index=0, placeholder="Choose an option",
-                                              key=f'{icase}_cmap',
-                                              label_visibility="visible")
-            with col2:
-                option['colorbar_label'] = st.text_input('colorbar label',
-                                                         key=f"{icase}_colorbar_label",
-                                                         label_visibility="visible")
-            with col3:
-                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
-                                                           key=f"{icase}_colorbar_position",
-                                                           index=0, placeholder="Choose an option",
-                                                           label_visibility="visible")
+        col1, col2, col3, col4 = st.columns(4)
+        option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
+        option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
+                                                     key=f"{icase}_colorbar_ticks")
 
-            with col4:
-                option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
-                                                key=f"{icase}_extend")
-            if option["colorbar_position"] == 'vertical':
-                left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
-            else:
-                left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
-
-            st.divider()
-            col1, col2, col3 = st.columns(3)
-            option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
-                                                          key=f"{icase}_colorbar_position_set")
-            if option['colorbar_position_set']:
-                col1, col2, col3, col4 = st.columns(4)
-                option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
-                option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
-                option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
-                option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
-
-            col1, col2, col3, col4 = st.columns(4)
-            option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=0.5, step=0.1,
-                                                         key=f"{icase}_colorbar_ticks")
-
-            if option["vmin_max_on"]:
-                option["vmin"] = col3.number_input(f"colorbar min", value=-1.)
-                option["vmax"] = col4.number_input(f"colorbar max", value=1.)
-            else:
-                option["vmin"] = -1.
-                option["vmax"] = 1.
-
-            st.divider()
-            col1, col2, col3 = st.columns(3)
-            option["map"] = col1.selectbox(f"Draw map",['None', 'interpolate'],
-                                           index=0, placeholder="Choose an option", label_visibility="visible",
-                                           key=f"{icase}_map")
+        if option["vmin_max_on"]:
+            option["vmin"] = col3.number_input(f"colorbar min", value=-1.)
+            option["vmax"] = col4.number_input(f"colorbar max", value=1.)
+        else:
+            option["vmin"] = -1.
+            option["vmax"] = 1.
 
 
+    with Save_tab:
         col1, col2, col3 = st.columns(3)
         with col1:
             option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{icase}_x_wise")
@@ -309,12 +309,6 @@ def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
         with col3:
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
 
-    # try:
-    draw_Correlation(os.path.join(dir_path,file), option)
-    # except:
-    #     st.error(f'Please check File: {file}')
+    st.divider()
+    draw_Correlation(Figure_show, os.path.join(dir_path,file), option)
 
-
-# def make_Correlation_Plot(dir_path, file, selected_item, sources, option):
-#     st.write('make_Correlation')
-#     prepare(dir_path, file, selected_item, sources, option)
