@@ -19,7 +19,202 @@ from io import BytesIO
 import streamlit as st
 
 
-def make_scenarios_comparison_Taylor_Diagram(option, evaluation_item, stds, RMSs, cors, ref_source, sim_sources):
+def make_scenarios_comparison_Taylor_Diagram(self, dir_path, selected_item, ref_source):
+    Figure_show = st.container()
+    Labels_tab, Case_tab, Line_tab, Marker_tab, Save_tab = st.tabs(['Labels', 'Simulation', 'Lines', 'Markers', 'Save'])
+
+    option = {}
+    with Labels_tab:
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+        option['title'] = col1.text_input('Title', value=f'{selected_item.replace("_", " ")}', label_visibility="visible",
+                                          key=f"taylor_title")
+        option['title_size'] = col2.number_input("Title label size", min_value=0, value=18, key=f"taylor_title_size")
+        option['axes_linewidth'] = col3.number_input("axes linewidth", min_value=0, value=1, key=f"taylor_axes_linewidth")
+        option['fontsize'] = col4.number_input("font size", min_value=0, value=16, key=f"taylor_fontsize")
+
+        option['STDlabelsize'] = col1.number_input("STD label size", min_value=0, value=16, key=f"taylor_STD_size")
+        option['CORlabelsize'] = col2.number_input("COR label size", min_value=0, value=16, key=f"taylor_COR_size")
+        option['RMSlabelsize'] = col3.number_input("RMS label size", min_value=0, value=16, key=f"taylor_RMS_size")
+        option['Normalized'] = col4.toggle('Normalized', value=True, key=f"taylor_Normalized")
+
+    def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+            import itertools
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            cols = itertools.cycle(st.columns(2))
+            for item in case_item:
+                col = next(cols)
+                case_item[item] = col.checkbox(item, key=f'{item}__taylor',
+                                               value=case_item[item])
+            return [item for item, value in case_item.items() if value]
+
+    with Case_tab:
+        sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+        sim_sources = get_cases(sim_sources, 'cases')
+
+    with Line_tab:
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+
+        col1.write('##### :blue[Ticksize]')
+        col2.write('##### :blue[Line style]')
+        col3.write('##### :blue[Line width]')
+        col4.write('##### :blue[Line color]')
+
+        with col1:
+            option['ticksizeSTD'] = st.number_input("STD", min_value=0, value=14, step=1, key=f"taylor_ticksizeSTD",
+                                                    label_visibility='visible')
+            option['ticksizeCOR'] = st.number_input("R", min_value=0, value=14, step=1, key=f"taylor_ticksizeCOR",
+                                                    label_visibility='visible')
+            option['ticksizeRMS'] = st.number_input("RMSD", min_value=0, value=14, step=1,
+                                                    key=f"taylor_ticksizeRMS", label_visibility='visible')
+            option['markersizeobs'] = st.number_input("Observation marker size", min_value=0, value=10, step=1,
+                                                      key=f"taylor_markersizeobs")
+            option['markerobs'] = st.selectbox(f'Observation Marker',
+                                               ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X',
+                                                "+", "^", "v"], index=2, placeholder="Choose an option",
+                                               label_visibility="visible")
+
+        with col2:
+            option['styleSTD'] = st.selectbox(f'STD', ['solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--'],
+                                              index=5, placeholder="Choose an option",
+                                              key=f"taylor_styleSTD", label_visibility='visible')
+            option['styleCOR'] = st.selectbox(f'R', ['solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--'],
+                                              index=6, placeholder="Choose an option", label_visibility='visible')
+            option['styleRMS'] = st.selectbox(f'RMSD',
+                                              ['solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--'],
+                                              index=4, placeholder="Choose an option", label_visibility='visible')
+            option['styleOBS'] = st.selectbox(f'Observation',
+                                              ['solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--'],
+                                              index=5, placeholder="Choose an option",
+                                              label_visibility="visible")
+        with col3:
+            option['widthSTD'] = st.number_input("STD", min_value=0., value=1., key=f"taylor_widthSTD",
+                                                 label_visibility='visible')
+            option['widthCOR'] = st.number_input("R", min_value=0., value=1., key=f"taylor_widthCOR",
+                                                 label_visibility='visible')
+            option['widthRMS'] = st.number_input("RMSD", min_value=0., value=2., key=f"taylor_widthRMS",
+                                                 label_visibility='visible')
+            option['widthOBS'] = st.number_input("Observation", min_value=0., value=1.)
+
+        with col4:
+            option['colSTD'] = st.text_input("STD", value='k', label_visibility='visible', key=f"taylor_colSTD")
+            option['colCOR'] = st.text_input("R ", value='k', label_visibility='visible', key=f"taylor_colCOR")
+            option['colRMS'] = st.text_input("RMSD ", value='green', label_visibility='visible', key=f"taylor_colRMS")
+            option['colOBS'] = st.text_input("Observation", value='m', label_visibility="visible")
+
+    with Marker_tab:
+        stds, RMSs, cors = [], [], []
+        df = pd.read_csv(dir_path, sep=r'\s+', header=0)
+        df.set_index('Item', inplace=True)
+
+        stds.append(df['Reference_std'].values[0])
+        RMSs.append(np.array(0))
+        cors.append(np.array(0))
+
+        import matplotlib.colors as mcolors
+        from matplotlib import cm
+
+        hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF',
+                      '#F8961E', '#277DA1', '#5A189A']
+        # hex_colors = cm.Set3(np.linspace(0, 1, len(self.sim['general'][f'{selected_item}_sim_source']) + 1))
+        colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+        symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])
+        markers = {}
+        col1, col2, col3, col4 = st.columns((1.8, 2, 2, 2))
+        col1.write('##### :blue[Colors]')
+        col2.write('##### :blue[Marker]')
+        col3.write('##### :blue[Markersize]')
+        col4.write('##### :blue[FaceColor]')
+
+        for sim_source in sim_sources:
+            st.write('Case: ', sim_source)
+            col1, col2, col3, col4 = st.columns((1, 2, 2, 2))
+            stds.append(df[f'{sim_source}_std'].values[0])
+            RMSs.append(df[f'{sim_source}_RMS'].values[0])
+            cors.append(df[f'{sim_source}_COR'].values[0])
+            markers[sim_source] = {}
+            with col1:
+                markers[sim_source]['labelColor'] = st.color_picker(f'{sim_source}Colors', value=next(colors),
+                                                                    key=None,
+                                                                    help=None,
+                                                                    on_change=None, args=None, kwargs=None,
+                                                                    disabled=False,
+                                                                    label_visibility="collapsed")
+                markers[sim_source]['edgeColor'] = markers[sim_source]['labelColor']
+            with col2:
+                Marker = ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"]
+                markers[sim_source]['symbol'] = st.selectbox(f'{sim_source}Marker', Marker,
+                                                             index=Marker.index(next(symbols)),
+                                                             placeholder="Choose an15 option",
+                                                             label_visibility="collapsed")
+            with col3:
+                markers[sim_source]['size'] = st.number_input(f"{sim_source}Markersize", min_value=0, value=10,
+                                                              label_visibility="collapsed")
+
+            with col4:
+                markers[sim_source]['faceColor'] = st.selectbox(f'{sim_source}FaceColor', ['w', 'b', 'k', 'r', 'none'],
+                                                                index=0, placeholder="Choose an option",
+                                                                label_visibility="collapsed")
+        st.info('If you choose Facecolor as "none", then markers will not be padded.')
+        option['MARKERS'] = markers
+
+        legend_on = st.toggle('Turn on to set the location of the legend manually', value=False, key=f'taylor_legend_on')
+        col1, col2, col3, col4 = st.columns((4, 4, 4, 4))
+        if legend_on:
+            if len(self.sim['general'][f'{selected_item}_sim_source']) < 6:
+                bbox_to_anchor_x = col1.number_input("X position of legend", value=1.5, step=0.1,
+                                                     key=f'taylor_bbox_to_anchor_x')
+                bbox_to_anchor_y = col2.number_input("Y position of legend", value=1., step=0.1,
+                                                     key=f'taylor_bbox_to_anchor_y')
+            else:
+                bbox_to_anchor_x = col1.number_input("X position of legend", value=1.1, step=0.1,
+                                                     key=f'taylor_bbox_to_anchor_x')
+                bbox_to_anchor_y = col2.number_input("Y position of legend", value=0.25, step=0.1,
+                                                     key=f'taylor_bbox_to_anchor_y')
+        else:
+            bbox_to_anchor_x = 1.4
+            bbox_to_anchor_y = 1.1
+        option['set_legend'] = dict(legend_on=legend_on, bbox_to_anchor_x=bbox_to_anchor_x, bbox_to_anchor_y=bbox_to_anchor_y)
+
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=6, key=f"taylor_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"taylor_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6, key=f"taylor_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"taylor_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"taylor_dpi")
+    st.divider()
+
+    if option['Normalized']:
+        std = np.array(stds) / df['Reference_std'].values[0]
+        RMS = np.array(RMSs)
+        cor = np.array(cors)
+    else:
+        std = np.array(stds)
+        RMS = np.array(RMSs)
+        cor = np.array(cors)
+    draw_scenarios_comparison_Taylor_Diagram(Figure_show,option, selected_item, std, RMS, cor, ref_source)
+
+
+def draw_scenarios_comparison_Taylor_Diagram(Figure_show,option, evaluation_item, stds, RMSs, cors, ref_source):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -42,18 +237,14 @@ def make_scenarios_comparison_Taylor_Diagram(option, evaluation_item, stds, RMSs
                    widthRMS=option['widthRMS'], widthSTD=option['widthSTD'], widthCOR=option['widthCOR'],
                    ticksizerms=option['ticksizeRMS'], ticksizeSTD=option['ticksizeSTD'], ticksizecor=option['ticksizeCOR'],
                    rmslabelsize=option['RMSlabelsize'], stdlabelsize=option['STDlabelsize'], corlabelsize=option['CORlabelsize'],
-
                    normalizedstd=option['Normalized'], set_legend=option['set_legend'],
-                   # tickRMS =  np.arange(tickRMS_range_min,tickRMS_range_max,tickRMS_range_step),
-                   # tickSTD =  np.arange(tickSTD_range_min,tickSTD_range_max,tickSTD_range_step),
-                   # tickRMSangle = 150, axismax = tickRMS_range_max,
                    styleOBS=option['styleOBS'], colOBS=option['colOBS'], widthOBS=option['widthOBS'],
-                   markerobs=option['markerobs'],markersizeobs=option['markersizeobs'],
+                   markerobs=option['markerobs'], markersizeobs=option['markersizeobs'],
                    )
 
-    ax.set_title(option['title'], fontsize=option['title_size'],pad=30)
+    ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     file2 = f'taylor_diagram_{evaluation_item}_{ref_source}'
     # 将图像保存到 BytesIO 对象
@@ -756,7 +947,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             for i, xval in enumerate(X):
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markersize[i],
-                                markerfacecolor=markerfacecolor[i],#markerfacecolor[i],
+                                markerfacecolor=markerfacecolor[i],  # markerfacecolor[i],
                                 markeredgecolor=markeredgecolor[i],
                                 markeredgewidth=2)
                     hp += tuple(h)
@@ -1080,7 +1271,7 @@ def _get_single_markers(markers: dict):
         color = markers[key]['faceColor']
         symbol = markers[key]['symbol']
         SymbolColor = symbol + color
-        if color == 'none' :
+        if color == 'none':
             SymbolColor = symbol + 'w'
         marker.append(SymbolColor)
         markersize.append(markers[key]['size'])
