@@ -13,7 +13,336 @@ from io import BytesIO
 import streamlit as st
 
 
-def make_scenarios_comparison_parallel_coordinates(option, file, evaluation_item, ref_source, scores, sim_cases, var):
+def make_scenarios_comparison_parallel_coordinates(self, file, selected_item, score, ref_source, item):
+    option = {}
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
+
+    with Labels_tab:
+        option['title'] = st.text_input('Title',
+                                        value=f"Parallel Coordinates Plot - {selected_item.replace('_', ' ')} - {ref_source}",
+                                        label_visibility="visible", key=f"{item} title")
+
+        col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
+        with col1:
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{item}_title_size")
+            option['fontsize'] = st.number_input("Font size", min_value=0, value=15, step=1, key=f"{item}_fontsize")
+
+        with col2:
+            option['xticklabel'] = st.text_input('X tick labels', value='', label_visibility="visible",
+                                                 key=f"{item}_xticklabel")
+            option['xtick'] = st.number_input("xtick label size", min_value=0, value=17, key=f"{item}_xtick")
+
+        with col3:
+            option['yticklabel'] = st.text_input('Y tick labels', value=f'', label_visibility="visible",
+                                                 key=f"{item}_yticklabel")
+            option['ytick'] = st.number_input("ytick label size", min_value=0, value=17, key=f"{item}_ytick")
+
+        with col4:
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0., value=1., step=0.1,
+                                                       key=f"{item}_axes_linewidth")
+
+    with Var_tab:
+        def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            if title != 'cases':
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__Parallel_Coordinates_variable", value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one items!")
+            else:
+                for item in case_item:
+                    case_item[item] = st.checkbox(item, key=f"{item}__Parallel_Coordinates_variable",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one items!")
+
+        if score == 'metrics':
+            items = [k for k, v in self.metrics.items() if v]
+        else:
+            items = [k for k, v in self.scores.items() if v]
+        cases = [k for k in self.sim['general'][f"{selected_item}_sim_source"]]
+        col1, col2 = st.columns(2)
+        with col1:
+            items = get_cases(items, f'Selected {score.title()}')
+        with col2:
+            cases = get_cases(cases, 'cases')
+
+    with Scale_tab:
+        option["legend_off"] = st.toggle('Turn off the legend?', value=False, key=f"{item}_legend_off")
+        col1, col2, col3, col4 = st.columns((4, 4, 4, 4))
+        if not option['legend_off']:
+            option["legend_loc"] = col1.selectbox("Legend location",
+                                                  ['upper center', 'best', 'upper right', 'upper left', 'lower left',
+                                                   'lower right', 'right', 'center left', 'center right', 'lower center',
+                                                   'center'], index=0,
+                                                  placeholder="Choose an option",
+                                                  label_visibility="visible", key=f"{item}_loc")
+            option["legend_ncol"] = col2.number_input("N cols", value=3, min_value=1, format='%d', key=f"{item}_ncol")
+
+            option["bbox_to_anchor_x"] = col3.number_input("X position of legend", value=0.5, step=0.1,
+                                                           key=f"{item}_bbox_to_anchor_x")
+            option["bbox_to_anchor_y"] = col4.number_input("Y position of legend", value=-0.14, step=0.1,
+                                                           key=f"{item}_bbox_to_anchor_y")
+        else:
+            option["bbox_to_anchor_x"] = 0.5
+            option["bbox_to_anchor_y"] = -0.15
+            option["legend_ncol"] = 1
+            option["legend_loc"] = 'best'
+
+        option["models_to_highlight_by_line"] = st.toggle('Models highlight by line?', value=True,
+                                                          key=f"{item}_models_to_highlight_by_line",
+                                                          help='Turn off to show figure by markers')
+        option["models_to_highlight_markers_size"] = 22
+        option['models_to_highlight_markers_alpha'] = 1.0
+        if not option["models_to_highlight_by_line"]:
+            col1, col2, col3 = st.columns((4, 4, 4))
+            col1.write("###### :orange[Marker style]")
+            option['markers'] = col1.selectbox(f'Marker',
+                                               ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                'd', 'P', 'X'], key=f'{item} Marker',
+                                               index=2, placeholder="Choose an option",
+                                               label_visibility="collapsed")
+            col2.write("###### :orange[Marker size]")
+            option["models_to_highlight_markers_size"] = col2.number_input(f"markers size", value=22, step=1,
+                                                                           key=f"{item}_markers_size",
+                                                                           label_visibility="collapsed")
+            col3.write("###### :orange[Marker alpha]")
+            option['models_to_highlight_markers_alpha'] = col3.number_input(f"markers alpha",
+                                                                            label_visibility="collapsed",
+                                                                            key=f'{item} alpha',
+                                                                            min_value=0., value=0.8, max_value=1.)
+
+        colors = {}
+        import matplotlib.colors as mcolors
+        import itertools
+        colors_list = [plt.get_cmap('Set3_r')(c) for c in np.linspace(0, 1, 11)]
+        hex_colors = itertools.cycle([mcolors.rgb2hex(color) for color in colors_list])
+        st.write("###### :orange[Colors]")
+        cols = itertools.cycle(st.columns(3))
+        if cases:
+            for item_select in cases:
+                col = next(cols)
+                colors[f"{item_select}"] = col.color_picker(f'{item_select}', value=next(hex_colors),
+                                                            key=f'{item} {item_select} colors', help=None,
+                                                            on_change=None,
+                                                            args=None, kwargs=None, disabled=False,
+                                                            label_visibility="visible")
+
+        option['colors'] = [color for color in colors.values()]
+
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            x_lenth = 15
+            if items:
+                x_lenth = len(items) * 3
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=x_lenth, key=f"{item}_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{item}_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=5, key=f"{item}_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
+
+    st.divider()
+    if items and cases:
+        draw_scenarios_comparison_parallel_coordinates(Figure_show, option, file, selected_item, ref_source, items, cases, score)
+    elif not items:
+        st.error('Metircs items is None!')
+    elif not cases:
+        st.error('Simulation cases is None!')
+
+
+def make_scenarios_comparison_parallel_coordinates_by_score(self, file, score, item):
+    option = {}
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
+    with Labels_tab:
+        option['title'] = st.text_input('Title',
+                                        value=f"Parallel Coordinates Plot - {score.replace('_', ' ')}",
+                                        label_visibility="visible", key=f"{item} title")
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+        with col1:
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{item}_title_size")
+            option["fontsize"] = st.number_input(f"Font size", value=15., step=1., key=f"{item}_legend_fontsize")
+        with col2:
+            option['xticklabel'] = st.text_input('X tick labels', value='', label_visibility="visible",
+                                                 key=f"{item}_xticklabel")
+            option['xtick'] = st.number_input("xtick label size", min_value=0, value=17, key=f"{item}_xtick")
+
+        with col3:
+            option['yticklabel'] = st.text_input('Y tick labels', value=score.replace("_", " "),
+                                                 label_visibility="visible",
+                                                 key=f"{item}_yticklabel")
+            option['ytick'] = st.number_input("ytick label size", min_value=0, value=17, key=f"{item}_ytick")
+
+        with col4:
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0., value=1., step=0.1,
+                                                       key=f"{item}_axes_linewidth")
+
+    with Var_tab:
+        def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            if title != 'cases':
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__Parallel_Coordinates_score",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one item!")
+            else:
+                for item in case_item:
+                    case_item[item] = st.checkbox(item, key=f"{item}__Parallel_Coordinates_score",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one item!")
+
+        items = [k for k in self.selected_items]
+        cases = list(set([value for key in self.selected_items for value in self.sim['general'][f"{key}_sim_source"] if value]))
+        col1, col2 = st.columns(2)
+        with col1:
+            items = get_cases(items, 'Selected items')
+        with col2:
+            cases = get_cases(cases, 'cases')
+
+    with Scale_tab:
+
+        col1, col2, col3, col4 = st.columns((4, 4, 4, 4))
+        option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=15,
+                                                 key=f"{item}_x_rotation")
+        option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'],
+                                        index=0, placeholder="Choose an option", label_visibility="visible",
+                                        key=f"{item}_x_ha")
+
+        option["legend_off"] = st.toggle('Turn off the legend?', value=False, key=f"{item}_legend_off")
+        col1, col2, col3, col4 = st.columns((4, 4, 4, 4))
+        if not option['legend_off']:
+            option["legend_loc"] = col1.selectbox("Legend location",
+                                                  ['best', 'right', 'left', 'upper left', 'upper right', 'lower left',
+                                                   'lower right',
+                                                   'upper center',
+                                                   'lower center', 'center left', 'center right'], index=7,
+                                                  placeholder="Choose an option",
+                                                  label_visibility="visible", key=f"{item}_loc")
+            option["legend_ncol"] = col2.number_input("N cols", value=4, min_value=1, format='%d', key=f"{item}_ncol")
+
+            option["bbox_to_anchor_x"] = col3.number_input("X position of legend", value=0.5, step=0.1,
+                                                           key=f"{item}_bbox_to_anchor_x")
+            option["bbox_to_anchor_y"] = col4.number_input("Y position of legend", value=-0.25, step=0.1,
+                                                           key=f"{item}_bbox_to_anchor_y")
+        else:
+            option["bbox_to_anchor_x"] = 0.5
+            option["bbox_to_anchor_y"] = -0.55
+            option["legend_ncol"] = 1
+            option["legend_loc"] = 'best'
+
+        option["models_to_highlight_by_line"] = st.toggle('Models highlight by line?', value=True,
+                                                          key=f"{item}_models_to_highlight_by_line",
+                                                          help='Turn off to show figure by markers')
+        option["models_to_highlight_markers_size"] = 22
+        option['models_to_highlight_markers_alpha'] = 1.0
+        if not option["models_to_highlight_by_line"]:
+            col1, col2, col3 = st.columns((4, 4, 4))
+            col1.write("###### :orange[Marker style]")
+            option['markers'] = col1.selectbox(f'Marker',
+                                               ['.', 'x', 'o', '<', '8', 's', 'p', '*', 'h', 'H', 'D',
+                                                'd', 'P', 'X'], key=f'{item} Marker',
+                                               index=2, placeholder="Choose an option",
+                                               label_visibility="collapsed")
+            col2.write("###### :orange[Marker size]")
+            option["models_to_highlight_markers_size"] = col2.number_input(f"markers size", value=22, step=1,
+                                                                           key=f"{item}_markers_size",
+                                                                           label_visibility="collapsed")
+            col3.write("###### :orange[Marker alpha]")
+            option['models_to_highlight_markers_alpha'] = col3.number_input(f"markers alpha",
+                                                                            label_visibility="collapsed",
+                                                                            key=f'{item} alpha',
+                                                                            min_value=0., value=0.8, max_value=1.)
+
+        colors = {}
+
+        import matplotlib.colors as mcolors
+
+        colors_list = [plt.get_cmap('Set3_r')(c) for c in np.linspace(0, 1, 11)]
+        hex_colors = itertools.cycle([mcolors.rgb2hex(color) for color in colors_list])
+        st.write("###### :orange[Colors]")
+        cols = itertools.cycle(st.columns(3))
+        if cases:
+            for item_select in cases:
+                col = next(cols)
+                colors[f"{item_select}"] = col.color_picker(f'{item_select}', value=next(hex_colors),
+                                                            key=f'{item} {item_select} colors', help=None,
+                                                            on_change=None,
+                                                            args=None, kwargs=None, disabled=False,
+                                                            label_visibility="visible")
+        option['colors'] = [color for color in colors.values()]
+
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            x_lenth = 15
+            if items:
+                x_lenth = len(items) * 3
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=x_lenth, key=f"{item}_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{item}_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=5, key=f"{item}_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
+
+    st.divider()
+    if items and cases:
+        draw_scenarios_comparison_parallel_coordinates_by_score(Figure_show, option, file, score, items, cases)
+    elif not items:
+        st.error('Metircs items is None!')
+    elif not cases:
+        st.error('Simulation cases is None!')
+
+
+def draw_scenarios_comparison_parallel_coordinates(Figure_show, option, file, evaluation_item, ref_source, scores, sim_cases, var):
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -78,7 +407,7 @@ def make_scenarios_comparison_parallel_coordinates(option, file, evaluation_item
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1)
     ax.set_title(option['title'], fontsize=option['title_size'])
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # # Save the plot
     filename = f'Parallel_Coordinates_Plot_{var}_{evaluation_item}_{ref_source}'
@@ -92,7 +421,7 @@ def make_scenarios_comparison_parallel_coordinates(option, file, evaluation_item
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score, select_items, sim_cases):
+def draw_scenarios_comparison_parallel_coordinates_by_score(Figure_show, option, file, score, select_items, sim_cases):
     # Read the data from the file
     df = pd.read_csv(file, sep='\s+', header=0)
 
@@ -114,7 +443,7 @@ def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score,
         i = 0
 
     item_combination = all_combinations[i]
-    st.write(f"##### :green[Showing for {', '.join(item_combination)}]")
+    Figure_show.write(f"##### :green[Showing for {', '.join(item_combination)}]")
     mask = pd.Series(False, index=df.index)
     for j, item in enumerate(unique_items):
         mask |= (df['Item'] == item) & (df['Reference'] == item_combination[j])
@@ -180,7 +509,7 @@ def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score,
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1)
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1)
     ax.set_title(option['title'], fontsize=option['title_size'])
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # # Save the plot
     filename = f"Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}"
@@ -188,15 +517,14 @@ def make_scenarios_comparison_parallel_coordinates_by_score(option, file, score,
     fig.savefig(buffer, format=option['saving_format'], dpi=option['dpi'])  # f
     buffer.seek(0)
     buffer.seek(0)
-    col1, col2, col3 = st.columns(3)
-    col1.download_button('Download image', buffer, file_name=f'{filename}.{option["saving_format"]}',
-                         mime=f"image/{option['saving_format']}",
-                         type="secondary", disabled=False, use_container_width=False)
+    col1, col2, col3 = Figure_show.columns(3)
+    st.download_button('Download image', buffer, file_name=f'{filename}.{option["saving_format"]}',
+                       mime=f"image/{option['saving_format']}",
+                       type="secondary", disabled=False, use_container_width=False)
     next_disable = False
     if len(all_combinations) <= 1:
         next_disable = True
     col3.button(f':point_right: Next Case', key='Next_item', disabled=next_disable, help='Press to change reference items')
-
 
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):

@@ -1,5 +1,5 @@
 from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal
-from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_metrics
+# from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_metrics
 from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_by_score
 from Comparison_figlib.Fig_heatmap import make_scenarios_scores_comparison_heat_map
 from Comparison_figlib.Fig_heatmap import make_LC_based_heat_map
@@ -20,7 +20,7 @@ from Comparison_figlib.Fig_Functional_Response import make_Functional_Response_P
 
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
-    "make_scenarios_comparison_Portrait_Plot_seasonal_metrics",
+    # "make_scenarios_comparison_Portrait_Plot_seasonal_metrics",
     "make_scenarios_comparison_Portrait_Plot_seasonal_by_score",
     "make_scenarios_scores_comparison_heat_map",
     "make_scenarios_comparison_parallel_coordinates",

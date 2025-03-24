@@ -32,7 +32,158 @@ from io import BytesIO
 import streamlit as st
 
 
-def make_scenarios_comparison_Target_Diagram(option, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources):
+def make_scenarios_comparison_Target_Diagram(self, dir_path, selected_item, ref_source):
+    Figure_show = st.container()
+    Labels_tab, Case_tab, Line_tab, Marker_tab, Save_tab = st.tabs(['Labels', 'Simulation', 'Lines', 'Markers', 'Save'])
+
+    option = {}
+
+    with Labels_tab:
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+
+        option['title'] = col1.text_input('Title', value=f'{selected_item.replace("_", " ")}', label_visibility="visible",
+                                          key=f"target_title")
+        option['title_size'] = col2.number_input("Title label size", min_value=0, value=18, key=f"target_title_size")
+        option['axes_linewidth'] = col3.number_input("axes linewidth", min_value=0, value=1, key=f"target_axes_linewidth")
+        option['fontsize'] = col4.number_input("font size", min_value=0, value=15, key=f"target_labelsize")
+        option['xticksize'] = col1.number_input("X tick size", min_value=0, value=15, key=f"target_xticksize")
+        option['yticksize'] = col2.number_input("Y tick size", min_value=0, value=15, key=f"target_yticksize")
+        option['Normalized'] = col1.toggle('Normalized ?', value=True, key=f"target_Normalized")
+
+
+    def get_cases(items, title):
+        case_item = {}
+        for item in items:
+            case_item[item] = True
+        import itertools
+        color = '#9DA79A'
+        st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+        st.write('')
+        cols = itertools.cycle(st.columns(2))
+        for item in case_item:
+            col = next(cols)
+            case_item[item] = col.checkbox(item, key=f'{item}__target',
+                                           value=case_item[item])
+        return [item for item, value in case_item.items() if value]
+
+    with Case_tab:
+        sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+        sim_sources = get_cases(sim_sources, 'cases')
+
+    with Line_tab:
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+        option['circlelabelsize'] = col1.number_input("circle label size", min_value=0, value=14,
+                                                      key=f"target_circletick")
+        option['circlestyle'] = col2.selectbox(f'circle Line Style',
+                                               ['solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'],
+                                               index=7, placeholder="Choose an option",
+                                               label_visibility="visible", key=f"target_stylecircle")
+        option['widthcircle'] = col3.number_input("circle line width", min_value=0., value=1., step=0.1,
+                                                  key=f"target_widthcircle")
+        option['circlecolor'] = col4.text_input("circle color", value='k', label_visibility="visible",
+                                                key=f"target_colcircle")
+    with Marker_tab:
+        biases = np.zeros(len(sim_sources))
+        rmses = np.zeros(len(sim_sources))
+        crmsds = np.zeros(len(sim_sources))
+        df = pd.read_csv(dir_path, sep=r'\s+', header=0)
+        df.set_index('Item', inplace=True)
+
+        import matplotlib.colors as mcolors
+        import itertools
+
+        hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF',
+                      '#F8961E'
+            , '#277DA1', '#5A189A']
+        colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
+        symbols = itertools.cycle(["+", ".", "o", "*", "x", "s", "D", "^", "v", ">", "<", "p"])
+        markers = {}
+
+        col1, col2, col3, col4 = st.columns((1.5, 2, 2, 2))
+        col1.write('##### :blue[Colors]')
+        col2.write('##### :blue[Marker]')
+        col3.write('##### :blue[Markersize]')
+        col4.write('##### :blue[FaceColor]')
+
+        for i, sim_source in enumerate(sim_sources):
+            st.write('Case: ', sim_source)
+            col1, col2, col3, col4 = st.columns((1, 2, 2, 2))
+
+            biases[i] = df[f'{sim_source}_bias'].values[0]
+            rmses[i] = df[f'{sim_source}_rmsd'].values[0]
+            crmsds[i] = df[f'{sim_source}_crmsd'].values[0]
+            markers[sim_source] = {}
+            with col1:
+                markers[sim_source]['labelColor'] = st.color_picker(f'{sim_source} colors', value=next(colors),
+                                                                    key=f"target_{sim_source}_colors",
+                                                                    disabled=False,
+                                                                    label_visibility="collapsed")
+                markers[sim_source]['edgeColor'] = markers[sim_source]['labelColor']
+            with col2:
+                Marker = ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"]
+                markers[sim_source]['symbol'] = st.selectbox(f'{sim_source} Marker', Marker,
+                                                             key=f"target_{sim_source}_Marker",
+                                                             index=Marker.index(next(symbols)),
+                                                             placeholder="Choose an option",
+                                                             label_visibility="collapsed")
+            with col3:
+                markers[sim_source]['size'] = st.number_input(f"{sim_source} Markersize", min_value=0, value=10,
+                                                              key=f"target_{sim_source} Markersize",
+                                                              label_visibility="collapsed")
+
+            with col4:
+                markers[sim_source]['faceColor'] = st.selectbox(f'{sim_source} faceColor', ['w', 'b', 'k', 'r', 'none'],
+                                                                index=0, placeholder="Choose an option",
+                                                                key=f"target_{sim_source} faceColor",
+                                                                label_visibility="collapsed")
+        option['MARKERS'] = markers
+
+        legend_on = st.toggle('Turn on to set the location of the legend manually', value=False, key=f'target_legend_on')
+        if legend_on:
+            col1, col2, col3, col4 = st.columns((4, 4, 4, 4))
+            if len(self.sim['general'][f'{selected_item}_sim_source']) < 6:
+                bbox_to_anchor_x = col1.number_input("X position of legend", value=1.5, step=0.1,
+                                                     key=f'target_bbox_to_anchor_x')
+                bbox_to_anchor_y = col2.number_input("Y position of legend", value=1., step=0.1,
+                                                     key=f'target_bbox_to_anchor_y')
+            else:
+                bbox_to_anchor_x = col1.number_input("X position of legend", value=1.1, step=0.1,
+                                                     key=f'target_bbox_to_anchor_x')
+                bbox_to_anchor_y = col2.number_input("Y position of legend", value=0.25, step=0.1,
+                                                     key=f'target_bbox_to_anchor_y')
+        else:
+            bbox_to_anchor_x = 1.4
+            bbox_to_anchor_y = 1.1
+        option['set_legend'] = dict(legend_on=legend_on, bbox_to_anchor_x=bbox_to_anchor_x, bbox_to_anchor_y=bbox_to_anchor_y)
+
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=6, key=f"target_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"target_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6, key=f"target_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"target_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"target_dpi")
+
+    st.divider()
+    draw_scenarios_comparison_Target_Diagram(Figure_show, option, selected_item, biases, crmsds, rmses,
+                                             ref_source, sim_sources)
+
+
+def draw_scenarios_comparison_Target_Diagram(Figure_show, option, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources):
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
     from matplotlib.ticker import ScalarFormatter
@@ -75,14 +226,12 @@ def make_scenarios_comparison_Target_Diagram(option, evaluation_item, bias, crms
                    circlestyle=option['circlestyle'],
                    circleLineWidth=option['widthcircle'],
                    circlelabelsize=option['circlelabelsize'],
+                   set_legend=option['set_legend'],
+                   )
 
-                   set_legend=option['set_legend'], )
+    ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
-
-
-    ax.set_title(option['title'], fontsize=option['title_size'],pad=30)
-
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     file2 = f'target_diagram_{evaluation_item}_{ref_source}'
     # 将图像保存到 BytesIO 对象
@@ -346,7 +495,8 @@ def _get_target_diagram_arguments(*args):
 
     return CAX, Bs, RMSDs, RMSDz
 
-def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option:dict) -> list:
+
+def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list:
     '''
     Plot axes for target diagram.
     
@@ -643,7 +793,7 @@ def get_single_markers(markers: dict):
         color = markers[key]['faceColor']
         symbol = markers[key]['symbol']
         SymbolColor = symbol + color
-        if color == 'none' :
+        if color == 'none':
             SymbolColor = symbol + 'w'
         marker.append(SymbolColor)
         markersize.append(markers[key]['size'])
@@ -783,7 +933,7 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
             else:
                 leg = plt.legend(hp, markerlabel, loc='upper right',
                                  fontsize=fontSize, numpoints=1,
-                                    bbox_to_anchor=(1.55,1.05))
+                                 bbox_to_anchor=(1.55, 1.05))
         else:
             # Put legend to right of the plot in multiple columns as needed
 
