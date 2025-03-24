@@ -24,6 +24,7 @@ SERVER_ADDRESS="127.0.0.1"
 SERVER_PORT="8000"
 
 # 提示用户输入地址和端口
+echo "If you not connect by ssh -L, Press Enter to Pass. "
 read -p "Please input Streamlit server address [Default: 127.0.0.1]: " input_address
 read -p "Please input Streamlit server port [Default: 8000]: " input_port
 
@@ -38,7 +39,8 @@ fi
 
 # 运行 Streamlit
 echo "Start Streamlit server, Address: $SERVER_ADDRESS, Port: $SERVER_PORT"
-echo "Copy Connect URL http://$SERVER_ADDRESS:$SERVER_PORT/ to your browser"
+echo "If you Connect by ssh -L, copy Connect URL http://$SERVER_ADDRESS:$SERVER_PORT/ to your browser"
+echo "Other wise copy Network URL to your browser"
 streamlit run ./GUI/GUI_openbench.py
 }
 
