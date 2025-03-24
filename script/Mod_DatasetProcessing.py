@@ -63,6 +63,8 @@ class BaseDatasetProcessing:
             'suffix': getattr(self, f"{datasource}_suffix"),
             'datasource': datasource,  # This should be 'ref' or 'sim'
             'data_type': getattr(self, f"{datasource}_data_type"),
+            'syear': getattr(self, f"{datasource}_syear"),
+            'eyear': getattr(self, f"{datasource}_eyear"),
         }
 
     def process(self, datasource: str) -> None:
@@ -144,7 +146,7 @@ class BaseDatasetProcessing:
                         ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                          coords={'lat': lat, 'lon': lon, 'time': time_index})
                     ds1 = ds1.transpose('time', 'lat', 'lon')
-                    return ds1[f'{ds.name}']
+                return ds1[f'{ds.name}']
 
         # Check for duplicate time values
         if ds['time'].to_index().has_duplicates:
@@ -345,9 +347,9 @@ class BaseDatasetProcessing:
         ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds = self.select_timerange(ds, syear, eyear)
+        ds = self.select_timerange(ds, self.minyear, self.maxyear)
         ds, varunit = self.process_units(ds, varunit)
-        self.split_year(ds, casedir, suffix, prefix, syear, eyear, datasource)
+        self.split_year(ds, casedir, suffix, prefix,self.minyear, self.maxyear, datasource)
 
     def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                     casedir: str, suffix: str, prefix: str, datasource: str) -> None:
@@ -493,7 +495,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             self.process_yearly_files(data_params)
 
     def process_single_file(self, data_params: Dict[str, Any]) -> None:
-        self.check_all(data_params['data_dir'], self.minyear, self.maxyear,
+        self.check_all(data_params['data_dir'], data_params['syear'], data_params['eyear'],
                        data_params['tim_res'], data_params['varunit'],
                        data_params['varname'], 'single', self.casedir,
                        data_params['suffix'], data_params['prefix'], data_params['datasource'])

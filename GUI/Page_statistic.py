@@ -6,23 +6,21 @@ from PIL import Image
 from io import StringIO
 from collections import ChainMap
 import xarray as xr
-# from streamlit_tags import st_tags
 from Namelist_lib.find_path import FindPath
 import numpy as np
-from Namelist_lib.namelist_read import NamelistReader  # , GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 import sys
 import subprocess
 import itertools
 from posixpath import normpath
 from mpl_toolkits.axisartist.angle_helper import select_step
-# from Statistic_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
-# from Statistic_figlib.Fig_Correlation import make_Correlation
-# from Statistic_figlib.Fig_Functional_Response import make_Functional_Response
-# from Statistic_figlib.Fig_Standard_Deviation import make_Standard_Deviation
-from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
-from Statistic_figlib.Fig_Z_Score import make_Z_Score
-from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
+from Statistic_figlib import *
+
+
+# from Statistic_figlib.Fig_Hellinger_Distance import make_Hellinger_Distance
+# from Statistic_figlib.Fig_Z_Score import make_Z_Score
+# from Statistic_figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
 
 
 class process_info():
@@ -84,127 +82,6 @@ class process_info():
             for item in unique_items:
                 st.session_state.stat_items[statistic_item][item] = True
         del unique_items, select_list
-
-    def get_Mann_Kendall_Trend_Test(self, statistic_item, stat_MK):
-        if isinstance(stat_MK, str): stat_MK = [stat_MK]
-        if statistic_item not in st.session_state.stat_items:
-            self.statistic_one_items(statistic_item, stat_MK)
-
-        case_item = st.session_state.stat_items[statistic_item]
-
-        def stat_data_change(key, editor_key):
-            if editor_key is not None:
-                case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_Mann_Kendall_Trend_Test"]
-            else:
-                case_item[key] = st.session_state[f"{key}_Mann_Kendall_Trend_Test"]
-            st.session_state.stat_change['general'] = True
-
-        def data_text_change(key, editor_key, col):
-            custom_input = st.session_state[editor_key]
-            if '，' in custom_input:
-                custom_input = custom_input.replace('，', ',')
-            selected_options = []
-            for option in custom_input.split(','):
-                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
-                    case_item[key][option.strip()] = True
-                elif option.strip() in case_item[key]:
-                    col.warning(f'{option.strip()} has already been selected, please change!')
-            st.session_state[editor_key] = ''
-            del selected_options
-
-        with st.popover("Mann Kendall Trend Test Infos", use_container_width=True):
-            for selected_item in self.selected_items:
-                st.subheader(f"Showing {selected_item}", divider=True)
-                cols = itertools.cycle(st.columns(2))
-                for item in case_item[selected_item].keys():
-                    col = next(cols)
-                    case_item[selected_item][item] = col.checkbox(item, key=f"{selected_item}_{item}_Mann_Kendall_Trend_Test",
-                                                                  on_change=stat_data_change,
-                                                                  args=(selected_item, item),
-                                                                  value=case_item[selected_item][item])
-            st.subheader(f"New items", divider=True)
-
-            col1, col2 = st.columns((2, 2.5))
-            col1.text_input("Add more", value='',
-                            key=f"MK_Test_text",
-                            on_change=data_text_change,
-                            args=('Data', f"MK_Test_text", col2),
-                            placeholder='Press Enter to add more',
-                            type='default',
-                            help='Using "," to separate',
-                            label_visibility="visible")
-            cols = itertools.cycle(st.columns(2))
-            for item, value in case_item.items():
-                if isinstance(value, bool):
-                    col = next(cols)
-                    case_item[item] = col.checkbox(item, key=f"{item}_Mann_Kendall_Trend_Test",
-                                                   # on_change=stat_data_change,
-                                                   # args=(item, None),
-                                                   value=case_item[item])
-            for item in case_item['Data'].keys():
-                col = next(cols)
-                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_Mann_Kendall_Trend_Test",
-                                                       on_change=stat_data_change,
-                                                       args=('Data', item),
-                                                       value=case_item['Data'][item])
-
-    def get_Standard_Deviation(self, statistic_item, stat_SD):
-        if isinstance(stat_SD, str): stat_SD = [stat_SD]
-        if statistic_item not in st.session_state.stat_items:
-            self.statistic_one_items(statistic_item, stat_SD)
-
-        case_item = st.session_state.stat_items[statistic_item]
-
-        def stat_data_change(key, editor_key):
-            case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_Standard_Deviation"]
-            st.session_state.stat_change['general'] = True
-
-        def data_text_change(key, editor_key, col):
-            custom_input = st.session_state[editor_key]
-            if '，' in custom_input:
-                custom_input = custom_input.replace('，', ',')
-            selected_options = []
-            for option in custom_input.split(','):
-                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
-                    case_item[key][option.strip()] = True
-                elif option.strip() in case_item[key]:
-                    col.warning(f'{option.strip()} has already been selected, please change!')
-            st.session_state[editor_key] = ''
-            del selected_options
-
-        with st.popover("Standard Deviation Infos", use_container_width=True):
-            for selected_item in self.selected_items:
-                st.subheader(f"Showing {selected_item}", divider=True)
-                cols = itertools.cycle(st.columns(2))
-                for item in case_item[selected_item].keys():
-                    col = next(cols)
-                    case_item[selected_item][item] = col.checkbox(item, key=f"{selected_item}_{item}_Standard_Deviation",
-                                                                  on_change=stat_data_change,
-                                                                  args=(selected_item, item),
-                                                                  value=case_item[selected_item][item])
-            st.subheader(f"New items", divider=True)
-
-            col1, col2 = st.columns((2, 2.5))
-            col1.text_input("Add more", value='',
-                            key=f"SD_input",
-                            on_change=data_text_change,
-                            args=('Data', f"SD_input", col2),
-                            placeholder='Press Enter to add more',
-                            type='default',
-                            help='Using "," to separate',
-                            label_visibility="visible")
-            cols = itertools.cycle(st.columns(2))
-            for item, value in case_item.items():
-                if isinstance(value, bool):
-                    col = next(cols)
-                    case_item[item] = col.checkbox(item, key=f"{item}_Standard_Deviation",
-                                                   value=case_item[item])
-            for item in case_item['Data'].keys():
-                col = next(cols)
-                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_Standard_Deviation",
-                                                       on_change=stat_data_change,
-                                                       args=('Data', item),
-                                                       value=case_item['Data'][item])
 
     def get_Z_Score(self, statistic_item, stat_Z_Score):
         if isinstance(stat_Z_Score, str): stat_Z_Score = [stat_Z_Score]
@@ -301,186 +178,6 @@ class process_info():
             for item in unique_items:
                 st.session_state.stat_items[statistic_item][item] = True
         del unique_items, select_list
-
-    def get_Correlation(self, statistic_item, stat_Corr):
-        if isinstance(stat_Corr, str): stat_Corr = [stat_Corr]
-        if statistic_item not in st.session_state.stat_items:
-            self.statistic_multi_items(statistic_item, stat_Corr)
-        case_item = st.session_state.stat_items[statistic_item]
-
-        def stat_data_change(key, editor_key):
-            case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_Corr"]
-            st.session_state.stat_change['general'] = True
-
-        def stat_submit_change(key, warn_container):
-            if len(st.session_state[f"{key}_Corr_multi"]) == 2:
-                sitem = '_'.join(st.session_state[f"{key}_Corr_multi"])
-                if frozenset(st.session_state[f"{key}_Corr_multi"]) not in [frozenset(item) for item in
-                                                                            case_item[key]['select_list']]:
-                    case_item[key][sitem] = True
-                    case_item[key]['select_list'].append(st.session_state[f"{key}_Corr_multi"])
-                else:
-                    warn_container.warning(f"Multiple items selected for {sitem}")
-            elif len(st.session_state[f"{key}_Corr_multi"]) <= 1:
-                warn_container.warning('Please select at least 2 items')
-
-        def stat_data_submit(key, warn_container):
-            stat_submit_change(key, warn_container)
-            st.session_state[f"{key}_multi"] = []
-            st.session_state.stat_change['general'] = True
-
-        def data_text_change(key, editor_key, col):
-            custom_input = st.session_state[editor_key]
-            if '，' in custom_input:
-                custom_input = custom_input.replace('，', ',')
-            selected_options = []
-            for option in custom_input.split(','):
-                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
-                    case_item[key][option.strip()] = True
-                elif option.strip() in case_item[key]:
-                    col.warning(f'{option.strip()} has already been selected, please change!')
-            st.session_state[editor_key] = ''
-            del selected_options
-
-        with st.popover("Variables Infos", use_container_width=True):
-            for selected_item in self.selected_items:
-                st.subheader(f"Showing {selected_item.replace('_', ' ')}", divider=True)
-                col1, col2 = st.columns((2.5, 1))
-                warn_container = st.container()
-                col1.multiselect(f"{selected_item} offered",
-                                 [value for value in st.session_state.stat_items[statistic_item][selected_item]['options']],
-                                 default=None,
-                                 key=f"{selected_item}_Corr_multi",
-                                 max_selections=2,
-                                 placeholder="Choose an option",
-                                 label_visibility="collapsed")
-                col2.button('Submit', key=f"{selected_item}_Corr_submit", on_click=stat_data_submit,
-                            args=(selected_item, warn_container), use_container_width=True)
-
-                cols = itertools.cycle(st.columns(2))
-                for skey, svalue in case_item[selected_item].items():
-                    if isinstance(svalue, bool):
-                        col = next(cols)
-                        case_item[selected_item][skey] = col.checkbox(skey, key=f"{selected_item}_{skey}_Corr",
-                                                                      on_change=stat_data_change,
-                                                                      args=(selected_item, skey),
-                                                                      value=case_item[selected_item][skey])
-
-            st.divider()
-
-            st.subheader(f"New items", divider=True)
-            col1, col2 = st.columns((2, 2.5))
-            col1.text_input("Add more", value='',
-                            key=f"Corr_input",
-                            on_change=data_text_change,
-                            args=('Data', f"Corr_input", col2),
-                            placeholder='Press Enter to add more',
-                            type='default',
-                            help='Using "," to separate',
-                            label_visibility="visible")
-
-            cols = itertools.cycle(st.columns(2))
-            for item, value in case_item.items():
-                if isinstance(value, bool):
-                    col = next(cols)
-                    case_item[item] = col.checkbox(item, key=f"{item}_Corr",
-                                                   value=case_item[item])
-            for item in case_item['Data'].keys():
-                col = next(cols)
-                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_Corr",
-                                                       on_change=stat_data_change,
-                                                       args=('Data', item),
-                                                       value=case_item['Data'][item])
-
-    def get_Functional_Response(self, statistic_item, stat_FD):
-        if isinstance(stat_FD, str): stat_FD = [stat_FD]
-        if statistic_item not in st.session_state.stat_items:
-            self.statistic_multi_items(statistic_item, stat_FD)
-        case_item = st.session_state.stat_items[statistic_item]
-
-        def stat_data_change(key, editor_key):
-            case_item[key][editor_key] = st.session_state[f"{key}_{editor_key}_FD"]
-            st.session_state.stat_change['general'] = True
-
-        def stat_submit_change(key, warn_container):
-            if len(st.session_state[f"{key}_FD_multi"]) == 2:
-                sitem = '_'.join(st.session_state[f"{key}_FD_multi"])
-                if frozenset(st.session_state[f"{key}_FD_multi"]) not in [frozenset(item) for item in
-                                                                          case_item[key]['select_list']]:
-                    case_item[key][sitem] = True
-                    case_item[key]['select_list'].append(st.session_state[f"{key}_FD_multi"])
-                else:
-                    warn_container.warning(f"Multiple items selected for {sitem}")
-            elif len(st.session_state[f"{key}_FD_multi"]) <= 1:
-                warn_container.warning('Please select at least 2 items')
-
-        def stat_data_submit(key, warn_container):
-            stat_submit_change(key, warn_container)
-            st.session_state[f"{key}_multi"] = []
-            st.session_state.stat_change['general'] = True
-
-        def data_text_change(key, editor_key, col):
-            custom_input = st.session_state[editor_key]
-            if '，' in custom_input:
-                custom_input = custom_input.replace('，', ',')
-            selected_options = []
-            for option in custom_input.split(','):
-                if len(option.strip()) > 0 and option.strip() not in case_item[key]:
-                    case_item[key][option.strip()] = True
-                elif option.strip() in case_item[key]:
-                    col.warning(f'{option.strip()} has already been selected, please change!')
-            st.session_state[editor_key] = ''
-            del selected_options
-
-        with st.popover("Variables Infos", use_container_width=True):
-            for selected_item in self.selected_items:
-                st.subheader(f"Showing {selected_item.replace('_', ' ')}", divider=True)
-                col1, col2 = st.columns((2.5, 1))
-                warn_container = st.container()
-                col1.multiselect(f"{selected_item} offered",
-                                 [value for value in st.session_state.stat_items[statistic_item][selected_item]['options']],
-                                 default=None,
-                                 key=f"{selected_item}_FD_multi",
-                                 max_selections=2,
-                                 placeholder="Choose an option",
-                                 label_visibility="collapsed")
-                col2.button('Submit', key=f"{selected_item}_FD_submit", on_click=stat_data_submit,
-                            args=(selected_item, warn_container), use_container_width=True)
-
-                cols = itertools.cycle(st.columns(2))
-                for skey, svalue in case_item[selected_item].items():
-                    if isinstance(svalue, bool):
-                        col = next(cols)
-                        case_item[selected_item][skey] = col.checkbox(skey, key=f"{selected_item}_{skey}_FD",
-                                                                      on_change=stat_data_change,
-                                                                      args=(selected_item, skey),
-                                                                      value=case_item[selected_item][skey])
-
-            st.divider()
-
-            st.subheader(f"New items", divider=True)
-            col1, col2 = st.columns((2, 2.5))
-            col1.text_input("Add more", value='',
-                            key=f"FD_input",
-                            on_change=data_text_change,
-                            args=('Data', f"FD_input", col2),
-                            placeholder='Press Enter to add more',
-                            type='default',
-                            help='Using "," to separate',
-                            label_visibility="visible")
-
-            cols = itertools.cycle(st.columns(2))
-            for item, value in case_item.items():
-                if isinstance(value, bool):
-                    col = next(cols)
-                    case_item[item] = col.checkbox(item, key=f"{item}_FD",
-                                                   value=case_item[item])
-            for item in case_item['Data'].keys():
-                col = next(cols)
-                case_item['Data'][item] = col.checkbox(item, key=f"Data_{item}_FD",
-                                                       on_change=stat_data_change,
-                                                       args=('Data', item),
-                                                       value=case_item['Data'][item])
 
     def get_Hellinger_Distance(self, statistic_item, stat_HD):
         if isinstance(stat_HD, str): stat_HD = [stat_HD]
@@ -803,7 +500,6 @@ class visualization_statistic:
         showing_item = []
         if generals['statistics']:
             showing_item = st.session_state.statistic_items
-            # showing_item = [k for k, v in st.session_state.statistics.items() if v]
             if not showing_item:
                 st.info('No statistics selected!')
         else:
@@ -823,7 +519,6 @@ class visualization_statistic:
             "灰紫色": "#6E617F",
             # "燕麦色": "#D4C9B9",
             # "奶咖色": "#C2B49A",
-
         }
 
         color = "#C48E8E"
@@ -867,8 +562,6 @@ class visualization_statistic:
             #         st.image(image, caption=f'Case: {icase}', use_container_width=True)
             #     except:
             #         st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-
         elif (item == "Hellinger_Distance"):
             st.markdown(f"""
             <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
@@ -886,8 +579,6 @@ class visualization_statistic:
                     st.image(image, caption=f'Case: {icase}', use_container_width=True)
                 except:
                     st.error(f'Missing Figure for Case: {icase}', icon="⚠")
-
-
         elif item == "Partial_Least_Squares_Regression":
             st.markdown(f"""
             <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
@@ -977,42 +668,8 @@ class visualization_replot_statistic:
 
     def _prepare(self, case_path, item, item_general):
         item_path = os.path.join(case_path, 'statistics', item)
-        if item == "Mann_Kendall_Trend_Test":
-            if isinstance(item_general, str): item_general = [item_general]
-            icase = st.radio("Mann_Kendall_Trend_Test", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                try:
-                    file = glob.glob(os.path.join(item_path, f'Mann_Kendall_Trend_Test_{icase}_output.nc'))[0]
-                    self.__Mann_Kendall_Trend_Test(item, file, icase, item_path)
-                except FileNotFoundError:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
-        elif (item == "Correlation"):
 
-            icase = st.radio("Correlation", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                try:
-                    file = glob.glob(os.path.join(item_path, f'Correlation_{icase}_output.nc'))[0]
-                    self.__Correlation(item, file, icase, item_path)
-                except:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
-
-        elif item == "Standard_Deviation":
-
-            icase = st.radio("Standard_Deviation", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                try:
-                    file = glob.glob(os.path.join(item_path, f'Standard_Deviation_{icase}_output.nc'))[0]
-                    self.__Standard_Deviation(item, file, icase, item_path)
-                except:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
-
-        elif item == "Z_Score":
+        if item == "Z_Score":
             st.info(f'Z_Score not ready yet!', icon="ℹ️")
             # icase = st.radio("Z_Score", [k for k in item_general],
             #                  index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
@@ -1023,17 +680,6 @@ class visualization_replot_statistic:
             #         self.__Z_Score(item, file, icase, item_path)
             #     except:
             #         st.error(f'Missing File for Case: {icase}', icon="⚠")
-        #
-        elif item == "Functional_Response":
-            icase = st.radio("Functional Response", [k for k in item_general],
-                             index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
-            st.divider()
-            if icase:
-                try:
-                    file = glob.glob(os.path.join(item_path, f'Functional_Response_{icase}_output.nc'))[0]
-                    self.__Functional_Response(item, file, icase, item_path)
-                except:
-                    st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif (item == "Hellinger_Distance"):
             icase = st.radio("Hellinger Distance", [k for k in item_general],
@@ -1051,39 +697,19 @@ class visualization_replot_statistic:
                              index=None, horizontal=True, key=f'{item}', label_visibility='collapsed')
             st.divider()
             if icase:
-                # try:
-                file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
-                self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
-                # except:
-                #     st.error(f'Missing File for Case: {icase}', icon="⚠")
+                try:
+                    file = glob.glob(os.path.join(item_path, f'Partial_Least_Squares_Regression_{icase}_output.nc'))[0]
+                    self.__Partial_Least_Squares_Regression(item, file, icase, item_path)
+                except:
+                    st.error(f'Missing File for Case: {icase}', icon="⚠")
 
         elif item == "Three_Cornered_Hat":
             st.info(f'Three_Cornered_Hat not ready yet!', icon="ℹ️")
-
-    def __Mann_Kendall_Trend_Test(self, item, file, icase, case_path):
-        st.cache_data.clear()
-        option = {}
-        # make_Mann_Kendall_Trend_Test(case_path, item, icase, file, st.session_state.stat_data[item], option)
-
-    def __Correlation(self, item, file, icase, case_path):
-        st.cache_data.clear()
-        option = {}
-        # make_Correlation(case_path, item, icase, file, st.session_state.stat_data[item], option)
-
-    def __Standard_Deviation(self, item, file, icase, case_path):
-        st.cache_data.clear()
-        option = {}
-        # make_Standard_Deviation(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Z_Score(self, item, file, icase, case_path):
         st.cache_data.clear()
         option = {}
         make_Z_Score(case_path, item, icase, file, st.session_state.stat_data[item], option)
-
-    def __Functional_Response(self, item, file, icase, case_path):
-        st.cache_data.clear()
-        option = {}
-        # make_Functional_Response(case_path, item, icase, file, st.session_state.stat_data[item], option)
 
     def __Hellinger_Distance(self, item, file, icase, case_path):
         st.cache_data.clear()
@@ -1101,10 +727,8 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         self.author = "Qingchen Xu/xuqingchen23@163.com"
         self.nl = NamelistReader()
         self.path_finder = FindPath()
-        # self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
         self.initial = initial
         self.stat_data = initial.stat()
-        # self.generals = st.session_state.generals
         self.classification = initial.classification()
         self.main_data = st.session_state.main_data
         self.ref_data = st.session_state.ref_data
@@ -1114,21 +738,13 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         self.statistics = initial.statistics()
         self.stat_info = initial.stat_list()
         self.stat_list = {
-            'Mann_Kendall_Trend_Test': 'MK_Test',
-            'Correlation': 'Corr',
-            'Standard_Deviation': 'SD',
             'Z_Score': 'Z_Score',
-            'Functional_Response': 'FR',
             'Hellinger_Distance': 'HD',
             'Partial_Least_Squares_Regression': 'PLSR',
             'Three_Cornered_Hat': 'TCH'
         }
         self.stat_class = {
-            'Mann_Kendall_Trend_Test': 'Single',
-            'Correlation': 'Multi',
-            'Standard_Deviation': 'Single',
             'Z_Score': 'Single',
-            'Functional_Response': 'Multi',
             'Hellinger_Distance': 'Multi',
             'Partial_Least_Squares_Regression': 'Multi',
             'Three_Cornered_Hat': 'Multi'
@@ -1143,7 +759,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         return index
 
     def set_errors(self):
-        # st.json(st.session_state, expanded=False)
         e = RuntimeError('This is an exception of type RuntimeError.'
                          'No data was found for statistic under {st.session_state.,'
                          'check that the namelist path is correct or run the Evaluation first.')
@@ -1155,7 +770,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         if 'stat_errorlist' not in st.session_state:
             st.session_state.stat_errorlist = {'set': {}}
 
-        # st.session_state.step1_initial   = 'setting'
         if st.session_state.step1_initial == 'Upload':
             try:
                 if self.__upload_stat_check(self.main_data, self.main_data['general']["statistics_nml"]):
@@ -1250,23 +864,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                         disabled=True,
                         args=("ANOVA", "ANOVA"),
                         value=statistics['ANOVA'])
-            # st.checkbox('Functional Response', key="Functional_Response",
-            #             on_change=statistics_editor_change,
-            #             args=("Functional_Response", "Functional_Response"),
-            #             value=statistics['Functional_Response'])
-            # st.checkbox('Mann Kendall Trend Test',
-            #             key="Mann_Kendall_Trend_Test",
-            #             on_change=statistics_editor_change,
-            #             args=("Mann_Kendall_Trend_Test", "Mann_Kendall_Trend_Test"),
-            #             value=statistics['Mann_Kendall_Trend_Test'])
-            # st.checkbox('Correlation', key="Correlation",
-            #             on_change=statistics_editor_change,
-            #             args=("Correlation", "Correlation"),
-            #             value=statistics['Correlation'])
-            # st.checkbox('Standard Deviation', key="Standard_Deviation",
-            #             on_change=statistics_editor_change,
-            #             args=("Standard_Deviation", "Standard_Deviation"),
-            #             value=statistics['Standard_Deviation'])
 
         st.session_state.step6_stat_setect_check = self.__stat_check_items(statistics)
         st.session_state.statistics = statistics
@@ -1299,7 +896,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             return False
         if check_state == 0:
             return True
-        # return check state~
 
     def _main_nml(self):
         if st.session_state.step6_stat_setect_check:
@@ -1477,8 +1073,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 st.session_state.stat_errorlist['set'][statistic_item] = list(
                     np.unique(st.session_state.stat_errorlist['set'][statistic_item]))
             return True
-
-    # ------------------------------------------------------
 
     def statistic_make(self):
 
@@ -1873,7 +1467,10 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 n = item_data[f"{item}_nX"]
             elif statistic_item == 'Partial_Least_Squares_Regression':
                 if f"{item}_nX" not in item_data:
-                    item_data[f"{item}_nX"] = get_x(item_data, item)
+                    try:
+                        item_data[f"{item}_nX"] = get_x(item_data, item)
+                    except:
+                        item_data[f"{item}_nX"] = 2
                 col1, col2, col3 = st.columns(3)
                 item_data[f"{item}_nX"] = col1.number_input(f"Set nX data: ",
                                                             min_value=2,
@@ -2116,7 +1713,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 if ilist in info_list:
                     sorted_info_list.append(ilist)
             cols = itertools.cycle(st.columns(3))
-            for i_info in sorted_info_list:#sorted(info_list, key=str.lower):
+            for i_info in sorted_info_list:  # sorted(info_list, key=str.lower):
                 if i_info not in ["dir", "fulllist"] and f"{item}_Y_{i_info}" in item_data.keys():
                     col = next(cols)
                     if i_info in ['prefix', 'suffix', 'varname']:
@@ -2162,13 +1759,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                             item_data[f"{item}_Y_{i_info}"]),
                                                                         key=f"{statistic_item}_{item}_Y_{i_info}",
                                                                         placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_Y_{i_info}']})...")
-            # item_data[f"{item}_Y_dir"] = st.text_input(f' Set Data Dictionary: ',
-            #                                            value=item_data[f"{item}_Y_dir"],
-            #                                            key=f"{statistic_item}_{item}_Y_dir",
-            #                                            on_change=stat_editor_change,
-            #                                            args=(statistic_item, f"{item}_Y", "dir",),
-            #                                            placeholder=f"Set your Simulation Dictionary...")
-            if not item_data[f"{item}_Y_dir"]: item_data[f"{item}_Y_dir"] = '/'
+            if not item_data[f"{item}_Y_dir"]: item_data[f"{item}_Y_dir"] = './data/'
             try:
                 item_data[f"{item}_Y_dir"] = self.path_finder.find_path(item_data[f"{item}_Y_dir"],
                                                                         f"{statistic_item}_{item}_Y_dir",
@@ -2176,7 +1767,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 st.code(f"Set Data Dictionary: {item_data[f'{item}_Y_dir']}", language='shell', wrap_lines=True)
             except PermissionError as e:
                 if e:
-                    item_data[f"{item}_Y_dir"] = '/'
+                    item_data[f"{item}_Y_dir"] = './'
 
             if item_data[f"{item}_Y_data_type"] == 'stn':
                 if not item_data[f"{item}_Y_fulllist"]: item_data[f"{item}_Y_fulllist"] = None
@@ -2185,12 +1776,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                             'csv',
                                                                             ['stat_change', statistic_item])
                 st.code(f"Set Fulllist File: {item_data[f'{item}_Y_fulllist']}", language='shell', wrap_lines=True)
-                # item_data[f"{item}_Y_fulllist"] = st.text_input(f'Set Fulllist File: ',
-                #                                                 value=item_data[f"{item}_Y_fulllist"],
-                #                                                 key=f"{statistic_item}_{item}_Y_fulllist",
-                #                                                 on_change=stat_editor_change,
-                #                                                 args=(statistic_item, f"{item}_Y", "fulllist"),
-                #                                                 placeholder=f"Set your Simulation Fulllist file...")
+
             else:
                 item_data[f"{item}_Y_fulllist"] = ''
             st.divider()
@@ -2410,7 +1996,6 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                 time.sleep(0.8)
                 return True
 
-    # Not Strat yet!-------------------------------
     def statistic_run(self):
 
         self.__print_welcome_message()
@@ -2431,7 +2016,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
         st.divider()
         if col1.button('Run', use_container_width=True):
             status = st.status(label="***Running Evaluation...***", expanded=False)
-            st.session_state.stat_status = self.Openbench_processing(status)
+            st.session_state.stat_status = self.Openbench_stat_processing(status)
             st.info(f'More info please check {st.session_state.stat_running_log_file}')
         elif col4.button('Pass', use_container_width=True):
             st.session_state.stat_status = 'complete'
@@ -2467,7 +2052,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Statistic Show figures page',
                       disabled=next_button_disable2)
 
-    def Openbench_processing(self, status):
+    def Openbench_stat_processing(self, status):
         st.divider()
         p = subprocess.Popen(
             f'python -u {st.session_state.openbench_path}/script/openbench.py {st.session_state["main_nml"]}',
@@ -2505,21 +2090,56 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
 
         return status._current_state
 
+    def __print_welcome_message(self):
+        """Print a more beautiful welcome message and ASCII art."""
+        st.subheader('Welcome to Running Page!', divider=True)
+        st.code(f'''
+        \n\n
+        {"=" * 80}
+           ____                   ____                  _
+          / __ \\                 |  _ \\                | |
+         | |  | |_ __   ___ _ __ | |_) | ___ _ __   ___| |__
+         | |  | | '_ \\ / _ \\ '_ \\|  _ < / _ \\ '_ \\ / __| '_ \\
+         | |__| | |_) |  __/ | | | |_) |  __/ | | | (__| | | |
+          \\____/| .__/ \\___|_| |_|____/ \\___|_| |_|\\___|_| |_|
+                | |
+                |_|                                           
+        {"=" * 80}
+        Welcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!
+        {"=" * 80}
+        This system evaluate various land surface model outputs against reference data.
+        Key Features:
+          • Multi-model support
+          • Comprehensive variable evaluation
+          • Advanced metrics and scoring
+          • Customizable benchmarking
+        {"=" * 80}
+
+        \n
+        ''',
+                language='python',
+                # line_numbers=True,
+                )
+
+        #        Initializing OpenBench Evaluation System...
+        # {"=" * 80}
+
     def __process_line(self, line, status):
         eskip_next_line = False
         wskip_next_line = False
-        error_keywords = [" - ERROR -","error", "failed", "exception", "traceback"]
+
+        error_keywords = [" - ERROR -", "error", "failed", "exception", "traceback"]
         error_keywords1 = ['File "', '", line']
         error_pattern = re.compile("|".join(error_keywords), re.IGNORECASE)
         error_file_pattern = re.compile("|".join(error_keywords1), re.IGNORECASE)
+
         python_error_pattern = re.compile(r"(raise|Error|Exception)")
         custom_error_pattern = re.compile(r"Error: .+ failed!")
+
         stop_next_line = False
         warning_keywords = ['Warning']
         warning_pattern = re.compile("|".join(warning_keywords), re.IGNORECASE)
         log_warning_pattern = re.compile("|".join([' - WARNNING -']), re.IGNORECASE)
-
-
 
         if error_pattern.search(line):
             status.update(label=f":red[{line.strip()}]", state="error", expanded=True)
@@ -2552,44 +2172,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
             status.write(f"***{line.strip()}***")
         return False
 
-    def __print_welcome_message(self):
-        """Print a more beautiful welcome message and ASCII art."""
-        st.subheader('Welcome to Statistic Running Page!', divider=True)
-        st.code(f'''
-        \n\n
-        {"=" * 80}
-           ____                   ____                  _
-          / __ \\                 |  _ \\                | |
-         | |  | |_ __   ___ _ __ | |_) | ___ _ __   ___| |__
-         | |  | | '_ \\ / _ \\ '_ \\|  _ < / _ \\ '_ \\ / __| '_ \\
-         | |__| | |_) |  __/ | | | |_) |  __/ | | | (__| | | |
-          \\____/| .__/ \\___|_| |_|____/ \\___|_| |_|\\___|_| |_|
-                | |
-                |_|                                           
-        {"=" * 80}
-        Welcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!
-        {"=" * 80}
-        This system evaluate various land surface model outputs against reference data.
-        Key Features:
-          • Multi-model support
-          • Comprehensive variable evaluation
-          • Advanced metrics and scoring
-          • Customizable benchmarking
-        {"=" * 80}
-
-        \n
-        ''',
-                language='python',
-                # line_numbers=True,
-                )
-
-        #        Initializing OpenBench Evaluation System...
-        # {"=" * 80}
-
     def statistic_show(self):
-        # st.write('show')
-        # if not st.session_state.step6_stat_run:
-        #     visualization_statistic.set_errors()
         self.visualizations()
 
         def define_step1():

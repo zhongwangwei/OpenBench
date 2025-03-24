@@ -132,15 +132,17 @@ def make_geo_plot_index(file, method_name, main_nml, option):
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                       main_nml['max_lat']])
+                       main_nml['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
                       crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
                       crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
