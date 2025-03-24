@@ -928,11 +928,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             ds = xr.open_dataset(file_path)
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
-                    # try:
-                    make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                      score, datasets_filtered, option)
-                    # except:
-                    #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
+                    try:
+                        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
+                                                                          score, datasets_filtered, option)
+                    except:
+                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
 
             for metric in metrics:
                 for ref_source in ref_sources:
@@ -965,11 +965,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             data = data[(data >= -100) & (data <= 100)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
-                    # try:
-                    make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                      metric, datasets_filtered, option)
-                    # except:
-                    #     print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                    try:
+                        make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
+                                                                          metric, datasets_filtered, option)
+                    except:
+                        print(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
 
     def scenarios_Parallel_Coordinates_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Parallel_Coordinates')
@@ -1842,8 +1842,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             for ref_source in ref_sources:
                 # Skip if only one simulation source
-                if len(sim_sources) < 2:
-                    continue
+
                 # Check data types for all simulation sources
                 data_types = []
                 for sim_source in sim_sources:
@@ -1946,7 +1945,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                         except Exception as e:
                             logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
-
+                    if len(sim_sources) < 2:
+                        continue
                     # Calculate pairwise differences for metrics (station data)
                     for metric in metrics:
                         for i, sim1 in enumerate(sim_sources):
@@ -2079,7 +2079,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                         except Exception as e:
                             logging.error(f"Error processing ensemble calculations for score {score}: {e}")
-
+                    if len(sim_sources) < 2:
+                        continue
                     # Compare metrics between pairs
                     for metric in metrics:
                         for i, sim1 in enumerate(sim_sources):
@@ -2182,8 +2183,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             for ref_source in ref_sources:
                 # Skip if only one simulation source
-                if len(sim_sources) < 2:
-                    continue
+                # if len(sim_sources) < 2:
+                #     continue
 
                 ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
@@ -2255,8 +2256,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             for sim_source in sim_sources:
                 # Skip if only one simulation source
-                if len(sim_sources) < 2:
-                    continue
+
 
                 sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
@@ -2306,8 +2306,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             for sim_source in sim_sources:
                 # Skip if only one simulation source
-                if len(sim_sources) < 2:
-                    continue
+
 
                 sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
@@ -2336,7 +2335,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         self.save_result(output_file, method_name, result)
                         make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
                     except Exception as e:
-                        logging.error(f"Error processing {basic_method} calculations for {evaluation_item} {ref_source}: {e}")
+                        logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
 
     def scenarios_Functional_Response_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         method_name = 'Functional_Response'
@@ -2392,6 +2391,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
+            if len(sim_sources) < 2:
+                continue
 
             for i, sim1 in enumerate(sim_sources):
                 for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
