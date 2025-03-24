@@ -93,13 +93,9 @@ def get_ticks(vmin, vmax):
         colorbar_ticks = 0.5
     elif 10 >= vmax - vmin > 5:
         colorbar_ticks = 1.
-    elif 20 >= vmax - vmin > 10:
+    elif 100 >= vmax - vmin > 10:
         colorbar_ticks = 5.
-    elif 50 >= vmax - vmin > 20:
-        colorbar_ticks = 10.
-    elif 80 >= vmax - vmin > 50:
-        colorbar_ticks = 15.
-    elif 100 >= vmax - vmin > 80:
+    elif 100 >= vmax - vmin > 50:
         colorbar_ticks = 20.
     elif 200 >= vmax - vmin > 100:
         colorbar_ticks = 20.
@@ -149,7 +145,7 @@ def get_index(vmin_max_on, vmin, vmax, colormap, cticks):
     return mticks, norm, bnd, cmap
 
 
-def Stn_map(file, loc_lon, loc_lat, metric_data, option):
+def draw_Diff_Stn_Plot(Figure_show, file, var, option):
     from pylab import rcParams
     import matplotlib
     import matplotlib.pyplot as plt
@@ -173,14 +169,16 @@ def Stn_map(file, loc_lon, loc_lat, metric_data, option):
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
-
     mticks, norm, bnd, cmap = get_index(option['vmin_max_on'], option['vmin'], option['vmax'], option['cmap'],
                                         option['colorbar_ticks'])
+    loc_lon, loc_lat, metric_data = Stn_map(file, var, 'Value')
 
     cs = ax.scatter(loc_lon, loc_lat, s=option['markersize'], c=metric_data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'],
                     marker=option['marker'],
                     edgecolors='none', alpha=0.9)
+    ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')  # 固定数据范围，不自动扩展
+    ax.set_aspect('equal', adjustable='box')  # 保持数据比例
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -222,7 +220,7 @@ def Stn_map(file, loc_lon, loc_lat, metric_data, option):
     cb.solids.set_edgecolor("face")
 
     file2 = os.path.basename(file)[:-3]
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # 将图像保存到 BytesIO 对象
     buffer = BytesIO()
@@ -234,209 +232,7 @@ def Stn_map(file, loc_lon, loc_lat, metric_data, option):
                        type="secondary", disabled=False, use_container_width=False, key=file2)
 
 
-def draw_Diff_Stn_Plot(file, var, option):  # outpath, source
-    df = pd.read_csv(f'{file}', header=0)
-
-    min_metric = -999.0
-    max_metric = 100000.0
-    ind0 = df[df['%s' % (option["type"])] > min_metric].index
-    data_select0 = df.loc[ind0]
-    ind1 = data_select0[data_select0['%s' % (option['type'])] < max_metric].index
-    data_select = data_select0.loc[ind1]
-    #
-    try:
-        stn_lon = data_select['ref_lon'].values
-        stn_lat = data_select['ref_lat'].values
-    except:
-        stn_lon = data_select['sim_lon'].values
-        stn_lat = data_select['sim_lat'].values
-
-    try:
-        plotvar = data_select[option['type']].values
-        Stn_map(file, stn_lon, stn_lat, plotvar, option)
-    except:
-        st.warning('Please select first!')
-
-
-def prepare_stn(dir_path, icase, file, selected_item, sources, item, unit, option):
-    with st.container(height=None, border=True):
-        col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
-        with col1:
-            title = f"{selected_item.replace('_', ' ')} {sources[0]} and {sources[1]} for {item}"
-            option['title'] = st.text_input('Title', value=title, label_visibility="visible",
-                                            key=f"{icase}_title")
-            option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
-
-        with col2:
-            option['xlabel'] = st.text_input('X labels', value='Longitude', label_visibility="visible",
-                                             key=f"{icase}_xlabel")
-            option['xticksize'] = st.number_input("Xtick label size", min_value=0, value=17, key=f"{icase}_xlabelsize")
-
-        with col3:
-            option['ylabel'] = st.text_input('Y labels', value='Latitude', label_visibility="visible",
-                                             key=f"{icase}_ylabel")
-            option['yticksize'] = st.number_input("Ytick label size", min_value=0, value=17, key=f"{icase}_ylabelsize")
-
-        with col4:
-            option['fontsize'] = st.number_input("Fontsize", min_value=0, value=17, key=f"{icase}_fontsize")
-            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
-                                                       key=f"{icase}_axes_linewidth")
-        type = st.radio("type", ['Reference', 'Simulation'],
-                        index=None, horizontal=True, key=f'{icase}_type', label_visibility="collapsed")
-        if type == 'Reference':
-            option['type'] = 'ref_value'
-        elif type == 'Simulation':
-            option['type'] = 'sim_value'
-        else:
-            option['type'] = None
-        with st.expander("More info", expanded=True):
-            col1, col2, col3, col4 = st.columns(4)
-            # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
-                                                  key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
-                                                  key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
-                                                  key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
-                                                  key=f"{icase}_max_lat")
-            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
-                                                key=f"{icase}xtick")
-            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
-                                                key=f"{icase}ytick")
-
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                option['cmap'] = st.selectbox('Colorbar',
-                                              ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
-                                               'BuGn_r',
-                                               'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
-                                               'GnBu_r',
-                                               'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
-                                               'Oranges',
-                                               'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
-                                               'Pastel1_r',
-                                               'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                               'PuBu_r',
-                                               'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
-                                               'RdBu_r',
-                                               'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
-                                               'RdYlGn_r',
-                                               'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                               'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
-                                               'YlGnBu_r',
-                                               'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
-                                               'afmhot_r',
-                                               'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
-                                               'brg_r',
-                                               'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
-                                               'copper_r',
-                                               'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
-                                               'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                               'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                               'gist_rainbow_r', 'gray', 'gray_r',
-                                               'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
-                                               'jet_r',
-                                               'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
-                                               'ocean_r',
-                                               'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                               'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                               'summer_r',
-                                               'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
-                                               'winter_r'], index=0, placeholder="Choose an option",
-                                              key=f'{icase}_cmap',
-                                              label_visibility="visible")
-            with col2:
-                option['colorbar_label'] = st.text_input('colorbar label',
-                                                         value=f'{item} [{unit}]',
-                                                         key=f"{icase}_colorbar_label",
-                                                         label_visibility="visible")
-            with col3:
-                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
-                                                           key=f"{icase}_colorbar_position",
-                                                           index=0, placeholder="Choose an option",
-                                                           label_visibility="visible")
-
-            with col4:
-                option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
-                                                key=f"{icase}_extend")
-            if option["colorbar_position"] == 'vertical':
-                left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
-            else:
-                left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
-
-            option['marker'] = col1.selectbox(f'Marker style',
-                                              ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+",
-                                               "^", "v"],
-                                              index=2,
-                                              placeholder="Choose an option",
-                                              label_visibility="visible")
-
-            option['markersize'] = col2.number_input(f"Markersize", min_value=0, value=15, step=1)
-
-            st.divider()
-            col1, col2, col3 = st.columns(3)
-            option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
-                                                          key=f"{icase}_colorbar_position_set")
-            if option['colorbar_position_set']:
-                col1, col2, col3, col4 = st.columns(4)
-                option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
-                option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
-                option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
-                option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
-
-            col1, col2, col3, col4 = st.columns(4)
-            option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-
-            df = pd.read_csv(f'{dir_path}/{file}', header=0)
-            try:
-                data = df[option['type']].values
-                quantiles = [np.nanpercentile(data, 5), np.nanpercentile(data, 95)]
-                max_value = math.ceil(quantiles[1])
-                min_value = math.floor(quantiles[0])
-                if option["vmin_max_on"]:
-                    option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=get_ticks(min_value, max_value),
-                                                                 step=get_ticks(min_value, max_value) / 10,
-                                                                 key=f"{icase}_colorbar_ticks")
-                    option["vmin"] = col3.number_input(f"colorbar min", value=min_value)
-                    option["vmax"] = col4.number_input(f"colorbar max", value=max_value)
-                else:
-                    option["colorbar_ticks"] = get_ticks(min_value, max_value)
-                    option["vmin"] = min_value
-                    option["vmax"] = max_value
-            except:
-                st.warning('Please select first!')
-
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{icase}_x_wise")
-            option["map"] = st.selectbox(f"Draw map", ['None', 'interpolate'],
-                                         index=0, placeholder="Choose an option", label_visibility="visible",
-                                         key=f"{icase}_map")
-
-        with col2:
-            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6, key=f"{icase}_y_wise")
-            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
-                                                   index=1, placeholder="Choose an option", label_visibility="visible",
-                                                   key=f"{icase}_saving_format")
-
-        with col3:
-            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
-            option['font'] = st.selectbox('Image saving format',
-                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
-                                           'Helvetica', 'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
-                                          index=0, placeholder="Choose an option", label_visibility="visible",
-                                          key=f"{icase}_font")
-    draw_Diff_Stn_Plot(str(os.path.join(dir_path, file)), item, option)
-
-
-def Geo_map(file, ilon, ilat, data, option):
-    from Namelist_lib.check_font import check_font
-    check = check_font()
-    check.check_font(option['font'])
-
+def draw_Diff_Geo_Plot(Figure_show, file, var, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
 
@@ -458,6 +254,12 @@ def Geo_map(file, ilon, ilat, data, option):
 
     mticks, norm, bnd, cmap = get_index(option['vmin_max_on'], option['vmin'], option['vmax'], option['cmap'],
                                         option['colorbar_ticks'])
+    ilat, ilon, data = Geo_map(file, var, 'value')
+
+    if ilat[0] - ilat[-1] < 0:
+        option['origin'] = 'lower'
+    else:
+        option['origin'] = 'upper'
 
     if option['map'] == 'interpolate':
         lon, lat = np.meshgrid(ilon, ilat)
@@ -466,7 +268,9 @@ def Geo_map(file, ilon, ilat, data, option):
         extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
         cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=option['origin'])
-
+    ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')  # 固定数据范围，不自动扩展
+    ax.set_aspect('equal', adjustable='box')  # 保持数据比例
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
     rivers = cfeature.NaturalEarthFeature(
@@ -477,7 +281,6 @@ def Geo_map(file, ilon, ilat, data, option):
     ax.add_feature(rivers, linewidth=0.5)
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
-    ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
     ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -1 * option["xtick"])[::-1], crs=ccrs.PlateCarree())
     ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -1 * option["ytick"])[::-1], crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter()
@@ -506,7 +309,7 @@ def Geo_map(file, ilon, ilat, data, option):
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     file2 = os.path.basename(file)[:-3]
     # 将图像保存到 BytesIO 对象
@@ -519,29 +322,75 @@ def Geo_map(file, ilon, ilat, data, option):
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def draw_Diff_Geo_Plot(file, var, option):  # outpath, source
+def Stn_map(file, var, function):
+    data = pd.read_csv(f'{file}', header=0)
+    plotvar = data[var].values
 
+    if function == 'min_max':
+        vmin, vmax = np.nanpercentile(plotvar, 5), np.nanpercentile(plotvar, 95)
+        vmax = math.ceil(vmax)
+        vmin = math.floor(vmin)
+        if vmax > 100: vmax = 100
+        if vmin < -100: vmin = -100
+        colorbar_ticks = get_ticks(vmin, vmax)
+        return vmin, vmax, colorbar_ticks
+
+    else:
+        try:
+            lon_select = data['ref_lon'].values
+            lat_select = data['ref_lat'].values
+        except:
+            lon_select = data['sim_lon'].values
+            lat_select = data['sim_lat'].values
+        return lon_select, lat_select, plotvar
+
+
+def Geo_map(file, var, function):  # outpath, source
     ds = xr.open_dataset(file)
     data = ds[var]
 
-    ilat = ds.lat.values
-    ilon = ds.lon.values
-    if ilat[0] - ilat[-1] < 0:
-        option['origin'] = 'lower'
+    if function == 'min_max':
+        quantiles = data.quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+        vmax = math.ceil(quantiles[1].values)
+        vmin = math.floor(quantiles[0].values)
+        if vmax > 100: vmax = 100
+        if vmin < -100: vmin = -100
+        colorbar_ticks = get_ticks(vmin, vmax)
+        return vmin, vmax, colorbar_ticks
     else:
-        option['origin'] = 'upper'
-    Geo_map(file, ilon, ilat, data, option)
+        ilat = ds.lat.values
+        ilon = ds.lon.values
+        return ilat, ilon, data
 
 
-def prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option):
-    with st.container(height=None, border=True):
+def prepare_stn(dir_path, icase, file, selected_item, sources, item, unit, option):
+    Figure_show = st.container()
+
+    color = '#9DA79A'
+    st.markdown(f"""
+    <div style="font-size:18px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+         Please choose Figure type...
+    </div>
+    """, unsafe_allow_html=True)
+    type = st.radio("type", ['Reference', 'Simulation'],
+                    index=None, horizontal=True, key=f'{icase}_type', label_visibility="collapsed")
+    if type == 'Reference':
+        option['type'] = 'ref_value'
+    elif type == 'Simulation':
+        option['type'] = 'sim_value'
+    else:
+        option['type'] = None
+
+    Labels_tab, Scale_tab, Map_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Map', 'Save'])
+    with Labels_tab:
+        title = f"{selected_item.replace('_', ' ')} {sources[0]} and {sources[1]} for {item}"
+        option['title'] = st.text_input('Title', value=title, label_visibility="visible",
+                                        key=f"{icase}_title")
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            title = f"{selected_item.replace('_', ' ')} {source} for {item}"
-            option['title'] = st.text_input('Title', value=title, label_visibility="visible",
-                                            key=f"{icase}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
-
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
+                                                       key=f"{icase}_axes_linewidth")
         with col2:
             option['xlabel'] = st.text_input('X labels', value='Longitude', label_visibility="visible",
                                              key=f"{icase}_xlabel")
@@ -554,115 +403,119 @@ def prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option
 
         with col4:
             option['fontsize'] = st.number_input("Fontsize", min_value=0, value=17, key=f"{icase}_fontsize")
-            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
-                                                       key=f"{icase}_axes_linewidth")
 
-        with st.expander("More info", expanded=True):
+
+    with Map_tab:
+        col1, col2, col3, col4 = st.columns(4)
+        option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
+                                              key=f"{icase}_min_lon")
+        option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
+                                              key=f"{icase}_max_lon")
+        option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
+                                              key=f"{icase}_min_lat")
+        option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
+                                              key=f"{icase}_max_lat")
+        option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                            key=f"{icase}xtick")
+        option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                            key=f"{icase}ytick")
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            option['cmap'] = st.selectbox('Colorbar',
+                                          ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                           'BuGn_r',
+                                           'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
+                                           'GnBu_r',
+                                           'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                           'Oranges',
+                                           'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
+                                           'Pastel1_r',
+                                           'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                           'PuBu_r',
+                                           'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
+                                           'RdBu_r',
+                                           'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                           'RdYlGn_r',
+                                           'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                           'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
+                                           'YlGnBu_r',
+                                           'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
+                                           'afmhot_r',
+                                           'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
+                                           'brg_r',
+                                           'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
+                                           'copper_r',
+                                           'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                           'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                           'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                           'gist_rainbow_r', 'gray', 'gray_r',
+                                           'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                           'jet_r',
+                                           'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
+                                           'ocean_r',
+                                           'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                           'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                           'summer_r',
+                                           'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                           'winter_r'], index=0, placeholder="Choose an option",
+                                          key=f'{icase}_cmap',
+                                          label_visibility="visible")
+        with col2:
+            option['colorbar_label'] = st.text_input('colorbar label',
+                                                     value=f'{item} [{unit}]',
+                                                     key=f"{icase}_colorbar_label",
+                                                     label_visibility="visible")
+        with col3:
+            option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
+                                                       key=f"{icase}_colorbar_position",
+                                                       index=0, placeholder="Choose an option",
+                                                       label_visibility="visible")
+
+        with col4:
+            option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                            index=0, placeholder="Choose an option", label_visibility="visible",
+                                            key=f"{icase}_extend")
+        if option["colorbar_position"] == 'vertical':
+            left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
+        else:
+            left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
+
+        option['marker'] = col1.selectbox(f'Marker style',
+                                          ['.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+",
+                                           "^", "v"],
+                                          index=2,key=f"{icase}_marker",
+                                          placeholder="Choose an option",
+                                          label_visibility="visible")
+
+        option['markersize'] = col2.number_input(f"Markersize", min_value=0, value=15, step=1,key=f"{icase}_markersize")
+
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
+                                                      key=f"{icase}_colorbar_position_set")
+        if option['colorbar_position_set']:
             col1, col2, col3, col4 = st.columns(4)
-            # min_lon, max_lon, min_lat, max_lat
-            option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
-                                                  key=f"{icase}_min_lon")
-            option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
-                                                  key=f"{icase}_max_lon")
-            option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
-                                                  key=f"{icase}_min_lat")
-            option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
-                                                  key=f"{icase}_max_lat")
-            option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
-                                                key=f"{icase}xtick")
-            option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
-                                                key=f"{icase}ytick")
+            option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
+            option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
+            option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
+            option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
 
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                option['cmap'] = st.selectbox('Colorbar',
-                                              ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
-                                               'BuGn_r',
-                                               'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
-                                               'GnBu_r',
-                                               'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
-                                               'Oranges',
-                                               'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
-                                               'Pastel1_r',
-                                               'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                               'PuBu_r',
-                                               'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
-                                               'RdBu_r',
-                                               'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
-                                               'RdYlGn_r',
-                                               'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                               'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
-                                               'YlGnBu_r',
-                                               'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
-                                               'afmhot_r',
-                                               'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
-                                               'brg_r',
-                                               'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
-                                               'copper_r',
-                                               'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
-                                               'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                               'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                               'gist_rainbow_r', 'gray', 'gray_r',
-                                               'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
-                                               'jet_r',
-                                               'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
-                                               'ocean_r',
-                                               'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                               'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                               'summer_r',
-                                               'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
-                                               'winter_r'], index=0, placeholder="Choose an option",
-                                              key=f'{icase}_cmap',
-                                              label_visibility="visible")
-            with col2:
-                option['colorbar_label'] = st.text_input('colorbar label',
-                                                         value=f'{source} [{unit}]',
-                                                         key=f"{icase}_colorbar_label",
-                                                         label_visibility="visible")
-            with col3:
-                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
-                                                           key=f"{icase}_colorbar_position",
-                                                           index=0, placeholder="Choose an option",
-                                                           label_visibility="visible")
+        col1, col2, col3, col4 = st.columns(4)
+        option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
+        min_value, max_value, colorvar_ticks = Stn_map(f'{dir_path}/{file}', option['type'], 'min_max')
+        if option["vmin_max_on"]:
+            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=colorvar_ticks,
+                                                         step=colorvar_ticks / 10,
+                                                         key=f"{icase}_colorbar_ticks")
+            option["vmin"] = col3.number_input(f"colorbar min", value=min_value)
+            option["vmax"] = col4.number_input(f"colorbar max", value=max_value)
+        else:
+            option["colorbar_ticks"] = colorvar_ticks
+            option["vmin"] = min_value
+            option["vmax"] = max_value
 
-            with col4:
-                option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                                index=0, placeholder="Choose an option", label_visibility="visible",
-                                                key=f"{icase}_extend")
-            if option["colorbar_position"] == 'vertical':
-                left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
-            else:
-                left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
-
-            st.divider()
-            col1, col2, col3 = st.columns(3)
-            option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
-                                                          key=f"{icase}_colorbar_position_set")
-            if option['colorbar_position_set']:
-                col1, col2, col3, col4 = st.columns(4)
-                option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
-                option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
-                option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
-                option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
-
-            col1, col2, col3, col4 = st.columns(4)
-            option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
-
-            ds = xr.open_dataset(str(os.path.join(dir_path, file)))
-            data = ds[item]
-            quantiles = data.quantile([0.05, 0.95], dim=['lat', 'lon'])
-            max_value = math.ceil(quantiles[1].values)
-            min_value = math.floor(quantiles[0].values)
-            if option["vmin_max_on"]:
-                option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=get_ticks(min_value, max_value),
-                                                             step=get_ticks(min_value, max_value) / 10,
-                                                             key=f"{icase}_colorbar_ticks")
-                option["vmin"] = col3.number_input(f"colorbar min", value=min_value)
-                option["vmax"] = col4.number_input(f"colorbar max", value=max_value)
-            else:
-                option["colorbar_ticks"] = get_ticks(min_value, max_value)
-                option["vmin"] = min_value
-                option["vmax"] = max_value
+    with Save_tab:
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -684,12 +537,184 @@ def prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option
                                            'Helvetica', 'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
                                           index=0, placeholder="Choose an option", label_visibility="visible",
                                           key=f"{icase}_font")
-    draw_Diff_Geo_Plot(str(os.path.join(dir_path, file)), item, option)
+    st.divider()
+    draw_Diff_Stn_Plot(Figure_show,str(os.path.join(dir_path, file)), option['type'], option)
 
 
-def make_Basic_Plot(dir_path, file, selected_item, source, item, unit, data_type, option):
+def prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option):
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Map_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Map', 'Save'])
+    with Labels_tab:
+        title = f"{selected_item.replace('_', ' ')} {source} for {item}"
+        option['title'] = st.text_input('Title', value=title, label_visibility="visible",
+                                        key=f"{icase}_title")
+        col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
+        with col1:
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{icase}_title_size")
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
+                                                       key=f"{icase}_axes_linewidth")
+        with col2:
+            option['xlabel'] = st.text_input('X labels', value='Longitude', label_visibility="visible",
+                                             key=f"{icase}_xlabel")
+            option['xticksize'] = st.number_input("Xtick label size", min_value=0, value=17, key=f"{icase}_xlabelsize")
+
+        with col3:
+            option['ylabel'] = st.text_input('Y labels', value='Latitude', label_visibility="visible",
+                                             key=f"{icase}_ylabel")
+            option['yticksize'] = st.number_input("Ytick label size", min_value=0, value=17, key=f"{icase}_ylabelsize")
+
+        with col4:
+            option['fontsize'] = st.number_input("Fontsize", min_value=0, value=17, key=f"{icase}_fontsize")
+
+    with Map_tab:
+
+        col1, col2, col3, col4 = st.columns(4)
+        option["min_lon"] = col1.number_input(f"minimal longitude", value=st.session_state['generals']['min_lon'],
+                                              key=f"{icase}_min_lon")
+        option["max_lon"] = col2.number_input(f"maximum longitude", value=st.session_state['generals']['max_lon'],
+                                              key=f"{icase}_max_lon")
+        option["min_lat"] = col3.number_input(f"minimal latitude", value=st.session_state['generals']['min_lat'],
+                                              key=f"{icase}_min_lat")
+        option["max_lat"] = col4.number_input(f"maximum latitude", value=st.session_state['generals']['max_lat'],
+                                              key=f"{icase}_max_lat")
+        option["xtick"] = col1.number_input(f"Set x tick scale", value=60, min_value=0, max_value=360, step=10,
+                                            key=f"{icase}xtick")
+        option["ytick"] = col2.number_input(f"Set y tick scale", value=30, min_value=0, max_value=180, step=10,
+                                            key=f"{icase}ytick")
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            option['cmap'] = st.selectbox('Colorbar',
+                                          ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                           'BuGn_r',
+                                           'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
+                                           'GnBu_r',
+                                           'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                           'Oranges',
+                                           'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
+                                           'Pastel1_r',
+                                           'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                           'PuBu_r',
+                                           'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
+                                           'RdBu_r',
+                                           'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                           'RdYlGn_r',
+                                           'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                           'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
+                                           'YlGnBu_r',
+                                           'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
+                                           'afmhot_r',
+                                           'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
+                                           'brg_r',
+                                           'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
+                                           'copper_r',
+                                           'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                           'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                           'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                           'gist_rainbow_r', 'gray', 'gray_r',
+                                           'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                           'jet_r',
+                                           'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
+                                           'ocean_r',
+                                           'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                           'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                           'summer_r',
+                                           'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                           'winter_r'], index=0, placeholder="Choose an option",
+                                          key=f'{icase}_cmap',
+                                          label_visibility="visible")
+        with col2:
+            option['colorbar_label'] = st.text_input('colorbar label',
+                                                     value=f'{source} [{unit}]',
+                                                     key=f"{icase}_colorbar_label",
+                                                     label_visibility="visible")
+        with col3:
+            option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],
+                                                       key=f"{icase}_colorbar_position",
+                                                       index=0, placeholder="Choose an option",
+                                                       label_visibility="visible")
+
+        with col4:
+            option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                            index=0, placeholder="Choose an option", label_visibility="visible",
+                                            key=f"{icase}_extend")
+        if option["colorbar_position"] == 'vertical':
+            left, bottom, right, top = 0.94, 0.24, 0.02, 0.5
+        else:
+            left, bottom, right, top = 0.26, 0.14, 0.5, 0.03
+
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        option['colorbar_position_set'] = col1.toggle('Setting colorbar position', value=False,
+                                                      key=f"{icase}_colorbar_position_set")
+        if option['colorbar_position_set']:
+            col1, col2, col3, col4 = st.columns(4)
+            option["colorbar_left"] = col1.number_input(f"colorbar left", value=left)
+            option["colorbar_bottom"] = col2.number_input(f"colorbar bottom", value=bottom)
+            option["colorbar_width"] = col3.number_input(f"colorbar width", value=right)
+            option["colorbar_height"] = col4.number_input(f"colorbar height", value=top)
+
+        col1, col2, col3, col4 = st.columns(4)
+        option["vmin_max_on"] = col1.toggle('Setting max min', value=False, key=f"{icase}_vmin_max_on")
+
+        vmin, vmax, colorbar_ticks = Geo_map(str(os.path.join(dir_path, file)), item, 'min_max')
+
+        if option["vmin_max_on"]:
+            option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", valuecolorbar_ticks,
+                                                         step=colorbar_ticks / 10,
+                                                         key=f"{icase}_colorbar_ticks")
+            option["vmin"] = col3.number_input(f"colorbar min", value=vmin)
+            option["vmax"] = col4.number_input(f"colorbar max", value=vmax)
+        else:
+            option["colorbar_ticks"] = colorbar_ticks
+            option["vmin"] = vmin
+            option["vmax"] = vmax
+
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{icase}_x_wise")
+            option["map"] = st.selectbox(f"Draw map", ['None', 'interpolate'],
+                                         index=0, placeholder="Choose an option", label_visibility="visible",
+                                         key=f"{icase}_map")
+
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=6, key=f"{icase}_y_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{icase}_saving_format")
+
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{icase}_dpi")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica', 'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{icase}_font")
+    draw_Diff_Geo_Plot(Figure_show, str(os.path.join(dir_path, file)), item, option)
+
+
+def make_Basic_Plot(dir_path, file, selected_item, source, item, data_type, self):
+    option = {}
+    if data_type != 'stn':
+        try:
+            unit = self.ref[source][selected_item]['varunit']
+        except:
+            unit = self.sim[source][selected_item]['varunit']
+    else:
+        try:
+            unit = self.ref[source[0]][selected_item]['varunit']
+        except:
+            unit = self.sim[source[0]][selected_item]['varunit']
+
     icase = f'{item}_{data_type}'
     if data_type != 'stn':
-        prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option)
+        try:
+            prepare_geo(dir_path, icase, file, selected_item, source, item, unit, option)
+        except:
+            st.error(icase + 'Missing')
     else:
-        prepare_stn(dir_path, icase, file, selected_item, source, item, unit, option)
+        try:
+            prepare_stn(dir_path, icase, file, selected_item, source, item, unit, option)
+        except:
+            st.error(icase + 'Missing')

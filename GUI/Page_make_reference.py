@@ -16,6 +16,7 @@ import numpy as np
 from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 from Namelist_lib.find_path import FindPath
+from pathlib import Path
 
 
 def timer(func):
@@ -31,156 +32,9 @@ def timer(func):
     return func_wrapper
 
 
-class make_reference:
-    def __init__(self, initial):
-        self.author = "Qingchen Xu/xuqingchen23@163.com"
-        self.classification = initial.classification()
-        self.nl = NamelistReader()
-        self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
-        self.initial = initial
-        self.path_finder = FindPath()
-        # self.ref_source = initial.ref_source()
-        # self.ref_initial = initial.ref_info()
-
-        self.evaluation_items = st.session_state.evaluation_items
-        self.selected_items = [k for k, v in self.evaluation_items.items() if v]
-
-        self.tittles = [k.replace('_', ' ') for k, v in self.evaluation_items.items() if v]
-
-        self.ref = initial.ref()
-
-        self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'Ref_variables_defination')
-
-        st.session_state.selected_items = self.selected_items
-        st.session_state.tittles = self.tittles
-
-    def find_paths_in_dict(self, d):
-
-        if platform.system() == "Windows":
-            sep = '\\'
-        else:
-            sep = posixpath.sep
-
-        paths = []
-        for key, value in d.items():
-            if isinstance(value, dict):
-                paths.extend(self.find_paths_in_dict(value))
-            elif isinstance(value, str):
-                if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sep == '\\':
-                        path.replace(os.sep, "\\")
-                        d[key] = value.replace(os.sep, '\\')
-                    else:
-                        d[key] = value.replace(os.sep, "/")
-                    paths.append((key, value))
-        return paths
-
-    def step2_set(self):
-        # print('Create ref namelist -------------------')
-        if 'ref_change' not in st.session_state:
-            st.session_state.ref_change = {'general': False}
-        st.subheader(f'Select your Reference source', divider=True)
-        selected_items = self.selected_items
-        Reference_lib = self.ref_sources
-
-        ref_general = self.ref['general']
-        if st.session_state.ref_data['general']:
-            ref_general = st.session_state.ref_data['general']
-
-        def ref_data_change(key, editor_key):
-            ref_general[key] = st.session_state[editor_key]
-            st.session_state.ref_change['general'] = True
-
-        for selected_item in selected_items:
-            item = f"{selected_item}_ref_source"
-            if item not in ref_general:
-                ref_general[item] = []
-            if isinstance(ref_general[item], str): ref_general[item] = [ref_general[item]]
-
-            label_text = f"<span style='font-size: 20px;'>{selected_item.replace('_', ' ')} reference cases ....</span>"
-            st.markdown(f":blue[{label_text}]", unsafe_allow_html=True)
-            if len(Reference_lib['general'][selected_item]) == 0:
-                st.warning(
-                    f"Sorry we didn't offer reference data for {selected_item.replace('_', ' ')}, please upload!")
-            # col1, col2 = st.columns((2.5, 1.5))
-            st.multiselect("Reference offered",
-                           [value for value in Reference_lib['general'][selected_item]],
-                           default=[value for value in ref_general[item]],
-                           key=f"{item}_multi",
-                           on_change=ref_data_change,
-                           args=(item, f"{item}_multi"),
-                           placeholder="Choose an option",
-                           label_visibility="visible")
-
-        st.session_state.step2_set_check = self.__step2_setcheck(ref_general)
-
-        sources = list(set([value for key in selected_items for value in ref_general[f"{key}_ref_source"] if value]))
-        st.session_state.ref_data['def_nml'] = {}
-        for source in sources:
-            st.session_state.ref_data['def_nml'][source] = Reference_lib['def_nml'][source]
-            if source not in st.session_state.ref_change:
-                st.session_state.ref_change[source] = False
-
-        formatted_keys = " \n".join(
-            f'{key.replace("_", " ")}: {", ".join(value for value in ref_general[f"{key}_ref_source"] if value)}' for
-            key in
-            selected_items)
-        sourced_key = " \n".join(f"{source}: {Reference_lib['def_nml'][source]}" for source in sources)
-        st.code(f'''{formatted_keys}\n\n{sourced_key}''', language="shell", line_numbers=True, wrap_lines=True)
-
-        col1, col, col3 = st.columns(3)
-
-        def define_new_refnml():
-            st.session_state.step2_make_newnamelist = True
-
-        col1.button('Add new reference namelist', on_click=define_new_refnml)
-
-        def define_clear_sources():
-            st.session_state.step2_mange_sources = True
-
-        col3.button('Manage Reference sources', on_click=define_clear_sources)
-
-        st.session_state.ref_data['general'] = ref_general
-
-        def define_step1():
-            st.session_state.step2_set = False
-
-        def define_step2():
-            st.session_state.step2_make = True
-
-        st.divider()
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.button(':back: Previous step', on_click=define_step1, help='Go to Evalution page')
-
-        with col4:
-            st.button('Next step :soon: ', on_click=define_step2, help='Go to Making page')
-
-    def __step2_setcheck(self, general_ref):
-        check_state = 0
-
-        ref_all_false = True
-        for selected_item in self.selected_items:
-            key = f'{selected_item}_ref_source'
-            if (general_ref[key] == []) or (general_ref[key] is None) or (len(general_ref[key]) == 0):
-                st.warning(f'Please choose at least one source data in {key.replace("_", " ")}!', icon="⚠")
-                check_state += 1
-            if selected_item not in st.session_state.step2_errorlist:
-                st.session_state.step2_errorlist[selected_item] = []
-
-        if check_state > 0:
-            st.session_state.step2_errorlist[selected_item].append(1)
-            st.session_state.step2_errorlist[selected_item] = list(
-                np.unique(st.session_state.step2_errorlist[selected_item]))
-            return False
-        if check_state == 0:
-            if (selected_item in st.session_state.step2_errorlist) & (
-                    1 in st.session_state.step2_errorlist[selected_item]):
-                st.session_state.step2_errorlist[selected_item] = list(
-                    filter(lambda x: x != 1, st.session_state.step2_errorlist[selected_item]))
-                st.session_state.step2_errorlist[selected_item] = list(
-                    np.unique(st.session_state.step2_errorlist[selected_item]))
-            return True
+class mange_reference:
+    def __init__(self):
+        self.author = "Qingchen Xu/xuqingchen0@gmail.com"
 
     def step2_make_new_refnml(self):
         if 'step2_add_nml' not in st.session_state:
@@ -201,14 +55,13 @@ class make_reference:
         </div>""", unsafe_allow_html=True)
         st.write(' ')
         file = st.radio("Set reference file 👇",
-                        ['Composite', 'Crop', 'Dam', 'Ecosystem', 'Energy', 'Forcing', 'Hydrology', 'Lake', 'River',
-                         'Urban'],
+                        ['Composite', 'Crop', 'Dam', 'Ecosystem', 'Energy', 'Forcing', 'Hydrology', 'Lake', 'River', 'Urban'],
                         key="ref_savefile", label_visibility='collapsed',
                         horizontal=True)
         ref_save_path = os.path.join(self.lib_path, file)
         st.divider()
 
-        newlib = {}  # st.session_state['new_lib']
+        newlib = {}
 
         def variables_change(key, editor_key):
             newlib[key] = st.session_state[editor_key]
@@ -225,7 +78,7 @@ class make_reference:
             if 'reflib_item' not in st.session_state:
                 st.session_state['reflib_item'] = self.initial.evaluation_items()
             Evaluation_Items = st.session_state['reflib_item']
-            # c = col.empty()
+
             col.write('')
             with col.popover("Variables items", use_container_width=True):
                 def Evaluation_Items_editor_change(key, editor_key):
@@ -514,17 +367,15 @@ class make_reference:
 
             return [item for item, value in Evaluation_Items.items() if value]
 
+        col1, col2 = st.columns((1, 2))
+        newlib['Ref_libname'] = col1.text_input(f'Reference lib name: ', value='',
+                                                key=f"Ref_libname",
+                                                on_change=variables_change,
+                                                args=(f"Ref_libname", 'Ref_libname'),
+                                                placeholder=f"Set your Reference lib...")
         if st.session_state['ref_form'] == 'Composite':
-            newlib = {}
             info_list = ['sub_dir', 'varname', 'varunit', 'prefix', 'suffix', 'syear', 'eyear']
-            col1, col2 = st.columns((1, 2))
-            newlib['Ref_libname'] = col1.text_input(f'Reference lib name: ', value='',
-                                                    key=f"Ref_libname",
-                                                    on_change=variables_change,
-                                                    args=(f"Ref_libname", 'Ref_libname'),
-                                                    placeholder=f"Set your Reference lib...")
             newlib['variables'] = get_var(col2)
-
             if len(newlib['Ref_libname']) > 0 and newlib['variables']:
                 newlib['general'] = {}
                 if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './data/'
@@ -592,22 +443,23 @@ class make_reference:
                                                                        placeholder="Set your Reference End year...")
                 else:
                     info_list = ['varname', 'varunit']
-                    newlib['general'][f"fulllist"] = st.text_input(f'Set Station Fulllist File: ',
-                                                                   value='',
-                                                                   key=f"new_lib_fulllist",
-                                                                   on_change=ref_main_change,
-                                                                   args=(f"fulllist", 'new_lib_fulllist'),
-                                                                   placeholder=f"Set your Reference Fulllist file...")
+                    if 'fulllist' not in newlib['general']: newlib['general']['fulllist'] = None
+                    if not newlib['general'][f"fulllist"]: newlib['general'][f"fulllist"] = None
+                    newlib['general'][f"fulllist"] = self.path_finder.get_file(newlib['general'][f"fulllist"],
+                                                                               f"new_lib_fulllist",
+                                                                               'csv', [None, None])
+                    st.code(f"Set Fulllist File: {newlib['general'][f'fulllist']}", language='shell', wrap_lines=True)
+
                     newlib['general']['grid_res'] = ''
                     newlib['general']['syear'] = ''
                     newlib['general']['eyear'] = ''
-
+                st.write('##### :orange[Add info]')
                 newlib['info_list'] = st.multiselect("Add info", info_list, default=['varname', 'varunit'],
                                                      key=f"variables_info_list",
                                                      on_change=variables_change,
                                                      args=('info_list', f"variables_info_list"),
                                                      placeholder="Choose an option",
-                                                     label_visibility="visible")
+                                                     label_visibility="collapsed")
 
                 info_lists = {'sub_dir': {'title': 'Set Data Sub-Dictionary', 'value': ''},
                               'varname': {'title': 'Set varname', 'value': ''},
@@ -645,17 +497,10 @@ class make_reference:
                                                                             key=f"{variable}_{info}",
                                                                             on_change=ref_info_change,
                                                                             args=(variable, info),
-                                                                            placeholder=f"Set your Reference Fulllist file...")
+                                                                            placeholder=f"Set your Reference Info...")
 
         else:
-            newlib = {}
             info_list = ['varname', 'varunit', 'prefix', 'suffix']
-            col1, col2 = st.columns((1, 2))
-            newlib['Ref_libname'] = col1.text_input(f'Reference lib name: ', value='',
-                                                    key=f"Ref_libname",
-                                                    on_change=variables_change,
-                                                    args=(f"Ref_libname", 'Ref_libname'),
-                                                    placeholder=f"Set your Reference lib...")
             newlib['variables'] = col2.selectbox("Variable selected",
                                                  [e.replace('_', ' ') for e in self.evaluation_items], index=None,
                                                  key=f"variable_select",
@@ -666,8 +511,8 @@ class make_reference:
 
             if newlib['Ref_libname'] and st.session_state['variable_select']:
                 newlib['general'] = {}
-                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './data/'
-                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './data/'
+                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = os.path.abspath('./data/')
+                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = os.path.abspath('./data/')
                 find_path = self.path_finder.find_path(newlib['general']['root_dir'], f"newlib_{newlib['Ref_libname']}_root_dir",
                                                        [None, None])
                 st.code(f"Dictionary: {find_path}", language='shell', wrap_lines=True)
@@ -726,22 +571,22 @@ class make_reference:
                                                                    placeholder="Set your Reference End year...")
                 else:
                     info_list = ['varname', 'varunit']
-                    newlib['general'][f"fulllist"] = st.text_input(f'Set Station Fulllist File: ',
-                                                                   value='',
-                                                                   key=f"new_lib_fulllist",
-                                                                   on_change=ref_main_change,
-                                                                   args=(f"fulllist", 'new_lib_fulllist'),
-                                                                   placeholder=f"Set your Reference Fulllist file...")
+                    if 'fulllist' not in newlib['general']: newlib['general']['fulllist'] = None
+                    if not newlib['general'][f"fulllist"]: newlib['general'][f"fulllist"] = None
+                    newlib['general'][f"fulllist"] = self.path_finder.get_file(newlib['general'][f"fulllist"],
+                                                                               f"new_lib_fulllist",
+                                                                               'csv', [None, None])
+                    st.code(f"Set Fulllist File: {newlib['general'][f'fulllist']}", language='shell', wrap_lines=True)
                     newlib['general']['grid_res'] = ''
                     newlib['general']['syear'] = ''
                     newlib['general']['eyear'] = ''
-
+                st.write('##### :orange[Add info]')
                 newlib['info_list'] = st.multiselect("Add info", info_list, default=info_list,
                                                      key=f"variables_info_list",
                                                      on_change=variables_change,
                                                      args=('info_list', f"variables_info_list"),
                                                      placeholder="Choose an option",
-                                                     label_visibility="visible")
+                                                     label_visibility="collapsed")
 
                 info_lists = {'sub_dir': {'title': 'Set Data Sub-Dictionary', 'value': ''},
                               'varname': {'title': 'Set varname', 'value': ''},
@@ -772,8 +617,16 @@ class make_reference:
                                                                 placeholder=f"Set your Reference Fulllist file...")
 
         disable = False
+
         if not newlib['Ref_libname']:
             st.error('Please input your Reference lib name First!')
+            disable = True
+        elif isinstance(newlib['variables'], list):
+            if len(newlib['variables']) == 0:
+                st.error('Please input your Reference lib variables First!')
+                disable = True
+        elif newlib['variables'] is None:
+            st.error('Please input your Reference lib variables First!')
             disable = True
         else:
             if not newlib['general']['root_dir']:
@@ -787,8 +640,7 @@ class make_reference:
             st.session_state.step2_add_nml = True
 
         col1, col2, col3 = st.columns(3)
-        if col1.button('Make namelist', on_click=define_add, help='Press this button to add new reference namelist',
-                       disabled=disable):
+        if col1.button('Make namelist', on_click=define_add, help='Press this button to add new reference namelist', disabled=disable):
             self.__step2_make_ref_lib_namelist(ref_save_path, newlib, form)
             st.success("😉 Make file successfully!!! \n Please press to Next step")
 
@@ -852,15 +704,15 @@ class make_reference:
                         self.ref_sources['general'][variable]]
                     if newlib["Ref_libname"] not in self.ref_sources['general'][variable]:
                         self.ref_sources['general'][variable].append(newlib["Ref_libname"])
-                self.ref_sources['def_nml'][newlib["Ref_libname"]] = file_path + f'/{newlib["Ref_libname"]}.nml'
-
             else:
                 variable = variable.replace(' ', '_')
                 if isinstance(self.ref_sources['general'][variable], str): self.ref_sources['general'][variable] = [
                     self.ref_sources['general'][variable]]
                 if newlib["Ref_libname"] not in self.ref_sources['general'][variable]:
                     self.ref_sources['general'][variable].append(newlib["Ref_libname"])
-                self.ref_sources['def_nml'][newlib["Ref_libname"]] = file_path + f'/{newlib["Ref_libname"]}.nml'
+
+            self.ref_sources['def_nml'][newlib["Ref_libname"]] = Path(
+                os.path.relpath(os.path.join(file_path + f'{newlib["Ref_libname"]}.nml'), self.base_path))
 
             with open('./GUI/Namelist_lib/Reference_lib.nml', 'w') as f1:
                 lines = []
@@ -881,7 +733,6 @@ class make_reference:
                 for line in lines:
                     f1.write(line)
             time.sleep(0.5)
-            # return True
 
     def step2_mange_sources(self):
         if 'step2_remove' not in st.session_state:
@@ -962,7 +813,8 @@ class make_reference:
                     lines.append("&def_nml\n")
                     max_key_length = max(len(key) for key in Ref_lib['def_nml'].keys())
                     for key in list(Ref_lib['def_nml'].keys()):
-                        lines.append(f"    {key:<{max_key_length}} = {Ref_lib['def_nml'][f'{key}']}\n")
+                        if key not in sources or key not in sources.values():
+                            lines.append(f"    {key:<{max_key_length}} = {Ref_lib['def_nml'][f'{key}']}\n")
                     lines.append(end_line)
                     for line in lines:
                         f1.write(line)
@@ -980,6 +832,7 @@ class make_reference:
         if st.button('Remove cases', on_click=define_remove, help='Press to remove cases', disabled=disable):
             with remove_contain:
                 remove(sources)
+            Ref_lib = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
 
         st.divider()
 
@@ -994,24 +847,150 @@ class make_reference:
         st.button('Finish and back to select page', on_click=define_back, args=(remove_contain, 'remove_contain'),
                   help='Finish add and go back to select page')
 
+
+class make_reference(mange_reference):
+    def __init__(self, initial):
+        self.author = "Qingchen Xu/xuqingchen23@163.com"
+        self.initial = initial
+
+        self.nl = NamelistReader()
+        self.ref_sources = self.nl.read_namelist('./GUI/Namelist_lib/Reference_lib.nml')
+        self.path_finder = FindPath()
+        self.base_path = Path(st.session_state.openbench_path)
+
+        self.evaluation_items = st.session_state.evaluation_items
+        self.selected_items = [k for k, v in self.evaluation_items.items() if v]
+        self.tittles = [k.replace('_', ' ') for k, v in self.evaluation_items.items() if v]
+        st.session_state.selected_items = self.selected_items
+        st.session_state.tittles = self.tittles
+
+        self.ref = self.initial.ref()
+        self.classification = self.initial.classification()
+        self.lib_path = os.path.join(st.session_state.namelist_path, 'Ref_variables_defination')
+
+    def step2_set(self):
+        if 'ref_change' not in st.session_state:
+            st.session_state.ref_change = {'general': False}
+
+        st.subheader(f'Select your Reference source', divider=True)
+
+        if st.session_state.ref_data['general']:
+            ref_general = st.session_state.ref_data['general']
+        else:
+            ref_general = self.ref['general']
+
+        def ref_data_change(key, editor_key):
+            ref_general[key] = st.session_state[editor_key]
+            st.session_state.ref_change['general'] = True
+
+        for selected_item in self.selected_items:
+            item = f"{selected_item}_ref_source"
+            if item not in ref_general:
+                ref_general[item] = []
+            if isinstance(ref_general[item], str): ref_general[item] = [ref_general[item]]
+
+            label_text = f"<span style='font-size: 20px;'>{selected_item.replace('_', ' ')} reference cases ....</span>"
+            st.markdown(f":blue[{label_text}]", unsafe_allow_html=True)
+            if len(self.ref_sources['general'][selected_item]) == 0:
+                st.warning(f"Sorry we didn't offer reference data for {selected_item.replace('_', ' ')}, please upload!")
+
+            st.multiselect("Reference offered",
+                           [value for value in self.ref_sources['general'][selected_item]],
+                           default=[value for value in ref_general[item] if value in self.ref_sources['general'][selected_item]],
+                           key=f"{item}_multi",
+                           on_change=ref_data_change,
+                           args=(item, f"{item}_multi"),
+                           placeholder="Choose an option",
+                           label_visibility="collapsed")
+
+        st.session_state.step2_set_check = self.__step2_setcheck(ref_general)
+
+        sources = list(set([value for key in self.selected_items for value in ref_general[f"{key}_ref_source"] if value]))
+        st.session_state.ref_data['def_nml'] = {}
+        for source in sources:
+            st.session_state.ref_data['def_nml'][source] = self.ref_sources['def_nml'][source]
+            if source not in st.session_state.ref_change:
+                st.session_state.ref_change[source] = False
+
+        for source in st.session_state.ref_data.keys():
+            if source not in sources + ['general', 'def_nml']:
+                del st.session_state.ref_data[source]
+
+        formatted_keys = " \n".join(
+            f'{key.replace("_", " ")}: {", ".join(value for value in ref_general[f"{key}_ref_source"] if value)}' for
+            key in
+            self.selected_items)
+        sourced_key = " \n".join(f"{source}: {self.ref_sources['def_nml'][source]}" for source in sources)
+        st.code(f'''{formatted_keys}\n\n{sourced_key}''', language="shell", line_numbers=True, wrap_lines=True)
+
+        col1, col, col3 = st.columns(3)
+
+        def define_new_refnml():
+            st.session_state.step2_make_newnamelist = True
+
+        col1.button('Add new reference namelist', on_click=define_new_refnml)
+
+        def define_clear_sources():
+            st.session_state.step2_mange_sources = True
+
+        col3.button('Manage Reference sources', on_click=define_clear_sources)
+
+        st.session_state.ref_data['general'] = ref_general
+
+        def define_step1():
+            st.session_state.step2_set = False
+
+        def define_step2():
+            st.session_state.step2_make = True
+
+        st.divider()
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.button(':back: Previous step', on_click=define_step1, help='Go to Evalution page')
+
+        with col4:
+            st.button('Next step :soon: ', on_click=define_step2, help='Go to Making page')
+
+    def __step2_setcheck(self, general_ref):
+        check_state = 0
+
+        for selected_item in self.selected_items:
+            key = f'{selected_item}_ref_source'
+            if (general_ref[key] == []) or (general_ref[key] is None) or (len(general_ref[key]) == 0):
+                st.error(f'Please choose at least one source data in {key.replace("_", " ")}!', icon="⚠")
+                check_state += 1
+            if selected_item not in st.session_state.step2_errorlist:
+                st.session_state.step2_errorlist[selected_item] = []
+
+            if check_state > 0:
+                st.session_state.step2_errorlist[selected_item].append(1)
+                st.session_state.step2_errorlist[selected_item] = list(np.unique(st.session_state.step2_errorlist[selected_item]))
+                return False
+            if check_state == 0:
+                if (selected_item in st.session_state.step2_errorlist) & (
+                        1 in st.session_state.step2_errorlist[selected_item]):
+                    st.session_state.step2_errorlist[selected_item] = list(
+                        filter(lambda x: x != 1, st.session_state.step2_errorlist[selected_item]))
+                    st.session_state.step2_errorlist[selected_item] = list(
+                        np.unique(st.session_state.step2_errorlist[selected_item]))
+                return True
+
     def step2_make(self):
         if 'step2_make_check' not in st.session_state:
             st.session_state.step2_make_check = False
 
-        selected_items = self.selected_items
-        tittles = self.tittles
         ref_general = st.session_state.ref_data['general']
         def_nml = st.session_state.ref_data['def_nml']
 
         if ref_general and def_nml:
             st.session_state.step2_check = []
-            for i, (source, path), tab in zip(range(len(def_nml)), def_nml.items(), st.tabs(def_nml.keys())):
+            for (source, path), tab in zip(def_nml.items(), st.tabs(def_nml.keys())):
                 try:
                     if source not in st.session_state.ref_data:
                         st.session_state.ref_data[source] = self.nl.read_namelist(path)
                     tab.subheader(f':blue[{source} Reference checking ....]', divider=True)
                     with tab:
-                        self.__step2_make_ref_info(i, source, st.session_state.ref_data[source], path, ref_general)
+                        self.__step2_make_ref_info(source, st.session_state.ref_data[source], ref_general)
                 except Exception as e:
                     st.error(f'Error: {e}')
             if all(st.session_state.step2_check):
@@ -1037,7 +1016,7 @@ class make_reference:
             st.button('Next step :soon: ', on_click=define_step2, help='Go to Reference nml page',
                       use_container_width=True)
 
-    def __step2_make_ref_info(self, i, source, source_lib, file, ref_general):
+    def __step2_make_ref_info(self, source, source_lib, ref_general):
 
         def ref_editor_change(key, editor_key, source):
             source_lib[key][editor_key] = st.session_state[f"{source}_{key}_{editor_key}"]
@@ -1055,12 +1034,12 @@ class make_reference:
 
             if source_lib[key]['data_type'] == 'stn':
                 if 'Streamflow' not in source_lib.keys():
-                if 'fulllist' not in source_lib[key]: source_lib[key][f"fulllist"] = None
-                if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
-                source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"],
-                                                                         f"{source}_{key}_fulllist",
-                                                                         'csv', ['ref_change', source])
-                st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
+                    if 'fulllist' not in source_lib[key]: source_lib[key][f"fulllist"] = None
+                    if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
+                    source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"],
+                                                                             f"{source}_{key}_fulllist",
+                                                                             'csv', ['ref_change', source])
+                    st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
 
             cols = itertools.cycle(st.columns(2))
             for key, values in source_lib.items():
@@ -1068,7 +1047,7 @@ class make_reference:
                     if source in ref_general[f'{key}_ref_source']:
                         if key == 'Streamflow':
                             for info in ['max_uparea', 'min_uparea']:
-                        col = next(cols)
+                                col = next(cols)
                                 source_lib[key][info] = col.number_input(info.title().replace("_", " "),
                                                                          value=source_lib[key][info],
                                                                          key=f"{key}_{info}",
@@ -1091,19 +1070,17 @@ class make_reference:
     def __step2_makecheck(self, source_lib, source):
         error_state = 0
         warning_state = 0
+
         general_list = ["root_dir", "timezone", "data_type", "data_groupby", "tim_res"]
         grid_list = ["grid_res", "syear", "eyear"]
         stn_list = ["fulllist"]
         info_list = ['sub_dir', 'varname', 'varunit', 'prefix', 'suffix', 'syear', 'eyear']
         for key in general_list:
-            if isinstance(source_lib['general'][key], str) and 'Streamflow' not in source_lib.keys():
+            if isinstance(source_lib['general'][key], str):
                 if len(source_lib['general'][key]) < 1:
-                    st.error(f'general: {key} should be a string longer than one, please check {key}.',
-                             icon="⚠")
                     error_state += 1
                 else:
-                    st.warning(f'general: {key} should be a string longer than one, please check {key}.',
-                               icon="⚠")
+                    warning_state += 1
 
         if source_lib['general']["data_type"] == 'grid':
             if "grid_res" in source_lib['general'].keys():
@@ -1123,32 +1100,28 @@ class make_reference:
         else:
             if 'Streamflow' not in source_lib.keys():
                 if not source_lib['general']["fulllist"]:
-                st.error(f"general : Fulllist should not be empty when data_type is 'stn'.",
-                         icon="⚠")
-                error_state += 1
+                    error_state += 1
+            else:
+                if isinstance(source_lib['general']["fulllist"], str):
+                    if len(source_lib['general']["fulllist"]) < 1:
+                        warning_state += 1
 
         for var in source_lib.keys():
             if var != 'general':
                 for key in source_lib[var].keys():
                     if key in ['varname', 'varunit']:  #
-                        if var in self.selected_items and source in st.session_state.ref_data['general'][
-                            f'{var}_ref_source']:
+                        if var in self.selected_items and source in st.session_state.ref_data['general'][f'{var}_ref_source']:
                             if len(source_lib[var][key]) < 1:
-                                st.error(f'{var}: {key} should be a string longer than one, please check.',
-                                         icon="⚠")
+                                st.error(f'{var}: {key} should be a string longer than one, please check.', icon="⚠")
                                 error_state += 1
-                        if len(source_lib[var][key]) < 1:
-                            warning_state += 1
-                    elif key == 'sub_dir':
-                        if source_lib[var][key] is None:
-                            st.warning(f'{var}: {key} should be a string, please check.',
-                                       icon="⚠")
-                            # warning_state += 1
-                        else:
-                            if len(source_lib[var][key]) < 1:
-                                st.warning(f'{var}: {key} should be a string longer than one, please check.',
-                                           icon="⚠")
-                                # warning_state += 1
+                    # elif key == 'sub_dir':
+                    #     if source_lib[var][key] is None:
+                    #         st.warning(f'{var}: {key} should be a string, please check.',
+                    #                    icon="⚠")
+                    #     else:
+                    #         if len(source_lib[var][key]) < 1:
+                    #             st.warning(f'{var}: {key} should be a string longer than one, please check.',
+                    #                        icon="⚠")
                     elif key in ['prefix', 'suffix']:
                         if len(source_lib[var]['prefix']) < 1 and len(source_lib[var]['suffix']) < 1:
                             warning_state += 1
@@ -1156,11 +1129,10 @@ class make_reference:
                         if not isinstance(source_lib[var][key], int):
                             warning_state += 1
                         if source_lib[var]["syear"] > source_lib[var]["eyear"]:
-                            warning_state += 1
+                            error_state += 1
 
         if warning_state > 0:
-            st.warning(f"Some mistake in source,please check your file!",
-                       icon="⚠")
+            st.warning(f"Some mistake in source, please check your file!", icon="⚠")
 
         if source not in st.session_state.step2_errorlist:
             st.session_state.step2_errorlist[source] = []
