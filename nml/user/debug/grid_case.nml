@@ -1,0 +1,20 @@
+&general
+  model_namelist = ./nml/Mod_variables_defination/CoLM.nml
+  timezone       = 0.0
+  data_type      = grid
+  data_groupby   = month
+  fulllist       = 
+  tim_res        = month
+  grid_res       = 0.5
+  suffix         = 
+  prefix         = grid_case_hist_
+  syear          = 2004
+  eyear          = 2005
+  root_dir       = ./data/simulation/degub/grid
+/
+
+&Gross_Primary_Productivity
+  varname = f_gpp
+  varunit = g m-2 s-1
+/
+
