@@ -912,9 +912,13 @@ class make_reference(mange_reference):
             if source not in st.session_state.ref_change:
                 st.session_state.ref_change[source] = False
 
-        for source in st.session_state.ref_data.keys():
-            if source not in sources + ['general', 'def_nml']:
-                del st.session_state.ref_data[source]
+        keys = st.session_state.ref_data.keys()
+        from difflib import ndiff
+
+        diff = list(ndiff(list(keys), sources))
+        for source in diff:
+            if source.startswith('- ') and source not in ['- general', '- def_nml']:
+                del st.session_state.ref_data[source.split(' ')[1]]
 
         formatted_keys = " \n".join(
             f'{key.replace("_", " ")}: {", ".join(value for value in ref_general[f"{key}_ref_source"] if value)}' for
