@@ -179,9 +179,17 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         else:
             # Mask the observation data with simulation data to ensure consistent coverage
             logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
-            o = xr.open_dataset(
-                f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
-                f'{general_info["ref_varname"]}']
+            try:
+                o = xr.open_dataset(
+                    f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+                    f'{general_info["ref_varname"]}']
+            except FileNotFoundError as e:
+                logging.error(f"Could not find output data: {e}")
+                logging.info(f"Processing ref data")
+                dataset_processer.process('ref')
+                o = xr.open_dataset(
+                    f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+                    f'{general_info["ref_varname"]}']
             s = xr.open_dataset(
                 f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
                 f'{general_info["sim_varname"]}']
