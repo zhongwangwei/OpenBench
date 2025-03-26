@@ -1,0 +1,22 @@
+&general
+    model_namelist = ./nml/Mod_variables_defination/CoLM.nml
+    timezone       = 0.0
+    data_type      = stn
+    data_groupby   = year
+    tim_res        = hour
+    fulllist       = ./data/simulation/degub/station_case.csv
+    grid_res       = 1.
+    syear          = 
+    eyear          = 
+    suffix         = 
+    prefix         = 
+    root_dir       = ./data/simulation/degub/stn
+/
+
+
+&Gross_Primary_Productivity
+    varname = f_assim
+    varunit = mol m-2 s-1
+/
+
+
