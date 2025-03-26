@@ -200,11 +200,11 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
+    if option['show_method'] == 'interpolate':
+        cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=option['extend'])
+    else:
         cs = ax.imshow(ds[xitem].values, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
                        origin=origin)
-    elif option['show_method'] == 'contourf':
-        cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=option['extend'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
