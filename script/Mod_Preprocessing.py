@@ -244,13 +244,19 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 logging.error(f"Error: The reference file {file_path} does not exist!")
                 sys.exit(1)
         elif general_info['ref_data_groupby'].lower() == 'year':
-            for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
+            #get min year of general_info['use_syear'] and max year of general_info['use_eyear']
+            min_year = min(int(general_info['use_syear']))
+            max_year = max(int(general_info['use_eyear']))
+            for year in range(min_year, max_year + 1):
                 file_path = os.path.join(general_info['ref_dir'], f'{general_info["ref_prefix"]}{year}{general_info["ref_suffix"]}.nc')
                 if not os.path.exists(file_path):
                     logging.error(f"Error: The reference file {file_path} does not exist!")
                     sys.exit(1)
         elif general_info['ref_data_groupby'].lower() == 'month':
-            for year in range(general_info['use_syear'], general_info['use_eyear'] + 1):
+            #get min year of general_info['use_syear'] and max year of general_info['use_eyear']
+            min_year = min(int(general_info['use_syear']))
+            max_year = max(int(general_info['use_eyear']))
+            for year in range(min_year, max_year + 1):
                 file_path = os.path.join(general_info['ref_dir'], f'{general_info["ref_prefix"]}{year}*{general_info["ref_suffix"]}.nc')
                 file_count = len(glob.glob(file_path))
                 #check if the file_count is 12
@@ -273,13 +279,19 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 logging.error(f"Error: The simulation file {file_path} does not exist!")
                 sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'year':
-            for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
+            #get min year of general_info['use_syear'] and max year of general_info['use_eyear']
+            min_year = min(int(general_info['use_syear']))
+            max_year = max(int(general_info['use_eyear']))
+            for year in range(min_year, max_year + 1):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}{general_info["sim_suffix"]}.nc')
                 if not os.path.exists(file_path):
                     logging.error(f"Error: The simulation file {file_path} does not exist!")
                     sys.exit(1)
         elif general_info['sim_data_groupby'].lower() == 'month':
-            for year in range(int(general_info['use_syear']), int(general_info['use_eyear'] + 1)):
+            #get min year of general_info['use_syear'] and max year of general_info['use_eyear']
+            min_year = min(int(general_info['use_syear']))
+            max_year = max(int(general_info['use_eyear']))
+            for year in range(min_year, max_year + 1):
                 file_path = os.path.join(general_info['sim_dir'], f'{general_info["sim_prefix"]}{year}*{general_info["sim_suffix"]}.nc')
                 file_count = len(glob.glob(file_path))
                 if file_count != 12:
