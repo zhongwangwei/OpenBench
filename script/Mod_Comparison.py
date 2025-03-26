@@ -1481,13 +1481,19 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         # Check if any valid relative scores were calculated
                         if not combined_relative_scores.empty:
                             # Save the combined relative scores to a single file
+                            try:
+                                combined_relative_scores['ref_lon'] = df['ref_lon'].values
+                                combined_relative_scores['ref_lat'] = df['ref_lat'].values
+                            except:
+                                combined_relative_scores['sim_lon'] = df['sim_lon'].values
+                                combined_relative_scores['sim_lat'] = df['sim_lat'].values
                             combined_relative_scores.to_csv(
-                                f"{dir_path}/{evaluation_item}_stn_{ref_source}_relative_scores.csv",
+                                f"{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv",
                                 index=False  # Exclude the row index
                             )
                         else:
                             logging.warning(f"No valid data found for {evaluation_item}, {ref_source}")  # More specific message
-
+                        make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'stn', self.main_nml['general'], option)
                     else:
                         for score in scores:
                             file_pattern = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc'
@@ -1523,8 +1529,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                 output_file = f'{dir_path}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
                                 result_ds.to_netcdf(output_file)
-
-                                # print(f"Relative scores calculated and saved for {evaluation_item}, {ref_source}, {sim_source}, {score}")
+                        make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid', self.main_nml['general'],
+                                                                 option)
 
     def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics,
                                                             option):
@@ -2203,7 +2209,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             output_path = f'{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv'
                             logging.info(f"Saving evaluation to {output_path}")
                             basic_data.to_csv(output_path, index=False)
-                            make_stn_plot_index(output_path, basic_method, self.main_nml['general'], (ref_source,sim_source),option)
+                            make_stn_plot_index(output_path, basic_method, self.main_nml['general'], (ref_source, sim_source), option)
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                 else:
@@ -2257,7 +2263,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             for sim_source in sim_sources:
                 # Skip if only one simulation source
 
-
                 sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
 
@@ -2306,7 +2311,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             for sim_source in sim_sources:
                 # Skip if only one simulation source
-
 
                 sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
@@ -2403,13 +2407,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             f'{sim_varname1}']
                         ds2 = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')[
                             f'{sim_varname2}']
-                        result = method_function(*[ds1,ds2])
+                        result = method_function(*[ds1, ds2])
                         output_file = f'{dir_path}/{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc'
                         self.save_result(output_file, method_name, result)
                         make_Correlation(output_file, method_name, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}")
-
 
     def save_result(self, output_file, method_name, result):
         # Remove the existing output directory

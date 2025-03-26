@@ -9,6 +9,7 @@ from figlib.Fig_stn_plot_index import make_stn_plot_index
 from figlib.Fig_LC_based_heat_map import make_LC_based_heat_map
 from figlib.Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
 from figlib.Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
+from figlib.Fig_Relative_Score import make_scenarios_comparison_Relative_Score
 from figlib.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
 from figlib.Fig_Diff_Plot import make_scenarios_comparison_Diff_Plot
 
@@ -33,6 +34,7 @@ __all__ = [
     "make_LC_based_heat_map",
     "make_scenarios_comparison_Whisker_Plot",
     "make_scenarios_comparison_Single_Model_Performance_Index",
+    "make_scenarios_comparison_Relative_Score",
     "make_scenarios_comparison_Ridgeline_Plot",
     "make_scenarios_comparison_Diff_Plot",
 

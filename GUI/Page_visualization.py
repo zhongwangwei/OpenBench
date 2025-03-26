@@ -344,7 +344,43 @@ class visualization_validation:
                     st.error(f'Missing Figure for SMIP', icon="⚠")
 
             elif item == "Relative_Score":
-                st.info(f'Relative_Score not ready yet!', icon="ℹ️")
+                st.cache_data.clear()
+                st.write('##### :orange[Evaluation Items]')
+                selected_item = st.radio('selected_items', [k.replace("_", " ") for k in self.selected_items], index=None,
+                                         horizontal=True, key=f'{item}_item', label_visibility='collapsed')
+
+                if selected_item:
+                    st.divider()
+                    selected_item = selected_item.replace(" ", "_")
+                    sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+                    ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    for ref_source in ref_sources:
+                        for sim_source in sim_sources:
+                            if (self.ref[ref_source]['general'][f'data_type'] != 'stn') & (self.sim[sim_source]['general'][f'data_type'] != 'stn'):
+                                filenames = glob.glob(os.path.join(figure_path, f'{selected_item}_ref_{ref_source}_sim_{sim_source}_Relative*'))
+                                filtered_list = [f for f in filenames if not f.endswith('.nc')]
+                                for filename in filtered_list:
+                                    try:
+                                        image = load_image(filename)
+                                        relative_part = filename.split("Relative")[-1].split(".")[0]
+                                        st.image(image, caption=f'Reference: {ref_source}, Simulation: {sim_source} Relative:{relative_part}',
+                                                 use_container_width=True)
+                                    except:
+                                        st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source} Relative:{relative_part}', icon="⚠")
+                            else:
+                                filenames = glob.glob(os.path.join(figure_path, f'{selected_item}_stn_{ref_source}_{sim_source}_relative_*'))
+                                filtered_list = [f for f in filenames if not f.endswith('.csv')]
+                                for filename in filtered_list:
+                                    try:
+                                        image = load_image(filename)
+                                        relative_part = filename.split("relative")[-1].split(".")[0]
+                                        st.image(image, caption=f'Reference: {ref_source}, Simulation: {sim_source} Relative:{relative_part}',
+                                                 use_container_width=True)
+                                    except:
+                                        st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source} Relative:{relative_part}', icon="⚠")
+
 
             elif item == "Diff_Plot":
                 st.cache_data.clear()
@@ -1493,4 +1529,40 @@ class visualization_replot_Comparison:
                     st.info('Function for station data is still on develop!')
 
     def Relative_Score(self, dir_path, item):
-        st.info(f'Relative_Score not ready yet!', icon="ℹ️")
+        st.cache_data.clear()
+        st.write('##### :orange[Evaluation Items]')
+        selected_item = st.radio('selected_items', [k.replace("_", " ") for k in self.selected_items], index=None,
+                                 horizontal=True, key=f'{item}_item', label_visibility='collapsed')
+        if selected_item:
+            st.divider()
+            col1, col2, col3 = st.columns(3)
+            selected_item = selected_item.replace(" ", "_")
+            sim_sources = self.sim['general'][f'{selected_item}_sim_source']
+            ref_sources = self.ref['general'][f'{selected_item}_ref_source']
+            if isinstance(sim_sources, str): sim_sources = [sim_sources]
+            if isinstance(ref_sources, str): ref_sources = [ref_sources]
+            col1.write('##### :orange[Reference]')
+            col2.write('##### :orange[Simulation]')
+            col3.write('##### :orange[Scores]')
+            ref_source = col1.radio("Relative_Score_refsource", [source for source in ref_sources],
+                                    index=None, horizontal=False, key=f'{item}_ref_source', label_visibility="collapsed")
+            sim_source = col2.radio("Relative_Score_simsource", [source for source in sim_sources],
+                                    index=None, horizontal=False, key=f'{item}_sim_source', label_visibility="collapsed")
+            iscore = col3.radio("Relative_Score_score", [key.replace("_", " ") for key, value in self.scores.items() if value],
+                                index=None, horizontal=False, key=f'{item}_score', label_visibility="collapsed")
+            if ref_source and sim_source and iscore:
+                score = iscore.replace(" ", "_")
+                ref_type = self.ref[ref_source]['general'][f'data_type']
+                sim_type = self.sim[sim_source]['general'][f'data_type']
+                if (ref_type != 'stn') & (sim_type != 'stn'):
+                    try:
+                        filename = f'{selected_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
+                        make_Relative_Score_Plot(dir_path, filename, selected_item, ref_source, sim_source, score, 'grid')
+                    except:
+                        st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source} Relative:{score}', icon="⚠")
+                else:
+                    try:
+                        filename = f'{selected_item}_stn_{ref_source}_{sim_source}_relative_scores.csv'
+                        make_Relative_Score_Plot(dir_path, filename, selected_item, ref_source, sim_source, score, 'stn')
+                    except:
+                        st.error(f'Missing Figure for Reference: {ref_source}, Simulation: {sim_source} Relative:{score}', icon="⚠")
