@@ -715,8 +715,8 @@ class GeneralInfoReader(NamelistReader):
         self.stn_list = self.stn_list[self.stn_list['Flag']]
         logging.info(f"Total number of stations selected: {len(self.stn_list)}")
         logging.info(self.stn_list)
-        self.use_syear = self.use_syear[0]
-        self.use_eyear = self.use_eyear[0]
+        #self.use_syear = self.use_syear[0]
+        #self.use_eyear = self.use_eyear[0]
 
     def _station_filter_criteria(self, row):
         """Define criteria for filtering stations."""
