@@ -1045,7 +1045,7 @@ class mange_simulation:
                 self.sim_sources['general']['Case_lib']]
             if newlib["Sim_casename"] not in self.sim_sources['general']['Case_lib']:
                 self.sim_sources['general']['Case_lib'].append(newlib["Sim_casename"])
-            case_path = os.path.join(sim_save_path + f'{newlib["Sim_casename"]}.nml')
+            case_path = os.path.join(sim_save_path, f'{newlib["Sim_casename"]}.nml')
             self.sim_sources['def_nml'][newlib["Sim_casename"]] = self.path_finder.check_rel_path(case_path)
 
             with open('./GUI/Namelist_lib/Simulation_lib.nml', 'w') as f1:
@@ -1256,6 +1256,7 @@ class mange_simulation:
         st.button('Finish and back to select page', on_click=define_back, args=(remove_contain, 'remove_contain'),
                   help='Finish add and go back to select page')
 
+
 class make_simulation(mange_simulation):
     def __init__(self, initial):
         self.author = "Qingchen Xu/xuqingchen23@163.com"
@@ -1320,9 +1321,12 @@ class make_simulation(mange_simulation):
             st.session_state.sim_data['def_nml'][source] = self.sim_sources['def_nml'][source]
             st.session_state.sim_change[source] = False
 
-        for source in st.session_state.sim_data.keys():
-            if source not in sources + ['general', 'def_nml']:
-                del st.session_state.sim_data[source]
+        keys = st.session_state.sim_data.keys()
+        from difflib import ndiff
+        diff = list(ndiff(list(keys), sources))
+        for source in diff:
+            if source.startswith('- ') and source not in ['- general', '- def_nml']:
+                del st.session_state.sim_data[source.split(' ')[1]]
 
         formatted_keys = " \n".join(
             f'{key.replace("_", " ")}: {", ".join(value for value in sim_general[f"{key}_sim_source"] if value)}' for key in self.selected_items)
@@ -1386,7 +1390,6 @@ class make_simulation(mange_simulation):
             return False
         if check_state == 0:
             return True
-
 
     def step3_make(self):
         sim_general = st.session_state.sim_data['general']

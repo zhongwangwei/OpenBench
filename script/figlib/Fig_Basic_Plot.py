@@ -258,11 +258,11 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
-                        origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+    else:
+        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+                                origin=origin)
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -820,10 +820,11 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
+
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
