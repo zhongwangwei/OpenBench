@@ -101,12 +101,12 @@ def make_Z_Score(output_dir, method_name, data_sources, main_nml, statistic_nml,
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
-    # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
-    # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
+
+
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
     rivers = cfeature.NaturalEarthFeature(

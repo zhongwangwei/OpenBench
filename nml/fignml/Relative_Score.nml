@@ -1,21 +1,46 @@
 &general
-  title               =
-  title_fontsize      = 18
-  xlabel              =
-  xtick               = 16
-  fontsize            = 15
-  axes_linewidth      = 1
+  title             =
+  title_size        = 18
+  xticklabel        =
+  xtick             = 15          # xtickslabel size setting
+  yticklabel        =
+  ytick             = 15          # ytickslabel size setting
+  labelsize         = 17
+  axes_linewidth    = 1
 
-  linewidth           = 1.5
-  alpha               = 0.2
+  set_lat_lon       = False  # 'True', 'False' Turn on this option, the map will be plot by your setting.
+  min_lon           = -180
+  max_lon           = 180
+  min_lat           = -90
+  max_lat           = 90
 
-  vlinestyle          = dashed  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
-  vlinewidth          = 1.5
+  cmap              = coolwarm
+            #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
+            # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm', ,'RdYlBu'
 
+  show_method       = None # interpolate, None
+  colorbar_position = horizontal
+  extend            = neither    # 'neither', 'both', 'min', 'max'
+#  colorbar_ticks    = 0.1
+  colorbar_label    =
 
-  x_wise              = 10
-  y_wise              = 6
-  saving_format       = jpg
-  font                = DejaVu Sans # 'DejaVu Sans' 'Times new roman' 'Arial' 'Courier New' 'Comic Sans MS' 'Verdana' 'Helvetica''Georgia' 'Tahoma' 'Trebuchet MS' 'Lucida Grande'
-  dpi                 = 300
+  colorbar_position_set = False  # 'True', 'False'
+  colorbar_left     =  0.26
+  colorbar_bottom   =  0.14
+  colorbar_width    =  0.5
+  colorbar_height   =  0.03
+
+  marker            =  o  # '.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"
+  markersize        =  15
+
+  vmin_max_on       = false  # 'True', 'False' Be cautious about this option, if turn on then all the metrics and scores will share the same max/min values
+  vmin              = -1
+  vmax              = 1
+
+  x_wise            = 10
+  y_wise            = 6
+
+  saving_format     = jpg
+  font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi               = 300
 /
