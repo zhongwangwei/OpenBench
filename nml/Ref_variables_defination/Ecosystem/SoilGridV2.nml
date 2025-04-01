@@ -11,7 +11,7 @@
 
 &Soil_Carbon
 varname           =  ocd #sm_0_5
-varunit           =  kg C m-3
+varunit           =  kg C m-2
 prefix            =  soilgrid_v2_ocd
 suffix            =  
 /

@@ -1447,57 +1447,79 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         if not all_files:
                             logging.warning(f"No files found for pattern: {file_pattern}")
                             continue
+                        if len(all_files) < 2:
+                            continue
 
                         combined_relative_scores = pd.DataFrame()
+                        filex = f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                        df_sim = pd.read_csv(filex, sep=',', header=0)
+                        ID = df_sim['ID']
+                        combined_relative_scores['ID'] = df_sim['ID']
+                        df_sim.set_index('ID', inplace=True)
 
                         # Read all files
                         for score in scores:
                             dfs = []
                             score_column = None
-                            for file in all_files:
+                            for i, file in enumerate(all_files):
                                 df = pd.read_csv(file, sep=',', header=0)
-                                df1 = df[f'{score}']
-                                dfs.append(df1)
-
+                                df.set_index('ID', inplace=True)
+                                df = df.reindex(ID)
+                                dfs.append(df[f'{score}'])
                                 if not dfs:
                                     logging.warning(
                                         f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}")
                                     continue
-
-                                # Combine all dataframes
-                                combined_df = pd.concat(dfs, axis=1)
-                                score_mean = combined_df.mean(axis=1)
-                                score_std = combined_df.std(axis=1)
-
+                            # Combine all dataframes
+                            combined_df = pd.concat(dfs, axis=1)  # .groupby('ID').first()
+                            score_mean = combined_df.mean(axis=1, skipna=True)
+                            score_std = combined_df.std(axis=1, skipna=True)
                             # Calculate relative scores for each file
-                            for i, filex in enumerate(all_files):
-                                df = pd.read_csv(filex, sep=',', header=0)
-                                combined_relative_scores['ID'] = df['ID']
-                                relative_scores = (df[f'{score}'] - score_mean) / score_std
+                            relative_scores = (df_sim[f'{score}'].values - score_mean.values) / score_std.values
 
-                                # Add the relative scores as a new column to the combined dataframe
-                                combined_relative_scores[f'relative_{score}_{sim_source}'] = relative_scores
+                            # Add the relative scores as a new column to the combined dataframe
+                            combined_relative_scores[f'relative_{score}_{sim_source}'] = relative_scores
 
                         # Check if any valid relative scores were calculated
                         if not combined_relative_scores.empty:
+                            ilat_lon = []
+                            for file in all_files:
+                                df = pd.read_csv(file, sep=',', header=0)
+                                del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat']
+                                df.drop(columns=[col for col in df.columns if col not in del_col], inplace=True)
+                                ilat_lon.append(df)
+                            # Combine all dataframes
+                            merged_df = pd.concat(ilat_lon).groupby('ID').first().reset_index()
                             # Save the combined relative scores to a single file
                             try:
-                                combined_relative_scores['ref_lon'] = df['ref_lon'].values
-                                combined_relative_scores['ref_lat'] = df['ref_lat'].values
+                                lon_mapping = merged_df.set_index('ID')['ref_lon'].to_dict()
+                                lat_mapping = merged_df.set_index('ID')['ref_lat'].to_dict()
+                                combined_relative_scores['ref_lon'] = combined_relative_scores['ID'].map(lon_mapping)
+                                combined_relative_scores['ref_lat'] = combined_relative_scores['ID'].map(lat_mapping)
                             except:
-                                combined_relative_scores['sim_lon'] = df['sim_lon'].values
-                                combined_relative_scores['sim_lat'] = df['sim_lat'].values
+                                lon_mapping = merged_df.set_index('ID')['sim_lon'].to_dict()
+                                lat_mapping = merged_df.set_index('ID')['sim_lat'].to_dict()
+                                combined_relative_scores['sim_lon'] = combined_relative_scores['ID'].map(lon_mapping)
+                                combined_relative_scores['sim_lat'] = combined_relative_scores['ID'].map(lat_mapping)
+
                             combined_relative_scores.to_csv(
                                 f"{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv",
                                 index=False  # Exclude the row index
                             )
                         else:
                             logging.warning(f"No valid data found for {evaluation_item}, {ref_source}")  # More specific message
-                        make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'stn', self.main_nml['general'], option)
+                        try:
+                            make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'stn', self.main_nml['general'],
+                                                                     option)
+                        except:
+                            logging.info(f"No files found")
+
                     else:
                         for score in scores:
                             file_pattern = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc'
                             all_files = glob.glob(file_pattern)
+                            if len(all_files) < 2:
+                                continue
                             if not all_files:
                                 logging.warning(f"No files found for pattern: {file_pattern}")
                                 continue
@@ -1514,23 +1536,25 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             combined_ds = xr.concat(datasets, dim='file')
 
                             # Calculate mean and standard deviation for each grid point
-                            score_mean = combined_ds[score].mean(dim='file')
-                            score_std = combined_ds[score].std(dim='file')
+                            score_mean = combined_ds[score].mean(dim='file', skipna=True)
+                            score_std = combined_ds[score].std(dim='file', skipna=True)
 
-                            # Calculate relative scores for each file and grid point
-                            for sim_source in sim_sources:
-                                file = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
-                                ds = xr.open_dataset(file)
-                                relative_score = (ds[score] - score_mean) / score_std
+                            file = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
+                            ds = xr.open_dataset(file)
+                            relative_score = (ds[score] - score_mean) / score_std
 
-                                # Create a new dataset to store the relative score
-                                result_ds = xr.Dataset()
-                                result_ds[f'relative_{score}'] = relative_score
+                            # Create a new dataset to store the relative score
+                            result_ds = xr.Dataset()
+                            result_ds[f'relative_{score}'] = relative_score
 
-                                output_file = f'{dir_path}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
-                                result_ds.to_netcdf(output_file)
-                        make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid', self.main_nml['general'],
-                                                                 option)
+                            output_file = f'{dir_path}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
+                            result_ds.to_netcdf(output_file)
+                        try:
+                            make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid',
+                                                                     self.main_nml['general'],
+                                                                     option)
+                        except:
+                            logging.info(f"No files found")
 
     def scenarios_Single_Model_Performance_Index_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics,
                                                             option):
