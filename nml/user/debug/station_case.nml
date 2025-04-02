@@ -2,8 +2,8 @@
     model_namelist = ./nml/Mod_variables_defination/CoLM.nml
     timezone       = 0.0
     data_type      = stn
-    data_groupby   = year
-    tim_res        = hour
+    data_groupby   = single
+    tim_res        = day
     fulllist       = ./data/simulation/degub/station_case.csv
     grid_res       = 1.
     syear          = 
