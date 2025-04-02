@@ -5,7 +5,7 @@
   data_groupby   = month
   fulllist       = 
   tim_res        = month
-  grid_res       = 0.5
+  grid_res       = 2.0
   suffix         = 
   prefix         = grid_case_hist_
   syear          = 2004

@@ -3,7 +3,7 @@
     basedir          = ./output
     compare_tim_res  = month
     compare_tzone    = 0.0
-    compare_grid_res = 0.25
+    compare_grid_res = 2.0
     syear            = 2004
     eyear            = 2005
     min_year         = 1.0
@@ -195,7 +195,7 @@
 
 
 &comparisons
-    HeatMap                        = True
+    HeatMap                        = False
     Taylor_Diagram                 = False
     Target_Diagram                 = False
     Kernel_Density_Estimate        = False
@@ -204,9 +204,9 @@
     Portrait_Plot_seasonal         = False
     Single_Model_Performance_Index = False
     Relative_Score                 = True
-    Ridgeline_Plot                 = True
+    Ridgeline_Plot                 = False
     Diff_Plot                      = False
-    Mean                           = True
+    Mean                           = False
     Median                         = False
     Min                            = False
     Max                            = False
