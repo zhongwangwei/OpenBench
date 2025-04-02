@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import re 
+import re
+import logging
 def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
@@ -16,15 +17,14 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
-               print('Adjusting time values for monthly river data...')
+               logging.info('Adjusting time values for monthly river data...')
             ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=15)
       elif time_unit.lower() in ['y', 'year', '1y', '1year']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
          if info.debug_mode:
-            print('Adjusting time values for daily CoLM output...')
-         
-         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)     
+            logging.info('Adjusting time values for daily CoLM output...')
+         ds['time'] = pd.DatetimeIndex(ds['time'].values)# - pd.DateOffset(days=1)
 
             # Handle river-related variables for monthly data
          if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
@@ -33,13 +33,13 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
-               print('Adjusting time values for daily river data...')
+               logging.info('Adjusting time values for daily river data...')
             ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          pass
 
    else:
-      print('tim_res error')
+      logging.error('tim_res error')
       exit()
    return ds
 
