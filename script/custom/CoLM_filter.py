@@ -34,7 +34,7 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
                logging.info('Adjusting time values for daily river data...')
-            ds['time'] = pd.DatetimeIndex(ds['time'].values)# - pd.DateOffset(days=1)
+            ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          pass
 
