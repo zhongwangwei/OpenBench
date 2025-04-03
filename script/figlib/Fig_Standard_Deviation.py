@@ -11,7 +11,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -61,6 +61,7 @@ def get_index(vmin, vmax, colormap):
 
 def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
     ds = xr.open_dataset(f"{file}")
+    ds = Convert_Type.convert_nc(ds)
     data = ds.Standard_Deviation
     ilat = ds.lat.values
     ilon = ds.lon.values

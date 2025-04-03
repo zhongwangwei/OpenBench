@@ -6,13 +6,14 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def make_LC_based_heat_map(file, selected_metrics, lb, option):
     selected_metrics = list(selected_metrics)
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
     df = pd.read_csv(file, sep='\s+', skiprows=1, header=0)
+    df = Convert_Type.convert_Frame(df)
     df.set_index('FullName', inplace=True)
     # Select the desired metrics
     # selected_metrics = ['nBiasScore', 'nRMSEScore', 'nPhaseScore', 'nIavScore', 'nSpatialScore', 'overall_score']

@@ -1,6 +1,5 @@
 import math
 import os
-
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
@@ -11,7 +10,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -63,6 +62,7 @@ def make_Hellinger_Distance(output_dir, method_name, data_sources, main_nml, sta
     file = os.path.join(output_dir, f"{method_name}", filename)
 
     ds = xr.open_dataset(f"{file}.nc")
+    ds = Convert_Type.convert_nc(ds)
     data = ds.hellinger_distance_score
     ilat = ds.lat.values
     ilon = ds.lon.values

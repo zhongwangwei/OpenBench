@@ -13,6 +13,7 @@ from joblib import Parallel, delayed
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 from Mod_Statistics import statistics_calculate
+from Mod_Converttype import Convert_Type
 from figlib import *
 
 
@@ -507,10 +508,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             if ref_data_type == 'stn' or sim_data_type == 'stn':
                                 file = f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                                 df = pd.read_csv(file, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
                                 overall_mean = df[f'{score}'].mean(skipna=True)
                             else:
                                 ds = xr.open_dataset(
                                     f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                ds = Convert_Type.convert_nc(ds)
 
                                 if self.weight.lower() == 'area':
                                     weights = np.cos(np.deg2rad(ds.lat))
@@ -520,6 +523,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     o = xr.open_dataset(
                                         f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                         f'{ref_varname}']
+                                    o = Convert_Type.convert_nc(o)
 
                                     # Calculate area weights (cosine of latitude)
                                     area_weights = np.cos(np.deg2rad(ds.lat))
@@ -605,6 +609,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 o = xr.open_dataset(
                                     f"{casedir}/output/data/stn_{ref_source}_{sim_source}/{item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
                                     ref_varname].squeeze()
+                                o = Convert_Type.convert_nc(o)
+                                s = Convert_Type.convert_nc(s)
 
                                 s['time'] = o['time']
                                 mask1 = np.isnan(s) | np.isnan(o)
@@ -639,6 +645,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 range(len(station_list['ID'])))
 
                             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+                            station_list = Convert_Type.convert_Frame(station_list)
                             station_list.to_csv(f"{dir_path}/taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
 
                             station_list = pd.read_csv(
@@ -667,6 +674,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             simfile = \
                                 xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
+                            reffile = Convert_Type.convert_nc(reffile)
+                            simfile = Convert_Type.convert_nc(simfile)
 
                             std_sim_result = self.stat_standard_deviation(simfile)
                             cor_result = self.correlation(simfile, reffile)
@@ -794,6 +803,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 o = xr.open_dataset(
                                     f"{casedir}/output/data/stn_{ref_source}_{sim_source}/{item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
                                     ref_varname].squeeze()
+                                o = Convert_Type.convert_nc(o)
+                                s = Convert_Type.convert_nc(s)
 
                                 s['time'] = o['time']
                                 mask1 = np.isnan(s) | np.isnan(o)
@@ -821,12 +832,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 range(len(station_list['ID'])))
 
                             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
-
+                            station_list = Convert_Type.convert_Frame(station_list)
                             station_list.to_csv(f"{dir_path}/target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
 
                             station_list = pd.read_csv(
                                 f"{dir_path}/target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt", header=0)
-
+                            station_list = Convert_Type.convert_Frame(station_list)
                             bias_sim = station_list['bias'].mean(skipna=True)
                             output_file.write(f"{bias_sim}\t")
                             biases[i] = bias_sim
@@ -851,6 +862,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             simfile = \
                                 xr.open_dataset(f'{casedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
+                            reffile = Convert_Type.convert_nc(reffile)
+                            simfile = Convert_Type.convert_nc(simfile)
 
                             bias_sim_result = self.bias(simfile, reffile)
                             if self.weight.lower() == 'area':
@@ -922,10 +935,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
                             file_path = f"{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                     try:
@@ -955,10 +970,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
                             data = df[metric].values
                         else:
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
@@ -1014,6 +1031,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ref_varname = evaluation_item
                             file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
 
                             for score in scores:
                                 kk = df[score].mean(skipna=True)
@@ -1043,9 +1061,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             simfile = \
                                 xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                     sim_varname]
+                            reffile = Convert_Type.convert_nc(reffile)
+                            simfile = Convert_Type.convert_nc(simfile)
+
                             for score in scores:
                                 ds = xr.open_dataset(
                                     f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                ds = Convert_Type.convert_nc(ds)
                                 if self.weight.lower() == 'area':
                                     weights = np.cos(np.deg2rad(reffile.lat))
                                     kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(
@@ -1069,7 +1091,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for metric in metrics:
                                 ds = xr.open_dataset(
                                     f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-
+                                ds = Convert_Type.convert_nc(ds)
                                 ds = ds.where(np.isfinite(ds), np.nan)
                                 q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                 ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
@@ -1113,6 +1135,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             try:
                 pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
+                pb_da = Convert_Type.convert_nc(pb_da)
                 pb_da.to_netcdf(
                     f'{casedir}/output/comparisons/Portrait_Plot_seasonal/{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
             except:
@@ -1123,6 +1146,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             pb = getattr(self, score)(s, o)
             try:
                 pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
+                pb_da = Convert_Type.convert_nc(pb_da)
                 pb_da.to_netcdf(
                     f'{casedir}/output/comparisons/Portrait_Plot_seasonal/{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
             except:
@@ -1143,7 +1167,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True)
             else:
                 pb = pb.mean(skipna=True)
-            return pb
+            return Convert_Type.convert_nc(pb)
 
         output_file_path = f"{dir_path}/Portrait_Plot_seasonal.txt"
 
@@ -1191,6 +1215,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ref_varname = evaluation_item
                             stnlist = f"{basedir}/stn_list.txt"
                             station_list = pd.read_csv(stnlist, header=0)
+                            station_list = Convert_Type.convert_Frame(station_list)
 
                             def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
                                                                station_list, iik, metric_or_score, season, metric=None,
@@ -1201,6 +1226,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 o = xr.open_dataset(
                                     f"{casedir}/output/data/stn_{ref_source}_{sim_source}/{item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
                                     ref_varname].squeeze()
+                                o = Convert_Type.convert_nc(o)
+                                s = Convert_Type.convert_nc(s)
 
                                 s['time'] = o['time']
                                 mask1 = np.isnan(s) | np.isnan(o)
@@ -1252,6 +1279,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 f'{ref_varname}']
                             s = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                 f'{sim_varname}']
+                            o = Convert_Type.convert_nc(o)
+                            s = Convert_Type.convert_nc(s)
+
                             o = o.where(np.isfinite(o), np.nan)
                             s = s.where(np.isfinite(s), np.nan)
                             s['time'] = o['time']
@@ -1361,10 +1391,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             # Read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
                             file_path = f"{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
@@ -1400,10 +1432,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             # Read the file_path data and select the metric
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
                             data = df[metric].values
                         else:
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         # if metric == 'percent_bias':
@@ -1453,6 +1487,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         combined_relative_scores = pd.DataFrame()
                         filex = f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                         df_sim = pd.read_csv(filex, sep=',', header=0)
+                        df_sim = Convert_Type.convert_Frame(df_sim)
+
                         ID = df_sim['ID']
                         combined_relative_scores['ID'] = df_sim['ID']
                         df_sim.set_index('ID', inplace=True)
@@ -1463,6 +1499,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             score_column = None
                             for i, file in enumerate(all_files):
                                 df = pd.read_csv(file, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
+
                                 df.set_index('ID', inplace=True)
                                 df = df.reindex(ID)
                                 dfs.append(df[f'{score}'])
@@ -1472,8 +1510,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     continue
                             # Combine all dataframes
                             combined_df = pd.concat(dfs, axis=1)  # .groupby('ID').first()
-                            score_mean = combined_df.mean(axis=1, skipna=True)
-                            score_std = combined_df.std(axis=1, skipna=True)
+                            score_mean = combined_df.mean(axis=1, skipna=True).astype('float32')
+                            score_std = combined_df.std(axis=1, skipna=True).astype('float32')
                             # Calculate relative scores for each file
                             relative_scores = (df_sim[f'{score}'].values - score_mean.values) / score_std.values
 
@@ -1501,7 +1539,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 lat_mapping = merged_df.set_index('ID')['sim_lat'].to_dict()
                                 combined_relative_scores['sim_lon'] = combined_relative_scores['ID'].map(lon_mapping)
                                 combined_relative_scores['sim_lat'] = combined_relative_scores['ID'].map(lat_mapping)
-
+                            combined_relative_scores = Convert_Type.convert_Frame(combined_relative_scores)
                             combined_relative_scores.to_csv(
                                 f"{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv",
                                 index=False  # Exclude the row index
@@ -1518,15 +1556,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         for score in scores:
                             file_pattern = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc'
                             all_files = glob.glob(file_pattern)
-                            if len(all_files) < 2:
-                                continue
+
                             if not all_files:
                                 logging.warning(f"No files found for pattern: {file_pattern}")
                                 continue
+                            if len(all_files) < 2:
+                                continue
+
                             # Read all files and combine into a single dataset
                             datasets = []
                             for file in all_files:
                                 ds = xr.open_dataset(file)
+                                ds = Convert_Type.convert_nc(ds)
                                 datasets.append(ds)
 
                             if not datasets:
@@ -1536,16 +1577,17 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             combined_ds = xr.concat(datasets, dim='file')
 
                             # Calculate mean and standard deviation for each grid point
-                            score_mean = combined_ds[score].mean(dim='file', skipna=True)
-                            score_std = combined_ds[score].std(dim='file', skipna=True)
+                            score_mean = combined_ds[score].mean(dim='file', skipna=True).astype('float32')
+                            score_std = combined_ds[score].std(dim='file', skipna=True).astype('float32')
 
                             file = f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
                             ds = xr.open_dataset(file)
+                            ds = Convert_Type.convert_nc(ds)
                             relative_score = (ds[score] - score_mean) / score_std
 
                             # Create a new dataset to store the relative score
                             result_ds = xr.Dataset()
-                            result_ds[f'relative_{score}'] = relative_score
+                            result_ds[f'relative_{score}'] = Convert_Type.convert_nc(relative_score)
 
                             output_file = f'{dir_path}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
                             result_ds.to_netcdf(output_file)
@@ -1667,7 +1709,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 o = xr.open_dataset(
                                     f"{casedir}/output/data/stn_{ref_source}_{sim_source}/{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")[
                                     ref_varname].squeeze()
-
+                                o = Convert_Type.convert_nc(o)
+                                s = Convert_Type.convert_nc(s)
                                 s['time'] = o['time']
                                 mask1 = np.isnan(s) | np.isnan(o)
                                 s.values[mask1] = np.nan
@@ -1680,9 +1723,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                                         sim_varname, ref_varname, station_list, iik)
                                 for iik in range(len(station_list['ID'])))
                             smpi_values, lower_values, upper_values = zip(*results)
-                            mean_smpi = np.nanmean(smpi_values)
-                            mean_lower = np.nanmean(lower_values)
-                            mean_upper = np.nanmean(upper_values)
+                            mean_smpi = np.nanmean(smpi_values).astype('float32')
+                            mean_lower = np.nanmean(lower_values).astype('float32')
+                            mean_upper = np.nanmean(upper_values).astype('float32')
                             output_file.write(f"{mean_smpi:.4f}\t{mean_lower:.4f}\t{mean_upper:.4f}\n")
 
                         else:
@@ -1696,6 +1739,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 f'{ref_varname}']
                             s = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                                 f'{sim_varname}']
+                            o = Convert_Type.convert_nc(o)
+                            s = Convert_Type.convert_nc(s)
 
                             s['time'] = o['time']
                             mask1 = np.isnan(s) | np.isnan(o)
@@ -1748,10 +1793,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
+                            df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
                             file_path = f"{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
@@ -1791,6 +1838,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = f"{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"
 
                             ds = xr.open_dataset(file_path)
+                            ds = Convert_Type.convert_nc(ds)
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
@@ -1898,6 +1946,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                                 file_path = f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                                 df = pd.read_csv(file_path, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
                                 all_station_data.append(df[metric])
 
                             # Convert to DataFrame for easier handling
@@ -1905,8 +1954,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             station_df.columns = sim_sources
 
                             # Calculate ensemble mean
-                            ensemble_mean = station_df.mean(axis=1)
+                            ensemble_mean = station_df.mean(axis=1).astype('float32')
                             ensemble_df = pd.DataFrame({'ID': df['ID'], f'{metric}_ensemble_mean': ensemble_mean})
+                            ensemble_df = Convert_Type.convert_Frame(ensemble_df)
                             ensemble_df.to_csv(os.path.join(dir_path,
                                                             f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{metric}.csv'),
                                                index=False)
@@ -1926,6 +1976,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     'lon': lon_select,
                                     f'{metric}_anomaly': anomaly
                                 })
+                                anomaly_df = Convert_Type.convert_Frame(anomaly_df)
                                 anomaly_df.to_csv(os.path.join(dir_path,
                                                                f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{metric}_anomaly.csv'),
                                                   index=False)
@@ -1941,6 +1992,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for sim_source in sim_sources:
                                 file_path = f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                                 df = pd.read_csv(file_path, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
                                 all_station_data.append(df[score])
 
                             # Convert to DataFrame for easier handling
@@ -1948,8 +2000,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             station_df.columns = sim_sources
 
                             # Calculate ensemble mean
-                            ensemble_mean = station_df.mean(axis=1)
+                            ensemble_mean = station_df.mean(axis=1).astype('float32')
                             ensemble_df = pd.DataFrame({'ID': df['ID'], f'{score}_ensemble_mean': ensemble_mean})
+                            ensemble_df = Convert_Type.convert_Frame(ensemble_df)
                             ensemble_df.to_csv(os.path.join(dir_path,
                                                             f'{evaluation_item}_stn_{ref_source}_ensemble_mean_{score}.csv'),
                                                index=False)
@@ -1969,6 +2022,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     'lon': lon_select,
                                     f'{score}_anomaly': anomaly
                                 })
+                                anomaly_df = Convert_Type.convert_Frame(anomaly_df)
                                 anomaly_df.to_csv(os.path.join(dir_path,
                                                                f'{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{score}_anomaly.csv'),
                                                   index=False)
@@ -1976,72 +2030,78 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         except Exception as e:
                             logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
                     if len(sim_sources) < 2:
-                        continue
-                    # Calculate pairwise differences for metrics (station data)
-                    for metric in metrics:
-                        for i, sim1 in enumerate(sim_sources):
-                            sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
-                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                                sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
-                                try:
-                                    df1 = pd.read_csv(
-                                        f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
-                                    df2 = pd.read_csv(
-                                        f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
-
-                                    diff = df1[metric] - df2[metric]
+                        pass
+                    else:
+                        # Calculate pairwise differences for metrics (station data)
+                        for metric in metrics:
+                            for i, sim1 in enumerate(sim_sources):
+                                sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
+                                for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                                    sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
                                     try:
-                                        lon_select = df1['ref_lon'].values
-                                        lat_select = df1['ref_lat'].values
-                                    except:
-                                        lon_select = df1['sim_lon'].values
-                                        lat_select = df1['sim_lat'].values
-                                    diff_df = pd.DataFrame({
-                                        'ID': df1['ID'],
-                                        'lat': lat_select,
-                                        'lon': lon_select,
-                                        f'{metric}_diff': diff
-                                    })
+                                        df1 = pd.read_csv(
+                                            f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
+                                        df2 = pd.read_csv(
+                                            f"{basedir}/output/metrics/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
+                                        df1 = Convert_Type.convert_Frame(df1)
+                                        df2 = Convert_Type.convert_Frame(df2)
 
-                                    output_file = os.path.join(dir_path,
-                                                               f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{metric}_diff.csv')
-                                    diff_df.to_csv(output_file, index=False)
+                                        diff = df1[metric] - df2[metric]
+                                        try:
+                                            lon_select = df1['ref_lon'].values
+                                            lat_select = df1['ref_lat'].values
+                                        except:
+                                            lon_select = df1['sim_lon'].values
+                                            lat_select = df1['sim_lat'].values
+                                        diff_df = pd.DataFrame({
+                                            'ID': df1['ID'],
+                                            'lat': lat_select,
+                                            'lon': lon_select,
+                                            f'{metric}_diff': diff
+                                        })
 
-                                except Exception as e:
-                                    logging.error(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
+                                        output_file = os.path.join(dir_path,
+                                                                   f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{metric}_diff.csv')
+                                        diff_df = Convert_Type.convert_Frame(diff_df)
+                                        diff_df.to_csv(output_file, index=False)
 
-                    # Calculate pairwise differences for scores (station data)
-                    for score in scores:
-                        for i, sim1 in enumerate(sim_sources):
-                            sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
-                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                                sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
-                                try:
-                                    df1 = pd.read_csv(
-                                        f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
-                                    df2 = pd.read_csv(
-                                        f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
+                                    except Exception as e:
+                                        logging.error(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
 
-                                    diff = df1[score] - df2[score]
+                        # Calculate pairwise differences for scores (station data)
+                        for score in scores:
+                            for i, sim1 in enumerate(sim_sources):
+                                sim_varname_1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
+                                for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                                    sim_varname_2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
                                     try:
-                                        lon_select = df1['ref_lon'].values
-                                        lat_select = df1['ref_lat'].values
-                                    except:
-                                        lon_select = df1['sim_lon'].values
-                                        lat_select = df1['sim_lat'].values
-                                    diff_df = pd.DataFrame({
-                                        'ID': df1['ID'],
-                                        'lat': lat_select,
-                                        'lon': lon_select,
-                                        f'{score}_diff': diff
-                                    })
+                                        df1 = pd.read_csv(
+                                            f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv")
+                                        df2 = pd.read_csv(
+                                            f"{basedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv")
+                                        df1 = Convert_Type.convert_Frame(df1)
+                                        df2 = Convert_Type.convert_Frame(df2)
+                                        diff = df1[score]- df2[score]
+                                        try:
+                                            lon_select = df1['ref_lon'].values
+                                            lat_select = df1['ref_lat'].values
+                                        except:
+                                            lon_select = df1['sim_lon'].values
+                                            lat_select = df1['sim_lat'].values
+                                        diff_df = pd.DataFrame({
+                                            'ID': df1['ID'],
+                                            'lat': lat_select,
+                                            'lon': lon_select,
+                                            f'{score}_diff': diff
+                                        })
 
-                                    output_file = os.path.join(dir_path,
-                                                               f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{score}_diff.csv')
-                                    diff_df.to_csv(output_file, index=False)
+                                        output_file = os.path.join(dir_path,
+                                                                   f'{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{score}_diff.csv')
+                                        diff_df = Convert_Type.convert_Frame(diff_df)
+                                        diff_df.to_csv(output_file, index=False)
 
-                                except Exception as e:
-                                    logging.error(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
+                                    except Exception as e:
+                                        logging.error(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
                 else:
                     # Calculate ensemble means and anomalies for metrics
                     for metric in metrics:
@@ -2051,16 +2111,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for sim_source in sim_sources:
                                 ds = xr.open_dataset(
                                     f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                ds = Convert_Type.convert_nc(ds)
                                 datasets.append(ds[metric])
                             # Calculate ensemble mean
                             ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
 
                             # Save ensemble mean
                             ds_mean = xr.Dataset()
-                            ds_mean[f'{metric}_ensemble_mean'] = ensemble_mean
+                            ds_mean[f'{metric}_ensemble_mean'] = Convert_Type.convert_nc(ensemble_mean)
                             ds_mean.attrs['description'] = f'Ensemble mean of {metric} across all simulations'
                             output_file = os.path.join(dir_path,
                                                        f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{metric}.nc')
+                            ds_mean = Convert_Type.convert_nc(ds_mean)
                             ds_mean.to_netcdf(output_file)
 
                             # Calculate and save anomalies for each simulation
@@ -2071,6 +2133,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
                                 output_file = os.path.join(dir_path,
                                                            f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_anomaly.nc')
+                                ds_anom= Convert_Type.convert_nc(ds_anom)
                                 ds_anom.to_netcdf(output_file)
 
                         except Exception as e:
@@ -2084,6 +2147,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for sim_source in sim_sources:
                                 ds = xr.open_dataset(
                                     f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                ds = Convert_Type.convert_nc(ds)
                                 datasets.append(ds[score])
 
                             # Calculate ensemble mean
@@ -2095,6 +2159,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             ds_mean.attrs['description'] = f'Ensemble mean of {score} across all simulations'
                             output_file = os.path.join(dir_path,
                                                        f'{evaluation_item}_ref_{ref_source}_ensemble_mean_{score}.nc')
+                            ds_mean = Convert_Type.convert_nc(ds_mean)
                             ds_mean.to_netcdf(output_file)
 
                             # Calculate and save anomalies for each simulation
@@ -2105,59 +2170,66 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
                                 output_file = os.path.join(dir_path,
                                                            f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_anomaly.nc')
+                                ds_anom = Convert_Type.convert_nc(ds_anom)
                                 ds_anom.to_netcdf(output_file)
 
                         except Exception as e:
                             logging.error(f"Error processing ensemble calculations for score {score}: {e}")
                     if len(sim_sources) < 2:
-                        continue
-                    # Compare metrics between pairs
-                    for metric in metrics:
-                        for i, sim1 in enumerate(sim_sources):
-                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                                try:
-                                    ds1 = xr.open_dataset(
-                                        f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc')
-                                    ds2 = xr.open_dataset(
-                                        f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc')
+                        pass
+                    else:
+                        # Compare metrics between pairs
+                        for metric in metrics:
+                            for i, sim1 in enumerate(sim_sources):
+                                for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                                    try:
+                                        ds1 = xr.open_dataset(
+                                            f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc')
+                                        ds2 = xr.open_dataset(
+                                            f'{basedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc')
+                                        ds1 = Convert_Type.convert_nc(ds1)
+                                        ds2 = Convert_Type.convert_nc(ds2)
+                                        diff = ds1[metric] - ds2[metric]
 
-                                    diff = ds1[metric] - ds2[metric]
+                                        ds_out = xr.Dataset()
+                                        ds_out[f'{metric}_diff'] = diff
+                                        ds_out.attrs['description'] = f'Difference in {metric} between {sim1} and {sim2}'
 
-                                    ds_out = xr.Dataset()
-                                    ds_out[f'{metric}_diff'] = diff
-                                    ds_out.attrs['description'] = f'Difference in {metric} between {sim1} and {sim2}'
+                                        output_file = os.path.join(dir_path,
+                                                                   f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{metric}_diff.nc')
+                                        ds_out = Convert_Type.convert_nc(ds_out)
+                                        ds_out.to_netcdf(output_file)
 
-                                    output_file = os.path.join(dir_path,
-                                                               f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{metric}_diff.nc')
-                                    ds_out.to_netcdf(output_file)
+                                    except Exception as e:
+                                        logging.error(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
 
-                                except Exception as e:
-                                    logging.error(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
+                        # Compare scores between pairs
+                        for score in scores:
+                            for i, sim1 in enumerate(sim_sources):
+                                for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                                    try:
+                                        ds1 = xr.open_dataset(
+                                            f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc')
+                                        ds2 = xr.open_dataset(
+                                            f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc')
+                                        ds1 = Convert_Type.convert_nc(ds1)
+                                        ds2 = Convert_Type.convert_nc(ds2)
+                                        diff = ds1[score] - ds2[score]
 
-                    # Compare scores between pairs
-                    for score in scores:
-                        for i, sim1 in enumerate(sim_sources):
-                            for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                                try:
-                                    ds1 = xr.open_dataset(
-                                        f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc')
-                                    ds2 = xr.open_dataset(
-                                        f'{basedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc')
+                                        ds_out = xr.Dataset()
+                                        ds_out[f'{score}_diff'] = diff
+                                        ds_out.attrs['description'] = f'Difference in {score} between {sim1} and {sim2}'
 
-                                    diff = ds1[score] - ds2[score]
+                                        output_file = os.path.join(dir_path,
+                                                                   f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{score}_diff.nc')
+                                        ds_out = Convert_Type.convert_nc(ds_out)
+                                        ds_out.to_netcdf(output_file)
 
-                                    ds_out = xr.Dataset()
-                                    ds_out[f'{score}_diff'] = diff
-                                    ds_out.attrs['description'] = f'Difference in {score} between {sim1} and {sim2}'
-
-                                    output_file = os.path.join(dir_path,
-                                                               f'{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{score}_diff.nc')
-                                    ds_out.to_netcdf(output_file)
-
-                                except Exception as e:
-                                    logging.error(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
+                                    except Exception as e:
+                                        logging.error(f"Error processing score {score} for {sim1} vs {sim2}: {e}")
 
                 # After calculating anomalies for metrics
+
                 make_scenarios_comparison_Diff_Plot(dir_path, metrics, scores, evaluation_item, ref_source, sim_sources,
                                                     self.general_config, sim_nml,
                                                     ref_data_type, option)
@@ -2181,6 +2253,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             o = xr.open_dataset(
                 f"{basedir}/output/data/stn_{ref_source}_{sim_source}/{evaluation_item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
                 ref_varname].squeeze()
+            o = Convert_Type.convert_nc(o)
+            s = Convert_Type.convert_nc(s)
+
             s['time'] = o['time']
             mask1 = np.isnan(s) | np.isnan(o)
             s.values[mask1] = np.nan
@@ -2212,10 +2287,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 ref_sources = [ref_sources]
 
             for ref_source in ref_sources:
-                # Skip if only one simulation source
-                # if len(sim_sources) < 2:
-                #     continue
-
                 ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
 
@@ -2230,6 +2301,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                                   ref_varname, sim_varname) for iik in
                                 range(len(station_list['ID'])))
                             basic_data = pd.concat([station_list.copy(), pd.DataFrame(results)], axis=1)
+                            basic_data = Convert_Type.convert_Frame(basic_data)
                             output_path = f'{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv'
                             logging.info(f"Saving evaluation to {output_path}")
                             basic_data.to_csv(output_path, index=False)
@@ -2240,10 +2312,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ds = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                             f'{ref_varname}']
+                        ds = Convert_Type.convert_nc(ds)
                         method_function = getattr(self, f"stat_{basic_method.lower()}", None)
                         result = method_function(*[ds])
                         output_path = f'{dir_path}/{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc'
-                        self.save_result(output_path, basic_method, result)
+                        self.save_result(output_path, basic_method, Convert_Type.convert_nc(result))
                         make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing Grid {basic_method} calculations for {ref_source}: {e}")
@@ -2258,10 +2331,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ds = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                             f'{sim_varname}']
+                        ds = Convert_Type.convert_nc(ds)
                         method_function = getattr(self, f"stat_{basic_method.lower()}", None)
                         result = method_function(*[ds])
                         output_path = f'{dir_path}/{evaluation_item}_sim_{sim_source}_{sim_varname}_{basic_method}.nc'
-                        self.save_result(output_path, basic_method, result)
+                        self.save_result(output_path, basic_method, Convert_Type.convert_nc(result))
                         make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {sim_source}: {e}")
@@ -2294,9 +2368,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                             f'{sim_varname}']
+                        sim = Convert_Type.convert_nc(sim)
                         result = method_function(*[sim], option['significance_level'])
                         output_file = f'{dir_path}/Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'
-                        self.save_result(output_file, method_name, result)
+                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Mann_Kendall_Trend_Test(output_file, method_name, sim_source, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
@@ -2308,9 +2383,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                             f'{ref_varname}']
+                        ref = Convert_Type.convert_nc(ref)
                         result = method_function(*[ref], option['significance_level'])
                         output_file = f'{dir_path}/Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
-                        self.save_result(output_file, method_name, result)
+                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Mann_Kendall_Trend_Test(output_file, method_name, ref_source, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
@@ -2343,9 +2419,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                             f'{sim_varname}']
+                        sim = Convert_Type.convert_nc(sim)
+
                         result = method_function(*[sim])
                         output_file = f'{dir_path}/{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'
-                        self.save_result(output_file, method_name, result)
+                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
@@ -2358,9 +2436,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                             f'{ref_varname}']
+                        ref = Convert_Type.convert_nc(ref)
+
                         result = method_function(*[ref])
                         output_file = f'{dir_path}/{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
-                        self.save_result(output_file, method_name, result)
+                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
@@ -2388,6 +2468,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                 ref = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                     f'{ref_varname}']
+                ref = Convert_Type.convert_nc(ref)
 
                 if ref_data_type != 'stn':
                     for sim_source in sim_sources:
@@ -2396,11 +2477,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                         sim = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')[
                             f'{sim_varname}']
+                        sim = Convert_Type.convert_nc(sim)
                         try:
                             result = method_function(*[ref, sim], option['nbins'])
 
                             output_file = f'{dir_path}/{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc'
-                            self.save_result(output_file, method_name, result)
+                            self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Functional_Response(output_file, method_name, sim_source, self.main_nml['general'], option)
                         except Exception as e:
                             logging.error(
@@ -2431,9 +2513,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             f'{sim_varname1}']
                         ds2 = xr.open_dataset(f'{basedir}/output/data/{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')[
                             f'{sim_varname2}']
+                        ds1 = Convert_Type.convert_nc(ds1)
+                        ds2 = Convert_Type.convert_nc(ds2)
                         result = method_function(*[ds1, ds2])
                         output_file = f'{dir_path}/{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc'
-                        self.save_result(output_file, method_name, result)
+                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Correlation(output_file, method_name, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}")

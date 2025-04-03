@@ -19,7 +19,7 @@ import shutil
 from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
 from figlib import *
 from Mod_DatasetProcessing import BaseDatasetProcessing
-
+from Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
@@ -1040,6 +1040,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
                 for year in years
             )
             ds = xr.concat(ds_list, dim='time')
+        ds = Convert_Type.convert_nc(ds)
         return ds
 
     def process_single_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
@@ -1148,13 +1149,13 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
         # Convert sparse arrays to dense arrays
         data_regrid = data.regrid.conservative(target_dataset, nan_threshold=0)
-        return data_regrid
+        return Convert_Type.convert_nc(data_regrid)
 
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import xesmf as xe
         regridder = xe.Regridder(data, new_grid, 'conservative')
         ds = regridder(data)
-        return list(ds.data_vars.values())[0]
+        return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import subprocess
@@ -1169,7 +1170,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
             subprocess.run(cmd, shell=True, check=True)
             ds = xr.open_dataset(temp_output.name)
-            return list(ds.data_vars.values())[0]
+            return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         min_lon = self.main_nml['general']['min_lon']
@@ -1522,7 +1523,7 @@ class StatisticsProcessing(BasicProcessing):
             data_list = self.remap_data(data_list)
 
             # Call the method with the loaded data
-            result = method_function(*data_list)
+            result = method_function(*data_list).astype('float32')
             self.save_result(statistic_method, result, [source])
         else:
             logging.warning(f"Warning: Analysis method '{statistic_method}' not implemented.")
