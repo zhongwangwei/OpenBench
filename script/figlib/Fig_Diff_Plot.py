@@ -9,14 +9,13 @@ from matplotlib import cm
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
-
+import logging
 # Plot settings
-import numpy as np
 import xarray as xr
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-
+from Mod_Converttype import Convert_Type
 from matplotlib import rcParams
 
 
@@ -92,7 +91,6 @@ def process_unit(ref_unit, metric):
 
 
 def get_index(vmin, vmax, colormap):
-
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
             colorbar_ticks = 0.2
@@ -159,6 +157,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
     ds = xr.open_dataset(f'{basedir}/{filename}')
+    ds = Convert_Type.convert_nc(ds)
 
     # Extract variables
     ilat = ds.lat.values
@@ -179,8 +178,10 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
                     min_value = -100
         else:
             min_value, max_value = np.nanmin(var), np.nanmax(var)
+        if min_value == max_value:
+            max_value = max_value + 1
 
-    cmap, mticks, norm, bnd = get_index(max(abs(min_value), max_value) * -1, max(abs(min_value), max_value), option['cmap'])
+    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
@@ -284,7 +285,7 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
 
     if not option["vmin_max_on"]:
         if var in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF', 'NSE', 'KGE', 'KGESS', 'correlation', 'kappa_coeff',
-                      'rSpearman']:
+                   'rSpearman']:
             quantiles = [np.nanpercentile(metric, 5), np.nanpercentile(metric, 95)]
             max_value = math.ceil(quantiles[1])
             min_value = math.floor(quantiles[0])
@@ -295,8 +296,10 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
                     min_value = -100
         else:
             min_value, max_value = np.nanmin(metric), np.nanmax(metric)
+        if min_value == max_value:
+            max_value = max_value + 1
 
-    cmap, mticks, norm, bnd = get_index(max(abs(min_value), max_value) * -1, max(abs(min_value), max_value), option['cmap'])
+    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
@@ -411,6 +414,7 @@ def plot_diff_results(basedir, data_type, item_type, evaluation_item, ref_source
     # For station data
     if ref_data_type == 'stn':
         data = pd.read_csv(f'{basedir}/{filename}', header=0)
+        data = Convert_Type.convert_Frame(data)
         lon_select = data['lon'].values
         lat_select = data['lat'].values
         plotvar = data[f'{item_type}_{"anomaly" if data_type == "anomaly" else "diff"}'].values
@@ -427,24 +431,36 @@ def make_scenarios_comparison_Diff_Plot(basedir, metrics, scores, evaluation_ite
                                         ref_data_type, option):
     for metric in metrics:
         for sim_source in sim_sources:
+            # try:
             plot_diff_results(basedir, 'anomaly', metric, evaluation_item, ref_source, sim_source, main_nml, sim_nml,
                               ref_data_type, option)
+        # except:
+        #     logging.error(f'{evaluation_item}:{metric} - {ref_source} {sim_source} anomaly error')
         # After calculating differences for metrics
         if len(sim_sources) >= 2:
             for i, sim1 in enumerate(sim_sources):
                 for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                    plot_diff_results(basedir, 'difference', metric, evaluation_item, ref_source,
-                                      (sim1, sim2), main_nml, sim_nml, ref_data_type, option)
+                    try:
+                        plot_diff_results(basedir, 'difference', metric, evaluation_item, ref_source,
+                                          (sim1, sim2), main_nml, sim_nml, ref_data_type, option)
+                    except:
+                        logging.error(f'{evaluation_item}:{metric} - {ref_source} {sim1} vs {sim2} anomaly error')
 
     for score in scores:
         # After calculating anomalies for scores
         for sim_source in sim_sources:
-            plot_diff_results(basedir, 'anomaly', score, evaluation_item, ref_source, sim_source, main_nml, sim_nml, ref_data_type
-                              , option)
+            try:
+                plot_diff_results(basedir, 'anomaly', score, evaluation_item, ref_source, sim_source, main_nml, sim_nml, ref_data_type
+                                  , option)
+            except:
+                logging.error(f'{evaluation_item}:{score} - {ref_source} {sim_source} anomaly error')
 
         # After calculating differences for scores
         if len(sim_sources) >= 2:
             for i, sim1 in enumerate(sim_sources):
                 for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
-                    plot_diff_results(basedir, 'difference', score, evaluation_item, ref_source, (sim1, sim2), main_nml, sim_nml,
-                                      ref_data_type, option)
+                    try:
+                        plot_diff_results(basedir, 'difference', score, evaluation_item, ref_source, (sim1, sim2), main_nml, sim_nml,
+                                          ref_data_type, option)
+                    except:
+                        logging.error(f'{evaluation_item}:{score} - {ref_source} {sim1} vs {sim2} anomaly error')

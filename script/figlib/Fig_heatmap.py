@@ -2,16 +2,17 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
  
 def make_scenarios_scores_comparison_heat_map(file, score, option):
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
     df = pd.read_csv(file, sep='\s+', header=0)
+    df = Convert_Type.convert_Frame(df)
     # exclude the first column
     df.set_index('Item', inplace=True)
     ref_dataname = df.iloc[:, 0:]
-    df = df.iloc[:, 1:]
+    df = df.iloc[:, 1:].astype('float32')
 
     font = {'family': 'DejaVu Sans'}
     # font = {'family': option['font']}
