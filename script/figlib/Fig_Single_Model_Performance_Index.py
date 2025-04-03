@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option):
     # Read the SMPI data
@@ -25,7 +25,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
 
     data_path = f"{basedir}/output/comparisons/Single_Model_Performance_Index/SMPI_comparison.txt"
     df = pd.read_csv(data_path, sep='\t')
-
+    df = Convert_Type.convert_Frame(df)
     # Prepare the subplot grid
     n_items = len(evaluation_items)
 

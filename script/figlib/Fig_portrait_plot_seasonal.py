@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
     # Set figure size
@@ -37,7 +37,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # ----------------------------------------------------------------------------------#
 
     df = pd.read_csv(file, sep='\s+', header=0)
-
+    df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
     # Get unique `Item` values and store them in `unique_items`.
@@ -141,7 +141,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # -------------------------------------------------------------------------------------------------------------------
 
     df = pd.read_csv(file, sep='\s+', header=0)
-
+    df = Convert_Type.convert_Frame(df)
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
@@ -242,7 +242,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # new start metrics
 
     df = pd.read_csv(file, sep='\s+', header=0)
-
+    df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
     # Get unique `Item` values and store them in `unique_items`.
@@ -345,6 +345,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # 第二种：基于多变量，多个模型，单个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
     df = pd.read_csv(file, sep='\s+', header=0)
+    df = Convert_Type.convert_Frame(df)
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 

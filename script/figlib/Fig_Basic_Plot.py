@@ -8,6 +8,7 @@ import math
 import os
 import pandas as pd
 import matplotlib
+from Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
@@ -120,6 +121,7 @@ def make_plot_index_grid(self):
             import math
             ds = xr.open_dataset(
                 f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
+            ds = Convert_Type.convert_nc(ds)
             quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
             del ds
             if not option["vmin_max_on"]:
@@ -232,6 +234,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
     ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
+    ds = Convert_Type.convert_nc(ds)
 
     # Extract variables
     ilat = ds.lat.values
@@ -582,6 +585,8 @@ def make_plot_index_stn(self):
     # read the data
     df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                         header=0)
+    df = Convert_Type.convert_Frame(df)
+
     # loop the keys in self.variables to get the metric output
     for metric in self.metrics:
         option = self.fig_nml['make_stn_plot_index']
@@ -773,6 +778,7 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
     file = os.path.join(output_dir, f"{method_name}", filename)
 
     ds = xr.open_dataset(f"{file}.nc")
+    ds = Convert_Type.convert_nc(ds)
     data = ds[method_name]
     ilat = ds.lat.values
     ilon = ds.lon.values

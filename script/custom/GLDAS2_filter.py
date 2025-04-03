@@ -1,3 +1,4 @@
+import logging
 def filter_GLDAS2(info,ds):   #update info as well
    if info.item == "Net_Radiation":
       try:
@@ -5,7 +6,7 @@ def filter_GLDAS2(info,ds):   #update info as well
          info.sim_varname='Net_Radiation'
          info.sim_varunit='W m-2'
       except:
-         print('Surface Net_Radiation calculation processing ERROR!!!')
+         logging.error('Surface Net_Radiation calculation processing ERROR!!!')
       return info, ds['Net_Radiation']
    
    if info.item == "Surface_Upward_SW_Radiation":
@@ -14,7 +15,7 @@ def filter_GLDAS2(info,ds):   #update info as well
          info.sim_varname='Surface_Upward_SW_Radiation'
          info.sim_varunit='W m-2'
       except:
-         print('Surface_Upward_SW_Radiation calculation processing ERROR!!!')
+         logging.error('Surface_Upward_SW_Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Upward_SW_Radiation']
    
    if info.item == "Surface_Upward_LW_Radiation":
@@ -23,7 +24,7 @@ def filter_GLDAS2(info,ds):   #update info as well
          info.sim_varname='Surface_Upward_LW_Radiation'
          info.sim_varunit='W m-2'
       except:
-         print('Surface_Upward_LW_Radiation calculation processing ERROR!!!')
+         logging.error('Surface_Upward_LW_Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Upward_LW_Radiation']
                        
    if info.item == "Total_Runoff":
@@ -32,5 +33,5 @@ def filter_GLDAS2(info,ds):   #update info as well
          info.sim_varname='Total_Runoff'
          info.sim_varunit='mm 3hour-1'
       except:
-         print('Total_Runoff calculation processing ERROR!!!')
+         logging.error('Total_Runoff calculation processing ERROR!!!')
       return info, ds['Total_Runoff']
