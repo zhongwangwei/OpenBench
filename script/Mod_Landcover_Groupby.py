@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 # Check the platform
 from Mod_Metrics import metrics
 from Mod_Scores import scores
+from Mod_Converttype import Convert_Type
 from figlib import *
 
 class LC_groupby(metrics, scores):
@@ -163,6 +164,7 @@ class LC_groupby(metrics, scores):
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall mean first
@@ -217,6 +219,7 @@ class LC_groupby(metrics, scores):
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
                                        
                                         if self.weight.lower() == 'area':
@@ -431,6 +434,7 @@ class LC_groupby(metrics, scores):
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall median first
@@ -485,6 +489,7 @@ class LC_groupby(metrics, scores):
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
                                         # Calculate and write the overall mean first

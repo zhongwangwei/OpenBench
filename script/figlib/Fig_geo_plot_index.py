@@ -8,7 +8,7 @@ import math
 import os
 import pandas as pd
 import matplotlib
-
+from Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
@@ -69,6 +69,7 @@ def make_geo_plot_index(file, method_name, main_nml, option):
     from matplotlib import rcParams
 
     ds = xr.open_dataset(f"{file}")
+    ds = Convert_Type.convert_nc(ds)
     data = ds[method_name]
     ilat = ds.lat.values
     ilon = ds.lon.values

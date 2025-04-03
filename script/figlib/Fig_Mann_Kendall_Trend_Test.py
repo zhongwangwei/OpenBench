@@ -11,7 +11,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -162,6 +162,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
 
 def make_Mann_Kendall_Trend_Test(file, method_name, data_sources, main_nml, option):
     ds = xr.open_dataset(f"{file}")
+    ds = Convert_Type.convert_nc(ds)
     trend = ds.trend
     if trend.ndim == 3 and trend.shape[0] == 1:
         trend = trend.squeeze(axis=0)

@@ -13,7 +13,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
@@ -175,6 +175,7 @@ def prepare_stn(output_dir, evaluation_item, ref_source, sim_source, scores, mai
     # read the data
     file = f"{output_dir}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv"
     df = pd.read_csv(file, header=0)
+    df = Convert_Type.convert_Frame(df)
     # loop the keys in self.variables to get the metric output
     min_metric = -999.0
     max_metric = 1000.0
@@ -313,6 +314,7 @@ def prepare_geo(output_dir, evaluation_item, ref_source, sim_source, scores, mai
     for score in scores:
         filename = f'{output_dir}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
         ds = xr.open_dataset(filename)
+        ds = Convert_Type.convert_nc(ds)
         data = ds[f'relative_{score}']
         ilat = ds.lat.values
         ilon = ds.lon.values

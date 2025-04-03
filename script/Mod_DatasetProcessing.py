@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 
 from Lib_Unit import UnitProcessing
 from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
+from Mod_Converttype import Convert_Type
 
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -46,7 +47,7 @@ class BaseDatasetProcessing:
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
-            self.station_list = pd.read_csv(f"{self.casedir}/stn_list.txt", header=0)
+            self.station_list = Convert_Type.convert_Frame(pd.read_csv(f"{self.casedir}/stn_list.txt", header=0))
             output_dir = f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}'
             # shutil.rmtree(output_dir, ignore_errors=True)
             # print(f"Re-creating output directory: {output_dir}")
@@ -252,9 +253,10 @@ class BaseDatasetProcessing:
             logging.error(f"Error: {str(e)}")
             raise
         try:
-            ds = self.apply_custom_filter(datasource, ds).astype('float32')
+            ds = self.apply_custom_filter(datasource, ds)
+            ds = Convert_Type.convert_nc(ds)
         except:
-            ds = ds[varname[0]].astype('float32')
+            ds = Convert_Type.convert_nc(ds[varname[0]])
         return ds
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset) -> xr.Dataset:
@@ -349,7 +351,7 @@ class BaseDatasetProcessing:
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
         ds = self.select_timerange(ds, self.minyear, self.maxyear)
         ds, varunit = self.process_units(ds, varunit)
-        self.split_year(ds, casedir, suffix, prefix,self.minyear, self.maxyear, datasource)
+        self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
 
     def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                     casedir: str, suffix: str, prefix: str, datasource: str) -> None:
@@ -441,10 +443,12 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         end_year = int(station['use_eyear'])
         file_path = f'{station["sim_dir"]}' if datasource == 'sim' else f'{station["ref_dir"]}'
         with xr.open_dataset(file_path) as stn_data:
+            stn_data = Convert_Type.convert_nc(stn_data)
             processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
             self.save_station_data(processed_data, station, datasource)
 
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
+        station = Convert_Type.convert_Frame(station)
         output_file = (f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/'
                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
         data.to_netcdf(output_file)
@@ -587,6 +591,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
     def extract_station_data(self, data_params: Dict[str, Any]) -> None:
         output_file = self.get_output_filename(data_params)
         with xr.open_dataset(output_file) as ds:
+            ds = Convert_Type.convert_nc(ds)
             Parallel(n_jobs=-1)(
                 delayed(self._extract_stn_parallel)(
                     data_params['datasource'], ds, self.station_list, i
@@ -605,7 +610,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             logging.info(f"Processing {data_source} data for year {year}")
 
         with xr.open_dataset(var_file) as data:
-
+            data = Convert_Type.convert_nc(data)
             data = self.preprocess_grid_data(data)
             remapped_data = self.remap_data(data)
             self.save_remapped_data(remapped_data, data_source, year)
@@ -693,7 +698,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
             subprocess.run(cmd, shell=True, check=True)
 
-            return xr.open_dataset(temp_output.name)
+            return Convert_Type.convert_nc(xr.open_dataset(temp_output.name))
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         with open(filename, 'w') as f:
