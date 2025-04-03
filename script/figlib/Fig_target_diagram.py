@@ -15,7 +15,6 @@ from matplotlib import ticker
 from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 
-
 def make_scenarios_comparison_Target_Diagram(basedir, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources, option):
     import matplotlib.pyplot as plt
     import matplotlib

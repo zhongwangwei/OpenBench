@@ -11,7 +11,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -180,6 +180,7 @@ def make_Partial_Least_Squares_Regression(output_dir, method_name, data_sources,
             }
     nX = statistic_nml[f"{data_sources[0]}_nX"]
     ds = xr.open_dataset(f"{file}.nc")
+    ds = Convert_Type.convert_nc(ds)
     ilat = ds.lat.values
     ilon = ds.lon.values
 
