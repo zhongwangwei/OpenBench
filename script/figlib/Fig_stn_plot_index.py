@@ -12,6 +12,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import rcParams
+from Mod_Converttype import Convert_Type
 
 
 def get_index(vmin, vmax, colormap):
@@ -65,6 +66,7 @@ def get_index(vmin, vmax, colormap):
 def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # read the data
     df = pd.read_csv(file, header=0)
+    df = Convert_Type.convert_Frame(df)
     # loop the keys in self.variables to get the metric output
     for type, source in zip(['ref_value', 'sim_value'], sources):
         min_metric = -999.0

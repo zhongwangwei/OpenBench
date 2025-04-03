@@ -16,7 +16,7 @@ from joblib import Parallel, delayed
 from Mod_Metrics import metrics
 from Mod_Scores import scores
 from figlib import *
-
+from Mod_Converttype import Convert_Type
 
 class Evaluation_grid(metrics, scores):
     def __init__(self, info, fig_nml):
@@ -56,6 +56,8 @@ class Evaluation_grid(metrics, scores):
             f'{self.ref_varname}']
         s = xr.open_dataset(f'{self.casedir}/output/data/{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')[
             f'{self.sim_varname}']
+        o = Convert_Type.convert_nc(o)
+        s = Convert_Type.convert_nc(s)
 
         s['time'] = o['time'] 
         if self.item == 'Terrestrial_Water_Storage_Change':
@@ -113,7 +115,7 @@ class Evaluation_stn(metrics, scores):
     def make_evaluation(self):
         # read station information
         stnlist = f"{self.casedir}/stn_list.txt"
-        station_list = pd.read_csv(stnlist, header=0)
+        station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
 
         # loop the keys in self.variables to get the metric output
         for metric in self.metrics:
@@ -155,6 +157,7 @@ class Evaluation_stn(metrics, scores):
         logging.info("=======================================")
         logging.info(" ")
         logging.info(" ")
+        station_list = Convert_Type.convert_Frame(station_list)
         output_path = f'{self.casedir}/output/metrics/stn_{self.ref_source}_{self.sim_source}/{self.ref_varname}_{self.sim_varname}_metrics.csv'
         logging.info(f"Saving evaluation to {output_path}")
         station_list.to_csv(output_path, index=False)
@@ -168,6 +171,8 @@ class Evaluation_stn(metrics, scores):
         o = xr.open_dataset(
             f"{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{self.item}_ref_{station_list['ID'][iik]}" + f"_{station_list['use_syear'][iik]}" + f"_{station_list['use_eyear'][iik]}.nc")[
             self.ref_varname].to_array().squeeze()
+        o = Convert_Type.convert_nc(o)
+        s = Convert_Type.convert_nc(s)
 
         s['time'] = o['time']
         mask1 = np.isnan(s) | np.isnan(o)
@@ -232,7 +237,7 @@ class Evaluation_stn(metrics, scores):
 
     def make_evaluation_P(self):
         stnlist = f"{self.casedir}/stn_list.txt"
-        station_list = pd.read_csv(stnlist, header=0)
+        station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
         num_cores = os.cpu_count()
         
         results = Parallel(n_jobs=-1)(
@@ -243,7 +248,8 @@ class Evaluation_stn(metrics, scores):
         logging.info("=======================================")
         logging.info(" ")
         logging.info(" ")
-        
+
+        station_list = Convert_Type.convert_Frame(station_list)
         output_path = f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv'
         logging.info(f"Saving evaluation to {output_path}")
         station_list.to_csv(output_path, index=False)

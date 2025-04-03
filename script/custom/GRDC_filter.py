@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import numpy as np
 import os, sys
@@ -23,7 +25,7 @@ def process_station(station, info, min_uparea, max_uparea):
         result['ref_dir'] = file_path
         with xr.open_dataset(file_path) as df:
             if info.debug_mode:
-               print(f"Processing station {int(station['ID'])}...")
+               logging.info(f"Processing station {int(station['ID'])}...")
             result['obs_syear'] = int(df["time.year"].values[0])
             result['obs_eyear'] = int(df["time.year"].values[-1])
             result['use_syear'] = max(result['obs_syear'], int(info.sim_syear), int(info.syear))
@@ -38,14 +40,14 @@ def process_station(station, info, min_uparea, max_uparea):
                 (station['ix2'] == -9999)):
                result['Flag'] = True
                if info.debug_mode:
-                  print(f"Station {int(station['ID'])} is selected")
+                  logging.info(f"Station {int(station['ID'])} is selected")
     return result
 
 def filter_GRDC(info):
    max_uparea = info.ref_nml['Streamflow']['GRDC_max_uparea']
    min_uparea = info.ref_nml['Streamflow']['GRDC_min_uparea']
    if info.compare_tim_res.lower() == "h":
-      print('compare_res="Hour", the compare_res should be "Day", "Month" or longer ')
+      logging.error('compare_res="Hour", the compare_res should be "Day", "Month" or longer ')
       sys.exit(1)
    info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_{info.sim_grid_res}Deg.txt"
    station_list = pd.read_csv(f"{info.ref_fulllist}", delimiter=r"\s+", header=0)
@@ -79,12 +81,12 @@ def filter_GRDC(info):
       data_select['lon_cama'].values[iii] = float(lon0[int(data_select['ix1'].values[iii]) - 1])
       data_select['lat_cama'].values[iii] = float(lat0[int(data_select['iy1'].values[iii]) - 1])
       if abs(data_select['lat_cama'].values[iii] - data_select['lat'].values[iii]) > 1:
-            print(f"Warning: ID {data_select['ID'][iii]} lat is not match")
+            logging.warning(f"Warning: ID {data_select['ID'][iii]} lat is not match")
       if abs(data_select['lon_cama'].values[iii] - data_select['lon'].values[iii]) > 1:
-            print(f"Warning: ID {data_select['ID'].values[iii]} lon is not match")
-   print(f"In total: {len(data_select['ID'])} stations are selected")
+            logging.warning(f"Warning: ID {data_select['ID'].values[iii]} lon is not match")
+   logging.info(f"In total: {len(data_select['ID'])} stations are selected")
    if len(data_select['ID']) == 0:
-      print(f"Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
+      logging.error(f"Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
       sys.exit(1)
    info.use_syear = data_select['use_syear'].min()
    info.use_eyear = data_select['use_eyear'].max()
