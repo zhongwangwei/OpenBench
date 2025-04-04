@@ -57,7 +57,7 @@ class LC_groupby(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = os.path.join(self.casedir, 'output', 'metrics', 'IGBP_groupby', 'grid_info.txt')
+            grid_info = f'{self.casedir}/output/metrics/IGBP_groupby/grid_info.txt'
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
@@ -68,8 +68,8 @@ class LC_groupby(metrics, scores):
                 f.write(f"yinc     =  {self.compare_grid_res}\n")
                 f.close()
             self.target_grid = grid_info
-            IGBPtype_orig = os.path.join('.', 'data', 'IGBP.nc')
-            IGBPtype_remap = os.path.join(self.casedir, 'output', 'metrics', 'IGBP_groupby', 'IGBP_remap.nc')
+            IGBPtype_orig = './data/IGBP.nc'
+            IGBPtype_remap = f'{self.casedir}/output/metrics/IGBP_groupby/IGBP_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, IGBPtype_orig, IGBPtype_remap, self.target_grid)
             self.IGBP_dir = IGBPtype_remap
 
@@ -92,7 +92,7 @@ class LC_groupby(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1, 18))
-            IGBPtype_remap = os.path.join(self.casedir, 'output', 'metrics', 'IGBP_groupby', 'IGBP_remap.nc')
+            IGBPtype_remap = f'{self.casedir}/output/metrics/IGBP_groupby/IGBP_remap.nc'
             ds_regrid.to_netcdf(IGBPtype_remap)
             self.IGBP_dir = IGBPtype_remap
 
@@ -163,8 +163,7 @@ class LC_groupby(metrics, scores):
                                     # Calculate and print mean values
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
-                                            os.path.join(self.casedir, 'output', 'metrics', 
-                                                        f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'))
+                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
@@ -175,13 +174,12 @@ class LC_groupby(metrics, scores):
 
                                         overall_median = ds[metric].median(skipna=True).values
                                         overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
+
                                         for i in range(1, 18):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
-                                            output_path = os.path.join(self.casedir, 'output', 'metrics', 'IGBP_groupby', 
-                                                                      f'{sim_source}___{ref_source}', 
-                                                                      f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc')
-                                            ds1.to_netcdf(output_path)
+                                            ds1.to_netcdf(
+                                                f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -190,7 +188,7 @@ class LC_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = os.path.join(self.casedir, 'output', 'metrics', 'IGBP_groupby', f'{sim_source}___{ref_source}')
+                                option['path'] = f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -220,7 +218,7 @@ class LC_groupby(metrics, scores):
 
                                     for score in self.scores:
                                         ds = xr.open_dataset(
-                                            os.path.join(self.casedir, 'output', 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'))
+                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
                                        
@@ -229,11 +227,12 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(os.path.join(self.casedir, 'output', 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'))[
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
                                             
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
+                                            
                                             # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean('time'))
                                             
@@ -256,18 +255,16 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                             ds1.to_netcdf(
-                                                os.path.join(self.casedir, "output", "scores", "IGBP_groupby", 
-                                                            f"{sim_source}___{ref_source}", 
-                                                            f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc"))
+                                                f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
                                             
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(os.path.join(self.casedir, "output", "data", 
-                                                                               f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"))[
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
+                                                
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
                                                 
@@ -291,7 +288,7 @@ class LC_groupby(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = os.path.join(self.casedir, "output", "scores", "IGBP_groupby", f"{sim_source}___{ref_source}")
+                                option['path'] = f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
@@ -342,8 +339,8 @@ class LC_groupby(metrics, scores):
                 f.write(f"yinc     =  {self.compare_grid_res}\n")
                 f.close()
             self.target_grid = grid_info
-            PFTtype_orig = os.path.join('.', 'data', 'PFT.nc')
-            PFTtype_remap = os.path.join(self.casedir, 'output', 'metrics', 'PFT_groupby', 'PFT_remap.nc')
+            PFTtype_orig = './data/PFT.nc'
+            PFTtype_remap = f'{self.casedir}/output/metrics/PFT_groupby/PFT_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, PFTtype_orig, PFTtype_remap, self.target_grid)
             self.PFT_dir = PFTtype_remap
 
@@ -352,7 +349,7 @@ class LC_groupby(metrics, scores):
             Compare the PFT class of the model output data and the reference data using xarray
             """
             from regrid import Grid, create_regridding_dataset
-            ds = xr.open_dataset(os.path.join('.', 'data', 'PFT.nc'), chunks={"lat": 2000, "lon": 2000})
+            ds = xr.open_dataset("./data/PFT.nc", chunks={"lat": 2000, "lon": 2000})
             ds = ds["PFT"]
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
@@ -366,7 +363,7 @@ class LC_groupby(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(0, 16))
-            PFTtype_remap = os.path.join(self.casedir, 'output', 'metrics', 'PFT_groupby', 'PFT_remap.nc')
+            PFTtype_remap = f'{self.casedir}/output/metrics/PFT_groupby/PFT_remap.nc'
             ds_regrid.to_netcdf(PFTtype_remap)
             self.PFT_dir = PFTtype_remap
 
@@ -436,7 +433,7 @@ class LC_groupby(metrics, scores):
 
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
-                                            os.path.join(self.casedir, 'output', 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'))
+                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
@@ -452,7 +449,7 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
-                                                os.path.join(self.casedir, 'output', 'metrics', 'PFT_groupby', f'{sim_source}___{ref_source}', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc'))
+                                                f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -461,7 +458,7 @@ class LC_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = os.path.join(self.casedir, 'output', 'metrics', 'PFT_groupby', f'{sim_source}___{ref_source}')
+                                option['path'] = f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -491,7 +488,7 @@ class LC_groupby(metrics, scores):
 
                                     for score in self.scores:
                                         ds = xr.open_dataset(
-                                            os.path.join(self.casedir, 'output', 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'))
+                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
@@ -502,7 +499,7 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(os.path.join(self.casedir, 'output', 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'))[
+                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
                                             
                                             # Calculate area weights (cosine of latitude)
@@ -528,14 +525,14 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
-                                                os.path.join(self.casedir, 'output', 'scores', 'PFT_groupby', f'{sim_source}___{ref_source}', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc'))
+                                                f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(os.path.join(self.casedir, 'output', 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'))[
+                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
                                                 
                                                 # Calculate area weights (cosine of latitude)
@@ -560,8 +557,9 @@ class LC_groupby(metrics, scores):
                                             output_file.write(f"{mean_value_str}\t")
                                         output_file.write(f"{overall_mean_str}\t")  # Write overall mean
                                         output_file.write("\n")
+
                                 selected_scores = self.scores
-                                option['path'] = os.path.join(self.casedir, 'output', 'scores', 'PFT_groupby', f'{sim_source}___{ref_source}')
+                                option['path'] = f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"PFT class scores comparison results are saved to {output_file_path2}")
