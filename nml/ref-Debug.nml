@@ -1,15 +1,15 @@
 &general
-    Evapotranspiration_ref_source = GLEAM_hybird_PLUMBER2, GLEAM4.2a_monthly
-    Latent_Heat_ref_source        = PLUMBER2,ILAMB_monthly
-    Sensible_Heat_ref_source      = PLUMBER2,ILAMB_monthly
+    Evapotranspiration_ref_source = GLEAM4.2a_monthly,GLEAM_hybird_PLUMBER2
+    Latent_Heat_ref_source        = ILAMB_monthly,PLUMBER2
+    Sensible_Heat_ref_source      = ILAMB_monthly,PLUMBER2
 /
 
 
 &def_nml
-    GLEAM_hybird_PLUMBER2 = ./nml/Ref_variables_defination/Hydrology/GLEAM_hybird_PLUMBER2.nml
-    ILAMB_monthly         = ./nml/Ref_variables_defination/Composite/ILAMB_monthly.nml
-    PLUMBER2              = ./nml/Ref_variables_defination/Composite/PLUMBER2.nml
-    GLEAM4.2a_monthly     = ./nml/Ref_variables_defination/Composite/GLEAM4.2a_monthly.nml
+    GLEAM_hybird_PLUMBER2 = ./nml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.nml
+    ILAMB_monthly         = ./nml/Ref_variables_defination/Debug/ILAMB_monthly.nml
+    PLUMBER2              = ./nml/Ref_variables_defination/Debug/PLUMBER2.nml
+    GLEAM4.2a_monthly     = ./nml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.nml
 /
 
 
