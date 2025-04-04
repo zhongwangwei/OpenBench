@@ -555,12 +555,20 @@ class BaseDatasetProcessing:
             var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
         except:
             var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
+        
         datasets = []
-        for file in var_files:
-            ds = self.select_var(year, year, tim_res, file, varname, datasource)
-            datasets.append(ds)
-        data0 = xr.concat(datasets, dim="time").sortby('time')
-        return data0
+        try:
+            for file in var_files:
+                ds = self.select_var(year, year, tim_res, file, varname, datasource)
+                datasets.append(ds)
+            data0 = xr.concat(datasets, dim="time").sortby('time')
+            return data0
+        finally:
+            # Clean up memory
+            for ds in datasets:
+                if hasattr(ds, 'close'):
+                    ds.close()
+            gc.collect()
 
     def check_file_exist(self, file: str) -> str:
         if not os.path.exists(file):
@@ -659,12 +667,15 @@ class BaseDatasetProcessing:
 
 class StationDatasetProcessing(BaseDatasetProcessing):
     def process_station_data(self, data_params: Dict[str, Any]) -> None:
-        logging.info("Processing station data")
-        Parallel(n_jobs=-1)(
-            delayed(self._make_stn_parallel)(
-                self.station_list, data_params['datasource'], i
-            ) for i in range(len(self.station_list['ID']))
-        )
+        try:
+            logging.info("Processing station data")
+            Parallel(n_jobs=-1)(
+                delayed(self._make_stn_parallel)(
+                    self.station_list, data_params['datasource'], i
+                ) for i in range(len(self.station_list['ID']))
+            )
+        finally:
+            gc.collect()
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
         varname = self.ref_varname if datasource == 'ref' else self.sim_varname
@@ -706,31 +717,43 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
-        station = station_list.iloc[index]
-        start_year = int(station['use_syear'])
-        end_year = int(station['use_eyear'])
-        file_path = station["sim_dir"] if datasource == 'sim' else station["ref_dir"]
-        with xr.open_dataset(file_path) as stn_data:
-            stn_data = Convert_Type.convert_nc(stn_data)
-            processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
-            self.save_station_data(processed_data, station, datasource)
+        try:
+            station = station_list.iloc[index]
+            start_year = int(station['use_syear'])
+            end_year = int(station['use_eyear'])
+            file_path = station["sim_dir"] if datasource == 'sim' else station["ref_dir"]
+            with xr.open_dataset(file_path) as stn_data:
+                stn_data = Convert_Type.convert_nc(stn_data)
+                processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
+                self.save_station_data(processed_data, station, datasource)
+        finally:
+            gc.collect()
 
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
-        station = Convert_Type.convert_Frame(station)
-        output_file = os.path.join(self.casedir, 'output', 'data', f'stn_{self.ref_source}_{self.sim_source}', f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
-        data.to_netcdf(output_file)
-        logging.info(f"Saved station data to {output_file}")
+        try:
+            station = Convert_Type.convert_Frame(station)
+            output_file = os.path.join(self.casedir, 'output', 'data', 
+                                     f'stn_{self.ref_source}_{self.sim_source}',
+                                     f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+            data.to_netcdf(output_file)
+            logging.info(f"Saved station data to {output_file}")
+        finally:
+            if hasattr(data, 'close'):
+                data.close()
+            gc.collect()
 
     @performance_monitor
     def _extract_stn_parallel(self, datasource: str, dataset: xr.Dataset, station_list: pd.DataFrame, index: int) -> None:
-        station = station_list.iloc[index]
-        start_year = int(station['use_syear'])
-        end_year = int(station['use_eyear'])
+        try:
+            station = station_list.iloc[index]
+            start_year = int(station['use_syear'])
+            end_year = int(station['use_eyear'])
 
-        station_data = self.extract_single_station_data(dataset, station, datasource)
-        processed_data = self.process_extracted_data(station_data, start_year, end_year)
-        self.save_extracted_data(processed_data, station, datasource)
-        gc.collect()  # Add garbage collection after processing each station
+            station_data = self.extract_single_station_data(dataset, station, datasource)
+            processed_data = self.process_extracted_data(station_data, start_year, end_year)
+            self.save_extracted_data(processed_data, station, datasource)
+        finally:
+            gc.collect()
 
     @performance_monitor
     def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
@@ -749,17 +772,27 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         return data.resample(time=self.compare_tim_res).mean()
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
-        output_file = os.path.join(self.casedir, 'output', 'data', f'stn_{self.ref_source}_{self.sim_source}', f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
-        data.to_netcdf(output_file)
-        logging.info(f"Saved extracted station data to {output_file}")
+        try:
+            output_file = os.path.join(self.casedir, 'output', 'data', 
+                                     f'stn_{self.ref_source}_{self.sim_source}',
+                                     f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+            data.to_netcdf(output_file)
+            logging.info(f"Saved extracted station data to {output_file}")
+        finally:
+            if hasattr(data, 'close'):
+                data.close()
+            gc.collect()
 
 
 class GridDatasetProcessing(BaseDatasetProcessing):
     @performance_monitor
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
-        self.prepare_grid_data(data_params)
-        self.remap_and_combine_data(data_params)
-        self.extract_station_data_if_needed(data_params)
+        try:
+            self.prepare_grid_data(data_params)
+            self.remap_and_combine_data(data_params)
+            self.extract_station_data_if_needed(data_params)
+        finally:
+            gc.collect()
 
     @performance_monitor
     def prepare_grid_data(self, data_params: Dict[str, Any]) -> None:
@@ -879,21 +912,23 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
-        if data_source not in ['ref', 'sim']:
-            logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
-            raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
+        try:
+            if data_source not in ['ref', 'sim']:
+                logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
+                raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
 
-        var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
-        if self.debug_mode:
-            logging.info(f"Processing {var_file} for year {year}")
-            logging.info(f"Processing {data_source} data for year {year}")
+            var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
+            if self.debug_mode:
+                logging.info(f"Processing {var_file} for year {year}")
+                logging.info(f"Processing {data_source} data for year {year}")
 
-        with xr.open_dataset(var_file) as data:
-            data = Convert_Type.convert_nc(data)
-            data = self.preprocess_grid_data(data)
-            remapped_data = self.remap_data(data)
-            self.save_remapped_data(remapped_data, data_source, year)
-            gc.collect()  # Add garbage collection after processing each grid
+            with xr.open_dataset(var_file) as data:
+                data = Convert_Type.convert_nc(data)
+                data = self.preprocess_grid_data(data)
+                remapped_data = self.remap_data(data)
+                self.save_remapped_data(remapped_data, data_source, year)
+        finally:
+            gc.collect()
 
     @performance_monitor
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
@@ -999,15 +1034,20 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             f.write(f"yinc = {self.compare_grid_res}\n")
 
     def save_remapped_data(self, data: xr.Dataset, data_source: str, year: int) -> None:
-        # Convert sparse arrays to dense arrays
-        data = data.resample(time=self.compare_tim_res).mean()
-        data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
+        try:
+            # Convert sparse arrays to dense arrays
+            data = data.resample(time=self.compare_tim_res).mean()
+            data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
 
-        varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
+            varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
 
-        out_file = os.path.join(self.casedir, 'tmp', f'{data_source}_{varname}_remap_{year}.nc')
-        data.to_netcdf(out_file)
-        logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
+            out_file = os.path.join(self.casedir, 'tmp', f'{data_source}_{varname}_remap_{year}.nc')
+            data.to_netcdf(out_file)
+            logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
+        finally:
+            if hasattr(data, 'close'):
+                data.close()
+            gc.collect()
 
 
 class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
