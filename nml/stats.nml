@@ -1,17 +1,19 @@
 &general
     Mean_data_source                             = Mean_Data
     Median_data_source                           = Median_Data
-    Min_data_source                             = Min_Data
-    Max_data_source                             = Max_Data
-    Sum_data_source                             = Sum_Data
+    Min_data_source                              = Min_Data
+    Max_data_source                              = Max_Data
+    Sum_data_source                              = Sum_Data
     Mann_Kendall_Trend_Test_data_source          = MK_Test_Data
     Correlation_data_source                      = Corr_Data.1a_monthly_UKESM1-0-LL
-    Standard_Deviation_data_source                = SD_Data
-    Z_Score_data_source                          = Z_Score_Data
+    Standard_Deviation_data_source               = SD_Data
     Functional_Response_data_source              = FR_Data
+    Z_Score_data_source                          = Z_Score_Data
     Hellinger_Distance_data_source               = HD_Data
     Three_Cornered_Hat_data_source               = TCH_Data
     Partial_Least_Squares_Regression_data_source = PLSR_Data
+    False_Discovery_Rate_data_source             = FDR_Data
+    ANOVA_data_source                            = ANOVA_Data
 /
 
 &Mean
@@ -31,7 +33,6 @@
 /
 
 &Median
-
 #casename: MK_Test_Canopy_Interception_CESM2
     Median_Data_timezone =  0.0
     Median_Data_data_type =  grid
@@ -46,8 +47,8 @@
     Median_Data_syear =  2003
     Median_Data_eyear =  2009
 /
-&Min
 
+&Min
 #casename: MK_Test_Canopy_Interception_CESM2
     Min_Data_timezone =  0.0
     Min_Data_data_type =  grid
@@ -62,8 +63,8 @@
     Min_Data_syear =  2003
     Min_Data_eyear =  2009
 /
-&Max
 
+&Max
 #casename: MK_Test_Canopy_Interception_CESM2
     Max_Data_timezone =  0.0
     Max_Data_data_type =  grid
@@ -78,8 +79,8 @@
     Max_Data_syear =  2003
     Max_Data_eyear =  2009
 /
-&Sum
 
+&Sum
 #casename: MK_Test_Canopy_Interception_CESM2
     Sum_Data_timezone =  0.0
     Sum_Data_data_type =  grid
@@ -152,20 +153,6 @@ SD_Data_syear = 1996
 SD_Data_eyear = 2005
 /
 
-&Z_Score
-Z_Score_Data_timezone = 0
-Z_Score_Data_data_type = geo
-Z_Score_Data_data_groupby = Single
-Z_Score_Data_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
-Z_Score_Data_varname = slhf
-Z_Score_Data_tim_res = monthly
-Z_Score_Data_geo_res = 0.5
-Z_Score_Data_suffix = Latent_Heat_ref_ERA5LAND_slhf
-Z_Score_Data_prefix = 
-Z_Score_Data_syear = 1996
-Z_Score_Data_eyear = 2005
-/
-
 &Functional_Response
 FR_Data_timezone = 0
 FR_Data_data_type = geo
@@ -180,6 +167,20 @@ FR_Data_prefix =
 FR_Data_syear = 2000
 FR_Data_eyear = 2020
 nbins = 25
+/
+
+&Z_Score
+Z_Score_Data_timezone = 0
+Z_Score_Data_data_type = geo
+Z_Score_Data_data_groupby = Single
+Z_Score_Data_dir = /share/home/dq013/zhwei/colm-test/Final01/output/data/
+Z_Score_Data_varname = slhf
+Z_Score_Data_tim_res = monthly
+Z_Score_Data_geo_res = 0.5
+Z_Score_Data_suffix = Latent_Heat_ref_ERA5LAND_slhf
+Z_Score_Data_prefix = 
+Z_Score_Data_syear = 1996
+Z_Score_Data_eyear = 2005
 /
 
 &Hellinger_Distance
@@ -289,6 +290,48 @@ PLSR_Data_X2_suffix = PLSR_X
 PLSR_Data_X2_prefix =
 PLSR_Data_X2_syear = 2000
 PLSR_Data_X2_eyear = 2020
+/
+
+&False_Discovery_Rate
+FDR_Data_X1_timezone = 0
+FDR_Data_X1_data_type = geo
+FDR_Data_X1_data_groupby = Single
+FDR_Data_X1_dir = /path/to/fdr_Data_x
+FDR_Data_X1_varname = fdr_variable_x
+FDR_Data_X1_varunit = unit_x
+FDR_Data_X1_tim_res = Year
+FDR_Data_X1_geo_res = 0.5
+FDR_Data_X1_suffix = fdr_X1
+FDR_Data_X1_prefix =
+FDR_Data_X1_syear = 2000
+FDR_Data_X1_eyear = 2020
+FDR_Data_X1_type  = Independent
+
+FDR_Data_X2_timezone = 0
+FDR_Data_X2_data_type = geo
+FDR_Data_X2_data_groupby = Single
+FDR_Data_X2_dir = /path/to/fdr_Data_x
+FDR_Data_X2_varname = fdr_variable_x
+FDR_Data_X2_varunit = unit_x
+FDR_Data_X2_tim_res = Year
+FDR_Data_X2_geo_res = 0.5
+FDR_Data_X2_suffix = fdr_X2
+FDR_Data_X2_prefix =
+FDR_Data_X2_syear = 2000
+FDR_Data_X2_eyear = 2020
+
+FDR_Data_X3_timezone = 0
+FDR_Data_X3_data_type = geo
+FDR_Data_X3_data_groupby = Single
+FDR_Data_X3_dir = /path/to/fdr_Data_x
+FDR_Data_X3_varname = fdr_variable_x
+FDR_Data_X3_varunit = unit_x
+FDR_Data_X3_tim_res = Year
+FDR_Data_X3_geo_res = 0.5
+FDR_Data_X3_suffix = fdr_X3
+FDR_Data_X3_prefix =
+FDR_Data_X3_syear = 2000
+FDR_Data_X3_eyear = 2020
 /
 
 &ANOVA
