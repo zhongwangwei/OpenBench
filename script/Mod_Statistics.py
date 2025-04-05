@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Tuple
 
 import pandas as pd
 import re
+import gc
 from joblib import Parallel, delayed
 import warnings
 from dask.diagnostics import ProgressBar
