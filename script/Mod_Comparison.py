@@ -164,11 +164,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     pass
                                 else:
                                     dir_path = os.path.join(basedir, 'output', 'comparisons', 'IGBP_groupby',
-                                                          f'{sim_source}___{ref_source}')
+                                                            f'{sim_source}___{ref_source}')
                                     os.makedirs(dir_path, exist_ok=True)
 
                                     output_file_path = os.path.join(dir_path,
-                                                                  f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                    f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                                     with open(output_file_path, "w") as output_file:
                                         # Print the table header with an additional column for the overall median
                                         output_file.write("ID\t")
@@ -183,7 +183,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         # Calculate and print median values
                                         for metric in self.metrics:
                                             metric_path = os.path.join(self.casedir, 'output', 'metrics',
-                                                                     f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                                                       f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                             ds = xr.open_dataset(metric_path)
                                             output_file.write(f"{metric}\t")
 
@@ -199,8 +199,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 ds1 = ds.where(IGBPtype == i)
                                                 igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                                 igbp_output_path = os.path.join(self.casedir, 'output', 'comparisons', 'IGBP_groupby',
-                                                                             f'{sim_source}___{ref_source}',
-                                                                             f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc')
+                                                                                f'{sim_source}___{ref_source}',
+                                                                                f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc')
                                                 os.makedirs(os.path.dirname(igbp_output_path), exist_ok=True)
                                                 ds1.to_netcdf(igbp_output_path)
                                                 median_value = ds1[metric].median(skipna=True).values
@@ -212,13 +212,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                     selected_metrics = self.metrics
                                     option['path'] = os.path.join(self.casedir, 'output', 'comparisons', 'IGBP_groupby',
-                                                               f'{sim_source}___{ref_source}')
+                                                                  f'{sim_source}___{ref_source}')
                                     option['item'] = [evaluation_item, sim_source, ref_source]
                                     option['groupby'] = 'IGBP_groupby'
                                     make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
 
                                     output_file_path2 = os.path.join(basedir, 'output', 'comparisons', 'IGBP_groupby',
-                                                                   f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                     f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
 
                                     with open(output_file_path2, "w") as output_file:
                                         # Print the table header with an additional column for the overall mean
@@ -234,7 +234,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         # Calculate and print mean values
                                         for score in self.scores:
                                             score_path = os.path.join(self.casedir, 'output', 'scores',
-                                                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                                                      f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                             ds = xr.open_dataset(score_path)
                                             output_file.write(f"{score}\t")
 
@@ -246,8 +246,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 ds1 = ds.where(IGBPtype == i)
                                                 igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                                 igbp_output_path = os.path.join(self.casedir, 'output', 'comparisons', 'IGBP_groupby',
-                                                                             f'{sim_source}___{ref_source}',
-                                                                             f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc')
+                                                                                f'{sim_source}___{ref_source}',
+                                                                                f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc')
                                                 os.makedirs(os.path.dirname(igbp_output_path), exist_ok=True)
                                                 ds1.to_netcdf(igbp_output_path)
                                                 mean_value = ds1[score].mean(skipna=True).values
@@ -267,7 +267,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         dir_path = os.path.join(casedir, 'output', 'comparisons', 'IGBP_groupby')
         os.makedirs(dir_path, exist_ok=True)
-        
+
         try:
             _IGBP_class_remap_cdo()
         except Exception as e:
@@ -609,21 +609,25 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         if ref_varname is None or ref_varname == '':
                                             ref_varname = evaluation_item
                                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                            stnlist = os.path.join(casedir, "stn_list.txt")
+                                            stnlist = os.path.join(casedir, 'output', 'metrics',
+                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                                             station_list = pd.read_csv(stnlist, header=0)
+                                            station_list = Convert_Type.convert_Frame(station_list)
+                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
                                             # this should be moved to other place
                                             if ref_source.lower() == 'grdc':
                                                 station_list['ref_lon'] = station_list['lon']
                                                 station_list['ref_lat'] = station_list['lat']
 
                                             def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                        station_list, iik):
+                                                                          station_list, iik):
                                                 try:
-                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    
+                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
                                                     s = xr.open_dataset(sim_path)[sim_varname].squeeze()
                                                     o = xr.open_dataset(ref_path)[ref_varname].squeeze()
                                                     o = Convert_Type.convert_nc(o)
@@ -656,12 +660,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                             results = Parallel(n_jobs=-1)(
                                                 delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
-                                                                               sim_varname, ref_varname, station_list, iik) for iik in
+                                                                                   sim_varname, ref_varname, station_list, iik) for iik in
                                                 range(len(station_list['ID'])))
 
                                             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
-                                            
+
                                             output_stn_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
                                             station_list.to_csv(output_stn_path)
 
@@ -684,12 +688,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
-                                            
-                                            ref_path = os.path.join(casedir, 'output', 'data', 
-                                                                  f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                            sim_path = os.path.join(casedir, 'output', 'data', 
-                                                                  f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                            
+
+                                            ref_path = os.path.join(casedir, 'output', 'data',
+                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                            sim_path = os.path.join(casedir, 'output', 'data',
+                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
                                             reffile = xr.open_dataset(ref_path)[ref_varname]
                                             simfile = xr.open_dataset(sim_path)[sim_varname]
                                             reffile = Convert_Type.convert_nc(reffile)
@@ -759,9 +763,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         output_file.write(f"{std_ref}\n")
                                     finally:
                                         gc.collect()  # Clean up memory after processing each simulation source
-
-                            make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources,
-                                                                     option)
+                            try:
+                                make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources,
+                                                                         option)
+                            except:
+                                logging.error(f"Error: {evaluation_item} {ref_source} Error!")
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
                 finally:
@@ -818,17 +824,21 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
-                                            stnlist = os.path.join(casedir, "stn_list.txt")
+                                            stnlist = os.path.join(casedir, 'output', 'metrics',
+                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                                             station_list = pd.read_csv(stnlist, header=0)
+                                            station_list = Convert_Type.convert_Frame(station_list)
+                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
 
                                             def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                        station_list, iik):
+                                                                          station_list, iik):
                                                 try:
-                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    
+                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
                                                     s = xr.open_dataset(sim_path)[sim_varname].squeeze()
                                                     o = xr.open_dataset(ref_path)[ref_varname].squeeze()
                                                     o = Convert_Type.convert_nc(o)
@@ -857,12 +867,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                             results = Parallel(n_jobs=-1)(
                                                 delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
-                                                                               sim_varname, ref_varname, station_list, iik) for iik in
+                                                                                   sim_varname, ref_varname, station_list, iik) for iik in
                                                 range(len(station_list['ID'])))
 
                                             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
-                                            
+
                                             output_stn_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
                                             station_list.to_csv(output_stn_path)
 
@@ -886,12 +896,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
-                                                
-                                            ref_path = os.path.join(casedir, 'output', 'data', 
-                                                                  f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                            sim_path = os.path.join(casedir, 'output', 'data', 
-                                                                  f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                            
+
+                                            ref_path = os.path.join(casedir, 'output', 'data',
+                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                            sim_path = os.path.join(casedir, 'output', 'data',
+                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
                                             reffile = xr.open_dataset(ref_path)[ref_varname]
                                             simfile = xr.open_dataset(sim_path)[sim_varname]
                                             reffile = Convert_Type.convert_nc(reffile)
@@ -910,8 +920,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         gc.collect()  # Clean up memory after processing each simulation source
 
                                 output_file.write("\n")
-                                make_scenarios_comparison_Target_Diagram(dir_path, evaluation_item, biases, rmses, crmsds, ref_source,
-                                                                     sim_sources, option)
+                                try:
+                                    make_scenarios_comparison_Target_Diagram(dir_path, evaluation_item, biases, rmses, crmsds, ref_source,
+                                                                             sim_sources, option)
+                                except:
+                                    logging.error(f"Error: {evaluation_item} {ref_source} error!")
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
                 finally:
@@ -932,7 +945,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str): sim_sources = [sim_sources]
                     if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                    
+
                     for score in scores:
                         try:
                             for ref_source in ref_sources:
@@ -952,26 +965,26 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     sim_varname = evaluation_item
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
-                                                    
+
                                                 file_path = os.path.join(basedir, 'output', 'scores',
-                                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                                         f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'scores',
-                                                                       f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                                                                         f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
                                             datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
-                                            
+
                                     try:
                                         make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                                       score, datasets_filtered, option)
+                                                                                          score, datasets_filtered, option)
                                     except:
                                         logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
                                 finally:
@@ -998,19 +1011,19 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     sim_varname = evaluation_item
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
-                                                    
+
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
-                                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                                         f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
-                                                                       f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
+                                                                         f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[metric].values
-                                                
+
                                             data = data[~np.isinf(data)]
                                             if metric == 'percent_bias':
                                                 data = data[(data >= -100) & (data <= 100)]
@@ -1020,7 +1033,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                     try:
                                         make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
-                                                                                       metric, datasets_filtered, option)
+                                                                                          metric, datasets_filtered, option)
                                     except:
                                         logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
                                 finally:
@@ -1056,7 +1069,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         # if the sim_sources and ref_sources are not list, then convert them to list
                         if isinstance(sim_sources, str): sim_sources = [sim_sources]
                         if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                        
+
                         for ref_source in ref_sources:
                             try:
                                 for i, sim_source in enumerate(sim_sources):
@@ -1066,7 +1079,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         output_file.write(f"{sim_source}\t")
                                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                                        
+
                                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                                             ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                                             sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
@@ -1074,9 +1087,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
-                                                
+
                                             file_path = os.path.join(basedir, 'output', 'scores',
-                                                                   f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                             df = pd.read_csv(file_path, sep=',', header=0)
                                             df = Convert_Type.convert_Frame(df)
 
@@ -1102,12 +1115,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
-                                                
+
                                             ref_path = os.path.join(basedir, 'output', 'data',
-                                                                  f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                                             sim_path = os.path.join(basedir, 'output', 'data',
-                                                                  f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                            
+                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
                                             reffile = xr.open_dataset(ref_path)[ref_varname]
                                             simfile = xr.open_dataset(sim_path)[sim_varname]
                                             reffile = Convert_Type.convert_nc(reffile)
@@ -1115,10 +1128,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                             for score in scores:
                                                 score_path = os.path.join(self.casedir, 'output', 'scores',
-                                                                       f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                                                          f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                                 ds = xr.open_dataset(score_path)
                                                 ds = Convert_Type.convert_nc(ds)
-                                                
+
                                                 if self.weight.lower() == 'area':
                                                     weights = np.cos(np.deg2rad(reffile.lat))
                                                     kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(
@@ -1132,13 +1145,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                         normalized_weights.fillna(0)).mean(skipna=True).values
                                                 else:
                                                     kk = ds[score].mean(skipna=True).values
-                                                    
+
                                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                                 output_file.write(f"{kk_str}\t")
-                                                
+
                                             for metric in metrics:
                                                 metric_path = os.path.join(self.casedir, 'output', 'metrics',
-                                                                        f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                                 ds = xr.open_dataset(metric_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 ds = ds.where(np.isfinite(ds), np.nan)
@@ -1147,7 +1160,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 kk = ds[metric].median(skipna=True).values
                                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
                                                 output_file.write(f"{kk_str}\t")
-                                                
+
                                             output_file.write("\n")
                                     finally:
                                         gc.collect()  # Clean up memory after processing each simulation source
@@ -1162,10 +1175,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # If index in scores or metrics was dropped, then remove the corresponding scores or metrics
             scores = [score for score in scores if score in df.columns]
             metrics = [metric for metric in metrics if metric in df.columns]
-            
+
             output_file_path1 = os.path.join(dir_path, "Parallel_Coordinates_evaluations_remove_nan.txt")
             df.to_csv(output_file_path1, sep='\t', index=False)
-            
+
             make_scenarios_comparison_parallel_coordinates(output_file_path1, self.casedir, evaluation_items, scores, metrics, option)
         finally:
             gc.collect()  # Final cleanup for the entire method
@@ -1188,8 +1201,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
                         pb_da = Convert_Type.convert_nc(pb_da)
-                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal', 
-                                                 f'{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
+                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
+                                                   f'{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
                         os.makedirs(os.path.dirname(output_path), exist_ok=True)
                         pb_da.to_netcdf(output_path)
                     except:
@@ -1204,8 +1217,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
                         pb_da = Convert_Type.convert_nc(pb_da)
-                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal', 
-                                                 f'{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
+                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
+                                                   f'{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
                         os.makedirs(os.path.dirname(output_path), exist_ok=True)
                         pb_da.to_netcdf(output_path)
                     except:
@@ -1248,7 +1261,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 for evaluation_item in evaluation_items:
                     try:
-                        logging.info("now processing the evaluation item: ", evaluation_item)
+                        logging.info(f"now processing the evaluation item: {evaluation_item}")
                         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                         if isinstance(sim_sources, str): sim_sources = [sim_sources]
@@ -1272,19 +1285,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
 
-                                            stnlist = os.path.join(basedir, "stn_list.txt")
+                                            stnlist = os.path.join(basedir, 'output', 'metrics',
+                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                                             station_list = pd.read_csv(stnlist, header=0)
                                             station_list = Convert_Type.convert_Frame(station_list)
+                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
 
                                             def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                            station_list, iik, metric_or_score, season, metric=None,
-                                                                            score=None):
+                                                                               station_list, iik, metric_or_score, season, metric=None,
+                                                                               score=None):
                                                 try:
-                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                          f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    
+                                                    sim_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                    ref_path = os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
                                                     s = xr.open_dataset(sim_path)[sim_varname].squeeze()
                                                     o = xr.open_dataset(ref_path)[ref_varname].squeeze()
                                                     o = Convert_Type.convert_nc(o)
@@ -1311,8 +1327,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     for season in seasons:
                                                         results = Parallel(n_jobs=-1)(
                                                             delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
-                                                                                                sim_varname, ref_varname, station_list, iik,
-                                                                                                'metric', season, metric=metric)
+                                                                                                    sim_varname, ref_varname, station_list, iik,
+                                                                                                    'metric', season, metric=metric)
                                                             for iik in range(len(station_list['ID'])))
                                                         results = np.array(results)
                                                         q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
@@ -1329,8 +1345,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     for season in seasons:
                                                         results = Parallel(n_jobs=-1)(
                                                             delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
-                                                                                                sim_varname, ref_varname, station_list, iik,
-                                                                                                'score', season, score=score)
+                                                                                                    sim_varname, ref_varname, station_list, iik,
+                                                                                                    'score', season, score=score)
                                                             for iik in range(len(station_list['ID'])))
                                                         mean_value = np.nanmean(results)
                                                         kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
@@ -1347,10 +1363,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     ref_varname = evaluation_item
 
                                                 ref_path = os.path.join(basedir, 'output', 'data',
-                                                                      f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                                                        f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                                                 sim_path = os.path.join(basedir, 'output', 'data',
-                                                                      f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                                
+                                                                        f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
                                                 o = xr.open_dataset(ref_path)[ref_varname]
                                                 s = xr.open_dataset(sim_path)[sim_varname]
                                                 o = Convert_Type.convert_nc(o)
@@ -1377,22 +1393,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     try:
                                                         if hasattr(self, metric):
                                                             k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_DJF, o_DJF,
-                                                                            vkey='_DJF')
+                                                                               vkey='_DJF')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_MAM, o_MAM,
-                                                                            vkey='_MAM')
+                                                                               vkey='_MAM')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_JJA, o_JJA,
-                                                                            vkey='_JJA')
+                                                                               vkey='_JJA')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_SON, o_SON,
-                                                                            vkey='_SON')
+                                                                               vkey='_SON')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
                                                         else:
@@ -1405,22 +1421,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     try:
                                                         if hasattr(self, score):
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_DJF, o_DJF,
-                                                                           vkey=f'_DJF')
+                                                                              vkey=f'_DJF')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_MAM, o_MAM,
-                                                                           vkey=f'_MAM')
+                                                                              vkey=f'_MAM')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_JJA, o_JJA,
-                                                                           vkey=f'_JJA')
+                                                                              vkey=f'_JJA')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_SON, o_SON,
-                                                                           vkey=f'_SON')
+                                                                              vkey=f'_SON')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
                                                         else:
@@ -1439,7 +1455,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         gc.collect()  # Clean up memory after processing each evaluation item
 
             make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
-                                                          option)
+                                                             option)
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -1476,16 +1492,16 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     sim_varname = evaluation_item
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
-                                                    
+
                                                 file_path = os.path.join(basedir, 'output', 'scores',
-                                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                                         f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'scores',
-                                                                       f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                                                                         f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
@@ -1495,7 +1511,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                     try:
                                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, score,
-                                                                            datasets_filtered, option)
+                                                                               datasets_filtered, option)
                                     except:
                                         logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!")
                                 finally:
@@ -1521,19 +1537,19 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     sim_varname = evaluation_item
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
-                                                    
+
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
-                                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                                         f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
-                                                                       f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
+                                                                         f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[metric].values
-                                                
+
                                             data = data[~np.isinf(data)]
                                             if metric == 'percent_bias':
                                                 data = data[(data >= -100) & (data <= 100)]
@@ -1543,7 +1559,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                     try:
                                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
-                                                                            datasets_filtered, option)
+                                                                               datasets_filtered, option)
                                     except:
                                         logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
                                 finally:
@@ -1579,8 +1595,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
 
                                     if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                        file_pattern = os.path.join(casedir, 'output', 'scores', 
-                                                                  f"{evaluation_item}_stn_{ref_source}_*_evaluations.csv")
+                                        file_pattern = os.path.join(casedir, 'output', 'scores',
+                                                                    f"{evaluation_item}_stn_{ref_source}_*_evaluations.csv")
                                         all_files = glob.glob(file_pattern)
 
                                         if not all_files:
@@ -1591,7 +1607,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                         combined_relative_scores = pd.DataFrame()
                                         filex = os.path.join(casedir, 'output', 'scores',
-                                                           f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                             f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                         df_sim = pd.read_csv(filex, sep=',', header=0)
                                         df_sim = Convert_Type.convert_Frame(df_sim)
 
@@ -1649,15 +1665,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 combined_relative_scores['sim_lon'] = combined_relative_scores['ID'].map(lon_mapping)
                                                 combined_relative_scores['sim_lat'] = combined_relative_scores['ID'].map(lat_mapping)
                                             combined_relative_scores = Convert_Type.convert_Frame(combined_relative_scores)
-                                            output_path = os.path.join(dir_path, 
-                                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv")
+                                            output_path = os.path.join(dir_path,
+                                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv")
                                             combined_relative_scores.to_csv(output_path, index=False)
                                         else:
                                             logging.warning(f"No valid data found for {evaluation_item}, {ref_source}")
 
                                         try:
-                                            make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, 
-                                                                                  scores, 'stn', self.main_nml['general'], option)
+                                            make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source,
+                                                                                     scores, 'stn', self.main_nml['general'], option)
                                         except:
                                             logging.info(f"No files found")
 
@@ -1665,7 +1681,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         for score in scores:
                                             try:
                                                 file_pattern = os.path.join(casedir, 'output', 'scores',
-                                                                          f'{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc')
+                                                                            f'{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc')
                                                 all_files = glob.glob(file_pattern)
 
                                                 if not all_files:
@@ -1692,7 +1708,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 score_std = combined_ds[score].std(dim='file', skipna=True).astype('float32')
 
                                                 file = os.path.join(casedir, 'output', 'scores',
-                                                                  f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                                                    f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                                 ds = xr.open_dataset(file)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 relative_score = (ds[score] - score_mean) / score_std
@@ -1702,14 +1718,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 result_ds[f'relative_{score}'] = Convert_Type.convert_nc(relative_score)
 
                                                 output_file = os.path.join(dir_path,
-                                                                         f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc')
+                                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc')
                                                 result_ds.to_netcdf(output_file)
                                             finally:
                                                 gc.collect()  # Clean up memory after processing each score
 
                                         try:
                                             make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid',
-                                                                                  self.main_nml['general'], option)
+                                                                                     self.main_nml['general'], option)
                                         except:
                                             logging.info(f"No files found")
                                 finally:
@@ -1791,8 +1807,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # Save grid-based SMPI
             try:
                 smpi_da = xr.DataArray(normalized_diff, coords={'lat': o.lat, 'lon': o.lon}, dims=['lat', 'lon'], name='SMPI')
-                output_path = os.path.join(casedir, 'output', 'comparisons', 'Single_Model_Performance_Index', 
-                                          f'{item}_ref_{ref_source}_sim_{sim_source}_SMPI_grid.nc')
+                output_path = os.path.join(casedir, 'output', 'comparisons', 'Single_Model_Performance_Index',
+                                           f'{item}_ref_{ref_source}_sim_{sim_source}_SMPI_grid.nc')
                 smpi_da.to_netcdf(output_path)
                 del smpi_da  # Release memory
                 gc.collect()  # Force garbage collection
@@ -1824,16 +1840,21 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == '':
                                 ref_varname = evaluation_item
-                            stnlist = f"{basedir}/stn_list.txt"
+                            stnlist = os.path.join(basedir, 'output', 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                             station_list = pd.read_csv(stnlist, header=0)
+                            station_list = Convert_Type.convert_Frame(station_list)
+                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
 
                             def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
                                                                station_list, iik):
                                 try:
-                                    s = xr.open_dataset(os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                    f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[sim_varname].squeeze()
-                                    o = xr.open_dataset(os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}", 
-                                                                    f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[ref_varname].squeeze()
+                                    s = xr.open_dataset(os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                     f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
+                                        sim_varname].squeeze()
+                                    o = xr.open_dataset(os.path.join(casedir, "output", "data", f"stn_{ref_source}_{sim_source}",
+                                                                     f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
+                                        ref_varname].squeeze()
                                     o = Convert_Type.convert_nc(o)
                                     s = Convert_Type.convert_nc(s)
 
@@ -1865,13 +1886,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ref_varname = evaluation_item
                             o_path = os.path.join(basedir, 'output', 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                             s_path = os.path.join(basedir, 'output', 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                            
+
                             o = xr.open_dataset(o_path)[f'{ref_varname}']
                             s = xr.open_dataset(s_path)[f'{sim_varname}']
-                            
+
                             o = Convert_Type.convert_nc(o)
                             s = Convert_Type.convert_nc(s)
-
 
                             s['time'] = o['time']
                             mask1 = np.isnan(s) | np.isnan(o)
@@ -1921,15 +1941,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == '':
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(basedir, 'output', 'scores', 
-                                                   f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            file_path = os.path.join(basedir, 'output', 'scores',
+                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
                             file_path = os.path.join(basedir, 'output', 'scores',
-                                                   f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                                                     f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
@@ -1963,14 +1983,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == '':
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(basedir, 'output', 'metrics', 
-                                                   f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            file_path = os.path.join(basedir, 'output', 'metrics',
+                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             data = df[metric].values
                         else:
                             file_path = os.path.join(basedir, 'output', 'metrics',
-                                                   f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
+                                                     f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
 
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
@@ -2079,8 +2099,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             all_station_data = []
                             for sim_source in sim_sources:
                                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                file_path = os.path.join(basedir, 'output', 'metrics', 
-                                                       f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                file_path = os.path.join(basedir, 'output', 'metrics',
+                                                         f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                 df = pd.read_csv(file_path, sep=',', header=0)
                                 df = Convert_Type.convert_Frame(df)
                                 all_station_data.append(df[metric])
@@ -2269,7 +2289,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 ds_anom.attrs['description'] = f'Anomaly from ensemble mean for {sim_source}'
                                 output_file = os.path.join(dir_path,
                                                            f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_anomaly.nc')
-                                ds_anom= Convert_Type.convert_nc(ds_anom)
+                                ds_anom = Convert_Type.convert_nc(ds_anom)
                                 ds_anom.to_netcdf(output_file)
 
                         except Exception as e:
@@ -2381,13 +2401,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', basic_method)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
+
         def calculate_basic_parallel(station_list, iik, evaluation_item, ref_source, sim_source, ref_varname, sim_varname):
             sim_filename = f"{evaluation_item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"
             ref_filename = f"{evaluation_item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"
-            
+
             sim_path = os.path.join(basedir, "output", "data", f"stn_{ref_source}_{sim_source}", sim_filename)
             ref_path = os.path.join(basedir, "output", "data", f"stn_{ref_source}_{sim_source}", ref_filename)
-            
+
             s = xr.open_dataset(sim_path)[sim_varname].squeeze()
             o = xr.open_dataset(ref_path)[ref_varname].squeeze()
             o = Convert_Type.convert_nc(o)
@@ -2429,8 +2450,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 if ref_data_type == 'stn':
                     try:
-                        stnlist = f"{basedir}/stn_list.txt"
+                        stnlist = os.path.join(basedir, 'output', 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                         station_list = pd.read_csv(stnlist, header=0)
+                        station_list = Convert_Type.convert_Frame(station_list)
+                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
                         for sim_source in sim_sources:
                             sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                             results = Parallel(n_jobs=-1)(
@@ -2503,13 +2527,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 if sim_data_type != 'stn':
                     try:
-                        sim = xr.open_dataset(os.path.join(basedir, 'output', 'data', 
-                                                         f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'))[
+                        sim = xr.open_dataset(os.path.join(basedir, 'output', 'data',
+                                                           f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'))[
                             f'{sim_varname}']
                         sim = Convert_Type.convert_nc(sim)
                         result = method_function(*[sim], option['significance_level'])
-                        output_file = os.path.join(dir_path, 
-                                                 f'Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                        output_file = os.path.join(dir_path,
+                                                   f'Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
                         self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Mann_Kendall_Trend_Test(output_file, method_name, sim_source, self.main_nml['general'], option)
                     except Exception as e:
@@ -2519,13 +2543,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                 if ref_data_type != 'stn':
                     try:
-                        ref_path = os.path.join(basedir, 'output', 'data', 
-                                              f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                        ref_path = os.path.join(basedir, 'output', 'data',
+                                                f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                         ref = xr.open_dataset(ref_path)[f'{ref_varname}']
                         ref = Convert_Type.convert_nc(ref)
                         result = method_function(*[ref], option['significance_level'])
-                        output_file = os.path.join(dir_path, 
-                                                 f'Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                        output_file = os.path.join(dir_path,
+                                                   f'Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                         self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                         make_Mann_Kendall_Trend_Test(output_file, method_name, ref_source, self.main_nml['general'], option)
                     except Exception as e:
@@ -2558,15 +2582,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         if sim_data_type != 'stn':
                             # Use os.path.join for file paths
                             sim_path = os.path.join(basedir, 'output', 'data',
-                                                  f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
                             sim = xr.open_dataset(sim_path)[sim_varname]
                             sim = Convert_Type.convert_nc(sim)
 
                             result = method_function(*[sim])
-                            
+
                             output_file = os.path.join(dir_path,
-                                                     f'{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                            
+                                                       f'{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
                             self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
                     except Exception as e:
@@ -2583,15 +2607,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         if ref_data_type != 'stn':
                             # Use os.path.join for file paths
                             ref_path = os.path.join(basedir, 'output', 'data',
-                                                  f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                             ref = xr.open_dataset(ref_path)[ref_varname]
                             ref = Convert_Type.convert_nc(ref)
 
                             result = method_function(*[ref])
-                            
+
                             output_file = os.path.join(dir_path,
-                                                     f'{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                            
+                                                       f'{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+
                             self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
                     except Exception as e:
@@ -2626,32 +2650,32 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                        
-                        # Use os.path.join for file paths
-                        ref_path = os.path.join(basedir, 'output', 'data',
-                                              f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                        ref = xr.open_dataset(ref_path)[ref_varname]
-                        ref = Convert_Type.convert_nc(ref)
 
                         if ref_data_type != 'stn':
+                            # Use os.path.join for file paths
+                            ref_path = os.path.join(basedir, 'output', 'data',
+                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                            ref = xr.open_dataset(ref_path)[ref_varname]
+                            ref = Convert_Type.convert_nc(ref)
+
                             for sim_source in sim_sources:
                                 try:
                                     sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                                     sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                    if sim_data_type != 'stn':
+                                        # Use os.path.join for file paths
+                                        sim_path = os.path.join(basedir, 'output', 'data',
+                                                                f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                                        sim = xr.open_dataset(sim_path)[sim_varname]
+                                        sim = Convert_Type.convert_nc(sim)
 
-                                    # Use os.path.join for file paths
-                                    sim_path = os.path.join(basedir, 'output', 'data',
-                                                          f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                    sim = xr.open_dataset(sim_path)[sim_varname]
-                                    sim = Convert_Type.convert_nc(sim)
+                                        result = method_function(*[ref, sim], option['nbins'])
 
-                                    result = method_function(*[ref, sim], option['nbins'])
+                                        output_file = os.path.join(dir_path,
+                                                                   f'{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc')
 
-                                    output_file = os.path.join(dir_path,
-                                                             f'{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc')
-                                    
-                                    self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
-                                    make_Functional_Response(output_file, method_name, sim_source, self.main_nml['general'], option)
+                                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
+                                        make_Functional_Response(output_file, method_name, sim_source, self.main_nml['general'], option)
                                 except Exception as e:
                                     logging.error(
                                         f"Error processing {method_name} calculations for {evaluation_item} {ref_source} {sim_source}: {e}")
@@ -2687,27 +2711,27 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         try:
                             sim_varname1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
                             sim_varname2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
-                            
+
                             # Use os.path.join for file paths
-                            ds1_path = os.path.join(basedir, 'output', 'data', 
-                                                  f'{evaluation_item}_sim_{sim1}_{sim_varname1}.nc')
-                            ds2_path = os.path.join(basedir, 'output', 'data', 
-                                                  f'{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')
-                            
+                            ds1_path = os.path.join(basedir, 'output', 'data',
+                                                    f'{evaluation_item}_sim_{sim1}_{sim_varname1}.nc')
+                            ds2_path = os.path.join(basedir, 'output', 'data',
+                                                    f'{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')
+
                             ds1 = xr.open_dataset(ds1_path)[sim_varname1]
                             ds2 = xr.open_dataset(ds2_path)[sim_varname2]
-                            
+
                             ds1 = Convert_Type.convert_nc(ds1)
                             ds2 = Convert_Type.convert_nc(ds2)
-                            
+
                             result = method_function(*[ds1, ds2])
-                            
-                            output_file = os.path.join(dir_path, 
-                                                     f'{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc')
-                            
+
+                            output_file = os.path.join(dir_path,
+                                                       f'{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc')
+
                             self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Correlation(output_file, method_name, self.main_nml['general'], option)
-                            
+
                         except Exception as e:
                             logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}")
                         finally:
@@ -2732,12 +2756,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 result['lon'].attrs['long_name'] = 'longitude'
                 result['lon'].attrs['units'] = 'degrees_east'
                 result['lon'].attrs['axis'] = 'X'
-                
+
                 # Ensure the directory exists
                 output_dir = os.path.dirname(output_file)
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
-                
+
                 result.to_netcdf(output_file)
             else:
                 logging.info(f"Result of {method_name}: {result}")
