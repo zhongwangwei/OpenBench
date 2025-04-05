@@ -130,7 +130,7 @@
 
 
 &metrics
-    percent_bias          = True
+    percent_bias          = False
     absolute_percent_bias = False
     bias                  = False
     mean_absolute_error   = False
@@ -141,10 +141,10 @@
     nrmse                 = False
     L                     = False
     correlation           = True
-    correlation_R2        = True
+    correlation_R2        = False
     NSE                   = False
     LNSE                  = False
-    KGE                   = True
+    KGE                   = False
     KGESS                 = True
     kappa_coeff           = False
     rv                    = False
@@ -184,18 +184,18 @@
 
 
 &scores
-    nBiasScore            = True
-    nRMSEScore            = True
-    nPhaseScore           = True
-    nIavScore             = True
-    nSpatialScore         = True
+    nBiasScore            = False
+    nRMSEScore            = False
+    nPhaseScore           = False
+    nIavScore             = False
+    nSpatialScore         = False
     Overall_Score         = True
     The_Ideal_Point_score = False
 /
 
 
 &comparisons
-    HeatMap                        = False
+    HeatMap                        = True
     Taylor_Diagram                 = False
     Target_Diagram                 = False
     Kernel_Density_Estimate        = False
@@ -203,7 +203,7 @@
     Parallel_Coordinates           = False
     Portrait_Plot_seasonal         = False
     Single_Model_Performance_Index = False
-    Relative_Score                 = True
+    Relative_Score                 = False
     Ridgeline_Plot                 = False
     Diff_Plot                      = False
     Mean                           = False
