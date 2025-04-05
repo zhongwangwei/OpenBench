@@ -426,65 +426,37 @@ class BaseDatasetProcessing:
             pass
         return ds
 
-    @performance_monitor
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
-        ds = None
         try:
-            # Get file size in GB
-            file_size_gb = os.path.getsize(VarFile) / (1024**3)
-            
-            # Get optimal chunk size (auto)
-            chunks = self.get_optimal_chunks(file_size_gb)
-            
-            # Update number of cores based on file size
-            self.num_cores = self.get_optimal_cores(file_size_gb)
-            
-            logging.info(f"Using auto chunking and {self.num_cores} cores for processing {VarFile}")
-            
             try:
-                ds = xr.open_dataset(VarFile, chunks=chunks)
+                ds = xr.open_dataset(VarFile)  # .squeeze()
             except:
-                ds = xr.open_dataset(VarFile, decode_times=False, chunks=chunks)
-            
-            # Apply filters and conversions
-            ds = self.apply_custom_filter(datasource, ds)
-            ds = Convert_Type.convert_nc(ds)
-            
-            # Clear memory before returning
-            gc.collect()
-            return ds
-        
+                ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
             raise
-        finally:
-            # Ensure dataset is properly closed
-            if ds is not None and hasattr(ds, 'close'):
-                ds.close()
-            gc.collect()
+        try:
+            ds = self.apply_custom_filter(datasource, ds)
+            ds = Convert_Type.convert_nc(ds)
+        except:
+            ds = Convert_Type.convert_nc(ds[varname[0]])
+        return ds
 
-    @performance_monitor
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset) -> xr.Dataset:
         if datasource == 'stat':
-            return ds
+            pass
         else:
             model = self.sim_model if datasource == 'sim' else self.ref_source
             try:
-                logging.info(f"Attempting to load custom filter for {model}")
+                logging.info(f"Loading custom variable filter for {model}")
                 custom_module = importlib.import_module(f"custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
                 self, ds = custom_filter(self, ds)
-            except ImportError:
-                logging.info(f"No custom filter found for {model}, using original dataset")
-                return ds
             except AttributeError:
-                logging.info(f"No filter_{model} function found in {model}_filter module, using original dataset")
-                return ds
-            except Exception as e:
-                logging.warning(f"Error applying custom filter for {model}: {str(e)}")
-                return ds
-            return ds
+                logging.warning(f"Custom filter function for {model} not found.")
+                raise
+        return ds
 
     @performance_monitor
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
