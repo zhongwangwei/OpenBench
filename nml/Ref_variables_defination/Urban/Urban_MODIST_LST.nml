@@ -1,20 +1,27 @@
 &general
-   root_dir          =   
-   timezone          =   
-   data_type         =   
-   data_groupby      =   
-   tim_res           =   
-   grid_res          =   
-   syear             =   
-   eyear             =   
+   root_dir          =  /tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/
+   timezone          =  0 
+   data_type         =  grid
+   data_groupby      =  single 
+   tim_res           =  Month
+   grid_res          =  0.5 
+   syear             =  2003
+   eyear             =  2020      
 /
 
-&Urban_Surface_Temperature
-varname           =  LST
+&Urban_Daytime_Surface_Temperature
+varname           =  LST_D
 varunit           =  K
-prefix            =   
+prefix            =  MODIS_LST_2003-2020
+suffix            =
+
+&Urban_Nittime_Surface_Temperature
+varname           =  LST_N
+varunit           =  K
+prefix            =  MODIS_LST_2003-2020
 suffix            =  
 /
+
 #Reference:
 # Zhang, T., Zhou, Y., Zhu, Z., Li, X., & Asrar, G. R. (2022). 
 # A global seamless 1 km resolution daily land surface temperature dataset (2003–2020). 

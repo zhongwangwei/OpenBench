@@ -1,5 +1,5 @@
 &general
-   root_dir          =   ./data/reference/grid_ref/Urban/ETMonitor/
+   root_dir          =   /tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/
    timezone          =   0
    data_type         =   grid
    data_groupby      =   single
@@ -12,8 +12,9 @@
 &Urban_Latent_Heat_Flux
 varname           =  LE
 varunit           =  w m-2
-prefix            =  2001-2019_LE_0.5
+prefix            =  LE_2001-2019_monmean
 suffix            =  
+
 /
 #Reference:
 # Zheng, C., Jia, L., & Hu, G. (2022). Global land surface evapotranspiration 
