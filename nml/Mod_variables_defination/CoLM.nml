@@ -263,13 +263,13 @@ varname =
 varunit = w m-2
 /
 
-&Urban_Albedo
-varname =  
-varunit = unitless
+&Urban_Daytime_Surface_Temperature
+varname = f_t_grndday
+varunit = K
 /
 
-&Urban_Surface_Temperature
-varname = f_trad
+&Urban_Nittime_Surface_Temperature
+varname = f_t_grndnit
 varunit = K
 /
 
