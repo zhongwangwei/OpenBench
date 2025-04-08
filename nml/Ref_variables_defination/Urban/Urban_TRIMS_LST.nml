@@ -1,20 +1,27 @@
 &general
-   root_dir          =   
-   timezone          =   
-   data_type         =   
-   data_groupby      =   
-   tim_res           =   
-   grid_res          =   
-   syear             =   
-   eyear             =   
+   root_dir          =  /tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/ 
+   timezone          =  0 
+   data_type         =  grid
+   data_groupby      =  single 
+   tim_res           =  Month
+   grid_res          =  0.5 
+   syear             =  2000
+   eyear             =  2020   
 /
 
-&Urban_Surface_Temperature
-varname           =  LST
+&Urban_Daytime_Surface_Temperature
+varname           =  LST_D
 varunit           =  K
-prefix            =   
+prefix            =  TRIMS_LST_2000-2020
+suffix            =
+
+&Urban_Nittime_Surface_Temperature
+varname           =  LST_N
+varunit           =  K
+prefix            =  TRIMS_LST_2000-2020
 suffix            =  
 /
+
 #Reference:
 # Zhou, J., Zhang, X., Tang, W., Ding, L., Ma, J., Zhang, X. (2021). 
 # Daily 1-km all-weather land surface temperature dataset for the China's 

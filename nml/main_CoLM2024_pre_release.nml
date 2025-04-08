@@ -100,12 +100,12 @@
 
   #*******************      Human Activity    **********************
   #urban
-  Urban_Anthropogenic_Heat_Flux = False
-  Urban_Albedo                  = False
-  Urban_Surface_Temperature     = False
-  Urban_Air_Temperature_Max     = False
-  Urban_Air_Temperature_Min     = False
-  Urban_Latent_Heat_Flux        = False
+  Urban_Anthropogenic_Heat_Flux     = False
+  Urban_Nittime_Surface_Temperature = True
+  Urban_Daytime_Surface_Temperature = True
+  Urban_Air_Temperature_Max         = True
+  Urban_Air_Temperature_Min         = True
+  Urban_Latent_Heat_Flux            = True
 
   #Crop
   Crop_Yield_Rice                = False
