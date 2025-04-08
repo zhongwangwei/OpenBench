@@ -11,7 +11,402 @@ from io import BytesIO
 import streamlit as st
 
 
-def make_scenarios_comparison_Portrait_Plot_seasonal(option, file, evaluation_items, reference, scores, cases, var):
+def make_scenarios_comparison_Portrait_Plot_seasonal(self, file, selected_item, score, ref_source, item):
+    st.cache_data.clear()
+    option = {}
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
+    with Labels_tab:
+        col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
+        with col1:
+            option['title'] = st.text_input('Title', label_visibility="visible",
+                                            key=f"{item} title")
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{item}_title_size")
+
+        with col2:
+            option['xticklabel'] = st.text_input('X tick labels', value='Simulation', label_visibility="visible",
+                                                 key=f"{item}_xticklabel")
+            option['xticksize'] = st.number_input("xtick size", min_value=0, value=17, key=f"{item}_xtick")
+
+        with col3:
+            option['yticklabel'] = st.text_input('Y tick labels', value=f'{score.title()}', label_visibility="visible",
+                                                 key=f"{item}_yticklabel")
+            option['yticksize'] = st.number_input("ytick size", min_value=0, value=17, key=f"{item}_ytick")
+
+        with col4:
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0., value=1., step=0.1,
+                                                       key=f"{item}_axes_linewidth")
+            option['fontsize'] = st.number_input("Font size", min_value=0, value=15, step=1, key=f"{item}_fontsize")
+
+    with Var_tab:
+        def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            if title != 'cases':
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__Portrait_Plot_seasonal_variable",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one items!")
+            else:
+                for item in case_item:
+                    case_item[item] = st.checkbox(item, key=f"{item}__Portrait_Plot_seasonal_variable",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one items!")
+
+        if score == 'metrics':
+            items = [k for k, v in self.metrics.items() if v]
+        else:
+            items = [k for k, v in self.scores.items() if v]
+        cases = [k for k in self.sim['general'][f"{selected_item}_sim_source"]]
+        col1, col2 = st.columns(2)
+        with col1:
+            items = get_cases(items, f'Selected {score.title()}')
+        with col2:
+            cases = get_cases(cases, 'cases')
+
+    with Scale_tab:
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=45,
+                                                 key=f"{item}_x_rotation")
+        option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'],
+                                        index=1, placeholder="Choose an option", label_visibility="visible",
+                                        key=f"{item}_x_ha")
+        option["y_rotation"] = col3.number_input(f"y rotation", min_value=-90, max_value=90, value=0,
+                                                 key=f"{item}_y_rotation")
+        option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'],
+                                        index=0, placeholder="Choose an option", label_visibility="visible",
+                                        key=f"{item}_y_ha")
+
+        col1, col2, col3, col4 = st.columns(4)
+        option['colorbar_off'] = col1.toggle('Turn off colorbar?', value=False)
+        option['cmap'] = col2.selectbox('Colorbar',
+                                        ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                         'BuGn_r',
+                                         'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu',
+                                         'GnBu_r',
+                                         'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                         'Oranges',
+                                         'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1',
+                                         'Pastel1_r',
+                                         'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                         'PuBu_r',
+                                         'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu',
+                                         'RdBu_r',
+                                         'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                         'RdYlGn_r',
+                                         'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                         'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu',
+                                         'YlGnBu_r',
+                                         'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot',
+                                         'afmhot_r',
+                                         'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg',
+                                         'brg_r',
+                                         'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
+                                         'copper_r',
+                                         'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                         'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                         'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                         'gist_rainbow_r', 'gray', 'gray_r',
+                                         'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                         'jet_r',
+                                         'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean',
+                                         'ocean_r',
+                                         'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                         'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                         'summer_r',
+                                         'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                         'winter_r'], index=0, placeholder="Choose an option", key=f'{item}_cmap',
+                                        label_visibility="visible")
+        if not option['colorbar_off']:
+            with col3:
+                option['colorbar_label'] = st.text_input('colorbar label', value=score.title(),
+                                                         label_visibility="visible",
+                                                         key=f"{item}_colorbar_label")
+            with col4:
+                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
+                                                           index=0, placeholder="Choose an option",
+                                                           label_visibility="visible",
+                                                           key=f"{item}_colorbar_position")
+                if option["colorbar_position"] == 'vertical':
+                    pad_value = 0.05
+                else:
+                    pad_value = 0.15
+        else:
+            option['colorbar_label'] = ''
+            option["colorbar_position"] = 'vertical'
+
+        if score == 'scores':
+            col1, col2, col3, col4 = st.columns(4)
+            option["extend"] = 'neither'
+            vmin, vmax, colorbar_ticks = 0., 1., 0.2
+            option["vmin_max_on"] = col1.toggle('Fit to data', value=False, key=f"{item}_vmin_max_on")
+            try:
+                if option["vmin_max_on"]:
+                    option["nstep"] = col2.number_input(f"Colorbar Ticks locater", value=colorbar_ticks, step=0.1,
+                                                        key=f"{item}_colorbar_ticks")
+                    try:
+                        option["vmin"] = col3.number_input(f"colorbar min", value=vmin, key=f"{item}_vmin")
+                        option["vmax"] = col4.number_input(f"colorbar max", value=vmax, key=f"{item}_vmax")
+                    except ValueError:
+                        st.error(f"Max value must larger than min value.")
+                else:
+                    option["nstep"] = colorbar_ticks
+                    option["vmin"] = vmin
+                    option["vmax"] = vmax
+            except Exception as e:
+                st.error(f"Error: {e}")
+                error = True
+
+        st.write("##### :blue[Legend]")
+        col1, col2, col3, col4 = st.columns(4)
+        option["legend_box_x"] = col1.number_input(f"x position", value=1.1, step=0.1, key=f"{item}_legend_box_x")
+        option["legend_box_y"] = col2.number_input(f"y position", value=1.2, step=0.1, key=f"{item}_legend_box_y")
+        option["legend_box_size"] = col3.number_input(f"legend box size", value=1.0, step=0.1,
+                                                      key=f"{item}_legend_box_size")
+        option["legend_lw"] = col4.number_input(f"Line width", value=1.0, step=0.1, key=f"{item}_legend_lw")
+        option["legend_fontsize"] = col1.number_input(f"Box fontsize", value=12.5, step=0.2,
+                                                      key=f"{item}_legend_fontsize")
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        x_lenth = 10
+        y_lenth = 5
+        if score == 'metrics':
+            x_lenth = len(cases)
+            y_lenth = len(items)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=x_lenth, key=f"{item}_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{item}_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=y_lenth, key=f"{item}_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
+
+    st.divider()
+    if items is not None and cases is not None:
+        if score == 'metrics':
+            draw_scenarios_comparison_Portrait_Plot_seasonal_metrics(Figure_show, option, file, selected_item, ref_source, items, cases,
+                                                                     score)
+        else:
+            draw_scenarios_comparison_Portrait_Plot_seasonal(Figure_show, option, file, selected_item, ref_source, items, cases,
+                                                             score)
+    elif not items:
+        st.error('Metircs items is None!')
+    elif not cases:
+        st.error('Simulation cases is None!')
+
+
+def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(self, file, score, item):
+    st.cache_data.clear()
+    option = {}
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
+    with Labels_tab:
+        col1, col2, col3, col4 = st.columns((3, 3, 3, 3))
+        with col1:
+            option['title'] = st.text_input('Title', label_visibility="visible",
+                                            key=f"{item} title")
+            option['title_size'] = st.number_input("Title label size", min_value=0, value=18, key=f"{item}_title_size")
+
+        with col2:
+            option['xticklabel'] = st.text_input('X tick labels', value='Simulation', label_visibility="visible",
+                                                 key=f"{item}_xticklabel")
+            option['xticksize'] = st.number_input("xtick size", min_value=0, value=15, key=f"{item}_xtick")
+
+        with col3:
+            option['yticklabel'] = st.text_input('Y tick labels', value=f'{score.replace("_", " ")}',
+                                                 label_visibility="visible",
+                                                 key=f"{item}_yticklabel")
+            option['yticksize'] = st.number_input("ytick size", min_value=0, value=15, key=f"{item}_ytick")
+
+        with col4:
+            option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0., value=1., step=0.1,
+                                                       key=f"{item}_axes_linewidth")
+            option['fontsize'] = st.number_input("Font size", min_value=0, value=15, step=1, key=f"{item}_fontsize")
+    with Var_tab:
+
+        def get_cases(items, title):
+            case_item = {}
+            for item in items:
+                case_item[item] = True
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            if title != 'cases':
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__Portrait_Plot_seasonal_score",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one item!")
+            else:
+                for item in case_item:
+                    case_item[item] = st.checkbox(item, key=f"{item}__Portrait_Plot_seasonal_score",
+                                                  value=case_item[item])
+                if len([item for item, value in case_item.items() if value]) > 0:
+                    return [item for item, value in case_item.items() if value]
+                else:
+                    st.error("You must choose one item!")
+
+        items = [k for k in self.selected_items]
+        cases = list(
+            set([value for key in self.selected_items for value in self.sim['general'][f"{key}_sim_source"] if value]))
+        col1, col2 = st.columns(2)
+        with col1:
+            items = get_cases(items, 'Selected items')
+        with col2:
+            cases = get_cases(cases, 'cases')
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
+        option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=45,
+                                                 key=f"{item}_x_rotation")
+        option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'],
+                                        index=1, placeholder="Choose an option", label_visibility="visible",
+                                        key=f"{item}_x_ha")
+        option["y_rotation"] = col3.number_input(f"y rotation", min_value=-90, max_value=90, value=0,
+                                                 key=f"{item}_y_rotation")
+        option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'],
+                                        index=0, placeholder="Choose an option", label_visibility="visible",
+                                        key=f"{item}_y_ha")
+
+        col1, col2, col3, col4 = st.columns(4)
+        option['colorbar_off'] = col1.toggle('Turn off colorbar?', value=False)
+        option['cmap'] = col2.selectbox('Colorbar',
+                                        ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                         'BuGn_r',
+                                         'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
+                                         'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r',
+                                         'Oranges',
+                                         'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
+                                         'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                         'PuBu_r',
+                                         'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
+                                         'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn',
+                                         'RdYlGn_r',
+                                         'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                         'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
+                                         'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
+                                         'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
+                                         'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper',
+                                         'copper_r',
+                                         'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                         'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                         'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                         'gist_rainbow_r', 'gray', 'gray_r',
+                                         'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet',
+                                         'jet_r',
+                                         'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
+                                         'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                         'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                         'summer_r',
+                                         'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                         'winter_r'], index=0, placeholder="Choose an option", key=f'{item}_cmap',
+                                        label_visibility="visible")
+        if not option['colorbar_off']:
+            with col4:
+                option["extend"] = st.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                                index=0, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_extend")
+            with col3:
+                option["colorbar_position"] = st.selectbox('colorbar position', ['horizontal', 'vertical'],  # 'Season',
+                                                           index=0, placeholder="Choose an option",
+                                                           label_visibility="visible",
+                                                           key=f"{item}_colorbar_position")
+        if score in self.scores:
+            option["extend"] = 'neither'
+
+        col1, col2, col3, col4 = st.columns(4)
+        vmin, vmax, colorbar_ticks = get_index(file, cases, items, score)
+        option["vmin_max_on"] = col1.toggle('Fit to data', value=False, key=f"{item}_vmin_max_on")
+        try:
+            if option["vmin_max_on"]:
+                option["colorbar_ticks"] = col2.number_input(f"Colorbar Ticks locater", value=colorbar_ticks, step=0.1,
+                                                             key=f"{item}_colorbar_ticks")
+                try:
+                    option["vmin"] = col3.number_input(f"colorbar min", value=vmin, key=f"{item}_vmin")
+                    option["vmax"] = col4.number_input(f"colorbar max", value=vmax, key=f"{item}_vmax")
+                except ValueError:
+                    st.error(f"Max value must larger than min value.")
+            else:
+                option["colorbar_ticks"] = colorbar_ticks
+                option["vmin"] = vmin
+                option["vmax"] = vmax
+        except Exception as e:
+            st.error(f"Error: {e}")
+            error = True
+
+        st.divider()
+        st.write("##### :blue[Legend]")
+        col1, col2, col3, col4 = st.columns(4)
+        option["legend_box_x"] = col1.number_input(f"x position", value=1.1, step=0.1, key=f"{item}_legend_box_x")
+        option["legend_box_y"] = col2.number_input(f"y position", value=1.2, step=0.1, key=f"{item}_legend_box_y")
+        option["legend_box_size"] = col3.number_input(f"legend box size", value=1.0, step=0.1,
+                                                      key=f"{item}_legend_box_size")
+        option["legend_lw"] = col4.number_input(f"Line width", value=1.0, step=0.1, key=f"{item}_legend_lw")
+        option["legend_fontsize"] = col1.number_input(f"Box fontsize", value=12.5, step=0.2,
+                                                      key=f"{item}_legend_fontsize")
+    with Save_tab:
+        col1, col2, col3 = st.columns(3)
+        x_lenth = 10
+        y_lenth = 6
+        if items and cases:
+            x_lenth = len(items)
+            y_lenth = len(cases)
+        with col1:
+            option["x_wise"] = st.number_input(f"X Length", min_value=0, value=x_lenth, key=f"{item}_x_wise")
+            option['saving_format'] = st.selectbox('Image saving format', ['png', 'jpg', 'eps'],
+                                                   index=1, placeholder="Choose an option", label_visibility="visible",
+                                                   key=f"{item}_saving_format")
+        with col2:
+            option["y_wise"] = st.number_input(f"y Length", min_value=0, value=y_lenth, key=f"{item}_y_wise")
+            option['font'] = st.selectbox('Image saving format',
+                                          ['Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana',
+                                           'Helvetica',
+                                           'Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_font")
+        with col3:
+            option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
+
+    st.divider()
+    if items and cases:
+        draw_scenarios_comparison_Portrait_Plot_seasonal_by_score(Figure_show, option, file, score, items, cases)
+    elif not items:
+        st.error('Metircs items is None!')
+    elif not cases:
+        st.error('Simulation cases is None!')
+
+
+def draw_scenarios_comparison_Portrait_Plot_seasonal(Figure_show, option, file, evaluation_items, reference, scores, cases, var):
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -41,7 +436,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(option, file, evaluation_it
                     data_score[k, i, j] = np.nan
 
     xaxis_labels = cases
-    yaxis_labels =[score.replace("_"," ") for score in scores]
+    yaxis_labels = [score.replace("_", " ") for score in scores]
 
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -70,8 +465,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(option, file, evaluation_it
                                   xaxis_fontsize=option['xticksize'],
                                   colorbar_off=option['colorbar_off'],
                                   cmap=option['cmap'],
-                                  # cmap_bounds=np.arange(option["vmin"], option["vmax"] + option['nstep'],
-                                  #                       option['nstep']),
+                                  colorbar_ticks=option['nstep'],
                                   cbar_kw={"orientation": option["colorbar_position"], 'extend': option["extend"]},
                                   cbar_label_fontsize=option["fontsize"],
                                   cbar_tick_fontsize=option["fontsize"],
@@ -89,7 +483,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(option, file, evaluation_it
     ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
     ax.set_title(option['title'], fontsize=option['title_size'])
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # # Save the plot
     filename = f'{item}_{reference}'
@@ -106,7 +500,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(option, file, evaluation_it
     del df, unique_items, item_references, sim_sources, item, references, data_score, xaxis_labels, yaxis_labels, figsize, fig, ax, filename
 
 
-def make_scenarios_comparison_Portrait_Plot_seasonal_metrics(option, file, evaluation_items, reference, scores, cases, var):
+def draw_scenarios_comparison_Portrait_Plot_seasonal_metrics(Figure_show, option, file, evaluation_items, reference, scores, cases, var):
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -157,16 +551,17 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_metrics(option, file, evalu
     min_ytick_left = 0
     for i, score in enumerate(scores):
         xaxis_labels = cases
-        yaxis_labels = [scores[i].replace("_"," ")]
-
+        yaxis_labels = [scores[i].replace("_", " ")]
+        vmin, vmax, colorbar_ticks = get_min_max(data_score[:, i, :], score)
         fig, ax, cbar = portrait_plot(data_score[:, i, :],
                                       fig=figure,
                                       ax=axes[i],
                                       xaxis_labels=xaxis_labels,
                                       yaxis_labels=yaxis_labels,
-                                      # cbar_label=option['colorbar_label'],
                                       box_as_square=True,
                                       figsize=figsize,
+                                      vrange=(vmin, vmax),
+                                      colorbar_ticks=colorbar_ticks,
                                       xaxis_fontsize=option['xticksize'],
                                       yaxis_fontsize=option['yticksize'],
                                       colorbar_off=option['colorbar_off'],
@@ -200,7 +595,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_metrics(option, file, evalu
         labels=['DJF', 'MAM', 'JJA', 'SON'],
         lw=option["legend_lw"],
         fontsize=option["legend_fontsize"], )
-    st.pyplot(figure)
+    Figure_show.pyplot(figure)
 
     # Save the plot
     filename = f'{item}_{references}'
@@ -217,7 +612,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_metrics(option, file, evalu
     del df, unique_items, item_references, sim_sources, item, references, data_score, xaxis_labels, yaxis_labels, figsize, fig, ax, filename
 
 
-def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, score, select_items, sim_cases):
+def draw_scenarios_comparison_Portrait_Plot_seasonal_by_score(Figure_show, option, file, score, select_items, sim_cases):
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -244,7 +639,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
     else:
         i = 0
     item_combination = all_combinations[i]
-    st.write(f"##### :green[Showing for {', '.join(item_combination)}]")
+    Figure_show.write(f"##### :green[Showing for {', '.join(item_combination)}]")
     # Iterate over each `item_combination` in the generated combinations.
     # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
     mask = pd.Series(False, index=df.index)
@@ -266,23 +661,9 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
                 except IndexError:
                     data_score[k, i, j] = np.nan
 
-    option["vmin"], option["vmax"] = np.percentile(data_score[~np.isnan(data_score)], 5), np.percentile(
-        data_score[~np.isnan(data_score)], 95)
-    if score in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mae', 'ssq', 've', 'apb']:
-        option["vmin"], option["vmax"] = 0, np.percentile(data_score[~np.isnan(data_score)], 95)
-    elif score in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:  # [-@,1]
-        option["vmin"], option["vmax"] = np.percentile(data_score[~np.isnan(data_score)], 5), 1
-    elif score in ['percent_bias', 'bias', 'pc_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:  # [-@,@]
-        option["vmin"], option["vmax"] = np.percentile(data_score[~np.isnan(data_score)], 5), np.percentile(
-            data_score[~np.isnan(data_score)], 95)
-    elif score in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:  # [-1,1]
-        option["vmin"], option["vmax"] = -1, 1
-    elif score in st.session_state.scores:
-        option["vmin"], option["vmax"] = 0, 1
-
     # Set x-axis and y-axis labels
     xaxis_labels = sim_sources
-    yaxis_labels = [unique_item.replace("_"," ") for unique_item in unique_items]
+    yaxis_labels = [unique_item.replace("_", " ") for unique_item in unique_items]
 
     # Set figure size
     font = {'family': option['font']}
@@ -314,6 +695,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
                                   cbar_kw={"orientation": option["colorbar_position"], 'extend': option["extend"]},
                                   cbar_label_fontsize=option["fontsize"],
                                   cbar_tick_fontsize=option["fontsize"],
+                                  colorbar_ticks=option["colorbar_ticks"],
                                   missing_color='grey',
                                   legend_on=True,
                                   legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
@@ -331,7 +713,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
     ax.set_title(option['title'], fontsize=option['title_size'])
 
     # Save the plot
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     filename = f'{score}_{"_".join(item_combination)}'
     # # Save the plot
@@ -339,10 +721,10 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
     fig.savefig(buffer, format=option['saving_format'], dpi=option['dpi'])  # f
     buffer.seek(0)
     buffer.seek(0)
-    col1, col2, col3 = st.columns(3)
-    col1.download_button('Download image', buffer, file_name=f'{filename}.{option["saving_format"]}',
-                         mime=f"image/{option['saving_format']}",
-                         type="secondary", disabled=False, use_container_width=False)
+    col1, col2, col3 = Figure_show.columns(3)
+    st.download_button('Download image', buffer, file_name=f'{filename}.{option["saving_format"]}',
+                       mime=f"image/{option['saving_format']}",
+                       type="secondary", disabled=False, use_container_width=False)
     next_disable = False
     if len(all_combinations) <= 1:
         next_disable = True
@@ -354,6 +736,102 @@ def make_scenarios_comparison_Portrait_Plot_seasonal_by_score(option, file, scor
     # end of the function
 
     # -------------------------------------------------------------------------------------------------------------------
+
+
+def get_ticks(vmin, vmax):
+    if 2 >= vmax - vmin > 1:
+        colorbar_ticks = 0.2
+    elif 5 >= vmax - vmin > 2:
+        colorbar_ticks = 0.5
+    elif 10 >= vmax - vmin > 5:
+        colorbar_ticks = 1.
+    elif 100 >= vmax - vmin > 10:
+        colorbar_ticks = 5.
+    elif 100 >= vmax - vmin > 50:
+        colorbar_ticks = 20.
+    elif 200 >= vmax - vmin > 100:
+        colorbar_ticks = 20.
+    elif 500 >= vmax - vmin > 200:
+        colorbar_ticks = 50.
+    elif 1000 >= vmax - vmin > 500:
+        colorbar_ticks = 100.
+    elif 2000 >= vmax - vmin > 1000:
+        colorbar_ticks = 200.
+    elif 10000 >= vmax - vmin > 2000:
+        colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+    else:
+        colorbar_ticks = 0.10
+    return colorbar_ticks
+
+
+def get_min_max(data, score):
+    vmin, vmax = np.percentile(data, 5), np.percentile(data, 95)
+    if vmin < -100: vmin = -100
+    if vmax > 100: vmax = 100
+    if score in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mae', 'ssq', 've', 'apb']:
+        vmin, vmax = 0, vmax
+    elif score in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:  # [-@,1]
+        vmin, vmax = vmin, 1
+    elif score in ['percent_bias', 'bias', 'pc_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:  # [-@,@]
+        vmin, vmax = vmin, vmax
+    elif score in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:  # [-1,1]
+        vmin, vmax = -1, 1
+    elif score in st.session_state.scores:
+        vmin, vmax = 0, 1
+    colorbar_ticks = get_ticks(vmin, vmax)
+    return vmin, vmax, colorbar_ticks
+
+
+def get_index(file, sim_cases, select_items, score):
+    df = pd.read_csv(file, sep='\s+', header=0)
+    unique_items = df['Item'].unique()
+    item_references = df.groupby('Item')['Reference'].unique()
+    sim_sources = df['Simulation'].unique()
+    df = df[df['Simulation'].isin(sim_cases)]
+
+    filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
+    filtered_df = filtered_df[filtered_df['Item'].isin(select_items)]
+    all_combinations = list(itertools.product(*filtered_df['Reference']))
+
+    def remove_outliers(item_combination):
+        mask = pd.Series(False, index=df.index)
+        for i, item in enumerate(unique_items):
+            mask |= (df['Item'] == item) & (df['Reference'] == item_combination[i])
+
+        filtered_df = df[mask]
+        data_score = np.zeros((4, len(unique_items), len(sim_sources)))
+        for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
+            for i, uitem in enumerate(unique_items):
+                for j, sim_source in enumerate(sim_sources):
+                    try:
+                        data_score[k, i, j] = \
+                            filtered_df.loc[(filtered_df['Item'] == uitem) & (filtered_df['Simulation'] == sim_source)][
+                                f'{score}_{season}'].iloc[0]
+                    except IndexError:
+                        data_score[k, i, j] = np.nan
+        vmin, vmax = np.percentile(data_score[~np.isnan(data_score)], 5), np.percentile(data_score[~np.isnan(data_score)], 95)
+        return vmin, vmax
+
+    bound = [remove_outliers(item_combination) for item_combination in all_combinations]
+    vmax = max([d[1] for d in bound])
+    vmin = min([d[0] for d in bound])
+
+    if vmin < -100: vmin = -100
+    if vmax > 100: vmax = 100
+
+    if score in ['RMSE', 'CRMSD', 'MSE', 'ubRMSE', 'nRMSE', 'mae', 'ssq', 've', 'apb']:
+        vmin, vmax = 0, vmax
+    elif score in ['NSE', 'LNSE', 'ubNSE', 'rNSE', 'wNSE', 'wsNSE']:  # [-@,1]
+        vmin, vmax = vmin, 1
+    elif score in ['percent_bias', 'bias', 'pc_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:  # [-@,@]
+        vmin, vmax = vmin, vmax
+    elif score in ['KGE', 'KGESS', 'correlation', 'kappa_coeff', 'rSpearman']:  # [-1,1]
+        vmin, vmax = -1, 1
+    elif score in st.session_state.scores:
+        vmin, vmax = 0, 1
+    colorbar_ticks = get_ticks(vmin, vmax)
+
+    return vmin, vmax, colorbar_ticks
 
 
 def portrait_plot(
@@ -381,6 +859,7 @@ def portrait_plot(
         cbar_label=None,
         cbar_label_fontsize=15,
         cbar_tick_fontsize=12,
+        colorbar_ticks=0.2,
         cbar_kw={},
         colorbar_off=False,
         missing_color="grey",
@@ -516,7 +995,7 @@ def portrait_plot(
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     else:
         cmap = plt.get_cmap(cmap)
-        norm = matplotlib.colors.BoundaryNorm(cmap_bounds, cmap.N, extend=extend)
+        norm = matplotlib.colors.BoundaryNorm(cmap_bounds, cmap.N)
     # [1] Heatmap-style portrait plot (no triangles)
     if num_divide == 1:
         ax, im = heatmap(
@@ -660,8 +1139,9 @@ def portrait_plot(
         ax.set_aspect("equal")
 
     if not colorbar_off:
-        # Create colorbar
         if not use_axes:
+            ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
+            mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
             pos = ax.get_position()
             left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
             if cbar_kw["orientation"] == 'vertical':
@@ -671,18 +1151,20 @@ def portrait_plot(
                     cbar_ax = fig.add_axes([right + 0.05, bottom + height / 6, 0.03, height / 3 * 2])  # right + 0.2
             else:
                 if len(xaxis_labels) <= 6:
-                    cbar_ax = fig.add_axes([left, bottom - 0.15, width, 0.05])
+                    cbar_ax = fig.add_axes([left, bottom - 0.15, width, 0.03])
                 else:
                     cbar_ax = fig.add_axes([left + width / 6, bottom - 0.15, width / 3 * 2, 0.05])
-            cbar = ax.figure.colorbar(im, cax=cbar_ax, **cbar_kw)
+            cbar = ax.figure.colorbar(im, cax=cbar_ax, ticks=mticks, **cbar_kw, )
         else:
+            ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks * 2)
+            mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
             cbar_kw["orientation"] = "horizontal"
             w = height * 1.5
             if len(xaxis_labels) <= 5:
                 w = height * 2
             cbar_ax = fig.add_axes([right + 0.08, bottom + height / 2, w, height / 4])
             # Label for colorbar
-            cbar = ax.figure.colorbar(im, cax=cbar_ax, **cbar_kw, extend=extend)
+            cbar = ax.figure.colorbar(im, cax=cbar_ax, ticks=mticks, **cbar_kw)
         if cbar_label is not None:
             if "orientation" in list(cbar_kw.keys()):
                 if cbar_kw["orientation"] == "horizontal":
@@ -724,13 +1206,13 @@ def portrait_plot(
             rotation = 0
             ha = "center"
             va = "top"
-            # cbar.ax.set_xlabel(
-            #     cbar_label,
-            #     rotation=rotation,
-            #     ha=ha,
-            #     va=va,
-            #     fontsize=cbar_label_fontsize,
-            # )
+            cbar.ax.set_xlabel(
+                cbar_label,
+                rotation=rotation,
+                ha=ha,
+                va=va,
+                fontsize=cbar_label_fontsize,
+            )
             cbar.ax.tick_params(labelsize=cbar_tick_fontsize)
             return fig, ax, cbar
     else:

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import re 
+import re
+import logging
 def adjust_time_BCC_AVIM(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
@@ -9,16 +10,16 @@ def adjust_time_BCC_AVIM(info, ds,syear,eyear,tim_res):
       num_value = int(num_value) if num_value else 1   
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m', 'month', 'mon']:
-         print('Adjusting time values for monthly BCC_AVIM output...')
+         logging.info('Adjusting time values for monthly BCC_AVIM output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(months=1)
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-         print('Adjusting time values for daily BCC_AVIM output...')
+         logging.info('Adjusting time values for daily BCC_AVIM output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)  
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-         print('Adjusting time values for yearly BCC_AVIM output ...')
+         logging.info('Adjusting time values for yearly BCC_AVIM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
-      print('tim_res error')
+      logging.error('tim_res error')
       exit()
    return ds
 

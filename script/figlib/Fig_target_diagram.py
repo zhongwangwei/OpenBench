@@ -15,7 +15,6 @@ from matplotlib import ticker
 from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 
-
 def make_scenarios_comparison_Target_Diagram(basedir, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources, option):
     import matplotlib.pyplot as plt
     import matplotlib
@@ -60,7 +59,7 @@ def make_scenarios_comparison_Target_Diagram(basedir, evaluation_item, bias, crm
     #    option['title'] = evaluation_item.replace('_', " ")
     # ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
-    output_file_path = os.path.join(f'{basedir}', f'Target_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
+    output_file_path = os.path.join(f'{basedir}', f'Target_Diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
 

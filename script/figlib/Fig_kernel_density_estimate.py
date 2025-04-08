@@ -109,10 +109,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
         plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
-        try:
-            del data, datasets_filtered, MLINES, lines, kde, covariance_matrix, x_values, density, line
-        except:
-            del data, datasets_filtered, MLINES, lines, x_values, line
 
 
 def generate_lines(data_names, option):

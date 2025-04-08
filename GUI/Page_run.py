@@ -28,7 +28,7 @@ def timer(func):
     return func_wrapper
 
 
-class run_validation:
+class run_validation():
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
         self.coauthor = "Zhongwang Wei/@gmail.com"
@@ -41,8 +41,6 @@ class run_validation:
         # st.error('No data has been uploaded or validation data has not been set.', icon="🚨")
 
     def run(self):
-        # if 'run_onclick' not in st.session_state:
-        #     st.session_state.run_onclick = 0
         self.__print_welcome_message()
 
         st.divider()
@@ -53,8 +51,6 @@ class run_validation:
         if 'status' not in st.session_state:
             st.session_state.status = ''
 
-        # def define_run():
-        #     st.session_state.run_onclick += 1
 
         if "status_message" not in st.session_state:
             st.session_state["status_message"] = "***Running Pages...***"
@@ -68,17 +64,7 @@ class run_validation:
             st.info(f'More info please check {st.session_state.running_log_file}')
         if col4.button('Pass', use_container_width=True):
             st.session_state.status = 'complete'
-            # st.session_state['status_message'] = "***Running Pages...***"
 
-        # if st.session_state.run_onclick and st.session_state.step4_run and st.session_state['status_message'] != "***Running Pages...***" and st.session_state.status!='':
-        #     status = st.status(label="***Running Pages...***", expanded=False)
-        #     with open("task_log.txt", "r", encoding='utf-8') as f:
-        #         for line in f:
-        #             return_status = self.__process_line(line, status)
-        #         if st.session_state['status_message'] == f"***:red[Evaluation Error]***":
-        #             status.update(label=st.session_state['status_message'], state="error", expanded=False)
-        #         elif st.session_state['status_message'] == f"***Evaluation done***":
-        #             status.update(label=st.session_state['status_message'], state="complete", expanded=False)
 
         if st.session_state.status == 'complete':
             st.session_state.step4_run = True
@@ -102,11 +88,6 @@ class run_validation:
                 next_button_disable2 = False
 
         return next_button_disable1, next_button_disable2
-
-        # @timer
-        # def _lunch_errors(self, run_err):
-        #     e = RuntimeError(run_err)
-        #     st.exception(e)
 
     def __print_welcome_message(self):
         """Print a more beautiful welcome message and ASCII art."""
@@ -185,12 +166,15 @@ class run_validation:
     def __process_line(self, line, status):
         eskip_next_line = False
         wskip_next_line = False
+
         error_keywords = [" - ERROR -","error", "failed", "exception", "traceback"]
         error_keywords1 = ['File "', '", line']
         error_pattern = re.compile("|".join(error_keywords), re.IGNORECASE)
         error_file_pattern = re.compile("|".join(error_keywords1), re.IGNORECASE)
+
         python_error_pattern = re.compile(r"(raise|Error|Exception)")
         custom_error_pattern = re.compile(r"Error: .+ failed!")
+        
         stop_next_line = False
         warning_keywords = ['Warning']
         warning_pattern = re.compile("|".join(warning_keywords), re.IGNORECASE)
