@@ -1,4 +1,4 @@
-import os
+import os, glob
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ from io import BytesIO
 import streamlit as st
 
 
-def draw_scenarios_scores_comparison_heat_map(file, score, items, cases, option):
+def draw_scenarios_scores_comparison_heat_map(Figure_show, file, score, items, cases, option):
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
     df = pd.read_csv(file, sep='\s+', header=0)
@@ -112,7 +112,7 @@ def draw_scenarios_scores_comparison_heat_map(file, score, items, cases, option)
 
     file2 = f'scenarios_{score}_comparison'
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # 将图像保存到 BytesIO 对象
     buffer = BytesIO()
@@ -124,14 +124,16 @@ def draw_scenarios_scores_comparison_heat_map(file, score, items, cases, option)
                        type="secondary", disabled=False, use_container_width=False)
 
 
-def make_scenarios_scores_comparison_heat_map(dir_path, score, selected_items, sim):
-    iscore = score.replace('_', ' ')
+def make_scenarios_scores_comparison_heat_map(File, score, selected_items, sim):
     option = {}
     item = 'heatmap'
-    with st.container(height=None, border=True):
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
+
+    with Labels_tab:
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
-            option['title'] = st.text_input('Title', value=f'Heatmap of {iscore}', label_visibility="visible",
+            option['title'] = st.text_input('Title', value=f'Heatmap of {score.replace('_', ' ')}', label_visibility="visible",
                                             key=f"{item}_title")
             option['title_size'] = st.number_input("Title label size", min_value=0, value=20, key=f"{item}_title_size")
 
@@ -149,90 +151,94 @@ def make_scenarios_scores_comparison_heat_map(dir_path, score, selected_items, s
             option['fontsize'] = st.number_input("Fontsize", min_value=0, value=17, key=f"{item}_fontsize")
             option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
                                                        key=f"{item}_axes_linewidth")
-        st.divider()
-        with st.expander("More info", expanded=False):
-            col1, col2, col3, col4 = st.columns(4)
 
-            option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=45,
-                                                     key=f'{item}_x_rotation')
-            option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'], key=f'{item}_x_ha',
-                                            index=0, placeholder="Choose an option", label_visibility="visible")
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
 
-            option["y_rotation"] = col3.number_input(f"y rotation", min_value=-90, max_value=90, value=45,
-                                                     key=f'{item}_y_rotation')
-            option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'], key=f'{item}_y_ha',
-                                            index=0, placeholder="Choose an option", label_visibility="visible")
-            option['ticks_format'] = col1.selectbox('Tick Format',
-                                                    ['%f', '%G', '%.1f', '%.1G', '%.2f', '%.2G',
-                                                     '%.3f', '%.3G'],
-                                                    index=2, placeholder="Choose an option", label_visibility="visible",
-                                                    key=f"{item}_ticks_format")
+        option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=45,
+                                                 key=f'{item}_x_rotation')
+        option['x_ha'] = col2.selectbox('x ha', ['right', 'left', 'center'], key=f'{item}_x_ha',
+                                        index=0, placeholder="Choose an option", label_visibility="visible")
 
-            option['cmap'] = col2.selectbox('Colorbar',
-                                            ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
-                                             'BuGn_r',
-                                             'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
-                                             'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
-                                             'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
-                                             'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
-                                             'PuBu_r',
-                                             'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
-                                             'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
-                                             'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
-                                             'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
-                                             'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
-                                             'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
-                                             'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper', 'copper_r',
-                                             'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
-                                             'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
-                                             'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
-                                             'gist_rainbow_r', 'gray', 'gray_r',
-                                             'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
-                                             'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
-                                             'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
-                                             'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
-                                             'summer_r',
-                                             'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
-                                             'winter_r'], index=0, placeholder="Choose an option", key=f'{item}_cmap',
-                                            label_visibility="visible")
+        option["y_rotation"] = col3.number_input(f"y rotation", min_value=-90, max_value=90, value=45,
+                                                 key=f'{item}_y_rotation')
+        option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'], key=f'{item}_y_ha',
+                                        index=0, placeholder="Choose an option", label_visibility="visible")
+        option['ticks_format'] = col1.selectbox('Tick Format',
+                                                ['%f', '%G', '%.1f', '%.1G', '%.2f', '%.2G',
+                                                 '%.3f', '%.3G'],
+                                                index=2, placeholder="Choose an option", label_visibility="visible",
+                                                key=f"{item}_ticks_format")
 
-            option["colorbar_position"] = col3.selectbox('colorbar position', ['horizontal', 'vertical'],
-                                                         key=f"{item}_colorbar_position",
-                                                         index=0, placeholder="Choose an option",
-                                                         label_visibility="visible")
-            option["extend"] = col4.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
-                                              index=0, placeholder="Choose an option", label_visibility="visible",
-                                              key=f"{item}_extend")
-            col1, col2, col3 = st.columns(3)
-            option['xlimit_on'] = col1.toggle('Setting the max-min value manually', value=False,
-                                              key=f'{item}_limit_on')
-            if option['xlimit_on']:
-                df = pd.read_csv(dir_path, sep='\s+', header=0)
-                df.set_index('Item', inplace=True)
-                df = df.iloc[:, 1:]
-                max_value, min_value = df.max().max(), df.min().min()
-                option["max"] = col3.number_input(f"x ticks max", key=f"{item}_max",
-                                                  value=max_value)
-                option["min"] = col2.number_input(f"x ticks min", key=f"{item}_min",
-                                                  value=min_value)
-            else:
-                option["max"] = 1.
-                option["min"] = 0.
+        option['cmap'] = col2.selectbox('Colorbar',
+                                        ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn',
+                                         'BuGn_r',
+                                         'BuPu', 'BuPu_r', 'CMRmap', 'CMRmap_r', 'Dark2', 'Dark2_r', 'GnBu', 'GnBu_r',
+                                         'Grays', 'Greens', 'Greens_r', 'Greys', 'Greys_r', 'OrRd', 'OrRd_r', 'Oranges',
+                                         'Oranges_r', 'PRGn', 'PRGn_r', 'Paired', 'Paired_r', 'Pastel1', 'Pastel1_r',
+                                         'Pastel2', 'Pastel2_r', 'PiYG', 'PiYG_r', 'PuBu', 'PuBuGn', 'PuBuGn_r',
+                                         'PuBu_r',
+                                         'PuOr', 'PuOr_r', 'PuRd', 'PuRd_r', 'Purples', 'Purples_r', 'RdBu', 'RdBu_r',
+                                         'RdGy', 'RdGy_r', 'RdPu', 'RdPu_r', 'RdYlBu', 'RdYlBu_r', 'RdYlGn', 'RdYlGn_r',
+                                         'Reds', 'Reds_r', 'Set1', 'Set1_r', 'Set2', 'Set2_r', 'Set3', 'Set3_r',
+                                         'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r', 'YlGn', 'YlGnBu', 'YlGnBu_r',
+                                         'YlGn_r', 'YlOrBr', 'YlOrBr_r', 'YlOrRd', 'YlOrRd_r', 'afmhot', 'afmhot_r',
+                                         'autumn', 'autumn_r', 'binary', 'binary_r', 'bone', 'bone_r', 'brg', 'brg_r',
+                                         'bwr', 'bwr_r', 'cividis', 'cividis_r', 'cool', 'cool_r', 'copper', 'copper_r',
+                                         'cubehelix', 'cubehelix_r', 'flag', 'flag_r',
+                                         'gist_earth', 'gist_earth_r', 'gist_gray', 'gist_gray_r', 'gist_grey',
+                                         'gist_heat', 'gist_heat_r', 'gist_ncar', 'gist_ncar_r', 'gist_rainbow',
+                                         'gist_rainbow_r', 'gray', 'gray_r',
+                                         'grey', 'hot', 'hot_r', 'hsv', 'hsv_r', 'inferno', 'inferno_r', 'jet', 'jet_r',
+                                         'magma', 'magma_r', 'nipy_spectral', 'nipy_spectral_r', 'ocean', 'ocean_r',
+                                         'pink', 'pink_r', 'plasma', 'plasma_r', 'prism', 'prism_r', 'rainbow',
+                                         'rainbow_r', 'seismic', 'seismic_r', 'spring', 'spring_r', 'summer',
+                                         'summer_r',
+                                         'terrain', 'terrain_r', 'viridis', 'viridis_r', 'winter',
+                                         'winter_r'], index=0, placeholder="Choose an option", key=f'{item}_cmap',
+                                        label_visibility="visible")
 
+        option["colorbar_position"] = col3.selectbox('colorbar position', ['horizontal', 'vertical'],
+                                                     key=f"{item}_colorbar_position",
+                                                     index=0, placeholder="Choose an option",
+                                                     label_visibility="visible")
+        option["extend"] = col4.selectbox(f"colorbar extend", ['neither', 'both', 'min', 'max'],
+                                          index=0, placeholder="Choose an option", label_visibility="visible",
+                                          key=f"{item}_extend")
+        col1, col2, col3 = st.columns(3)
+        option['xlimit_on'] = col1.toggle('Fit to Data?', value=False, key=f'{item}_limit_on')
+        if option['xlimit_on']:
+            df = pd.read_csv(File, sep='\s+', header=0)
+            df.set_index('Item', inplace=True)
+            df = df.iloc[:, 1:]
+            max_value, min_value = df.max().max(), df.min().min()
+            option["max"] = col3.number_input(f"x ticks max", key=f"{item}_max", value=max_value)
+            option["min"] = col2.number_input(f"x ticks min", key=f"{item}_min", value=min_value)
+        else:
+            option["max"] = 1.
+            option["min"] = 0.
+
+    with Var_tab:
         def get_cases(items, title):
             case_item = {}
             for item in items:
                 case_item[item] = True
-            with st.popover(title, use_container_width=True):
-                st.subheader(f"Showing {title}", divider=True)
-                if title != 'cases':
-                    for item in case_item:
-                        case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__heatmap",
-                                                      value=case_item[item])
-                else:
-                    for item in case_item:
-                        case_item[item] = st.checkbox(item, key=f"{item}__heatmap",
-                                                      value=case_item[item])
+
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+            if title != 'cases':
+                for item in case_item:
+                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__heatmap",
+                                                  value=case_item[item])
+            else:
+                for item in case_item:
+                    case_item[item] = st.checkbox(item, key=f"{item}__heatmap",
+                                                  value=case_item[item])
             return [item for item, value in case_item.items() if value]
 
         items = [k for k in selected_items]
@@ -244,7 +250,7 @@ def make_scenarios_scores_comparison_heat_map(dir_path, score, selected_items, s
         with col2:
             cases = get_cases(cases, 'cases')
 
-        st.divider()
+    with Save_tab:
         col1, col2, col3 = st.columns(3)
         with col1:
             option["x_wise"] = st.number_input(f"X Length", min_value=0, value=10, key=f"{item}_x_wise")
@@ -261,16 +267,15 @@ def make_scenarios_scores_comparison_heat_map(dir_path, score, selected_items, s
                                           key=f"{item}_font")
         with col3:
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi")
-    draw_scenarios_scores_comparison_heat_map(dir_path, score, items, cases, option)
+    st.divider()
+    draw_scenarios_scores_comparison_heat_map(Figure_show, File, score, items, cases, option)
 
 
-def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score, ref_source, sim_source, item, items):
-    # st.write( selected_item, score, ref_source, sim_source, item)
-    # Convert the data to a DataFrame
-    # read the data from the file using csv, remove the first row, then set the index to the first column
+def draw_LC_based_heat_map(Figure_show, option, file, selected_metrics, selected_item, score, ref_source, sim_source, item, items):
+    path = os.path.dirname(file)
+
     df = pd.read_csv(file, sep='\s+', skiprows=1, header=0)
     df.set_index('FullName', inplace=True)
-    # Select the desired metrics
     if selected_item is not None:
         selected_metrics = list(selected_metrics)
         df_selected = df.loc[selected_metrics]
@@ -293,66 +298,18 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
               'axes.unicode_minus': False,
               'text.usetex': False}
     rcParams.update(params)
-    # Create the heatmap using Matplotlib
-
-    shorter = {
-        'PFT_groupby':
-            {
-                "bare_soil": "BS",
-                "needleleaf_evergreen_temperate_tree": "NETT",
-                "needleleaf_evergreen_boreal_tree": "NEBT",
-                "needleleaf_deciduous_boreal_tree": "NDBT",
-                "broadleaf_evergreen_tropical_tree": "BETT",
-                "broadleaf_evergreen_temperate_tree": "BETT",
-                "broadleaf_deciduous_tropical_tree": "BDTT",
-                "broadleaf_deciduous_temperate_tree": "BDTT",
-                "broadleaf_deciduous_boreal_tree": "BDBT",
-                "broadleaf_evergreen_shrub": "BES",
-                "broadleaf_deciduous_temperate_shrub": "BDTS",
-                "broadleaf_deciduous_boreal_shrub": "BDBS",
-                "c3_arctic_grass": "C3AG",
-                "c3_non-arctic_grass": "C3NAG",
-                "c4_grass": "C4G",
-                "c3_crop": "C3C",
-                "Overall": 'Overall'
-            },
-        'IGBP_groupby': {
-            "evergreen_needleleaf_forest": 'ENF',
-            "evergreen_broadleaf_forest": 'EBF',
-            "deciduous_needleleaf_forest": 'DNF',
-            "deciduous_broadleaf_forest": 'DBF',
-            "mixed_forests": 'MF',
-            "closed_shrubland": 'CSH',
-            "open_shrublands": 'OSH',
-            "woody_savannas": 'WSA',
-            "savannas": 'SAV',
-            "grasslands": 'GRA',
-            "permanent_wetlands": 'WET',
-            "croplands": 'CRO',
-            "urban_and_built_up": 'URB',
-            "cropland_natural_vegetation_mosaic": 'CVM',
-            "snow_and_ice": 'SNO',
-            "barren_or_sparsely_vegetated": 'BSV',
-            "water_bodies": 'WAT',
-            "Overall": 'Overall',
-        }
-    }
 
     if score == 'scores':
         fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
         im = ax.imshow(df_selected, cmap=option['cmap'], vmin=0, vmax=1)
-        # Add colorbar
-        # cbar = ax.figure.colorbar(im, ax=ax, label='Score', shrink=0.5)
-        # Add labels and title
+
         ax.set_yticks(range(len(df_selected.index)))
         ax.set_xticks(range(len(df_selected.columns)))
-        ax.set_yticklabels([index.replace('_', ' ') for index in df_selected.index], rotation=option['y_rotation'],
-                           ha=option['y_ha'])
+        ax.set_yticklabels([index.replace('_', ' ') for index in df_selected.index], rotation=option['y_rotation'], ha=option['y_ha'])
 
         if option["x_ticklabel"] == 'Normal':
             ax.set_xticklabels([columns.replace('_', ' ').title() for columns in df_selected.columns],
-                               rotation=option['x_rotation'],
-                               ha=option['x_ha'])
+                               rotation=option['x_rotation'], ha=option['x_ha'])
         else:
             ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
@@ -390,20 +347,20 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
                 else:
                     cbar_ax = fig.add_axes([left / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.05])
             cbar = fig.colorbar(im, cax=cbar_ax, orientation=option['colorbar_position'], extend='neither')
+
     elif len(df_selected.index) == 1 and score != 'scores':
         fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
         metric = df_selected.index[0]
-        import glob
-        files = glob.glob(f'{option["path"]}/{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
+        files = glob.glob(f'{path}/{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
         datasets = [xr.open_dataset(file) for file in files]
         for t, ds in enumerate(datasets):
-            datasets[t] = ds.expand_dims(dim={'time': [t]})  # 为每个文件添加一个新的'time'维度
-
+            datasets[t] = ds.expand_dims(dim={'time': [t]})
         combined_dataset = xr.concat(datasets, dim='time')
         quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=['time', 'lat', 'lon'])
-        # consider 0.05 and 0.95 value as the max/min value
-        custom_vmin_vmax = {}
 
+        custom_vmin_vmax = {}
+        if quantiles[metric][-1] > 100: quantiles[metric][-1], quantiles[metric][2] = 100, 80
+        if quantiles[metric][0] < -100: quantiles[metric][0], quantiles[metric][1] = -100, -80
         if metric in ['bias', 'percent_bias', 'rSD', 'PBIAS_HF', 'PBIAS_LF']:
             custom_vmin_vmax[metric] = [quantiles[metric][0].values, quantiles[metric][-1].values,
                                         quantiles[metric][2].values, quantiles[metric][1].values]
@@ -470,6 +427,7 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal',
                             extend=option['extend'])
+
     else:
         fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=(option['x_wise'], option['y_wise']), sharex=True)
         fig.text(0.03, 0.5, 'Metrics', va='center', rotation='vertical', fontsize=option['yticksize'] + 1)
@@ -479,18 +437,19 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
         for i, (metric, row_data) in enumerate(df_selected.iterrows()):
             if metric in ['bias', 'mae', 'ubRMSE', 'apb', 'RMSE', 'L', 'percent_bias', 'apb']:
                 import glob
-                files = glob.glob(f'{option["path"]}/{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
+                files = glob.glob(f'{path}/{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc')
                 datasets = [xr.open_dataset(file) for file in files]
                 for t, ds in enumerate(datasets):
                     datasets[t] = ds.expand_dims(dim={'time': [t]})  # 为每个文件添加一个新的'time'维度
 
                 combined_dataset = xr.concat(datasets, dim='time')
                 quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=['time', 'lat', 'lon'])
-                # consider 0.05 and 0.95 value as the max/min value
                 vmin = quantiles[metric][0].values
                 vmax = quantiles[metric][-1].values
                 x1 = quantiles[metric][2].values
                 x2 = quantiles[metric][1].values
+                if vmax > 100: vmax, x1 = 100, 80
+                if vmin < -100: vmin, x2 = -100, -80
                 del quantiles, combined_dataset, datasets
                 custom_vmin_vmax[metric] = [vmin, vmax, x1, x2]
             else:
@@ -501,7 +460,6 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
             x1, x2 = custom_vmin_vmax[row_name][2], custom_vmin_vmax[row_name][3]
             im = axes[i].imshow(row_data.values.reshape(1, -1), cmap=option['cmap'],
                                 vmin=vmin, vmax=vmax)
-            # Add numbers to each cell
             for j, value in enumerate(row_data):
                 axes[i].text(j, 0, f'{df_selected.iloc[i, j]:{option["ticks_format"][1:]}}', ha='center', va='center',
                              color='white' if df_selected.iloc[i, j] > x1 or df_selected.iloc[i, j] < x2 else 'black',
@@ -546,7 +504,7 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
 
     file2 = f'{selected_item}_{sim_source}___{ref_source}_{score}'
 
-    st.pyplot(fig)
+    Figure_show.pyplot(fig)
 
     # 将图像保存到 BytesIO 对象
     buffer = BytesIO()
@@ -558,11 +516,12 @@ def draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score,
                        type="secondary", disabled=False, use_container_width=False, key=item)
 
 
-def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_source, dir_path, metrics, scores):
+def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_source, metrics, scores):
     option = {}
-    option['path'] = os.path.dirname(file)
+    Figure_show = st.container()
+    Labels_tab, Scale_tab, Var_tab, Save_tab = st.tabs(['Labels', 'Scale', 'Variables', 'Save'])
 
-    with st.container(height=None, border=True):
+    with Labels_tab:
         col1, col2, col3, col4 = st.columns((3.5, 3, 3, 3))
         with col1:
             option['title'] = st.text_input('Title', value=f'Heatmap of {score}', label_visibility="visible",
@@ -585,34 +544,38 @@ def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_sou
             option['axes_linewidth'] = st.number_input("axes linewidth", min_value=0, value=1,
                                                        key=f"{item}_axes_linewidth")
 
-        col1, col2, col3 = st.columns((2, 1, 1))
-
+    with Var_tab:
         def get_cases(items, title):
             case_item = {}
             for item in items:
                 case_item[item] = True
-            with st.popover(f"Select {title}", use_container_width=True):
-                st.subheader(f"Showing {title}", divider=True)
-                for item in case_item:
-                    case_item[item] = st.checkbox(item.replace("_", " "), key=f"{item}__heatmap_groupby",
-                                                  value=case_item[item])
-                selected = [item for item, value in case_item.items() if value]
-                if len(selected) > 0:
-                    return selected
-                else:
-                    st.error('You must choose one item!')
+            color = '#9DA79A'
+            st.markdown(f"""
+            <div style="font-size:20px; font-weight:bold; color:{color}; border-bottom:3px solid {color}; padding: 5px;">
+                 Showing {title}....
+            </div>
+            """, unsafe_allow_html=True)
+            st.write('')
+
+            cols = itertools.cycle(st.columns(2))
+            for item in case_item:
+                col = next(cols)
+                case_item[item] = col.checkbox(item.replace("_", " "), key=f"{item}__heatmap_groupby",
+                                               value=case_item[item])
+            selected = [item for item, value in case_item.items() if value]
+            if len(selected) > 0:
+                return selected
+            else:
+                st.error('You must choose one item!')
 
         if score == 'scores':
             selected_metrics = [k for k, v in scores.items() if v]
         else:
             selected_metrics = [k for k, v in metrics.items() if v]
-        with col1:
-            selected_metrics = get_cases(selected_metrics, score.title())
+        selected_metrics = get_cases(selected_metrics, score.title())
 
-        st.divider()
-
-        set_colorbar = st.expander("More info", expanded=False)
-        col1, col2, col3, col4 = set_colorbar.columns(4)
+    with Scale_tab:
+        col1, col2, col3, col4 = st.columns(4)
 
         option["x_rotation"] = col1.number_input(f"x rotation", min_value=-90, max_value=90, value=45,
                                                  key=f"{item}_x_rotation")
@@ -624,8 +587,8 @@ def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_sou
         option['y_ha'] = col4.selectbox('y ha', ['right', 'left', 'center'],
                                         index=0, placeholder="Choose an option", label_visibility="visible",
                                         key=f"{item}_y_ha")
-
-        col1, col2, col3 = set_colorbar.columns(3)
+        st.divider()
+        col1, col2, col3 = st.columns(3)
         option['show_colorbar'] = col1.toggle('Showing colorbar?', value=True, key=f"{item}colorbar_on")
         option['cmap'] = col2.selectbox('Colorbar',
                                         ['coolwarm', 'coolwarm_r', 'Blues', 'Blues_r', 'BrBG', 'BrBG_r', 'BuGn', 'BuGn_r',
@@ -662,7 +625,7 @@ def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_sou
                                                              key=f"{item}_colorbar_position",
                                                              index=0, placeholder="Choose an option",
                                                              label_visibility="visible")
-        col1, col2, col3 = set_colorbar.columns(3)
+        col1, col2, col3 = st.columns(3)
         option["x_ticklabel"] = col1.selectbox('X tick labels Format', ['Normal', 'Shorter'],  # 'Season',
                                                index=1, placeholder="Choose an option", label_visibility="visible",
                                                key=f"{item}_x_ticklabel")
@@ -671,8 +634,8 @@ def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_sou
                                                  '%.3f', '%.3G'],
                                                 index=4, placeholder="Choose an option", label_visibility="visible",
                                                 key=f"{item}_ticks_format")
-        st.divider()
 
+    with Save_tab:
         if score == 'scores':
             items = [k for k, v in scores.items() if v]
         else:
@@ -705,4 +668,49 @@ def make_LC_based_heat_map(item, file, selected_item, score, sim_source, ref_sou
             option['dpi'] = st.number_input(f"Figure dpi", min_value=0, value=300, key=f"{item}_dpi'")
 
     if selected_metrics:
-        draw_LC_based_heat_map(option, file, selected_metrics, selected_item, score, ref_source, sim_source, item, items)
+        st.divider()
+        draw_LC_based_heat_map(Figure_show, option, file, selected_metrics, selected_item, score, ref_source, sim_source, item, items)
+
+
+shorter = {
+    'PFT_groupby':
+        {
+            "bare_soil": "BS",
+            "needleleaf_evergreen_temperate_tree": "NETT",
+            "needleleaf_evergreen_boreal_tree": "NEBT",
+            "needleleaf_deciduous_boreal_tree": "NDBT",
+            "broadleaf_evergreen_tropical_tree": "BETT",
+            "broadleaf_evergreen_temperate_tree": "BETT",
+            "broadleaf_deciduous_tropical_tree": "BDTT",
+            "broadleaf_deciduous_temperate_tree": "BDTT",
+            "broadleaf_deciduous_boreal_tree": "BDBT",
+            "broadleaf_evergreen_shrub": "BES",
+            "broadleaf_deciduous_temperate_shrub": "BDTS",
+            "broadleaf_deciduous_boreal_shrub": "BDBS",
+            "c3_arctic_grass": "C3AG",
+            "c3_non-arctic_grass": "C3NAG",
+            "c4_grass": "C4G",
+            "c3_crop": "C3C",
+            "Overall": 'Overall'
+        },
+    'IGBP_groupby': {
+        "evergreen_needleleaf_forest": 'ENF',
+        "evergreen_broadleaf_forest": 'EBF',
+        "deciduous_needleleaf_forest": 'DNF',
+        "deciduous_broadleaf_forest": 'DBF',
+        "mixed_forests": 'MF',
+        "closed_shrubland": 'CSH',
+        "open_shrublands": 'OSH',
+        "woody_savannas": 'WSA',
+        "savannas": 'SAV',
+        "grasslands": 'GRA',
+        "permanent_wetlands": 'WET',
+        "croplands": 'CRO',
+        "urban_and_built_up": 'URB',
+        "cropland_natural_vegetation_mosaic": 'CVM',
+        "snow_and_ice": 'SNO',
+        "barren_or_sparsely_vegetated": 'BSV',
+        "water_bodies": 'WAT',
+        "Overall": 'Overall',
+    }
+}

@@ -26,6 +26,7 @@ from Mod_Landcover_Groupby import LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
 from Mod_Preprocessing import check_required_nml, run_files_check
+from Mod_Converttype import Convert_Type
 import logging
 from datetime import datetime
 
@@ -179,12 +180,22 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         else:
             # Mask the observation data with simulation data to ensure consistent coverage
             logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
-            o = xr.open_dataset(
-                f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
-                f'{general_info["ref_varname"]}']
+            try:
+                o = xr.open_dataset(
+                    f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+                    f'{general_info["ref_varname"]}']
+            except FileNotFoundError as e:
+                logging.error(f"Could not find output data: {e}")
+                logging.info(f"Processing ref data")
+                dataset_processer.process('ref')
+                o = xr.open_dataset(
+                    f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc')[
+                    f'{general_info["ref_varname"]}']
+            o = Convert_Type.convert_nc(o)
             s = xr.open_dataset(
                 f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc')[
                 f'{general_info["sim_varname"]}']
+            s = Convert_Type.convert_nc(s)
             s['time'] = o['time']
             mask1 = np.isnan(s) | np.isnan(o)
             o.values[mask1] = np.nan

@@ -2,15 +2,14 @@
 import os
 import streamlit as st
 from streamlit_option_menu import option_menu
-from Namelist_lib.namelist_read import NamelistReader
 from Namelist_lib.namelist_info import initial_setting
 from Page_control import Pages_control
-from Page_make_validation import make_initional
-from Page_make_reference import make_reference
-from Page_make_simulation import make_simulation
-from Page_run import run_validation
-from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
-
+# from Page_make_validation import make_initional
+# from Page_make_reference import make_reference
+# from Page_make_simulation import make_simulation
+# from Page_run import run_validation
+# from Page_visualization import visualization_validation, visualization_replot_files, visualization_replot_Comparison
+#
 st.set_page_config(page_title="Home Pages", page_icon="🌍", layout="centered")
 
 
@@ -221,7 +220,9 @@ def initial_st(initial_information):
     if 'main_path' not in st.session_state:
         st.session_state.main_path = os.getcwd()
     if 'openbench_path' not in st.session_state:
-        st.session_state.openbench_path = os.path.abspath(os.path.join(os.getcwd()))
+        st.session_state.openbench_path = os.path.abspath(os.getcwd())
+    if 'namelist_path' not in st.session_state:
+        st.session_state.namelist_path = os.path.join(st.session_state.openbench_path, 'nml')
     if 'main_data' not in st.session_state:
         st.session_state.main_data = initial_information.main()
     if 'sim_data' not in st.session_state:
@@ -402,6 +403,7 @@ def define_step_st():
         st.session_state.step1_general = True
         st.session_state.step1_metrics = False
         st.session_state.step1_evaluation = False
+        st.session_state.step1_comparison = False
         st.session_state.step2_set = False
         st.session_state.step3_set = False
 
@@ -611,9 +613,9 @@ if __name__ == "__main__":
             st.divider()
             st.button(':zero: Initial', on_click=lambda: on_click_handler(step_functions['step1']['initial']),
                       help='Beck to Initial page', use_container_width=True)
-            # st.divider()
-            # st.button(':one: General', on_click=lambda: on_click_handler(step_functions['step1']['define1']),
-            #           help='Beck to General page', use_container_width=True)
+            st.divider()
+            st.button(':one: General', on_click=lambda: on_click_handler(step_functions['step1']['define1']),
+                      help='Beck to General page', use_container_width=True)
             # # st.button(':one: Metrics and Scores', on_click=lambda: on_click_handler(step_functions['step1']['define2']),
             # #           help='Go to Metrics page', use_container_width=True)
             # # st.button(':one: Evaluation', on_click=lambda: on_click_handler(step_functions['step1']['define3']),

@@ -8,6 +8,7 @@ import math
 import os
 import pandas as pd
 import matplotlib
+from Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 
@@ -120,6 +121,7 @@ def make_plot_index_grid(self):
             import math
             ds = xr.open_dataset(
                 f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
+            ds = Convert_Type.convert_nc(ds)
             quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
             del ds
             if not option["vmin_max_on"]:
@@ -232,6 +234,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
     ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
+    ds = Convert_Type.convert_nc(ds)
 
     # Extract variables
     ilat = ds.lat.values
@@ -258,11 +261,11 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
-                        origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
+    else:
+        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+                                origin=origin)
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -275,13 +278,15 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     if not option['set_lat_lon']:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -440,13 +445,15 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
 
     if not option['set_lat_lon']:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat])
+        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[::-1], crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -578,6 +585,8 @@ def make_plot_index_stn(self):
     # read the data
     df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                         header=0)
+    df = Convert_Type.convert_Frame(df)
+
     # loop the keys in self.variables to get the metric output
     for metric in self.metrics:
         option = self.fig_nml['make_stn_plot_index']
@@ -769,6 +778,7 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
     file = os.path.join(output_dir, f"{method_name}", filename)
 
     ds = xr.open_dataset(f"{file}.nc")
+    ds = Convert_Type.convert_nc(ds)
     data = ds[method_name]
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -816,10 +826,11 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
     else:
         origin = 'upper'
 
-    if option['show_method'] == 'imshow':
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
+    if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
+
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -833,15 +844,17 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                       main_nml['max_lat']])
+                       main_nml['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
                       crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
                       crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)

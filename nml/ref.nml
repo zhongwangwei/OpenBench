@@ -1,16 +1,16 @@
 &general
   #*******************  Radiation and Energy Cycle  *************
-  Sensible_Heat_ref_source                  = GLEAM4.2a_monthly                               #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND，GLEAM4.2a_monthly,SMAPL4                          #stn: PLUMBER2,GEBA
-  Latent_Heat_ref_source                    = ILAMB_monthly                                   #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND,SMAPL4                                             #stn: PLUMBER2,GEBA
-  Ground_Heat_ref_source                    = ILAMB_monthly                                   #Grid: ILAMB_monthly，SMAPL4                                                               #stn: PLUMBER2,GEBA
-  Net_Radiation_ref_source                  = CLARA_3                                         #Grid: ILAMB_monthly, FLUXCOM, ERA5LAND,CERES_EBAF_Ed4.2,Rn-Xu2022,SMAPL4, CLARA_3         #stn: PLUMBER2,GEBA
-  Surface_Upward_SW_Radiation_ref_source    = CERES_EBAF_Ed4.2                                #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2,SMAPL4                                              #stn: PLUMBER2,GEBA
-  Surface_Upward_LW_Radiation_ref_source    = CERES_EBAF_Ed4.2                                #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2,CLARA_AVHRR,SMAPL4                                  #stn: PLUMBER2,GEBA
-  Surface_Net_SW_Radiation_ref_source       = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2,SMAPL4  ,CLARA_3                           #stn: PLUMBER2,GEBA 
-  Surface_Net_LW_Radiation_ref_source       = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR,SMAPL4  ,CLARA_3               #stn: PLUMBER2,GEBA
-  Albedo_ref_source                         = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND,CLARA_3                                                     #stn: PLUMBER2
-  Surface_Soil_Temperature_ref_source       = HOMTS                                           #Grid: HOMTS(China),SMAPL4,ERA5LAND
-  Root_Zone_Soil_Temperature_ref_source     = HOMTS                                           #Grid: HOMTS(China),SMAPL4,ERA5LAND
+  Sensible_Heat_ref_source                  = GLEAM4.2a_monthly                               #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND, ERA5LAND_0p25，GLEAM4.2a_monthly,GLEAM4.2a_monthly_0p25, SMAPL4, SMAPL4_0p25                          #stn: PLUMBER2,GEBA
+  Latent_Heat_ref_source                    = ILAMB_monthly                                   #Grid: ILAMB_monthly，FLUXCOM, ERA5LAND, ERA5LAND_0p25,SMAPL4, SMAPL4_0p25                                             #stn: PLUMBER2,GEBA
+  Ground_Heat_ref_source                    = ILAMB_monthly                                   #Grid: ILAMB_monthly，SMAPL4, SMAPL4_0p25                                                               #stn: PLUMBER2,GEBA
+  Net_Radiation_ref_source                  = CLARA_3                                         #Grid: ILAMB_monthly, FLUXCOM, ERA5LAND, ERA5LAND_0p25,CERES_EBAF_Ed4.2,Rn-Xu2022,Rn-Xu2022_0p25,SMAPL4, SMAPL4_0p25, CLARA_3         #stn: PLUMBER2,GEBA
+  Surface_Upward_SW_Radiation_ref_source    = CERES_EBAF_Ed4.2                                #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2,SMAPL4, SMAPL4_0p25                                              #stn: PLUMBER2,GEBA
+  Surface_Upward_LW_Radiation_ref_source    = CERES_EBAF_Ed4.2                                #Grid: ILAMB_monthly, CERES_EBAF_Ed4.2,CLARA_AVHRR,SMAPL4, SMAPL4_0p25                                  #stn: PLUMBER2,GEBA
+  Surface_Net_SW_Radiation_ref_source       = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND, ERA5LAND_0p25,CERES_EBAF_Ed4.2,SMAPL4, SMAPL4_0p25,CLARA_3                           #stn: PLUMBER2,GEBA 
+  Surface_Net_LW_Radiation_ref_source       = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND, ERA5LAND_0p25,CERES_EBAF_Ed4.2,CLARA_AVHRR,SMAPL4, SMAPL4_0p25,CLARA_3               #stn: PLUMBER2,GEBA
+  Albedo_ref_source                         = CLARA_3                                         #Grid: ILAMB_monthly, ERA5LAND, ERA5LAND_0p25,CLARA_3                                                     #stn: PLUMBER2
+  Surface_Soil_Temperature_ref_source       = HOMTS                                           #Grid: HOMTS(China),SMAPL4, SMAPL4_0p25,ERA5LAND, ERA5LAND_0p25
+  Root_Zone_Soil_Temperature_ref_source     = HOMTS                                           #Grid: HOMTS(China),SMAPL4, SMAPL4_0p25,ERA5LAND, ERA5LAND_0p25
 
 
   #*******************Ecosystem and Carbon Cycle****************
@@ -19,7 +19,7 @@
   Ecosystem_Respiration_ref_source          = ILAMB_monthly                                  # Grid: ILAMB_monthly, FLUXCOM,GCFD                             
   Biomass_ref_source                        = ILAMB_monthly                                  # Grid: ILAMB_monthly, FLUXCOM,CEDA,Biomass_Huang2021, Biomass_XU2021
   BurnedArea_ref_source                     = ILAMB_monthly                                  # Grid: ILAMB_monthly, GFED5,CEDA
-  Leaf_Area_Index_ref_source                = LAI_Yuan2011                                   # Grid: Lin2023, GIMMS_LAI4g,SMAPL4  Stn: LAI_Yuan2011 
+  Leaf_Area_Index_ref_source                = LAI_Yuan2011                                   # Grid: Lin2023, GIMMS_LAI4g,SMAPL4, SMAPL4_0p25  Stn: LAI_Yuan2011 
   Soil_Carbon_ref_source                    = Soilgrid                                       # ILAMB_monthly, Soilgrid
   Nitrogen_Fixation_ref_source              = ILAMB_monthly
   Methane                                   = ILAMB_monthly                                  # Grid: ILAMB_monthly   stn: CH4_FluxnetANN,
@@ -27,22 +27,22 @@
   
   #*******************      Hydrology Cycle      ****************
   ###surface####
-  Evapotranspiration_ref_source                       = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly,FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024,ERA5LAND  stn: PLUMBER2,  GLEAM_hybird_PLUMBER2
-  Canopy_Transpiration_ref_source                     = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly,FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024 stn: Transpiration_GLEAM_hybird
-  Canopy_Interception_ref_source                      = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly,Ei_Lian_etal
-  Open_Water_Evaporation_ref_source                   = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly
-  Soil_Evaporation_ref_source                         = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly
-  Total_Runoff_ref_source                             = GRUN_ENSEMBLE                       # Grid: ILAMB_monthly,ERA5LAND,GRFR,GRADES,LORA,GRUN_ENSEMBLE,CNRD,GRFR_025
+  Evapotranspiration_ref_source                       = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25, FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024, ET_Xu_etal_2024_0p25, ERA5LAND, ERA5LAND_0p25  stn: PLUMBER2,  GLEAM_hybird_PLUMBER2
+  Canopy_Transpiration_ref_source                     = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25, FLUXCOM-X-BASE_monthly, Transpiration_Li_etal2024, Transpiration_Li_etal2024_0p25 stn: Transpiration_GLEAM_hybird
+  Canopy_Interception_ref_source                      = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25, Ei_Lian_etal
+  Open_Water_Evaporation_ref_source                   = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25
+  Soil_Evaporation_ref_source                         = GLEAM4.2a_monthly                   # Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25
+  Total_Runoff_ref_source                             = GRUN_ENSEMBLE                       # Grid: ILAMB_monthly,ERA5LAND, ERA5LAND_0p25,GRFR,GRFR_025,GRADES,LORA,GRUN_ENSEMBLE,CNRD
 
   ###Snow#### 
-  Snow_Water_Equivalent_ref_source                    = ILAMB_monthly                       # Grid: snowex23 (not ready), globsnow_v3,SMAPL4(not ready),NH-SWE
-  Surface_Snow_Cover_In_Fraction_ref_source           = SMAPL4                              # Grid: SMAPL4(not ready)
-  Snow_Depth_ref_source                               = SMAPL4                              # Grid: SMAPL4(not ready)
+  Snow_Water_Equivalent_ref_source                    = ILAMB_monthly                       # Grid: snowex23 (not ready), globsnow_v3,SMAPL4, SMAPL4_0p25,NH-SWE
+  Surface_Snow_Cover_In_Fraction_ref_source           = SMAPL4                              # Grid: SMAPL4, SMAPL4_0p25
+  Snow_Depth_ref_source                               = SMAPL4                              # Grid: SMAPL4, SMAPL4_0p25
   Permafrost_ref_source                               = ILAMB_monthly
  
   ###Soil####
-  Surface_Soil_Moisture_ref_source                    = GLEAM4.2a_monthly           #Grid: GLEAM4.2a_monthly, ERA5LAND,ILAMB_monthly,SMAPL3,SMAPL4,GSSM1km(EU, not ready),SMCI1.0  stn:ISMN
-  Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.2a_monthly           #Grid: GLEAM4.2a_monthly, SMAPL4,SMCI1.0
+  Surface_Soil_Moisture_ref_source                    = GLEAM4.2a_monthly           #Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25, ERA5LAND, ERA5LAND_0p25,ILAMB_monthly,SMAPL3, SMAPL4, SMAPL4_0p25,GSSM1km(EU, not ready),SMCI1.0  stn:ISMN
+  Root_Zone_Soil_Moisture_ref_source                  = GLEAM4.2a_monthly           #Grid: GLEAM4.2a_monthly, GLEAM4.2a_monthly_0p25, SMAPL4, SMAPL4_0p25, SMCI1.0
                           
 
   ###  Groundwater ####
@@ -99,6 +99,7 @@
   Urban_Nittime_Surface_Temperature_ref_source        =  MODIST, TRIMS_LST    # Grid: TRIMS,MODIST,GSDLST                        stn: Urban-PLUMBER
   Urban_Air_Temperature_Max_ref_source                =  TEMP_Zhang_etal_2022 # Grid: Zhang_et_al_2022
   Urban_Air_Temperature_Min_ref_source                =  TEMP_Zhang_etal_2022 # Grid: Zhang_et_al_2022
+
   Urban_Building_Heat_Flux_ref_source                 =  Qian2024(not ready)  # Grid: Qian2024(not ready)
   Urban_Industrial_Heat_Flux_ref_source               =  Qian2024(not ready)  # Grid: Qian2024(not ready)
   Urban_Transportation_Heat_Flux_ref_source           =  Qian2024(not ready)  # Grid: Qian2024(not ready)
@@ -121,23 +122,23 @@
   Sediment_Transport_ref_source                       = HYDAT                        # stn: HYDAT(Canada)
 
   ###Lake
-  Lake_Surface_Water_Temperature_ref_source           = GCOS                        # Grid: GCOS,ESACCI_LAKES, GLAST      stn
+  Lake_Surface_Water_Temperature_ref_source           = GCOS                         # Grid: GCOS, GCOS_0p25, ESACCI_LAKES, GLAST      stn
   Lake_Ice_Fraction_Cover_ref_source                  =                              #
   Lake_Water_Level_ref_source                         = G-REALM                      # Grid: G-REALM,GWW
   Lake_Water_Area_ref_source                          = ReaLSAT                      # Grid: ReaLSAT,GWW
   Lake_Water_Volume_ref_source                        = 
 
   #*******************         Forcings      **********************
-  Surface_Air_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND,CN05.1, SMAPL4
-  Diurnal_Max_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND 
-  Diurnal_Min_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND
-  Diurnal_Temperature_Range_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,
-  Surface_Downward_SW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_3
-  Surface_Downward_LW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX,ERA5LAND,CERES_EBAF_Ed4.2,CLARA_AVHRR,CARE,CLARA_3
-  Surface_Relative_Humidity_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND
-  Surface_Specific_Humidity_ref_source                =  ERA5LAND                # Grid: MSWX,ERA5LAND,SMAPL4
-  Precipitation_ref_source                            =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX,ERA5LAND, MSWEP,GPCPv3.2_monthly,GPCPv3.2_daily,CN05.1
-  Surface_Wind_Speed_ref_source                       =  CLM5                    # Grid: CRU-TS4.08,MSWX,ERA5LAND
+  Surface_Air_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,CN05.1, SMAPL4, SMAPL4_0p25
+  Diurnal_Max_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25 
+  Diurnal_Min_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
+  Diurnal_Temperature_Range_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, 
+  Surface_Downward_SW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,CERES_EBAF_Ed4.2,CLARA_3
+  Surface_Downward_LW_Radiation_ref_source            =  CLARA_3                 # Grid: MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,CERES_EBAF_Ed4.2,CLARA_AVHRR,CARE,CLARA_3
+  Surface_Relative_Humidity_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
+  Surface_Specific_Humidity_ref_source                =  ERA5LAND                # Grid: MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,SMAPL4, SMAPL4_0p25
+  Precipitation_ref_source                            =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25, MSWEP, MSWEP_0p25,GPCPv3.2_monthly,GPCPv3.2_daily,CN05.1
+  Surface_Wind_Speed_ref_source                       =  CLM5                    # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
 / 
 
 
@@ -148,9 +149,12 @@ FLUXCOM                    = ./nml/Ref_variables_defination/Composite/FLUXCOM.nm
 FLUXCOM-X-BASE_monthly     = ./nml/Ref_variables_defination/Composite/FLUXCOM-X-BASE_monthly.nml
 ILAMB_monthly              = ./nml/Ref_variables_defination/Composite/ILAMB_monthly.nml
 GLEAM4.2a_monthly          = ./nml/Ref_variables_defination/Composite/GLEAM4.2a_monthly.nml
+GLEAM4.2a_monthly_0p25     = ./nml/Ref_variables_defination/Composite/GLEAM4.2a_monthly_0p25.nml
 ERA5LAND                   = ./nml/Ref_variables_defination/Composite/ERA5Land_daily.nml
+ERA5LAND_0p25              = ./nml/Ref_variables_defination/Composite/ERA5Land_daily_0p25 .nml
 PLUMBER2                   = ./nml/Ref_variables_defination/Composite/PLUMBER2.nml
-SMAPL4                     = ./nml/Ref_variables_defination/Composite/SMAPL4.nml
+SMAPL4                     = ./nml/Ref_variables_defination/Composite/SMAP_L4.nml
+SMAPL4_0p25                = ./nml/Ref_variables_defination/Composite/SMAP_L4_0p25.nml
 
 #Ecosystem
 LAI_Yuan2011               = ./nml/Ref_variables_defination/Ecosystem/LAI_Yuan2011.nml
@@ -162,28 +166,33 @@ Biomass_Huang2021          = ./nml/Ref_variables_defination/Ecosystem/Biomass_Hu
 Biomass_XU2021             = ./nml/Ref_variables_defination/Ecosystem/Biomass_XU2021.nml
 GFED5                      = ./nml/Ref_variables_defination/Ecosystem/GFED5.nml
 CEDA                       = ./nml/Ref_variables_defination/Ecosystem/CEDA.nml
-Soilgrid.                  = ./nml/Ref_variables_defination/Ecosystem/SoilGridV2.nml
+Soilgrid                   = ./nml/Ref_variables_defination/Ecosystem/SoilGridV2.nml
+
 #Energy
 CERES_EBAF_Ed4.2           = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR                = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
 Rn-Xu2022                  = ./nml/Ref_variables_defination/Energy/Rn-Xu2022.nml
+Rn-Xu2022_0p25             = ./nml/Ref_variables_defination/Energy/Rn-Xu2022_0p25.nml
 HOMTS                      = ./nml/Ref_variables_defination/Energy/HOMTS.nml
 GEBA                       = ./nml/Ref_variables_defination/Energy/GEBA.nml
 CARE                       = ./nml/Ref_variables_defination/Energy/CARE.nml
 CLARA_3                    = ./nml/Ref_variables_defination/Energy/CLARA_3.nml
+
 #Hydrology
 Transpiration_GLEAM_hybird = ./nml/Ref_variables_defination/Hydrology/Transpiration_GLEAM_hybird.nml
 GLEAM_hybird_PLUMBER2      = ./nml/Ref_variables_defination/Hydrology/GLEAM_hybird_PLUMBER2.nml
 Ei_Lian_etal               = ./nml/Ref_variables_defination/Hydrology/Ei_Lian_etal.nml
 ET_Xu_etal_2024            = ./nml/Ref_variables_defination/Hydrology/ET_Xu_etal_2024.nml
+ET_Xu_etal_2024_0p25       = ./nml/Ref_variables_defination/Hydrology/ET_Xu_etal_2024_0p25.nml
 Transpiration_Li_etal2024  = ./nml/Ref_variables_defination/Hydrology/Transpiration_Li_etal2024.nml
+Transpiration_Li_etal2024_0p25  = ./nml/Ref_variables_defination/Hydrology/Transpiration_Li_etal2024_0p25.nml
 SMAPL3                     = ./nml/Ref_variables_defination/Hydrology/SMAP_L3.nml
 GRFR                       = ./nml/Ref_variables_defination/Hydrology/GRFR.nml
+GRFR_025                   = ./nml/Ref_variables_defination/Hydrology/GRFR_025.nml
 GRADES                     = ./nml/Ref_variables_defination/Hydrology/GRADES.nml
 LORA                       = ./nml/Ref_variables_defination/Hydrology/LORA.nml
 GRUN_ENSEMBLE              = ./nml/Ref_variables_defination/Hydrology/GRUN_ENSEMBLE.nml
 CNRD                       = ./nml/Ref_variables_defination/Hydrology/CNRD.nml
-GRFR_025                   = ./nml/Ref_variables_defination/Hydrology/GRFR_025.nml
 SMCI1.0                    = ./nml/Ref_variables_defination/Hydrology/SMCI1.0.nml
 snowex23                   = ./nml/Ref_variables_defination/Hydrology/snowex23.nml
 globsnow_v3                = ./nml/Ref_variables_defination/Hydrology/globsnow_v3.nml
@@ -200,7 +209,7 @@ WaterUse_GGMSEUD           = ./nml/Ref_variables_defination/Crop/WaterUse_GGMSEU
 WaterUse_GIWUED            = ./nml/Ref_variables_defination/Crop/WaterUse_GIWUED.nml
 CropPhen_ChinaCropPhen1km  = ./nml/Ref_variables_defination/Crop/WaterUse_GIWUED.nml
 CropArea_CROPGRIDS         = ./nml/Ref_variables_defination/Crop/CropArea_CROPGRIDS.nml
-Monfreda2008              = ./nml/Ref_variables_defination/Crop/Monfreda2008.nml
+Monfreda2008               = ./nml/Ref_variables_defination/Crop/Monfreda2008.nml
 CROPGRIDSv1.08             = ./nml/Ref_variables_defination/Crop/CROPGRIDSv1.08.nml
 GCPE                       = ./nml/Ref_variables_defination/Crop/GCPE.nml
 ChinaCropPhen1km           = ./nml/Ref_variables_defination/Crop/ChinaCropPhen1km.nml
@@ -214,6 +223,7 @@ SPAM                       = ./nml/Ref_variables_defination/Crop/CropYield_SPAM.
 #Dam
 ResOpsUS                   = ./nml/Ref_variables_defination/Dam/ResOpsUS.nml
 Chen2023                   = ./nml/Ref_variables_defination/Dam/Chen2023.nml
+
 #River
 GRDC                       = ./nml/Ref_variables_defination/River/GRDC.nml
 HydroWeb_river             = ./nml/Ref_variables_defination/River/HydroWeb_river.nml
@@ -223,8 +233,9 @@ DT2021                     = ./nml/Ref_variables_defination/River/DT2021.nml
 HYDAT                      = ./nml/Ref_variables_defination/River/HYDAT.nml
 
 #Lake
-HydroWeb_2.0              = ./nml/Ref_variables_defination/River/HydroWeb_lake.nml
+HydroWeb_2.0               = ./nml/Ref_variables_defination/River/HydroWeb_lake.nml
 GCOS                       = ./nml/Ref_variables_defination/lake/GCOS.nml
+GCOS_0p25                  = ./nml/Ref_variables_defination/lake/GCOS_0p25.nml
 GLAST                      = ./nml/Ref_variables_defination/lake/GLAST.nml
 ESACCI_LAKES               = ./nml/Ref_variables_defination/lake/ESACCI_LAKES.nml
 G-REALM                    = ./nml/Ref_variables_defination/lake/G-REALM.nml
@@ -244,10 +255,11 @@ TRIMS_LST                  = ./nml/Ref_variables_defination/Urban/Urban_TRIMS_LS
 CRU-TS4.08                = ./nml/Ref_variables_defination/Forcing/cru_ts_408.nml
 GPCPv3.2_monthly          = ./nml/Ref_variables_defination/Forcing/GPCPv3.2_monthly.nml
 GPCPv3.2_daily            = ./nml/Ref_variables_defination/Forcing/GPCPv3.2_daily.nml
-CN05.1                     = ./nml/Ref_variables_defination/Forcing/CN05.1.nml
-
+CN05.1                    = ./nml/Ref_variables_defination/Forcing/CN05.1.nml
 MSWX                      = ./nml/Ref_variables_defination/Forcing/MSWX.nml
+MSWX_0p25                 = ./nml/Ref_variables_defination/Forcing/MSWX_0p25.nml
 MSWEP                     = ./nml/Ref_variables_defination/Forcing/MSWEP.nml
+MSWEP_0p25                = ./nml/Ref_variables_defination/Forcing/MSWEP_0p25.nml
 CERES_EBAF_Ed4.2          = ./nml/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR               = ./nml/Ref_variables_defination/Energy/CLARA_AVHRR.nml
 CARE                      = ./nml/Ref_variables_defination/Energy/CARE.nml

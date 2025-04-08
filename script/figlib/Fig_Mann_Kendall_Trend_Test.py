@@ -11,7 +11,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -95,8 +95,6 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
     else:
         cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    # cs = ax.contourf(lon, lat, data, cmap=option['cmap'], levels=bnd, norm=norm, extend=option['extend'])
-    # cs = ax.imshow(data, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=option['extend'], origin='lower')
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -107,23 +105,25 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
     ax.add_feature(rivers, linewidth=0.5)
     ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
-    # ax.scatter(lon[::2, ::2], lat[::2, ::2], s=significant[::2, ::2] * option['markersize'], c=option['markercolor'],
-    #            marker=option['marker'], alpha=option['alpha'])
+
     p = ax.contourf(lon, lat, p_value, levels=[0, significant, 1],
                     hatches=['.....', None], colors="none", add_colorbar=False,
                     zorder=3)
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                       main_nml['max_lat']])
+                       main_nml['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
                       crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
                       crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
+
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -162,6 +162,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
 
 def make_Mann_Kendall_Trend_Test(file, method_name, data_sources, main_nml, option):
     ds = xr.open_dataset(f"{file}")
+    ds = Convert_Type.convert_nc(ds)
     trend = ds.trend
     if trend.ndim == 3 and trend.shape[0] == 1:
         trend = trend.squeeze(axis=0)

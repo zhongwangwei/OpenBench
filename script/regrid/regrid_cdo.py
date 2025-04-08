@@ -4,7 +4,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from shapely.geometry import Polygon
 from joblib import Parallel, delayed
-
+from Mod_Converttype import Convert_Type
 class regridder_cdo:
    def __init__(self, info):
       self.name = 'regridder_cdo'
@@ -29,7 +29,7 @@ class regridder_cdo:
       # Load remapped data with xarray for further analysis (optional)
       remapped_data = xr.open_dataset(output_file)
 
-      return remapped_data
+      return Convert_Type.convert_nc(remapped_data)
    '''
    def remaplaf_with_3D_parallel(
       source_data, source_lon, source_lat, target_lon, target_lat, n_jobs=-1

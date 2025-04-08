@@ -14,6 +14,7 @@ from joblib import Parallel, delayed
 # Check the platform
 from Mod_Metrics import metrics
 from Mod_Scores import scores
+from Mod_Converttype import Convert_Type
 from figlib import *
 
 class LC_groupby(metrics, scores):
@@ -163,6 +164,7 @@ class LC_groupby(metrics, scores):
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall mean first
@@ -217,6 +219,7 @@ class LC_groupby(metrics, scores):
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
                                        
                                         if self.weight.lower() == 'area':
@@ -392,7 +395,7 @@ class LC_groupby(metrics, scores):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                logging.info("now processing the evaluation item: ", evaluation_item)
+                logging.info(f"now processing the evaluation item: {evaluation_item}" )
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -431,6 +434,7 @@ class LC_groupby(metrics, scores):
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall median first
@@ -485,6 +489,7 @@ class LC_groupby(metrics, scores):
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
                                         # Calculate and write the overall mean first

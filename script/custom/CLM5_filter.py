@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import re 
+import re
+import logging
 def adjust_time_CLM5(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
@@ -9,16 +10,16 @@ def adjust_time_CLM5(info, ds,syear,eyear,tim_res):
       num_value = int(num_value) if num_value else 1   
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m', 'month', 'mon']:
-         print('Adjusting time values for monthly CLM5 output...')
+         logging.info('Adjusting time values for monthly CLM5 output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(months=1)
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-         print('Adjusting time values for daily CLM5 output...')
+         logging.info('Adjusting time values for daily CLM5 output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)  
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-         print('Adjusting time values for yearly CLM5 output ...')
+         logging.info('Adjusting time values for yearly CLM5 output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
-      print('tim_res error')
+      logging.error('tim_res error')
       exit()
    return ds
 
@@ -29,7 +30,7 @@ def filter_CLM5(info, ds):   #update info as well
          info.sim_varname = 'Net_Radiation'
          info.sim_varunit = 'W m-2'
       except Exception as e:
-         print(f"Surface Net Radiation calculation processing ERROR: {e}")
+         logging.error(f"Surface Net Radiation calculation processing ERROR: {e}")
          return info, None
       return info, ds['Net_Radiation']
    if info.item == "Surface_Net_LW_Radiation":
@@ -38,7 +39,7 @@ def filter_CLM5(info, ds):   #update info as well
          info.sim_varname='FIRA'
          info.sim_varunit='W m-2'
       except:
-         print('Surface Net LW Radiation calculation processing ERROR!!!')
+         logging.error('Surface Net LW Radiation calculation processing ERROR!!!')
       return info, ds['FIRA']
    
    if info.item == "Surface_Soil_Moisture":
@@ -48,7 +49,7 @@ def filter_CLM5(info, ds):   #update info as well
             info.sim_varname = 'SOILLIQ'
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
    
@@ -67,7 +68,7 @@ def filter_CLM5(info, ds):   #update info as well
             info.sim_varname = 'SOILLIQ'
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
    
@@ -86,7 +87,7 @@ def filter_CLM5(info, ds):   #update info as well
             info.sim_varname = 'SOILLIQ'
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
    
@@ -97,7 +98,7 @@ def filter_CLM5(info, ds):   #update info as well
             info.sim_varname = 'Ground_Heat'
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['Ground_Heat']
 
@@ -109,7 +110,7 @@ def filter_CLM5(info, ds):   #update info as well
             info.sim_varname = 'Albedo'
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface Albedo calculation processing ERROR: {e}")
+         logging.error(f"Surface Albedo calculation processing ERROR: {e}")
          return info, None
       return info, ds['Albedo']
 

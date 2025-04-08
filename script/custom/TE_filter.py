@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-
+import logging
 def adjust_time_TE(info, ds, syear, eyear, tim_res):
     match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
     if match:
@@ -16,7 +16,7 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
         elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
             freq = f'{num_value}H'
         else:
-            print(f'Unsupported time unit: {time_unit}')
+            logging.error(f'Unsupported time unit: {time_unit}')
             exit()
 
         # Create a new time range based on syear, eyear, and freq
@@ -26,7 +26,7 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
         ds['time'] = new_time_range
 
     else:
-        print('tim_res error')
+        logging.error('tim_res error')
         exit()
 
     return ds
@@ -39,5 +39,5 @@ def filter_TE(info,ds):   #update info as well
          info.sim_varname='Total_Runoff'
          info.sim_varunit='kg m-2 s-1'
       except:
-         print('Total_Runoff calculation processing ERROR!!!')
+         logging.error('Total_Runoff calculation processing ERROR!!!')
       return info, ds['Total_Runoff']

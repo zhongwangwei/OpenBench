@@ -1,5 +1,5 @@
 from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal
-from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_metrics
+# from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_metrics
 from Comparison_figlib.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal_by_score
 from Comparison_figlib.Fig_heatmap import make_scenarios_scores_comparison_heat_map
 from Comparison_figlib.Fig_heatmap import make_LC_based_heat_map
@@ -17,10 +17,11 @@ from Comparison_figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Tren
 from Comparison_figlib.Fig_Correlation import make_Correlation_Plot
 from Comparison_figlib.Fig_Standard_Deviation import make_Standard_Deviation_Plot
 from Comparison_figlib.Fig_Functional_Response import make_Functional_Response_Plot
+from Comparison_figlib.Fig_Relative_Score import make_Relative_Score_Plot
 
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
-    "make_scenarios_comparison_Portrait_Plot_seasonal_metrics",
+    # "make_scenarios_comparison_Portrait_Plot_seasonal_metrics",
     "make_scenarios_comparison_Portrait_Plot_seasonal_by_score",
     "make_scenarios_scores_comparison_heat_map",
     "make_scenarios_comparison_parallel_coordinates",
@@ -33,7 +34,7 @@ __all__ = [
     "make_scenarios_comparison_Single_Model_Performance_Index",
     "make_scenarios_comparison_Ridgeline_Plot",
     'make_scenarios_comparison_Diff_Plot',
-
+    'make_Relative_Score_Plot',
     'make_Basic_Plot',
     'make_Mann_Kendall_Trend_Test_Plot',
     'make_Correlation_Plot',

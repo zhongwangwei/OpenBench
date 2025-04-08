@@ -11,7 +11,7 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import rcParams
-
+from Mod_Converttype import Convert_Type
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
@@ -61,6 +61,7 @@ def get_index(vmin, vmax, colormap):
 
 def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
     ds = xr.open_dataset(f"{file}")
+    ds = Convert_Type.convert_nc(ds)
     data = ds.Standard_Deviation
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -123,15 +124,18 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
-                       main_nml['max_lat']])
+                       main_nml['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
                       crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
                       crs=ccrs.PlateCarree())
     else:
-        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']])
+        ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+    ax.set_adjustable('datalim')
+    ax.set_aspect('equal', adjustable='box')
+
     lon_formatter = LongitudeFormatter()
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
