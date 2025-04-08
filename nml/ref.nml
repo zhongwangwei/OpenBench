@@ -92,12 +92,14 @@
 
 
   ###Urban
-  Urban_Latent_Heat_ref_source                        =  MCD43A3              # Grid: FLUXCOM-X-BASE_monthly, ET_Xu_etal_2024, ET_Xu_etal_2024_0p25    stn: Urban-PLUMBER
-  Urban_Anthropogenic_Heat_Flux_ref_source            =  AH4GUC               # Grid: ETMonitor
-  Urban_Albedo_ref_source                             =  China_AHE            # Grid: DONG_AHE, China_AHE,AH4GUC                 stn: Urban-PLUMBER
-  Urban_Surface_Temperature_ref_source                =  MODIST               # Grid: TRIMS,MODIST,GSDLST                        stn: Urban-PLUMBER
-  Urban_Air_Temperature_max_ref_source                =  Zhang_et_al_2022     # Grid: Zhang_et_al_2022
-  Urban_Air_Temperature_min_ref_source                =  Zhang_et_al_2022     # Grid: Zhang_et_al_2022
+  Urban_Latent_Heat_Flux_ref_source                   =  ETMonitor            # Grid: ETMonitor    stn: Urban-PLUMBER
+  Urban_Anthropogenic_Heat_Flux_ref_source            =  AH4GUC               # Grid: DONG_AHE, China_AHE,AH4GUC                 stn: Urban-PLUMBER
+  Urban_Albedo_ref_source                             =  MCD43A3              # Grid: MCD43A3      stn: Urban-PLUMBER
+  Urban_Daytime_Surface_Temperature_ref_source        =  MODIST, TRIMS_LST    # Grid: TRIMS,MODIST,GSDLST                        stn: Urban-PLUMBER
+  Urban_Nittime_Surface_Temperature_ref_source        =  MODIST, TRIMS_LST    # Grid: TRIMS,MODIST,GSDLST                        stn: Urban-PLUMBER
+  Urban_Air_Temperature_Max_ref_source                =  TEMP_Zhang_etal_2022 # Grid: Zhang_et_al_2022
+  Urban_Air_Temperature_Min_ref_source                =  TEMP_Zhang_etal_2022 # Grid: Zhang_et_al_2022
+
   Urban_Building_Heat_Flux_ref_source                 =  Qian2024(not ready)  # Grid: Qian2024(not ready)
   Urban_Industrial_Heat_Flux_ref_source               =  Qian2024(not ready)  # Grid: Qian2024(not ready)
   Urban_Transportation_Heat_Flux_ref_source           =  Qian2024(not ready)  # Grid: Qian2024(not ready)
@@ -212,7 +214,6 @@ CROPGRIDSv1.08             = ./nml/Ref_variables_defination/Crop/CROPGRIDSv1.08.
 GCPE                       = ./nml/Ref_variables_defination/Crop/GCPE.nml
 ChinaCropPhen1km           = ./nml/Ref_variables_defination/Crop/ChinaCropPhen1km.nml
 GSDLST                     = ./nml/Ref_variables_defination/Crop/GSDLST.nml
-Zhang_et_al_2022           = ./nml/Ref_variables_defination/Crop/Zhang_et_al_2022.nml
 Qian2024                   = ./nml/Ref_variables_defination/Crop/Qian2024.nml
 ERA5-HEAT                  = ./nml/Ref_variables_defination/Crop/ERA5-HEAT.nml
 WSUS                       = ./nml/Ref_variables_defination/Crop/WSUS.nml
