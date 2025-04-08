@@ -232,10 +232,12 @@ Standard_Deviation              = False
 Functional_Response             = False
 /
 
-
 &statistics
 Z_Score                            = False
 Hellinger_Distance                 = False
+Three_Cornered_Hat                 = False
 Partial_Least_Squares_Regression   = False
-#Three_Cornered_Hat                 = False
+False_Discovery_Rate               = False
+ANOVA                              = False
 /
+

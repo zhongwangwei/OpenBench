@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import xarray as xr
-
+import logging
 def process_site(site, ds, info):
     sitename = site.values
     lon = ds['lon'].sel(site=site).values
@@ -29,7 +29,7 @@ def filter_Yuan2022(info):
         data = [result for site in ds['site'] if (result := process_site(site, ds, info))]
     
     if not data:
-        print("No sites match the criteria.")
+        logging.error("No sites match the criteria.")
         return
     
     df = pd.DataFrame(data, columns=['ID', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear', 'ref_dir'])
@@ -39,6 +39,6 @@ def filter_Yuan2022(info):
     info.ref_fulllist = f"{info.casedir}/stn_list.txt"
     
     df.to_csv(info.ref_fulllist, index=False)
-    print('Save list done')
+    logging.info('Save list done')
 
 # ... (rest of the code remains unchanged)

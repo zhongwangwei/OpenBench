@@ -2,6 +2,7 @@
 import glob, shutil
 import os
 import sys
+from pathlib import Path
 import itertools
 import platform
 import posixpath
@@ -31,182 +32,15 @@ def timer(func):
     return func_wrapper
 
 
-class make_simulation:
-    def __init__(self, initial):
-        self.author = "Qingchen Xu/xuqingchen23@163.com"
-        self.classification = initial.classification()
-        # self.sim_initial = initial.sim_info()
-        # self.sim = st.session_state.sim_data
-        self.sim = initial.sim()
-        self.evaluation_items = st.session_state.evaluation_items
-        self.selected_items = [k for k, v in self.evaluation_items.items() if v]
-        self.tittles = [k.replace('_', ' ') for k, v in self.evaluation_items.items() if v]
-        self.initial = initial
-        self.nl = NamelistReader()
-        self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
-        self.Mod_variables_defination = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_defination')
-        self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
-        self.path_finder = FindPath()
-        # self.stat = initial.stat()
-
-    def find_paths_in_dict(self, d):
-
-        if platform.system() == "Windows":
-            sep = '\\'
-        else:
-            sep = posixpath.sep
-
-        paths = []
-        for key, value in d.items():
-            if isinstance(value, dict):
-                paths.extend(self.find_paths_in_dict(value))
-            elif isinstance(value, str):
-                if 'path' in key.lower() or '/' in value or '\\' in value:
-                    if sep == '\\':
-                        path.replace(os.sep, "\\")
-                        d[key] = value.replace(os.sep, '\\')
-                    else:
-                        d[key] = value.replace(os.sep, "/")
-                    paths.append((key, value))
-        return paths
-
-    def step3_set(self):
-        # print('Create ref namelist -------------------')
-        if 'sim_change' not in st.session_state:
-            st.session_state.sim_change = {'general': False}
-
-        st.subheader(f'Select your simulation cases', divider=True)
-        selected_items = self.selected_items
-        Simulation_lib = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
-
-        if 'add_mode' not in st.session_state:
-            st.session_state['add_mod'] = False
-
-        sim_general = self.sim['general']
-        if st.session_state.sim_data['general']:
-            sim_general = st.session_state.sim_data['general']
-
-        def sim_data_change(key, editor_key):
-            sim_general[key] = st.session_state[editor_key]
-            st.session_state.sim_change['general'] = True
-
-        for selected_item in selected_items:
-            item = f"{selected_item}_sim_source"
-            if item not in sim_general:
-                sim_general[item] = []
-            if isinstance(sim_general[item], str): sim_general[item] = [sim_general[item]]
-
-            label_text = f"<span style='font-size: 20px;'>{selected_item.replace('_', ' ')} simulation cases ....</span>"
-            st.markdown(f":blue[{label_text}]", unsafe_allow_html=True)
-            if len(Simulation_lib['general']['Case_lib']) == 0:
-                st.warning(
-                    f"Sorry we didn't offer simulation data, please upload!")
-
-            st.multiselect("simulation offered",
-                           [value for value in Simulation_lib['general']['Case_lib']],
-                           default=[value for value in sim_general[item]],
-                           key=f"{item}_multi",
-                           on_change=sim_data_change,
-                           args=(item, f"{item}_multi"),
-                           placeholder="Choose an option",
-                           label_visibility="collapsed")
-
-        st.session_state.step3_set_check = self.__step3_setcheck(sim_general)
-
-        sources = list(set([value for key in selected_items for value in sim_general[f"{key}_sim_source"] if value]))
-        st.session_state.sim_data['def_nml'] = {}
-        for source in sources:
-            st.session_state.sim_data['def_nml'][source] = Simulation_lib['def_nml'][source]
-            st.session_state.sim_change[source] = False
-
-        formatted_keys = " \n".join(
-            f'{key.replace("_", " ")}: {", ".join(value for value in sim_general[f"{key}_sim_source"] if value)}' for
-            key in
-            selected_items)
-        sourced_key = " \n".join(f"{source}: {Simulation_lib['def_nml'][source]}" for source in sources)
-        st.code(f'''{formatted_keys}\n\n{sourced_key}''', language="shell", line_numbers=True, wrap_lines=True)
-
-        #
-
-        col1, col, col3 = st.columns(3)
-
-        def define_new_simnml():
-            st.session_state.step3_make_newnamelist = True
-
-        col1.button('Add new simulation namelist', on_click=define_new_simnml)
-
-        def define_clear_cases():
-            st.session_state.step3_mange_cases = True
-
-        col3.button('Manage simulation cases', on_click=define_clear_cases)
-
-        st.session_state.sim_data['general'] = sim_general
-
-        st.divider()
-
-        def define_step1():
-            st.session_state.step3_set = False
-
-        def define_step2():
-            st.session_state.step3_make = True
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.button(':back: Previous step', on_click=define_step1, help='Go to Refernece page')
-        with col4:
-            st.button('Next step :soon: ', on_click=define_step2, help='Go to making page')
-
-    def __step3_setcheck(self, general_sim):
-        check_state = 0
-
-        ref_all_false = True
-        for selected_item in self.selected_items:
-            key = f"{selected_item}_sim_source"
-            if general_sim[key] is None or len(general_sim[key]) == 0:
-                st.warning(f'Please set at least one case in {key.replace("_", " ")}!', icon="⚠")
-                check_state += 1
-            if selected_item not in st.session_state.step3_errorlist:
-                st.session_state.step3_errorlist[selected_item] = []
-
-        if check_state > 0:
-            st.session_state.step3_errorlist[selected_item].append(1)
-            st.session_state.step3_errorlist[selected_item] = list(
-                np.unique(st.session_state.step3_errorlist[selected_item]))
-            return False
-        if check_state == 0:
-            if (selected_item in st.session_state.step3_errorlist) & (
-                    1 in st.session_state.step3_errorlist[selected_item]):
-                st.session_state.step3_errorlist[selected_item] = list(
-                    filter(lambda x: x != 1, st.session_state.step3_errorlist[selected_item]))
-                st.session_state.step3_errorlist[selected_item] = list(
-                    np.unique(st.session_state.step3_errorlist[selected_item]))
-            return True
+class mange_simulation:
+    def __init__(self):
+        self.author = "Qingchen Xu/xuqingchen0@gmail.com"
 
     def step3_make_new_simnml(self):
         if 'step3_add_nml' not in st.session_state:
             st.session_state.step3_add_nml = True
 
-        path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
-        folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
-
-        st.markdown(f"""
-        <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-            Set Simulation file 👇
-        </div>""", unsafe_allow_html=True)
-        st.write(' ')
-        file = st.radio("Set Simulation file 👇",
-                        ["user"] + [f"user/{folder}" for folder in folders] + ['New folder'],
-                        key="sim_savefile", label_visibility='collapsed',
-                        horizontal=True)
-        if file == 'New folder':
-            col1, col2 = st.columns(2)
-            col1.write('##### :green[Simulation new file name]')
-            name = col1.text_input(f'Simulation file name: ', value='',
-                                   key=f"Sim_filename",
-                                   placeholder=f"Set your Simulation file...")
-            file = f"user/{name}"
-        sim_save_path = os.path.join(st.session_state.openbench_path, 'nml', file)
-
+        sim_save_path = self.__check_path()
         st.divider()
 
         def variables_change(key, editor_key):
@@ -243,6 +77,7 @@ class make_simulation:
             del_vars = ['mode_item']
             for del_var in del_vars:
                 del st.session_state[del_var]
+            self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
 
         col3.button('Add new Mod', on_click=define_new_mod)
         col4.button('Finish add', on_click=define_finish)
@@ -630,42 +465,33 @@ class make_simulation:
                                                                       args=(f"suffix", 'new_simlib_suffix'),
                                                                       placeholder=f"Set your Simulation suffix...")
 
-                    # newlib['general']['dir'] = st.text_input(f'Set Data Dictionary: ',
-                    #                                          value='',
-                    #                                          key=f"new_simlib_root_dir",
-                    #                                          on_change=sim_main_change,
-                    #                                          args=(f"root_dir", 'new_simlib_root_dir'),
-                    #                                          placeholder=f"Set your Simulation Dictionary...")
                     newlib['general'][f"fulllist"] = ''
                 else:
                     info_list = ['sub_dir', 'varname', 'varunit']
-                    if 'fulllist' not in newlib['fulllist']: newlib['general']['fulllist'] = None
+                    if 'fulllist' not in newlib['general']: newlib['general']['fulllist'] = None
                     if not newlib['general'][f"fulllist"]: newlib['general'][f"fulllist"] = None
                     newlib['general'][f"fulllist"] = self.path_finder.get_file(newlib['general'][f"fulllist"],
                                                                                f"new_simlib_fulllist",
                                                                                'csv', [None, None])
                     st.code(f"Set Fulllist File: {newlib['general'][f'fulllist']}", language='shell', wrap_lines=True)
-                    # newlib['general'][f"fulllist"] = st.text_input(f'Set Station Fulllist File: ',
-                    #                                                value='',
-                    #                                                key=f"new_simlib_fulllist",
-                    #                                                on_change=sim_main_change,
-                    #                                                args=(f"fulllist", 'new_simlib_fulllist'),
-                    #                                                placeholder=f"Set your Simulation Fulllist file...")
+
                     newlib['general']['grid_res'] = ''
                     newlib['general']['syear'] = ''
                     newlib['general']['eyear'] = ''
                     newlib['general']['suffix'] = ''
                     newlib['general']['prefix'] = ''
-                if 'dir' not in newlib['general']: newlib['general']['dir'] = './data/'
-                if not newlib['general']['dir']: newlib['general']['dir'] = './data/'
+
+                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './data/'
+                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './data/'
                 try:
-                    newlib['general']['dir'] = self.path_finder.find_path(newlib['general']['dir'],
-                                                                          f"new_simlib_{newlib['Sim_casename']}_root_dir",
-                                                                          [None, None])
-                    st.code(f"Set Data Dictionary: {newlib['general']['dir']}", language='shell', wrap_lines=True)
+                    newlib['general']['root_dir'] = self.path_finder.find_path(newlib['general']['root_dir'],
+                                                                               f"new_simlib_{newlib['Sim_casename']}_root_dir",
+                                                                               [None, None])
+                    st.code(f"Set Data Dictionary: {newlib['general']['root_dir']}", language='shell', wrap_lines=True)
                 except PermissionError as e:
                     if e:
-                        newlib['general']['dir'] = '/'
+                        newlib['general']['root_dir'] = '/'
+
                 st.divider()
                 st.write(f'###### :orange[:point_down: If some item is differ to {newlib["Mod"]} variables, press to change]')
                 col1, col2 = st.columns((2, 1.2))
@@ -690,6 +516,7 @@ class make_simulation:
                                     newlib[var][info] = Mod_nml[var][info]
                         if var in newlib and var not in newlib['variables']:
                             del newlib[var]
+
                     import itertools
                     for variable in newlib['variables']:
                         with st.container(height=None, border=True):
@@ -747,6 +574,33 @@ class make_simulation:
         make_contain = st.container()
         st.button('Finish and back to select page', on_click=define_back, args=(make_contain, 'make_contain'),
                   help='Finish add and go back to select page')
+
+    def __check_path(self):
+        path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
+        folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
+
+        st.markdown(f"""
+        <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
+            Set Simulation file 👇
+        </div>""", unsafe_allow_html=True)
+        st.write(' ')
+        file = st.radio("Set Simulation file 👇",
+                        ["user"] + [f"user/{folder}" for folder in folders] + ['New folder'],
+                        key="sim_savefile", label_visibility='collapsed',
+                        horizontal=True)
+
+        if file == 'New folder':
+            col1, col2 = st.columns(2)
+            col1.write('##### :green[Simulation new file name]')
+            name = col1.text_input(f'Simulation file name: ', value='',
+                                   key=f"Sim_filename",
+                                   placeholder=f"Set your Simulation file...")
+            if name:
+                file = f"user/{name}"
+                os.makedirs(os.path.join(st.session_state.namelist_path, file), exist_ok=True)  # 创建目录（如果不存在）
+                return os.path.join(st.session_state.openbench_path, 'nml', file)
+        else:
+            return os.path.join(st.session_state.openbench_path, 'nml', file)
 
     def __step3_add_mode(self):
 
@@ -1122,7 +976,8 @@ class make_simulation:
                         f.write(line)
                     time.sleep(2)
 
-                self.sim_sources['def_Mod'][mod_lib["general"]["model"]] = path + f'/{mod_lib["general"]["model"]}.nml'
+                model_path = os.path.join(path, f'{mod_lib["general"]["model"]}.nml')
+                self.sim_sources['def_Mod'][mod_lib["general"]["model"]] = self.path_finder.check_rel_path(model_path)
                 with open('./GUI/Namelist_lib/Simulation_lib.nml', 'w') as f1:
                     lines = []
                     end_line = "/\n\n\n"
@@ -1160,7 +1015,7 @@ class make_simulation:
 
         """
 
-        with st.spinner('Making namelist... Please wait.'):
+        with (st.spinner('Making namelist... Please wait.')):
             with open(sim_save_path + f'/{newlib["Sim_casename"]}.nml', 'w') as f:
                 lines = []
                 end_line = "/\n\n\n"
@@ -1190,7 +1045,8 @@ class make_simulation:
                 self.sim_sources['general']['Case_lib']]
             if newlib["Sim_casename"] not in self.sim_sources['general']['Case_lib']:
                 self.sim_sources['general']['Case_lib'].append(newlib["Sim_casename"])
-            self.sim_sources['def_nml'][newlib["Sim_casename"]] = sim_save_path + f'/{newlib["Sim_casename"]}.nml'
+            case_path = os.path.join(sim_save_path, f'{newlib["Sim_casename"]}.nml')
+            self.sim_sources['def_nml'][newlib["Sim_casename"]] = self.path_finder.check_rel_path(case_path)
 
             with open('./GUI/Namelist_lib/Simulation_lib.nml', 'w') as f1:
                 lines = []
@@ -1226,7 +1082,7 @@ class make_simulation:
         model_key = "Sim_casename"
         timezone_key = "timezone"
         data_groupby_key = "data_groupby"
-        dir_key = "dir"
+        dir_key = "root_dir"
         tim_res_key = "tim_res"
 
         # 这之后的要区分检查--------------------------------
@@ -1238,7 +1094,7 @@ class make_simulation:
         syear_key = "syear"
         eyear_key = "eyear"
 
-        if len(newlib[model_key]) <= 1:
+        if len(newlib[model_key]) < 1:
             st.error(f'{model_key} should be a string longer than one, please check {model_key}.',
                      icon="⚠")
             check_state += 1
@@ -1259,9 +1115,9 @@ class make_simulation:
                 if (general[geo_res_key] == 0.0):
                     st.error(f"Geo Resolution should be larger than zero when data_type is 'geo', please check.", icon="⚠")
                     check_state += 1
-                elif (suffix_key in general) or (prefix_key in general):
+                elif (suffix_key in general) and (prefix_key in general):
                     if isinstance(general[suffix_key], str) | (isinstance(general[prefix_key], str)):
-                        if len(general[suffix_key]) == 0 & len(general[prefix_key]) == 0:
+                        if len(general[suffix_key]) == 0 and len(general[prefix_key]) == 0:
                             st.error(f'"suffix or prefix should be a string longer than one, please check.', icon="⚠")
                             check_state += 1
                 elif general[eyear_key] < general[syear_key]:
@@ -1382,6 +1238,7 @@ class make_simulation:
         if st.button('Remove cases', on_click=define_remove, help='Press to remove cases', disabled=disable):
             with remove_contain:
                 remove(cases)
+                sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
 
         st.divider()
 
@@ -1398,6 +1255,141 @@ class make_simulation:
 
         st.button('Finish and back to select page', on_click=define_back, args=(remove_contain, 'remove_contain'),
                   help='Finish add and go back to select page')
+
+
+class make_simulation(mange_simulation):
+    def __init__(self, initial):
+        self.author = "Qingchen Xu/xuqingchen23@163.com"
+        self.classification = initial.classification()
+
+        self.sim = initial.sim()
+        self.evaluation_items = st.session_state.evaluation_items
+        self.selected_items = [k for k, v in self.evaluation_items.items() if v]
+        self.tittles = [k.replace('_', ' ') for k, v in self.evaluation_items.items() if v]
+        self.initial = initial
+        self.nl = NamelistReader()
+        self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
+        self.Mod_variables_defination = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_defination')
+        self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
+        self.path_finder = FindPath()
+        self.base_path = Path(st.session_state.openbench_path)
+
+    def step3_set(self):
+
+        if 'sim_change' not in st.session_state:
+            st.session_state.sim_change = {'general': False}
+
+        st.subheader(f'Select your simulation cases', divider=True)
+
+        if 'add_mode' not in st.session_state:
+            st.session_state['add_mod'] = False
+
+        sim_general = self.sim['general']
+        if st.session_state.sim_data['general']:
+            sim_general = st.session_state.sim_data['general']
+
+        def sim_data_change(key, editor_key):
+            sim_general[key] = st.session_state[editor_key]
+            st.session_state.sim_change['general'] = True
+
+        for selected_item in self.selected_items:
+            item = f"{selected_item}_sim_source"
+            if item not in sim_general:
+                sim_general[item] = []
+            if isinstance(sim_general[item], str): sim_general[item] = [sim_general[item]]
+
+            label_text = f"<span style='font-size: 20px;'>{selected_item.replace('_', ' ')} simulation cases ....</span>"
+            st.markdown(f":blue[{label_text}]", unsafe_allow_html=True)
+            if len(self.sim_sources['general']['Case_lib']) == 0:
+                st.warning(
+                    f"Sorry we didn't offer simulation data, please upload!")
+
+            st.multiselect("simulation offered",
+                           [value for value in self.sim_sources['general']['Case_lib']],
+                           default=[value for value in sim_general[item] if value in self.sim_sources['general']['Case_lib']],
+                           key=f"{item}_multi",
+                           on_change=sim_data_change,
+                           args=(item, f"{item}_multi"),
+                           placeholder="Choose an option",
+                           label_visibility="collapsed")
+
+        st.session_state.step3_set_check = self.__step3_setcheck(sim_general)
+
+        sources = list(set([value for key in self.selected_items for value in sim_general[f"{key}_sim_source"] if value]))
+        st.session_state.sim_data['def_nml'] = {}
+        for source in sources:
+            st.session_state.sim_data['def_nml'][source] = self.sim_sources['def_nml'][source]
+            st.session_state.sim_change[source] = False
+
+        keys = st.session_state.sim_data.keys()
+        from difflib import ndiff
+        diff = list(ndiff(list(keys), sources))
+        for source in diff:
+            if source.startswith('- ') and source not in ['- general', '- def_nml']:
+                del st.session_state.sim_data[source.split(' ')[1]]
+
+        formatted_keys = " \n".join(
+            f'{key.replace("_", " ")}: {", ".join(value for value in sim_general[f"{key}_sim_source"] if value)}' for key in self.selected_items)
+        sourced_key = " \n".join(f"{source}: {self.sim_sources['def_nml'][source]}" for source in sources)
+        st.code(f'''{formatted_keys}\n\n{sourced_key}''', language="shell", line_numbers=True, wrap_lines=True)
+
+        #
+
+        col1, col, col3 = st.columns(3)
+
+        def define_new_simnml():
+            st.session_state.step3_make_newnamelist = True
+
+        col1.button('Add new simulation namelist', on_click=define_new_simnml)
+
+        def define_clear_cases():
+            st.session_state.step3_mange_cases = True
+
+        col3.button('Manage simulation cases', on_click=define_clear_cases)
+
+        st.session_state.sim_data['general'] = sim_general
+
+        st.divider()
+
+        def define_step1():
+            st.session_state.step3_set = False
+
+        def define_step2():
+            st.session_state.step3_make = True
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.button(':back: Previous step', on_click=define_step1, help='Go to Refernece page')
+        with col4:
+            st.button('Next step :soon: ', on_click=define_step2, help='Go to making page')
+
+    def __step3_setcheck(self, general_sim):
+        check_state = 0
+
+        for selected_item in self.selected_items:
+            key = f"{selected_item}_sim_source"
+            if general_sim[key] is None or len(general_sim[key]) == 0:
+                st.warning(f'Please set at least one case in {key.replace("_", " ")}!', icon="⚠")
+                check_state += 1
+            if selected_item not in st.session_state.step3_errorlist:
+                st.session_state.step3_errorlist[selected_item] = []
+
+            if check_state > 0:
+                st.session_state.step3_errorlist[selected_item].append(1)
+                st.session_state.step3_errorlist[selected_item] = list(
+                    np.unique(st.session_state.step3_errorlist[selected_item]))
+            if check_state == 0:
+                if (selected_item in st.session_state.step3_errorlist) & (
+                        1 in st.session_state.step3_errorlist[selected_item]):
+                    st.session_state.step3_errorlist[selected_item] = list(
+                        filter(lambda x: x != 1, st.session_state.step3_errorlist[selected_item]))
+                    st.session_state.step3_errorlist[selected_item] = list(
+                        np.unique(st.session_state.step3_errorlist[selected_item]))
+
+        if check_state > 0:
+            return False
+        if check_state == 0:
+            return True
 
     def step3_make(self):
         sim_general = st.session_state.sim_data['general']
@@ -1452,64 +1444,64 @@ class make_simulation:
         import itertools
         with st.container(height=None, border=True):
             key = 'general'
+            col1, col2, col3 = st.columns(3)
+            source_lib[key]['data_type'] = col1.selectbox(f'{i}. Set Data type: ',
+                                                          options=('stn', 'grid'),
+                                                          index=set_data_type(source_lib[key]['data_type']),
+                                                          placeholder=f"Set your Simulation Data type (default={source_lib[key]['data_type']})...")
+            source_lib[key]['tim_res'] = col2.selectbox(f'{i}. Set Time Resolution: ',
+                                                        options=('hour', 'day', 'month', 'year'),
+                                                        index=set_data_groupby(source_lib[key]['tim_res']),
+                                                        placeholder=f"Set your Simulation Time Resolution (default={source_lib[key]['tim_res']})...")
+            source_lib[key]['data_groupby'] = col3.selectbox(f'{i}. Set Data groupby: ',
+                                                             options=('hour', 'day', 'month', 'year', 'single'),
+                                                             index=set_data_groupby(source_lib[key]['data_groupby']),
+                                                             placeholder=f"Set your Simulation Data groupby (default={source_lib[key]['data_groupby']})...")
+
             cols = itertools.cycle(st.columns(3))
             for item in source_lib[key].keys():
-                if item not in ["model_namelist", "root_dir", "fulllist"]:
+                if item not in ["model_namelist", "root_dir", 'data_type', 'tim_res', 'data_groupby']:
                     col = next(cols)
-                    if item in ['prefix', 'suffix']:
-                        source_lib[key][item] = col.text_input(f'{i}. Set {item}: ',
-                                                               value=source_lib[key][item],
-                                                               key=f"{source}_{key}_{item}",
-                                                               on_change=sim_editor_change,
-                                                               args=(key, item, source),
-                                                               placeholder=f"Set your Simulation {item}...")
-                    elif item in ['timezone', 'grid_res']:
-                        source_lib[key][item] = col.number_input(f"{i}. Set {item}: ",
-                                                                 value=float(source_lib[key][item]),
-                                                                 key=f"{source}_{key}_{item}",
-                                                                 on_change=sim_editor_change,
-                                                                 args=(key, item, source),
-                                                                 placeholder=f"Set your Simulation {item}...")
-                    elif item in ['syear', 'eyear']:
-                        source_lib[key][item] = col.number_input(f"{i}. Set {item}:",
-                                                                 format='%04d', step=int(1),
-                                                                 value=source_lib[key][item],
-                                                                 key=f"{source}_{key}_{item}",
-                                                                 on_change=sim_editor_change,
-                                                                 args=(key, item, source),
-                                                                 placeholder=f"Set your Simulation {item}...")
-                    elif item == 'tim_res':
-                        source_lib[key][item] = col.selectbox(f'{i}. Set Time Resolution: ',
-                                                              options=('hour', 'day', 'month', 'year'),
-                                                              index=set_data_groupby(source_lib[key][item]),
-                                                              placeholder=f"Set your Simulation Time Resolution (default={source_lib[key][item]})...")
-                    elif item == 'data_groupby':
-                        source_lib[key][item] = col.selectbox(f'{i}. Set Data groupby: ',
-                                                              options=('hour', 'day', 'month', 'year', 'single'),
-                                                              index=set_data_groupby(source_lib[key][item]),
-                                                              placeholder=f"Set your Simulation Data groupby (default={source_lib[key][item]})...")
-                    elif item == 'data_type':
-                        source_lib[key][item] = col.selectbox(f'{i}. Set Data type: ',
-                                                              options=('stn', 'grid'),
-                                                              index=set_data_type(source_lib[key][item]),
-                                                              placeholder=f"Set your Simulation Data type (default={source_lib[key][item]})...")
+                    if source_lib[key]['data_type'] == 'stn':
+                        if item == 'fulllist':
+                            if "fulllist" not in source_lib[key]: source_lib[key][f"fulllist"] = None
+                            if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
+                            source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"], f"{source}_{key}_fulllist",
+                                                                                     'csv', ['sim_change', source])
+                            st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
+                        elif item in ['prefix', 'suffix', 'grid_res', 'syear', 'eyear']:
+                            source_lib[key][item] = ''
+                        elif item in ['timezone']:
+                            source_lib[key][item] = col.number_input(f"{i}. Set {item}: ",
+                                                                     value=float(source_lib[key][item]),
+                                                                     key=f"{source}_{key}_{item}",
+                                                                     on_change=sim_editor_change,
+                                                                     args=(key, item, source),
+                                                                     placeholder=f"Set your Simulation {item}...")
+                    else:
+                        if item in ['prefix', 'suffix']:
+                            source_lib[key][item] = col.text_input(f'{i}. Set {item}: ',
+                                                                   value=source_lib[key][item],
+                                                                   key=f"{source}_{key}_{item}",
+                                                                   on_change=sim_editor_change,
+                                                                   args=(key, item, source),
+                                                                   placeholder=f"Set your Simulation {item}...")
+
+                        elif item in ['syear', 'eyear']:
+                            source_lib[key][item] = col.number_input(f"{i}. Set {item}:",
+                                                                     format='%04d', step=int(1),
+                                                                     value=source_lib[key][item],
+                                                                     key=f"{source}_{key}_{item}",
+                                                                     on_change=sim_editor_change,
+                                                                     args=(key, item, source),
+                                                                     placeholder=f"Set your Simulation {item}...")
+
             if "root_dir" not in source_lib[key]: source_lib[key][f"root_dir"] = '/'
             if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = '/'
-            try:
-                source_lib[key][f"root_dir"] = self.path_finder.find_path(source_lib[key][f"root_dir"],
-                                                                          f"{source}_general_root_dir",
-                                                                          ['sim_change', source])
-                st.code(f"Set Data Dictionary: {source_lib[key][f'root_dir']}", language='shell', wrap_lines=True)
-            except PermissionError as e:
-                if e:
-                    source_lib[key][f"root_dir"] = '/'
-
-            if source_lib[key]['data_type'] == 'stn':
-                if "fulllist" not in source_lib[key]: source_lib[key][f"fulllist"] = None
-                if not source_lib[key][f"fulllist"]: source_lib[key][f"fulllist"] = None
-                source_lib[key][f"fulllist"] = self.path_finder.get_file(source_lib[key][f"fulllist"], f"{source}_{key}_fulllist",
-                                                                         'csv', ['sim_change', source])
-                st.code(f"Set Fulllist File: {source_lib[key][f'fulllist']}", language='shell', wrap_lines=True)
+            source_lib[key][f"root_dir"] = self.path_finder.find_path(source_lib[key][f"root_dir"],
+                                                                      f"{source}_general_root_dir",
+                                                                      ['sim_change', source])
+            st.code(f"Set Data Dictionary: {source_lib[key][f'root_dir']}", language='shell', wrap_lines=True)
 
             for key, values in source_lib.items():
                 if key != 'general' and key in self.selected_items:
@@ -1744,6 +1736,8 @@ class make_simulation:
                     lines.append("&def_nml\n")
                     max_key_length = max(len(key) for key in def_nml.keys())
                     for key, value in def_nml.items():
+                        if Path(value).is_relative_to(self.base_path):
+                            value = './' + os.path.relpath(value, self.base_path)
                         lines.append(f"    {key:<{max_key_length}} = {value}\n")
                     lines.append(end_line)
                     for line in lines:

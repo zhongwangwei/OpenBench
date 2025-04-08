@@ -10,6 +10,7 @@ import streamlit as st
 class FindPath():
     def __init__(self):
         self.author = "Qingchen Xu/xuqingchen0@gmail.com"
+        self.base_path = Path(st.session_state.openbench_path)
 
     def has_permission(self, path):
         return os.access(path, os.R_OK)  # 检查是否有读取权限
@@ -19,13 +20,18 @@ class FindPath():
             selected_dir = st.session_state[key]
             if selected_dir == '<- Back SPACE':  # 返回上一级
                 st.session_state['find_path'][key] = os.path.dirname(ipath)
-            else:  # 进入选择的子目录
+            else:
                 if self.has_permission(os.path.join(ipath, selected_dir)):
                     st.session_state['find_path'][key] = os.path.join(ipath, selected_dir)
             if change_list[0] is not None and change_list[1] is not None:
                 st.session_state[change_list[0]][change_list[1]] = True
 
-        subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+        try:
+            subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+        except:
+            path = os.path.abspath(path)
+            subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+
         with st.popover(f"Find Path", use_container_width=True):
             st.code(f"Current Path: {st.session_state['find_path'][key]}")
             options = (['<- Back SPACE'] if path != '/' else []) + sorted(subdirectories)
@@ -39,14 +45,15 @@ class FindPath():
                 label_visibility="collapsed"
             )
 
-    # @staticmethod
     def find_path(self, path: str, key: str, change_list: list):
+
         if 'find_path' not in st.session_state:
             st.session_state['find_path'] = {}
         if 'find_option' not in st.session_state:
             st.session_state['find_option'] = None
         if key not in st.session_state['find_path']:
             st.session_state['find_path'][key] = path
+
         if path is None:
             if platform.system() == 'Windows':
                 st.warning(f'Input path:{path} is not a directory. Reset path as "C:"'.format(path=path))
@@ -71,10 +78,10 @@ class FindPath():
                     st.session_state['find_path'][key] = '/'
 
         self.__update_path(st.session_state['find_path'][key], key, change_list)
-        return st.session_state['find_path'][key]
+        return self.check_rel_path(st.session_state['find_path'][key])
 
     def __update_sub_path(self, sub_path: str, sub_key: str, root_path: str, change_list: list):
-        def path_change(key, ipath, change_list,container):
+        def path_change(key, ipath, change_list, container):
             selected_dir = st.session_state[key]
             if selected_dir == '<- Back SPACE':  # 返回上一级
                 st.session_state['find_path'][key] = os.path.dirname(ipath)
@@ -104,7 +111,7 @@ class FindPath():
                 index=None,
                 key=sub_key,
                 on_change=path_change,
-                args=(sub_key, st.session_state['find_path'][sub_key], change_list,popover),
+                args=(sub_key, st.session_state['find_path'][sub_key], change_list, popover),
                 label_visibility="collapsed"
             )
 
@@ -136,7 +143,6 @@ class FindPath():
         else:
             st.warning('Please select sub-Dictionary!')
             return None
-            # return os.path.relpath(st.session_state['find_path'][sub_key], root_path)
 
     def __update_file(self, path: str, key: str, file_type: str, change_list):
         def path_change(key, ipath, change_list):
@@ -151,8 +157,13 @@ class FindPath():
             if change_list[0] is not None and change_list[1] is not None:
                 st.session_state[change_list[0]][change_list[1]] = True
 
-        subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
-        with st.popover(f"Find Path", use_container_width=True):
+        try:
+            subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+        except:
+            path = os.path.abspath(path)
+            subdirectories = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+
+        with st.popover(f"Find File", use_container_width=True):
             st.code(f"Current Path: {st.session_state['find_path'][key]}")
             col1, col2 = st.columns(2)
             options = (['<- Back SPACE'] if path != '/' else []) + sorted(subdirectories)
@@ -175,13 +186,13 @@ class FindPath():
                 else:
                     return None
 
-            if st.session_state['find_file'][key] is not None:
-                index = get_index(subdirfiles, st.session_state['find_file'][key])
-            else:
-                index = None
+            # if st.session_state['find_file'][key] is not None:
+            #     index = get_index(subdirfiles, st.session_state['find_file'][key])
+            # else:
+            #     index = None
 
             if subdirfiles:
-                ifile = col2.radio('file', sorted(subdirfiles), index=index, key=f'{key}_ifile', help=None,
+                ifile = col2.radio('file', sorted(subdirfiles), index=None, key=f'{key}_ifile', help=None,
                                    disabled=False, horizontal=False, captions=None, label_visibility="collapsed")
                 if ifile is not None:
                     st.session_state['find_file'][key] = ifile
@@ -231,6 +242,23 @@ class FindPath():
                 else:
                     st.warning(f'Input path: :red[{st.session_state["find_path"][key]}]is not a directory. Reset path as "/"')
                     st.session_state['find_path'][key] = '/'
+
         self.__update_file(st.session_state['find_path'][key], key, file_type, change_list)
         if st.session_state['find_file'][key] is not None:
-            return normpath(os.path.join(st.session_state['find_path'][key], st.session_state['find_file'][key]))
+            file = normpath(os.path.join(st.session_state['find_path'][key], st.session_state['find_file'][key]))
+            return self.check_rel_path(file)
+
+    def check_rel_path(self, path_str):
+        input_path = Path(path_str)
+        is_absolute = input_path.is_absolute()
+        if is_absolute:
+            try:
+                relative_path = str(input_path.relative_to(self.base_path))
+            except ValueError:
+                relative_path = str(Path(os.path.relpath(input_path, self.base_path)))
+        else:
+            relative_path = str(input_path)
+        if relative_path.startswith('./') or relative_path.startswith('../'):
+            return relative_path
+        else:
+            return './' + relative_path

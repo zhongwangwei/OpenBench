@@ -63,7 +63,7 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
     #ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
     output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
-                                    f'taylor_diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
+                                    f'Taylor_Diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
 

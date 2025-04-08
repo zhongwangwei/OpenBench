@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-import re 
+import re
+import logging
 def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
@@ -16,15 +17,14 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
-               print('Adjusting time values for monthly river data...')
+               logging.info('Adjusting time values for monthly river data...')
             ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=15)
       elif time_unit.lower() in ['y', 'year', '1y', '1year']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
          if info.debug_mode:
-            print('Adjusting time values for daily CoLM output...')
-         
-         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)     
+            logging.info('Adjusting time values for daily CoLM output...')
+         ds['time'] = pd.DatetimeIndex(ds['time'].values)# - pd.DateOffset(days=1)
 
             # Handle river-related variables for monthly data
          if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
@@ -33,13 +33,13 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
                          'maxdph', 'damsto', 'daminf', 'wevap', 'winfilt', 'levsto', 'levdph']:
             if info.debug_mode:
-               print('Adjusting time values for daily river data...')
+               logging.info('Adjusting time values for daily river data...')
             ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          pass
 
    else:
-      print('tim_res error')
+      logging.error('tim_res error')
       exit()
    return ds
 
@@ -56,7 +56,7 @@ def filter_CoLM(info,ds):   #update info as well
              ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0)) *
             (3600. * 24. * 365.)) / 100.
       except:
-         print("Missing variables:")
+         logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
               'f_cropprodc_rainfed_temp_corn', 'area_rainfed_temp_corn',
@@ -68,7 +68,7 @@ def filter_CoLM(info,ds):   #update info as well
             if var not in ds.variables:
                missing_vars.append(var)
          if missing_vars:
-            print(f"Missing variables: {', '.join(missing_vars)}")
+            logging.error(f"Missing variables: {', '.join(missing_vars)}")
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Corn'] =  ds['Crop_Yield_Corn'].assign_attrs(varunit='t ha-1')
@@ -85,7 +85,7 @@ def filter_CoLM(info,ds):   #update info as well
                                     (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn'].fillna(0)+ds['area_irrigated_temp_corn'].fillna(0)+ds['area_rainfed_trop_corn'].fillna(0)+
                                     ds['area_irrigated_trop_corn'].fillna(0))*(3600.*24.*365.))/100.
       except:
-         print("Missing variables:")
+         logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
               'f_cropprodc_rainfed_temp_corn', 'area_rainfed_temp_corn',
@@ -97,7 +97,7 @@ def filter_CoLM(info,ds):   #update info as well
             if var not in ds.variables:
                missing_vars.append(var)
          if missing_vars:
-            print(f"Missing variables: {', '.join(missing_vars)}")
+            logging.error(f"Missing variables: {', '.join(missing_vars)}")
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Maize'] =  ds['Crop_Yield_Maize'].assign_attrs(varunit='t ha-1')
@@ -115,7 +115,7 @@ def filter_CoLM(info,ds):   #update info as well
                                     (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_soybean'].fillna(0)+ds['area_irrigated_temp_soybean'].fillna(0)+ds['area_rainfed_trop_soybean'].fillna(0)+
                                     ds['area_irrigated_trop_soybean'].fillna(0))*(3600.*24.*365.))/100.
       except:
-         print("Missing variables:")
+         logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
               'f_cropprodc_rainfed_temp_soybean', 'area_rainfed_temp_soybean',
@@ -127,7 +127,7 @@ def filter_CoLM(info,ds):   #update info as well
             if var not in ds.variables:
                missing_vars.append(var)
          if missing_vars:
-            print(f"Missing variables: {', '.join(missing_vars)}")
+            logging.error(f"Missing variables: {', '.join(missing_vars)}")
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Soybean'] =  ds['Crop_Yield_Soybean'].assign_attrs(varunit='t ha-1')
@@ -141,7 +141,7 @@ def filter_CoLM(info,ds):   #update info as well
          ds['Crop_Yield_Rice']=(((ds['f_cropprodc_rainfed_rice']*ds['area_rainfed_rice'])+
                                     (ds['f_cropprodc_irrigated_rice']*ds['area_irrigated_rice']))*(10**6)*2.5*(10**(-6))/(ds['area_rainfed_rice']+ds['area_irrigated_rice'])*(3600.*24.*365.))/100.
       except:
-         print("Missing variables:")
+         logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
               'f_cropprodc_rainfed_rice', 'area_rainfed_rice',
@@ -151,7 +151,7 @@ def filter_CoLM(info,ds):   #update info as well
             if var not in ds.variables:
                missing_vars.append(var)
          if missing_vars:
-            print(f"Missing variables: {', '.join(missing_vars)}")
+            logging.error(f"Missing variables: {', '.join(missing_vars)}")
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Rice'] =  ds['Crop_Yield_Rice'].assign_attrs(varunit='t ha-1')
@@ -169,7 +169,7 @@ def filter_CoLM(info,ds):   #update info as well
                                     (10**6)*2.5*(10**(-6))/(ds['area_rainfed_spwheat'].fillna(0)+ds['area_irrigated_spwheat'].fillna(0)+
                                     ds['area_rainfed_wtwheat'].fillna(0)+ds['area_irrigated_wtwheat'].fillna(0))*(3600.*24.*365.))/100.
       except:
-         print("Missing variables:")
+         logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
               'f_cropprodc_rainfed_spwheat', 'area_rainfed_spwheat',
@@ -181,7 +181,7 @@ def filter_CoLM(info,ds):   #update info as well
             if var not in ds.variables:
                missing_vars.append(var)
          if missing_vars:
-            print(f"Missing variables: {', '.join(missing_vars)}")
+            logging.error(f"Missing variables: {', '.join(missing_vars)}")
             return info, None
           #add the unit t ha-1 to dsout
       ds['Crop_Yield_Wheat'] =  ds['Crop_Yield_Wheat'].assign_attrs(varunit='t ha-1')
@@ -196,7 +196,7 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varname=['Canopy_Interception']
          info.sim_varunit=' mm s-1'
       except:
-         print('canopy interception evaporation calculation processing ERROR!!!')
+         logging.error('canopy interception evaporation calculation processing ERROR!!!')
       return info, ds['Canopy_Interception']
 
    if info.item == "Precipitation":
@@ -209,7 +209,7 @@ def filter_CoLM(info,ds):   #update info as well
          else:
                ds['Precipitation']=ds['f_xy_rain']+ds['f_xy_snow']
       except Exception as e:
-         print(f"Surface Precipitation calculation processing ERROR: {e}")
+         logging.error(f"Surface Precipitation calculation processing ERROR: {e}")
          return info, None
       return info, ds['Precipitation']
       
@@ -220,7 +220,7 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varname=['Surface_Net_SW_Radiation']
          info.sim_varunit='W m-2'
       except:
-         print('Surface Net SW Radiation calculation processing ERROR!!!')
+         logging.error('Surface Net SW Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Net_SW_Radiation']
    
    if info.item == "Surface_Net_LW_Radiation":
@@ -229,7 +229,7 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varname=['Surface_Net_LW_Radiation']
          info.sim_varunit='W m-2'
       except:
-         print('Surface Net LW Radiation calculation processing ERROR!!!')
+         logging.error('Surface Net LW Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Net_LW_Radiation']
    
    if info.item == "Surface_Soil_Moisture":
@@ -246,7 +246,7 @@ def filter_CoLM(info,ds):   #update info as well
             info.sim_varunit = 'unitless'
 
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['f_wliq_soisno']
    
@@ -276,7 +276,7 @@ def filter_CoLM(info,ds):   #update info as well
             info.sim_varname = ['f_wliq_soisno']
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface soil moisture calculation processing ERROR: {e}")
+         logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['f_wliq_soisno']
    if info.item == "Albedo":
@@ -286,7 +286,7 @@ def filter_CoLM(info,ds):   #update info as well
             info.sim_varname = ['Albedo']
             info.sim_varunit = 'unitless'
       except Exception as e:
-         print(f"Surface Albedo calculation processing ERROR: {e}")
+         logging.error(f"Surface Albedo calculation processing ERROR: {e}")
          return info, None
       return info, ds['Albedo']
 
@@ -297,7 +297,7 @@ def filter_CoLM(info,ds):   #update info as well
             info.sim_varname = ['Surface_Wind_Speed']
             info.sim_varunit = 'm s-1 wind'
       except Exception as e:
-         print(f"Surface Wind Speed calculation processing ERROR: {e}")
+         logging.error(f"Surface Wind Speed calculation processing ERROR: {e}")
          return info, None
       return info, ds['Surface_Wind_Speed']
 
@@ -308,7 +308,7 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varname=['Urban_Anthropogenic_Heat_Flux']
          info.sim_varunit='W m-2'
       except Exception as e:
-         print(f"Urban Anthropogenic Heat Flux calculation processing ERROR: {e}")
+         logging.error(f"Urban Anthropogenic Heat Flux calculation processing ERROR: {e}")
          return info, None
       return info, ds['Urban_Anthropogenic_Heat_Flux']
 
@@ -327,6 +327,6 @@ def filter_CoLM(info,ds):   #update info as well
          info.sim_varname=['Terrestrial_Water_Storage_Change']
          info.sim_varunit='mm'
       except:
-         print('Terrestrial Water Storage Change calculation processing ERROR!!!')
+         logging.error('Terrestrial Water Storage Change calculation processing ERROR!!!')
          return info, None
       return info, ds['Terrestrial_Water_Storage_Change']
