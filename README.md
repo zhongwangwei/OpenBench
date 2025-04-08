@@ -70,11 +70,12 @@ The system generates various outputs including:
 - PhD student: Qingchen Xu  
 - MS student: Fan Bai
 - PhD student: Zixin Wei
+- Dr Wenzong Dong 
 
 
 ## Version
 
-Current Version: 0.1
+Current Version: 0.2
 Release Date: Sep 2024
 
 
