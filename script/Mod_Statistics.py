@@ -94,7 +94,41 @@ class statistics_calculate:
         """
         if isinstance(data, xr.Dataset):
             data = list(data.data_vars.values())[0]
-        return (data - data.mean(dim="time")) / data.std(dim="time")
+            
+        # Check if 'time' dimension exists
+        if 'time' not in data.dims:
+            raise ValueError("Input data must have a 'time' dimension")
+            
+        # Calculate mean and std with skipna=True for consistency with other methods
+        mean = data.mean(dim="time", skipna=True)
+        std = data.std(dim="time", skipna=True)
+        
+        # Handle zero or near-zero standard deviation to avoid division by zero
+        # Create a mask where std is too small (effectively zero)
+        std_mask = std < 1e-10
+        
+        # Calculate z-score, safely handling potential division by zero
+        # First do the calculation normally
+        z_score = (data - mean) / std
+        
+        # Then replace values where std is too small with NaN
+        if std_mask.any():
+            # Where std is effectively zero, set z-score to NaN
+            z_score = z_score.where(~std_mask)
+            
+        # Add appropriate metadata
+        if hasattr(data, 'name') and data.name is not None:
+            z_score.name = f"{data.name}_zscore"
+        else:
+            z_score.name = "zscore"
+            
+        # Copy attributes from original data and add z-score specific ones
+        z_score.attrs.update(data.attrs)
+        z_score.attrs['long_name'] = 'Z-score (standardized anomaly)'
+        z_score.attrs['description'] = 'Standardized anomaly: (data - mean) / standard deviation'
+        z_score.attrs['units'] = 'unitless'  # Z-scores are dimensionless
+        
+        return z_score
 
     def stat_mean(self, data):
         """
@@ -393,79 +427,190 @@ class statistics_calculate:
         Calculate uncertainty using the Three-Cornered Hat method.
 
         Args:
-            *variables: Variable number of xarray DataArrays to compare
+            *variables: Variable number of xarray DataArrays to compare.
+                       Requires at least 3 variables for the method to work.
 
         Returns:
             xarray.Dataset: Dataset containing uncertainty and relative uncertainty
         """
+        try:
+            from scipy import optimize
+            import gc
+        except ImportError as e:
+            logging.error(f"Required package not found: {e}")
+            raise ImportError(f"Required package not found: {e}")
+
+        # Check if we have enough variables
+        if len(variables) < 3:
+            raise ValueError("Three-Cornered Hat method requires at least 3 variables")
 
         def cal_uct(arr):
-            def my_fun(r):
+            """Calculate uncertainty using Three-Cornered Hat method for one grid point."""
+            try:
+                # Check if we have enough valid data
+                if np.isnan(arr).any() or arr.shape[0] < 3 or arr.shape[1] < 3:
+                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                
+                def my_fun(r):
+                    """Objective function for optimization."""
+                    try:
+                        S = np.cov(arr.T)
+                        f = np.sum(r[:-1] ** 2)
+                        for j in range(len(S)):
+                            for k in range(j + 1, len(S)):
+                                f += (S[j, k] - r[-1] + r[j] + r[k]) ** 2
+                        K = np.linalg.det(S)
+                        # Avoid division by zero or very small determinants
+                        if abs(K) < 1e-10:
+                            return np.inf
+                        F = f / (K ** (2 * len(S)))
+                        return F
+                    except Exception as e:
+                        logging.debug(f"Error in objective function: {e}")
+                        return np.inf
+
                 S = np.cov(arr.T)
-                f = np.sum(r[:-1] ** 2)
-                for j in range(len(S)):
-                    for k in range(j + 1, len(S)):
-                        f += (S[j, k] - r[-1] + r[j] + r[k]) ** 2
-                K = np.linalg.det(S)
-                F = f / (K ** (2 * len(S)))
-                return F
+                # Check if covariance matrix is valid
+                if np.isnan(S).any() or np.isinf(S).any():
+                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                
+                # Check if matrix is singular or nearly singular
+                if abs(np.linalg.det(S)) < 1e-10:
+                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                
+                N = arr.shape[1]
+                u = np.ones((1, N - 1))
+                R = np.zeros((N, N))
+                
+                try:
+                    R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, np.linalg.inv(S)), u.T))
+                except np.linalg.LinAlgError:
+                    # Matrix inversion failed
+                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                
+                x0 = R[:, N - 1]
+                det_S = np.linalg.det(S)
+                inv_S = np.linalg.inv(S)
+                Denominator = det_S ** (2 / len(S))
 
-            S = np.cov(arr.T)
-            N = arr.shape[1]
-            u = np.ones((1, N - 1))
-            R = np.zeros((N, N))
-            R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, np.linalg.inv(S)), u.T))
+                # Set up constraint
+                cons = {'type': 'ineq', 'fun': lambda r: (r[-1] - np.dot(
+                    np.dot(r[:-1] - r[-1] * u, inv_S),
+                    (r[:-1] - r[-1] * u).T)) / Denominator}
 
-            x0 = R[:, N - 1]
-            det_S = np.linalg.det(S)
-            inv_S = np.linalg.inv(S)
-            Denominator = det_S ** (2 / len(S))
+                # Perform optimization with error handling
+                try:
+                    x = optimize.minimize(my_fun, x0, method='COBYLA', tol=2e-10, constraints=cons)
+                    if not x.success:
+                        logging.debug(f"Optimization failed: {x.message}")
+                        return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                    
+                    R[:, N - 1] = x.x
+                    for i in range(N - 1):
+                        for j in range(i, N - 1):
+                            R[i, j] = S[i, j] - R[N - 1, N - 1] + R[i, N - 1] + R[j, N - 1]
+                    R += R.T - np.diag(R.diagonal())
+                    
+                    # Check if R has negative values on diagonal (invalid results)
+                    if np.any(np.diag(R) < 0):
+                        return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                    
+                    uct = np.sqrt(np.diag(R))
+                    
+                    # Safely calculate relative uncertainty
+                    mean_abs = np.mean(np.abs(arr), axis=0)
+                    # Avoid division by zero
+                    mean_abs = np.where(mean_abs < 1e-10, np.nan, mean_abs)
+                    r_uct = uct / mean_abs * 100
 
-            cons = {'type': 'ineq', 'fun': lambda r: (r[-1] - np.dot(
-                np.dot(r[:-1] - r[-1] * u, inv_S),
-                (r[:-1] - r[-1] * u).T)) / Denominator}
+                    return uct, r_uct
+                except Exception as e:
+                    logging.debug(f"Error in optimization: {e}")
+                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+            except Exception as e:
+                logging.debug(f"Error in cal_uct: {e}")
+                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
-            x = optimize.minimize(my_fun, x0, method='COBYLA', tol=2e-10, constraints=cons)
+        try:
+            # Combine all variables into a single array
+            combined_data = xr.concat(variables, dim='variable')
+            # Get dimensions for processing
+            lats = combined_data.lat.values
+            lons = combined_data.lon.values
+            
+            # Initialize output arrays with NaN values
+            uct = xr.full_like(combined_data, np.nan)
+            r_uct = xr.full_like(combined_data, np.nan)
+            
+            # Process in chunks to manage memory better
+            # Use joblib to parallelize if data is large enough
+            if len(lats) * len(lons) > 100:  # Arbitrary threshold for parallelization
+                from joblib import Parallel, delayed
+                
+                def process_chunk(lat_chunk):
+                    """Process a chunk of latitudes in parallel."""
+                    chunk_results = []
+                    for lat in lat_chunk:
+                        for lon in lons:
+                            arr = combined_data.sel(lat=lat, lon=lon).values.T
+                            if not np.isnan(arr).all():
+                                uct_values, r_uct_values = cal_uct(arr)
+                                chunk_results.append((lat, lon, uct_values, r_uct_values))
+                    return chunk_results
+                
+                # Split lats into chunks for parallel processing
+                n_jobs = min(os.cpu_count(), 8)  # Limit to avoid excessive memory use
+                chunk_size = max(1, len(lats) // (n_jobs * 2))
+                lat_chunks = [lats[i:i + chunk_size] for i in range(0, len(lats), chunk_size)]
+                
+                # Process chunks in parallel
+                all_results = Parallel(n_jobs=n_jobs)(
+                    delayed(process_chunk)(chunk) for chunk in lat_chunks
+                )
+                
+                # Combine results
+                for chunk_results in all_results:
+                    for lat, lon, uct_values, r_uct_values in chunk_results:
+                        uct.loc[dict(lat=lat, lon=lon)] = uct_values
+                        r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
+                
+                # Clean up
+                del all_results
+                gc.collect()
+            else:
+                # For smaller datasets, use simple loop
+                for lat in lats:
+                    for lon in lons:
+                        arr = combined_data.sel(lat=lat, lon=lon).values.T
+                        if not np.isnan(arr).all():
+                            uct_values, r_uct_values = cal_uct(arr)
+                            uct.loc[dict(lat=lat, lon=lon)] = uct_values
+                            r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
+                    # Periodically collect garbage to manage memory
+                    if lat % 10 == 0:
+                        gc.collect()
 
-            R[:, N - 1] = x.x
-            for i in range(N - 1):
-                for j in range(i, N - 1):
-                    R[i, j] = S[i, j] - R[N - 1, N - 1] + R[i, N - 1] + R[j, N - 1]
-            R += R.T - np.diag(R.diagonal())
+            # Create output dataset
+            ds = xr.Dataset({
+                'uncertainty': uct,
+                'relative_uncertainty': r_uct
+            })
 
-            uct = np.sqrt(np.diag(R))
-            r_uct = uct / np.mean(np.abs(arr), axis=0) * 100
+            # Add metadata
+            ds['uncertainty'].attrs['long_name'] = 'Uncertainty from Three-Cornered Hat method'
+            ds['uncertainty'].attrs['units'] = 'Same as input variables'
+            ds['uncertainty'].attrs['description'] = 'Absolute uncertainty estimated using the Three-Cornered Hat method'
+            ds['relative_uncertainty'].attrs['long_name'] = 'Relative uncertainty from Three-Cornered Hat method'
+            ds['relative_uncertainty'].attrs['units'] = '%'
+            ds['relative_uncertainty'].attrs['description'] = 'Relative uncertainty (%) estimated using the Three-Cornered Hat method'
+            ds.attrs['method'] = 'Three-Cornered Hat'
+            ds.attrs['n_datasets'] = len(variables)
 
-            return uct, r_uct
-
-        # Combine all variables into a single array
-        combined_data = xr.concat(variables, dim='variable')
-        # Prepare output arrays
-        uct = xr.zeros_like(combined_data)
-        r_uct = xr.zeros_like(combined_data)
-
-        # Calculate uncertainty for each lat-lon point
-        for lat in combined_data.lat:
-            for lon in combined_data.lon:
-                arr = combined_data.sel(lat=lat, lon=lon).values.T
-                if not np.isnan(arr).all():
-                    uct_values, r_uct_values = cal_uct(arr)
-                    uct.loc[dict(lat=lat, lon=lon)] = uct_values
-                    r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
-
-        # Create output dataset
-        ds = xr.Dataset({
-            'uncertainty': uct,
-            'relative_uncertainty': r_uct
-        })
-
-        # Add metadata
-        ds['uncertainty'].attrs['long_name'] = 'Uncertainty from Three-Cornered Hat method'
-        ds['uncertainty'].attrs['units'] = 'Same as input variables'
-        ds['relative_uncertainty'].attrs['long_name'] = 'Relative uncertainty from Three-Cornered Hat method'
-        ds['relative_uncertainty'].attrs['units'] = '%'
-
-        return ds
+            return ds
+            
+        finally:
+            # Clean up memory
+            gc.collect()
 
     def stat_partial_least_squares_regression(self, *variables):
         """
@@ -807,6 +952,7 @@ class statistics_calculate:
             logging.error(f"{e.name} is required for this function")
             raise ImportError(f"{e.name} is required for this function")
         from joblib import Parallel, delayed
+        import gc
 
         # Separate dependent and independent variables
         Y_vars = [var for var in variables if '_Y' in var.name]
@@ -825,122 +971,206 @@ class statistics_calculate:
         data_array = np.stack([combined_data[var].values for var in combined_data.data_vars if var != 'Y_data'], axis=-1)
         Y_data_array = combined_data['Y_data'].values
 
-        if analysis_type == 'twoway':
+        # Determine number of cores to use
+        num_cores = n_jobs if n_jobs > 0 else os.cpu_count()
+        # Limit cores to a reasonable number to avoid memory issues
+        num_cores = min(num_cores, os.cpu_count(), 8)
 
-            def normalize_data(data):
-                """Normalize data to [0, 1] range."""
-                return (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
+        try:
+            if analysis_type == 'twoway':
+                def normalize_data(data):
+                    """Normalize data to [0, 1] range."""
+                    min_val = np.nanmin(data)
+                    max_val = np.nanmax(data)
+                    if max_val == min_val:
+                        return np.zeros_like(data)
+                    return (data - min_val) / (max_val - min_val)
 
-            def OLS(data_slice, Y_data_slice):
-                """Perform OLS analysis on a single lat-lon point."""
-                if np.any(np.isnan(data_slice)) or np.any(np.isnan(Y_data_slice)) or \
-                        np.any(np.isinf(data_slice)) or np.any(np.isinf(Y_data_slice)) or \
-                        np.any(np.all(data_slice < 1e-10, axis=0)) or np.all(Y_data_slice < 1e-10):
-                    return np.full(16, np.nan), np.full(16, np.nan)
+                def OLS(data_slice, Y_data_slice):
+                    """Perform OLS analysis on a single lat-lon point."""
+                    # Check for invalid data
+                    if np.any(np.isnan(data_slice)) or np.any(np.isnan(Y_data_slice)) or \
+                            np.any(np.isinf(data_slice)) or np.any(np.isinf(Y_data_slice)) or \
+                            np.any(np.all(data_slice < 1e-10, axis=0)) or np.all(Y_data_slice < 1e-10) or \
+                            len(Y_data_slice) < data_slice.shape[1] + 2:  # Ensure enough samples for model
+                        return np.full(data_slice.shape[1] * 2, np.nan), np.full(data_slice.shape[1] * 2, np.nan)
 
-                # Normalize data
-                norm_data = np.apply_along_axis(normalize_data, 0, data_slice)
-                norm_Y_data = normalize_data(Y_data_slice)
+                    try:
+                        # Normalize data
+                        norm_data = np.apply_along_axis(normalize_data, 0, data_slice)
+                        norm_Y_data = normalize_data(Y_data_slice)
 
-                # Create DataFrame
-                df = pd.DataFrame(norm_data, columns=[f'var_{i}' for i in range(norm_data.shape[1])])
-                df['Y_data'] = norm_Y_data
+                        # Create DataFrame
+                        df = pd.DataFrame(norm_data, columns=[f'var_{i}' for i in range(norm_data.shape[1])])
+                        df['Y_data'] = norm_Y_data
 
-                # Construct formula dynamically
-                var_names = df.columns[:-1]
-                main_effects = '+'.join(var_names)
-                interactions = '+'.join(f'({a}:{b})' for i, a in enumerate(var_names) for b in var_names[i + 1:])
-                formula = f'Y_data ~ {main_effects}+{interactions}'
+                        # Construct formula with main effects only
+                        var_names = df.columns[:-1]
+                        main_effects = '+'.join(var_names)
+                        
+                        # Add limited interactions - only include first-order interactions
+                        # to avoid over-parameterization
+                        interactions = ""
+                        if len(var_names) > 1:
+                            interactions = "+" + '+'.join(f'({a}:{b})' 
+                                                         for i, a in enumerate(var_names) 
+                                                         for b in var_names[i + 1:])
+                        
+                        formula = f'Y_data ~ {main_effects}{interactions}'
 
-                # Perform OLS
-                model = smf.ols(formula, data=df).fit()
-                anova_results = sm.stats.anova_lm(model, typ=2)
+                        # Perform OLS
+                        model = smf.ols(formula, data=df).fit()
+                        anova_results = sm.stats.anova_lm(model, typ=2)
 
-                return anova_results['sum_sq'].values, anova_results['PR(>F)'].values
+                        return anova_results['sum_sq'].values, anova_results['PR(>F)'].values
+                    except Exception as e:
+                        logging.debug(f"Error in OLS analysis: {e}")
+                        n_factors = data_slice.shape[1] * 2
+                        return np.full(n_factors, np.nan), np.full(n_factors, np.nan)
 
-            # Parallel processing
-            num_cores = n_jobs if n_jobs > 0 else os.cpu_count()
+                # Parallel processing with chunking to conserve memory
+                chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
+                results = []
+                
+                for chunk_i in range(0, data_array.shape[-3], chunk_size):
+                    end_i = min(chunk_i + chunk_size, data_array.shape[-3])
+                    chunk_results = Parallel(n_jobs=num_cores)(
+                        delayed(OLS)(data_array[..., i, j, :], Y_data_array[..., i, j])
+                        for i in range(chunk_i, end_i)
+                        for j in range(data_array.shape[-2])
+                    )
+                    results.extend(chunk_results)
+                    # Force garbage collection
+                    gc.collect()
 
-            results = Parallel(n_jobs=num_cores)(
-                delayed(OLS)(data_array[..., i, j, :], Y_data_array[..., i, j])
-                for i in range(data_array.shape[-3])
-                for j in range(data_array.shape[-2])
-            )
+                # Process results
+                if not results:
+                    logging.error("No valid results from ANOVA analysis")
+                    raise ValueError("No valid results from ANOVA analysis")
+                
+                # Determine number of factors from first non-NaN result
+                valid_result = next((r for r in results if not np.all(np.isnan(r[0]))), None)
+                if valid_result is None:
+                    logging.error("All ANOVA results are NaN")
+                    raise ValueError("All ANOVA results are NaN")
+                    
+                n_factors = len(valid_result[0])
+                
+                # Reshape results
+                sum_sq = np.array([r[0] if len(r[0]) == n_factors else np.full(n_factors, np.nan) 
+                                 for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
+                p_values = np.array([r[1] if len(r[1]) == n_factors else np.full(n_factors, np.nan) 
+                                   for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
 
-            # Reshape results
-            n_factors = len(results[0][0])  # Number of factors in ANOVA
-            sum_sq = np.array([r[0] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
-            p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
+                # Create output dataset
+                output_ds = xr.Dataset(
+                    {
+                        'sum_sq': (['lat', 'lon', 'factors'], sum_sq),
+                        'p_value': (['lat', 'lon', 'factors'], p_values)
+                    },
+                    coords={
+                        'lat': combined_data.lat,
+                        'lon': combined_data.lon,
+                        'factors': np.arange(n_factors)
+                    }
+                )
 
-            # Create output dataset
-            output_ds = xr.Dataset(
-                {
-                    'sum_sq': (['lat', 'lon', 'factors'], sum_sq),
-                    'p_value': (['lat', 'lon', 'factors'], p_values)
-                },
-                coords={
-                    'lat': combined_data.lat,
-                    'lon': combined_data.lon,
-                    'factors': np.arange(n_factors)
-                }
-            )
+                # Add metadata
+                output_ds['sum_sq'].attrs['long_name'] = 'Sum of Squares from ANOVA'
+                output_ds['sum_sq'].attrs['description'] = 'Sum of squares for each factor in the ANOVA'
+                output_ds['p_value'].attrs['long_name'] = 'P-values from ANOVA'
+                output_ds['p_value'].attrs['description'] = 'P-values for each factor in the ANOVA'
+                output_ds.attrs['analysis_type'] = 'two-way ANOVA'
+                output_ds.attrs['n_factors'] = n_factors
 
-            # Add metadata
-            output_ds['sum_sq'].attrs['long_name'] = 'Sum of Squares from ANOVA'
-            output_ds['sum_sq'].attrs['description'] = 'Sum of squares for each factor in the ANOVA'
-            output_ds['p_value'].attrs['long_name'] = 'P-values from ANOVA'
-            output_ds['p_value'].attrs['description'] = 'P-values for each factor in the ANOVA'
-            output_ds.attrs['analysis_type'] = 'two-way ANOVA'  # Changed to 'two-way ANOVA'
-            output_ds.attrs['n_factors'] = n_factors
+            elif analysis_type == 'oneway':
+                def oneway_anova(data_slice, Y_data_slice):
+                    """Perform one-way ANOVA on a single lat-lon point."""
+                    if np.any(np.isnan(data_slice)) or np.any(np.isnan(Y_data_slice)) or \
+                            np.any(np.isinf(data_slice)) or np.any(np.isinf(Y_data_slice)) or \
+                            np.any(np.all(data_slice < 1e-10, axis=0)) or np.all(Y_data_slice < 1e-10):
+                        return np.nan, np.nan
 
-        elif analysis_type == 'oneway':
-            def oneway_anova(data_slice, Y_data_slice):
-                """Perform one-way ANOVA on a single lat-lon point."""
-                if np.any(np.isnan(data_slice)) or np.any(np.isnan(Y_data_slice)) or \
-                        np.any(np.isinf(data_slice)) or np.any(np.isinf(Y_data_slice)) or \
-                        np.any(np.all(data_slice < 1e-10, axis=0)) or np.all(Y_data_slice < 1e-10):
-                    return np.nan, np.nan
+                    try:
+                        # More robust grouping approach - discretize continuous variables
+                        groups = []
+                        for i in range(data_slice.shape[1]):
+                            # Use quartiles to discretize the data
+                            x = data_slice[:, i]
+                            x_valid = x[~np.isnan(x)]
+                            if len(x_valid) < 4:  # Not enough data for quartiles
+                                continue
+                                
+                            # Calculate quartiles
+                            q1, q2, q3 = np.percentile(x_valid, [25, 50, 75])
+                            
+                            # Group by quartiles
+                            g1 = Y_data_slice[(x <= q1) & ~np.isnan(Y_data_slice)]
+                            g2 = Y_data_slice[(x > q1) & (x <= q2) & ~np.isnan(Y_data_slice)]
+                            g3 = Y_data_slice[(x > q2) & (x <= q3) & ~np.isnan(Y_data_slice)]
+                            g4 = Y_data_slice[(x > q3) & ~np.isnan(Y_data_slice)]
+                            
+                            # Add non-empty groups
+                            for g in [g1, g2, g3, g4]:
+                                if len(g) >= 2:  # Need at least 2 samples
+                                    groups.append(g)
+                        
+                        if len(groups) < 2:  # Need at least 2 groups for ANOVA
+                            return np.nan, np.nan
+                            
+                        # Perform one-way ANOVA
+                        f_statistic, p_value = f_oneway(*groups)
+                        return f_statistic, p_value
+                    except Exception as e:
+                        logging.debug(f"Error in one-way ANOVA: {e}")
+                        return np.nan, np.nan
 
-                # Group Y_data values based on unique values in each independent variable
-                groups = [Y_data_slice[data_slice[:, i] == val] for i in range(data_slice.shape[1]) for val in
-                          np.unique(data_slice[:, i])]
+                # Parallel processing with chunking to conserve memory
+                chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
+                results = []
+                
+                for chunk_i in range(0, data_array.shape[-3], chunk_size):
+                    end_i = min(chunk_i + chunk_size, data_array.shape[-3])
+                    chunk_results = Parallel(n_jobs=num_cores)(
+                        delayed(oneway_anova)(data_array[..., i, j, :], Y_data_array[..., i, j])
+                        for i in range(chunk_i, end_i)
+                        for j in range(data_array.shape[-2])
+                    )
+                    results.extend(chunk_results)
+                    # Force garbage collection
+                    gc.collect()
 
-                # Perform one-way ANOVA
-                f_statistic, p_value = f_oneway(*groups)
+                # Reshape results
+                f_statistics = np.array([r[0] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
+                p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
 
-                return f_statistic, p_value
+                # Create output dataset
+                output_ds = xr.Dataset(
+                    {
+                        'F_statistic': (['lat', 'lon'], f_statistics),
+                        'p_value': (['lat', 'lon'], p_values)
+                    },
+                    coords={
+                        'lat': combined_data.lat,
+                        'lon': combined_data.lon,
+                    }
+                )
 
-            # Parallel processing
-            num_cores = n_jobs if n_jobs > 0 else os.cpu_count()
-
-            results = Parallel(n_jobs=num_cores)(
-                delayed(oneway_anova)(data_array[..., i, j, :], Y_data_array)
-                for i in range(data_array.shape[-3])
-                for j in range(data_array.shape[-2])
-            )
-
-            # Reshape results
-            f_statistics = np.array([r[0] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
-            p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
-
-            # Create output dataset
-            output_ds = xr.Dataset(
-                {
-                    'F_statistic': (['lat', 'lon'], f_statistics),
-                    'p_value': (['lat', 'lon'], p_values)
-                },
-                coords={
-                    'lat': combined_data.lat,
-                    'lon': combined_data.lon,
-                }
-            )
-
-            # Add metadata
-            output_ds['F_statistic'].attrs['long_name'] = 'F-statistic from one-way ANOVA'
-            output_ds['F_statistic'].attrs['description'] = 'F-statistic for the one-way ANOVA'
-            output_ds['p_value'].attrs['long_name'] = 'P-values from one-way ANOVA'
-
-        return output_ds
+                # Add metadata
+                output_ds['F_statistic'].attrs['long_name'] = 'F-statistic from one-way ANOVA'
+                output_ds['F_statistic'].attrs['description'] = 'F-statistic for the one-way ANOVA'
+                output_ds['p_value'].attrs['long_name'] = 'P-values from one-way ANOVA'
+                output_ds['p_value'].attrs['description'] = 'P-values for the one-way ANOVA'
+                output_ds.attrs['analysis_type'] = 'one-way ANOVA'
+            
+            return output_ds
+            
+        finally:
+            # Clean up memory
+            del data_array
+            del Y_data_array
+            del results
+            gc.collect()
 
     def save_result(self, method_name: str, result, data_sources: List[str]) -> xr.Dataset:
         # Remove the existing output directory
