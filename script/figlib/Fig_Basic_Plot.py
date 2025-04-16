@@ -764,7 +764,7 @@ def get_index(vmin, vmax, colormap):
 
     return cmap, mticks, norm, bnd
 
-def make_Basic(output_dir, method_name, data_sources, main_nml,
+def make_Basic(file, method_name, data_sources, main_nml,
                                  option):
     import numpy as np
     import xarray as xr
@@ -773,11 +773,11 @@ def make_Basic(output_dir, method_name, data_sources, main_nml,
     from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
     from matplotlib import rcParams
-    filename_parts = [method_name] + data_sources
-    filename = "_".join(filename_parts) + "_output"
-    file = os.path.join(output_dir, f"{method_name}", filename)
+    # filename_parts = [method_name] + data_sources
+    # filename = "_".join(filename_parts) + "_output"
+    # file = os.path.join(output_dir, f"{method_name}", filename)
 
-    ds = xr.open_dataset(f"{file}.nc")
+    ds = xr.open_dataset(file)
     ds = Convert_Type.convert_nc(ds)
     data = ds[method_name]
     ilat = ds.lat.values

@@ -29,7 +29,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.general_config = self.main_nml['general']
         # update self based on self.general_config
         self.__dict__.update(self.general_config)
-
+        self.compare_nml = {}
         # Add default weight attribute
         self.weight = self.main_nml['general'].get('weight', 'none')  # Default to 'none' if not specified
 
@@ -2508,6 +2508,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
+        self.compare_nml['Mann_Kendall_Trend_Test'] = {}
+        self.compare_nml['Mann_Kendall_Trend_Test']['significance_level'] = option['significance_level']
         for evaluation_item in evaluation_items:
             # Get simulation sources
             sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
@@ -2531,7 +2533,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                            f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'))[
                             f'{sim_varname}']
                         sim = Convert_Type.convert_nc(sim)
-                        result = method_function(*[sim], option['significance_level'])
+
+                        result = method_function(*[sim])
                         output_file = os.path.join(dir_path,
                                                    f'Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
                         self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
@@ -2547,7 +2550,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                         ref = xr.open_dataset(ref_path)[f'{ref_varname}']
                         ref = Convert_Type.convert_nc(ref)
-                        result = method_function(*[ref], option['significance_level'])
+                        result = method_function(*[ref])
                         output_file = os.path.join(dir_path,
                                                    f'Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                         self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
@@ -2628,6 +2631,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             gc.collect()
 
     def scenarios_Functional_Response_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        self.compare_nml['Functional_Response'] = {}
+        self.compare_nml['Functional_Response']['nbins'] = option['nbins']
         try:
             method_name = 'Functional_Response'
             method_function = getattr(self, f"stat_{method_name.lower()}", None)
@@ -2669,7 +2674,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         sim = xr.open_dataset(sim_path)[sim_varname]
                                         sim = Convert_Type.convert_nc(sim)
 
-                                        result = method_function(*[ref, sim], option['nbins'])
+
+                                        result = method_function(*[ref, sim])
 
                                         output_file = os.path.join(dir_path,
                                                                    f'{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc')
