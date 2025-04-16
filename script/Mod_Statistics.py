@@ -21,6 +21,7 @@ from regrid.regrid_wgs84 import convert_to_wgs84_scipy, convert_to_wgs84_xesmf
 from figlib import *
 from Mod_DatasetProcessing import BaseDatasetProcessing
 from Mod_Converttype import Convert_Type
+
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
@@ -63,7 +64,7 @@ class statistics_calculate:
             data2 = list(data2.data_vars.values())[0]
 
         if isinstance(data1, xr.DataArray) and isinstance(data2, xr.DataArray):
-            return xr.corr(data1, data2, dim="time").to_dataset(name=f"correlation")
+            return xr.corr(data1, data2, dim="time").to_dataset(name=f"Correlation")
         else:
             logging.error("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
             raise TypeError("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
@@ -94,40 +95,40 @@ class statistics_calculate:
         """
         if isinstance(data, xr.Dataset):
             data = list(data.data_vars.values())[0]
-            
+
         # Check if 'time' dimension exists
         if 'time' not in data.dims:
             raise ValueError("Input data must have a 'time' dimension")
-            
+
         # Calculate mean and std with skipna=True for consistency with other methods
         mean = data.mean(dim="time", skipna=True)
         std = data.std(dim="time", skipna=True)
-        
+
         # Handle zero or near-zero standard deviation to avoid division by zero
         # Create a mask where std is too small (effectively zero)
         std_mask = std < 1e-10
-        
+
         # Calculate z-score, safely handling potential division by zero
         # First do the calculation normally
         z_score = (data - mean) / std
-        
+
         # Then replace values where std is too small with NaN
         if std_mask.any():
             # Where std is effectively zero, set z-score to NaN
             z_score = z_score.where(~std_mask)
-            
+
         # Add appropriate metadata
         if hasattr(data, 'name') and data.name is not None:
             z_score.name = f"{data.name}_zscore"
         else:
             z_score.name = "zscore"
-            
+
         # Copy attributes from original data and add z-score specific ones
         z_score.attrs.update(data.attrs)
         z_score.attrs['long_name'] = 'Z-score (standardized anomaly)'
         z_score.attrs['description'] = 'Standardized anomaly: (data - mean) / standard deviation'
         z_score.attrs['units'] = 'unitless'  # Z-scores are dimensionless
-        
+
         return z_score
 
     def stat_mean(self, data):
@@ -266,7 +267,7 @@ class statistics_calculate:
         return data.rolling(time=window)
 
     # Advanced statistical methods
-    def stat_functional_response(self, v, u, nbins):
+    def stat_functional_response(self, v, u):
         """
         Calculate the functional response score for each grid point along the time dimension.
 
@@ -286,7 +287,10 @@ class statistics_calculate:
         if isinstance(u, xr.Dataset):
             u = list(u.data_vars.values())[0]
 
-        # nbins = self.stats_nml['Functional_Response']['nbins']
+        try:
+            nbins = self.stats_nml['Functional_Response']['nbins']
+        except:
+            nbins = self.compare_nml['Functional_Response']['nbins']
 
         def calc_functional_response(v_series, u_series):
             # Remove NaN values
@@ -298,6 +302,9 @@ class statistics_calculate:
                 return np.nan
 
             # Create bins
+            if u_valid.min() == u_valid.max():
+                return np.nan
+
             u_bins = np.linspace(u_valid.min(), u_valid.max(), nbins + 1)
 
             # Calculate mean v for each bin
@@ -450,7 +457,7 @@ class statistics_calculate:
                 # Check if we have enough valid data
                 if np.isnan(arr).any() or arr.shape[0] < 3 or arr.shape[1] < 3:
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                
+
                 def my_fun(r):
                     """Objective function for optimization."""
                     try:
@@ -473,21 +480,21 @@ class statistics_calculate:
                 # Check if covariance matrix is valid
                 if np.isnan(S).any() or np.isinf(S).any():
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                
+
                 # Check if matrix is singular or nearly singular
                 if abs(np.linalg.det(S)) < 1e-10:
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                
+
                 N = arr.shape[1]
                 u = np.ones((1, N - 1))
                 R = np.zeros((N, N))
-                
+
                 try:
                     R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, np.linalg.inv(S)), u.T))
                 except np.linalg.LinAlgError:
                     # Matrix inversion failed
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                
+
                 x0 = R[:, N - 1]
                 det_S = np.linalg.det(S)
                 inv_S = np.linalg.inv(S)
@@ -504,19 +511,19 @@ class statistics_calculate:
                     if not x.success:
                         logging.debug(f"Optimization failed: {x.message}")
                         return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                    
+
                     R[:, N - 1] = x.x
                     for i in range(N - 1):
                         for j in range(i, N - 1):
                             R[i, j] = S[i, j] - R[N - 1, N - 1] + R[i, N - 1] + R[j, N - 1]
                     R += R.T - np.diag(R.diagonal())
-                    
+
                     # Check if R has negative values on diagonal (invalid results)
                     if np.any(np.diag(R) < 0):
                         return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-                    
+
                     uct = np.sqrt(np.diag(R))
-                    
+
                     # Safely calculate relative uncertainty
                     mean_abs = np.mean(np.abs(arr), axis=0)
                     # Avoid division by zero
@@ -537,43 +544,43 @@ class statistics_calculate:
             # Get dimensions for processing
             lats = combined_data.lat.values
             lons = combined_data.lon.values
-            
+
             # Initialize output arrays with NaN values
             uct = xr.full_like(combined_data, np.nan)
             r_uct = xr.full_like(combined_data, np.nan)
-            
+
             # Process in chunks to manage memory better
             # Use joblib to parallelize if data is large enough
             if len(lats) * len(lons) > 100:  # Arbitrary threshold for parallelization
                 from joblib import Parallel, delayed
-                
+
                 def process_chunk(lat_chunk):
                     """Process a chunk of latitudes in parallel."""
                     chunk_results = []
                     for lat in lat_chunk:
                         for lon in lons:
-                            arr = combined_data.sel(lat=lat, lon=lon).values.T
+                            arr = combined_data.sel(lat=lat, lon=lon).values#.T
                             if not np.isnan(arr).all():
                                 uct_values, r_uct_values = cal_uct(arr)
                                 chunk_results.append((lat, lon, uct_values, r_uct_values))
                     return chunk_results
-                
+
                 # Split lats into chunks for parallel processing
                 n_jobs = min(os.cpu_count(), 8)  # Limit to avoid excessive memory use
                 chunk_size = max(1, len(lats) // (n_jobs * 2))
                 lat_chunks = [lats[i:i + chunk_size] for i in range(0, len(lats), chunk_size)]
-                
+
                 # Process chunks in parallel
                 all_results = Parallel(n_jobs=n_jobs)(
                     delayed(process_chunk)(chunk) for chunk in lat_chunks
                 )
-                
+
                 # Combine results
                 for chunk_results in all_results:
                     for lat, lon, uct_values, r_uct_values in chunk_results:
                         uct.loc[dict(lat=lat, lon=lon)] = uct_values
                         r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
-                
+
                 # Clean up
                 del all_results
                 gc.collect()
@@ -607,7 +614,7 @@ class statistics_calculate:
             ds.attrs['n_datasets'] = len(variables)
 
             return ds
-            
+
         finally:
             # Clean up memory
             gc.collect()
@@ -634,28 +641,26 @@ class statistics_calculate:
         from scipy.stats import t
 
         # Prepare Dependent and Independent data
-        # Separate Y and X variables
-        # if isinstance(v, xr.Dataset):
-        #     v = list(v.data_vars.values())[0]
-        # if isinstance(u, xr.Dataset):
-        #     u = list(u.data_vars.values())[0]
-
         max_components = self.stats_nml['Partial_Least_Squares_Regression']['max_components']
         n_splits = self.stats_nml['Partial_Least_Squares_Regression']['n_splits']
         n_jobs = self.stats_nml['Partial_Least_Squares_Regression']['n_jobs']
 
         Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
         X_vars = list(variables[1:])  # [var for var in variables if '_Y' not in var.name]
-        # if not Y_vars:
-        #     raise ValueError("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
+
+        def extract_xarray_data(data):
+            """统一提取 xarray.Dataset 或 xarray.DataArray 的数据"""
+            if isinstance(data, xr.Dataset):
+                return data.to_array().squeeze("variable").values  # Dataset → 转多变量DataArray再取值
+            elif isinstance(data, xr.DataArray):
+                return data.values  # DataArray → 直接取值
+            else:
+                raise TypeError(f"Unsupported type: {type(data)}. Expected xarray.Dataset or xarray.DataArray")
 
         # Prepare data
-
-        Y_data = Y_vars.values
-        X_data = np.concatenate([x.values[np.newaxis] for x in X_vars], axis=0)
+        Y_data = extract_xarray_data(Y_vars)
+        X_data = np.concatenate([extract_xarray_data(x)[np.newaxis, ...] for x in X_vars], axis=0)
         X_data = np.moveaxis(X_data, 0, 1)  # Reshape to (time, n_variables, lat, lon)
-        # print(X_data.shape)
-
         # Standardize data
         X_mean = np.mean(X_data, axis=0)
         X_std = np.std(X_data, axis=0)
@@ -759,7 +764,7 @@ class statistics_calculate:
 
         return ds
 
-    def stat_mann_kendall_trend_test(self, data, significance_level):
+    def stat_mann_kendall_trend_test(self, data):
         """
         Calculates the Mann-Kendall trend test for a time series using scipy's kendalltau.
 
@@ -769,11 +774,16 @@ class statistics_calculate:
         Returns:
             xarray.Dataset: Dataset containing trend test results for each variable and grid point.
         """
+        try:
+            significance_level = self.stats_nml['Mann_Kendall_Trend_Test']['significance_level']
+        except:
+            significance_level = self.compare_nml['Mann_Kendall_Trend_Test']['significance_level']
 
         def _apply_mann_kendall(da, significance_level):
             """
             Applies Mann-Kendall test to a single DataArray using kendalltau.
             """
+
             def mk_test(x):
                 if len(x) < 4 or np.all(np.isnan(x)):
                     return np.array([np.nan, np.nan, np.nan, np.nan])
@@ -812,28 +822,54 @@ class statistics_calculate:
                 p_value = result.isel(mk_params=2)
                 tau = result.isel(mk_params=3)
 
+                # Create a new Dataset with separate variables
+                ds = xr.Dataset({
+                    'trend': trend,
+                    'significance': significance,
+                    'p_value': p_value,
+                    'tau': tau
+                })
+
+                # Add attributes
+                ds.trend.attrs['long_name'] = 'Mann-Kendall trend'
+                ds.trend.attrs['description'] = 'Trend direction: 1 (increasing), -1 (decreasing), 0 (no trend)'
+                ds.significance.attrs['long_name'] = 'Trend significance'
+                ds.significance.attrs['description'] = f'True if trend is significant at {significance_level} level, False otherwise'
+                ds.p_value.attrs['long_name'] = 'p-value'
+                ds.p_value.attrs['description'] = 'p-value of the Mann-Kendall trend test'
+                ds.tau.attrs['long_name'] = "Kendall's tau statistic"
+                ds.tau.attrs['description'] = "Kendall's tau correlation coefficient"
+
+                ds.attrs['statistical_test'] = 'Mann-Kendall trend test (using Kendall\'s tau)'
+                ds.attrs['significance_level'] = significance_level
+
                 # Clean up intermediate result
                 del result
                 gc.collect()
 
-                return trend, significance, p_value, tau
+                return ds
             finally:
                 # Ensure cleanup of any remaining objects
                 gc.collect()
 
         try:
             # Process the data with proper memory management
-            trend, significance, p_value, tau = _apply_mann_kendall(data, significance_level)
-            
-            # Create the output dataset
-            ds = xr.Dataset({
-                'trend': trend,
-                'significance': significance,
-                'p_value': p_value,
-                'tau': tau
-            })
-            
-            return ds
+            if isinstance(data, xr.Dataset):
+                # If it's a dataset, apply the test to each data variable
+                results = []
+                for var in data.data_vars:
+                    result = _apply_mann_kendall(data[var], significance_level)
+                    result = result.assign_coords(variable=var)
+                    results.append(result)
+                # Save the result
+                return xr.concat(results, dim='variable')
+            elif isinstance(data, xr.DataArray):
+                # If it's a DataArray, apply the test directly
+                return _apply_mann_kendall(data, significance_level)
+            else:
+                logging.error("Input must be an xarray Dataset or DataArray")
+                raise TypeError("Input must be an xarray Dataset or DataArray")
+
         finally:
             # Clean up any remaining objects
             gc.collect()
@@ -923,7 +959,7 @@ class statistics_calculate:
 
         return ds
 
-    def stat_ANOVA(self, *variables, n_jobs=-1, analysis_type='twoway'):
+    def stat_anova(self, *variables):
         """
         Perform statistical analysis (one-way ANOVA or two-way ANOVA) on multiple variables,
         automatically identifying the dependent variable.
@@ -937,6 +973,10 @@ class statistics_calculate:
            xarray.Dataset: Dataset containing results of the analysis (F-statistic and p-values for one-way ANOVA,
                           sum of squares and p-values for two-way ANOVA)
         """
+        # , n_jobs = -1, analysis_type = 'twoway'
+        n_jobs = self.stats_nml['ANOVA']['n_jobs']
+        analysis_type = self.stats_nml['ANOVA']['analysis_type']
+
         try:
             if analysis_type == 'twoway':
                 import statsmodels.formula.api as smf
@@ -955,17 +995,27 @@ class statistics_calculate:
         import gc
 
         # Separate dependent and independent variables
-        Y_vars = [var for var in variables if '_Y' in var.name]
-        X_vars = [var for var in variables if '_Y' not in var.name]
+        Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
+        X_vars = variables[1:]  # [var for var in variables if '_Y' not in var.name]
 
         if len(Y_vars) != 1:
             logging.error("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
             raise ValueError("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
 
-        Y_data = Y_vars[0]
+        def extract_xarray_data(data):
+            """统一提取 xarray.Dataset 或 xarray.DataArray 的数据"""
+            if isinstance(data, xr.Dataset):
+                varname = next(iter(data.data_vars))
+                return data[varname]  # Dataset → 转多变量DataArray再取值
+            elif isinstance(data, xr.DataArray):
+                return data  # DataArray → 直接取值
+            else:
+                raise TypeError(f"Unsupported type: {type(data)}. Expected xarray.Dataset or xarray.DataArray")
+                # If it's a dataset, apply the test to each data variable
 
+        Y_data = extract_xarray_data(Y_vars)
         # Align and combine datasets
-        combined_data = xr.merge([Y_data.rename('Y_data')] + [var.rename(f'var_{i}') for i, var in enumerate(X_vars)])
+        combined_data = xr.merge([Y_data.rename('Y_data')] + [extract_xarray_data(var).rename(f'var_{i}') for i, var in enumerate(X_vars)])
 
         # Prepare data for analysis
         data_array = np.stack([combined_data[var].values for var in combined_data.data_vars if var != 'Y_data'], axis=-1)
@@ -1007,15 +1057,15 @@ class statistics_calculate:
                         # Construct formula with main effects only
                         var_names = df.columns[:-1]
                         main_effects = '+'.join(var_names)
-                        
+
                         # Add limited interactions - only include first-order interactions
                         # to avoid over-parameterization
                         interactions = ""
                         if len(var_names) > 1:
-                            interactions = "+" + '+'.join(f'({a}:{b})' 
-                                                         for i, a in enumerate(var_names) 
-                                                         for b in var_names[i + 1:])
-                        
+                            interactions = "+" + '+'.join(f'({a}:{b})'
+                                                          for i, a in enumerate(var_names)
+                                                          for b in var_names[i + 1:])
+
                         formula = f'Y_data ~ {main_effects}{interactions}'
 
                         # Perform OLS
@@ -1031,7 +1081,7 @@ class statistics_calculate:
                 # Parallel processing with chunking to conserve memory
                 chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
                 results = []
-                
+
                 for chunk_i in range(0, data_array.shape[-3], chunk_size):
                     end_i = min(chunk_i + chunk_size, data_array.shape[-3])
                     chunk_results = Parallel(n_jobs=num_cores)(
@@ -1047,20 +1097,20 @@ class statistics_calculate:
                 if not results:
                     logging.error("No valid results from ANOVA analysis")
                     raise ValueError("No valid results from ANOVA analysis")
-                
+
                 # Determine number of factors from first non-NaN result
                 valid_result = next((r for r in results if not np.all(np.isnan(r[0]))), None)
                 if valid_result is None:
                     logging.error("All ANOVA results are NaN")
                     raise ValueError("All ANOVA results are NaN")
-                    
+
                 n_factors = len(valid_result[0])
-                
+
                 # Reshape results
-                sum_sq = np.array([r[0] if len(r[0]) == n_factors else np.full(n_factors, np.nan) 
-                                 for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
-                p_values = np.array([r[1] if len(r[1]) == n_factors else np.full(n_factors, np.nan) 
+                sum_sq = np.array([r[0] if len(r[0]) == n_factors else np.full(n_factors, np.nan)
                                    for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
+                p_values = np.array([r[1] if len(r[1]) == n_factors else np.full(n_factors, np.nan)
+                                     for r in results]).reshape(data_array.shape[-3], data_array.shape[-2], -1)
 
                 # Create output dataset
                 output_ds = xr.Dataset(
@@ -1100,24 +1150,24 @@ class statistics_calculate:
                             x_valid = x[~np.isnan(x)]
                             if len(x_valid) < 4:  # Not enough data for quartiles
                                 continue
-                                
+
                             # Calculate quartiles
                             q1, q2, q3 = np.percentile(x_valid, [25, 50, 75])
-                            
+
                             # Group by quartiles
                             g1 = Y_data_slice[(x <= q1) & ~np.isnan(Y_data_slice)]
                             g2 = Y_data_slice[(x > q1) & (x <= q2) & ~np.isnan(Y_data_slice)]
                             g3 = Y_data_slice[(x > q2) & (x <= q3) & ~np.isnan(Y_data_slice)]
                             g4 = Y_data_slice[(x > q3) & ~np.isnan(Y_data_slice)]
-                            
+
                             # Add non-empty groups
                             for g in [g1, g2, g3, g4]:
                                 if len(g) >= 2:  # Need at least 2 samples
                                     groups.append(g)
-                        
+
                         if len(groups) < 2:  # Need at least 2 groups for ANOVA
                             return np.nan, np.nan
-                            
+
                         # Perform one-way ANOVA
                         f_statistic, p_value = f_oneway(*groups)
                         return f_statistic, p_value
@@ -1128,7 +1178,7 @@ class statistics_calculate:
                 # Parallel processing with chunking to conserve memory
                 chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
                 results = []
-                
+
                 for chunk_i in range(0, data_array.shape[-3], chunk_size):
                     end_i = min(chunk_i + chunk_size, data_array.shape[-3])
                     chunk_results = Parallel(n_jobs=num_cores)(
@@ -1162,9 +1212,9 @@ class statistics_calculate:
                 output_ds['p_value'].attrs['long_name'] = 'P-values from one-way ANOVA'
                 output_ds['p_value'].attrs['description'] = 'P-values for the one-way ANOVA'
                 output_ds.attrs['analysis_type'] = 'one-way ANOVA'
-            
+
             return output_ds
-            
+
         finally:
             # Clean up memory
             del data_array
@@ -1409,6 +1459,11 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
             if isinstance(result, xr.DataArray):
                 result = result.to_dataset(name=f"{method_name}")
+            else:
+                if method_name in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+                    if method_name not in result.data_vars:
+                        varname = next(iter(result.data_vars))
+                        result = result.rename({varname: method_name})
             result['lat'].attrs['_FillValue'] = float('nan')
             result['lat'].attrs['standard_name'] = 'latitude'
             result['lat'].attrs['long_name'] = 'latitude'
@@ -1424,6 +1479,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             # If the result is not xarray object, we might need to handle it differently
             # For now, let's just print it
             logging.info(f"Result of {method_name}: {result}")
+        return output_file
 
     coordinate_map = {
         'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon',
@@ -1522,8 +1578,8 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [source.strip()]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Basic(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Basic(output_file, statistic_method, [source], self.main_nml['general'], option)
 
     def scenarios_Mann_Kendall_Trend_Test_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1543,10 +1599,10 @@ class StatisticsProcessing(BasicProcessing):
             # Assuming data_source_config is a list or another iterable; adjust as necessary
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
+            option['significance_level'] = statistic_nml['significance_level']
             sources = [source.strip()]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Mann_Kendall_Trend_Test(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml,
-                                         option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Mann_Kendall_Trend_Test(output_file, statistic_method, [source], self.main_nml['general'], option)
 
     def scenarios_Correlation_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1568,8 +1624,8 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [f'{source}1', f'{source}2']
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Correlation(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Correlation(output_file, statistic_method, self.main_nml['general'], option)
 
     def scenarios_Standard_Deviation_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1590,8 +1646,8 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [source.strip()]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Standard_Deviation(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Standard_Deviation(output_file, statistic_method, [source], self.main_nml['general'], option)
 
     def scenarios_Hellinger_Distance_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1613,8 +1669,8 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [f'{source}1', f'{source}2']
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Hellinger_Distance(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Hellinger_Distance(output_file, statistic_method, [source], self.main_nml['general'], option)
 
     def scenarios_Z_Score_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1635,8 +1691,8 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [source.strip()]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            # make_Z_Score(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            # make_Z_Score(output_file, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
 
     def scenarios_Three_Cornered_Hat_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1661,8 +1717,8 @@ class StatisticsProcessing(BasicProcessing):
                 logging.error('Error: Three Cornered Hat method must be at least 3 dataset.')
                 exit(1)
             sources = [f'{source}{i}' for i in range(1, nX + 1)]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            # make_Three_Cornered_Hat(self.output_dir, statistic_method, [source], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Three_Cornered_Hat(output_file, statistic_method, [source], statistic_nml, option)
 
     def scenarios_Partial_Least_Squares_Regression_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -1685,8 +1741,8 @@ class StatisticsProcessing(BasicProcessing):
         for source in data_sources:
             nX = int(statistic_nml[f'{source}_nX'])
             sources = [f'{source}_Y'] + [f'{source}_X{i + 1}' for i in range(nX)]
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Partial_Least_Squares_Regression(self.output_dir, statistic_method, [source], self.main_nml['general'],
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Partial_Least_Squares_Regression(output_file, statistic_method, [source], self.main_nml['general'],
                                                   statistic_nml, option)
 
     # Advanced statistical methods
@@ -1709,14 +1765,33 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [f'{source}1', f'{source}2']
-            self.run_analysis(source.strip(), sources, statistic_method)
-            make_Functional_Response(self.output_dir, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_Functional_Response(output_file, statistic_method, [source], self.main_nml['general'], option)
 
     def scenarios_False_Discovery_Rate_analysis(self, statistic_method, statistic_nml, option):
         return
 
     def scenarios_ANOVA_analysis(self, statistic_method, statistic_nml, option):
-        return
+        self.setup_output_directories(statistic_method)
+        # Load data sources for this method
+        data_sources_key = f'{statistic_method}_data_source'
+        if data_sources_key not in self.general_config:
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            return
+
+            # Assuming 'statistic_method' is defined and corresponds to one of the keys in the configuration
+        data_source_config = self.general_config.get(f'{statistic_method}_data_source', '')
+
+        # Check if the data_source_config is a string; if not, handle it appropriately
+        if isinstance(data_source_config, str):
+            data_sources = data_source_config.split(',')
+        else:
+            # Assuming data_source_config is a list or another iterable; adjust as necessary
+            data_sources = data_source_config  # If it's already a list, no need to split
+        for source in data_sources:
+            sources = [f'{source}_Y', f'{source}_X']
+            output_file = self.run_analysis(source.strip(), sources, statistic_method)
+            make_ANOVA(output_file, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
 
     def run_analysis(self, source: str, sources: List[str], statistic_method):
         method_function = getattr(self, f"stat_{statistic_method.lower()}", None)
@@ -1739,7 +1814,8 @@ class StatisticsProcessing(BasicProcessing):
             data_list = self.remap_data(data_list)
 
             # Call the method with the loaded data
-            result = method_function(*data_list).astype('float32')
-            self.save_result(statistic_method, result, [source])
+            result = method_function(*data_list)
+            output_file = self.save_result(statistic_method, result, [source])
+            return output_file
         else:
             logging.warning(f"Warning: Analysis method '{statistic_method}' not implemented.")
