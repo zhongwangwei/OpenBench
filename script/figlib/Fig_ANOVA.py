@@ -13,6 +13,7 @@ from matplotlib import colors
 from matplotlib import rcParams
 from Mod_Converttype import Convert_Type
 
+
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
@@ -73,6 +74,10 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
               'axes.unicode_minus': False,
               'text.usetex': False}
     rcParams.update(params)
+
+    # filename_parts = [method_name] + data_sources
+    # filename = "_".join(filename_parts) + "_output"
+    # file = os.path.join(output_dir, f"{method_name}", filename)
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -155,52 +160,31 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
     cb.solids.set_edgecolor("face")
     # 绘制地图
     file2 = file[:-3]
-    plt.savefig(f'{file}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
+    plt.savefig(f'{file2}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
                 dpi=option['dpi'])
     plt.close()
 
 
-def make_Partial_Least_Squares_Regression(file, method_name, data_sources, main_nml, statistic_nml,
-                                          option):  # outpath, source
+def make_ANOVA(file, method_name, data_sources, main_nml, statistic_nml, option):  # outpath, source
 
-    # filename_parts = [method_name] + data_sources
-    # filename = "_".join(filename_parts) + "_output"
-    # file = os.path.join(output_dir, f"{method_name}", filename)
-
-    info = {'best_n_components': 'both',
-            'coefficients': 'both',
-            'intercepts': 'both',
-            'p_values': 'neither',
-            'r_squared': 'neither',
-            'anomaly': 'both',
-            }
-    nX = statistic_nml[f"{data_sources[0]}_nX"]
     ds = xr.open_dataset(f"{file}")
     ds = Convert_Type.convert_nc(ds)
     ilat = ds.lat.values
     ilon = ds.lon.values
 
-    for var in ds.data_vars:
-        if var not in ['best_n_components', 'r_squared']:
-            for x in range(nX):
-                data = ds[var][x]
-                fvar = f'{var}_X{x + 1}'
+    F_statistic = ds.F_statistic
+    p_value = ds.p_value
+    if F_statistic.ndim == 3 and F_statistic.shape[0] == 1:
+        F_statistic = F_statistic.squeeze(axis=0)
+    if p_value.ndim == 3 and p_value.shape[0] == 1:
+        p_value = tau.squeeze(axis=0)
 
-                option['extend'] = info[var]
-                if var == 'p_values':
-                    option['vmin'], option['vmax'] = 0, 1
-                else:
-                    option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
-                        data.max(skipna=True).values)
-                map(file, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
-        else:
-            data = ds[var]
-            fvar = var
 
-            option['extend'] = info[var]
-            if var == 'r_squared':
-                option['vmin'], option['vmax'] = 0, 1
-            else:
-                option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
-                    data.max(skipna=True).values)
-            map(file, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
+    option['extend'] = 'neither'
+    option['vmin'], option['vmax'] = 0, 1
+    map(file, method_name, data_sources, ilon, ilat, p_value, 'p_value', main_nml, option)
+
+    option['extend'] = 'both'
+    option['vmin'], option['vmax'] = math.floor(F_statistic.min(skipna=True).values), math.ceil(
+            F_statistic.max(skipna=True).values)
+    map(file, method_name, data_sources, ilon, ilat, F_statistic, 'F_statistic', main_nml, option)

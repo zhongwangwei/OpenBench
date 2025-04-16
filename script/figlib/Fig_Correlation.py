@@ -62,7 +62,7 @@ def get_index(vmin, vmax, colormap):
 def make_Correlation(file, method_name, main_nml, option):
     ds = xr.open_dataset(f"{file}")
     ds = Convert_Type.convert_nc(ds)
-    data = ds.correlation
+    data = ds.Correlation
     ilat = ds.lat.values
     ilon = ds.lon.values
     lon, lat = np.meshgrid(ilon, ilat)
