@@ -446,6 +446,7 @@ class statistics_calculate:
         except ImportError as e:
             logging.error(f"Required package not found: {e}")
             raise ImportError(f"Required package not found: {e}")
+        print(variables)
 
         # Check if we have enough variables
         if len(variables) < 3:
@@ -481,8 +482,9 @@ class statistics_calculate:
                 if np.isnan(S).any() or np.isinf(S).any():
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
+                det_S = np.linalg.det(S)
                 # Check if matrix is singular or nearly singular
-                if abs(np.linalg.det(S)) < 1e-10:
+                if abs(det_S) < 1e-10:
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
                 N = arr.shape[1]
@@ -490,26 +492,27 @@ class statistics_calculate:
                 R = np.zeros((N, N))
 
                 try:
-                    R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, np.linalg.inv(S)), u.T))
+                    inv_S = np.linalg.inv(S)
+                    inv_S_sub = inv_S[:N-1, :N-1] # Submatrix for calculations involving u
+                    # Use inv_S_sub for dot product with u
+                    R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, inv_S_sub), u.T))
                 except np.linalg.LinAlgError:
-                    # Matrix inversion failed
+                    print(f"DEBUG: cal_uct returning NaN - LinAlgError during initial R calculation")
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
                 x0 = R[:, N - 1]
-                det_S = np.linalg.det(S)
-                inv_S = np.linalg.inv(S)
                 Denominator = det_S ** (2 / len(S))
 
                 # Set up constraint
+                # Use inv_S_sub in the constraint lambda function as well
                 cons = {'type': 'ineq', 'fun': lambda r: (r[-1] - np.dot(
-                    np.dot(r[:-1] - r[-1] * u, inv_S),
+                    np.dot(r[:-1] - r[-1] * u, inv_S_sub),
                     (r[:-1] - r[-1] * u).T)) / Denominator}
 
                 # Perform optimization with error handling
                 try:
                     x = optimize.minimize(my_fun, x0, method='COBYLA', tol=2e-10, constraints=cons)
                     if not x.success:
-                        logging.debug(f"Optimization failed: {x.message}")
                         return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
                     R[:, N - 1] = x.x
@@ -518,36 +521,63 @@ class statistics_calculate:
                             R[i, j] = S[i, j] - R[N - 1, N - 1] + R[i, N - 1] + R[j, N - 1]
                     R += R.T - np.diag(R.diagonal())
 
+                    diag_R = np.diag(R)
                     # Check if R has negative values on diagonal (invalid results)
-                    if np.any(np.diag(R) < 0):
+                    if np.any(diag_R < 0):
                         return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
-                    uct = np.sqrt(np.diag(R))
+                    uct = np.sqrt(diag_R) # Use pre-calculated diagonal
 
                     # Safely calculate relative uncertainty
                     mean_abs = np.mean(np.abs(arr), axis=0)
                     # Avoid division by zero
-                    mean_abs = np.where(mean_abs < 1e-10, np.nan, mean_abs)
-                    r_uct = uct / mean_abs * 100
+                    mean_abs_safe = np.where(mean_abs < 1e-10, np.nan, mean_abs)
+                    
+                    if np.isnan(mean_abs_safe).any():
+                        print(f"DEBUG: cal_uct returning NaN - mean_abs is NaN (near zero: {mean_abs})")
+                        return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+                        
+                    r_uct = uct / mean_abs_safe * 100
 
                     return uct, r_uct
                 except Exception as e:
-                    logging.debug(f"Error in optimization: {e}")
+                    # Optionally re-raise or log traceback here for more detail
+                    import traceback
+                    traceback.print_exc()
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
             except Exception as e:
-                logging.debug(f"Error in cal_uct: {e}")
+                print(f"DEBUG: cal_uct returning NaN due to outer exception: {e}")
                 return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
         try:
+            # Extract data from each dataset if it's a Dataset
+            data_arrays = []
+            for var in variables:
+                if isinstance(var, xr.Dataset):
+                    # Get the first data variable from the dataset
+                    var_name = list(var.data_vars)[0]
+                    data_arrays.append(var[var_name])
+                else:
+                    # Already a DataArray
+                    data_arrays.append(var)
+            
             # Combine all variables into a single array
-            combined_data = xr.concat(variables, dim='variable')
+            combined_data = xr.concat(data_arrays, dim='variable')
+            #save the combined_data
+            combined_data.to_netcdf('combined_data.nc')
             # Get dimensions for processing
             lats = combined_data.lat.values
             lons = combined_data.lon.values
+            num_variables = len(data_arrays)
 
-            # Initialize output arrays with NaN values
-            uct = xr.full_like(combined_data, np.nan)
-            r_uct = xr.full_like(combined_data, np.nan)
+            # Initialize output arrays with NaN values - WITHOUT time dimension
+            empty_template = xr.DataArray(
+                np.full((num_variables, len(lats), len(lons)), np.nan),
+                dims=('variable', 'lat', 'lon'),
+                coords={'variable': range(num_variables), 'lat': lats, 'lon': lons}
+            )
+            uct = empty_template.copy()
+            r_uct = empty_template.copy()
 
             # Process in chunks to manage memory better
             # Use joblib to parallelize if data is large enough
@@ -559,10 +589,16 @@ class statistics_calculate:
                     chunk_results = []
                     for lat in lat_chunk:
                         for lon in lons:
-                            arr = combined_data.sel(lat=lat, lon=lon).values#.T
-                            if not np.isnan(arr).all():
-                                uct_values, r_uct_values = cal_uct(arr)
-                                chunk_results.append((lat, lon, uct_values, r_uct_values))
+                            # Extract numerical values only, ensure it's a proper numpy array
+                            arr = combined_data.sel(lat=lat, lon=lon).values
+                            if not isinstance(arr, np.ndarray) or arr.size == 0 or np.isnan(arr).all():
+                                continue
+                            
+                            # For Three-Cornered Hat method, we need to transpose the data
+                            # so that time is the first dimension and variables are the second
+                            arr = arr.T  # shape: (time, variables)
+                            uct_values, r_uct_values = cal_uct(arr)
+                            chunk_results.append((lat, lon, uct_values, r_uct_values))
                     return chunk_results
 
                 # Split lats into chunks for parallel processing
@@ -578,8 +614,11 @@ class statistics_calculate:
                 # Combine results
                 for chunk_results in all_results:
                     for lat, lon, uct_values, r_uct_values in chunk_results:
-                        uct.loc[dict(lat=lat, lon=lon)] = uct_values
-                        r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
+                        # Use .loc indexing to set values
+                        lat_idx = np.where(lats == lat)[0][0]
+                        lon_idx = np.where(lons == lon)[0][0]
+                        uct.values[:, lat_idx, lon_idx] = uct_values
+                        r_uct.values[:, lat_idx, lon_idx] = r_uct_values
 
                 # Clean up
                 del all_results
@@ -588,11 +627,19 @@ class statistics_calculate:
                 # For smaller datasets, use simple loop
                 for lat in lats:
                     for lon in lons:
-                        arr = combined_data.sel(lat=lat, lon=lon).values.T
-                        if not np.isnan(arr).all():
+                        arr = combined_data.sel(lat=lat, lon=lon).values
+                        if isinstance(arr, np.ndarray) and arr.size > 0 and not np.isnan(arr).all():
+                            # For Three-Cornered Hat method, transpose the data
+                            arr = arr.T  # shape: (time, variables)
+                            
                             uct_values, r_uct_values = cal_uct(arr)
-                            uct.loc[dict(lat=lat, lon=lon)] = uct_values
-                            r_uct.loc[dict(lat=lat, lon=lon)] = r_uct_values
+                            
+                            # Use direct indexing
+                            lat_idx = np.where(lats == lat)[0][0]
+                            lon_idx = np.where(lons == lon)[0][0]
+                            uct.values[:, lat_idx, lon_idx] = uct_values
+                            r_uct.values[:, lat_idx, lon_idx] = r_uct_values
+                    
                     # Periodically collect garbage to manage memory
                     if lat % 10 == 0:
                         gc.collect()
@@ -618,6 +665,7 @@ class statistics_calculate:
         finally:
             # Clean up memory
             gc.collect()
+
 
     def stat_partial_least_squares_regression(self, *variables):
         """
