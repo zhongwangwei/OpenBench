@@ -56,12 +56,10 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
-def make_Hellinger_Distance(output_dir, method_name, data_sources, main_nml, statistic_nml, option):
-    filename_parts = [method_name] + data_sources
-    filename = "_".join(filename_parts) + "_output"
-    file = os.path.join(output_dir, f"{method_name}", filename)
+def make_Hellinger_Distance(file, method_name, data_sources, main_nml, option):
 
-    ds = xr.open_dataset(f"{file}.nc")
+
+    ds = xr.open_dataset(f"{file}")
     ds = Convert_Type.convert_nc(ds)
     data = ds.hellinger_distance_score
     ilat = ds.lat.values

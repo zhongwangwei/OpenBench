@@ -262,7 +262,10 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     for statistic in statistic_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
-        statistic_method = f'scenarios_{statistic}_analysis'
+        if statistic in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
+            statistic_method = f'scenarios_Basic_analysis'
+        else:
+            statistic_method = f'scenarios_{statistic}_analysis'
         if hasattr(stats_handler, statistic_method):
             getattr(stats_handler, statistic_method)(statistic, stats_nml[statistic], fig_nml[statistic])
         else:
@@ -301,8 +304,11 @@ def main():
     # Update namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
     UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
-    run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
-                    fig_nml)
+    if main_nl['general']['statistics'] and not main_nl['general']['evaluation'] and not main_nl['general']['comparison']:
+        pass
+    else:
+        run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
+                        fig_nml)
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
