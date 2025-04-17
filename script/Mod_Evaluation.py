@@ -19,6 +19,10 @@ from Mod_Scores import scores
 from figlib import *
 from Mod_Converttype import Convert_Type
 
+# Configure logging
+logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
+warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
+logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
 class Evaluation_grid(metrics, scores):
     def __init__(self, info, fig_nml):
         self.name = 'Evaluation_grid'
