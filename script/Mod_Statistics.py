@@ -446,7 +446,6 @@ class statistics_calculate:
         except ImportError as e:
             logging.error(f"Required package not found: {e}")
             raise ImportError(f"Required package not found: {e}")
-        print(variables)
 
         # Check if we have enough variables
         if len(variables) < 3:
@@ -1766,7 +1765,7 @@ class StatisticsProcessing(BasicProcessing):
                 exit(1)
             sources = [f'{source}{i}' for i in range(1, nX + 1)]
             output_file = self.run_analysis(source.strip(), sources, statistic_method)
-            make_Three_Cornered_Hat(output_file, statistic_method, [source], statistic_nml, option)
+            make_Three_Cornered_Hat(output_file, statistic_method, [source],self.main_nml['general'],  statistic_nml, option)
 
     def scenarios_Partial_Least_Squares_Regression_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
