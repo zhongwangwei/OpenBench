@@ -92,19 +92,11 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
         origin = 'lower'
     else:
         origin = 'upper'
-
-    if option['show_method'] == 'imshow':
-        if 'intercepts' in title:
-            cs = ax.imshow(data, cmap=option['cmap'], extent=extent, origin='lower')
-        else:
-            cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
-        # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-    elif option['show_method'] == 'contourf':
-        lon, lat = np.meshgrid(ilon, ilat)
-        if 'intercepts' in title:
-            cs = ax.contourf(lon, lat, data, cmap=option['cmap'], extend=option['extend'])
-        else:
-            cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    lon, lat = np.meshgrid(ilon, ilat)
+    if option['show_method'] == 'interpolate':
+        cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+    else:
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')

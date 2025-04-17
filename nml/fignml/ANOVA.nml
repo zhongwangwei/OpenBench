@@ -17,8 +17,7 @@
   cmap              = coolwarm
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm', ,'RdYlBu'
-
-  show_method       = imshow # contourf, imshow
+  show_method       = None # interpolate, None
   colorbar_position = horizontal
   extend            = neither    # 'neither', 'both', 'min', 'max'
 #  colorbar_ticks    = 0.1
