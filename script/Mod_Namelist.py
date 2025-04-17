@@ -457,10 +457,12 @@ class GeneralInfoReader(NamelistReader):
         if self.sim_varname is None or self.sim_varname == '':
             logging.warning(f"Warning: sim_varname is not specified in namelist. Using item name: {self.item}")
             self.sim_varname = self.item
+            self.sim_nml[self.item][f'{self.sim_source}_varname'] = self.item
+
         if self.ref_varname is None or self.ref_varname == '':
             logging.warning(f"Warning: ref_varname is not specified in namelist. Using item name: {self.item}")
             self.ref_varname = self.item
-
+            self.ref_nml[self.item][f'{self.ref_source}_varname'] = self.item
     def _initialize_attributes(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any],
                                ref_nml: Dict[str, Any], item: str, sim_source: str, ref_source: str):
         """Initialize class attributes from namelists."""

@@ -16,7 +16,9 @@ from Mod_Scores import scores
 from Mod_Statistics import statistics_calculate
 from Mod_Converttype import Convert_Type
 from figlib import *
-
+logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
+warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
+logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
 
 class ComparisonProcessing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
@@ -2717,7 +2719,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         try:
                             sim_varname1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
                             sim_varname2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
-
+                            # if self.sim_varname is empty, then set it to item
+                            if sim_varname1 is None or sim_varname1 == '':
+                                sim_varname1 = evaluation_item
+                                sim_nml[f'{evaluation_item}'][f'{sim1}_varname'] = evaluation_item
+                            if sim_varname2 is None or sim_varname2 == '':
+                                sim_varname2 = evaluation_item
+                                sim_nml[f'{evaluation_item}'][f'{sim2}_varname'] = evaluation_item
                             # Use os.path.join for file paths
                             ds1_path = os.path.join(basedir, 'output', 'data',
                                                     f'{evaluation_item}_sim_{sim1}_{sim_varname1}.nc')
