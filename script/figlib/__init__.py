@@ -21,6 +21,7 @@ from figlib.Fig_Z_Score import make_Z_Score
 from figlib.Fig_Functional_Response import make_Functional_Response
 from figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
 from figlib.Fig_Basic_Plot import make_plot_index_stn, make_plot_index_grid,plot_stn, make_Basic
+from figlib.Fig_Three_Cornered_Hat import make_Three_Cornered_Hat
 from figlib.Fig_ANOVA import make_ANOVA
 
 __all__ = [
@@ -51,4 +52,5 @@ __all__ = [
     'plot_stn',
     'make_Basic',
     'make_ANOVA',
+    'make_Three_Cornered_Hat',
 ]

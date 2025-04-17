@@ -13,6 +13,7 @@ from matplotlib import colors
 from matplotlib import rcParams
 from Mod_Converttype import Convert_Type
 
+
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):
         if 2 >= vmax - vmin > 1:
@@ -57,6 +58,7 @@ def get_index(vmin, vmax, colormap):
     return mticks, norm, bnd
 
 
+
 def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, option):
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -74,6 +76,10 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
               'text.usetex': False}
     rcParams.update(params)
 
+    # filename_parts = [method_name] + data_sources
+    # filename = "_".join(filename_parts) + "_output"
+    # file = os.path.join(output_dir, f"{method_name}", filename)
+
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
@@ -88,19 +94,11 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
     else:
         origin = 'upper'
 
+    lon, lat = np.meshgrid(ilon, ilat)
     if option['show_method'] == 'interpolate':
-        lon, lat = np.meshgrid(ilon, ilat)
-        if 'intercepts' in title:
-            cs = ax.contourf(lon, lat, data, cmap=option['cmap'], extend=option['extend'])
-        else:
-            cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
+        cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
     else:
-        if 'intercepts' in title:
-            cs = ax.imshow(data, cmap=option['cmap'], extent=extent, origin='lower')
-        else:
-            cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
-        # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
-
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
@@ -131,8 +129,8 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
     ax.xaxis.set_major_formatter(lon_formatter)
     ax.yaxis.set_major_formatter(lat_formatter)
 
-    if option['title'] is None:
-        option['title'] = f'Mann-Kendall Test Results ({title})'
+    if not option['title']:
+        option['title'] = title
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
     plt.title(option['title'], fontsize=option['title_size'])
@@ -156,52 +154,28 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
     cb.solids.set_edgecolor("face")
     # 绘制地图
     file2 = file[:-3]
-    plt.savefig(f'{file}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
+    plt.savefig(f'{file2}_{title}.{option["saving_format"]}', format=f'{option["saving_format"]}',
                 dpi=option['dpi'])
     plt.close()
 
-
-def make_Partial_Least_Squares_Regression(file, method_name, data_sources, main_nml, statistic_nml,
-                                          option):  # outpath, source
-
-    # filename_parts = [method_name] + data_sources
-    # filename = "_".join(filename_parts) + "_output"
-    # file = os.path.join(output_dir, f"{method_name}", filename)
-
-    info = {'best_n_components': 'both',
-            'coefficients': 'both',
-            'intercepts': 'both',
-            'p_values': 'neither',
-            'r_squared': 'neither',
-            'anomaly': 'both',
-            }
-    nX = statistic_nml[f"{data_sources[0]}_nX"]
+def make_Three_Cornered_Hat(file, method_name, data_sources, main_nml, statistic_nml, option):
     ds = xr.open_dataset(f"{file}")
     ds = Convert_Type.convert_nc(ds)
     ilat = ds.lat.values
     ilon = ds.lon.values
 
-    for var in ds.data_vars:
-        if var not in ['best_n_components', 'r_squared']:
-            for x in range(nX):
-                data = ds[var][x]
-                fvar = f'{var}_X{x + 1}'
+    relative_uncertainty = ds.relative_uncertainty
+    uncertainty = ds.uncertainty
+    variables = ds.variable.values
+    for variable in variables:
+        relative_data = relative_uncertainty[variable]
+        option['extend'] = 'both'
+        option['vmin'], option['vmax'] = math.floor(relative_data.min(skipna=True).values), math.ceil(
+                relative_data.max(skipna=True).values)
+        map(file, method_name, data_sources, ilon, ilat, relative_data, f'relative_uncertainty_variable{variable+1}', main_nml, option)
 
-                option['extend'] = info[var]
-                if var == 'p_values':
-                    option['vmin'], option['vmax'] = 0, 1
-                else:
-                    option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
-                        data.max(skipna=True).values)
-                map(file, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
-        else:
-            data = ds[var]
-            fvar = var
-
-            option['extend'] = info[var]
-            if var == 'r_squared':
-                option['vmin'], option['vmax'] = 0, 1
-            else:
-                option['vmin'], option['vmax'] = math.floor(data.min(skipna=True).values), math.ceil(
-                    data.max(skipna=True).values)
-            map(file, method_name, data_sources, ilon, ilat, data, fvar, main_nml, option)
+        uncertainty_data = uncertainty[variable]
+        option['extend'] = 'both'
+        option['vmin'], option['vmax'] = math.floor(uncertainty_data.min(skipna=True).values), math.ceil(
+                uncertainty_data.max(skipna=True).values)
+        map(file, method_name, data_sources, ilon, ilat, uncertainty_data, f'uncertainty_variable{variable+1}', main_nml, option)
