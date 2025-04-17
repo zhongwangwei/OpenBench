@@ -1,6 +1,8 @@
 import numpy as np
 import xarray as xr
-
+logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
+warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
+logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
 class scores:
     """
     A class for calculating various performance scores for model evaluation.
