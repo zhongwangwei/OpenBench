@@ -14,3 +14,5 @@ script/Evapotranspiration_ref_ET_Xu_etal_2024_ET.nc
 /data
 /output
 /.cursor
+/preprocessing/get_cama_ready/data_for_wse
+/preprocessing/get_cama_ready/logs
