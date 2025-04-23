@@ -16,3 +16,12 @@ script/Evapotranspiration_ref_ET_Xu_etal_2024_ET.nc
 /.cursor
 /preprocessing/get_cama_ready/data_for_wse
 /preprocessing/get_cama_ready/logs
+*.pyc
+*.f90
+preprocessing/get_cama_ready/AllocateVS copy 2.py
+preprocessing/get_cama_ready/AllocateVS copy.py
+preprocessing/get_cama_ready/out/altimetry_glb_15min_20250422.txt
+preprocessing/get_cama_ready/out/altimetry_glb_15min_20250423.txt
+preprocessing/get_cama_ready/out/cama_data_s30e010.nc
+preprocessing/get_cama_ready/out/cama_data_s30w050.nc
+preprocessing/get_cama_ready/s01-allocate_VS.sh

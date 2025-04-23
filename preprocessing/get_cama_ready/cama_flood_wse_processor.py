@@ -17,6 +17,7 @@ from typing import List, Dict, Optional, Union, Literal, Tuple
 from multiprocessing import Pool, Process
 from pathlib import Path
 from enum import Enum
+import sys
 
 import numpy as np
 import pandas as pd
@@ -788,6 +789,326 @@ class CaMaFloodMapDownloader:
         self.logger.info("All required map files are present")
         return True
 
+class StationAllocator:
+    """Class for allocating virtual stations to river networks."""
+    
+    def __init__(self, config: Config, logger: Logger):
+        self.config = config
+        self.logger = logger.logger
+        self.data_dir = Path("./data_for_wse")
+        
+        # Flag definitions for allocation types
+        self.FLAG_RIVER_CENTERLINE = 10  # on the river centerline
+        self.FLAG_RIVER_CHANNEL = 11    # on the river channel
+        self.FLAG_CATCHMENT_OUTLET = 12  # location was on the unit-catchment outlet
+        self.FLAG_NEAREST_RIVER = 20    # found the nearest river
+        self.FLAG_NEAREST_MAIN = 21     # found the nearest main river
+        self.FLAG_PERPENDICULAR = 30    # found the nearest perpendicular main river
+        self.FLAG_BIFURCATION = 31      # bifurcation location
+        self.FLAG_OCEAN_CORRECTION = 40  # correction for ocean grids
+        self.FLAG_ERROR = 90            # error in allocation
+        
+        # Grid parameters
+        self.nx = 1440  # Number of longitude points
+        self.ny = 720   # Number of latitude points
+        self.dx = 0.25  # Grid spacing in longitude (degrees)
+        self.dy = 0.25  # Grid spacing in latitude (degrees)
+        
+        # Data arrays
+        self.visual = None      # Visual classification array
+        self.flwdir = None      # Flow direction array
+        self.catmxx = None      # Catchment X indices
+        self.catmyy = None      # Catchment Y indices
+        self.uparea = None      # Upstream area
+        self.rivwth = None      # River width
+        self.elevtn = None      # Elevation
+        self.nextxx = None      # Next X grid
+        self.nextyy = None      # Next Y grid
+        self.biftag = None      # Bifurcation tag
+    
+    def initialize_grid_data(self, map_dir: Path, region_name: str) -> None:
+        """Initialize grid data for processing."""
+        self.logger.info(f"Initializing grid data from {map_dir}")
+        self.load_grid_data(map_dir, region_name)
+    
+    def load_grid_data(self, map_dir: Path, region_name: str) -> None:
+        """
+        Load grid data for a specific region.
+        All binary files use yrev and little_endian options.
+        
+        Args:
+            map_dir: Path to the map directory
+            region_name: Name of the region/tile
+        """
+        try:
+            def load_and_validate(file_path: Path, dtype: np.dtype, var_name: str) -> np.ndarray:
+                """Helper function to load and validate binary data."""
+                if not file_path.exists():
+                    raise FileNotFoundError(f"{var_name} file not found: {file_path}")
+                
+                # Read binary data with little endian
+                data = np.fromfile(file_path, dtype=dtype)
+                
+                # Check if endianness conversion is needed
+                if not sys.byteorder.startswith('little'):
+                    data = data.byteswap()
+                
+                # Reshape to 2D array
+                try:
+                    data = data.reshape(self.ny, self.nx)
+                except ValueError as e:
+                    raise ValueError(f"Failed to reshape {var_name} data: {str(e)}")
+                
+                ## Reverse latitude (yrev)
+                #data = data[::-1, :]
+                
+                # Validate data
+                if not np.isfinite(data).all():
+                    n_invalid = np.sum(~np.isfinite(data))
+                    self.logger.warning(
+                        f"Found {n_invalid} invalid values in {var_name} "
+                        f"({n_invalid/data.size:.2%} of total)"
+                    )
+                
+                data_min = np.nanmin(data)
+                data_max = np.nanmax(data)
+                self.logger.info(f"{var_name} data range: {data_min:.3f} to {data_max:.3f}")
+                
+                return data
+            
+            # Load visual classification
+            visual_file = map_dir / f"{region_name}.visual.bin"
+            self.visual = load_and_validate(visual_file, np.int8, "visual")
+            
+            # Load flow direction
+            flwdir_file = map_dir / f"{region_name}.flwdir.bin"
+            self.flwdir = load_and_validate(flwdir_file, np.int8, "flow direction")
+            
+            # Load catchment mapping (special case due to double array)
+            catm_file = map_dir / f"{region_name}.catmxy.bin"
+            data = np.fromfile(catm_file, dtype=np.int16)
+            if not sys.byteorder.startswith('little'):
+                data = data.byteswap()
+            
+            # Split into X and Y components
+            half_size = self.nx * self.ny
+            if len(data) != 2 * half_size:
+                raise ValueError(
+                    f"Invalid catchment mapping data size. "
+                    f"Expected {2 * half_size} elements, got {len(data)}"
+                )
+            
+            self.catmxx = data[:half_size].reshape(self.ny, self.nx)[::-1, :]  # Apply yrev
+            self.catmyy = data[half_size:].reshape(self.ny, self.nx)[::-1, :]  # Apply yrev
+            
+            # Load river width
+            rivwth_file = map_dir / f"{region_name}.rivwth.bin"
+            self.rivwth = load_and_validate(rivwth_file, np.float32, "river width")
+            
+            # Load upstream area
+            uparea_file = map_dir / f"{region_name}.uparea.bin"
+            self.uparea = load_and_validate(uparea_file, np.float32, "upstream area")
+            
+            # Load elevation
+            elevtn_file = map_dir / f"{region_name}.elevtn.bin"
+            self.elevtn = load_and_validate(elevtn_file, np.float32, "elevation")
+            
+            # Basic validation of loaded data
+            expected_shape = (self.ny, self.nx)
+            for name, arr in [
+                ("visual", self.visual),
+                ("flow direction", self.flwdir),
+                ("catchment X", self.catmxx),
+                ("catchment Y", self.catmyy),
+                ("river width", self.rivwth),
+                ("upstream area", self.uparea),
+                ("elevation", self.elevtn)
+            ]:
+                if arr is None:
+                    raise ValueError(f"{name} data failed to load")
+                if arr.shape != expected_shape:
+                    raise ValueError(
+                        f"Invalid {name} data shape: {arr.shape}, "
+                        f"expected {expected_shape}"
+                    )
+            
+            self.logger.info(
+                f"Successfully loaded grid data for region {region_name}\n"
+                f"Grid dimensions: {self.nx}x{self.ny}"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load grid data: {str(e)}")
+            raise
+    
+    def find_nearest_river(self, lat: float, lon: float, search_radius: int = 60) -> Tuple[int, int, int, float]:
+        """
+        Find the nearest river pixel to the given coordinates.
+        
+        Args:
+            lat: Latitude in degrees
+            lon: Longitude in degrees
+            search_radius: Search radius in pixels
+            
+        Returns:
+            Tuple of (x, y, flag, distance)
+        """
+        # Convert lat/lon to grid indices
+        ix = int((lon - self.west) / self.dx)
+        iy = int((self.north - lat) / self.dy)
+        
+        if not (0 <= ix < self.nx and 0 <= iy < self.ny):
+            return -9999, -9999, self.FLAG_ERROR, -9999.0
+        
+        # Initialize search
+        min_dist = 1.0e20
+        best_x = ix
+        best_y = iy
+        flag = self.FLAG_ERROR
+        
+        # Search in radius
+        for dy in range(-search_radius, search_radius + 1):
+            for dx in range(-search_radius, search_radius + 1):
+                jx = ix + dx
+                jy = iy + dy
+                
+                if not (0 <= jx < self.nx and 0 <= jy < self.ny):
+                    continue
+                
+                # Skip if not river
+                if self.visual[jy, jx] not in [10, 20]:  # 10=river, 20=outlet
+                    continue
+                
+                # Calculate distance
+                dist = np.sqrt(dx*dx + dy*dy)
+                if dist < min_dist:
+                    if self.visual[jy, jx] == 10:  # River centerline
+                        best_x = jx
+                        best_y = jy
+                        min_dist = dist
+                        flag = self.FLAG_RIVER_CENTERLINE
+                    elif self.visual[jy, jx] == 20:  # Outlet
+                        best_x = jx
+                        best_y = jy
+                        min_dist = dist
+                        flag = self.FLAG_CATCHMENT_OUTLET
+        
+        return best_x, best_y, flag, min_dist
+    
+    def find_main_river(self, ix: int, iy: int, search_radius: int = 60) -> Tuple[int, int, int, float]:
+        """
+        Find the nearest main river (largest upstream area) from the given point.
+        
+        Args:
+            ix: X grid index
+            iy: Y grid index
+            search_radius: Search radius in pixels
+            
+        Returns:
+            Tuple of (x, y, flag, distance)
+        """
+        if not (0 <= ix < self.nx and 0 <= iy < self.ny):
+            return -9999, -9999, self.FLAG_ERROR, -9999.0
+        
+        # Initialize search
+        max_uparea = self.uparea[iy, ix]
+        best_x = ix
+        best_y = iy
+        min_dist = 1.0e20
+        flag = self.FLAG_ERROR
+        
+        # Search in radius
+        for dy in range(-search_radius, search_radius + 1):
+            for dx in range(-search_radius, search_radius + 1):
+                jx = ix + dx
+                jy = iy + dy
+                
+                if not (0 <= jx < self.nx and 0 <= jy < self.ny):
+                    continue
+                
+                # Skip if not river or smaller upstream area
+                if self.visual[jy, jx] not in [10, 20]:
+                    continue
+                if self.uparea[jy, jx] <= max_uparea:
+                    continue
+                
+                # Calculate distance
+                dist = np.sqrt(dx*dx + dy*dy)
+                if dist < min_dist:
+                    best_x = jx
+                    best_y = jy
+                    min_dist = dist
+                    max_uparea = self.uparea[jy, jx]
+                    flag = self.FLAG_NEAREST_MAIN
+        
+        return best_x, best_y, flag, min_dist
+    
+    def allocate_station(self, lat: float, lon: float) -> Dict[str, Union[int, float]]:
+        """
+        Allocate a virtual station to the river network.
+        
+        Args:
+            lat: Latitude in degrees
+            lon: Longitude in degrees
+            
+        Returns:
+            Dictionary containing allocation results
+        """
+        try:
+            # First find nearest river
+            x1, y1, flag1, dist1 = self.find_nearest_river(lat, lon)
+            if flag1 == self.FLAG_ERROR:
+                return {
+                    'flag': self.FLAG_ERROR,
+                    'x1': -9999,
+                    'y1': -9999,
+                    'x2': -9999,
+                    'y2': -9999,
+                    'dist1': -9999.0,
+                    'dist2': -9999.0,
+                    'river_width': -9999.0
+                }
+            
+            # If not on river centerline, try to find main river
+            x2, y2, flag2, dist2 = -9999, -9999, -9999, -9999.0
+            if flag1 not in [self.FLAG_RIVER_CENTERLINE, self.FLAG_CATCHMENT_OUTLET]:
+                x2, y2, flag2, dist2 = self.find_main_river(x1, y1)
+                
+                # Update flags based on results
+                if flag2 != self.FLAG_ERROR:
+                    if self.biftag[y1, x1] == 1:
+                        flag1 = self.FLAG_BIFURCATION
+                    elif dist1 < dist2:
+                        flag1 = self.FLAG_NEAREST_RIVER
+                    else:
+                        flag1 = self.FLAG_NEAREST_MAIN
+                        x1, y1 = x2, y2
+                        x2, y2 = -9999, -9999
+            
+            return {
+                'flag': flag1,
+                'x1': x1,
+                'y1': y1,
+                'x2': x2,
+                'y2': y2,
+                'dist1': dist1,
+                'dist2': dist2,
+                'river_width': self.rivwth[y1, x1] if flag1 != self.FLAG_ERROR else -9999.0
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error allocating station at lat={lat}, lon={lon}: {str(e)}")
+            return {
+                'flag': self.FLAG_ERROR,
+                'x1': -9999,
+                'y1': -9999,
+                'x2': -9999,
+                'y2': -9999,
+                'dist1': -9999.0,
+                'dist2': -9999.0,
+                'river_width': -9999.0
+            }
+
 class CAMAFloodWSEProcessor:
     """Main class for orchestrating the entire WSE processing workflow."""
     
@@ -799,6 +1120,7 @@ class CAMAFloodWSEProcessor:
         self.external_processor = ExternalDataProcessor(self.config, self.logger)
         self.bias_corrector = BiasCorrector(self.config, self.logger)
         self.dataset_preparator = DatasetPreparator(self.config, self.logger)
+        self.station_allocator = StationAllocator(self.config, self.logger)
     
     def run_processing_pipeline(self, hydroweb_credentials: Dict[str, str],
                               external_data_paths: List[Path] = None,
@@ -885,12 +1207,20 @@ class CAMAFloodWSEProcessor:
             egm96 = EarthGravityModel1996(egm96_path, self.logger.logger)
             egm2008 = EarthGravityModel2008(egm2008_path, self.logger.logger)
             
-            # Calculate EGM heights for each station
-            self.logger.logger.info("Calculating EGM heights for each station...")
+            # Initialize grid data for station allocation
+            map_dir = Path("./data_for_wse/map")  # Update this path as needed
+            region_name = "glb_15min"  # Update this as needed
+            self.station_allocator.initialize_grid_data(map_dir, region_name)
             
-            # Create lists to store heights
+            # Calculate EGM heights and allocate stations
+            self.logger.logger.info("Processing stations...")
+            
+            # Create lists to store results
             egm96_heights = []
             egm2008_heights = []
+            allocation_flags = []
+            river_widths = []
+            distances = []
             
             # Process each station
             for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing stations"):
@@ -911,18 +1241,33 @@ class CAMAFloodWSEProcessor:
                     self.logger.logger.warning(f"Failed to get EGM2008 height for station {row['identifier']}: {str(e)}")
                     egm2008_height = None
                 
+                # Allocate station
+                try:
+                    allocation = self.station_allocator.allocate_station(lat, lon)
+                    allocation_flags.append(allocation['flag'])
+                    river_widths.append(allocation['river_width'])
+                    distances.append(allocation['dist1'])
+                except Exception as e:
+                    self.logger.logger.warning(f"Failed to allocate station {row['identifier']}: {str(e)}")
+                    allocation_flags.append(-9999)
+                    river_widths.append(-9999.0)
+                    distances.append(-9999.0)
+                
                 egm96_heights.append(egm96_height)
                 egm2008_heights.append(egm2008_height)
             
-            # Add heights to dataframe
+            # Add results to dataframe
             df['egm96_height'] = egm96_heights
             df['egm2008_height'] = egm2008_heights
+            df['allocation_flag'] = allocation_flags
+            df['river_width'] = river_widths
+            df['distance_to_river'] = distances
             
             # Save to new CSV file
             self.logger.logger.info(f"Saving results to: {output_csv}")
             df.to_csv(output_csv, index=False)
             
-            self.logger.logger.info("Successfully processed HydroWeb data and added EGM heights")
+            self.logger.logger.info("Successfully processed HydroWeb data and added EGM heights and river allocations")
             
         except Exception as e:
             self.logger.logger.error(f"Error processing HydroWeb data: {str(e)}")

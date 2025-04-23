@@ -3,10 +3,10 @@
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
-   tim_res           =  Day
+   tim_res           =  Month
    grid_res          =  
-   syear             =  
-   eyear             =  
+   syear             =  1900
+   eyear             =  2022
    fulllist          =  ./data/reference/stn_ref/HydroWeb_2.0/hydroprd_river.csv
 /
 
