@@ -1,0 +1,2 @@
+           ID                                   Station                 River                 Basin                         Country       lon       lat  elevation    EGM08    EGM96        Satellite       Start Date         End Date        Status
+0000000000002                                 Station02               River02               Basin02                       Country02  19.06    -28.95    100   31.49     31.93       Satellite01  2018-12-15 15:54  2020-11-16 15:54   operational
