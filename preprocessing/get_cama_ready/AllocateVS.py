@@ -36,10 +36,6 @@ class AllocateVS:
         self.tag = tag
         self.outdir = outdir
         
-        # 添加EGM96处理器
-        self.egm96_processor = None
-        self.egm96_path = Path("./data_for_wse/WW15MGH.DAC")
-        
         # 基本参数
         self.north1 = None
         self.east1 = None
@@ -796,9 +792,7 @@ class AllocateVS:
                 break
         
         return x0, y0
-    
-
-    
+     
     def down_dist(self, ix, iy):
         """计算下游距离"""
         iix = ix 
@@ -1127,21 +1121,9 @@ class AllocateVS:
         if lon0 < self.west1 or lon0 > self.east1 or lat0 < self.south1 or lat0 > self.north1:
             return None
             
-        # 计算在高分辨率网格中的索引
-        print(f"Debug: Input parameters:")
-        print(f"  lon0={lon0}, west1={self.west1}")
-        print(f"  lat0={lat0}, north1={self.north1}")
-        print(f"  csize={self.csize}, hres={self.hres}")
-        
         # 计算中间值 - 和Fortran代码保持一致
         lon_term = lon0 - self.west1 - self.csize/2.0
         lat_term = self.north1 - self.csize/2.0 - lat0
-        
-        print(f"Debug: Intermediate calculations:")
-        print(f"  lon_term = {lon0} - {self.west1} - {self.csize}/2.0 = {lon_term}")
-        print(f"  lat_term = {self.north1} - {self.csize}/2.0 - {lat0} = {lat_term}")
-        print(f"  lon_calc = {lon_term} * {self.hres} = {lon_term * self.hres}")
-        print(f"  lat_calc = {lat_term} * {self.hres} = {lat_term * self.hres}")
         
         # 高精度计算站点索引 
         ix = int(lon_term * self.hres) + 1 #1-based
@@ -1601,84 +1583,7 @@ class AllocateVS:
         except Exception as e:
             print(f"Error saving to NetCDF: {e}")
             return None
-
-    def global_to_tile(self, global_ix, global_iy):
-        """将全局索引转换为瓦片内的相对索引"""
-        ix = global_ix % self.nx
-        if ix == 0:
-            ix = self.nx
-        iy = global_iy % self.ny
-        if iy == 0:
-            iy = self.ny
-        return ix, iy
         
-    def tile_to_global(self, ix, iy):
-        """将瓦片内的相对索引转换为全局索引"""
-        tile_x = (ix - 1) // self.nx
-        tile_y = (iy - 1) // self.ny
-        global_ix = tile_x * self.nx + (ix - 1) % self.nx + 1
-        global_iy = tile_y * self.ny + (iy - 1) % self.ny + 1
-        return global_ix, global_iy
-
-    def find_nearest_points(self, lon, lat):
-        """
-        找到给定经纬度坐标最近的CaMa-Flood网格点
-        
-        Args:
-            lon (float): 经度
-            lat (float): 纬度
-            
-        Returns:
-            tuple: (iXX, iYY) 0-based索引的网格点坐标
-        """
-        try:
-            # 计算网格索引
-            iXX = int((lon - self.west) / self.gsize)
-            iYY = int((self.north - lat) / self.gsize)
-            
-            # 确保索引在有效范围内
-            iXX = max(0, min(iXX, self.nXX - 1))
-            iYY = max(0, min(iYY, self.nYY - 1))
-            
-            # 检查该点是否在有效流域内
-            if self.basin[iYY, iXX] <= 0:
-                # 在周围8个点中寻找最近的有效流域点
-                min_dist = float('inf')
-                nearest_iXX = iXX
-                nearest_iYY = iYY
-                
-                for dy in [-1, 0, 1]:
-                    for dx in [-1, 0, 1]:
-                        if dx == 0 and dy == 0:
-                            continue
-                            
-                        new_iXX = iXX + dx
-                        new_iYY = iYY + dy
-                        
-                        # 检查边界
-                        if (0 <= new_iXX < self.nXX and 
-                            0 <= new_iYY < self.nYY and 
-                            self.basin[new_iYY, new_iXX] > 0):
-                            
-                            # 计算到目标点的距离
-                            point_lon = self.west + (new_iXX + 0.5) * self.gsize
-                            point_lat = self.north - (new_iYY + 0.5) * self.gsize
-                            dist = np.sqrt((lon - point_lon)**2 + (lat - point_lat)**2)
-                            
-                            if dist < min_dist:
-                                min_dist = dist
-                                nearest_iXX = new_iXX
-                                nearest_iYY = new_iYY
-                
-                iXX = nearest_iXX
-                iYY = nearest_iYY
-            
-            return iXX, iYY
-            
-        except Exception as e:
-            print(f"Error finding nearest points: {e}")
-            return None, None
-
     def find_downstream_points(self, iXX, iYY):
         """找到下游点的位置"""
         next_iXX = self.nextXX[iYY-1, iXX-1]
