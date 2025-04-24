@@ -25,3 +25,6 @@ preprocessing/get_cama_ready/out/altimetry_glb_15min_20250423.txt
 preprocessing/get_cama_ready/out/cama_data_s30e010.nc
 preprocessing/get_cama_ready/out/cama_data_s30w050.nc
 preprocessing/get_cama_ready/s01-allocate_VS.sh
+preprocessing/get_cama_ready/out/altimetry_glb_15min_20250424.txt
+preprocessing/get_cama_ready/AllocateVS-ERR.py
+preprocessing/get_cama_ready/allocate_VS
