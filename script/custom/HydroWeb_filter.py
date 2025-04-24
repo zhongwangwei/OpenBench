@@ -15,10 +15,9 @@ def process_station(station, info, min_uparea, max_uparea):
         'obs_eyear': -9999,
         'ref_dir': 'file'
     }
-    if info.compare_tim_res.lower() == '1m':
-        file_path = f'{info.ref_dir}/GRDC_Month/{int(station["ID"])}_Q_Month.nc'
-    elif info.compare_tim_res.lower() == '1d':
-        file_path = f'{info.ref_dir}/GRDC_Day/{int(station["ID"])}_Q_Day.Cmd.nc'
+    print(station['ID'])
+    if info.compare_tim_res.lower() == '1d':
+        file_path = f'{info.ref_dir}/output/river/hydroprd_river_{station["ID"]}.nc'
     else:
         return result
     if os.path.exists(file_path):
@@ -34,20 +33,15 @@ def process_station(station, info, min_uparea, max_uparea):
                 (station['lon'] >= info.min_lon) and
                 (station['lon'] <= info.max_lon) and
                 (station['lat'] >= info.min_lat) and
-                (station['lat'] <= info.max_lat) and
-                (station['area1'] >= min_uparea) and
-                (station['area1'] <= max_uparea) and
-                (station['ix2'] == -9999)):
+                (station['lat'] <= info.max_lat) 
                result['Flag'] = True
                if info.debug_mode:
                   logging.info(f"Station {int(station['ID'])} is selected")
     return result
 
-def filter_GRDC(info):
-   max_uparea = info.ref_nml['Streamflow']['GRDC_max_uparea']
-   min_uparea = info.ref_nml['Streamflow']['GRDC_min_uparea']
-   if info.compare_tim_res.lower() == "h":
-      logging.error('compare_res="Hour", the compare_res should be "Day", "Month" or longer ')
+def filter_HydroWeb(info):
+   if info.compare_tim_res.lower() != "d" :
+      logging.error('The compare_res should be "Day" ')
       sys.exit(1)
    # Add logging import if not already imported
    import logging
@@ -64,27 +58,27 @@ def filter_GRDC(info):
    valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
    #ask user to input the resolution
    #add the reason for the input
-   logging.info("The simulation grid resolution can be different from the LSM grid resolution")
-   info.sim_grid_res = float(input("Please input the simulation grid resolution: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)"))
+   logging.info("The simulation grid resolution of routing model can be different from the LSM grid resolution")
+   info.sim_grid_res = float(input("Please input the simulation grid resolution of routing model again: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)"))
    if info.sim_grid_res not in valid_resolutions:
-       logging.warning(f"sim_grid_res value {info.sim_grid_res} is not in the list of standard resolutions: {valid_resolutions}")
-       logging.warning("This may cause issues with grid coordinate calculations")
+       logging.error(f"sim_grid_res value {info.sim_grid_res} is not in the list of standard resolutions: {valid_resolutions}")
+       sys.exit(1)
    
    if info.debug_mode:
        logging.info(f"Using simulation grid resolution: {info.sim_grid_res} degrees")
    if info.sim_grid_res == 0.25:
-      info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_15min.txt"
+      info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_15min.txt"
    elif info.sim_grid_res == 0.0167:
-      info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_1min.txt"
+      info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_1min.txt"
    elif info.sim_grid_res == 0.0833:
-      info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_5min.txt"
+      info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_5min.txt"
    elif info.sim_grid_res == 0.1:
-      info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_6min.txt"
+      info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_6min.txt"
    elif info.sim_grid_res == 0.05:
-      info.ref_fulllist = f"{info.ref_dir}/list/GRDC_alloc_3min.txt"
+      info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_3min.txt"
    station_list = pd.read_csv(f"{info.ref_fulllist}", delimiter=r"\s+", header=0)
 
-   results = Parallel(n_jobs=-1)(delayed(process_station)(row, info, min_uparea, max_uparea) for _, row in station_list.iterrows())
+   results = Parallel(n_jobs=-1)(delayed(process_station)(row, info) for _, row in station_list.iterrows())
    for i, result in enumerate(results):
       for key, value in result.items():
          station_list.at[i, key] = value
@@ -129,6 +123,6 @@ def filter_GRDC(info):
    data_select['use_eyear'] = data_select['use_eyear'].astype(int)
    data_select['obs_syear'] = data_select['obs_syear'].astype(int)
    data_select['obs_eyear'] = data_select['obs_eyear'].astype(int)
-   data_select['ID'] = data_select['ID'].astype(int)
+   data_select['ID'] = data_select['ID'] #.astype(int)
    
    data_select.to_csv(f"{info.casedir}/stn_list.txt", index=False)
