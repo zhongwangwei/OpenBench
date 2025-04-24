@@ -7,267 +7,6 @@ import netCDF4 as nc
 import logging
 from typing import List, Tuple, Dict, Union
 
-class EarthGravityModel1996:
-    """EGM96大地水准面高度处理类"""
-    
-    def __init__(self, grid_file: Path, logger=None):
-        self.grid_file = grid_file
-        self.logger = logger or logging.getLogger(__name__)
-        self.data = None
-        
-        # 根据WW15MGH.DAC文件确定的值
-        self.minimum_height = -106.99
-        self.maximum_height = 85.39
-    
-    def load_data(self) -> None:
-        """加载和处理EGM96网格数据"""
-        try:
-            # 读取二进制数据
-            with open(self.grid_file, 'rb') as f:
-                data = f.read()
-            
-            # 转换为numpy数组并交换字节顺序（文件是大端序）
-            data_array = np.frombuffer(data, dtype='>i2')  # >i2 表示大端序16位整数
-            self.data = data_array.reshape(721, 1440)  # 721行（0°到180°），1440列（0°到360°）
-            
-            self.logger.info("成功加载EGM96网格数据")
-        except Exception as e:
-            self.logger.error(f"加载EGM96网格数据失败: {str(e)}")
-            raise
-    
-    def get_height(self, longitude: float, latitude: float) -> float:
-        """
-        获取椭球面上EGM96的高度。
-        
-        Args:
-            longitude: 经度（度）
-            latitude: 纬度（度）
-            
-        Returns:
-            高度（米）。负数表示平均海平面低于椭球面。
-        """
-        if self.data is None:
-            self.load_data()
-        
-        # 将度转换为弧度
-        lon_rad = np.radians(longitude)
-        lat_rad = np.radians(latitude)
-        
-        # 计算索引
-        record_index = (720 * (np.pi * 0.5 - lat_rad)) / np.pi
-        record_index = np.clip(record_index, 0, 720)
-        
-        # 将经度范围调整到0到2π
-        lon_rad = lon_rad % (2 * np.pi)
-        height_index = (1440 * lon_rad) / (2 * np.pi)
-        height_index = np.clip(height_index, 0, 1440)
-        
-        # 获取双线性插值的整数索引
-        i = int(height_index)
-        j = int(record_index)
-        
-        # 计算插值权重
-        x_minus_x1 = height_index - i
-        y_minus_y1 = record_index - j
-        x2_minus_x = 1.0 - x_minus_x1
-        y2_minus_y = 1.0 - y_minus_y1
-        
-        # 获取高度值（处理边缘情况）
-        f11 = self.data[j, i % 1440]
-        f21 = self.data[j, (i + 1) % 1440]
-        f12 = self.data[min(j + 1, 720), i % 1440]
-        f22 = self.data[min(j + 1, 720), (i + 1) % 1440]
-        
-        # 双线性插值
-        height = (f11 * x2_minus_x * y2_minus_y +
-                 f21 * x_minus_x1 * y2_minus_y +
-                 f12 * x2_minus_x * y_minus_y1 +
-                 f22 * x_minus_x1 * y_minus_y1) / 100.0  # 从厘米转换为米
-        
-        return height
-    
-    def get_heights(self, coordinates: List[Tuple[float, float]]) -> List[float]:
-        """
-        获取多个坐标的EGM96高度。
-        
-        Args:
-            coordinates: 经纬度对列表（度）
-            
-        Returns:
-            高度列表（米）
-        """
-        return [self.get_height(lon, lat) for lon, lat in coordinates]
-
-class EarthGravityModel2008:
-    """EGM08大地水准面高度处理类，使用双线性插值"""
-    
-    def __init__(self, grid_file: Path, logger=None):
-        self.grid_file = grid_file
-        self.logger = logger or logging.getLogger(__name__)
-        self.data = None
-        # 1x1分钟分辨率的网格规格
-        self.nrows = 10801  # 纬度点数（90°到-90°，间隔1弧分）
-        self.ncols = 21600  # 经度点数（0°到360°，间隔1弧分）
-        self.dlat = 1.0/60.0  # 纬度网格间距（1弧分）
-        self.dlon = 1.0/60.0  # 经度网格间距（1弧分）
-        self.top_lat = 90.0  # 起始纬度
-        self.west_lon = 0.0  # 起始经度
-        
-        # 官方文档中的统计数据，用于验证
-        self.min_height = -106.910  # 米
-        self.max_height = 85.840    # 米
-    
-    def load_data(self) -> None:
-        """加载和处理EGM08网格数据"""
-        try:
-            # 检查文件是否存在
-            if not self.grid_file.exists():
-                raise FileNotFoundError(f"EGM2008网格文件未找到: {self.grid_file}")
-            
-            # 获取文件大小
-            file_size = self.grid_file.stat().st_size
-            expected_size = self.nrows * self.ncols * 4  # 每个值4字节(REAL*4)
-            
-            if file_size != expected_size:
-                self.logger.warning(f"文件大小不匹配。预期{expected_size}字节，实际{file_size}字节。")
-            
-            # 初始化数据数组
-            self.data = np.zeros((self.nrows, self.ncols), dtype=np.float32)
-            
-            # 逐行读取二进制数据
-            with open(self.grid_file, 'rb') as f:
-                for i in range(self.nrows):
-                    # 读取记录标记（4字节）
-                    record_marker = f.read(4)
-                    if not record_marker:
-                        raise EOFError(f"第{i}行意外文件结束")
-                    
-                    # 读取行数据（ncols * 4字节）
-                    row_data = f.read(self.ncols * 4)
-                    if len(row_data) != self.ncols * 4:
-                        raise EOFError(f"第{i}行数据不完整")
-                    
-                    # 将行数据转换为float32数组
-                    row = np.frombuffer(row_data, dtype='>f4')  # 大端序float32
-                    self.data[i] = row
-                    
-                    # 读取结束记录标记（4字节）
-                    end_marker = f.read(4)
-                    if not end_marker:
-                        raise EOFError(f"第{i}行缺少结束记录标记")
-            
-            # 验证数据范围
-            data_min = np.min(self.data)
-            data_max = np.max(self.data)
-            if data_min < self.min_height or data_max > self.max_height:
-                self.logger.warning(
-                    f"数据范围({data_min:.3f}到{data_max:.3f})超出预期范围({self.min_height}到{self.max_height})"
-                )
-            
-            self.logger.info(f"成功加载EGM08网格数据，形状为{self.data.shape}")
-            
-        except Exception as e:
-            self.logger.error(f"加载EGM08网格数据失败: {str(e)}")
-            raise
-    
-    def bilinear_interpolation(self, ri: float, rj: float) -> float:
-        """
-        在特定网格位置执行双线性插值。
-        
-        Args:
-            ri: 行索引（浮点数）
-            rj: 列索引（浮点数）
-            
-        Returns:
-            插值结果（米）
-        """
-        try:
-            # 获取整数索引
-            i = int(ri)
-            j = int(rj)
-            
-            # 确保索引在边界内
-            i = max(0, min(i, self.nrows - 2))
-            j = max(0, min(j, self.ncols - 2))
-            
-            # 计算权重
-            di = ri - i
-            dj = rj - j
-            
-            # 处理经度环绕
-            j1 = j % self.ncols
-            j2 = (j + 1) % self.ncols
-            
-            # 获取角点值
-            v00 = float(self.data[i, j1])
-            v10 = float(self.data[i + 1, j1])
-            v01 = float(self.data[i, j2])
-            v11 = float(self.data[i + 1, j2])
-            
-            # 执行双线性插值
-            value = (v00 * (1 - di) * (1 - dj) +
-                    v10 * di * (1 - dj) +
-                    v01 * (1 - di) * dj +
-                    v11 * di * dj)
-            
-            return value  # 值已经是米为单位
-            
-        except Exception as e:
-            self.logger.error(f"双线性插值错误: {str(e)}")
-            raise
-    
-    def get_height(self, longitude: float, latitude: float) -> float:
-        """
-        获取椭球面上EGM08的高度。
-        
-        Args:
-            longitude: 经度（度，0到360或-180到180）
-            latitude: 纬度（度，-90到90）
-            
-        Returns:
-            高度（米）。负数表示平均海平面低于椭球面。
-        """
-        try:
-            if self.data is None:
-                self.load_data()
-            
-            # 验证输入坐标
-            if not (-90 <= latitude <= 90):
-                raise ValueError(f"纬度{latitude}超出有效范围[-90, 90]")
-            
-            # 将经度归一化到0-360范围
-            lon = longitude % 360.0
-            
-            # 将经纬度转换为网格索引
-            # 注意：数据从90°N开始，所以需要翻转纬度索引
-            ri = (90.0 - latitude) / self.dlat
-            rj = lon / self.dlon
-            
-            # 确保索引在边界内
-            ri = max(0, min(ri, self.nrows - 1))
-            rj = max(0, min(rj, self.ncols - 1))
-            
-            return self.bilinear_interpolation(ri, rj)
-            
-        except Exception as e:
-            self.logger.error(f"获取经度={longitude}，纬度={latitude}的高度错误: {str(e)}")
-            raise
-    
-    def get_heights(self, coordinates: List[Tuple[float, float]]) -> List[float]:
-        """
-        获取多个坐标的EGM08高度。
-        
-        Args:
-            coordinates: 经纬度对列表（度）
-            
-        Returns:
-            高度列表（米）
-        """
-        try:
-            return [self.get_height(lon, lat) for lon, lat in coordinates]
-        except Exception as e:
-            self.logger.error(f"获取多个坐标高度错误: {str(e)}")
-            raise
 
 class AllocateVS:
     """
@@ -297,11 +36,9 @@ class AllocateVS:
         self.tag = tag
         self.outdir = outdir
         
-        # 添加EGM处理器
+        # 添加EGM96处理器
         self.egm96_processor = None
         self.egm96_path = Path("./data_for_wse/WW15MGH.DAC")
-        self.egm2008_processor = None
-        self.egm2008_path = Path("./data_for_wse/Und_min1x1_egm2008_isw=82_WGS84_TideFree")
         
         # 基本参数
         self.north1 = None
@@ -355,96 +92,6 @@ class AllocateVS:
             if self.check_and_convert_files():
                 self.load_cama_data()
                 self.load_hires_data()
-                self.initialize_egm96()  # 初始化EGM96处理器
-                self.initialize_egm2008()  # 初始化EGM2008处理器
-
-    def initialize_egm96(self):
-        """初始化EGM96处理器"""
-        try:
-            if self.egm96_path.exists():
-                # 设置日志记录器
-                logger = logging.getLogger("AllocateVS")
-                handler = logging.StreamHandler()
-                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-                handler.setFormatter(formatter)
-                logger.addHandler(handler)
-                logger.setLevel(logging.INFO)
-                
-                # 创建EGM96处理器
-                self.egm96_processor = EarthGravityModel1996(self.egm96_path, logger)
-                print(f"EGM96处理器初始化成功，使用文件: {self.egm96_path}")
-            else:
-                print(f"警告: EGM96文件不存在 {self.egm96_path}")
-        except Exception as e:
-            print(f"EGM96处理器初始化失败: {e}")
-    
-    def initialize_egm2008(self):
-        """初始化EGM2008处理器"""
-        try:
-            if self.egm2008_path.exists():
-                # 设置日志记录器
-                logger = logging.getLogger("AllocateVS")
-                handler = logging.StreamHandler()
-                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-                handler.setFormatter(formatter)
-                logger.addHandler(handler)
-                logger.setLevel(logging.INFO)
-                
-                # 创建EGM2008处理器
-                self.egm2008_processor = EarthGravityModel2008(self.egm2008_path, logger)
-                print(f"EGM2008处理器初始化成功，使用文件: {self.egm2008_path}")
-            else:
-                print(f"警告: EGM2008文件不存在 {self.egm2008_path}")
-        except Exception as e:
-            print(f"EGM2008处理器初始化失败: {e}")
-
-    def get_egm96_height(self, lon, lat):
-        """获取指定经纬度的EGM96高度
-        
-        Args:
-            lon: 经度
-            lat: 纬度
-            
-        Returns:
-            float: EGM96高度，如果处理失败则返回None
-        """
-        try:
-            if self.egm96_processor is None:
-                self.initialize_egm96()
-                
-            if self.egm96_processor is not None:
-                height = self.egm96_processor.get_height(lon, lat)
-                return height
-            else:
-                print(f"警告: EGM96处理器未初始化，无法获取高度")
-                return None
-        except Exception as e:
-            print(f"获取EGM96高度失败: {e}")
-            return None
-    
-    def get_egm2008_height(self, lon, lat):
-        """获取指定经纬度的EGM2008高度
-        
-        Args:
-            lon: 经度
-            lat: 纬度
-            
-        Returns:
-            float: EGM2008高度，如果处理失败则返回None
-        """
-        try:
-            if self.egm2008_processor is None:
-                self.initialize_egm2008()
-                
-            if self.egm2008_processor is not None:
-                height = self.egm2008_processor.get_height(lon, lat)
-                return height
-            else:
-                print(f"警告: EGM2008处理器未初始化，无法获取高度")
-                return None
-        except Exception as e:
-            print(f"获取EGM2008高度失败: {e}")
-            return None
 
     def init_params(self):
         """初始化基本参数"""
@@ -1150,16 +797,23 @@ class AllocateVS:
         
         return x0, y0
     
-    def down_dist(self, kx, ky):
+
+    
+    def down_dist(self, ix, iy):
         """计算下游距离"""
-        iix = kx
-        iiy = ky
+        iix = ix 
+        iiy = iy
         count = 0
         down_dist = 0.0
-        
-        lon1 = self.west1 + (kx)*(1/float(self.hres))
-        lat1 = self.north1 - (ky)*(1/float(self.hres))
-        
+        west0 = self.west1+ self.csize/2.0
+        north0 = self.north1-self.csize/2.0
+        print(west0, north0)
+        #lon1 = self.west1 + (ix+0.5)*(1/float(self.hres))
+        #lat1 = self.north1 - (iy+0.5)*(1/float(self.hres))
+        lon1 = west0+ix*self.csize
+        lat1 = north0-iy*self.csize
+        print(f"  lon1, lat1: {lon1}, {lat1}")
+
         while self.visual[iiy-1, iix-1] != 20:
             if count > 1000:
                 down_dist = -9999.0
@@ -1178,6 +832,7 @@ class AllocateVS:
                 break
                 
             dval = self.flwdir[iiy-1, iix-1]
+            print(f"  dval: {dval}")
             dx, dy = self.next_D8(dval)
             iix = iix + dx
             iiy = iiy + dy
@@ -1185,8 +840,9 @@ class AllocateVS:
             if iix < 1 or iiy < 1 or iix > self.nx or iiy > self.ny:
                 break
                 
-            lon2 = self.west1 + (iix)*(1/float(self.hres))
-            lat2 = self.north1 - (iiy)*(1/float(self.hres))
+            lon2=lon1+dx*self.csize 
+            lat2=lat1+dy*self.csize
+
             down_dist = down_dist + self.hubeny_real(lat1, lon1, lat2, lon2)
             
             lon1 = lon2
@@ -1195,7 +851,8 @@ class AllocateVS:
         
         if count > 1000:
             down_dist = -9999.0
-            
+        print(f"  lon2, lat2: {lon2}, {lat2}")
+        print(f"  down_dist: {down_dist}")
         return down_dist
     
     def until_mouth_flag(self, ix, iy, x0, y0):
@@ -1244,7 +901,7 @@ class AllocateVS:
         lag = 1.0e20
         
         # 搜索范围
-        nn = 10
+        nn = 20
         
         # 在搜索范围内寻找最近的河流中心线
         for dy in range(-nn, nn+1):
@@ -1465,184 +1122,383 @@ class AllocateVS:
         return kx, ky, lag
     
     def process_station(self, id, station, river, bsn, country, lon0, lat0, ele0, egm08, egm96, sat, stime, etime, status):
-        """
-        处理单个站点数据
-        
-        Args:
-            id: 站点ID
-            station: 站点名称
-            river: 河流名称
-            bsn: 流域名称
-            country: 国家名称
-            lon0: 经度
-            lat0: 纬度
-            ele0: 高程
-            egm08: EGM08高度
-            egm96: EGM96高度
-            sat: 卫星名称
-            stime: 开始时间
-            etime: 结束时间
-            status: 状态
+        """处理单个站点的数据"""
+        # 检查站点是否在当前区域内
+        if lon0 < self.west1 or lon0 > self.east1 or lat0 < self.south1 or lat0 > self.north1:
+            return None
             
-        Returns:
-            包含处理结果的字典
-        """
-        # 计算站点当前的EGM96高度
-        calc_egm96 = None
-        if self.egm96_processor is not None:
-            try:
-                calc_egm96 = self.get_egm96_height(lon0, lat0)
-                # 如果提供了输入EGM96值，与计算值进行比较
-                if egm96 is not None and calc_egm96 is not None:
-                    egm96_diff = abs(float(egm96) - calc_egm96)
-                    if egm96_diff > 1.0:  # 差异大于1米发出警告
-                        print(f"警告: 站点 {id} 的EGM96值差异较大。输入: {egm96}, 计算: {calc_egm96}, 差异: {egm96_diff}")
-            except Exception as e:
-                print(f"计算站点 {id} 的EGM96高度时出错: {e}")
+        # 计算在高分辨率网格中的索引
+        print(f"Debug: Input parameters:")
+        print(f"  lon0={lon0}, west1={self.west1}")
+        print(f"  lat0={lat0}, north1={self.north1}")
+        print(f"  csize={self.csize}, hres={self.hres}")
         
-        # 计算站点当前的EGM2008高度
-        calc_egm2008 = None
-        if self.egm2008_processor is not None:
-            try:
-                calc_egm2008 = self.get_egm2008_height(lon0, lat0)
-                # 如果提供了输入EGM2008值，与计算值进行比较
-                if egm08 is not None and calc_egm2008 is not None:
-                    egm2008_diff = abs(float(egm08) - calc_egm2008)
-                    if egm2008_diff > 1.0:  # 差异大于1米发出警告
-                        print(f"警告: 站点 {id} 的EGM2008值差异较大。输入: {egm08}, 计算: {calc_egm2008}, 差异: {egm2008_diff}")
-            except Exception as e:
-                print(f"计算站点 {id} 的EGM2008高度时出错: {e}")
+        # 计算中间值 - 和Fortran代码保持一致
+        lon_term = lon0 - self.west1 - self.csize/2.0
+        lat_term = self.north1 - self.csize/2.0 - lat0
         
-        # 是否在指定区域内
-        pname = "HydroWeb"
+        print(f"Debug: Intermediate calculations:")
+        print(f"  lon_term = {lon0} - {self.west1} - {self.csize}/2.0 = {lon_term}")
+        print(f"  lat_term = {self.north1} - {self.csize}/2.0 - {lat0} = {lat_term}")
+        print(f"  lon_calc = {lon_term} * {self.hres} = {lon_term * self.hres}")
+        print(f"  lat_calc = {lat_term} * {self.hres} = {lat_term * self.hres}")
         
-        # 检查站点是否在区域边界内
-        if self.west1 <= lon0 <= self.east1 and self.south1 <= lat0 <= self.north1:
-            print(f"站点 {id} 在指定区域内 {self.west1}-{self.east1}, {self.south1}-{self.north1}")
-            pass
+        # 高精度计算站点索引 
+        ix = int(lon_term * self.hres) + 1 #1-based
+        iy = int(lat_term * self.hres) + 1 #1-based
+        
+        print(f"Debug: Calculated HiRes Index: ix={ix}, iy={iy}")
+        #print the lon lat of ix, iy
+        lon_hres = self.west1 + (ix)*(1/float(self.hres))
+        lat_hres = self.north1 - (iy)*(1/float(self.hres))
+        print(f"Debug: HiRes Index (ix, iy) -> Lon Lat: ({lon_hres:.5f}, {lat_hres:.5f})")
+
+        print(f"[DEBUG] Station {station} ({lon0:.5f}, {lat0:.5f}) -> Initial HiRes Index (ix, iy): ({ix}, {iy}) within tile {self.cname}")
+        #print the lon lat of ix, iy
+        lon_hres = self.west1 + (ix)*(1/float(self.hres))
+        lat_hres = self.north1 - (iy)*(1/float(self.hres))
+        print(f"Debug: HiRes Index (ix, iy) -> Lon Lat: ({lon_hres:.2f}, {lat_hres:.2f})")
+
+        # 检查索引是否有效
+        if ix < 1 or ix > self.nx or iy < 1 or iy > self.ny:
+            print(f"Warning: Invalid grid indices for station {station}: ix={ix}, iy={iy} (Tile dimensions: nx={self.nx}, ny={self.ny})")
+            return None
+        
+        # 标记代码说明
+        # 10 = 在河流中心线上
+        # 11 = 在河道内
+        # 12 = 位置在单元流域出口
+        # 20 = 找到最近的河流
+        # 21 = 找到最近的主河流
+        # 30 = 找到最近垂直的主河流
+        # 31 = 分叉位置
+        # 40 = 对海洋网格进行校正
+        
+        flag = -9
+        kx1 = -9999  # 初始化为-9999，与Fortran代码保持一致
+        ky1 = -9999
+        kx2 = -9999
+        ky2 = -9999
+        kx1 = ix  # 然后设置为当前位置
+        ky1 = iy
+        
+        lat1 = lat0
+        lon1 = lon0
+        
+        print(f"Debug: Processing station {station}")
+        print(f"  Position: ix={ix}, iy={iy}")
+        print(f"  visual[{iy-1},{ix-1}]={self.visual[iy-1,ix-1]}")
+        print(f"  riv1m[{iy-1},{ix-1}]={self.riv1m[iy-1,ix-1]}")
+        
+        # 检查点的类型并处理 (注意：数组索引需要-1转换为0-based)
+        if self.visual[iy-1, ix-1] == 10:  # 河流中心线
+            print(f"  Station {station} is on river centerline")
+            kx1 = ix
+            ky1 = iy
+            kx2 = -9999
+            ky2 = -9999
+            flag = 10
+        elif self.riv1m[iy-1, ix-1] == -1:  # 河道
+            print(f"  Station {station} is in river channel")
+            # 找最近的河流中心线
+            kx1, ky1, lag1 = self.find_nearest_river(ix, iy)
+            kx2 = -9999
+            ky2 = -9999
+            flag = 11
+        elif self.visual[iy-1, ix-1] == 20:  # 单元流域出口
+            print(f"  Station {station} is at unit-catchment outlet")
+            kx1 = ix
+            ky1 = iy
+            kx2 = -9999
+            ky2 = -9999
+            flag = 12
+        # 陆地/网格单元、边界到河道的校正
+        elif self.visual[iy-1, ix-1] in [2, 3, 5, 7]:
+            print(f"  Station {station} needs correction from land to channel")
+            # 找最近的河流
+            kx2, ky2, lag2 = self.find_nearest_river(ix, iy)
+            if kx2 == -9999 or ky2 == -9999:
+                kx2 = ix
+                ky2 = iy
+            # 找垂直于河流的最近主河道
+            kx1, ky1, lag1 = self.find_nearest_main_river_ppend(kx2, ky2)
+            if kx1 == -9999 or ky1 == -9999:
+                # 尝试找最近的主河道
+                kx3, ky3, lag3 = self.find_nearest_main_river(kx2, ky2)
+                if kx3 == -9999 or ky3 == -9999:
+                    kx1 = kx2
+                    ky1 = ky2
+                    kx2 = -9999
+                    ky2 = -9999
+                    flag = 20
+                else:
+                    kx1 = kx3
+                    ky1 = ky3
+                    flag = 21
+            else:
+                # 检查是否找到了一个新的位置
+                if kx1 != kx2 or ky1 != ky2:
+                    if lag2 < lag1:
+                        flag = 30
+                    else:
+                        kx2 = -9999
+                        ky2 = -9999
+                        flag = 20
+                else:
+                    kx2 = -9999
+                    ky2 = -9999
+                    flag = 20
+        # 海洋网格校正
+        elif self.visual[iy-1, ix-1] in [0, 1, 25]:
+            print(f"  Station {station} needs ocean grid correction")
+            kx1, ky1, lag1 = self.find_nearest_river(ix, iy)
+            if kx1 != ix or ky1 != iy:
+                kx2 = -9999
+                ky2 = -9999
+                flag = 40
+            else:
+                flag = 90
         else:
-            print(f"站点 {id} 不在指定区域内 {self.west1}-{self.east1}, {self.south1}-{self.north1}")
-            return {
-                "id": id, 
-                "station": station,
-                "river": river,
-                "basin": bsn,
-                "country": country,
-                "lon0": lon0,
-                "lat0": lat0,
-                "ele0": ele0,
-                "egm08": egm08,
-                "calc_egm08": calc_egm2008,
-                "egm96": egm96,
-                "calc_egm96": calc_egm96,
-                "status": "范围外",
-                "flag": -9999
-            }
+            flag = 90
             
-        # 将经纬度转换为CaMa索引
-        ix0, iy0 = self.westsouth(lon0, lat0)
+        # Print results after finding river point
+        print(f"[DEBUG] After river finding: flag={flag}, kx1={kx1}, ky1={ky1}, kx2={kx2}, ky2={ky2}")
         
-        if ix0 < 0 or ix0 >= self.nXX or iy0 < 0 or iy0 >= self.nYY:
-            print(f"错误：站点 {id} 转换为CaMa索引无效：{ix0}, {iy0}")
-            return {
-                "id": id, 
-                "station": station,
-                "river": river,
-                "basin": bsn,
-                "country": country,
-                "lon0": lon0,
-                "lat0": lat0,
-                "ele0": ele0,
-                "egm08": egm08,
-                "calc_egm08": calc_egm2008,
-                "egm96": egm96,
-                "calc_egm96": calc_egm96,
-                "status": "范围外",
-                "flag": -9999
-            }
+        # 使用找到的最佳位置
+        kx = kx1
+        ky = ky1
+ 
+        # 检查索引有效性
+        if kx < 1 or ky < 1 or kx > self.nx or ky > self.ny:
+            print(f"Warning: Invalid grid indices after processing for station {station}: kx={kx}, ky={ky}")
+            return None
+        
+        # 获取CaMa网格索引 (注意：数组索引需要-1转换为0-based)
+        # Remove yrev correction - use direct indices instead
+        # 检查数组是否越界
+        if kx-1 < 0 or kx-1 >= self.nx or ky-1 < 0 or ky-1 >= self.ny:
+            print(f"Warning: Array indices out of bounds for catmXX/catmYY: kx-1={kx-1}, ky-1={ky-1}, array shape=({self.nx}, {self.ny})")
+            return None
 
-        # 继续处理站点其他信息...
-        
-        # 将结果添加到字典中
-        return {
-            "id": id,
-            "station": station,
-            "river": river,
-            "basin": bsn,
-            "country": country,
-            "lon0": lon0,
-            "lat0": lat0,
-            "ele0": ele0,
-            "egm08": egm08,
-            "calc_egm08": calc_egm2008,
-            "egm96": egm96,
-            "calc_egm96": calc_egm96,
-            "sat": sat,
-            "stime": stime,
-            "etime": etime,
-            "ix": iXX, 
-            "iy": iYY,
-            "nextix": nxtX,
-            "nextiy": nxtY,
-            "elevtn": elev,
-            "elevhires": elevhires,
-            "hand": hand_val,
-            "lon": lons,
-            "lat": lats,
-            "dist": dist,
-            "flag": flag,
-            "dstatio": dist_s,
-            "status": status,
-            # 其他结果字段...
-        }
+        # 打印catmXX和catmYY的值
+        print(f"Debug: catmXX[{ky-1},{kx-1}]={self.catmXX[ky-1, kx-1]}")
+        print(f"Debug: catmYY[{ky-1},{kx-1}]={self.catmYY[ky-1, kx-1]}")
+        # 获取CaMa网格索引
+        # Fortran数组是列优先(column-major)，而Python是行优先(row-major)
+        # 在catmXX和catmYY中，第一个索引是y(行)，第二个是x(列)
+        iXX = self.catmXX[ky-1, kx-1]   
+        iYY = self.catmYY[ky-1, kx-1]    
+        print(f"  iXX, iYY: {iXX}, {iYY}")
+        print(f"[DEBUG] Mapped to CaMa Index (iXX, iYY) using catm files at (kx, ky)=({kx}, {ky}): ({iXX}, {iYY})")
 
-    def save_results(self, results):
-        """
-        将结果保存到CSV文件
-        
-        Args:
-            results: 处理结果列表
-        """
-        # 检查结果是否为空
-        if not results:
-            print("没有结果可保存")
-            return
-        
-        # 准备CSV标题
-        headers = [
-            "id", "station", "river", "basin", "country", "sat",
-            "lon0", "lat0", "ele0", "egm08", "calc_egm08", "egm96", "calc_egm96", "status",
-            "stime", "etime", "ix", "iy", "nextix", "nextiy", "flag",
-            "elevtn", "elevhires", "dist", "dstatio", "hand", "lon", "lat"
-        ]
-        
-        # 确定输出文件名和路径
-        out_dir = Path(self.outdir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        
-        output_file = out_dir / f"{self.dataname}_{self.tag}.txt"
-        
-        # 写入结果
-        with open(output_file, 'w') as f:
-            # 写入标题
-            f.write(",".join(headers) + "\n")
+        # Check if this is a bifurcation location
+        if self.biftag[iYY-1, iXX-1] == 1:
+            # Check if we have a secondary point and it's different from the primary point
+            if kx2 != -9999 or ky2 != -9999:
+                if kx1 != kx2 or ky1 != ky2:
+                    # This is a bifurcation location
+                    print("Bifurcation location detected")
+                    flag = 31
+        kx=kx1
+        ky=ky1
+        print(f"  kx, ky: {kx}, {ky}")
+        if kx < 1 or ky < 1 or kx > self.nx or ky > self.ny:
+            print(f"Warning: Invalid grid indices after processing for station {station}: kx={kx}, ky={ky}")
+            return None
+     
+        # 计算下游距离 (注意：数组索引需要-1转换为0-based)
+        if self.visual[ky-1, kx-1] == 10:
+            diffdist = self.down_dist(kx, ky)
+        else:
+            diffdist = 0.0
+        print(f"  diffdist: {diffdist}")
+        if diffdist == -9999.0:
+            print(f"Warning: Invalid downstream distance for station {station}")
+            return None
             
-            # 写入数据行
-            for result in results:
-                values = []
-                for header in headers:
-                    value = result.get(header, "")
-                    # 确保None也正确写入
-                    if value is None:
-                        value = ""
-                    values.append(str(value))
+        # 计算与原始位置的距离
+        dist1 = -9999.0
+        dist2 = -9999.0
+        
+        lat2 = self.north1 - (ky)*(1/float(self.hres))
+        lon2 = self.west1 + (kx)*(1/float(self.hres))
+        dist1 = self.hubeny_real(lat1, lon1, lat2, lon2)
+        
+        if kx2 != -9999 or ky2 != -9999:
+            lat2 = self.north1 - (ky2)*(1/float(self.hres))
+            lon2 = self.west1 + (kx2)*(1/float(self.hres))
+            dist2 = self.hubeny_real(lat1, lon1, lat2, lon2)
+            
+        # 获取最终的CaMa网格索引 (注意：数组索引需要-1转换为0-based)
+        iXX = self.catmXX[ky-1, kx-1]
+        iYY = self.catmYY[ky-1, kx-1]
+        print(f"Debug: self.elevtn shape: {self.elevtn.shape}")
+        print(f"Debug: self.ele1m shape: {self.ele1m.shape}")
+        print(f"Debug: iXX, iYY: {iXX}, {iYY}")
+        uXX, uYY = self.upstream(iXX, iYY)
+        print(f"Debug: uXX, uYY: {uXX}, {uYY}")
+        
+        # 比较上下游高程差，选取合适的网格
+        try:
+            uXX, uYY = self.upstream(iXX, iYY)
+            
+            # 检查上游索引有效性
+            if uXX < 1 or uXX > self.nXX or uYY < 1 or uYY > self.nYY:
+                print(f"Warning: Invalid upstream indices for station {station}: uXX={uXX}, uYY={uYY}")
+                # 使用当前索引作为上游索引
+                uXX = iXX
+                uYY = iYY
+            
+            # 检查索引是否在有效范围内
+            if not (0 <= iYY-1 < self.nYY and 0 <= iXX-1 < self.nXX and 
+                    0 <= uYY-1 < self.nYY and 0 <= uXX-1 < self.nXX):
+                print(f"Warning: CaMa grid indices out of bounds: iXX={iXX}, iYY={iYY}, uXX={uXX}, uYY={uYY}")
+                print(f"Valid ranges: 1 to {self.nXX} for X, 1 to {self.nYY} for Y")
+                # Skip the elevation comparison
+                raise ValueError("CaMa grid indices out of bounds")
                 
-                f.write(",".join(values) + "\n")
+            # 注意：数组索引需要-1转换为0-based
+            delv0 = abs(self.elevtn[iYY-1, iXX-1] - self.ele1m[ky-1, kx-1])  # 与下游的高程差
+            delv1 = abs(self.elevtn[uYY-1, uXX-1] - self.ele1m[ky-1, kx-1])  # 与上游的高程差
+            
+            # 如果上游高程差更小，则分配到上游网格
+            iXX_orig, iYY_orig = iXX, iYY # Store original before potential upstream adjustment
+            if delv1 < delv0:
+                iXX = uXX
+                iYY = uYY
+                flag = flag + 100
+            
+            # Print result after upstream adjustment check
+            if iXX != iXX_orig or iYY != iYY_orig:
+                print(f"[DEBUG] Adjusted to upstream CaMa Index (iXX, iYY): ({iXX}, {iYY}) due to elevation diff (delv0={delv0:.2f}, delv1={delv1:.2f}). Flag changed to {flag}.")
+            else:
+                print(f"[DEBUG] Kept original CaMa Index (iXX, iYY): ({iXX}, {iYY}) after elevation check (delv0={delv0:.2f}, delv1={delv1:.2f})")
+        except Exception as e:
+            print(f"Warning: Error during upstream elevation comparison: {e}")
+            # Continue without upstream adjustment
         
-        print(f"结果已保存到 {output_file}")
+        # 计算CaMa网格中心坐标
+        lon_cama = self.west + (iXX - 0.5) * self.gsize
+        lat_cama = self.north - (iYY - 0.5) * self.gsize
         
-        # 还可以保存为NetCDF格式
-        # self.save_to_netcdf(results)
+        print(f"[DEBUG] Final CaMa Grid Center (lon_cama, lat_cama): ({lon_cama:.2f}, {lat_cama:.2f}) for final (iXX, iYY)=({iXX}, {iYY})")
+
+        # 构建结果字典，确保保存egm96_final
+        result = {
+            'id': id,
+            'station': station,
+            'dataname': self.dataname,
+            'lon': lon0,
+            'lat': lat0,
+            'sat': sat,
+            'flag': flag,
+            'ele': self.ele1m[ky-1, kx-1],
+            'diffdist': diffdist * 1e-3,
+            'kx1': kx1,
+            'ky1': ky1,
+            'kx2': kx2,
+            'ky2': ky2,
+            'dist1': dist1,
+            'dist2': dist2,
+            'rivwth': self.riv1m[ky-1, kx-1],
+            'iXX': iXX,
+            'iYY': iYY,
+            'egm08': egm08,
+            'egm96': egm96,  # 使用计算值或输入值
+            'lon_cama': lon_cama,
+            'lat_cama': lat_cama
+        }
+        
+        return result
+        
+    def process_stations(self):
+        """处理所有站点数据"""
+        # 读取站点列表
+        rlist = f"./SampleStation_list.txt"
+        results = []
+        
+        try:
+            with open(rlist, 'r') as f:
+                # 跳过标题行
+                next(f)
+                
+                # 逐行处理站点数据
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) < 14:
+                        continue
+                        
+                    id = parts[0]
+                    station = parts[1]
+                    river = parts[2]
+                    bsn = parts[3]
+                    country = parts[4]
+                    lon0 = float(parts[5])
+                    lat0 = float(parts[6])
+                    ele0 = float(parts[7])
+                    egm08 = float(parts[8])
+                    egm96 = float(parts[9])
+                    sat = parts[10]
+                    stime = parts[11]
+                    etime = parts[12]
+                    status = parts[13]
+                    
+                    # 处理单个站点
+                    result = self.process_station(id, station, river, bsn, country, lon0, lat0, ele0, 
+                                                egm08, egm96, sat, stime, etime, status)
+                    
+                    if result:
+                        results.append(result)
+                        print(
+                            f"{result['id']:13s} {result['station']:60s} {result['dataname']:10s} "
+                            f"{result['lon']:10.2f} {result['lat']:10.2f} {result['sat']:15s} "
+                            f"{result['flag']:4d} {result['ele']:10.2f} {result['diffdist']:13.2f} "
+                            f"{result['kx1']:8d} {result['ky1']:8d} {result['kx2']:8d} {result['ky2']:8d} "
+                            f"{result['dist1']:12.2f} {result['dist2']:12.2f} {result['rivwth']:12.2f} "
+                            f"{result['iXX']:8d} {result['iYY']:8d} {result['egm08']:10.2f} {result['egm96']:10.2f}\n"
+                        )
+        except Exception as e:
+            print(f"Error processing station list: {e}")
+            import traceback
+            traceback.print_exc()
+            
+        return results
+    
+    def save_results(self, results):
+        """保存处理结果到文件"""
+        if not results:
+            print("No results to save")
+            return
+            
+        output_file = f"{self.outdir}/altimetry_{self.dataname}_{self.map}.txt"
+        
+        try:
+            with open(output_file, 'w') as f:
+                # 写入标题行 - 格式与s01-allocate_VS.py保持一致
+                f.write(
+                    f"{'ID':13}{'station':64}{'dataname':12}{'lon':12}{'lat':10}"
+                    f"{'satellite':17}{'flag':6}{'elevation':12}{'dist_to_mouth':15}"
+                    f"{'kx1':10}{'ky1':8}{'kx2':8}{'ky2':8}{'dist1':14}{'dist2':12}"
+                    f"{'rivwth':12}{'ix':10}{'iy':8}{'Lon_CaMa':12}{'Lat_CaMa':12}"
+                    f"{'EGM08':12}{'EGM96':10}\n"
+                )
+                
+                # 写入数据行
+                for result in results:
+                    f.write(
+                        f"{result['id']:13}{result['station']:64}{result['dataname']:12}"
+                        f"{result['lon']:12.2f}{result['lat']:10.2f}{result['sat']:17}"
+                        f"{result['flag']:6d}{result['ele']:12.2f}{result['diffdist']:15.2f}"
+                        f"{result['kx1']:10d}{result['ky1']:8d}{result['kx2']:8d}{result['ky2']:8d}"
+                        f"{result['dist1']:14.2f}{result['dist2']:12.2f}{result['rivwth']:12.2f}"
+                        f"{result['iXX']:10d}{result['iYY']:8d}"
+                        f"{result['lon_cama']:12.2f}{result['lat_cama']:12.2f}"
+                        f"{result['egm08']:12.2f}{result['egm96']:10.2f}\n"
+                    )
+                    
+            print(f"Results saved to {output_file}")
+        except Exception as e:
+            print(f"Error saving results: {e}")
 
     def save_to_netcdf(self, data_arrays):
         """保存数据为NetCDF格式"""
