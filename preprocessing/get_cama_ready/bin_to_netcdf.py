@@ -195,14 +195,14 @@ def convert_cama_files(cama_dir, map_name, tag, output_dir, force_overwrite=Fals
     try:
         with open(params_file, 'r') as f:
             lines = f.readlines()
-            nXX = int(lines[0].split('!!')[0].strip())
-            nYY = int(lines[1].split('!!')[0].strip())
-            nFL = int(lines[2].split('!!')[0].strip())
-            gsize = float(lines[3].split('!!')[0].strip())
-            west = float(lines[4].split('!!')[0].strip())
-            east = float(lines[5].split('!!')[0].strip())
-            south = float(lines[6].split('!!')[0].strip())
-            north = float(lines[7].split('!!')[0].strip())
+            nXX = int(lines[0].split('!')[0].strip())
+            nYY = int(lines[1].split('!')[0].strip())
+            nFL = int(lines[2].split('!')[0].strip())
+            gsize = float(lines[3].split('!')[0].strip())
+            west = float(lines[4].split('!')[0].strip())
+            east = float(lines[5].split('!')[0].strip())
+            south = float(lines[6].split('!')[0].strip())
+            north = float(lines[7].split('!')[0].strip())
     except Exception as e:
         print(f"Error reading parameters file {params_file}: {e}")
         return False
