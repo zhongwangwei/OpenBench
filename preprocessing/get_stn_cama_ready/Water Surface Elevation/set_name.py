@@ -67,7 +67,7 @@ def check_region_exists(cama_dir, map_name, tag, region_name):
     Returns:
         bool: True if region files exist, False otherwise
     """
-    catmxy_file = f"{cama_dir}/data_for_wse/cama_maps/{map_name}/{tag}/{region_name}.catmxy.bin"
+    catmxy_file = f"{cama_dir}/{map_name}/{tag}/{region_name}.catmxy.bin"
     return os.path.exists(catmxy_file) and os.path.getsize(catmxy_file) > 0
 
 if __name__ == "__main__":

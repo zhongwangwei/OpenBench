@@ -28,3 +28,9 @@ preprocessing/get_cama_ready/s01-allocate_VS.sh
 preprocessing/get_cama_ready/out/altimetry_glb_15min_20250424.txt
 preprocessing/get_cama_ready/AllocateVS-ERR.py
 preprocessing/get_cama_ready/allocate_VS
+/preprocessing/get_stn_cama_ready/Water Surface Elevation/bk-unupload
+/preprocessing/get_stn_cama_ready/Water Surface Elevation/data_for_wse/cama_map-bk
+/preprocessing/get_stn_cama_ready/Water Surface Elevation/data_for_wse
+/preprocessing/get_stn_cama_ready/Water Surface Elevation/logs
+/preprocessing/get_stn_cama_ready/Water Surface Elevation/out
+preprocessing/get_stn_cama_ready/Water Surface Elevation/tmp.txt

@@ -6,7 +6,7 @@ import datetime
 import netCDF4 as nc
 import logging
 from typing import List, Tuple, Dict, Union
-
+import pandas as pd
 
 class AllocateVS:
     """
@@ -14,7 +14,7 @@ class AllocateVS:
     基于Menaka@IIS的allocate_vs.f90 Fortran代码转换而来
     """
     
-    def __init__(self, west1=None, south1=None, dataname=None, camadir=None, map_name=None, tag=None, outdir=None):
+    def __init__(self, west1=None, south1=None, dataname=None, camadir=None, map_name=None, tag=None, outdir=None,fname=None):
         """
         初始化AllocateVS类
         
@@ -26,6 +26,7 @@ class AllocateVS:
             map_name (str): 地图名称，例如: glb_15min
             tag (str): 标签，例如: 1min, 15sec, 3sec
             outdir (str): 输出目录
+            fname (str): 站点列表文件名
         """
         # 初始化参数
         self.west1 = west1
@@ -35,7 +36,8 @@ class AllocateVS:
         self.map = map_name
         self.tag = tag
         self.outdir = outdir
-        
+        self.fname = fname
+ 
         # 基本参数
         self.north1 = None
         self.east1 = None
@@ -100,7 +102,7 @@ class AllocateVS:
         print(f"  south1={self.south1}, north1={self.north1}")
         
         # 读取CaMa参数
-        params_file = f"{self.camadir}/data_for_wse/cama_maps/glb_15min/params.txt"
+        params_file = f"{self.camadir}/{self.map}/params.txt"
         print(f"Reading params from: {params_file}")
         try:
             with open(params_file, 'r') as f:
@@ -178,7 +180,7 @@ class AllocateVS:
         """
         try:
             # 读取参数文件
-            params_file = f"{self.camadir}/data_for_wse/cama_maps/glb_15min/params.txt"
+            params_file = f"{self.camadir}/{self.map}/params.txt"
             with open(params_file, 'r') as f:
                 lines = f.readlines()
                 self.nXX = int(lines[0].split('!!')[0].strip())
@@ -200,7 +202,7 @@ class AllocateVS:
             self.nextYY = np.zeros((self.nYY, self.nXX), dtype=np.int32)
             
             # 从NetCDF文件加载数据
-            base_path = f"{self.camadir}/data_for_wse/cama_maps/glb_15min"
+            base_path = f"{self.camadir}/{self.map}"
             
             # 加载uparea
             with nc.Dataset(f"{base_path}/uparea.nc", 'r') as ds:
@@ -826,7 +828,6 @@ class AllocateVS:
                 break
                 
             dval = self.flwdir[iiy-1, iix-1]
-            print(f"  dval: {dval}")
             dx, dy = self.next_D8(dval)
             iix = iix + dx
             iiy = iiy + dy
@@ -876,13 +877,13 @@ class AllocateVS:
                 iix = iix + dx
                 iiy = iiy + dy
                 
-            if self.visual[iix, iiy] == 25:  # 河口出口
+            if self.visual[iiy-1, iix-1] == 25:  # 河口出口
                 break
                 
-            if iix < 1 or iiy < 1 or iix > self.nx or iiy > self.ny:
+            if iix-1 < 1 or iiy-1 < 1 or iix-1 > self.nx or iiy-1 > self.ny:
                 break
                 
-            if iix == x0 and iiy == y0:
+            if iix-1 == x0 and iiy-1 == y0:
                 flag = 1
                 break
         
@@ -924,7 +925,7 @@ class AllocateVS:
         """寻找最近的主河道"""
         kx = -9999
         ky = -9999
-        nn = 60  # 搜索范围
+        nn = 20  # 搜索范围
         lag = 1.0e20
         lag_now = 1.0e20
         
@@ -1115,7 +1116,7 @@ class AllocateVS:
         
         return kx, ky, lag
     
-    def process_station(self, id, station, river, bsn, country, lon0, lat0, ele0, egm08, egm96, sat, stime, etime, status):
+    def process_station(self, id, station, lon0, lat0, ele0, egm08, egm96, sat):
         """处理单个站点的数据"""
         # 检查站点是否在当前区域内
         if lon0 < self.west1 or lon0 > self.east1 or lat0 < self.south1 or lat0 > self.north1:
@@ -1365,7 +1366,6 @@ class AllocateVS:
         
         print(f"[DEBUG] Final CaMa Grid Center (lon_cama, lat_cama): ({lon_cama:.2f}, {lat_cama:.2f}) for final (iXX, iYY)=({iXX}, {iYY})")
 
-        # 构建结果字典，确保保存egm96_final
         result = {
             'id': id,
             'station': station,
@@ -1393,52 +1393,46 @@ class AllocateVS:
         
         return result
         
-    def process_stations(self):
+    def process_stations(self,):
         """处理所有站点数据"""
         # 读取站点列表
-        rlist = f"./SampleStation_list.txt"
+        rlist = self.fname
         results = []
-        
+        print(f"Processing stations from {rlist}")
         try:
-            with open(rlist, 'r') as f:
-                # 跳过标题行
-                next(f)
-                
-                # 逐行处理站点数据
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) < 14:
-                        continue
-                        
-                    id = parts[0]
-                    station = parts[1]
-                    river = parts[2]
-                    bsn = parts[3]
-                    country = parts[4]
-                    lon0 = float(parts[5])
-                    lat0 = float(parts[6])
-                    ele0 = float(parts[7])
-                    egm08 = float(parts[8])
-                    egm96 = float(parts[9])
-                    sat = parts[10]
-                    stime = parts[11]
-                    etime = parts[12]
-                    status = parts[13]
-                    
-                    # 处理单个站点
-                    result = self.process_station(id, station, river, bsn, country, lon0, lat0, ele0, 
-                                                egm08, egm96, sat, stime, etime, status)
-                    
-                    if result:
-                        results.append(result)
-                        print(
-                            f"{result['id']:13s} {result['station']:60s} {result['dataname']:10s} "
-                            f"{result['lon']:10.2f} {result['lat']:10.2f} {result['sat']:15s} "
-                            f"{result['flag']:4d} {result['ele']:10.2f} {result['diffdist']:13.2f} "
-                            f"{result['kx1']:8d} {result['ky1']:8d} {result['kx2']:8d} {result['ky2']:8d} "
-                            f"{result['dist1']:12.2f} {result['dist2']:12.2f} {result['rivwth']:12.2f} "
-                            f"{result['iXX']:8d} {result['iYY']:8d} {result['egm08']:10.2f} {result['egm96']:10.2f}\n"
-                        )
+            df = pd.read_csv(rlist, sep=r'\s+', header=0, dtype={'ID': str})
+      
+            df['ID'] = df['ID'].astype(str)
+            print( df['ID'])
+            for index, row in df.iterrows():
+                id = str(row['ID'])
+                try:
+                    station = row['station']
+                except:
+                    station = row['Station']
+                lon = row['lon']
+                lat = row['lat']
+                ele = row['elevation']
+                egm08 = row['EGM08']
+                egm96 = row['EGM96']
+                try:
+                    sat = row['satellite']
+                except:
+                    sat = row['Satellite']
+                print(f"Processing station {station} at {lon}, {lat}")
+                # 处理单个站点
+                result = self.process_station(id, station, lon, lat, ele, egm08, egm96, sat)
+            
+                if result:
+                    results.append(result)
+                    print(
+                        f"{result['id']:13s} {result['station']:60s} {result['dataname']:10s} "
+                        f"{result['lon']:10.2f} {result['lat']:10.2f} {result['sat']:15s} "
+                        f"{result['flag']:4d} {result['ele']:10.2f} {result['diffdist']:13.2f} "
+                        f"{result['kx1']:8d} {result['ky1']:8d} {result['kx2']:8d} {result['ky2']:8d} "
+                        f"{result['dist1']:12.2f} {result['dist2']:12.2f} {result['rivwth']:12.2f} "
+                        f"{result['iXX']:8d} {result['iYY']:8d} {result['egm08']:10.2f} {result['egm96']:10.2f}\n"
+                    )
         except Exception as e:
             print(f"Error processing station list: {e}")
             import traceback
@@ -1601,7 +1595,7 @@ class AllocateVS:
         """
         try:
             # 检查CaMa-Flood基础文件
-            base_path = f"{self.camadir}/data_for_wse/cama_maps/glb_15min"
+            base_path = f"{self.camadir}/{self.map}"
             base_files = ['uparea.nc', 'basin.nc', 'elevtn.nc', 'nxtdst.nc', 'biftag.nc', 'nextxy.nc']
             
             # 首先检查基础文件是否存在
@@ -1724,13 +1718,6 @@ class AllocateVS:
                     convert_hires_files(self.camadir, self.map, self.tag, hires_path, region)
             
             print("File check and conversion completed.")
-            
-            # 检查EGM96文件
-            if not self.egm96_path.exists():
-                print(f"警告: EGM96文件不存在: {self.egm96_path}")
-                print("EGM96高度计算将不可用")
-            else:
-                print(f"EGM96文件存在: {self.egm96_path}")
             
             return True
         except Exception as e:

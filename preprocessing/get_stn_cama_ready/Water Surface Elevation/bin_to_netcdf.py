@@ -186,7 +186,7 @@ def convert_cama_files(cama_dir, map_name, tag, output_dir, force_overwrite=Fals
     os.makedirs(output_dir, exist_ok=True)
     
     # 确定参数文件路径
-    params_file = f"{cama_dir}/data_for_wse/cama_maps/{map_name}/params.txt"
+    params_file = f"{cama_dir}/{map_name}/params.txt"
     if not os.path.exists(params_file):
         print(f"Error: Parameters file {params_file} not found")
         return False
@@ -223,7 +223,7 @@ def convert_cama_files(cama_dir, map_name, tag, output_dir, force_overwrite=Fals
     
     # 转换每个文件
     for filename, (dtype, description, units) in files_to_convert.items():
-        input_file = f"{cama_dir}/data_for_wse/cama_maps/{map_name}/{filename}"
+        input_file = f"{cama_dir}/{map_name}/{filename}"
         
         # 检查文件是否存在
         if not os.path.exists(input_file):
@@ -242,7 +242,7 @@ def convert_cama_files(cama_dir, map_name, tag, output_dir, force_overwrite=Fals
             conversion_success = False
     
     # 特殊处理nextxy.bin（包含两个记录）
-    nextxy_file = f"{cama_dir}/data_for_wse/cama_maps/{map_name}/nextxy.bin"
+    nextxy_file = f"{cama_dir}/{map_name}/nextxy.bin"
     if os.path.exists(nextxy_file):
         nextxy_nc = f"{output_dir}/nextxy.nc"
         if not convert_nextxy_file(nextxy_file, nextxy_nc, nXX, nYY, west, east, south, north, gsize, force_overwrite=force_overwrite):
@@ -269,7 +269,7 @@ def convert_hires_files(cama_dir, map_name, tag, output_dir, region=None, file_l
     os.makedirs(output_dir, exist_ok=True)
     
     # 检查高分辨率目录是否存在
-    hires_dir = f"{cama_dir}/data_for_wse/hires_maps/{map_name}/{tag}"
+    hires_dir = f"{cama_dir}/{map_name}/{tag}"
     if not os.path.exists(hires_dir):
         print(f"Error: High-resolution directory {hires_dir} not found")
         return False
@@ -436,7 +436,7 @@ def convert_hires_files(cama_dir, map_name, tag, output_dir, region=None, file_l
         print(f"Warning: No files found for region {region_name}")
         # 尝试在整个目录中查找包含区域名称的文件
         import glob
-        pattern = f"{cama_dir}/data_for_wse/cama_maps/glb_15min/3sec/*{region_name}*"
+        pattern = f"{cama_dir}/{map_name}/{tag}/*{region_name}*"
         matching_files = glob.glob(pattern, recursive=True)
         if matching_files:
             print(f"Found files matching pattern: {pattern}")
