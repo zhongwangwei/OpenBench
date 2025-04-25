@@ -18,7 +18,7 @@
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm', ,'RdYlBu'
 
-  colorbar_position = horizontal
+  colorbar_position = vertical
 #  extend            = both    # 'neither', 'both', 'min', 'max'
 #  colorbar_ticks    = 0.1
   colorbar_label    =

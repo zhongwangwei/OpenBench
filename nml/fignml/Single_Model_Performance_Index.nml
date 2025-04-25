@@ -21,7 +21,7 @@
   n                 = 1
   markeraplha       = 0.8
 
-  hspace            = 0.8
+  hspace            = 0.4
   wspace            = 0.1
 
 
@@ -29,7 +29,7 @@
   saving_format     = jpg
   y_wise            = 6
   font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
-  dpi               = 80
+  dpi               = 300
 
 /
 

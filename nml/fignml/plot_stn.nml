@@ -1,33 +1,33 @@
 &general
   title =  
-  title_size =  20
-  xtick =  17
-  ytick =  17
+  title_size =  30
+  xtick =  24
+  ytick =  24
   labelsize = 15
-  fontsize = 15
+  fontsize = 24
   grid =  True
   grid_linestyle =  --
   grid_width =  1.0
-
+  labelspacing = 1
 
   obs_linecolor =  F96969
   obs_linestyle = solid
-  obs_lineswidth = 1.5
-  obs_marker = .
-  obs_markersize =  10
-  obs_alphas = 1.0
+  obs_lineswidth = 144
+  obs_marker = ^
+  obs_markersize =  432
+  obs_alphas = 0.8
 
   sim_linecolor =  599AD4
-  sim_linestyle = dashed
-  sim_lineswidth = 1.5
-  sim_marker =
-  sim_markersize =  10
-  sim_alphas = 1.0
+  sim_linestyle = solid
+  sim_lineswidth = 144
+  sim_marker = *
+  sim_markersize =  432
+  sim_alphas = 0.8
 
   x_wise =  17
   y_wise =  6
   saving_format =  jpg
-  font              = Times new roman
+  font              = DejaVu Sans
   dpi               = 300
 /
 

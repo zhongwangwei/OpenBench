@@ -21,7 +21,7 @@
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm', ,'RdYlBu'
 
   show_method       = None # interpolate, None
-  colorbar_position = horizontal
+  colorbar_position = vertical
   extend            = neither    # 'neither', 'both', 'min', 'max'
 #  colorbar_ticks    = 0.1
   colorbar_label    =

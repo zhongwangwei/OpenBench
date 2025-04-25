@@ -1,24 +1,24 @@
 &general
   title             =
-  title_size        =  20
+  title_size        =  24
   xlabel            = Simulations
   ylabel            = References
-  xtick             =  17
-  ytick             =  17
+  xtick             =  18
+  ytick             =  18
   axes_linewidth    = 1
   x_rotation        = 45
   x_ha              = right  # 'right', 'left', 'center'
-  y_rotation        = 45
+  y_rotation        = 0
   y_ha              = right  # 'right', 'left', 'center'
 
   ticks_format      = .2f
-  fontsize          = 13
+  fontsize          = 16
 
   cmap              = coolwarm
             #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm' ,'RdYlGn'
 
-  colorbar_position = horizontal # 'vertical', 'horizontal'
+  colorbar_position = vertical # 'vertical', 'horizontal'
   extend            = neither    # 'neither', 'both', 'min', 'max'
   colorbar_label    =
 
@@ -32,9 +32,9 @@
   vmin              = 0
   vmax              = 1
 
-  x_wise            = 10
+  x_wise            = 4
   saving_format     = jpg
-  y_wise            = 8
+  y_wise            = 6
   font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
   dpi               = 300
 
