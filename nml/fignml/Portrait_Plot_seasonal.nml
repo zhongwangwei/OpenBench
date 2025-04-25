@@ -17,7 +17,7 @@
             # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm' ,'RdYlGn'
 
   colorbar_off          = False # 'True', 'False'
-  colorbar_position     = horizontal # 'vertical', 'horizontal'
+  colorbar_position     = vertical # 'vertical', 'horizontal'
   extend                = neither    # 'neither', 'both', 'min', 'max'
   colorbar_label        =
   colorbar_labelsize    = 15
