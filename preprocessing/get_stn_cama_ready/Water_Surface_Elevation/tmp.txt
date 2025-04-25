@@ -1,0 +1,1 @@
+ID           station                                                         dataname    lon         lat       satellite        flag  elevation   dist_to_mouth  kx1       ky1     kx2     ky2     dist1         dist2       rivwth      ix        iy      Lon_CaMa    Lat_CaMa    EGM08       EGM96     

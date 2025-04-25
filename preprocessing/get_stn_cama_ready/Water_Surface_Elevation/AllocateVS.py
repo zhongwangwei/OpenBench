@@ -183,14 +183,14 @@ class AllocateVS:
             params_file = f"{self.camadir}/{self.map}/params.txt"
             with open(params_file, 'r') as f:
                 lines = f.readlines()
-                self.nXX = int(lines[0].split('!!')[0].strip())
-                self.nYY = int(lines[1].split('!!')[0].strip())
-                self.nFL = int(lines[2].split('!!')[0].strip())
-                self.gsize = float(lines[3].split('!!')[0].strip())
-                self.west = float(lines[4].split('!!')[0].strip())
-                self.east = float(lines[5].split('!!')[0].strip())
-                self.south = float(lines[6].split('!!')[0].strip())
-                self.north = float(lines[7].split('!!')[0].strip())
+                self.nXX = int(lines[0].split('!')[0].strip())
+                self.nYY = int(lines[1].split('!')[0].strip())
+                self.nFL = int(lines[2].split('!')[0].strip())
+                self.gsize = float(lines[3].split('!')[0].strip())
+                self.west = float(lines[4].split('!')[0].strip())
+                self.east = float(lines[5].split('!')[0].strip())
+                self.south = float(lines[6].split('!')[0].strip())
+                self.north = float(lines[7].split('!')[0].strip())
             
             # 初始化数组
             self.uparea = np.zeros((self.nYY, self.nXX), dtype=np.float32)
@@ -247,7 +247,7 @@ class AllocateVS:
             print(f"Original coordinates: west1={self.west1}, south1={self.south1}")
             
             # 获取正确的瓦片路径和文件前缀
-            base_path = f"{self.camadir}/data_for_wse/cama_map/{self.map}/{self.tag}"
+            base_path = f"{self.camadir}/{self.map}/{self.tag}"
             file_prefix = self.cname
             print(f"Loading high-resolution data from: {base_path}")
             print(f"Using file prefix: {file_prefix}")
@@ -1670,7 +1670,7 @@ class AllocateVS:
             # 检查每个站点所在区域的高分辨率文件
             hires_missing = {}
             for region in station_regions:
-                hires_path = f"{self.camadir}/data_for_wse/cama_map/{self.map}/{self.tag}"
+                hires_path = f"{self.camadir}/{self.map}/{self.tag}"
                 hires_files = [
                     f"{region}.catmxy.nc", 
                     f"{region}.catmzz.nc", 
@@ -1713,7 +1713,7 @@ class AllocateVS:
                         print(f"Converting files for current region {region}...")
                     else:
                         print(f"Converting files for region {region}...")
-                    hires_path = f"{self.camadir}/data_for_wse/cama_map/{self.map}/{self.tag}"
+                    hires_path = f"{self.camadir}/{self.map}/{self.tag}"
                     # 转换高分辨率文件
                     convert_hires_files(self.camadir, self.map, self.tag, hires_path, region)
             
