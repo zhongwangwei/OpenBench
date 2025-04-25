@@ -34,3 +34,7 @@ preprocessing/get_cama_ready/allocate_VS
 /preprocessing/get_stn_cama_ready/Water Surface Elevation/logs
 /preprocessing/get_stn_cama_ready/Water Surface Elevation/out
 preprocessing/get_stn_cama_ready/Water Surface Elevation/tmp.txt
+/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/data_for_wse
+/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/out
+/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/logs
+/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/bk-unupload
