@@ -1,0 +1,229 @@
+&general
+    basename         = Debug
+    basedir          = ./output
+    compare_tim_res  = month
+    compare_tzone    = 0.0
+    compare_grid_res = 2.0
+    syear            = 2004
+    eyear            = 2005
+    min_year         = 1.0
+    max_lat          = 90.0
+    min_lat          = -90.0
+    max_lon          = 180.0
+    min_lon          = -180.0
+    reference_nml    = ./nml/ref-Debug.nml
+    simulation_nml   = ./nml/sim-Debug.nml
+    statistics_nml   = ./nml/stats.nml
+    figure_nml       = ./nml/figlib.nml
+    num_cores        = 48
+    evaluation       = True
+    comparison       = True
+    statistics       = True
+    debug_mode       = True
+    weight           = None
+    IGBP_groupby     = True
+    PFT_groupby      = True
+    unified_mask     = True
+/
+
+
+&evaluation_items
+  #========================Evaluation_Items====================
+  #*******************Ecosystem and Carbon Cycle****************
+    Biomass                          = False
+    Burned_Area                      = False
+    Ecosystem_Respiration            = False
+    Gross_Primary_Productivity       = False
+    Leaf_Area_Index                  = False
+    Leaf_Greenness                   = False
+    Methane                          = False
+    Net_Ecosystem_Exchange           = False
+    Nitrogen_Fixation                = False
+    Soil_Carbon                      = False
+    Veg_Cover_In_Fraction            = False
+  #**************************************************************
+
+
+  #*******************      Hydrology Cycle      ****************
+    Canopy_Interception              = False
+    Canopy_Transpiration             = False
+    Depth_Of_Surface_Water           = False
+    Evapotranspiration               = True
+    Ground_Evaporation               = False
+    Groundwater_Recharge_Rate        = False
+    Permafrost                       = False
+    Root_Zone_Soil_Moisture          = False
+    Snow_Depth                       = False
+    Snow_Water_Equivalent            = False
+    Soil_Evaporation                 = False
+    Surface_Snow_Cover_In_Fraction   = False
+    Surface_Soil_Moisture            = False
+    Terrestrial_Water_Storage_Change = False
+    Total_Runoff                     = False
+    Water_Evaporation                = False
+    Water_Storage_In_Aquifer         = False
+    Water_Table_Depth                = False
+  #**************************************************************
+
+
+  #*******************  Radiation and Energy Cycle  *************
+    Albedo                           = False
+    Ground_Heat                      = False
+    Latent_Heat                      = True
+    Net_Radiation                    = False
+    Root_Zone_Soil_Temperature       = False
+    Sensible_Heat                    = True
+    Surface_Net_LW_Radiation         = False
+    Surface_Net_SW_Radiation         = False
+    Surface_Soil_Temperature         = False
+    Surface_Upward_LW_Radiation      = False
+    Surface_Upward_SW_Radiation      = False
+  #**************************************************************
+
+
+  #*******************         Forcings      **********************
+    Diurnal_Max_Temperature          = False
+    Diurnal_Min_Temperature          = False
+    Diurnal_Temperature_Range        = False
+    Precipitation                    = False
+    Surface_Air_Temperature          = False
+    Surface_Downward_LW_Radiation    = False
+    Surface_Downward_SW_Radiation    = False
+    Surface_Relative_Humidity        = False
+    Surface_Specific_Humidity        = False
+  #**************************************************************
+
+
+  #*******************         Human Activity      **********************
+    Crop_Emergence_DOY_Wheat         = False
+    Crop_Heading_DOY_Corn            = False
+    Crop_Heading_DOY_Wheat           = False
+    Crop_Maturity_DOY_Corn           = False
+    Crop_Maturity_DOY_Wheat          = False
+    Crop_V3_DOY_Corn                 = False
+    Crop_Yield_Corn                  = False
+    Crop_Yield_Maize                 = False
+    Crop_Yield_Rice                  = False
+    Crop_Yield_Soybean               = False
+    Crop_Yield_Wheat                 = False
+    Dam_Inflow                       = False
+    Dam_Outflow                      = False
+    Dam_Water_Elevation              = False
+    Dam_Water_Storage                = False
+    Inundation_Area                  = False
+    Inundation_Fraction              = False
+    Lake_Ice_Fraction_Cover          = False
+    Lake_Temperature                 = False
+    Lake_Water_Area                  = False
+    Lake_Water_Level                 = False
+    Lake_Water_Volume                = False
+    River_Water_Level                = False
+    Streamflow                       = False
+    Total_Irrigation_Amount          = False
+    Urban_Air_Temperature_Max        = False
+    Urban_Air_Temperature_Min        = False
+    Urban_Albedo                     = False
+    Urban_Anthropogenic_Heat_Flux    = False
+    Urban_Latent_Heat_Flux           = False
+    Urban_Surface_Temperature        = False
+/
+
+
+&metrics
+    percent_bias          = False
+    absolute_percent_bias = False
+    bias                  = False
+    mean_absolute_error   = False
+    RMSE                  = True
+    MSE                   = False
+    ubRMSE                = False
+    CRMSD                 = False
+    nrmse                 = False
+    L                     = False
+    correlation           = True
+    correlation_R2        = False
+    NSE                   = False
+    LNSE                  = False
+    KGE                   = False
+    KGESS                 = True
+    kappa_coeff           = False
+    rv                    = False
+    ubNSE                 = False
+    ubKGE                 = False
+    ubcorrelation         = False
+    ubcorrelation_R2      = False
+    pc_max                = False
+    pc_min                = False
+    pc_ampli              = False
+    rSD                   = False
+    PBIAS_HF              = False
+    PBIAS_LF              = False
+    SMPI                  = False
+    ggof                  = False
+    gof                   = False
+    KGEkm                 = False
+    KGElf                 = False
+    KGEnp                 = False
+    md                    = False
+    mNSE                  = False
+    pbiasfdc              = False
+    pfactor               = False
+    rd                    = False
+    rfactor               = False
+    rNSE                  = False
+    rSpearman             = False
+    rsr                   = False
+    sKGE                  = False
+    ssq                   = False
+    valindex              = False
+    ve                    = False
+    wNSE                  = False
+    wsNSE                 = False
+    index_agreement       = False
+/
+
+
+&scores
+    nBiasScore            = False
+    nRMSEScore            = False
+    nPhaseScore           = False
+    nIavScore             = False
+    nSpatialScore         = False
+    Overall_Score         = True
+    The_Ideal_Point_score = False
+/
+
+
+&comparisons
+    HeatMap                        = True
+    Taylor_Diagram                 = True
+    Target_Diagram                 = True
+    Kernel_Density_Estimate        = True
+    Whisker_Plot                   = True
+    Parallel_Coordinates           = False
+    Portrait_Plot_seasonal         = False
+    Single_Model_Performance_Index = True
+    Relative_Score                 = True
+    Ridgeline_Plot                 = True
+    Diff_Plot                      = True
+    Mean                           = True
+    Median                         = True
+    Min                            = True
+    Max                            = True
+    Sum                            = True
+    Mann_Kendall_Trend_Test        = True
+    Correlation                    = True
+    Standard_Deviation             = True
+    Functional_Response            = True
+/
+
+
+&statistics
+    Z_Score                            = False
+    Hellinger_Distance                 = False
+    Three_Cornered_Hat                 = False
+    Partial_Least_Squares_Regression   = False
+    False_Discovery_Rate               = False
+    ANOVA                              = False
+/
+

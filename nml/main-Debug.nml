@@ -18,7 +18,7 @@
     num_cores        = 48
     evaluation       = True
     comparison       = True
-    statistics       = False
+    statistics       = True
     debug_mode       = True
     weight           = None
     IGBP_groupby     = True
@@ -198,13 +198,13 @@
     HeatMap                        = True
     Taylor_Diagram                 = False
     Target_Diagram                 = False
-    Kernel_Density_Estimate        = False
+    Kernel_Density_Estimate        = True
     Whisker_Plot                   = False
     Parallel_Coordinates           = False
     Portrait_Plot_seasonal         = False
-    Single_Model_Performance_Index = False
+    Single_Model_Performance_Index = True
     Relative_Score                 = False
-    Ridgeline_Plot                 = False
+    Ridgeline_Plot                 = True
     Diff_Plot                      = False
     Mean                           = False
     Median                         = False
@@ -213,7 +213,7 @@
     Sum                            = False
     Mann_Kendall_Trend_Test        = False
     Correlation                    = False
-    Standard_Deviation             = False
+    Standard_Deviation             = True
     Functional_Response            = False
 /
 

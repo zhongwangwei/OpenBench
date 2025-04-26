@@ -13,7 +13,7 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
 
         params = {'backend': 'ps',
                   'axes.linewidth': option['axes_linewidth'],
-                  'font.size': option["fontsize"],
+                #   'font.size': option["fontsize"],
                   'xtick.labelsize': option['xtick'],
                   'xtick.direction': 'out',
                   'ytick.direction': 'out',
@@ -21,99 +21,102 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
                   'axes.unicode_minus': False,
                   'text.usetex': False}
         rcParams.update(params)
-        if varname != 'nSpatialScore':
-            n_plots = len(sim_sources)
-            # create a figure and axis
-            fig, axes = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
 
-            # Generate colors using a colormap
-            MLINES = generate_lines(sim_sources, option)
+        n_plots = len(sim_sources)
+        # create a figure and axis
+        fig, axes = plt.subplots(figsize=(option['x_wise'], option['y_wise']*len(sim_sources)/2))
 
-            # Find global min and max for x-axis
-            def remove_outliers(data_list):
-                q1, q3 = np.percentile(data_list, [1.5, 98.5])
-                return [q1, q3]
+        # Generate colors using a colormap
+        MLINES = generate_lines(sim_sources, option)
 
-            bound = [remove_outliers(d) for d in datasets_filtered]
-            global_max = max([d[1] for d in bound])
-            global_min = min([d[0] for d in bound])
+        # Find global min and max for x-axis
+        def remove_outliers(data_list):
+            q1, q3 = np.percentile(data_list, [1.5, 98.5])
+            return [q1, q3]
 
-            if varname in ['NSE', 'KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
-                if global_min < -1:
-                    global_min = -1
-                global_max = 1
-            x_range = np.linspace(global_min, global_max, 200)
-            dx = x_range[1] - x_range[0]
-            # Adjust these parameters to control spacing and overlap
-            y_shift_increment = 0.5
-            scale_factor = 0.8
+        bound = [remove_outliers(d) for d in datasets_filtered]
+        global_max = max([d[1] for d in bound])
+        global_min = min([d[0] for d in bound])
 
-            for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
-                filtered_data = data
-                if varname in ['KGE', 'NSE', 'KGESS']:
-                    filtered_data = np.where(data < -1, -1, data)
+        if varname in ['NSE', 'KGE', 'KGESS', 'ubKGE', 'rKGE', 'wKGE', 'wsKGE']:
+            if global_min < -1:
+                global_min = -1
+            global_max = 1
+        x_range = np.linspace(global_min, global_max, 200)
+        dx = x_range[1] - x_range[0]
+        # Adjust these parameters to control spacing and overlap
+        y_shift_increment = 0.1
+        scale_factor = 0.15
 
-                kde = gaussian_kde(filtered_data)
-                y_range = kde(x_range)
+        for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
+            filtered_data = data
+            if varname in ['KGE', 'NSE', 'KGESS']:
+                filtered_data = np.where(data < -1, -1, data)
 
-                # Scale and shift the densities
-                y_range = y_range * scale_factor / y_range.max()
-                y_shift = i * y_shift_increment
+            kde = gaussian_kde(filtered_data)
+            y_range = kde(x_range)
 
-                # Plot the KDE
-                axes.fill_between(x_range, y_shift, y_range + y_shift, color=MLINES[sim_source]['lineColor'],
-                                  alpha=MLINES[sim_source]['alpha'], zorder=n_plots - i)
-                axes.plot(x_range, y_range + y_shift, color='black', linewidth=MLINES[sim_source]['linewidth'], )
+            # Scale and shift the densities
+            y_range = y_range * scale_factor / y_range.max()
+            y_shift = i * y_shift_increment
 
-                # Add labels
-                axes.text(global_min, y_shift + 0.2, sim_source, fontweight='bold', ha='left', va='center')
-                # Calculate and plot median
-                median = np.median(data)
-                if varname in ['KGE', 'NSE', 'KGESS'] and median <= global_min:
-                    pass
-                else:
-                    index_closest = (np.abs(x_range - median)).argmin()
-                    y_target = y_range[index_closest]
-                    axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
-                                linewidth=option['vlinewidth'], zorder=n_plots + 1)
+            # Plot the KDE
+            axes.fill_between(x_range, y_shift, y_range + y_shift, color=MLINES[sim_source]['lineColor'],
+                                alpha=MLINES[sim_source]['alpha'], zorder=n_plots - i)
+            axes.plot(x_range, y_range + y_shift, color="k", 
+                            alpha=MLINES[sim_source]['alpha'], linewidth=MLINES[sim_source]['linewidth']*1.5, )
 
-                    # Add median value text
-                    axes.text(median, y_shift + y_target, f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
-                              zorder=n_plots + 2)
+            # Add labels
+            axes.text(global_min-(global_max-global_min)/100, y_shift, sim_source, 
+                    fontsize=option["fontsize"], fontweight='bold', ha='right', va='center')
+            # Calculate and plot median
+            median = np.median(data)
+            if varname in ['KGE', 'NSE', 'KGESS'] and median <= global_min:
+                pass
+            else:
+                index_closest = (np.abs(x_range - median)).argmin()
+                y_target = y_range[index_closest]
+                axes.vlines(median, y_shift, y_shift + y_target, color='black', linestyle=option['vlinestyle'],
+                            linewidth=option['vlinewidth']*1.5, zorder=n_plots + 1)
 
-            # Customize the plot
-            axes.set_yticks([])
-            xlabel = option['xlabel']
-            title = option['title']
+                # Add median value text
+                axes.text(median, y_shift + y_target*1.02, f'{median:.2f}', ha='center', va='bottom', fontsize=option["fontsize"],
+                            zorder=n_plots + 2)
 
-            if not option['xlabel']:
-                xlabel = varname.replace('_', ' ')
-                if varname == 'percent_bias':
-                    xlabel = varname.replace('_', ' ') + f' (showing value between [-100,100])'
-            if not option['title']:
-                title = f'Ridgeline Plot of {evaluation_item.replace("_", " ")}'
-            axes.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-            axes.set_title(title, fontsize=option['title_fontsize'], pad=30)
+        # Customize the plot
+        axes.set_yticks([])
+        xlabel = option['xlabel']
+        title = option['title']
 
-            # Remove top and right spines
-            axes.spines['top'].set_visible(False)
-            axes.spines['right'].set_visible(False)
-            axes.spines['left'].set_visible(False)
+        if not option['xlabel']:
+            xlabel = varname.replace('_', ' ')
+            if varname == 'percent_bias':
+                xlabel = varname.replace('_', ' ') + f' (showing value between [-100,100])'
+        if not option['title']:
+            title = f'{evaluation_item.replace("_", " ")}'
+        axes.set_xlabel(xlabel, fontsize=option['xtick'] + 4, weight='bold')
+        axes.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+        axes.set_title(title, fontsize=option['title_fontsize'], pad=30, weight='bold')
 
-            # Extend the bottom spine to the left
-            axes.spines['bottom'].set_position(('data', -0.2))
+        # Remove top and right spines
+        axes.spines['top'].set_visible(False)
+        axes.spines['right'].set_visible(False)
+        axes.spines['left'].set_visible(False)
 
-            # Set y-axis limits
-            axes.set_ylim(-0.2, (n_plots - 1) * y_shift_increment + scale_factor)
-            axes.set_xlim(global_min - dx, global_max + dx)
+        # Extend the bottom spine to the left
+        axes.spines['bottom'].set_visible(False)
 
-            # Adjust layout and save
-            plt.tight_layout()
-            output_file_path = f"{basedir}/Ridgeline_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
-            plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+        # Set y-axis limits
+        axes.set_ylim(0, (n_plots - 1) * y_shift_increment + scale_factor)
+        axes.set_xlim(global_min - dx, global_max + dx)
 
-            # Clean up
-            plt.close()
+        # Adjust layout and save
+        plt.tight_layout()
+        output_file_path = f"{basedir}/Ridgeline_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
+        plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+
+        # Clean up
+        plt.close()
         return
 
 def generate_lines(data_names, option):
@@ -121,8 +124,8 @@ def generate_lines(data_names, option):
     import matplotlib.colors as mcolors
     lines = {}
     # add colors and symbols
-    hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
-        , '#277DA1', '#5A189A']
+    hex_colors = ['#b1c5e1', '#c2b3d4', '#a7dc8f', '#f09f99', '#be9f98', 
+                '#edbad0', '#dddb97', '#a9dae0', '#f8e9b9', '#7f7f7f','#f4be83',]
     # hex_colors = cm.vivid(np.linspace(0, 1, len(data_names) + 1))
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
 

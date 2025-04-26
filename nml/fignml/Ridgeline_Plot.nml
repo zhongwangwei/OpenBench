@@ -1,20 +1,20 @@
 &general
   title               =
-  title_fontsize      = 18
+  title_fontsize      = 28
   xlabel              =
   xtick               = 16
-  fontsize            = 15
+  fontsize            = 20
   axes_linewidth      = 1
 
   linewidth           = 1.5
-  alpha               = 0.2
+  alpha               = 0.8
 
   vlinestyle          = dashed  #' solid', 'dotted', 'dashed', 'dashdot', ':', '-', '--', '-.'
   vlinewidth          = 1.5
 
 
-  x_wise              = 10
-  y_wise              = 6
+  x_wise              = 12
+  y_wise              = 5
   saving_format       = jpg
   font                = DejaVu Sans # 'DejaVu Sans' 'Times new roman' 'Arial' 'Courier New' 'Comic Sans MS' 'Verdana' 'Helvetica''Georgia' 'Tahoma' 'Trebuchet MS' 'Lucida Grande'
   dpi                 = 300

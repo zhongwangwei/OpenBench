@@ -3,6 +3,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
 from Mod_Converttype import Convert_Type
+
+import os
+import sys
+cmaps_parent_path = os.path.abspath('./script/figlib/')
+sys.path.append(cmaps_parent_path)
+import cmaps
+from Fig_toolbox import get_index, convert_unit, get_colormap
  
 def make_scenarios_scores_comparison_heat_map(file, score, option):
     # Convert the data to a DataFrame
@@ -33,7 +40,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
 
     option['x_wise'] = len(df.index)
     option['y_wise'] = len(df.columns)
-
     # Add minimum size constraints for small datasets
     if option['x_wise'] < 3:
         option['x_wise'] = max(3, option['x_wise'])
@@ -42,34 +48,39 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
         
     # Adjust font sizes for small datasets
     if len(df.index) <= 2 or len(df.columns) <= 2:
-        option['fontsize'] = min(option['fontsize'], 8)
-        option['xtick'] = min(option['xtick'], 12)
-        option['ytick'] = min(option['ytick'], 12)
-        option['title_size'] = min(option['title_size'], 12)
+        option['fontsize'] = min(option['fontsize'], 16)
+        option['xtick'] = min(option['xtick'], 18)
+        option['ytick'] = min(option['ytick'], 18)
+        option['title_size'] = min(option['title_size'], 24)
 
-    fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
+    fig, ax = plt.subplots(figsize=((option['x_wise']+len(df.columns))*0.9, (option['y_wise']+len(df.index))*0.75))
     if option['vmin_max_on']:
         vmin, vmax = option['vmin'], option['vmax']
     else:
         vmin, vmax = 0, 1
-    if not option['cmap']:
-        option['cmap'] = 'coolwarm'
-    im = ax.imshow(df, cmap=option['cmap'], vmin=vmin, vmax=vmax)
+
+    im = ax.imshow(df, cmap=cmaps.MPL_RdBu_r, vmin=vmin, vmax=vmax)
 
     # Add colorbar
     # Add labels and title
+    ref_dataname_name = ref_dataname.iloc[:, 0].tolist()
     ax.set_yticks(range(len(df.index)))
     ax.set_xticks(range(len(df.columns)))
-    ax.set_yticklabels([y.replace('_', ' ') for y in df.index], rotation=option['y_rotation'], ha=option['y_ha'])
-    ax.set_xticklabels(df.columns, rotation=option['x_rotation'], ha=option['x_ha'])
+    ax.set_yticklabels(
+        [f"{y.replace('_', ' ')}\n({x.replace('_', ' ')})" for y, x in zip(df.index, ref_dataname_name)],
+        rotation=option['y_rotation'],
+        ha=option['y_ha']
+    )
+    ax.set_xticklabels([x for x in df.columns], rotation=option['x_rotation'], ha=option['x_ha'])
 
-    ax.set_ylabel(option['ylabel'], fontsize=option['ytick'] + 1)
-    ax.set_xlabel(option['xlabel'], fontsize=option['xtick'] + 1)
+    ax.set_ylabel(option['ylabel'], fontsize=option['ytick'] + 1, weight='bold')
+    ax.set_xlabel(option['xlabel'], fontsize=option['xtick'] + 1, weight='bold')
 
     title = option['title']
     if len(option['title']) == 0:
-        title = f'Heatmap of {score}'
-    ax.set_title(title, fontsize=option['title_size'])
+        # title = f'Heatmap of {score}'
+        title = f'{score}'
+    ax.set_title(title.replace("_", " "), fontsize=option['title_size'], weight='bold')
 
     # Add numbers to each cell
     for i in range(len(df.index)):
@@ -78,15 +89,16 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
                     color='white' if df.iloc[i, j] > 0.8 or df.iloc[i, j] < 0.2 else 'black', fontsize=option['fontsize'])
 
     max_tick_width = 0
-    for i in range(len(ref_dataname.index)):
-        text_obj = ax.text(len(df.columns) - 0.3, i, f'{ref_dataname.iloc[i, 0]}', ha='left', va='center', color='black',
-                           fontsize=option['ytick'])
-        # add the small ticks to the right of the heatmap
-        ax.text(len(df.columns) - 0.5, i, '-', ha='left', va='center', color='black')
-        text_position = text_obj.get_position()
-        bbox = text_obj.get_window_extent()
-        bbox_in_fig_coords = bbox.transformed(fig.transFigure.inverted())
-        max_tick_width = max(max_tick_width, bbox_in_fig_coords.width)
+    # for i in range(len(ref_dataname.index)):
+    #     ref_dataname_name = ref_dataname.iloc[i, 0].replace("_", " ")
+    #     text_obj = ax.text(len(df.columns) - 0.3, i, f'{ref_dataname_name}', ha='left', va='center', color='black',
+    #                        fontsize=option['ytick'])
+    #     # add the small ticks to the right of the heatmap
+    #     ax.text(len(df.columns) - 0.5, i, '-', ha='left', va='center', color='black')
+    #     text_position = text_obj.get_position()
+    #     bbox = text_obj.get_window_extent()
+    #     bbox_in_fig_coords = bbox.transformed(fig.transFigure.inverted())
+    #     max_tick_width = max(max_tick_width, bbox_in_fig_coords.width)
     # add the colorbar, and make it shrink to the size of the heatmap, and the location is at the right of reference data name
 
     # Create dynamically positioned and sized colorbar
@@ -95,20 +107,20 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     if not option['colorbar_position_set']:
         if option["colorbar_position"] == 'vertical':
             if len(df.index) < 6:
-                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height])  # right + 0.2
+                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height]) 
             else:
-                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom + height / 6, 0.03, height / 3 * 2])  # right + 0.2
+                cbar_ax = fig.add_axes([right + max_tick_width +0.01 , bottom, 0.03, height])
         else:
             xlabel = ax.xaxis.label
             xticks = ax.get_xticklabels()
             max_xtick_height = 0
             for xtick in xticks:
-                bbox = xtick.get_window_extent()  # 获取每个 xtick 的包围框
-                bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
+                bbox = xtick.get_window_extent() 
+                bbox_transformed = bbox.transformed(fig.transFigure.inverted())  
                 max_xtick_height = max(max_xtick_height, bbox_transformed.height)
             if xlabel is not None:
-                bbox = xlabel.get_window_extent()  # 获取每个 xtick 的包围框
-                bbox_transformed = bbox.transformed(fig.transFigure.inverted())  # 将像素转换为图坐标
+                bbox = xlabel.get_window_extent()  
+                bbox_transformed = bbox.transformed(fig.transFigure.inverted()) 
                 x_height = bbox_transformed.height
                 if len(df.columns) < 6:
                     cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.02])
