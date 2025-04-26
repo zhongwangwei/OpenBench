@@ -14,54 +14,11 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import rcParams
 from Mod_Converttype import Convert_Type
 
-
-def get_index(vmin, vmax, colormap):
-    def get_ticks(vmin, vmax):
-        if 2 >= vmax - vmin > 1:
-            colorbar_ticks = 0.2
-        elif 5 >= vmax - vmin > 2:
-            colorbar_ticks = 0.5
-        elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 20 >= vmax - vmin > 10:
-            colorbar_ticks = 2
-        elif 50 >= vmax - vmin > 20:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 10
-        elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
-        elif 500 >= vmax - vmin > 200:
-            colorbar_ticks = 50
-        elif 1000 >= vmax - vmin > 500:
-            colorbar_ticks = 100
-        elif 2000 >= vmax - vmin > 1000:
-            colorbar_ticks = 200
-        elif 10000 >= vmax - vmin > 2000:
-            colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
-        else:
-            colorbar_ticks = 0.10
-        return colorbar_ticks
-
-    # Calculate ticks
-    colorbar_ticks = get_ticks(vmin, vmax)
-    ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
-    mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
-              mticks]
-    if mticks[0] < vmin and mticks[-1] < vmax:
-        mticks = mticks[1:]
-    elif mticks[0] > vmin and mticks[-1] > vmax:
-        mticks = mticks[:-1]
-    elif mticks[0] < vmin and mticks[-1] > vmax:
-        mticks = mticks[1:-1]
-
-    cmap = cm.get_cmap(colormap)
-    bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
-    norm = colors.BoundaryNorm(bnd, cmap.N)
-
-    return cmap, mticks, norm, bnd
-
+import sys
+cmaps_parent_path = os.path.abspath('./script/figlib/')
+sys.path.append(cmaps_parent_path)
+import cmaps
+from Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
 
 def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # read the data
@@ -88,7 +45,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         if not option['cmap']:
             option['cmap'] = 'coolwarm'
         min_value, max_value = np.percentile(metric, 5), np.percentile(metric, 95)
-        cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+        cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option['cmap'])
         if not option['vmin_max_on']:
             option['vmax'], option['vmin'] = mticks[-1], mticks[0]
 
@@ -125,30 +82,38 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'],
-                        marker=option['marker'],
-                        edgecolors='none', alpha=0.9)
+        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, vmin=option['vmin'], vmax=option['vmax'],
+                        marker=option['marker'], linewidths=0.5,
+                        edgecolors='black', alpha=0.9, zorder=10)
+        
+        for spine in ax.spines.values():
+            spine.set_linewidth(0)
+
         coastline = cfeature.NaturalEarthFeature(
-            'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+            'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
         rivers = cfeature.NaturalEarthFeature(
             'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
-        ax.add_feature(cfeature.LAND, facecolor='0.8')
+        ax.add_feature(cfeature.LAND, facecolor='0.9')
         ax.add_feature(coastline, linewidth=0.6)
-        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
+        ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white', zorder=9)
         ax.add_feature(rivers, linewidth=0.5)
-        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+        ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8,
+            xlocs=np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1],
+            ylocs=np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1])
 
         if not option['set_lat_lon']:
             ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
                            main_nml['max_lat']], crs=ccrs.PlateCarree())
-            ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
+            ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[:0:-1],
                           crs=ccrs.PlateCarree())
-            ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
+            ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[:0:-1],
                           crs=ccrs.PlateCarree())
         else:
             ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
-            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+            ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
+            ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
+        ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+        ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
         ax.set_adjustable('datalim')
         ax.set_aspect('equal', adjustable='box')
 
@@ -158,27 +123,33 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         ax.yaxis.set_major_formatter(lat_formatter)
 
         ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
-        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
+        ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
         title = option['title']
         if not option['title']:
             title = f'{source} {method_name}'
-        plt.title(title, fontsize=option['title_size'])
-
-        if not option['colorbar_position_set']:
-            pos = ax.get_position()  # .bounds
-            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+        plt.title(title, fontsize=option['title_size'], weight='bold')
+    if not option['colorbar_position_set']:
+        pos = ax.get_position()
+        left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+        if (option['min_lat']<-60) & (option['max_lat']>89) & (option['min_lon']<-179) & (option['max_lon']>179):
+            if option['colorbar_position'] == 'horizontal':
+                cbaxes = fig.add_axes([left + 0.03, bottom+ 0.14, 0.15, 0.02])
+            else:
+                cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height/3])
+        else:
             if option['colorbar_position'] == 'horizontal':
                 if len(option['xticklabel']) == 0:
-                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width/4*3, 0.03])
                 else:
-                    cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width/4*3, 0.03])
             else:
-                cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
-        else:
-            cbaxes = fig.add_axes(
-                [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
+                cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
+    else:
+        cbaxes = fig.add_axes(
+            [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
 
-        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+
+        cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label='',
                           extend=option['extend'],
                           orientation=option['colorbar_position'])
         cb.solids.set_edgecolor("face")

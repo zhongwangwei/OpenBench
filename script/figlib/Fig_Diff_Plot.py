@@ -18,125 +18,11 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from Mod_Converttype import Convert_Type
 from matplotlib import rcParams
 
-
-def process_unit(ref_unit, metric):
-    all_metrics_units = {
-        'percent_bias': '%',  # Percent Bias
-        'absolute_percent_bias': '%',  # Absolute Percent Bias
-        'bias': 'Same as input data',  # Bias
-        'mean_absolute_error': 'Same as input data',  # Mean Absolute Error
-        'RMSE': 'Same as input data',  # Root Mean Squared Error
-        'MSE': 'Square of input data unit',  # Mean Squared Error
-        'ubRMSE': 'Same as input data',  # Unbiased Root Mean Squared Error
-        'CRMSD': 'Same as input data',  # Centered Root Mean Square Difference
-        'nrmse': 'Unitless',  # Normalized Root Mean Square Error
-        'L': 'Unitless',  # Likelihood
-        'correlation': 'Unitless',  # correlation coefficient
-        'correlation_R2': 'Unitless',  # correlation coefficient R2
-        'NSE': 'Unitless',  # Nash Sutcliffe efficiency coefficient
-        'LNSE': 'Unitless',  # natural logarithm of NSE coefficient
-        'KGE': 'Unitless',  # Kling-Gupta Efficiency
-        'KGESS': 'Unitless',  # Normalized Kling-Gupta Efficiency
-        'kappa_coeff': 'Unitless',  # Kappa coefficient
-        'rv': 'Unitless',  # Relative variability (amplitude ratio)
-        'ubNSE': 'Unitless',  # Unbiased Nash Sutcliffe efficiency coefficient
-        'ubKGE': 'Unitless',  # Unbiased Kling-Gupta Efficiency
-        'ubcorrelation': 'Unitless',  # Unbiased correlation
-        'ubcorrelation_R2': 'Unitless',  # correlation coefficient R2
-        'pc_max': '%',  # the bias of the maximum value
-        'pc_min': '%',  # the bias of the minimum value
-        'pc_ampli': '%',  # the bias of the amplitude value
-        'rSD': 'Unitless',  # Ratio of standard deviations
-        'PBIAS_HF': '%',  # Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
-        'PBIAS_LF': '%',  # Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
-        'SMPI': 'Unitless',  # https://docs.esmvaltool.org/en/latest/recipes/recipe_smpi.html
-        'ggof': 'Unitless',  # Graphical Goodness of Fit
-        'gof': 'Unitless',  # Numerical Goodness-of-fit measures
-        'KGEkm': 'Unitless',  # Kling-Gupta Efficiency with knowable-moments
-        'KGElf': 'Unitless',  # Kling-Gupta Efficiency for low values
-        'KGEnp': 'Unitless',  # Non-parametric version of the Kling-Gupta Efficiency
-        'md': 'Unitless',  # Modified Index of Agreement
-        'mNSE': 'Unitless',  # Modified Nash-Sutcliffe efficiency
-        'pbiasfdc': '%',  # Percent Bias in the Slope of the Midsegment of the Flow Duration Curve
-        'pfactor': '%',  # the percent of observations that are within the given uncertainty bounds.
-        'rd': 'Unitless',  # Relative Index of Agreement
-        'rfactor': 'Unitless',
-        # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
-        'rNSE': 'Unitless',  # Relative Nash-Sutcliffe efficiency
-        'rSpearman': 'Unitless',  # Spearman's rank correlation coefficient
-        'rsr': 'Unitless',  # Ratio of RMSE to the standard deviation of the observations
-        'sKGE': 'Unitless',  # Split Kling-Gupta Efficiency
-        'ssq': 'Square of input data unit',  # Sum of the Squared Residuals
-        'valindex': 'Unitless',  # Valid Indexes
-        've': 'Unitless',  # Volumetric Efficiency
-        'wNSE': 'Unitless',  # Weighted Nash-Sutcliffe efficiency
-        'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
-        'index_agreement': 'Unitless',  # Index of agreement
-    }
-    if metric not in all_metrics_units.keys():
-        return '[None]'
-    else:
-        unit = all_metrics_units[metric]
-        if unit == 'Unitless':
-            return '[Unitless]'
-        elif unit == '%':
-            return '[%]'
-        elif unit == 'Same as input data':
-            return f'[{ref_unit}]'
-        elif unit == 'Square of input data unit':
-            return rf'[${ref_unit}^{{2}}$]'
-        else:
-            print('Warning: Missing metric unit!')
-            return '[None]'
-
-
-def get_index(vmin, vmax, colormap):
-    def get_ticks(vmin, vmax):
-        if 2 >= vmax - vmin > 1:
-            colorbar_ticks = 0.2
-        elif 5 >= vmax - vmin > 2:
-            colorbar_ticks = 0.5
-        elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 20 >= vmax - vmin > 10:
-            colorbar_ticks = 2
-        elif 50 >= vmax - vmin > 20:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 10
-        elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
-        elif 500 >= vmax - vmin > 200:
-            colorbar_ticks = 50
-        elif 1000 >= vmax - vmin > 500:
-            colorbar_ticks = 100
-        elif 2000 >= vmax - vmin > 1000:
-            colorbar_ticks = 200
-        elif 10000 >= vmax - vmin > 2000:
-            colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
-        else:
-            colorbar_ticks = 0.10
-        return colorbar_ticks
-
-    # Calculate ticks
-    colorbar_ticks = get_ticks(vmin, vmax)
-    ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
-    mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
-              mticks]
-    if mticks[0] < vmin and mticks[-1] < vmax:
-        mticks = mticks[1:]
-    elif mticks[0] > vmin and mticks[-1] > vmax:
-        mticks = mticks[:-1]
-    elif mticks[0] < vmin and mticks[-1] > vmax:
-        mticks = mticks[1:-1]
-
-    cmap = cm.get_cmap(colormap)
-    bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
-    norm = colors.BoundaryNorm(bnd, cmap.N)
-
-    return cmap, mticks, norm, bnd
-
+import os
+cmaps_parent_path = os.path.abspath('./script/figlib/')
+sys.path.append(cmaps_parent_path)
+import cmaps
+from Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
 
 def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     font = {'family': option['font']}
@@ -181,7 +67,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         if min_value == max_value:
             max_value = max_value + 1
 
-    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
     if min_value < option['vmin'] and max_value > option['vmax']:
         option['extend'] = 'both'
@@ -202,32 +88,39 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         origin = 'upper'
 
     if option['show_method'] == 'interpolate':
-        cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=option['extend'])
+        cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(ds[xitem].values, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+        cs = ax.imshow(ds[xitem].values, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent,
                        origin=origin)
 
+    for spine in ax.spines.values():
+        spine.set_linewidth(0)
+
     coastline = cfeature.NaturalEarthFeature(
-        'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+        'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
     rivers = cfeature.NaturalEarthFeature(
         'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
-    ax.add_feature(cfeature.LAND, facecolor='0.8')
+    ax.add_feature(cfeature.LAND, facecolor='0.9')
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+    ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8,
+        xlocs=np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1],
+        ylocs=np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1])
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
                        main_nml['max_lat']], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
+        ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[:0:-1],
                       crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
+        ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[:0:-1],
                       crs=ccrs.PlateCarree())
     else:
         ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+        ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
+        ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
+    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+    ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
     ax.set_adjustable('datalim')
     ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
@@ -237,24 +130,29 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
 
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
-    plt.title(option['title'], fontsize=option['title_size'])
+    plt.title(option['title'], fontsize=option['title_size'], weight='bold')
 
     if not option['colorbar_position_set']:
-        pos = ax.get_position()  # .bounds
+        pos = ax.get_position()
         left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-        if option['colorbar_position'] == 'horizontal':
-            if len(option['xticklabel']) == 0:
-                cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
+        if (option['min_lat']<-60) & (option['max_lat']>89) & (option['min_lon']<-179) & (option['max_lon']>179):
+            if option['colorbar_position'] == 'horizontal':
+                cbaxes = fig.add_axes([left + 0.03, bottom+ 0.14, 0.15, 0.02])
             else:
-                cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
+                cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height/3])
         else:
-            cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+            if option['colorbar_position'] == 'horizontal':
+                if len(option['xticklabel']) == 0:
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width/4*3, 0.03])
+                else:
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width/4*3, 0.03])
+            else:
+                cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
     else:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
-
-    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
-                      extend=option['extend'], orientation=option['colorbar_position'])
+    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label='',
+                      extend=extend, orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
 
     filename2 = filename[:-3]
@@ -299,43 +197,41 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         if min_value == max_value:
             max_value = max_value + 1
 
-    cmap, mticks, norm, bnd = get_index(min_value, max_value, option['cmap'])
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option['cmap'])
     option['vmin'], option['vmax'] = mticks[0], mticks[-1]
-    if min_value < option['vmin'] and max_value > option['vmax']:
-        option['extend'] = 'both'
-    elif min_value > option['vmin'] and max_value > option['vmax']:
-        option['extend'] = 'max'
-    elif min_value < option['vmin'] and max_value < option['vmax']:
-        option['extend'] = 'min'
-    else:
-        option['extend'] = 'neither'
+
 
     fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, marker=option['marker'],
-                    edgecolors='none', alpha=0.9)
+    cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, vmin=option['vmin'], vmax=option['vmax'],
+                    marker=option['marker'], linewidths=0.5, edgecolors='black', alpha=0.9)
     coastline = cfeature.NaturalEarthFeature(
-        'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')
+        'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
     rivers = cfeature.NaturalEarthFeature(
         'physical', 'rivers_lake_centerlines', '110m', edgecolor='0.6', facecolor='none')
-    ax.add_feature(cfeature.LAND, facecolor='0.8')
+    ax.add_feature(cfeature.LAND, facecolor='0.9')
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor='white', edgecolor='white')
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8)
+    ax.gridlines(draw_labels=False, linestyle=':', linewidth=0.5, color='grey', alpha=0.8,
+        xlocs=np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1],
+        ylocs=np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1])
 
     if not option['set_lat_lon']:
         ax.set_extent([main_nml['min_lon'], main_nml['max_lon'], main_nml['min_lat'],
                        main_nml['max_lat']], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[::-1],
+        ax.set_xticks(np.arange(main_nml['max_lon'], main_nml['min_lon'], -60)[:0:-1],
                       crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[::-1],
+        ax.set_yticks(np.arange(main_nml['max_lat'], main_nml['min_lat'], -30)[:0:-1],
                       crs=ccrs.PlateCarree())
     else:
         ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[::-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[::-1], crs=ccrs.PlateCarree())
+        ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
+        ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
+    
+    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+    ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
     ax.set_adjustable('datalim')
     ax.set_aspect('equal', adjustable='box')
     lon_formatter = LongitudeFormatter()
@@ -345,23 +241,29 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
 
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=50)
-    plt.title(option['title'], fontsize=option['title_size'])
+    plt.title(option['title'], fontsize=option['title_size'], weight='bold')
 
     if not option['colorbar_position_set']:
-        pos = ax.get_position()  # .bounds
+        pos = ax.get_position()
         left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-        if option['colorbar_position'] == 'horizontal':
-            if len(option['xticklabel']) == 0:
-                cbaxes = fig.add_axes([left + width / 6, bottom - 0.12, width / 3 * 2, 0.04])
+        if (option['min_lat']<-60) & (option['max_lat']>89) & (option['min_lon']<-179) & (option['max_lon']>179):
+            if option['colorbar_position'] == 'horizontal':
+                cbaxes = fig.add_axes([left + 0.03, bottom+ 0.14, 0.15, 0.02])
             else:
-                cbaxes = fig.add_axes([left + width / 6, bottom - 0.17, width / 3 * 2, 0.04])
+                cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height/3])
         else:
-            cbaxes = fig.add_axes([right + 0.05, bottom, 0.03, height])
+            if option['colorbar_position'] == 'horizontal':
+                if len(option['xticklabel']) == 0:
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width/4*3, 0.03])
+                else:
+                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width/4*3, 0.03])
+            else:
+                cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
     else:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]])
 
-    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label=option['colorbar_label'],
+    cb = fig.colorbar(cs, cax=cbaxes, ticks=mticks, spacing='uniform', label='',
                       extend=option['extend'],
                       orientation=option['colorbar_position'])
     cb.solids.set_edgecolor("face")
@@ -401,12 +303,12 @@ def plot_diff_results(basedir, data_type, item_type, evaluation_item, ref_source
         plot_option['title'] = f'{evaluation_item} {item_type} anomaly for {sim_source}'
         # if not plot_option['colorbar_label']:
         unit = sim_nml[f'{evaluation_item}'][f'{sim_source}_varunit']
-        plot_option['colorbar_label'] = process_unit(unit, item_type)
+        plot_option['colorbar_label'] = process_unit(unit, '', item_type)
     else:
         plot_option['title'] = f'{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}'
         # if not plot_option['colorbar_label']:
         unit = sim_nml[f'{evaluation_item}'][f'{sim_source[0]}_varunit']
-        plot_option['colorbar_label'] = process_unit(unit, item_type)
+        plot_option['colorbar_label'] = process_unit(unit, '', item_type)
 
     if not plot_option['cmap']:
         plot_option['cmap'] = 'RdBu_r'  # Diverging colormap for anomalies/differences
