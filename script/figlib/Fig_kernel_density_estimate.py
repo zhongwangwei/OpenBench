@@ -27,7 +27,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
         # create a figure and axis
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-        ax = fig.add_subplot(111)  # 添加子图
+        ax = fig.add_subplot(111) 
+
+        for spine in ax.spines.values():
+            spine.set_linewidth(0)  
 
         # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
@@ -57,7 +60,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
                 # Store the line object
                 line, = plt.plot(x_values, density, color=MLINES[sim_source]['lineColor'],
                                  linestyle=MLINES[sim_source]['linestyle'],
-                                 linewidth=MLINES[sim_source]['linewidth'],
+                                 linewidth=MLINES[sim_source]['linewidth']*2,
                                  label=sim_source
                                  )
                 lines.append(line)  # Add the line object to the list
@@ -79,13 +82,13 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         if not option["set_legend"]:
             ncol = int(math.ceil(len(sim_sources) / 10))
             ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
-                      loc=option["loc"], ncol=ncol)
+                      loc=option["loc"], ncol=ncol, handlelength=1, handleheight=1)
         else:
             ax.legend(shadow=False, frameon=False, fontsize=option['fontsize'], title=legend_title,
-                      bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=ncol)
+                      bbox_to_anchor=(option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]), ncol=ncol, handlelength=1, handleheight=1)
 
         if option['grid']:
-            ax.grid(linestyle=option['grid_style'], alpha=0.7, linewidth=option['grid_linewidth'])  # 绘制图中虚线 透明度0.3
+            ax.grid(linestyle=option['grid_style'], alpha=0.7, linewidth=option['grid_linewidth'])
 
         if not option['title']:
             title = f"Kernel Density Estimate of {evaluation_item.replace('_', ' ')}"
@@ -102,9 +105,9 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         else:
             yticklabel = option['yticklabel']
 
-        plt.xlabel(xticklabel, fontsize=option['xtick'] + 1)
-        plt.ylabel(yticklabel, fontsize=option['ytick'] + 1)
-        plt.title(title, fontsize=option['title_fontsize'])
+        plt.xlabel(xticklabel, fontsize=option['xtick'] + 1, weight='bold')
+        plt.ylabel(yticklabel, fontsize=option['ytick'] + 1, weight='bold')
+        plt.title(title, fontsize=option['title_fontsize'], weight='bold', loc='left')
 
         output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
         plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
@@ -116,8 +119,8 @@ def generate_lines(data_names, option):
     import matplotlib.colors as mcolors
     lines = {}
     # add colors and symbols
-    hex_colors = ['#4C6EF5', '#F9C74F', '#90BE6D', '#5BC0EB', '#43AA8B', '#F3722C', '#855456', '#F9AFAF', '#F8961E'
-        , '#277DA1', '#5A189A']
+    hex_colors = ['#468cc8', '#90278c', '#b48abc', '#f9931d', '#fcdf15', 
+                '#d02030', '#252162', '#a9dae0', '#e57f99', '#019d88','#afb2b3',]
     # hex_colors = cm.Set3(np.linspace(0, 1, len(data_names) + 1))
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])
 
