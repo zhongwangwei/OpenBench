@@ -118,7 +118,7 @@
   Streamflow_ref_source                               = GRDC                         # Stn:  GRDC, GSIM,DT2021,HYDAT(Canada)
   Inundation_Fraction_ref_source                      = GIEMS_v2                     # Grid: GIEMS_v2
   Inundation_Area_ref_source                          = GIEMS_v2                     # Grid: GIEMS_v2
-  River_Water_Level_ref_source                        = HydroWeb_2.0                 # Stn: HydroWeb_2.0,HYDAT(Canada)
+  River_Water_Level_ref_source                        = HydroWeb_river               # Stn: HydroWeb_river,HYDAT(Canada)
   Sediment_Transport_ref_source                       = HYDAT                        # stn: HYDAT(Canada)
 
   ###Lake
