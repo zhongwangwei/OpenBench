@@ -1,13 +1,13 @@
 &general
-   root_dir          =  ./data/reference/stn_ref/StreamFlow/GRDC
+   root_dir          =  ./data/reference/stn_ref/Dam_River_Lake/ResOpsUS/output/reservoir
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
-   tim_res           =  
+   tim_res           =  day
    grid_res          =  
    syear             =  1900
    eyear             =  2020
-   fulllist          = ./data/reference/stn_ref/Dam/ResOpsUS/reservoir_attributes.csv 
+   fulllist          = ./data/reference/stn_ref/Dam_River_Lake/ResOpsUS/ResOpsUS_reservoir.csv 
 
 /
 
