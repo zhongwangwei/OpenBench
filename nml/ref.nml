@@ -118,15 +118,15 @@
   Streamflow_ref_source                               = GRDC                         # Stn:  GRDC, GSIM,DT2021,HYDAT(Canada)
   Inundation_Fraction_ref_source                      = GIEMS_v2                     # Grid: GIEMS_v2
   Inundation_Area_ref_source                          = GIEMS_v2                     # Grid: GIEMS_v2
-  River_Water_Level_ref_source                        = HydroWeb_river               # Stn: HydroWeb_river,HYDAT(Canada)
+  River_Water_Level_ref_source                        = HydroWeb_2.0_river           # Stn: HydroWeb_2.0_river,HYDAT(Canada)
   Sediment_Transport_ref_source                       = HYDAT                        # stn: HYDAT(Canada)
 
   ###Lake
   Lake_Surface_Water_Temperature_ref_source           = GCOS                         # Grid: GCOS, GCOS_0p25, ESACCI_LAKES, GLAST      stn
   Lake_Ice_Fraction_Cover_ref_source                  =                              #
-  Lake_Water_Level_ref_source                         = G-REALM                      # Grid: G-REALM,GWW
-  Lake_Water_Area_ref_source                          = ReaLSAT                      # Grid: ReaLSAT,GWW
-  Lake_Water_Volume_ref_source                        = 
+  Lake_Water_Level_ref_source                         = G-REALM                      # Grid: G-REALM,GWW    Stn: HydroWeb_2.0_lake
+  Lake_Water_Area_ref_source                          = ReaLSAT                      # Grid: ReaLSAT,GWW    Stn: HydroWeb_2.0_lake
+  Lake_Water_Volume_ref_source                        =                              # Stn: HydroWeb_2.0_lake
 
   #*******************         Forcings      **********************
   Surface_Air_Temperature_ref_source                  =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,CN05.1, SMAPL4, SMAPL4_0p25
@@ -226,14 +226,14 @@ Chen2023                   = ./nml/Ref_variables_defination/Dam/Chen2023.nml
 
 #River
 GRDC                       = ./nml/Ref_variables_defination/River/GRDC.nml
-HydroWeb_river             = ./nml/Ref_variables_defination/River/HydroWeb_river.nml
+HydroWeb_2.0_river         = ./nml/Ref_variables_defination/River/HydroWeb_2.0_river.nml
 GIEMS_v2                   = ./nml/Ref_variables_defination/River/GIEMS_v2.nml
 GSIM                       = ./nml/Ref_variables_defination/River/GSIM.nml
 DT2021                     = ./nml/Ref_variables_defination/River/DT2021.nml
 HYDAT                      = ./nml/Ref_variables_defination/River/HYDAT.nml
 
 #Lake
-HydroWeb_2.0               = ./nml/Ref_variables_defination/River/HydroWeb_lake.nml
+HydroWeb_2.0_lake          = ./nml/Ref_variables_defination/River/HydroWeb_2.0_lake.nml
 GCOS                       = ./nml/Ref_variables_defination/lake/GCOS.nml
 GCOS_0p25                  = ./nml/Ref_variables_defination/lake/GCOS_0p25.nml
 GLAST                      = ./nml/Ref_variables_defination/lake/GLAST.nml
