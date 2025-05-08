@@ -16,6 +16,7 @@ from Mod_Scores import scores
 from Mod_Statistics import statistics_calculate
 from Mod_Converttype import Convert_Type
 from figlib import *
+from statistic import *
 
 logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
 warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
