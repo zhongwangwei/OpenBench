@@ -153,3 +153,11 @@ varunit           =  m hr-1
 prefix            =  ERA5LAND_
 suffix            =  _tp_1D_0p25
 /
+
+&Surface_Wind_Speed
+sub_dir           =  wind_speed
+varname           =  ws
+varunit           =  m s-1
+prefix            =  ERA5LAND_
+suffix            =  _ws_1D_0p25
+/

@@ -17,6 +17,11 @@ model=CoLM
    varname           =  tmp
    varunit           =  k
 /
-$Surface_Specific_Humidity
+&Surface_Specific_Humidity
    varname           =  spfh
    varunit           =  kg kg-1
+/
+&Surface_Wind_Speed
+   varname           = ws
+   varunit           = m s-1
+/
