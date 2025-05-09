@@ -77,7 +77,7 @@ class UnitProcessing:
 				'm2': lambda x: x / 1.e6,
 			},
 
-			'm s-1 wind': {
+			'm s-1': {
 				'km h-1': lambda x: x * 3.6,
 			},
 			't ha-1': {
