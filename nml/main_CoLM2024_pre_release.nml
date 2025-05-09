@@ -94,7 +94,8 @@
   Surface_Relative_Humidity=False
   Surface_Specific_Humidity=False
   Precipitation=False
-  Surface_Air_Temperature=False 
+  Surface_Air_Temperature=False
+  Surface_Wind_Speed=False 
   #****************************************************************
 
 
