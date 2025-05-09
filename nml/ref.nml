@@ -138,7 +138,7 @@
   Surface_Relative_Humidity_ref_source                =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
   Surface_Specific_Humidity_ref_source                =  ERA5LAND                # Grid: MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25,SMAPL4, SMAPL4_0p25
   Precipitation_ref_source                            =  CRU-TS4.08              # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25, MSWEP, MSWEP_0p25,GPCPv3.2_monthly,GPCPv3.2_daily,CN05.1
-  Surface_Wind_Speed_ref_source                       =  CLM5                    # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
+  Surface_Wind_Speed_ref_source                       =  ERA5LAND                    # Grid: CRU-TS4.08,MSWX, MSWX_0p25, ERA5LAND, ERA5LAND_0p25
 / 
 
 
