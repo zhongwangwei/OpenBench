@@ -70,7 +70,7 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
         cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     # cs = ax.imshow(data, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin='lower')
     coastline = cfeature.NaturalEarthFeature(
