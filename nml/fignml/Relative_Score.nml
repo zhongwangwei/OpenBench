@@ -7,6 +7,7 @@
   ytick             = 15          # ytickslabel size setting
   labelsize         = 17
   axes_linewidth    = 1
+  line_width = 1.5
 
   set_lat_lon       = False  # 'True', 'False' Turn on this option, the map will be plot by your setting.
   min_lon           = -180

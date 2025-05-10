@@ -11,6 +11,7 @@
   y_rotation        = 45
   y_ha              = right  # 'right', 'left', 'center'
   x_ticklabel       = Shorter # 'Normal', 'Shorter'
+  line_width = 1.5
 
   ticks_format      = .2f
   fontsize          = 12

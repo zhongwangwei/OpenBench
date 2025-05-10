@@ -9,7 +9,8 @@
   grid_linestyle =  --
   grid_width =  1.0
   labelspacing = 1
-
+  line_width = 2.5
+  
   obs_linecolor =  F96969
   obs_linestyle = solid
   obs_lineswidth = 144
@@ -20,7 +21,7 @@
   sim_linecolor =  599AD4
   sim_linestyle = solid
   sim_lineswidth = 144
-  sim_marker = *
+  sim_marker = d
   sim_markersize =  432
   sim_alphas = 0.8
 

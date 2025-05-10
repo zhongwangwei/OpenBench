@@ -104,31 +104,31 @@ def convert_unit(input_str):
     result = re.sub(r'\bw\b', 'W', result)
 
     # Rule 3: Remove spaces, handle spaces before '-' as '/' or '·'
-    if '-' in result:
-        parts = result.split('-')
-        if len(parts) == 2:  # single '-'
-            left = parts[0].rstrip()
-            if ' ' in left:
-                left = left.replace(' ', '/')
-            result = left + '-'+ parts[1].lstrip()
-        else:  # multiple '-'
-            left = parts[0].rstrip()
-            if ' ' in left:
-                left = left.replace(' ', '/(')
-            middle = '-'.join(part.strip() for part in parts[1:-1])
-            if ' ' in middle:
-                middle = middle.replace(' ', '·')
-            right = parts[-1].lstrip()
-            result = left + '-'+ middle + '-'+ right + ')'
-    result = result.replace(' ', '')
+    # if '-' in result:
+    #     parts = result.split('-')
+    #     if len(parts) == 2:  # single '-'
+    #         left = parts[0].rstrip()
+    #         if ' ' in left:
+    #             left = left.replace(' ', '/')
+    #         result = left + '-'+ parts[1].lstrip()
+    #     else:  # multiple '-'
+    #         left = parts[0].rstrip()
+    #         if ' ' in left:
+    #             left = left.replace(' ', '/(')
+    #         middle = '-'.join(part.strip() for part in parts[1:-1])
+    #         if ' ' in middle:
+    #             middle = middle.replace(' ', '·')
+    #         right = parts[-1].lstrip()
+    #         result = left + '-'+ middle + '-'+ right + ')'
+    # result = result.replace(' ', '·')
 
     # Rule 3: Convert numbers following '-' to superscript, remove '-' and 1
     def to_superscript(match):
-        num = match.group(1)
-        superscript_map = str.maketrans('123456789', '¹²³⁴⁵⁶⁷⁸⁹')
+        num = match.group(0)
+        superscript_map = str.maketrans('123456789-', '¹²³⁴⁵⁶⁷⁸⁹⁻')
         return num.translate(superscript_map)
-    result = re.sub(r'-(\d+)', to_superscript, result)
-    result = result.replace('¹', '')
+    result = re.sub(r'-\d+', to_superscript, result)
+    # result = result.replace('¹', '')
 
     # Rule 4: Convert 'None' and 'unitless' to '-'
     result = re.sub(r'\b(None|unitless)\b', '-', result)

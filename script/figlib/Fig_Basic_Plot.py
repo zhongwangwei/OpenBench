@@ -136,7 +136,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
                                 origin=origin)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
@@ -254,7 +254,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
                     marker=markers[1], markersize=markersizes[1]/max_time_len, add_legend=True)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     # set ylabel to be the same as the variable name
     unit = convert_unit(self.ref_varunit)
@@ -328,7 +328,7 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
                     linewidths=0.5, edgecolors='black', alpha=0.9, zorder=10)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
@@ -552,7 +552,7 @@ def make_Basic(file, method_name, data_sources, main_nml,
         cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')

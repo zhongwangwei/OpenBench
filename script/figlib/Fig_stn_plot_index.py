@@ -87,7 +87,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
                         edgecolors='black', alpha=0.9, zorder=10)
         
         for spine in ax.spines.values():
-            spine.set_linewidth(0)
+            spine.set_linewidth(option['line_width'])
 
         coastline = cfeature.NaturalEarthFeature(
             'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')

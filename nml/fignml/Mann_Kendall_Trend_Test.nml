@@ -7,6 +7,7 @@
   ytick             = 15          # ytickslabel size setting
   labelsize         = 17
   axes_linewidth    = 1
+  line_width = 1.5
 
   significance_level = 0.05
 
