@@ -94,7 +94,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
                        origin=origin)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')

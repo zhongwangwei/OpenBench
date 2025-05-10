@@ -68,7 +68,7 @@ def make_geo_plot_index(file, method_name, main_nml, option):
         cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
-        spine.set_linewidth(0)
+        spine.set_linewidth(option['line_width'])
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '110m', edgecolor='0.6', facecolor='none')
