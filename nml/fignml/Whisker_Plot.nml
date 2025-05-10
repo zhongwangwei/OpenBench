@@ -11,6 +11,7 @@
   x_rotation                =  0
   y_rotation                =  0
   ha                        =  center  #'right', 'left', 'center'
+  line_width = 1.5
 
 
 
