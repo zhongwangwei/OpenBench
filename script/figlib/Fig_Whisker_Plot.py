@@ -25,6 +25,9 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
                 '#a2ad87','#1e4f9e']
     fig, ax = plt.subplots(1, figsize=(option['x_wise']*len(sim_sources)/2, option['y_wise']))
 
+    for spine in ax.spines.values():
+        spine.set_linewidth(option['line_width'])
+        
     def colors(color):
         hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
         import re
