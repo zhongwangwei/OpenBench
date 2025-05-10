@@ -30,7 +30,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
         ax = fig.add_subplot(111) 
 
         for spine in ax.spines.values():
-            spine.set_linewidth(0)  
+            spine.set_linewidth(option['line_width'])  
 
         # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
@@ -107,7 +107,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
         plt.xlabel(xticklabel, fontsize=option['xtick'] + 1, weight='bold')
         plt.ylabel(yticklabel, fontsize=option['ytick'] + 1, weight='bold')
-        plt.title(title, fontsize=option['title_fontsize'], weight='bold', loc='left')
+        plt.title(title, fontsize=option['title_fontsize'], weight='bold', loc='center')
 
         output_file_path = f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
         plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
