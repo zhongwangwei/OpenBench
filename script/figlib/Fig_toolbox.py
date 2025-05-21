@@ -216,7 +216,6 @@ def get_index(vmin, vmax, colormap, varname=''):
     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
               mticks]
 
-    print(f"min: {vmin} \nmax: {vmax}")
 
     # if (varname in list1) or (varname in list3):
     if max((vmin-mticks[0]),(mticks[-1]-vmax)) <= (colorbar_ticks/2):
@@ -242,7 +241,6 @@ def get_index(vmin, vmax, colormap, varname=''):
             max_num = max(-mticks[0], mticks[-1])
             mticks = np.linspace(-max_num,max_num,5)
 
-    print(f"mticks is {mticks[:]}")
 
 
     cmap = get_colormap('cmp_b2r')

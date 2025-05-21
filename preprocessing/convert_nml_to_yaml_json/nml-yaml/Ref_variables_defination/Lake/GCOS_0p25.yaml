@@ -1,0 +1,14 @@
+general:
+  root_dir: ./data/reference/grid_ref/Dam_River_Lake/Lake_surface_water_temperature_SAT_0p25
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Year
+  tim_res: Month
+  grid_res: 0.25
+  syear: 1995
+  eyear: 2023
+Lake_Surface_Water_Temperature:
+  varname: lake_surface_water_temperature
+  varunit: K
+  prefix: LAKES-L3S-LSWT-
+  suffix: ''

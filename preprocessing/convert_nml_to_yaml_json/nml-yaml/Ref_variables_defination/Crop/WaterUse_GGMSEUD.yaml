@@ -1,0 +1,15 @@
+general:
+  root_dir: ./data/reference/grid_ref/WaterUse/GGMSEUD
+  timezone: 0.0
+  data_type: grid
+  data_groupby: single
+  tim_res: Month
+  grid_res: 0.5
+Total_Irrigation_Amount:
+  sub_dir: irrigation_water_use_v2
+  varname: withd_irr
+  varunit: mm month-1
+  prefix: withd_irr_pcrglobwb_resharped
+  suffix: ''
+  syear: 1971
+  eyear: 2010

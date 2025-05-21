@@ -1,0 +1,13 @@
+general:
+  model_namelist: ./nml/Mod_variables_defination/CoLM.nml
+  timezone: 0.0
+  data_type: grid
+  data_groupby: month
+  dir: /share/home/dq013/zhwei/colm/cases/cama-test-2/history/
+  fulllist: ''
+  tim_res: month
+  grid_res: 0.25
+  suffix: ''
+  prefix: cama-test-2_hist_cama_
+  syear: 2001
+  eyear: 2009

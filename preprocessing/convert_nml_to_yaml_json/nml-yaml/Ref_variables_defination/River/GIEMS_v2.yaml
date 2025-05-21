@@ -1,0 +1,19 @@
+general:
+  root_dir: ./data/reference/grid_ref/Dam_River_Lake/Inundation/GIEMS_v2_2020/regrid_0.25d/
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Year
+  tim_res: Month
+  grid_res: 0.25
+  syear: 1992
+  eyear: 2015
+Inundation_Fraction:
+  varname: fldfrc
+  varunit: unitless
+  prefix: GIEMS_v2_2020_fldfrc_15min_
+  suffix: ''
+Inundation_Area:
+  varname: fldare
+  varunit: km2
+  prefix: GIEMS_v2_2020_fldare_15min_
+  suffix: ''
