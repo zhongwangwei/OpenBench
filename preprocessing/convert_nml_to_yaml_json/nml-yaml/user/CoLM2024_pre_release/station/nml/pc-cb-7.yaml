@@ -1,0 +1,12 @@
+general:
+  model_namelist: ./nml/Mod_variables_defination/CoLM.nml
+  timezone: 0.0
+  data_type: stn
+  data_groupby: year
+  dir: ''
+  fulllist: /share/home/dq013/zhwei/OpenBench/20250120/nml/user/CoLM2024_pre_release/station/output/pc-cb-7.csv
+  tim_res: hour
+  grid_res: 1
+Gross_Primary_Productivity:
+  varname: f_assim
+  varunit: mol m-2 s-1

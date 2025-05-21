@@ -1,0 +1,34 @@
+validation_nml:
+  plot_stn_source: ./nml/fignml/plot_stn.yaml
+  make_stn_plot_index_source: ./nml/fignml/make_stn_plot_index.yaml
+  make_geo_plot_index_source: ./nml/fignml/make_geo_plot_index.yaml
+  IGBP_groupby_source: ./nml/fignml/IGBP_groupby_source.yaml
+  PFT_groupby_source: ./nml/fignml/PFT_groupby_source.yaml
+comparison_nml:
+  HeatMap_source: ./nml/fignml/HeatMap_source.yaml
+  Taylor_Diagram_source: ./nml/fignml/Taylor_Diagram.yaml
+  Target_Diagram_source: ./nml/fignml/Target_Diagram.yaml
+  Kernel_Density_Estimate_source: ./nml/fignml/Kernel_Density_Estimate.yaml
+  Whisker_Plot_source: ./nml/fignml/Whisker_Plot.yaml
+  Parallel_Coordinates_source: ./nml/fignml/Parallel_Coordinates.yaml
+  Portrait_Plot_seasonal_source: ./nml/fignml/Portrait_Plot_seasonal.yaml
+  Single_Model_Performance_Index_source: ./nml/fignml/Single_Model_Performance_Index.yaml
+  Relative_Score_source: ./nml/fignml/Relative_Score.yaml
+  Ridgeline_Plot_source: ./nml/fignml/Ridgeline_Plot.yaml
+  Diff_Plot_source: ./nml/fignml/Diff_Plot.yaml
+  Basic_source: ./nml/fignml/Basic.yaml
+  Mann_Kendall_Trend_Test_source: ./nml/fignml/Mann_Kendall_Trend_Test.yaml
+  Correlation_source: ./nml/fignml/Correlation.yaml
+  Standard_Deviation_source: ./nml/fignml/Standard_Deviation.yaml
+  Functional_Response_source: ./nml/fignml/Functional_Response.yaml
+statistic_nml:
+  Basic_source: ./nml/fignml/Basic.yaml
+  Mann_Kendall_Trend_Test_source: ./nml/fignml/Mann_Kendall_Trend_Test.yaml
+  Correlation_source: ./nml/fignml/Correlation.yaml
+  Standard_Deviation_source: ./nml/fignml/Standard_Deviation.yaml
+  Functional_Response_source: ./nml/fignml/Functional_Response.yaml
+  Z_Score_source: ./nml/fignml/Z_Score.yaml
+  Three_Cornered_Hat_source: ./nml/fignml/Three_Cornered_Hat.yaml
+  Hellinger_Distance_source: ./nml/fignml/Hellinger_Distance.yaml
+  Partial_Least_Squares_Regression_source: ./nml/fignml/Partial_Least_Squares_Regression.yaml
+  ANOVA_source: ./nml/fignml/ANOVA.yaml

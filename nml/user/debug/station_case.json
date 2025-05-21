@@ -1,0 +1,16 @@
+{
+  "general": {
+    "model_namelist": "./nml/Mod_variables_defination/CoLM.json",
+    "timezone": 0.0,
+    "data_type": "stn",
+    "data_groupby": "single",
+    "tim_res": "day",
+    "fulllist": "./data/simulation/debug/station_case.csv",
+    "grid_res": 1.0,
+    "syear": "",
+    "eyear": "",
+    "suffix": "",
+    "prefix": "",
+    "root_dir": "./data/simulation/debug/stn"
+  }
+}

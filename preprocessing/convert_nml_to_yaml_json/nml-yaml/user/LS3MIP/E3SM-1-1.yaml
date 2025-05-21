@@ -1,0 +1,27 @@
+general:
+  model_namelist: ./nml/Mod_variables_defination/LS3MIP.nml
+  root_dir: ./data/simulation/LS3MIP/
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Single
+  tim_res: Month
+  grid_res: 1.25
+  fulllist: ''
+  syear: 1850
+  eyear: 2014
+Evapotranspiration:
+  sub_dir: evapotranspiration/
+  prefix: evspsbl_Amon_E3SM-1-1_land-hist_r1i1p11f1_gn_185001-201412
+  suffix: ''
+Canopy_Interception:
+  sub_dir: canopy_interception/
+  prefix: evspsblveg_Lmon_E3SM-1-1_land-hist_r1i1p11f1_gn_185001-201412
+  suffix: ''
+Total_Runoff:
+  sub_dir: total_runoff/
+  prefix: mrro_Lmon_E3SM-1-1_land-hist_r1i1p11f1_gn_185001-201412
+  suffix: ''
+Canopy_Transpiration:
+  sub_dir: transpiration/
+  prefix: tran_Lmon_E3SM-1-1_land-hist_r1i1p11f1_gn_185001-201412
+  suffix: ''

@@ -1,0 +1,17 @@
+{
+  "general": {
+    "root_dir": "./data/reference/stn_ref/Water/Transpiration_GLEAM_hybird/GLEAM_hybird",
+    "timezone": 0.0,
+    "data_type": "stn",
+    "data_groupby": "single",
+    "tim_res": "Day",
+    "grid_res": "",
+    "syear": "",
+    "eyear": "",
+    "fulllist": "./data/reference/stn_ref/Water/Transpiration_GLEAM_hybird/Transpiration_GLEAM_hybird.csv"
+  },
+  "Canopy_Transpiration": {
+    "varname": "et",
+    "varunit": "mm day-1"
+  }
+}

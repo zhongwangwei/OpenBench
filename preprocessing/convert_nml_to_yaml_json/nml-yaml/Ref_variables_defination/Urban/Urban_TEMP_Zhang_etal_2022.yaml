@@ -1,0 +1,19 @@
+general:
+  root_dir: /tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/
+  timezone: 0
+  data_type: grid
+  data_groupby: single
+  tim_res: Month
+  grid_res: 0.5
+  syear: 2003
+  eyear: 2020
+Urban_Air_Temperature_Max:
+  varname: TMAX
+  varunit: K
+  prefix: Urban_TEMP_Zhang_2003-2020
+  suffix: ''
+Urban_Air_Temperature_Min:
+  varname: TMIN
+  varunit: K
+  prefix: Urban_TEMP_Zhang_2003-2020
+  suffix: ''

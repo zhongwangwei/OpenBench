@@ -1,0 +1,14 @@
+general:
+  root_dir: ''
+  timezone: ''
+  data_type: ''
+  data_groupby: ''
+  tim_res: ''
+  grid_res: ''
+  syear: ''
+  eyear: ''
+Urban_Anthropogenic_Heat_Flux:
+  varname: AHE
+  varunit: w m-2
+  prefix: ''
+  suffix: ''

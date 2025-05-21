@@ -1,0 +1,17 @@
+general:
+  model_namelist: ./nml/Mod_variables_defination/CaMaFlood.nml
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Year
+  dir: ./data/simulation/CaMa-Flood/GRFR-15min/
+  fulllist: ''
+  tim_res: day
+  grid_res: 0.25
+  syear: 2000
+  eyear: 2019
+Streamflow:
+  prefix: o_outflw
+  suffix: ''
+Inundation_Fraction:
+  prefix: o_fldfrc
+  suffix: ''

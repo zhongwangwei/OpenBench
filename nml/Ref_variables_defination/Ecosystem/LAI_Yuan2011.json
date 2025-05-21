@@ -1,0 +1,21 @@
+{
+  "general": {
+    "root_dir": "./data/reference/stn_ref/Ecosystem/LAI/Yuan2022",
+    "timezone": 0.0,
+    "data_type": "stn",
+    "data_groupby": "single",
+    "tim_res": "",
+    "grid_res": "",
+    "syear": 1900,
+    "eyear": 2020
+  },
+  "Leaf_Area_Index": {
+    "sub_dir": "",
+    "varname": "lai",
+    "varunit": "unitless",
+    "suffix": "",
+    "prefix": "",
+    "fulllist": "",
+    "data_groupby": "single"
+  }
+}
