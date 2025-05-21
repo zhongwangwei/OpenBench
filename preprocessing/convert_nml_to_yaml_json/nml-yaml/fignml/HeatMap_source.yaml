@@ -1,0 +1,31 @@
+general:
+  title: ''
+  title_size: 24
+  xlabel: Simulations
+  ylabel: References
+  xtick: 18
+  ytick: 18
+  axes_linewidth: 1
+  x_rotation: 45
+  x_ha: right
+  y_rotation: 0
+  y_ha: right
+  ticks_format: .2f
+  fontsize: 16
+  cmap: coolwarm
+  colorbar_position: vertical
+  extend: neither
+  colorbar_label: ''
+  colorbar_position_set: false
+  colorbar_left: 0.26
+  colorbar_bottom: 0.14
+  colorbar_width: 0.5
+  colorbar_height: 0.03
+  vmin_max_on: false
+  vmin: 0
+  vmax: 1
+  x_wise: 4
+  saving_format: jpg
+  y_wise: 6
+  font: DejaVu Sans
+  dpi: 300

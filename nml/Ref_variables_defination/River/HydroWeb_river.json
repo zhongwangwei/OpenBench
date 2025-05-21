@@ -1,0 +1,17 @@
+{
+  "general": {
+    "root_dir": "./data/reference/stn_ref/Dam_River_Lake/HydroWeb_2.0/output/river",
+    "timezone": 0.0,
+    "data_type": "stn",
+    "data_groupby": "single",
+    "tim_res": "Month",
+    "grid_res": "",
+    "syear": 1900,
+    "eyear": 2022,
+    "fulllist": "./data/reference/stn_ref/Dam_River_Lake/HydroWeb_2.0/hydroprd_river.csv"
+  },
+  "River_Water_Level": {
+    "varname": "height",
+    "varunit": "m"
+  }
+}

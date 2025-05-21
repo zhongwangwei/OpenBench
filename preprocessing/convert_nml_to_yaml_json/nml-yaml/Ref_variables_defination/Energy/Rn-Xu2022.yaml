@@ -1,0 +1,14 @@
+general:
+  root_dir: ./data/reference/grid_ref/Energy/Rn-Xu2022/netcdf
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Day
+  tim_res: Day
+  grid_res: 0.05
+  syear: 1982
+  eyear: 2019
+Canopy_Interception:
+  varname: Rn
+  varunit: w m-2
+  prefix: AVHRR_Rn_
+  suffix: ''

@@ -1,0 +1,29 @@
+{
+  "general": {
+    "title": "",
+    "title_fontsize": 18,
+    "xticklabel": "",
+    "yticklabel": "KDE Density",
+    "xtick": 16,
+    "ytick": 16,
+    "fontsize": 15,
+    "axes_linewidth": 1,
+    "line_width": 1.5,
+    "linestyle": "solid",
+    "linewidth": 1.5,
+    "alpha": 0.2,
+    "ncol": 1,
+    "loc": "best",
+    "set_legend": false,
+    "bbox_to_anchor_x": 1.5,
+    "bbox_to_anchor_y": 1,
+    "grid": true,
+    "grid_style": "dotted",
+    "grid_linewidth": 0.7,
+    "x_wise": 10,
+    "y_wise": 6,
+    "saving_format": "jpg",
+    "font": "DejaVu Sans",
+    "dpi": 300
+  }
+}

@@ -1,6 +1,8 @@
 import importlib
 import os
 import re
+import json
+import yaml
 from typing import Dict, Any, Tuple, List, Union
 
 import numpy as np
@@ -12,7 +14,7 @@ import logging
 
 class NamelistReader:
     """
-    A class for reading and processing namelist files.
+    A class for reading and processing namelist files with extended support for YAML and JSON formats.
     """
 
     def __init__(self):
@@ -20,10 +22,11 @@ class NamelistReader:
         Initialize the NamelistReader with metadata and error settings.
         """
         self.name = 'namelist_read'
-        self.version = '0.1'
-        self.release = '0.1'
-        self.date = 'Mar 2023'
+        self.version = '0.2'  # Updated version
+        self.release = '0.2'  # Updated release
+        self.date = 'May 2025'  # Updated date
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
+        self.extended_by = "OpenBench Contributors"
 
         # Ignore all numpy warnings
         np.seterr(all='ignore')
@@ -64,9 +67,58 @@ class NamelistReader:
         """
         return {k: v for k, v in namelist.items() if v}
 
-    def read_namelist(self, file_path: str) -> Dict[str, Dict[str, Any]]:
+    def _detect_file_format(self, file_path: str) -> str:
         """
-        Read a namelist from a text file.
+        Detect the format of the configuration file based on its extension.
+
+        Args:
+            file_path (str): The path to the configuration file.
+
+        Returns:
+            str: The detected format ('nml', 'yaml', or 'json').
+        """
+        _, ext = os.path.splitext(file_path)
+        ext = ext.lower()
+        
+        if ext == '.nml':
+            return 'nml'
+        elif ext in ('.yaml', '.yml'):
+            return 'yaml'
+        elif ext == '.json':
+            return 'json'
+        else:
+            # Default to nml for backward compatibility
+            logging.warning(f"Unknown file extension: {ext}, defaulting to Fortran namelist format")
+            return 'nml'
+
+    def _parse_value(self, key: str, value: str) -> Union[bool, int, float, list, str]:
+        """
+        Parse a string value into its appropriate type.
+
+        Args:
+            key (str): The key of the value being parsed.
+            value (str): The string value to parse.
+
+        Returns:
+            Union[bool, int, float, list, str]: The parsed value.
+        """
+        value = value.strip()
+        if key in ['suffix', 'prefix']:
+            return value  # Return as string for suffix and prefix
+        if value.lower() in ['true', 'false']:
+            return bool(self.strtobool(value))
+        elif value.replace('-', '', 1).isdigit():
+            return int(value)
+        elif value.replace('.', '', 1).replace('-', '', 1).isdigit():
+            return float(value)
+        elif ',' in value:
+            return [v.strip() for v in value.split(',')]
+        else:
+            return value
+
+    def _read_nml(self, file_path: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Read a Fortran namelist format file.
 
         Args:
             file_path (str): The path to the namelist file.
@@ -76,31 +128,6 @@ class NamelistReader:
         """
         namelist = {}
         current_dict = None
-
-        def parse_value(key: str, value: str) -> Union[bool, int, float, list, str]:
-            """
-            Parse a string value into its appropriate type.
-
-            Args:
-                key (str): The key of the value being parsed.
-                value (str): The string value to parse.
-
-            Returns:
-                Union[bool, int, float, list, str]: The parsed value.
-            """
-            value = value.strip()
-            if key in ['suffix', 'prefix']:
-                return value  # Return as string for suffix and prefix
-            if value.lower() in ['true', 'false']:
-                return bool(self.strtobool(value))
-            elif value.replace('-', '', 1).isdigit():
-                return int(value)
-            elif value.replace('.', '', 1).replace('-', '', 1).isdigit():
-                return float(value)
-            elif ',' in value:
-                return [v.strip() for v in value.split(',')]
-            else:
-                return value
 
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -117,9 +144,68 @@ class NamelistReader:
                     key, value = line.split('=', 1)
                     key = key.strip()
                     value = value.split('#')[0].strip()  # Remove inline comments
-                    current_dict[key] = parse_value(key, value)
+                    current_dict[key] = self._parse_value(key, value)
 
         return namelist
+
+    def _read_yaml(self, file_path: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Read a YAML format file.
+
+        Args:
+            file_path (str): The path to the YAML file.
+
+        Returns:
+            Dict[str, Dict[str, Any]]: A nested dictionary representing the YAML structure.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+            return data
+        except Exception as e:
+            logging.error(f"Error reading YAML file {file_path}: {e}")
+            raise
+
+    def _read_json(self, file_path: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Read a JSON format file.
+
+        Args:
+            file_path (str): The path to the JSON file.
+
+        Returns:
+            Dict[str, Dict[str, Any]]: A nested dictionary representing the JSON structure.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data
+        except Exception as e:
+            logging.error(f"Error reading JSON file {file_path}: {e}")
+            raise
+
+    def read_namelist(self, file_path: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Read a configuration file in various formats (Fortran namelist, YAML, or JSON).
+
+        Args:
+            file_path (str): The path to the configuration file.
+
+        Returns:
+            Dict[str, Dict[str, Any]]: A nested dictionary representing the configuration structure.
+        """
+        file_format = self._detect_file_format(file_path)
+        
+        if file_format == 'nml':
+            return self._read_nml(file_path)
+        elif file_format == 'yaml':
+            return self._read_yaml(file_path)
+        elif file_format == 'json':
+            return self._read_json(file_path)
+        else:
+            # This should never happen due to the default in _detect_file_format
+            logging.error(f"Unsupported file format: {file_format}")
+            raise ValueError(f"Unsupported file format: {file_format}")
 
 
 class UpdateNamelist(NamelistReader):
