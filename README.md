@@ -90,6 +90,7 @@ The system generates a comprehensive set of outputs, typically organized into a 
 *   **Detailed Logs and Summaries:** Log files documenting the evaluation process, including any warnings or errors, and summary reports of the evaluation findings.
 
 ## Troubleshooting
+### Catopy coastline data download
 An internet connection is required for Cartopy coastline, while some HPC environments may not have internet connectivity. For offline HPC use, manually download Natural Earth datasets and save them to Cartopy's data directory.
 ```bash
 import cartopy
