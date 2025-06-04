@@ -89,6 +89,25 @@ The system generates a comprehensive set of outputs, typically organized into a 
 *   **Comparison Plots and Statistics:** Visualizations (e.g., time series plots, scatter plots, spatial maps) and statistical summaries comparing model outputs against reference data and against other models.
 *   **Detailed Logs and Summaries:** Log files documenting the evaluation process, including any warnings or errors, and summary reports of the evaluation findings.
 
+## Troubleshooting
+An internet connection is required for Cartopy coastline, while some HPC environments may not have internet connectivity. For offline HPC use, manually download Natural Earth datasets and save them to Cartopy's data directory.
+```bash
+import cartopy
+print(cartopy.config['data_dir'])
+```
+Access Natural Earth official website download data (Cultural, Physical) on an Internet-enabled machine: https://www.naturalearthdata.com/downloads/
+We recommend to download 110m resulation files and replace them on 'data dir'.
+```bash
+└── cartopy_data_dir/
+    ├── shapefiles/
+    │   ├── natural_earth/
+    │   │   ├── cultural/
+    │   │   └── physical/
+    └── raster/
+        └── natural_earth/
+```
+For example, the Cultural shapefile should be exist at /Users/zhongwangwei/.local/share/cartopy/shapefiles/natural_earth/cultural/ne_110m_admin_0_boundary_lines_land.shp
+
 ## Customization
 
 OpenBench is designed to be flexible:
