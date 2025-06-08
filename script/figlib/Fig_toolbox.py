@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib
 from matplotlib import cm
 from matplotlib import colors
+import sys
+cmaps_parent_path = os.path.abspath('./script/figlib/')
+sys.path.append(cmaps_parent_path)
 import cmaps
 
 def process_unit(ref_unit,sim_unit,metric):
@@ -203,11 +206,11 @@ def get_index(vmin, vmax, colormap, varname=''):
 
     list1 = ['percent_bias','bias','PBIAS_HF','PBIAS_LF','pbiasfdc','pc_max','pc_min','pc_ampli','rSD','rv',]
     list2 = ['NSE','KGE','KGESS','ubNSE','ubKGE','KGEkm','KGElf','KGEnp','rNSE','sKGE','wNSE','wsNSE']
-    list3 = ['absolute_percent_bias','mean_absolute_error','RMSE','MSE','ubRMSE','CRMSD','nrmse','rsr','SMPI']
-    list4 = ['correlation_R2','index_agreement','LNSE','mNSE','valindex','L']
+    list3 = ['absolute_percent_bias','mean_absolute_error','RMSE','MSE','ubRMSE','CRMSD','nrmse','rsr','SMPI','ssq',]
+    list4 = ['correlation_R2','index_agreement','LNSE','mNSE','valindex','L','rd','pfactor']
     score_list = ['BiasScore', 'RMSEScore', 'PhaseScore', 'IavScore', 'SpatialScore', 'Overall_Score', 'The_Ideal_Point_score']
-    list5 = ['correlation','ubcorrelation','ubcorrelation_R2','rSpearman']
-    list6 = ['md','rd','ve','rfactor','ssq','pfactor','kappa_coeff',]
+    list5 = ['correlation','ubcorrelation','ubcorrelation_R2','rSpearman','kappa_coeff']
+    list6 = ['md','ve','rfactor',]
         
     # Calculate ticks
     colorbar_ticks = get_ticks(vmin, vmax)

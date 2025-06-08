@@ -1,0 +1,35 @@
+{
+/*参考数据配置文件：定义用于评估模型性能的参考数据的名称和位置，
+具体数据的格式、变量名称等需到对应参考数据的配置文件中修改，
+OpenBench中已预设好大量模型参考数据配置，
+如使用对应参考数据可直接使用预设参考数据配置，
+详细可参考ref.json中参考数据预设路径及对应配置，
+同时可对任意评估项目设置一个或多个参考数据，
+参考数据可包括实地观测、卫星数据、再分析数据等*/
+
+  /*基础设置：定义每个评估项目的参考数据源，
+  只有在main中打开的评估项目需要给出参考数据源，
+  不同评估项目的来源可以不一致*/
+  "general": {
+    "Evapotranspiration_ref_source": [
+      "GLEAM4.2a_monthly",
+      "GLEAM_hybird_PLUMBER2"
+    ],
+    "Latent_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ],
+    "Sensible_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ]
+  },
+  /*数据源设置：定义上述所给定参考数据源的具体配置，
+  详细配置请按照对给定路径文件进行设定*/
+  "def_nml": {
+    "GLEAM_hybird_PLUMBER2": "./nml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.json",
+    "ILAMB_monthly": "./nml/Ref_variables_defination/Debug/ILAMB_monthly.json",
+    "PLUMBER2": "./nml/Ref_variables_defination/Debug/PLUMBER2.json",
+    "GLEAM4.2a_monthly": "./nml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.json"
+  }
+}

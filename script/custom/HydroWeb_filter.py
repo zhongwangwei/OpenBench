@@ -33,7 +33,7 @@ def process_station(station, info, min_uparea, max_uparea):
                 (station['lon'] >= info.min_lon) and
                 (station['lon'] <= info.max_lon) and
                 (station['lat'] >= info.min_lat) and
-                (station['lat'] <= info.max_lat) 
+                (station['lat'] <= info.max_lat)):
                result['Flag'] = True
                if info.debug_mode:
                   logging.info(f"Station {int(station['ID'])} is selected")
