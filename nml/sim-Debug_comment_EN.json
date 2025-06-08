@@ -1,0 +1,30 @@
+{
+  /* Simulation configuration file: Defines the name and location of simulation output data,
+     specific data formats, variable names, etc., should be modified in the corresponding simulation data configuration file,
+     such as modifying grid_case.json and stn_case.json here */
+
+  /* Basic settings: Defines the simulation data, corresponding to the model simulation data sources for evaluation items,
+     only evaluation items enabled in the main configuration file require model simulation data sources,
+     such as two simulation data cases here: a regional simulation case (grid_case)
+     and a single-point simulation case (stn_case) */
+  "general": {
+    "Evapotranspiration_sim_source": [
+      "grid_case",
+      "station_case"
+    ],
+    "Latent_Heat_sim_source": [
+      "grid_case",
+      "station_case"
+    ],
+    "Sensible_Heat_sim_source": [
+      "grid_case",
+      "station_case"
+    ]
+  },
+  /* Data source settings: Defines the configuration files for simulation data,
+     detailed configurations should be set according to the specified file paths */
+  "def_nml": {
+    "grid_case": "./nml/user/debug/grid_case.json",
+    "station_case": "./nml/user/debug/station_case.json"
+  }
+}
