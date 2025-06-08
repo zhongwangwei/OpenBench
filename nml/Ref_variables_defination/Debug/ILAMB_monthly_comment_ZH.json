@@ -1,0 +1,38 @@
+{
+/*具体参考数据配置文件（ILAMB_monthly）：
+定义某一参考数据格式，
+统一参考数据可包括多个评估项目，
+此处评估Sensible_Heat和Latent_Heat*/
+
+	/*基础设置：设置该参考数据格式*/
+  "general": {
+    "root_dir": "./data/reference/debug/ILAMB",//数据存放路径
+    "timezone": 0.0,                           //数据所使用时区
+    "data_type": "grid",                       //数据类型（"grid"或"stn"）
+    "data_groupby": "Single",                  //数据聚合类型（如grid则为"year","month","day"，如所有时间聚合在一起或stn为"single"）
+    "tim_res": "Month",                        //时间分辨率（"year","month","day"）
+    "grid_res": 2.0                            //空间分辨率（度），单点可给为""
+  },
+	/*参考数据变量设置：
+	设置该参考数据中所有评估变量的格式，
+	如此处为grid需设置Sensible_Heat和Latent_Heat的
+	路径前缀、变量名、变量单位、文件名称、起止年份等*/
+  "Sensible_Heat": {
+    "sub_dir": "Sensible_Heat/FLUXCOM",
+    "varname": "sh",
+    "varunit": "w m-2",
+    "prefix": "sh",
+    "suffix": "",
+    "syear": 2004,
+    "eyear": 2005
+  },
+  "Latent_Heat": {
+    "sub_dir": "Latent_Heat/FLUXCOM",
+    "varname": "le",
+    "varunit": "w m-2",
+    "prefix": "le",
+    "suffix": "",
+    "syear": 2004,
+    "eyear": 2005
+  }
+}
