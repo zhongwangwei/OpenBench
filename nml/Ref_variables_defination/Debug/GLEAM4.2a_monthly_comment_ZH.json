@@ -1,0 +1,28 @@
+{
+/*具体参考数据配置文件（GLEAM4.2a_monthly）：
+定义某一参考数据格式，
+统一参考数据可包括多个评估项目，
+此处只评估一个Evapotranspiration*/
+
+	/*基础设置：设置该参考数据格式*/
+  "general": {
+    "root_dir": "./data/reference/debug/GLEAM4.2a_monthly/",//数据存放路径
+    "timezone": 0,         //数据所使用时区
+    "data_type": "grid",   //数据类型（"grid"或"stn"）
+    "data_groupby": "Year",//数据聚合类型（如grid则为"year","month","day"，如所有时间聚合在一起或stn为"single"）
+    "syear": 2004,         //开始年份（从该年1月开始）
+    "eyear": 2005,         //结束年份（至该年12月结束）
+    "tim_res": "Month",    //时间分辨率（"year","month","day"）
+    "grid_res": 2.0        //空间分辨率（度），单点可给为""
+  },
+	/*参考数据变量设置：
+	设置该参考数据中所有评估变量的格式，
+	如此处为stn只需设置Evapotranspiration的变量名和变量单位*/
+  "Evapotranspiration": {
+    "sub_dir": "",
+    "varname": "E",
+    "varunit": "mm month-1",
+    "prefix": "E_",
+    "suffix": "_GLEAM_v4.2a_MO"
+  }
+}

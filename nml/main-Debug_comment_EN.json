@@ -1,0 +1,233 @@
+{
+  /* Main configuration file: Defines parameters for the entire evaluation process,
+     including basic settings, evaluation items, evaluation metrics,
+     scoring methods, comparison analysis, and statistical analysis */
+
+  /* Basic settings: Fundamental settings for the evaluation,
+     such as defining the case (Debug) here,
+     where simulation configuration comes from sim-Debug.json,
+     reference configuration comes from ref-Debug.json,
+     and evaluation, comparison, and statistics modules are all enabled */
+  "general": {
+    "basename": "Debug",          // Evaluation case name
+    "basedir": "./output",        // Output path for evaluation results
+    "compare_tim_res": "month",   // Time resolution for evalution (e.g., "month", "day")
+    "compare_tzone": 0.0,         // Time zone setting
+    "compare_grid_res": 2.0,      // Spatial grid resolution (degrees, only work for grid)
+    "syear": 2004,                // Start year of evaluation
+    "eyear": 2005,                // End year of evaluation
+    "min_year": 1.0,              // Minimum evaluation interval (less than 1 year will not be evaluated)
+    "max_lat": 90.0,              // Maximum latitude of evaluation area (-90 to 90)
+    "min_lat": -90.0,             // Minimum latitude of evaluation area (-90 to 90)
+    "max_lon": 180.0,             // Maximum longitude of evaluation area (-180 to 180)
+    "min_lon": -180.0,            // Minimum longitude of evaluation area (-180 to 180)
+    "reference_nml": "./nml/ref-Debug.json", // Path to reference configuration file
+    "simulation_nml": "./nml/sim-Debug.json",// Path to simulation configuration file
+    "statistics_nml": "./nml/stats.json",    // Path to statistical analysis configuration file (default)
+    "figure_nml": "./nml/figlib.json",       // Path to visualization configuration file (default)
+    "num_cores": 48,              // Number of cores used for parallel computing
+    "evaluation": true,           // Whether to enable evaluation module
+    "comparison": true,           // Whether to enable comparison module
+    "statistics": true,           // Whether to enable statistics module
+    "debug_mode": true,           // Whether to enable debug mode (show debug information in log)
+    "weight": "None",             // Whether to apply weighting ("area", "mass", "None")
+    "IGBP_groupby": true,         // Whether to aggregate metics and scores by IGBP
+    "PFT_groupby": true,          // Whether to aggregate metics and scores by PFT
+    "unified_mask": true          // Whether to evaluate only overlapping areas when model data are all gridded
+  },
+  /* Evaluation items: Defines evaluable variables and their switches,
+     with the evaluation module enabled in basic settings,
+     all variables set to true here are designated as evaluation items,
+     including Evapotranspiration, Latent_Heat, and Sensible_Heat */
+  "evaluation_items": {
+    "Biomass": false,
+    "Burned_Area": false,
+    "Ecosystem_Respiration": false,
+    "Gross_Primary_Productivity": false,
+    "Leaf_Area_Index": false,
+    "Leaf_Greenness": false,
+    "Methane": false,
+    "Net_Ecosystem_Exchange": false,
+    "Nitrogen_Fixation": false,
+    "Soil_Carbon": false,
+    "Veg_Cover_In_Fraction": false,
+    "Canopy_Interception": false,
+    "Canopy_Transpiration": false,
+    "Depth_Of_Surface_Water": false,
+    "Evapotranspiration": true,
+    "Ground_Evaporation": false,
+    "Groundwater_Recharge_Rate": false,
+    "Permafrost": false,
+    "Root_Zone_Soil_Moisture": false,
+    "Snow_Depth": false,
+    "Snow_Water_Equivalent": false,
+    "Soil_Evaporation": false,
+    "Surface_Snow_Cover_In_Fraction": false,
+    "Surface_Soil_Moisture": false,
+    "Terrestrial_Water_Storage_Change": false,
+    "Total_Runoff": false,
+    "Water_Evaporation": false,
+    "Water_Storage_In_Aquifer": false,
+    "Water_Table_Depth": false,
+    "Albedo": false,
+    "Ground_Heat": false,
+    "Latent_Heat": true,
+    "Net_Radiation": false,
+    "Root_Zone_Soil_Temperature": false,
+    "Sensible_Heat": true,
+    "Surface_Net_LW_Radiation": false,
+    "Surface_Net_SW_Radiation": false,
+    "Surface_Soil_Temperature": false,
+    "Surface_Upward_LW_Radiation": false,
+    "Surface_Upward_SW_Radiation": false,
+    "Diurnal_Max_Temperature": false,
+    "Diurnal_Min_Temperature": false,
+    "Diurnal_Temperature_Range": false,
+    "Precipitation": false,
+    "Surface_Air_Temperature": false,
+    "Surface_Downward_LW_Radiation": false,
+    "Surface_Downward_SW_Radiation": false,
+    "Surface_Relative_Humidity": false,
+    "Surface_Specific_Humidity": false,
+    "Crop_Emergence_DOY_Wheat": false,
+    "Crop_Heading_DOY_Corn": false,
+    "Crop_Heading_DOY_Wheat": false,
+    "Crop_Maturity_DOY_Corn": false,
+    "Crop_Maturity_DOY_Wheat": false,
+    "Crop_V3_DOY_Corn": false,
+    "Crop_Yield_Corn": false,
+    "Crop_Yield_Maize": false,
+    "Crop_Yield_Rice": false,
+    "Crop_Yield_Soybean": false,
+    "Crop_Yield_Wheat": false,
+    "Dam_Inflow": false,
+    "Dam_Outflow": false,
+    "Dam_Water_Elevation": false,
+    "Dam_Water_Storage": false,
+    "Inundation_Area": false,
+    "Inundation_Fraction": false,
+    "Lake_Ice_Fraction_Cover": false,
+    "Lake_Temperature": false,
+    "Lake_Water_Area": false,
+    "Lake_Water_Level": false,
+    "Lake_Water_Volume": false,
+    "River_Water_Level": false,
+    "Streamflow": false,
+    "Total_Irrigation_Amount": false,
+    "Urban_Air_Temperature_Max": false,
+    "Urban_Air_Temperature_Min": false,
+    "Urban_Albedo": false,
+    "Urban_Anthropogenic_Heat_Flux": false,
+    "Urban_Latent_Heat_Flux": false,
+    "Urban_Surface_Temperature": false
+  },
+  /* Evaluation metrics: Defines evaluation metrics and their switches,
+     with the evaluation module enabled in basic settings,
+     all evaluation items will calculate the metrics set to true below,
+     including RMSE, correlation, and KGESS */
+  "metrics": {
+    "percent_bias": false,
+    "absolute_percent_bias": false,
+    "bias": false,
+    "mean_absolute_error": false,
+    "RMSE": true,
+    "MSE": false,
+    "ubRMSE": false,
+    "CRMSD": false,
+    "nrmse": false,
+    "L": false,
+    "correlation": true,
+    "correlation_R2": false,
+    "NSE": false,
+    "LNSE": false,
+    "KGE": false,
+    "KGESS": true,
+    "kappa_coeff": false,
+    "rv": false,
+    "ubNSE": false,
+    "ubKGE": false,
+    "ubcorrelation": false,
+    "ubcorrelation_R2": false,
+    "pc_max": false,
+    "pc_min": false,
+    "pc_ampli": false,
+    "rSD": false,
+    "PBIAS_HF": false,
+    "PBIAS_LF": false,
+    "SMPI": false,
+    "ggof": false,
+    "gof": false,
+    "KGEkm": false,
+    "KGElf": false,
+    "KGEnp": false,
+    "md": false,
+    "mNSE": false,
+    "pbiasfdc": false,
+    "pfactor": false,
+    "rd": false,
+    "rfactor": false,
+    "rNSE": false,
+    "rSpearman": false,
+    "rsr": false,
+    "sKGE": false,
+    "ssq": false,
+    "valindex": false,
+    "ve": false,
+    "wNSE": false,
+    "wsNSE": false,
+    "index_agreement": false
+  },
+  /* Scoring methods: Defines scoring methods and their switches,
+     with the evaluation module enabled in basic settings,
+     all evaluation items will calculate the scoring methods set to true below,
+     including Overall_Score */
+  "scores": {
+    "nBiasScore": false,
+    "nRMSEScore": false,
+    "nPhaseScore": false,
+    "nIavScore": false,
+    "nSpatialScore": false,
+    "Overall_Score": true,
+    "The_Ideal_Point_score": false
+  },
+  /* Comparison analysis: Defines comparison methods used for multi-model comparison,
+     with the comparison module enabled in basic settings,
+     all evaluation items' metrics and scoring methods will use the comparison methods set to true below,
+     including HeatMap, Kernel_Density_Estimate, Single_Model_Performance_Index,
+     Ridgeline_Plot, and Standard_Deviation */
+  "comparisons": {
+    "HeatMap": true,
+    "Taylor_Diagram": false,
+    "Target_Diagram": false,
+    "Kernel_Density_Estimate": true,
+    "Whisker_Plot": false,
+    "Parallel_Coordinates": false,
+    "Portrait_Plot_seasonal": false,
+    "Single_Model_Performance_Index": true,
+    "Relative_Score": false,
+    "Ridgeline_Plot": true,
+    "Diff_Plot": false,
+    "Mean": false,
+    "Median": false,
+    "Min": false,
+    "Max": false,
+    "Sum": false,
+    "Mann_Kendall_Trend_Test": false,
+    "Correlation": false,
+    "Standard_Deviation": true,
+    "Functional_Response": false
+  },
+  /* Statistical analysis: Defines statistical analysis methods,
+     with the statistics module enabled in basic settings,
+     all evaluation items' metrics and scoring methods will use the statistical methods set to true below,
+     although the statistics module is enabled in this case,
+     no statistical methods are specified */
+  "statistics": {
+    "Z_Score": false,
+    "Hellinger_Distance": false,
+    "Three_Cornered_Hat": false,
+    "Partial_Least_Squares_Regression": false,
+    "False_Discovery_Rate": false,
+    "ANOVA": false
+  }
+}
