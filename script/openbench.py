@@ -25,6 +25,7 @@ from Mod_Evaluation import Evaluation_grid, Evaluation_stn
 from Mod_Landcover_Groupby import LC_groupby
 from Mod_Namelist import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
+from Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, ComparisonProcessing_only_drawing
 from Mod_Preprocessing import check_required_nml, run_files_check
 from Mod_Converttype import Convert_Type
 import logging
@@ -121,30 +122,37 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         ref_sources = sorted(ref_sources, key=lambda x: 0 if ref_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
         # Rearrange simulation sources to put station data first
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
-
-        for ref_source in ref_sources:
-            onetimeref = True
-            for sim_source in sim_sources:
-                process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
-                             evaluation_item, sim_source, ref_source, fig_nml)
-                onetimeref = False
+        
+        if not main_nl['general']['only_drawing']:
+            for ref_source in ref_sources:
+                onetimeref = True
+                for sim_source in sim_sources:
+                    process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                                evaluation_item, sim_source, ref_source, fig_nml)
+                    onetimeref = False
 
         for ref_source in ref_sources:
             onetimeref = True
             for sim_source in sim_sources:
                 process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
-                                   statistic_vars, evaluation_item, sim_source, ref_source, fig_nml)
+                                statistic_vars, evaluation_item, sim_source, ref_source, fig_nml)
                 onetimeref = False
 
     main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')
     main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')
     if main_nl['general']['IGBP_groupby']:
-        LC = LC_groupby(main_nl, score_vars, metric_vars)
+        if main_nl['general']['only_drawing']:
+            LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
+        else:
+            LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                              fig_nml['IGBP_groupby'])
     if main_nl['general']['PFT_groupby']:
-        LC = LC_groupby(main_nl, score_vars, metric_vars)
+        if main_nl['general']['only_drawing']:
+            LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
+        else:
+            LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                             fig_nml['PFT_groupby'])
@@ -209,13 +217,21 @@ def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                                             evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
+    logging.info(f"xu output nml information before evaluation")
+    logging.info(f"general_info: {general_info}, type: {type(general_info)}")
     # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        evaluater = Evaluation_stn(general_info, fig_nml)
+        if main_nl['general']['only_drawing']:
+            evaluater = Evaluation_stn_only_drawing(general_info, fig_nml)
+        else:
+            evaluater = Evaluation_stn(general_info, fig_nml)
         evaluater.make_evaluation_P()
 
     else:
-        evaluater = Evaluation_grid(general_info, fig_nml)
+        if main_nl['general']['only_drawing']:
+            evaluater = Evaluation_grid_only_drawing(general_info, fig_nml)
+        else:
+            evaluater = Evaluation_grid(general_info, fig_nml)
         evaluater.make_Evaluation()
 
 
@@ -227,7 +243,10 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
     logging.info("╚═══════════════════════════════════════════════════════════════╝")
     logging.info(" ")
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
-    ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
+    if main_nl['general']['only_drawing']:
+        ch = ComparisonProcessing_only_drawing(main_nl, score_vars, metric_vars)
+    else:
+        ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
 
     for cvar in comparison_vars:
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
@@ -309,6 +328,21 @@ def main():
     else:
         run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                         fig_nml)
+
+    # xu output nml information:
+    logging.info(f"xu output nml information before running")
+    logging.info(f"main_nl: {main_nl}, type: {type(main_nl)}")
+    logging.info(f"ref_nml: {ref_nml}, type: {type(ref_nml)}")
+    logging.info(f"sim_nml: {sim_nml}, type: {type(sim_nml)}")
+    logging.info(f"stats_nml: {stats_nml}, type: {type(stats_nml)}")
+    logging.info(f"fig_nml: {fig_nml}, type: {type(fig_nml)}")
+    logging.info(f"evaluation_items: {evaluation_items}, type: {type(evaluation_items)}")
+    logging.info(f"metric_vars: {metric_vars}, type: {type(metric_vars)}")
+    logging.info(f"score_vars: {score_vars}, type: {type(score_vars)}")
+    logging.info(f"comparison_vars: {comparison_vars}, type: {type(comparison_vars)}")
+    logging.info(f"statistic_vars: {statistic_vars}, type: {type(statistic_vars)}")
+
+    main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', 'True')
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:

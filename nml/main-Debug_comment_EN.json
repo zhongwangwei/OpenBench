@@ -30,6 +30,7 @@
     "comparison": true,           // Whether to enable comparison module
     "statistics": true,           // Whether to enable statistics module
     "debug_mode": true,           // Whether to enable debug mode (show debug information in log)
+    "only_drawing": true,         // Whether to enable only drawing mode (just drawing, Based on the previous statistical results)
     "weight": "None",             // Whether to apply weighting ("area", "mass", "None")
     "IGBP_groupby": true,         // Whether to aggregate metics and scores by IGBP
     "PFT_groupby": true,          // Whether to aggregate metics and scores by PFT
