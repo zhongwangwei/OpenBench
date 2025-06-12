@@ -592,6 +592,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     output_file.write(f"{sim_source}_std\t")
                                     output_file.write(f"{sim_source}_COR\t")
                                     output_file.write(f"{sim_source}_RMS\t")
+                                    output_file.write(f"{sim_source}_std_ref\t")
 
                                 output_file.write("Reference_std\t")
                                 output_file.write("\n")  # Move "All" to the first line
@@ -764,7 +765,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
                                             stds[0] = std_ref
 
-                                        output_file.write(f"{std_ref}\n")
+                                        output_file.write(f"{std_ref}\t")
                                     finally:
                                         gc.collect()  # Clean up memory after processing each simulation source
                             try:
