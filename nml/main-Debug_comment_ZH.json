@@ -30,6 +30,7 @@
     "comparison": true,           //是否开启比较模块
     "statistics": true,           //是否开启统计模块
     "debug_mode": true,           //是否debug模块（增加输出信息）
+    "only_drawing": true,         //是否开启只绘图模式（只绘图，绘图数据基于此前计算结果）
     "weight": "None",             //是否加权计算（"area"，"mass"，"None"）
     "IGBP_groupby": true,         //是否进行IGBP分类聚合
     "PFT_groupby": true,          //是否进行PFT分类聚合
