@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib
 from matplotlib import cm
 from matplotlib import colors
+import os
 import sys
 cmaps_parent_path = os.path.abspath('./script/figlib/')
 sys.path.append(cmaps_parent_path)
