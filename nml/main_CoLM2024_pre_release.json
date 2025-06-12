@@ -21,6 +21,7 @@
     "comparison": false,
     "statistics": false,
     "debug_mode": true,
+    "only_drawing": true,
     "weight": "area",
     "IGBP_groupby": true,
     "PFT_groupby": true,
