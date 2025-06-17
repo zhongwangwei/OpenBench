@@ -1114,6 +1114,15 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             # Ensure memory is cleaned up after the entire process
             gc.collect()
 
+    def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        try:
+            dir_path = os.path.join(casedir, 'output', 'comparisons', 'RadarMap')
+            for score in scores:
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
+                make_scenarios_comparison_radar_map(output_file_path, score, option)
+        finally:
+            gc.collect()  # Clean up memory after processing
+
     def scenarios_Correlation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
             method_name = 'Correlation'

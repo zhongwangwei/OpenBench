@@ -2700,6 +2700,91 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # Ensure memory is cleaned up after the entire process
             gc.collect()
 
+    def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        try:
+            dir_path = os.path.join(casedir, 'output', 'comparisons', 'RadarMap')
+            os.makedirs(dir_path, exist_OK=True)
+
+            for score in scores:
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
+                with open(output_file_path, "w") as output_file:
+                    output_file.write(f"Item\t")
+                    output_file.write("Reference\t")
+                    # fixme: ugly code, need to be improved
+                    for evaluation_item in evaluation_items:
+                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    for sim_source in sim_sources:
+                        output_file.write(f"{sim_source}\t")
+                    output_file.write("\n")  # Move "All" to the first line
+
+                    for evaluation_item in evaluation_items:
+                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                        ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+                        # if the sim_sources and ref_sources are not list, then convert them to list
+                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                        # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                        # if isinstance(ref_sources, str): ref_sources = [ref_sources]
+
+                        for ref_source in ref_sources:
+                            output_file.write(f"{evaluation_item}\t")
+                            output_file.write(f"{ref_source}\t")
+                            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                            if isinstance(sim_sources, str): sim_sources = [sim_sources]
+
+                            for sim_source in sim_sources:
+                                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+
+                                if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                    file = f"{casedir}/output/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                                    df = pd.read_csv(file, sep=',', header=0)
+                                    df = Convert_Type.convert_Frame(df)
+                                    overall_mean = df[f'{score}'].mean(skipna=True)
+                                else:
+                                    ds = xr.open_dataset(
+                                        f'{casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                    ds = Convert_Type.convert_nc(ds)
+
+                                    if self.weight.lower() == 'area':
+                                        weights = np.cos(np.deg2rad(ds.lat))
+                                        overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                    elif self.weight.lower() == 'mass':
+                                        # Get reference data for flux weighting
+                                        o = xr.open_dataset(
+                                            f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                            f'{ref_varname}']
+                                        o = Convert_Type.convert_nc(o)
+
+                                        # Calculate area weights (cosine of latitude)
+                                        area_weights = np.cos(np.deg2rad(ds.lat))
+
+                                        # Calculate absolute flux weights
+                                        flux_weights = np.abs(o.mean('time'))
+
+                                        # Combine area and flux weights
+                                        combined_weights = area_weights * flux_weights
+
+                                        # Normalize weights to sum to 1
+                                        normalized_weights = combined_weights / combined_weights.sum()
+
+                                        # Calculate weighted mean
+                                        overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                    else:
+                                        overall_mean = ds[score].mean(skipna=True).values
+
+                                overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                                output_file.write(f"{overall_mean_str}\t")
+                            output_file.write("\n")
+
+                make_scenarios_comparison_radar_map(output_file_path, score, option)
+        finally:
+            gc.collect()  # Clean up memory after processing
+
     def scenarios_Correlation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
             method_name = 'Correlation'
