@@ -184,7 +184,7 @@ def get_colormap(cmap_name):
     except AttributeError:
         raise ValueError(f"Cannot find colormap named '{cmap_name}'")
 
-def get_index(vmin, vmax, colormap, varname=''):
+def get_index(vmin, vmax, colormap='Spectral', varname=''):
     def get_ticks(vmin, vmax):
         diff = vmax - vmin
         small_value = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
