@@ -4,7 +4,7 @@
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "Year",
-    "tim_res": "Month",
+    "tim_res": "Day",
     "grid_res": 0.25,
     "syear": 1979,
     "eyear": 2019
