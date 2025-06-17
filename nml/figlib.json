@@ -22,7 +22,8 @@
     "Mann_Kendall_Trend_Test_source": "./nml/fignml/Mann_Kendall_Trend_Test.json",
     "Correlation_source": "./nml/fignml/Correlation.json",
     "Standard_Deviation_source": "./nml/fignml/Standard_Deviation.json",
-    "Functional_Response_source": "./nml/fignml/Functional_Response.json"
+    "Functional_Response_source": "./nml/fignml/Functional_Response.json",
+    "RadarMap_source":"./nml/fignml/RadarMap.json"
   },
   "statistic_nml": {
     "Basic_source": "./nml/fignml/Basic.json",

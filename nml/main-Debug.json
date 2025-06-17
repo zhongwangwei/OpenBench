@@ -190,7 +190,8 @@
     "Mann_Kendall_Trend_Test": false,
     "Correlation": false,
     "Standard_Deviation": true,
-    "Functional_Response": false
+    "Functional_Response": false,
+    "RadarMap": true
   },
   "statistics": {
     "Z_Score": false,
