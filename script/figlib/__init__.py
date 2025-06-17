@@ -12,6 +12,7 @@ from figlib.Fig_Single_Model_Performance_Index import make_scenarios_comparison_
 from figlib.Fig_Relative_Score import make_scenarios_comparison_Relative_Score
 from figlib.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
 from figlib.Fig_Diff_Plot import make_scenarios_comparison_Diff_Plot
+from figlib.Fig_radarmap import make_scenarios_comparison_radar_map
 
 from figlib.Fig_Mann_Kendall_Trend_Test import make_Mann_Kendall_Trend_Test
 from figlib.Fig_Correlation import make_Correlation
@@ -23,6 +24,7 @@ from figlib.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squar
 from figlib.Fig_Basic_Plot import make_plot_index_stn, make_plot_index_grid,plot_stn, make_Basic
 from figlib.Fig_Three_Cornered_Hat import make_Three_Cornered_Hat
 from figlib.Fig_ANOVA import make_ANOVA
+
 
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
@@ -39,6 +41,7 @@ __all__ = [
     "make_scenarios_comparison_Relative_Score",
     "make_scenarios_comparison_Ridgeline_Plot",
     "make_scenarios_comparison_Diff_Plot",
+    "make_scenarios_comparison_radar_map",
 
     'make_Mann_Kendall_Trend_Test',
     'make_Correlation',
