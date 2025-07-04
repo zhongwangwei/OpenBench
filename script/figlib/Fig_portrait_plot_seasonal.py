@@ -1,4 +1,5 @@
 import itertools
+import logging
 import sys
 
 import matplotlib
@@ -8,6 +9,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import rcParams
 from Mod_Converttype import Convert_Type
+
 
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
     # Set figure size
@@ -89,50 +91,53 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             xaxis_labels = sim_sources
             yaxis_labels = [score.replace('_', ' ') for score in scores]
 
-            # Create the portrait plot
-            fig, ax, cbar = portrait_plot(data_score,
-                                          xaxis_labels=xaxis_labels,
-                                          yaxis_labels=yaxis_labels,
-                                          cbar_label=cbar_label,
-                                          box_as_square=True,
-                                          vrange=(vmin, vmax),
-                                          figsize=figsize,
-                                          xaxis_fontsize=option['xtick'],
-                                          yaxis_fontsize=option['ytick'],
-                                          colorbar_off=option['colorbar_off'],
-                                          cmap=option['cmap'],
-                                          cmap_bounds=np.linspace(vmin, vmax, 11),
-                                          cbar_kw=cbar_kw,
-                                          cbar_option=cbar_option,
-                                          cbar_label_fontsize=option["colorbar_labelsize"],
-                                          cbar_tick_fontsize=option["fontsize"],
-                                          missing_color='grey',
-                                          legend_on=True,
-                                          legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                          legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                          legend_box_size=option["legend_box_size"],
-                                          legend_lw=option["legend_lw"],
-                                          legend_fontsize=option["legend_fontsize"],
-                                          logo_off=True)
+            try:
+                # Create the portrait plot
+                fig, ax, cbar = portrait_plot(data_score,
+                                              xaxis_labels=xaxis_labels,
+                                              yaxis_labels=yaxis_labels,
+                                              cbar_label=cbar_label,
+                                              box_as_square=True,
+                                              vrange=(vmin, vmax),
+                                              figsize=figsize,
+                                              xaxis_fontsize=option['xtick'],
+                                              yaxis_fontsize=option['ytick'],
+                                              colorbar_off=option['colorbar_off'],
+                                              cmap=option['cmap'],
+                                              cmap_bounds=np.linspace(vmin, vmax, 11),
+                                              cbar_kw=cbar_kw,
+                                              cbar_option=cbar_option,
+                                              cbar_label_fontsize=option["colorbar_labelsize"],
+                                              cbar_tick_fontsize=option["fontsize"],
+                                              missing_color='grey',
+                                              legend_on=True,
+                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
+                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                                              legend_box_size=option["legend_box_size"],
+                                              legend_lw=option["legend_lw"],
+                                              legend_fontsize=option["legend_fontsize"],
+                                              logo_off=True)
 
-            # Rotate x-axis labels for better readability
-            ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-            ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-            ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-            if not option['ylabel']:
-                ylabel = 'Scores'
-            if not option['xlabel']:
-                xlabel = 'Simulations'
+                # Rotate x-axis labels for better readability
+                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
+                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
+                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
+                if not option['ylabel']:
+                    ylabel = 'Scores'
+                if not option['xlabel']:
+                    xlabel = 'Simulations'
 
-            ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-            ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-            ax.set_title(title, fontsize=option['title_size'])
+                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
+                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
+                ax.set_title(title, fontsize=option['title_size'])
 
-            # Save the plot
-            filename = f'{item}_{reference}'
-            output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
-            plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
-            plt.close()
+                # Save the plot
+                filename = f'{item}_{reference}'
+                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
+                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                plt.close()
+            except:
+                logging.error(f"Error in {item} - {reference}")
     # delete the variables
     del df, unique_items, item_references, sim_sources, item, references, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 
@@ -190,48 +195,51 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             if option['colorbar_label'] == '':
                 cbar_label = score.replace('_', ' ')
             # Create the portrait plot
-            fig, ax, cbar = portrait_plot(data_score,
-                                          xaxis_labels=xaxis_labels,
-                                          yaxis_labels=yaxis_labels,
-                                          cbar_label=cbar_label,
-                                          box_as_square=True,
-                                          vrange=(vmin, vmax),
-                                          figsize=figsize,
-                                          xaxis_fontsize=option['xtick'],
-                                          yaxis_fontsize=option['ytick'],
-                                          colorbar_off=option['colorbar_off'],
-                                          cmap=option['cmap'],
-                                          cmap_bounds=np.linspace(vmin, vmax, 11),
-                                          cbar_kw=cbar_kw,
-                                          cbar_option=cbar_option,
-                                          cbar_label_fontsize=option["colorbar_labelsize"],
-                                          cbar_tick_fontsize=option["fontsize"],
-                                          missing_color='grey',
-                                          legend_on=True,
-                                          legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                          legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                          legend_box_size=option["legend_box_size"],
-                                          legend_lw=option["legend_lw"],
-                                          legend_fontsize=option["legend_fontsize"],
-                                          logo_off=True)
+            try:
+                fig, ax, cbar = portrait_plot(data_score,
+                                              xaxis_labels=xaxis_labels,
+                                              yaxis_labels=yaxis_labels,
+                                              cbar_label=cbar_label,
+                                              box_as_square=True,
+                                              vrange=(vmin, vmax),
+                                              figsize=figsize,
+                                              xaxis_fontsize=option['xtick'],
+                                              yaxis_fontsize=option['ytick'],
+                                              colorbar_off=option['colorbar_off'],
+                                              cmap=option['cmap'],
+                                              cmap_bounds=np.linspace(vmin, vmax, 11),
+                                              cbar_kw=cbar_kw,
+                                              cbar_option=cbar_option,
+                                              cbar_label_fontsize=option["colorbar_labelsize"],
+                                              cbar_tick_fontsize=option["fontsize"],
+                                              missing_color='grey',
+                                              legend_on=True,
+                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
+                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                                              legend_box_size=option["legend_box_size"],
+                                              legend_lw=option["legend_lw"],
+                                              legend_fontsize=option["legend_fontsize"],
+                                              logo_off=True)
 
-            # Rotate x-axis labels for better readability
-            ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-            ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-            ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-            if not option['ylabel']:
-                ylabel = score.replace('_', ' ')
-            if not option['xlabel']:
-                xlabel = 'Simulations'
-            ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-            ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-            ax.set_title(title, fontsize=option['title_size'])
+                # Rotate x-axis labels for better readability
+                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
+                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
+                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
+                if not option['ylabel']:
+                    ylabel = score.replace('_', ' ')
+                if not option['xlabel']:
+                    xlabel = 'Simulations'
+                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
+                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
+                ax.set_title(title, fontsize=option['title_size'])
 
-            # Save the plot
-            filename = f'{score}_{"_".join(item_combination)}'
-            output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-            plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
-            plt.close()
+                # Save the plot
+                filename = f'{score}_{"_".join(item_combination)}'
+                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
+                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                plt.close()
+            except:
+                logging.error(f"Error in {score} - {item_combination}")
     # delete the variables
     del df, filtered_df, unique_items, sim_sources, all_combinations, score, item_combination, mask, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 
@@ -256,7 +264,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # Iterate over each variable and its corresponding references
     for item, references in item_references.items():
         for reference in references:
-        #     Initialize data_metric array
+            #     Initialize data_metric array
             data_metric = np.zeros((4, len(evaluation_items), 1, len(sim_sources)))
             # Fill data_metric array with corresponding values
             for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
@@ -283,63 +291,66 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 if option['colorbar_label'] == '':
                     cbar_label = metric.replace('_', ' ')
 
-                cbar_option['colorbar_position_set']=False
+                cbar_option['colorbar_position_set'] = False
                 # Create the portrait plot
-                fig, ax, cbar = portrait_plot(data_metric[:, i, :],
-                                              fig=figure,
-                                              ax=axes[i],
-                                              xaxis_labels=xaxis_labels,
-                                              yaxis_labels=yaxis_labels,
-                                              # cbar_label=cbar_label,
-                                              box_as_square=True,
-                                              figsize=mfigsize,
-                                              xaxis_fontsize=option['xtick'],
-                                              yaxis_fontsize=option['ytick'],
-                                              colorbar_off=option['colorbar_off'],
-                                              cmap=option['cmap'],
-                                              cbar_kw=cbar_kw,
-                                              cbar_option=cbar_option,
-                                              cbar_label_fontsize=option["colorbar_labelsize"],
-                                              cbar_tick_fontsize=option["fontsize"],
-                                              missing_color='grey',
-                                              legend_on=False,
-                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                              legend_box_size=option["legend_box_size"],
-                                              legend_lw=option["legend_lw"],
-                                              legend_fontsize=option["legend_fontsize"],
-                                              use_axes=True,
-                                              ifigure=i,
-                                              )
-                axes[i] = ax
-                axes[i].set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
+                try:
+                    fig, ax, cbar = portrait_plot(data_metric[:, i, :],
+                                                  fig=figure,
+                                                  ax=axes[i],
+                                                  xaxis_labels=xaxis_labels,
+                                                  yaxis_labels=yaxis_labels,
+                                                  # cbar_label=cbar_label,
+                                                  box_as_square=True,
+                                                  figsize=mfigsize,
+                                                  xaxis_fontsize=option['xtick'],
+                                                  yaxis_fontsize=option['ytick'],
+                                                  colorbar_off=option['colorbar_off'],
+                                                  cmap=option['cmap'],
+                                                  cbar_kw=cbar_kw,
+                                                  cbar_option=cbar_option,
+                                                  cbar_label_fontsize=option["colorbar_labelsize"],
+                                                  cbar_tick_fontsize=option["fontsize"],
+                                                  missing_color='grey',
+                                                  legend_on=False,
+                                                  legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
+                                                  legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                                                  legend_box_size=option["legend_box_size"],
+                                                  legend_lw=option["legend_lw"],
+                                                  legend_fontsize=option["legend_fontsize"],
+                                                  use_axes=True,
+                                                  ifigure=i,
+                                                  )
+                    axes[i] = ax
+                    axes[i].set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
 
-            # Rotate x-axis labels for better readability
-            ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-            if not option['ylabel']:
-                ylabel = 'Metrics'
-            if not option['xlabel']:
-                xlabel = 'Simulations'
+                    # Rotate x-axis labels for better readability
+                    ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
+                    if not option['ylabel']:
+                        ylabel = 'Metrics'
+                    if not option['xlabel']:
+                        xlabel = 'Simulations'
 
-            ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-            ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-            axes[0].set_title(title, fontsize=option['title_size'])
+                    ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
+                    ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
+                    axes[0].set_title(title, fontsize=option['title_size'])
 
-            add_legend(
-                4,
-                axes[0],
-                (option["legend_box_x"], option["legend_box_y"]+1),
-                option["legend_box_size"],
-                labels=['DJF', 'MAM', 'JJA', 'SON'],
-                lw=option["legend_lw"],
-                fontsize=option["legend_fontsize"], )
+                    add_legend(
+                        4,
+                        axes[0],
+                        (option["legend_box_x"], option["legend_box_y"] + 1),
+                        option["legend_box_size"],
+                        labels=['DJF', 'MAM', 'JJA', 'SON'],
+                        lw=option["legend_lw"],
+                        fontsize=option["legend_fontsize"], )
 
-            # Save the plot
-            filename = f'{item}_{reference}'
-            output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
-            plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
-            plt.close()
-    del df, unique_items, item_references, metric,sim_sources, item, references, data_metric, xaxis_labels, yaxis_labels, mfigsize, fig, ax, cbar, filename, output_file_path
+                    # Save the plot
+                    filename = f'{item}_{reference}'
+                    output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
+                    plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                    plt.close()
+                except:
+                    logging.error(f"Error in {reference} - {item} {metric}")
+    del df, unique_items, item_references, metric, sim_sources, item, references, data_metric, xaxis_labels, yaxis_labels, mfigsize, fig, ax, cbar, filename, output_file_path
 
     # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
@@ -390,55 +401,57 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             if option['colorbar_label'] == '':
                 cbar_label = metric.replace('_', ' ')
 
-            if option['vmin_max_on']:
-                vmin, vmax = option['vmin'], option['vmax']
-            else:
+            try:
+                if option['vmin_max_on']:
+                    vmin, vmax = option['vmin'], option['vmax']
+                else:
+                    vmin, vmax = np.percentile(data_metric[~np.isnan(data_metric)], [5, 95])
+                # Create the portrait plot
+                fig, ax, cbar = portrait_plot(data_metric,
+                                              xaxis_labels=xaxis_labels,
+                                              yaxis_labels=yaxis_labels,
+                                              cbar_label=cbar_label,
+                                              box_as_square=True,
+                                              vrange=(vmin, vmax),
+                                              figsize=figsize,
+                                              xaxis_fontsize=option['xtick'],
+                                              yaxis_fontsize=option['ytick'],
+                                              colorbar_off=option['colorbar_off'],
+                                              cmap=option['cmap'],
+                                              cmap_bounds=np.linspace(vmin, vmax, 11),
+                                              cbar_kw=cbar_kw,
+                                              cbar_option=cbar_option,
+                                              cbar_label_fontsize=option["colorbar_labelsize"],
+                                              cbar_tick_fontsize=option["fontsize"],
+                                              missing_color='grey',
+                                              legend_on=True,
+                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
+                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                                              legend_box_size=option["legend_box_size"],
+                                              legend_lw=option["legend_lw"],
+                                              legend_fontsize=option["legend_fontsize"],
+                                              logo_off=True)
 
-                vmin, vmax = np.percentile(data_metric[~np.isnan(data_metric)], [5, 95])
+                # Rotate x-axis labels for better readability
+                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
+                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
+                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
+                if not option['ylabel']:
+                    ylabel = metric.replace('_', ' ')
+                if not option['xlabel']:
+                    xlabel = 'Simulations'
+                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
+                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
+                ax.set_title(title, fontsize=option['title_size'])
 
-            # Create the portrait plot
-            fig, ax, cbar = portrait_plot(data_metric,
-                                          xaxis_labels=xaxis_labels,
-                                          yaxis_labels=yaxis_labels,
-                                          cbar_label=cbar_label,
-                                          box_as_square=True,
-                                          vrange=(vmin, vmax),
-                                          figsize=figsize,
-                                          xaxis_fontsize=option['xtick'],
-                                          yaxis_fontsize=option['ytick'],
-                                          colorbar_off=option['colorbar_off'],
-                                          cmap=option['cmap'],
-                                          cmap_bounds=np.linspace(vmin, vmax, 11),
-                                          cbar_kw=cbar_kw,
-                                          cbar_option=cbar_option,
-                                          cbar_label_fontsize=option["colorbar_labelsize"],
-                                          cbar_tick_fontsize=option["fontsize"],
-                                          missing_color='grey',
-                                          legend_on=True,
-                                          legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                          legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                          legend_box_size=option["legend_box_size"],
-                                          legend_lw=option["legend_lw"],
-                                          legend_fontsize=option["legend_fontsize"],
-                                          logo_off=True)
+                # Save the plot
+                filename = f'{metric}_{"_".join(item_combination)}'
+                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
+                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                plt.close()
+            except:
+                logging.error(f"Error in {metric} - {item_combination}")
 
-            # Rotate x-axis labels for better readability
-            ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-            ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-            ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-            if not option['ylabel']:
-                ylabel = metric.replace('_', ' ')
-            if not option['xlabel']:
-                xlabel = 'Simulations'
-            ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-            ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-            ax.set_title(title, fontsize=option['title_size'])
-
-            # Save the plot
-            filename = f'{metric}_{"_".join(item_combination)}'
-            output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-            plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
-            plt.close()
     del df, filtered_df, unique_items, sim_sources, all_combinations, metric, item_combination, mask, data_metric, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 
 
