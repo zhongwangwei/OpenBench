@@ -2703,7 +2703,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
             dir_path = os.path.join(casedir, 'output', 'comparisons', 'RadarMap')
-            os.makedirs(dir_path, exist_OK=True)
+            os.makedirs(dir_path, exist_ok=True)
 
             for score in scores:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
