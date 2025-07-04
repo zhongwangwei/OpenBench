@@ -217,8 +217,6 @@ def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score
     general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                                             evaluation_item, sim_source, ref_source)
     general_info = general_info_object.to_dict()
-    logging.info(f"xu output nml information before evaluation")
-    logging.info(f"general_info: {general_info}, type: {type(general_info)}")
     # Run Evaluation
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
         if main_nl['general']['only_drawing']:
@@ -330,17 +328,17 @@ def main():
                         fig_nml)
 
     # xu output nml information:
-    logging.info(f"xu output nml information before running")
-    logging.info(f"main_nl: {main_nl}, type: {type(main_nl)}")
-    logging.info(f"ref_nml: {ref_nml}, type: {type(ref_nml)}")
-    logging.info(f"sim_nml: {sim_nml}, type: {type(sim_nml)}")
-    logging.info(f"stats_nml: {stats_nml}, type: {type(stats_nml)}")
-    logging.info(f"fig_nml: {fig_nml}, type: {type(fig_nml)}")
-    logging.info(f"evaluation_items: {evaluation_items}, type: {type(evaluation_items)}")
-    logging.info(f"metric_vars: {metric_vars}, type: {type(metric_vars)}")
-    logging.info(f"score_vars: {score_vars}, type: {type(score_vars)}")
-    logging.info(f"comparison_vars: {comparison_vars}, type: {type(comparison_vars)}")
-    logging.info(f"statistic_vars: {statistic_vars}, type: {type(statistic_vars)}")
+    # logging.info(f"xu output nml information before running")
+    # logging.info(f"main_nl: {main_nl}, type: {type(main_nl)}")
+    # logging.info(f"ref_nml: {ref_nml}, type: {type(ref_nml)}")
+    # logging.info(f"sim_nml: {sim_nml}, type: {type(sim_nml)}")
+    # logging.info(f"stats_nml: {stats_nml}, type: {type(stats_nml)}")
+    # logging.info(f"fig_nml: {fig_nml}, type: {type(fig_nml)}")
+    # logging.info(f"evaluation_items: {evaluation_items}, type: {type(evaluation_items)}")
+    # logging.info(f"metric_vars: {metric_vars}, type: {type(metric_vars)}")
+    # logging.info(f"score_vars: {score_vars}, type: {type(score_vars)}")
+    # logging.info(f"comparison_vars: {comparison_vars}, type: {type(comparison_vars)}")
+    # logging.info(f"statistic_vars: {statistic_vars}, type: {type(statistic_vars)}")
 
     main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', 'True')
 

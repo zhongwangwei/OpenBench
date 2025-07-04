@@ -507,7 +507,7 @@ def make_Basic(file, method_name, data_sources, main_nml,
     lon, lat = np.meshgrid(ilon, ilat)
 
     min_value, max_value = np.nanmin(data), np.nanmax(data)
-    cmap, mticks, norm, bnd, extend = get_index(in_value, max_value, option['cmap'])
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option['cmap'])
     if not option['vmin_max_on']:
         option['vmax'], option['vmin'] = mticks[-1], mticks[0]
     if min_value < option['vmin'] and max_value > option['vmax']:
