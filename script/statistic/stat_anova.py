@@ -43,12 +43,8 @@ def stat_anova(self, *variables):
     import gc
 
     # Separate dependent and independent variables
-    Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
+    Y_vars =variables[0]  # [var for var in variables if '_Y' in var.name]
     X_vars = variables[1:]  # [var for var in variables if '_Y' not in var.name]
-
-    if len(Y_vars) != 1:
-        logging.error("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
-        raise ValueError("Exactly one variable with '_Y' in its name should be provided as the dependent variable.")
 
     def extract_xarray_data(data):
         """统一提取 xarray.Dataset 或 xarray.DataArray 的数据"""
