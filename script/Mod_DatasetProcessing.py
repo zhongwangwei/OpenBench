@@ -25,53 +25,55 @@ from Mod_Converttype import Convert_Type
 
 def performance_monitor(func: Callable) -> Callable:
     """Decorator to monitor function performance including execution time and memory usage."""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Get initial memory usage
         process = psutil.Process(os.getpid())
         start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
         start_time = time.time()
-        
+
         # Get initial CPU usage
         start_cpu = process.cpu_percent()
-        
+
         try:
             # Execute the function
             result = func(*args, **kwargs)
-            
+
             # Calculate execution time and memory usage
             end_time = time.time()
             end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
             end_cpu = process.cpu_percent()
-            
+
             execution_time = end_time - start_time
             memory_used = end_mem - start_mem
             cpu_used = end_cpu - start_cpu
-            
+
             # Log performance 
             logging.info(f"Performance  for {func.__name__}:")
             logging.info(f"  Execution time: {execution_time:.2f} seconds")
             logging.info(f"  Memory usage: {memory_used:.3f} GB")
             logging.info(f"  CPU usage: {cpu_used:.1f}%")
-            
+
             # Log warning if memory usage is high
-            if memory_used > 0.8 * psutil.virtual_memory().total / (1024**3):  # 80% of total memory
+            if memory_used > 0.8 * psutil.virtual_memory().total / (1024 ** 3):  # 80% of total memory
                 logging.warning(f"High memory usage detected in {func.__name__}: {memory_used:.3f} GB")
-            
+
             return result
-            
+
         except Exception as e:
             # Log error with performance context
             end_time = time.time()
             end_mem = process.memory_info().rss / 1024 / 1024 / 1024
             execution_time = end_time - start_time
             memory_used = end_mem - start_mem
-            
+
             logging.error(f"Error in {func.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
             logging.error(str(e))
             raise
-            
+
     return wrapper
+
 
 def get_system_resources():
     """
@@ -82,14 +84,14 @@ def get_system_resources():
     """
     try:
         # Get total memory in GB
-        total_memory = psutil.virtual_memory().total / (1024**3)
+        total_memory = psutil.virtual_memory().total / (1024 ** 3)
         # Get available memory in GB
-        available_memory = psutil.virtual_memory().available / (1024**3)
+        available_memory = psutil.virtual_memory().available / (1024 ** 3)
         # Get number of CPU cores
         cpu_count = psutil.cpu_count(logical=False)
         # Get CPU frequency
         cpu_freq = psutil.cpu_freq().max if psutil.cpu_freq() else 0
-        
+
         return {
             'total_memory_gb': total_memory,
             'available_memory_gb': available_memory,
@@ -104,6 +106,7 @@ def get_system_resources():
             'cpu_count': 4,
             'cpu_freq_mhz': 0
         }
+
 
 def calculate_optimal_chunk_size(dataset_size_gb: float, available_memory_gb: float) -> Dict[str, str]:
     """
@@ -124,6 +127,7 @@ def calculate_optimal_chunk_size(dataset_size_gb: float, available_memory_gb: fl
         'lon': 'auto'
     }
 
+
 def calculate_optimal_cores(cpu_count: int, available_memory_gb: float, dataset_size_gb: float) -> int:
     """
     Calculate optimal number of cores based on system resources and dataset size.
@@ -138,15 +142,16 @@ def calculate_optimal_cores(cpu_count: int, available_memory_gb: float, dataset_
     """
     # Calculate memory per core needed
     memory_per_core = dataset_size_gb / cpu_count
-    
+
     # If memory per core is too high, reduce number of cores
     if memory_per_core > available_memory_gb * 0.8:
         optimal_cores = max(1, int(available_memory_gb * 0.8 / memory_per_core))
     else:
         # Leave one core free for system processes
         optimal_cores = max(1, cpu_count - 1)
-    
+
     return optimal_cores
+
 
 class BaseDatasetProcessing:
     def __init__(self, config: Dict[str, Any]):
@@ -158,14 +163,14 @@ class BaseDatasetProcessing:
         """Initialize resource-related parameters based on system capabilities."""
         # Get system resources
         resources = get_system_resources()
-        
+
         # Set default num_cores if not specified
         if not hasattr(self, 'num_cores') or self.num_cores <= 0:
             self.num_cores = resources['cpu_count']
-        
+
         # Store resource information
         self.system_resources = resources
-        
+
         # Default chunk size (will be adjusted per operation)
         self.default_chunks = {
             'time': 'auto',
@@ -357,7 +362,7 @@ class BaseDatasetProcessing:
         ds = self.check_time(ds, syear, eyear, tim_res)
         # Apply model-specific time adjustments
         if datasource == 'stat':
-            pass
+            ds['time'] = pd.DatetimeIndex(ds['time'].values)
         else:
             if self.sim_data_type != 'stn':
                 ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
@@ -401,7 +406,7 @@ class BaseDatasetProcessing:
             # Compare the actual time with the complete time series to find the missing time
             # print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
-            if len(missing_times) > 0:
+            if len(missing_times) > 0 and len(missing_times) < len(time_var):
                 logging.warning("Time series is not complete. Missing time values found: ")
                 print(missing_times)
                 logging.info('Filling missing time values with np.nan')
@@ -437,15 +442,15 @@ class BaseDatasetProcessing:
             logging.error(f"Error: {str(e)}")
             raise
         try:
-            ds = self.apply_custom_filter(datasource, ds)
+            ds = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
         except:
             ds = Convert_Type.convert_nc(ds[varname[0]])
         return ds
 
-    def apply_custom_filter(self, datasource: str, ds: xr.Dataset) -> xr.Dataset:
+    def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == 'stat':
-            pass
+            return ds[varname[0]]
         else:
             model = self.sim_model if datasource == 'sim' else self.ref_source
             try:
@@ -504,12 +509,12 @@ class BaseDatasetProcessing:
 
         try:
             # Calculate dataset size in GB
-            dataset_size_gb = ds.nbytes / (1024**3)
-            
+            dataset_size_gb = ds.nbytes / (1024 ** 3)
+
             # Update number of cores based on dataset size
             optimal_cores = min(self.get_optimal_cores(dataset_size_gb), self.num_cores)
             logging.info(f"Using {optimal_cores} cores for splitting years")
-            
+
             years = range(use_syear, use_eyear + 1)
             Parallel(n_jobs=optimal_cores)(
                 delayed(save_year)(casedir, suffix, prefix, ds, year) for year in years
@@ -527,7 +532,7 @@ class BaseDatasetProcessing:
             var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
         except:
             var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
-        
+
         datasets = []
         try:
             for file in var_files:
@@ -606,10 +611,9 @@ class BaseDatasetProcessing:
             else:
                 # 如果已经是numpy数组，直接使用
                 data_array = ds
-            
+
             # 进行单位转换
             converted_data, new_unit = UnitProcessing.convert_unit(data_array, varunit.lower())
-            
             # 创建新的数据集或更新现有数据集
             if isinstance(ds, xr.Dataset):
                 # 更新数据集中的数据
@@ -617,13 +621,13 @@ class BaseDatasetProcessing:
             elif isinstance(ds, xr.DataArray):
                 # 创建新的DataArray
                 ds.values = converted_data
-            
+
             # 更新单位属性
             ds.attrs['units'] = new_unit
             logging.info(f"Converted unit from {varunit} to {new_unit}")
-            
+
             return ds, new_unit
-        
+
         except ValueError as e:
             logging.warning(f"Warning: {str(e)}. Attempting specific conversion.")
             # 不要直接退出，而是返回原始数据
@@ -704,9 +708,9 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
             station = Convert_Type.convert_Frame(station)
-            output_file = os.path.join(self.casedir, 'output', 'data', 
-                                     f'stn_{self.ref_source}_{self.sim_source}',
-                                     f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+            output_file = os.path.join(self.casedir, 'output', 'data',
+                                       f'stn_{self.ref_source}_{self.sim_source}',
+                                       f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
             data.to_netcdf(output_file)
             logging.info(f"Saved station data to {output_file}")
         finally:
@@ -745,9 +749,9 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
-            output_file = os.path.join(self.casedir, 'output', 'data', 
-                                     f'stn_{self.ref_source}_{self.sim_source}',
-                                     f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+            output_file = os.path.join(self.casedir, 'output', 'data',
+                                       f'stn_{self.ref_source}_{self.sim_source}',
+                                       f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
             data.to_netcdf(output_file)
             logging.info(f"Saved extracted station data to {output_file}")
         finally:
@@ -850,7 +854,6 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             gc.collect()  # Add garbage collection after saving combined data
 
         self.cleanup_temp_files(data_params)
-
 
     def get_output_filename(self, data_params: Dict[str, Any]) -> str:
         if data_params['datasource'] == 'ref':

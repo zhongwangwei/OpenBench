@@ -65,17 +65,18 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         time_freq = source_config[f'{source}_tim_res']
         time_freq = self.check_time_freq(time_freq)
         varname = source_config[f'{source}_varname']
+        varunit = source_config[f'{source}_varunit']
         groupby = source_config[f'{source}_data_groupby'].lower()
         suffix = source_config[f'{source}_suffix']
         prefix = source_config[f'{source}_prefix']
         logging.info(f"Processing data source '{source}' from '{dirx}'...")
 
         if groupby == 'single':
-            ds = self.process_single_groupby(dirx, suffix, prefix, varname, syear, eyear, time_freq)
+            ds = self.process_single_groupby(dirx, suffix, prefix, varname, varunit, syear, eyear, time_freq)
         elif groupby == 'year':
             years = range(syear, eyear + 1)
             ds_list = Parallel(n_jobs=self.num_cores)(
-                delayed(self.process_yearly_groupby)(dirx, suffix, prefix, varname, year, year, time_freq)
+                delayed(self.process_yearly_groupby)(dirx, suffix, prefix, varname, varunit, year, year, time_freq)
                 for year in years
             )
             ds = xr.concat(ds_list, dim='time')
@@ -83,40 +84,41 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             logging.info(f"Combining data to one file...")
             years = range(syear, eyear + 1)
             ds_list = Parallel(n_jobs=self.num_cores)(
-                delayed(self.process_other_groupby)(dirx, suffix, prefix, varname, year, year, time_freq)
+                delayed(self.process_other_groupby)(dirx, suffix, prefix, varname, varunit, year, year, time_freq)
                 for year in years
             )
             ds = xr.concat(ds_list, dim='time')
         ds = Convert_Type.convert_nc(ds)
         return ds
 
-    def process_single_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
+    def process_single_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], varunit: List[str], syear: int, eyear: int,
                                time_freq: str) -> xr.Dataset:
         VarFile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
         if isinstance(varname, str): varname = [varname]
         ds = self.select_var(syear, eyear, time_freq, VarFile, varname, 'stat')
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq, varunit)
         return ds
 
-    def process_yearly_groupby(self, dirx: str, suffix: str, prefix, varname: List[str], syear: int, eyear: int,
+    def process_yearly_groupby(self, dirx: str, suffix: str, prefix, varname: List[str], varunit: List[str], syear: int, eyear: int,
                                time_freq: str) -> xr.Dataset:
         VarFile = self.check_file_exist(os.path.join(dirx, f'{prefix}{syear}{suffix}.nc'))
         if isinstance(varname, str): varname = [varname]
         ds = self.select_var(syear, eyear, time_freq, VarFile, varname, 'stat')
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq, varunit)
         return ds
 
-    def process_other_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], syear: int, eyear: int,
+    def process_other_groupby(self, dirx: str, suffix: str, prefix: str, varname: List[str], varunit: List[str], syear: int, eyear: int,
                               time_freq: str) -> xr.Dataset:
         if isinstance(varname, str): varname = [varname]
         ds = self.combine_year(syear, dirx, dirx, suffix, prefix, varname, 'stat', time_freq)
-        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq)
+        ds = self.load_and_process_dataset(ds, syear, eyear, time_freq, varunit)
         return ds
 
-    def load_and_process_dataset(self, ds: xr.Dataset, syear: str, eyear: str, time_freq) -> xr.Dataset:
+    def load_and_process_dataset(self, ds: xr.Dataset, syear: str, eyear: str, time_freq, varunit) -> xr.Dataset:
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, time_freq, 'stat')
         ds = self.select_timerange(ds, syear, eyear)
+        ds, varunit = self.process_units(ds, varunit)
         return ds
 
     def remap_data(self, data_list):
@@ -126,14 +128,15 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         """
 
         remapping_methods = [
-            self.remap_interpolate,
             self.remap_xesmf,
-            self.remap_cdo
+            self.remap_cdo,
+            self.remap_interpolate
         ]
 
         remapped_data = []
         for i, data in enumerate(data_list):
             data = self.preprocess_grid_data(data)
+            data.to_netcdf('test.nc')
             new_grid = self.create_target_grid()
             for method in remapping_methods:
                 try:
@@ -585,8 +588,7 @@ class StatisticsProcessing(BasicProcessing):
                     Y_vars = self.process_data_source(sources[0].strip(), self.stats_nml[statistic_method])
                 except:
                     logging.error("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
-                    raise ValueError(
-                        "No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
+                    raise ValueError("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
 
             if len(data_list) == 0:
                 logging.error(f"Warning: No data sources found for '{statistic_method}'.")
