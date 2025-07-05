@@ -206,7 +206,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             )
 
     legend_elements = [Line2D([0], [0], marker='o', color='#bfbfbf', 
-            label=r"$\text{         point size} \propto \sigma_{\text{CI}}$"+"\n    (larger size indicates\n  greater variability across\nsimulations for a reference)",
+            label="$\\text{         point size} \\propto \\sigma_{\\text{CI}}$\n    (larger size indicates\n  greater variability across\nsimulations for a reference)",
             linestyle='None', markersize=20*len(ref_sources), markeredgecolor='None', markerfacecolor='#bfbfbf')]
     fig.legend(
         handles=legend_elements,
