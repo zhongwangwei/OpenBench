@@ -11,7 +11,7 @@
   },
   "Surface_Air_Temperature": {
     "sub_dir": "",
-    "varname": "",
+    "varname": "tm",
     "varunit": "C",
     "prefix": "CN05.1_Tm_1961_2021_daily_0P25",
     "suffix": ""
