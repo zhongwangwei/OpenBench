@@ -60,13 +60,13 @@ OpenBench is comprised of several key modules that work together to deliver its 
 To run the OpenBench evaluation system, execute the main script from your terminal:
 
 ```bash
-python script/openbench.py nml/main-Debug.json
+python openbench/openbench.py nml/main-Debug.yaml
 ```
-You can also use a main configuration file in .nml or .yaml format.
+You can also use a main configuration file in .nml or .json format.
 
-Alternatively, you can provide the full path to your main configuration file (e.g., `/path/to/your/main.yaml` or `/path/to/your/main.nml`):
+Alternatively, you can provide the full path to your main configuration file (e.g., `/path/to/your/main.json` or `/path/to/your/main.nml`):
 ```bash
-python script/openbench.py /path/to/your/main.json
+python openbench/openbench.py /path/to/your/main.yaml
 ```
 
 ## Supported Evaluations
