@@ -1,0 +1,48 @@
+&general
+
+  title                             =
+  title_size                        = 18
+  xticklabel                        =
+  xticksize                         = 17
+  yticklabel                        =
+  yticksize                         = 17
+  fontsize                          = 15
+  axes_linewidth                    = 1
+  x_rotation                        = 15
+  x_ha                              = right  #'right', 'left', 'center'
+
+  cmap                              = Set3
+            #'Blues', 'BuPu', ''CMRmap','Set1', 'Set2',  'Set3','tab20', 'Spectral', 'Spectral_r', 'Wistia', 'Wistia_r',
+            # 'YlGn', 'YlGnBu', 'YlGn_r', 'YlOrBr',  'YlOrRd',  'autumn','bwr','cividis', 'cool','coolwarm' ,'RdYlGn'
+
+  models_to_highlight_by_line       =True  #False, True
+  markers                           = .  # '.', 'x', 'o', ">", '<', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', "+", "^", "v"
+  markersalpha                      = 0.5
+  models_to_highlight_markers_size  = 20
+
+
+  legend_off                        = False #False, True
+  legend_loc                        = upper center #'best', 'right', 'left', 'upper left', 'upper right', 'lower left', 'lower right', 'upper center', 'lower center', 'center left', 'center right'
+  legend_ncol                       = 2
+  set_legend                        = False  #False, True
+  bbox_to_anchor_x                  = 0.5
+  bbox_to_anchor_y                  = -0.25
+
+  x_wise                            =  15
+  saving_format                     =  jpg
+  y_wise                            =  5
+  font                              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi                               =  300
+
+/
+
+
+
+
+
+
+
+
+
+
+

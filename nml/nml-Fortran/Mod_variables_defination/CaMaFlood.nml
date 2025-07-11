@@ -1,0 +1,52 @@
+&general
+model=CaMa 
+/
+
+############################Hydrology and water Cycle############################
+
+&Total_Runoff
+varname           =  f_rnof
+varunit           =  mm s-1
+/
+
+&Streamflow
+varname         =  outflw
+varunit         =  m3 s-1
+/
+
+&Inundation_Fraction
+varname = fldfrc
+varunit = m2 m-2
+/
+
+&Inundation_Area
+varname = fldare
+varunit = m2
+/
+
+###Dam###
+&Dam_Inflow
+varname = daminf
+varunit = m3 s-1
+/
+
+&Dam_Outflow
+varname = damouf
+varunit = m3 s-1
+/
+
+&Dam_Elevation
+   varname           =  sfcelv
+   varunit           =  m
+/
+
+&Dam_Storage
+   varname           =  damsto
+   varunit           =  m3
+/
+
+&River_Water_Level
+   varname           =  sfcelv
+   varunit           =  m
+/
+##################################################################################

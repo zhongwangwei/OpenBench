@@ -1,0 +1,134 @@
+&general
+   root_dir          =  ./data/reference/grid_ref/Crop/SPAM
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Year
+   tim_res           =  Year
+   grid_res          =  0.083333
+/
+
+#*************RICE*******************
+&Crop_Yield_Rice_2000
+sub_dir           =  2000/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_RICE_A
+syear             =  2000
+eyear             =  2000
+/
+
+&Crop_Yield_Rice_2010
+sub_dir           =  2010/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  V2r0_global_Y_RICE_A 
+syear             =  2010
+eyear             =  2010
+/
+
+&Crop_Yield_Rice_2020
+sub_dir           =  2020/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_RICE_A 
+syear             =  2020
+eyear             =  2020
+/
+#*************MAIZE*******************
+&Crop_Yield_Maize_2000
+sub_dir           =  2000/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_MAIZ_A
+syear             =  2000
+eyear             =  2000
+/
+
+&Crop_Yield_Maize_2010
+sub_dir           =  2010/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  V2r0_global_Y_MAIZ_A 
+syear             =  2010
+eyear             =  2010
+/
+
+&Crop_Yield_Maize_2020
+sub_dir           =  2020/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_MAIZ_A 
+syear             =  2020
+eyear             =  2020
+/
+#*************SOYBEAN*******************
+
+&Crop_Yield_Soybean_2000
+sub_dir           =  2000/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_SOYB_A
+syear             =  2000
+eyear             =  2000
+/
+
+&Crop_Yield_Soybean_2010
+sub_dir           =  2010/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  V2r0_global_Y_SOYB_A 
+syear             =  2010
+eyear             =  2010
+/
+
+&Crop_Yield_Soybean_2020
+sub_dir           =  2020/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_SOYB_A 
+syear             =  2020
+eyear             =  2020
+/
+#*************WHEAT*******************
+&Crop_Yield_Wheat_2000
+sub_dir           =  2000/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  V3r107_global_Y_WHEA_A 
+syear             =  2000
+eyear             =  2000
+/
+
+&Crop_Yield_Wheat_2010
+sub_dir           =  2010/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  V2r0_global_Y_WHEA_A
+syear             =  2010
+eyear             =  2010
+/
+
+&Crop_Yield_Wheat_2020
+sub_dir           =  2020/netcdf
+varname           =  Band1
+varunit           =  kg ha-1
+prefix            =  spam
+suffix            =  _v1r0_global_Y_WHEA_A
+syear             =  2020
+eyear             =  2020
+/
+#Reference
+# Yu, Q., You, L., Wood-Sichra, U., Ru, Y., Joglekar, A. K. B., Fritz, S., Xiong, W., Lu, M., Wu, W., and Yang, P.: 
+# A cultivated planet in 2010 – Part 2: The global gridded agricultural-production maps, Earth Syst. Sci. Data, 12, 
+# 3545–3572, https://doi.org/10.5194/essd-12-3545-2020, 2020.

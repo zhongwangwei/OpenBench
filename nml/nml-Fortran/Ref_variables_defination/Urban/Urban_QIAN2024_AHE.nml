@@ -1,0 +1,18 @@
+&general
+   root_dir          =   /tera11/zhwei/share/Data_ref/grid_ref/Urban/Qian2024/netcdf/Annual
+   timezone          =   
+   data_type         =   grid
+   data_groupby      =   Single
+   tim_res           =   Year
+   grid_res          =   0.00433
+   syear             =   2000
+   eyear             =   2020
+/
+
+&Urban_Surface_Temperature
+varname           =  LST
+varunit           =  W m-2
+prefix            =  AH_total_annual 
+suffix            =  
+/
+#Reference:
