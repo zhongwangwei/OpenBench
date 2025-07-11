@@ -1,0 +1,16 @@
+{
+  "general": {
+    "model_namelist": "./nml/Mod_variables_defination/CaMaFlood.json",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Month",
+    "dir": "./data/simulation/discharge/XinAnJiang",
+    "fulllist": "",
+    "tim_res": "day",
+    "grid_res": 0.1,
+    "suffix": "",
+    "prefix": "XinAnJiang_hist_cama_",
+    "syear": 1980,
+    "eyear": 2015
+  }
+}

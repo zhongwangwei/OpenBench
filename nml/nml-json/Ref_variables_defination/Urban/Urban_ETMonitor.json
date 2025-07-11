@@ -1,0 +1,18 @@
+{
+  "general": {
+    "root_dir": "/tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "single",
+    "tim_res": "Month",
+    "grid_res": 0.5,
+    "syear": 2001,
+    "eyear": 2019
+  },
+  "Urban_Latent_Heat_Flux": {
+    "varname": "LE",
+    "varunit": "w m-2",
+    "prefix": "LE_2001-2019_monmean",
+    "suffix": ""
+  }
+}

@@ -1,0 +1,26 @@
+&general
+   model_namelist    = ./nml/nml-Fortran/Mod_variables_defination/CoLM.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  month
+   dir = ./data/simulation/LSMs/CoLM2024/
+   fulllist =
+   tim_res =  month
+   grid_res = 2.0
+   suffix =  
+   prefix =  Global_Grid_2x2_PFT_VG_BGC-CRUJRA-Hist1850-2021-lambda3500-reducevmax_hist_
+   syear =  1850
+   eyear =  2021
+/
+
+&Sensible_Heat
+/
+
+
+&Latent_Heat
+/
+
+&Gross_Primary_Productivity
+   varname =  f_gpp
+   varunit =  gC m-2 s-1
+/

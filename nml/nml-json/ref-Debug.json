@@ -1,0 +1,22 @@
+{
+  "general": {
+    "Evapotranspiration_ref_source": [
+      "GLEAM4.2a_monthly",
+      "GLEAM_hybird_PLUMBER2"
+    ],
+    "Latent_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ],
+    "Sensible_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ]
+  },
+  "def_nml": {
+    "GLEAM_hybird_PLUMBER2": "./nml/nml-json/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.json",
+    "ILAMB_monthly": "./nml/nml-json/Ref_variables_defination/Debug/ILAMB_monthly.json",
+    "PLUMBER2": "./nml/nml-json/Ref_variables_defination/Debug/PLUMBER2.json",
+    "GLEAM4.2a_monthly": "./nml/nml-json/Ref_variables_defination/Debug/GLEAM4.2a_monthly.json"
+  }
+}
