@@ -1,0 +1,19 @@
+&general
+   root_dir          =   
+   timezone          =   
+   data_type         =   
+   data_groupby      =   
+   tim_res           =   
+   grid_res          =   
+   syear             =   
+   eyear             =   
+/
+
+&Urban_Albedo
+varname           =  Albedo
+varunit           =  unitless
+prefix            =   
+suffix            =  
+/
+#Reference:
+#***MODIS 

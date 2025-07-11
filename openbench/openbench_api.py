@@ -117,11 +117,26 @@ class OpenBench:
         """
         Create OpenBench instance from configuration file.
         
+        Supports the following configuration formats:
+        - JSON (.json)
+        - YAML (.yaml, .yml)
+        - Fortran Namelist (.nml)
+        
         Args:
-            config_path: Path to configuration file (JSON, YAML, or NML)
+            config_path: Path to configuration file
             
         Returns:
             Configured OpenBench instance
+            
+        Examples:
+            >>> # Load from JSON
+            >>> ob = OpenBench.from_config('config/main.json')
+            
+            >>> # Load from YAML
+            >>> ob = OpenBench.from_config('config/main.yaml')
+            
+            >>> # Load from Fortran Namelist
+            >>> ob = OpenBench.from_config('config/main.nml')
         """
         instance = cls()
         instance.load_config(config_path)
@@ -147,20 +162,51 @@ class OpenBench:
         """
         Load configuration from file.
         
+        Supports JSON (.json), YAML (.yaml/.yml), and Fortran Namelist (.nml) formats.
+        
         Args:
             config_path: Path to configuration file
         """
         if not _HAS_MODULES:
-            # Fallback: simple JSON loading
+            # Fallback: support all three formats
             config_path = Path(config_path)
-            if config_path.exists() and config_path.suffix == '.json':
+            if config_path.exists():
                 try:
-                    import json
-                    with open(config_path, 'r') as f:
-                        self.config = json.load(f)
-                    self._initialize_from_config()
-                    self.logger.info(f"Configuration loaded from {config_path} (fallback mode)")
-                    return
+                    # JSON format
+                    if config_path.suffix == '.json':
+                        import json
+                        with open(config_path, 'r') as f:
+                            self.config = json.load(f)
+                        self._initialize_from_config()
+                        self.logger.info(f"Configuration loaded from {config_path} (JSON, fallback mode)")
+                        return
+                    
+                    # YAML format
+                    elif config_path.suffix in ['.yaml', '.yml']:
+                        try:
+                            import yaml
+                            with open(config_path, 'r') as f:
+                                self.config = yaml.safe_load(f)
+                            self._initialize_from_config()
+                            self.logger.info(f"Configuration loaded from {config_path} (YAML, fallback mode)")
+                            return
+                        except ImportError:
+                            self.logger.warning("PyYAML not available for fallback YAML loading")
+                    
+                    # Fortran Namelist format
+                    elif config_path.suffix == '.nml':
+                        try:
+                            import f90nml
+                            nml = f90nml.read(str(config_path))
+                            # Convert namelist to dict
+                            self.config = {k: dict(v) if hasattr(v, 'items') else v 
+                                         for k, v in nml.items()}
+                            self._initialize_from_config()
+                            self.logger.info(f"Configuration loaded from {config_path} (NML, fallback mode)")
+                            return
+                        except ImportError:
+                            self.logger.warning("f90nml not available for fallback NML loading")
+                            
                 except Exception as e:
                     self.logger.warning(f"Fallback config loading failed: {e}")
             
@@ -187,6 +233,7 @@ class OpenBench:
         if not config_path.exists():
             raise ConfigurationError(f"Configuration file not found: {config_path}")
         
+        # Use ConfigManager which already supports all three formats
         self.config = self.config_manager.load_config(str(config_path))
         self._initialize_from_config()
         
@@ -502,6 +549,29 @@ class OpenBench:
         except Exception as e:
             return {"valid": False, "message": str(e)}
     
+    @staticmethod
+    def detect_config_format(config_path: Union[str, Path]) -> str:
+        """
+        Detect configuration file format from extension.
+        
+        Args:
+            config_path: Path to configuration file
+            
+        Returns:
+            Format string: 'json', 'yaml', 'nml', or 'unknown'
+        """
+        config_path = Path(config_path)
+        suffix = config_path.suffix.lower()
+        
+        if suffix == '.json':
+            return 'json'
+        elif suffix in ['.yaml', '.yml']:
+            return 'yaml'
+        elif suffix == '.nml':
+            return 'nml'
+        else:
+            return 'unknown'
+    
     def get_config(self) -> Dict[str, Any]:
         """Get current configuration."""
         return self.config.copy()
@@ -586,14 +656,26 @@ def run_evaluation(
     """
     Quick evaluation function.
     
+    Supports JSON, YAML, and Fortran Namelist configuration formats.
+    
     Args:
-        config_path: Configuration file path
+        config_path: Configuration file path (.json, .yaml, .yml, or .nml)
         simulation_data: Optional simulation data
         reference_data: Optional reference data
         **kwargs: Additional parameters
         
     Returns:
         Evaluation results
+        
+    Examples:
+        >>> # Run with JSON config
+        >>> results = run_evaluation('config/main.json')
+        
+        >>> # Run with YAML config
+        >>> results = run_evaluation('config/main.yaml')
+        
+        >>> # Run with Fortran Namelist
+        >>> results = run_evaluation('config/main.nml')
     """
     with OpenBench.from_config(config_path) as ob:
         return ob.run(simulation_data, reference_data, **kwargs)
@@ -604,10 +686,23 @@ def create_openbench(config: Optional[Union[str, Dict[str, Any]]] = None) -> Ope
     Create OpenBench instance with flexible configuration.
     
     Args:
-        config: Configuration file path or dictionary
+        config: Configuration file path (supports .json, .yaml, .yml, .nml) or dictionary
         
     Returns:
         OpenBench instance
+        
+    Examples:
+        >>> # Create from JSON file
+        >>> ob = create_openbench('config/main.json')
+        
+        >>> # Create from YAML file
+        >>> ob = create_openbench('config/main.yaml')
+        
+        >>> # Create from Fortran Namelist
+        >>> ob = create_openbench('config/main.nml')
+        
+        >>> # Create from dictionary
+        >>> ob = create_openbench({'general': {'basename': 'test'}})
     """
     if isinstance(config, str):
         return OpenBench.from_config(config)

@@ -1,0 +1,36 @@
+&general
+  title             =
+  title_size        = 17
+  fontsize          = 15 # to contral legend font zise
+  axes_linewidth    = 1
+  xtick             = 15
+
+  y_rotation        = 0
+  y_ha              = right  #'right', 'left', 'center'
+  x_rotation        = 0
+  x_ha              = center   #'right', 'left', 'center'
+
+  ylabel            =
+  ylabelsize        = 17
+  xlabel            = Single Model Performance Index
+  xlabelsize        = 17
+
+  x_posi            = -0.02
+  y_posi            = 0.5
+
+  n                 = 1
+  markeraplha       = 0.8
+
+  hspace            = 0.4
+  wspace            = 0.1
+
+
+  x_wise            = 10
+  saving_format     = jpg
+  y_wise            = 6
+  font              = DejaVu Sans # 'DejaVu Sans', 'Times new roman', 'Arial', 'Courier New', 'Comic Sans MS', 'Verdana', 'Helvetica','Georgia', 'Tahoma', 'Trebuchet MS', 'Lucida Grande'
+  dpi               = 300
+
+/
+
+

@@ -1,0 +1,36 @@
+&general
+   root_dir          =  ./data/reference/grid_ref/Energy/CLARA_AVHRR
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.25
+
+/
+
+&Surface_Downward_LW_Radiation
+varname           =  SDL
+varunit           =  w m-2
+prefix            =  SDL
+suffix            =   
+syear             =  1979
+eyear             =  2020
+/
+
+&Surface_Net_LW_Radiation
+varname           =  SNL 
+varunit           =  W m-2
+prefix            =  SNL
+suffix            =   
+syear             =  1982
+eyear             =  2018
+/
+
+&Surface_Upward_LW_Radiation
+varname           =  SOL
+varunit           =  w m-2
+prefix            =  SOL
+suffix            =   
+syear             =  1982
+eyear             =  2018
+/
