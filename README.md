@@ -138,6 +138,7 @@ nml/
 OpenBench automatically detects configuration format and runs the evaluation:
 
 ```bash
+
 # JSON format
 python openbench/openbench.py nml/nml-json/main-Debug.json
 
