@@ -1,0 +1,55 @@
+&general
+   root_dir          =  ./data/reference/stn_ref/FLUXNET_PLUMBER2/flux
+   timezone          =  0.0
+   data_type         =  stn
+   data_groupby      =  single
+   tim_res           =  Hour
+   grid_res          =  
+   syear             =  
+   eyear             =  
+   fulllist          =  ./data/reference/stn_ref/FLUXNET_PLUMBER2/PLUMBER2.csv
+/
+
+############################  Radiation and Energy Cycle  ############################
+
+&Sensible_Heat
+   varname =  Qh_cor
+   varunit =  w m-2
+/
+
+&Latent_Heat
+   varname =  Qle_cor
+   varunit =  w m-2
+/
+
+&Ground_Heat
+   varname =  Qg
+   varunit =  w m-2
+/
+
+&Net_Radiation
+   varname =  Rnet
+   varunit =  w m-2
+/
+
+&Surface_Upward_SW_Radiation
+   varname =  SWup
+   varunit =  w m-2
+/
+
+&Surface_Upward_LW_Radiation
+   varname =  LWup
+   varunit =  w m-2
+/
+
+############################Ecosystem and Carbon Cycle############################
+
+&Gross_Primary_Productivity
+   varname =  GPP
+   varunit =  mumolCO2 m-2 s-1
+/
+
+&Net_Ecosystem_Exchange
+   varname =  NEE
+   varunit =  mumolCO2 m-2 s-1
+/

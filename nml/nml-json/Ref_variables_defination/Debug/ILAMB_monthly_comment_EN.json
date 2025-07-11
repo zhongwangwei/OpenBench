@@ -1,0 +1,38 @@
+{
+  /* Specific reference data configuration file (ILAMB_monthly):
+     Defines the format of a specific reference data,
+     unified reference data may include multiple evaluation items,
+     here including Sensible_Heat and Latent_Heat */
+
+  /* Basic settings: Configures the format of this reference data */
+  "general": {
+    "root_dir": "./data/reference/debug/ILAMB", // Data storage path
+    "timezone": 0.0,                           // Time zone used by the data
+    "data_type": "grid",                       // Data type ("grid" or "stn")
+    "data_groupby": "Single",                  // Data aggregation type (for grid: "year", "month", "day"; for all times aggregated together or stn: "single")
+    "tim_res": "Month",                        // Time resolution ("year", "month", "day")
+    "grid_res": 2.0                            // Spatial resolution (degrees), can be "" for stn
+  },
+  /* Reference data variable settings:
+     Configures the format of all evaluation variables in this reference data,
+     here for grid, settings for Sensible_Heat and Latent_Heat include
+     path prefix, variable name, variable unit, file name, start and end years, etc. */
+  "Sensible_Heat": {
+    "sub_dir": "Sensible_Heat/FLUXCOM",
+    "varname": "sh",
+    "varunit": "w m-2",
+    "prefix": "sh",
+    "suffix": "",
+    "syear": 2004,
+    "eyear": 2005
+  },
+  "Latent_Heat": {
+    "sub_dir": "Latent_Heat/FLUXCOM",
+    "varname": "le",
+    "varunit": "w m-2",
+    "prefix": "le",
+    "suffix": "",
+    "syear": 2004,
+    "eyear": 2005
+  }
+}

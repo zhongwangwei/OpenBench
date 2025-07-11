@@ -1,0 +1,18 @@
+{
+  "general": {
+    "root_dir": "./data/reference/grid_ref/Water/Runoff/GRFR_0p25",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "tim_res": "Day",
+    "grid_res": 0.25,
+    "syear": 1979,
+    "eyear": 2019
+  },
+  "Total_Runoff": {
+    "varname": "ro",
+    "varunit": "mm day-1",
+    "prefix": "RUNOFF_",
+    "suffix": ""
+  }
+}

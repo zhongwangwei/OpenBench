@@ -1,0 +1,15 @@
+&general
+   model_namelist    = ./nml/nml-Fortran/Mod_variables_defination/CoLM.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  single
+   dir = ./data/simulation/urban/05deg
+   fulllist =
+   tim_res =  month
+   grid_res =  0.5
+   prefix =  ERA5_2003_2012_china_with_urban_fraction
+   suffix =  
+
+   syear =  2003
+   eyear =  2012
+/

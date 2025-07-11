@@ -152,6 +152,9 @@ class NamelistReader:
                     key, value = line.split('=', 1)
                     key = key.strip()
                     value = value.strip().rstrip(',')
+                    # Remove comments (everything after #)
+                    if '#' in value:
+                        value = value.split('#')[0].strip()
                     current_dict[key] = self._parse_value(key, value)
         
         return namelist
@@ -208,16 +211,7 @@ class NamelistReader:
         if not os.path.exists(file_path):
             raise ConfigurationError(f"Configuration file not found: {file_path}")
         
-        # Try to use the enhanced ConfigManager first
-        try:
-            from .manager import config_manager
-            if config_manager:
-                logging.debug(f"Successfully loaded configuration using ConfigManager: {file_path}")
-                return config_manager.load_config(file_path)
-        except Exception as e:
-            logging.warning(f"ConfigManager failed to load {file_path}: {e}. Falling back to legacy reader.")
-        
-        # Fallback to legacy reading method
+        # Direct reading without using ConfigManager to avoid recursion
         try:
             file_format = self._detect_file_format(file_path)
             
@@ -231,7 +225,6 @@ class NamelistReader:
                 raise ConfigurationError(f"Unsupported file format: {file_format}")
                 
         except Exception as e:
-            logging.warning(f"Unexpected error with ConfigManager for {file_path}: {e}. Falling back to legacy reader.")
             raise ConfigurationError(f"Failed to read configuration file {file_path}: {e}")
     
     def read(self, file_path: str) -> Dict[str, Dict[str, Any]]:
