@@ -1,0 +1,26 @@
+{
+  "general": {
+    "title": "",
+    "title_size": 14,
+    "xticksize": 13,
+    "yticksize": 13,
+    "fontsize": 13,
+    "axes_linewidth": 1,
+    "Normalized": "off",
+    "circlelabelsize": 14,
+    "circlestyle": "--",
+    "widthcircle": 1,
+    "circlecolor": "k",
+    "markerLegend": "on",
+    "MARKERSsize": 10,
+    "faceColor": "w",
+    "set_legend": false,
+    "bbox_to_anchor_x": 1.4,
+    "bbox_to_anchor_y": 1.1,
+    "x_wise": 6,
+    "saving_format": "jpg",
+    "y_wise": 6,
+    "font": "DejaVu Sans",
+    "dpi": 300
+  }
+}

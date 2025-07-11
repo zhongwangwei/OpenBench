@@ -1,0 +1,15 @@
+&general
+   model_namelist    = ./nml/nml-Fortran/Mod_variables_defination/CoLM.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  stn
+   data_groupby =  year
+   dir = 
+   fulllist = /share/home/dq013/zhwei/OpenBench/2025012./nml-Fortran/user/CoLM2024_pre_release/station/output/igbp-vg-1.csv
+   tim_res =  hour
+   grid_res = 1
+/
+
+&Gross_Primary_Productivity
+   varname =  f_assim
+   varunit =  mol m-2 s-1
+/

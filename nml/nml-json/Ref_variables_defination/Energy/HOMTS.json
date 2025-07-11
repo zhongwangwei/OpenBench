@@ -1,0 +1,18 @@
+{
+  "general": {
+    "root_dir": "./data/reference/grid_ref/Energy/HOMTS_update",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Single",
+    "tim_res": "Day",
+    "grid_res": 0.25,
+    "syear": 1960,
+    "eyear": 2017
+  },
+  "Surface_Soil_Temperature": {
+    "varname": "TS",
+    "varunit": "C",
+    "prefix": "HOM_TS0cm_daily_025x025_1960_2017",
+    "suffix": ""
+  }
+}

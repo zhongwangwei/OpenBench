@@ -1,0 +1,360 @@
+&general
+model=BCC_AVIM
+/
+
+############################  Radiation and Energy Cycle  ############################
+&Sensible_Heat
+   varname =  FSH
+   varunit =  w m-2
+/
+&Leaf_Sensible_Heat
+   varname =  FSH_V
+   varunit =  w m-2
+/
+&Ground_Sensible_Heat
+   varname =  FSH_G
+   varunit =  w m-2
+
+&Latent_Heat
+   varname =  
+   varunit =  w m-2
+/
+
+&Net_Radiation
+   varname =  
+   varunit =  w m-2
+/
+
+&Ground_Heat
+   varname =  FGR
+   varunit =  w m-2
+/
+
+&Surface_Upward_SW_Radiation
+   varname =  FSR
+   varunit =  w m-2
+/
+
+&Surface_Upward_LW_Radiation
+   varname =  FIRE
+   varunit =  w m-2
+/
+
+&Surface_Net_SW_Radiation
+   varname =  FSA
+   varunit =  w m-2
+/
+
+&Surface_Net_LW_Radiation
+   varname =  FIRA
+   varunit =  w m-2
+/
+
+&Albedo
+  varname = 
+  varunit = unitless
+/
+##################################################################################
+
+############################Ecosystem and Carbon Cycle############################
+&Gross_Primary_Productivity
+   varname =  
+   varunit =  g m-2 s-1 
+/
+
+&Canopy_Assimilation_Rate
+   varname =  
+   varunit =  mol m-2 s-1
+/
+
+#&Total_Respiration
+&Ecosystem_Respiration
+   varname = 
+   varunit =  mol m-2 s-1
+/
+
+&Veg_Cover_In_Fraction
+   varname =  
+   varunit =  m2 m-2
+/
+
+&Leaf_Greenness
+   varname =  
+   varunit =  m2 m-2
+/
+
+&Leaf_Area_Index
+   varname =  ELAI
+   varunit =  unitless
+/
+
+
+##################################################################################
+
+
+############################Hydrology and water Cycle############################
+&Evapotranspiration
+varname           = 
+varunit           =  mm s-1
+/
+
+&Canopy_Evaporation_Canopy_Transpiration
+varname           =  
+varunit           =  w m-2
+/
+
+&Canopy_Interception
+varname           =   
+varunit           =   mm s-1
+/
+
+&Ground_Evaporation
+varname           =  QSOIL
+varunit           =  mm s-1
+/
+
+
+&Canopy_Transpiration
+varname           =  QVEGT
+varunit           =  mm s-1
+/
+
+&Total_Runoff
+varname           =  
+varunit           =  mm s-1
+/
+
+&Surface_Runoff
+varname           =  QOVER
+varunit           =  mm s-1
+/
+
+&Saturation_Excess_Surface_Runoff
+varname           =  
+varunit           =  mm s-1
+/
+
+&Infiltration Excess Surface Runoff
+varname           =  
+varunit           =  mm s-1
+/
+
+&Subsurface_Runoff
+varname           =  
+varunit           =  mm s-1
+/
+
+
+&Groundwater_Recharge_Rate
+varname           =  
+varunit           =  mm s-1
+/
+
+
+&Snow_Water_Equivalent
+varname           =  
+varunit           =  mm
+/
+
+&Snow_Depth
+varname           =  H2OSNO
+varunit           =  mm
+/
+
+&Surface_Snow_Cover_In_Fraction
+varname           =  FSNO
+varunit           =  m2 m-2
+/
+
+&Water_Table_Depth
+varname           = 
+varunit           =  m
+/
+
+&Depth_Of_Surface_Water
+varname           =  
+varunit           =  mm
+/
+
+&Water_Storage_In_Aquifer
+varname           =  
+varunit           =  mm
+/
+
+&Surface_Soil_Moisture
+varname           =  SOILLIQ
+varunit           =  unitless 
+/
+
+&Root_Zone_Soil_Moisture
+varname           =  SOILLIQ
+varunit           =  unitless
+/
+
+&Surface_Soil_Temperature
+varname           =  TG
+varunit           =  K
+
+###River####
+&Streamflow
+varname         =  
+varunit         =  m3 s-1
+/
+
+&Inundation_Fraction
+varname = 
+varunit = m2 m-2
+/
+
+&Inundation_Area
+varname = 
+varunit = m2
+/
+
+&River_Water_Level
+varname = 
+varunit = m2
+/
+
+  
+###Lake####
+&Lake_temperature
+varname = TLAKE
+varunit = m2
+/
+&Lake_Ice_Fraction_Cover
+varname = 
+varunit = m2
+/
+&Lake_Water_Level
+varname = 
+varunit = m2
+/
+&Lake_Water_Area
+varname = 
+varunit = m2
+/
+&Lake_Water_Volume
+varname = 
+varunit = m2
+/
+&Lake_Surface_Water_Temperature
+varname           =  
+varunit           =  K
+/
+&Lake_Ice_Fraction_Cover
+varname           = 
+varunit           =  m2 m-2
+/
+##################################################################################
+
+###################################Human Activity#################################
+#------Urban-------------------------------------------------
+&Urban_Anthropogenic_Heat_Flux
+varname = 
+varunit = w m-2
+/
+
+&Urban_Albedo
+varname =  
+varunit = unitless
+/
+
+&Urban_Surface_Temperature
+varname = 
+varunit = K
+/
+
+&Urban_Air_Temperature_Max
+varname = 
+varunit = K
+/
+
+&Urban_Air_Temperature_Min
+varname = 
+varunit = K
+/
+
+&Urban_Latent_Heat_Flux
+varname = 
+varunit = w m-2
+/
+#-----------------------------------------------------------
+#------Crop-------------------------------------------------
+&Crop_Phase
+varname = 
+varunit = unitless
+/
+
+&Grain_To_Crop_Seed_Carbon
+varname = 
+varunit = gC m-2 s-1
+/
+
+&Crop_Yield_Rice
+varname =  
+varunit = 
+/
+
+&Crop_Yield_Corn
+varname =  
+varunit = t ha-1
+/
+
+&Crop_Yield_Rice_Major
+varname =
+varunit = g m-2 s-1
+/
+
+&Total_Irrigation_Amount
+varname = 
+varunit = kg m-2
+/
+#-----------------------------------------------------------
+
+###Dam###
+&Dam_Inflow
+varname = 
+varunit = m3 s-1
+/
+
+&Dam_Outflow
+varname =
+varunit = m3 s-1
+/
+
+&Dam_Elevation
+   varname           = 
+   varunit           =  m
+/
+
+&Dam_Storage
+   varname           =  
+   varunit           =  m3
+/
+##################################################################################
+
+#Forcings
+&Surface_Downward_SW_Radiation
+   varname           =  FSDS
+   varunit           =  w m-2
+/
+&Surface_Downward_LW_Radiation
+   varname           =  FLDS
+   varunit           =  w m-2
+/
+
+&Surface_Specific_Humidity
+   varname           =  QBOT
+   varunit           =  unitless
+/
+
+&Precipitation
+   varname           =  RAIN
+   varunit           =  mm s-1
+/
+&Surface_Air_Temperature
+   varname           =  TSA
+   varunit           =  K
+/
+

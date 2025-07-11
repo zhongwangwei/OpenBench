@@ -1,0 +1,40 @@
+{
+  "validation_nml": {
+    "plot_stn_source": "./nml/nml-json/fignml/plot_stn.json",
+    "make_stn_plot_index_source": "./nml/nml-json/fignml/make_stn_plot_index.json",
+    "make_geo_plot_index_source": "./nml/nml-json/fignml/make_geo_plot_index.json",
+    "IGBP_groupby_source": "./nml/nml-json/fignml/IGBP_groupby_source.json",
+    "PFT_groupby_source": "./nml/nml-json/fignml/PFT_groupby_source.json"
+  },
+  "comparison_nml": {
+    "HeatMap_source": "./nml/nml-json/fignml/HeatMap_source.json",
+    "Taylor_Diagram_source": "./nml/nml-json/fignml/Taylor_Diagram.json",
+    "Target_Diagram_source": "./nml/nml-json/fignml/Target_Diagram.json",
+    "Kernel_Density_Estimate_source": "./nml/nml-json/fignml/Kernel_Density_Estimate.json",
+    "Whisker_Plot_source": "./nml/nml-json/fignml/Whisker_Plot.json",
+    "Parallel_Coordinates_source": "./nml/nml-json/fignml/Parallel_Coordinates.json",
+    "Portrait_Plot_seasonal_source": "./nml/nml-json/fignml/Portrait_Plot_seasonal.json",
+    "Single_Model_Performance_Index_source": "./nml/nml-json/fignml/Single_Model_Performance_Index.json",
+    "Relative_Score_source": "./nml/nml-json/fignml/Relative_Score.json",
+    "Ridgeline_Plot_source": "./nml/nml-json/fignml/Ridgeline_Plot.json",
+    "Diff_Plot_source": "./nml/nml-json/fignml/Diff_Plot.json",
+    "Basic_source": "./nml/nml-json/fignml/Basic.json",
+    "Mann_Kendall_Trend_Test_source": "./nml/nml-json/fignml/Mann_Kendall_Trend_Test.json",
+    "Correlation_source": "./nml/nml-json/fignml/Correlation.json",
+    "Standard_Deviation_source": "./nml/nml-json/fignml/Standard_Deviation.json",
+    "Functional_Response_source": "./nml/nml-json/fignml/Functional_Response.json",
+    "RadarMap_source":"./nml/nml-json/fignml/RadarMap.json"
+  },
+  "statistic_nml": {
+    "Basic_source": "./nml/nml-json/fignml/Basic.json",
+    "Mann_Kendall_Trend_Test_source": "./nml/nml-json/fignml/Mann_Kendall_Trend_Test.json",
+    "Correlation_source": "./nml/nml-json/fignml/Correlation.json",
+    "Standard_Deviation_source": "./nml/nml-json/fignml/Standard_Deviation.json",
+    "Functional_Response_source": "./nml/nml-json/fignml/Functional_Response.json",
+    "Z_Score_source": "./nml/nml-json/fignml/Z_Score.json",
+    "Three_Cornered_Hat_source": "./nml/nml-json/fignml/Three_Cornered_Hat.json",
+    "Hellinger_Distance_source": "./nml/nml-json/fignml/Hellinger_Distance.json",
+    "Partial_Least_Squares_Regression_source": "./nml/nml-json/fignml/Partial_Least_Squares_Regression.json",
+    "ANOVA_source": "./nml/nml-json/fignml/ANOVA.json"
+  }
+}

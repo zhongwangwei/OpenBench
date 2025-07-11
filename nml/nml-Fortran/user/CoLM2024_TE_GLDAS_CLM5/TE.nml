@@ -1,0 +1,33 @@
+&general
+   model_namelist    =  ./nml-Fortran/Mod_variables_defination/TE.nml                    
+   timezone =  0.0
+   data_type =  grid
+   data_groupby = Year
+   dir = ./data/simulation/LSMs/TE/
+   fulllist =
+   tim_res =  Month
+   syear =  1955
+   eyear =  2023
+   grid_res =  0.5
+
+/
+
+&Sensible_Heat
+prefix            =  YEE2_JRA-55_SENS_M
+suffix            =  _GLB050
+/
+
+&Latent_Heat
+prefix            =  YEE2_JRA-55_LTNT_M
+suffix            =  _GLB050
+/
+
+&Canopy_Transpiration
+prefix            =  YEE2_JRA-55_ETFLX_M
+suffix            =  _GLB050
+/
+
+&Total_Runoff
+prefix            =  YEE2_JRA-55_RUNOFF_M
+suffix            =  _GLB050
+/

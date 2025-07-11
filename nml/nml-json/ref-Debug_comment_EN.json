@@ -1,0 +1,35 @@
+{
+  /* Reference configuration file: Defines the name and location of reference data used for evaluating model performance,
+     specific data formats, variable names, etc., should be modified in the corresponding reference data configuration file,
+     OpenBench has pre-configured a large number of model reference data configurations,
+     if using the corresponding reference data, the preset reference data configuration can be used directly,
+     for details, refer to the preset reference data paths and corresponding configurations in ref.json,
+     multiple reference data sources can be set for any evaluation item,
+     reference data may include in-situ observations, satellite data, reanalysis data, etc. */
+
+  /* Basic settings: Defines the reference data sources for each evaluation item,
+     only evaluation items enabled in the main configuration file require reference data sources,
+     the sources for different evaluation items can vary */
+  "general": {
+    "Evapotranspiration_ref_source": [
+      "GLEAM4.2a_monthly",
+      "GLEAM_hybird_PLUMBER2"
+    ],
+    "Latent_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ],
+    "Sensible_Heat_ref_source": [
+      "ILAMB_monthly",
+      "PLUMBER2"
+    ]
+  },
+  /* Data source settings: Defines the specific configurations for the reference data sources specified above,
+     detailed configurations should be set according to the specified file paths */
+  "def_nml": {
+    "GLEAM_hybird_PLUMBER2": "./nml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.json",
+    "ILAMB_monthly": "./nml/Ref_variables_defination/Debug/ILAMB_monthly.json",
+    "PLUMBER2": "./nml/Ref_variables_defination/Debug/PLUMBER2.json",
+    "GLEAM4.2a_monthly": "./nml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.json"
+  }
+}

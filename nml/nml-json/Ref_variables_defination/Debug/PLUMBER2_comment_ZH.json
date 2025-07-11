@@ -1,0 +1,30 @@
+{
+/*具体参考数据配置文件（PLUMBER2）：
+定义某一参考数据格式，
+统一参考数据可包括多个评估项目，
+此处评估Sensible_Heat和Latent_Heat*/
+
+	/*基础设置：设置该参考数据格式*/
+  "general": {
+    "root_dir": "./data/reference/debug/PLUMBER2",   //数据存放路径
+    "timezone": 0.0,                                 //数据所使用时区
+    "data_type": "stn",                              //数据类型（"grid"或"stn"）
+    "data_groupby": "single",                        //数据聚合类型（如grid则为"year","month","day"，如所有时间聚合在一起或stn为"single"）
+    "tim_res": "Day",                                //时间分辨率（"year","month","day"）
+    "grid_res": "",                                  //空间分辨率（度），单点可给为""
+    "syear": "",                                     //开始年份（此处无需给定，数据列表中已给出）
+    "eyear": "",                                     //结束年份（此处无需给定，数据列表中已给出）
+    "fulllist": "./data/reference/debug/PLUMBER2.csv"//stn专属，需给出所有站点的站点信息列表路径，所需信息如该列表所示
+  },
+	/*参考数据变量设置：
+	设置该参考数据中所有评估变量的格式，
+	如此处为stn只需设置Sensible_Heat和Latent_Heat的变量名和变量单位*/
+  "Sensible_Heat": {
+    "varname": "Qh_cor",
+    "varunit": "w m-2"
+  },
+  "Latent_Heat": {
+    "varname": "Qle_cor",
+    "varunit": "w m-2"
+  }
+}

@@ -1,0 +1,48 @@
+&general
+    Gross_Primary_Productivity_sim_source     = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case   
+    Evapotranspiration_sim_source             = 01_case #,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Canopy_Transpiration_sim_source           = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Canopy_Interception_sim_source            = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Soil_Evaporation_sim_source               = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Total_Runoff_sim_source                   = 01_case,02_case,03_case #,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case   
+    Latent_Heat_sim_source                    = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Sensible_Heat_sim_source                  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Soil_Moisture_sim_source          = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Root_Zone_Soil_Moisture_sim_source        = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Net_Radiation_sim_source                  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Upward_SW_Radiation_sim_source    = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Soil_Temperature_sim_source       = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Ground_Heat_sim_source                    = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Albedo_sim_source                         = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Upward_LW_Radiation_sim_source    = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Net_SW_Radiation_sim_source       = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case    
+    Surface_Net_LW_Radiation_sim_source       = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case         
+    Surface_Net_SW_Radiation_sim_source       = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case         
+    Surface_Downward_SW_Radiation_sim_source  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
+    Surface_Downward_LW_Radiation_sim_source  = 01_case,02_case,03_case,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
+    Terrestrial_Water_Storage_Change_sim_source = 12_case #,02_case,03_case #,04_case,05_case,06_case,07_case,08_case,09_case,10_case,11_case,12_case,16_case,17_case,18_case,19_case,28_case,29_case,30_case,31_case ,32_case       
+/
+
+&def_nml
+01_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/01_case.nml
+02_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/02_case.nml
+03_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/03_case.nml
+04_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/04_case.nml
+05_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/05_case.nml
+06_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/06_case.nml
+07_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/07_case.nml
+08_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/08_case.nml
+09_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/09_case.nml
+10_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/10_case.nml
+11_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/11_case.nml
+12_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/12_case.nml
+16_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/16_case.nml
+17_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/17_case.nml
+18_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/18_case.nml
+19_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/19_case.nml
+28_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/28_case.nml
+29_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/29_case.nml
+30_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/30_case.nml
+31_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/31_case.nml
+32_case=./nml-Fortran/user/CoLM2024_pre_release/trajectory1/32_case.nml
+/
