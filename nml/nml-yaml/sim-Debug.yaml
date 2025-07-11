@@ -1,0 +1,13 @@
+general:
+  Evapotranspiration_sim_source:
+  - grid_case
+  - station_case
+  Latent_Heat_sim_source:
+  - grid_case
+  - station_case
+  Sensible_Heat_sim_source:
+  - grid_case
+  - station_case
+def_nml:
+  grid_case: ./nml/nml-yaml/user/debug/grid_case.yaml
+  station_case: ./nml/nml-yaml/user/debug/station_case.yaml

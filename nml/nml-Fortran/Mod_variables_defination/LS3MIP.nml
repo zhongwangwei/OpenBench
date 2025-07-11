@@ -1,0 +1,24 @@
+&general
+model=LS3MIP
+/
+
+############################  Hydrology and water Cycle  ############################
+&Evapotranspiration
+  varname           =  evspsbl
+  varunit           =  kg m-2 s-1
+/
+
+&Canopy_Interception
+  varname           =  evspsblveg
+  varunit           =  kg m-2 s-1
+/
+
+&Total_Runoff
+  varname           =  mrro
+  varunit           =  kg m-2 s-1
+/
+
+&Canopy_Transpiration
+  varname           =  tran
+  varunit           =  kg m-2 s-1
+/
