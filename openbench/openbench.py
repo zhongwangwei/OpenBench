@@ -192,7 +192,14 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                             fig_nml['PFT_groupby'])
-
+    if main_nl['general']['Climate_zone_groupby']:
+        if main_nl['general']['only_drawing']:
+            LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
+        else:
+            LC = LC_groupby(main_nl, score_vars, metric_vars)
+        basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+        LC.scenarios_CZ_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+                                            fig_nml['Climate_zone_groupby'])
 
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
