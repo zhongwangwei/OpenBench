@@ -4,7 +4,8 @@
     "make_stn_plot_index_source": "./nml/nml-json/fignml/make_stn_plot_index.json",
     "make_geo_plot_index_source": "./nml/nml-json/fignml/make_geo_plot_index.json",
     "IGBP_groupby_source": "./nml/nml-json/fignml/IGBP_groupby_source.json",
-    "PFT_groupby_source": "./nml/nml-json/fignml/PFT_groupby_source.json"
+    "PFT_groupby_source": "./nml/nml-json/fignml/PFT_groupby_source.json",
+    "Climate_zone_groupby_source": "./nml/nml-json/fignml/CZ_groupby_source.json"
   },
   "comparison_nml": {
     "HeatMap_source": "./nml/nml-json/fignml/HeatMap_source.json",
