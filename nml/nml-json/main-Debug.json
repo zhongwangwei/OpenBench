@@ -25,6 +25,7 @@
     "weight": "None",
     "IGBP_groupby": true,
     "PFT_groupby": true,
+    "Climate_zone_groupby": true,
     "unified_mask": true
   },
   "evaluation_items": {
@@ -114,7 +115,7 @@
     "absolute_percent_bias": false,
     "bias": false,
     "mean_absolute_error": false,
-    "RMSE": false,
+    "RMSE": true,
     "MSE": false,
     "ubRMSE": false,
     "CRMSD": false,
@@ -125,7 +126,7 @@
     "NSE": false,
     "LNSE": false,
     "KGE": false,
-    "KGESS": false,
+    "KGESS": true,
     "kappa_coeff": false,
     "rv": false,
     "ubNSE": false,
@@ -162,12 +163,12 @@
     "index_agreement": false
   },
   "scores": {
-    "nBiasScore": false,
+    "nBiasScore": true,
     "nRMSEScore": false,
     "nPhaseScore": false,
     "nIavScore": false,
-    "nSpatialScore": false,
-    "Overall_Score": false,
+    "nSpatialScore": true,
+    "Overall_Score": true,
     "The_Ideal_Point_score": false
   },
   "comparisons": {

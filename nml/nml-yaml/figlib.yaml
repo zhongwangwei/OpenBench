@@ -4,6 +4,7 @@ validation_nml:
   make_geo_plot_index_source: ./nml/nml-yaml/fignml/make_geo_plot_index.yaml
   IGBP_groupby_source: ./nml/nml-yaml/fignml/IGBP_groupby_source.yaml
   PFT_groupby_source: ./nml/nml-yaml/fignml/PFT_groupby_source.yaml
+  Climate_zone_groupby_source: ./nml/nml-yaml/fignml/CZ_groupby_source.yaml
 comparison_nml:
   HeatMap_source: ./nml/nml-yaml/fignml/HeatMap_source.yaml
   Taylor_Diagram_source: ./nml/nml-yaml/fignml/Taylor_Diagram.yaml

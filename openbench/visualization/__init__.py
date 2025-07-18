@@ -6,7 +6,7 @@ from .Fig_target_diagram import make_scenarios_comparison_Target_Diagram
 from .Fig_kernel_density_estimate import make_scenarios_comparison_Kernel_Density_Estimate
 from .Fig_geo_plot_index import make_geo_plot_index
 from .Fig_stn_plot_index import make_stn_plot_index
-from .Fig_LC_based_heat_map import make_LC_based_heat_map
+from .Fig_LC_based_heat_map import make_LC_based_heat_map, make_CZ_based_heat_map
 from .Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
 from .Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
 from .Fig_Relative_Score import make_scenarios_comparison_Relative_Score
@@ -36,6 +36,7 @@ __all__ = [
     "make_geo_plot_index",
     "make_stn_plot_index",
     "make_LC_based_heat_map",
+    "make_CZ_based_heat_map",
     "make_scenarios_comparison_Whisker_Plot",
     "make_scenarios_comparison_Single_Model_Performance_Index",
     "make_scenarios_comparison_Relative_Score",
