@@ -23,9 +23,10 @@ from Mod_Comparison import ComparisonProcessing
 from Mod_DatasetProcessing import DatasetProcessing
 from Mod_Evaluation import Evaluation_grid, Evaluation_stn
 from Mod_Landcover_Groupby import LC_groupby
+from Mod_ClimateZone_Groupby import CZ_groupby
 from config import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
 from Mod_Statistics import StatisticsProcessing
-from Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, ComparisonProcessing_only_drawing
+from Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, CZ_groupby_only_drawing, ComparisonProcessing_only_drawing
 from Mod_Preprocessing import check_required_nml, run_files_check
 from Mod_Converttype import Convert_Type
 import logging
@@ -192,7 +193,14 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                             fig_nml['PFT_groupby'])
-
+    if main_nl['general']['Climate_zone_groupby']:
+        if main_nl['general']['only_drawing']:
+            CZ = CZ_groupby_only_drawing(main_nl, score_vars, metric_vars)
+        else:
+            CZ = CZ_groupby(main_nl, score_vars, metric_vars)
+        basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+        CZ.scenarios_CZ_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
+                                            fig_nml['Climate_zone_groupby'])
 
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
