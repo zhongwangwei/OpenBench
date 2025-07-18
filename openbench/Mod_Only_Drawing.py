@@ -212,6 +212,38 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No scores for PFT class comparison')
         _scenarios_PFT_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
+
+class CZ_groupby_only_drawing(metrics, scores):
+    def __init__(self, main_nml, scores, metrics):
+        self.name = 'StatisticsDataHandler_only_drawing'
+        self.version = '0.1'
+        self.release = '0.1'
+        self.date = 'June 2025'
+        self.author = "Xionghui Xu"
+        self.main_nml = main_nml
+        self.general_config = self.main_nml['general']
+        # update self based on self.general_config
+        self.__dict__.update(self.general_config)
+        # Extract remapping information from main namelist
+        self.compare_grid_res = self.main_nml['general']['compare_grid_res']
+        self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
+        self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
+        # Set default weight method to 'none'
+        self.weight = self.main_nml['general'].get('weight', 'none')
+        # this should be done in read_namelist
+        # adjust the time frequency
+        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+        if not match:
+            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+        value, unit = match.groups()
+        if not value:
+            value = 1
+        else:
+            value = int(value)  # Convert the numerical value to an integer
+        self.metrics = metrics
+        self.scores = scores
+
     def scenarios_CZ_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         def _CZ_class_remap_cdo(self):
             """
@@ -493,7 +525,6 @@ class LC_groupby_only_drawing(metrics, scores):
             logging.info("Falling back to xarray-regrid remapping...")
             _CZ_class_remap(self)
         _scenarios_CZ_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
-
 
 class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
