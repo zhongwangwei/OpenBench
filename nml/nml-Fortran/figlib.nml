@@ -4,6 +4,7 @@
   make_geo_plot_index_source           = ./nml/nml-Fortran/fignml/make_geo_plot_index.nml
   IGBP_groupby_source                  = ./nml/nml-Fortran/fignml/IGBP_groupby_source.nml
   PFT_groupby_source                   = ./nml/nml-Fortran/fignml/PFT_groupby_source.nml
+  Climate_zone_groupby_source          = ./nml/nml-Fortran/fignml/CZ_groupby_source.nml
 /
 
 &comparison_nml
