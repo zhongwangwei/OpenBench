@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./data/reference/grid_ref/SMAP_L4_0p25/",
+    "root_dir": "./dataset/reference/grid_ref/SMAP_L4_0p25/",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Month",

@@ -378,8 +378,8 @@ class mange_reference:
             newlib['variables'] = get_var(col2)
             if len(newlib['Ref_libname']) > 0 and newlib['variables']:
                 newlib['general'] = {}
-                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './data/'
-                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './data/'
+                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './dataset/'
+                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './dataset/'
                 find_path = self.path_finder.find_path(newlib['general']['root_dir'], f"newlib_{newlib['Ref_libname']}_root_dir",
                                                        [None, None])
                 st.code(f"Dictionary: {find_path}", language='shell', wrap_lines=True)
@@ -511,8 +511,8 @@ class mange_reference:
 
             if newlib['Ref_libname'] and st.session_state['variable_select']:
                 newlib['general'] = {}
-                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = os.path.abspath('./data/')
-                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = os.path.abspath('./data/')
+                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = os.path.abspath('./dataset/')
+                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = os.path.abspath('./dataset/')
                 find_path = self.path_finder.find_path(newlib['general']['root_dir'], f"newlib_{newlib['Ref_libname']}_root_dir",
                                                        [None, None])
                 st.code(f"Dictionary: {find_path}", language='shell', wrap_lines=True)
@@ -1029,8 +1029,8 @@ class make_reference(mange_reference):
         import itertools
         with st.container(height=None, border=True):
             key = 'general'
-            if 'root_dir' not in source_lib[key]: source_lib[key][f"root_dir"] = './data/'
-            if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = './data/'
+            if 'root_dir' not in source_lib[key]: source_lib[key][f"root_dir"] = './dataset/'
+            if not source_lib[key][f"root_dir"]: source_lib[key][f"root_dir"] = './dataset/'
             find_path = self.path_finder.find_path(source_lib['general'][f"root_dir"], f"{source}_general_root_dir",
                                                    ['ref_change', source])
             st.code(f"Dictionary: {find_path}", language='shell', wrap_lines=True)

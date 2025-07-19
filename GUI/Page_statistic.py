@@ -1759,7 +1759,7 @@ class Process_stastic(process_info, visualization_statistic, visualization_replo
                                                                             item_data[f"{item}_Y_{i_info}"]),
                                                                         key=f"{statistic_item}_{item}_Y_{i_info}",
                                                                         placeholder=f"Set your Simulation Data type (default={item_data[f'{item}_Y_{i_info}']})...")
-            if not item_data[f"{item}_Y_dir"]: item_data[f"{item}_Y_dir"] = './data/'
+            if not item_data[f"{item}_Y_dir"]: item_data[f"{item}_Y_dir"] = './dataset/'
             try:
                 item_data[f"{item}_Y_dir"] = self.path_finder.find_path(item_data[f"{item}_Y_dir"],
                                                                         f"{statistic_item}_{item}_Y_dir",

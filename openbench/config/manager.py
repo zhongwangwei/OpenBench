@@ -5,7 +5,7 @@ Enhanced Configuration Manager for OpenBench
 This module provides an enhanced centralized configuration management system that supports
 multiple file formats (JSON, YAML, Fortran NML) with validation, templates, and error handling.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """

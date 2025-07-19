@@ -9,7 +9,13 @@ import pandas as pd
 from matplotlib import rcParams
 # import seaborn as sns
 from matplotlib.cbook import flatten
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 
 def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics,
                                                    option):
@@ -39,7 +45,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     figsize = (option['x_wise'], option['y_wise'])
 
     # Read the data from the file
-    df = pd.read_csv(file, sep='\s+', header=0)
+    df = pd.read_csv(file, sep=r'\s+', header=0)
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
@@ -197,7 +203,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         legend_bbox_to_anchor = (0.5, -0.15)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
-    df = pd.read_csv(file, sep='\s+', header=0)
+    df = pd.read_csv(file, sep=r'\s+', header=0)
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
@@ -261,7 +267,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
     # -------第二种情况：多个item，多个模型，一个score，每幅图一个score
-    df = pd.read_csv(file, sep='\s+', header=0)
+    df = pd.read_csv(file, sep=r'\s+', header=0)
     df = Convert_Type.convert_Frame(df)
 
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.

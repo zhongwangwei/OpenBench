@@ -1,5 +1,5 @@
 general:
-  root_dir: ./data/reference/grid_ref/SMAP_L4/
+  root_dir: ./dataset/reference/grid_ref/SMAP_L4/
   timezone: 0
   data_type: grid
   data_groupby: Month

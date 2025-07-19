@@ -5,7 +5,7 @@ OpenBench - Land Surface Model Benchmarking System
 A comprehensive evaluation framework for land surface models with modular
 architecture, parallel processing, and standardized interfaces.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """
