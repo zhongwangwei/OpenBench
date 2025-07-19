@@ -481,7 +481,7 @@ def showing_stn_data(self, right, selected_item, refselect, simselect, path, dat
                 id = chart_df.loc[idx, "ID"]
                 use_syear = chart_df.loc[idx, "Start year"]
                 use_eyear = chart_df.loc[idx, "End year"]
-                data_path = path + f'/data/stn_{refselect}_{simselect}/'
+                data_path = path + f'/dataset/stn_{refselect}_{simselect}/'
 
                 try:
                     ref_data = xr.open_dataset(data_path + f'{selected_item}_ref_{id}_{use_syear}_{use_eyear}.nc')[ref_var]
@@ -511,7 +511,7 @@ def showing_stn_data(self, right, selected_item, refselect, simselect, path, dat
     if st.session_state['Submit_button']:
         showing_items = chart_df[chart_df['Select']]
         if len(showing_items) > 0:
-            casdir = path + f'/data/stn_{refselect}_{simselect}/'
+            casdir = path + f'/dataset/stn_{refselect}_{simselect}/'
             make_stn_lines(showing_items, selected_item, casdir, (ref_var, sim_var), (ref_unit, sim_unit), ms)
         else:
             st.warning('Please choose Stations first!')

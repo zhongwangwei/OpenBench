@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./data/reference/stn_ref/FLUXNET_PLUMBER2/flux
+   root_dir          =  ./dataset/reference/stn_ref/FLUXNET_PLUMBER2/flux
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -7,7 +7,7 @@
    grid_res          =  
    syear             =  
    eyear             =  
-   fulllist          =  ./data/reference/stn_ref/FLUXNET_PLUMBER2/PLUMBER2.csv
+   fulllist          =  ./dataset/reference/stn_ref/FLUXNET_PLUMBER2/PLUMBER2.csv
 /
 
 ############################  Radiation and Energy Cycle  ############################

@@ -13,7 +13,13 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 from matplotlib import rcParams
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 import sys

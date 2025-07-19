@@ -1,5 +1,5 @@
 general:
-  root_dir: ./data/reference/grid_ref/Water/ET_Xu_etal_2024_0p25
+  root_dir: ./dataset/reference/grid_ref/Water/ET_Xu_etal_2024_0p25
   timezone: 0.0
   data_type: grid
   data_groupby: Year

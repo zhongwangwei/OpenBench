@@ -4,7 +4,7 @@
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "month",
-    "dir": "./data/simulation/LSMs/CoLM2024/",
+    "dir": "./dataset/simulation/LSMs/CoLM2024/",
     "fulllist": "",
     "tim_res": "month",
     "grid_res": 2.0,

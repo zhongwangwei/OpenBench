@@ -3,7 +3,7 @@ general:
   timezone: 0.0
   data_type: grid
   data_groupby: month
-  dir: ./data/simulation/LSMs/CLM5/
+  dir: ./dataset/simulation/LSMs/CLM5/
   fulllist: ''
   tim_res: month
   grid_res: 0.5

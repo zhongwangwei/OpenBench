@@ -5,7 +5,7 @@ Configuration Updaters for OpenBench
 This module provides configuration updating and processing classes that handle
 complex OpenBench-specific configuration logic.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """

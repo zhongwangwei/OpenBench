@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.append('/home/xuxh22/stu01/OpenBench/OpenBench_250405/script')
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -8,11 +7,17 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from matplotlib.patches import Patch
 from matplotlib.font_manager import FontProperties
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 from .Fig_toolbox import get_index, convert_unit, get_colormap
 
 def make_scenarios_comparison_radar_map(file, score, option):
-    df = pd.read_csv(file, sep='\s+', header=0)
+    df = pd.read_csv(file, sep=r'\s+', header=0)
     df = Convert_Type.convert_Frame(df)
     list1 = df.iloc[:, 0].tolist()
     list2 = df.iloc[:, 1].tolist()
