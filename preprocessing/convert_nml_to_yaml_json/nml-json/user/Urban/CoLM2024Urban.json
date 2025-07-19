@@ -4,7 +4,7 @@
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "single",
-    "dir": "./data/simulation/urban/05deg",
+    "dir": "./dataset/simulation/urban/05deg",
     "fulllist": "",
     "tim_res": "month",
     "grid_res": 0.5,

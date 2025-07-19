@@ -1,5 +1,5 @@
 &general
-   root_dir          =  /tera10/yuanhua/dongwz/urban_data/forILAMB/05deg/OpenBench/
+   root_dir          =  /tera10/yuanhua/dongwz/urban_dataset/forILAMB/05deg/OpenBench/
    timezone          =  0 
    data_type         =  grid
    data_groupby      =  single 

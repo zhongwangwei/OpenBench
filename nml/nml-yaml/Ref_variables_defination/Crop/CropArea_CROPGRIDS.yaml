@@ -1,5 +1,5 @@
 general:
-  root_dir: ./data/reference/grid_ref/Crop/CROPGRIDSv1.08/CROPGRIDSv1.08_NC_maps
+  root_dir: ./dataset/reference/grid_ref/Crop/CROPGRIDSv1.08/CROPGRIDSv1.08_NC_maps
   timezone: 0.0
   data_type: grid
   data_groupby: single

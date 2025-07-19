@@ -5,7 +5,7 @@ Configuration Readers for OpenBench
 This module provides specialized configuration readers for different file formats
 and OpenBench-specific configuration processing.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """

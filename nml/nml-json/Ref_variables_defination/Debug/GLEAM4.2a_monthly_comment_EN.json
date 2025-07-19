@@ -6,7 +6,7 @@
 
   /* Basic settings: Configures the format of this reference data */
   "general": {
-    "root_dir": "./data/reference/debug/GLEAM4.2a_monthly/", // Data storage path
+    "root_dir": "./dataset/reference/debug/GLEAM4.2a_monthly/", // Data storage path
     "timezone": 0,         // Time zone used by the data
     "data_type": "grid",   // Data type ("grid" or "stn")
     "data_groupby": "Year",// Data aggregation type (for grid: "year", "month", "day"; for all times aggregated together or stn: "single")

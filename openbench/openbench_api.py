@@ -5,7 +5,7 @@ OpenBench Unified API
 This module provides a unified, high-level interface for OpenBench operations,
 making it easy to configure and run complete evaluations.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """
@@ -18,15 +18,15 @@ import json
 
 # Import all OpenBench modules
 try:
-    from config import ConfigManager, load_config
-    from Mod_Exceptions import OpenBenchError, ConfigurationError, error_handler
-    from Mod_EvaluationEngine import create_evaluation_engine
-    from Mod_OutputManager import ModularOutputManager
-    from Mod_LoggingSystem import get_logging_manager
-    from Mod_ParallelEngine import ParallelEngine
-    from Mod_CacheSystem import get_cache_manager
-    from Mod_DataPipeline import create_standard_pipeline
-    from Mod_APIService import create_api_service
+    from openbench.config import ConfigManager, load_config
+    from openbench.util.Mod_Exceptions import OpenBenchError, ConfigurationError, error_handler
+    from openbench.core.evaluation.Mod_EvaluationEngine import create_evaluation_engine
+    from openbench.util.Mod_OutputManager import ModularOutputManager
+    from openbench.util.Mod_LoggingSystem import get_logging_manager
+    from openbench.util.Mod_ParallelEngine import ParallelEngine
+    from openbench.data.Mod_CacheSystem import get_cache_manager
+    from openbench.data.Mod_DataPipeline import create_standard_pipeline
+    from openbench.util.Mod_APIService import create_api_service
     _HAS_MODULES = True
 except ImportError as e:
     _HAS_MODULES = False
@@ -327,7 +327,7 @@ class OpenBench:
             config_file = kwargs.get('config_file')
             if config_file:
                 # This would call the original openbench.py workflow
-                from openbench import main
+                from openbench.openbench import main
                 results = main(config_file)
             else:
                 # Use the current config

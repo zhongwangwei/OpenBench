@@ -19,22 +19,29 @@ import time
 import glob
 import xarray as xr
 import numpy as np
-from Mod_Comparison import ComparisonProcessing
-from Mod_DatasetProcessing import DatasetProcessing
-from Mod_Evaluation import Evaluation_grid, Evaluation_stn
-from Mod_Landcover_Groupby import LC_groupby
-from Mod_ClimateZone_Groupby import CZ_groupby
-from config import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
-from Mod_Statistics import StatisticsProcessing
-from Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, CZ_groupby_only_drawing, ComparisonProcessing_only_drawing
-from Mod_Preprocessing import check_required_nml, run_files_check
-from Mod_Converttype import Convert_Type
+import gc
+
+# Try to import psutil for memory monitoring, use fallback if not available
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+
+# Add parent directory to Python path for direct script execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# DatasetProcessing will be imported when needed to avoid circular imports
+from openbench.config import NamelistReader, GeneralInfoReader, UpdateNamelist, UpdateFigNamelist
+from openbench.visualization.Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, CZ_groupby_only_drawing, ComparisonProcessing_only_drawing
+from openbench.data.Mod_Preprocessing import check_required_nml, run_files_check
+from openbench.util.Mod_Converttype import Convert_Type
 import logging
 from datetime import datetime
 
 # Import enhanced logging system
 try:
-    from Mod_LoggingSystem import setup_logging, get_logging_manager, configure_library_logging
+    from openbench.Mod_LoggingSystem import setup_logging, get_logging_manager, configure_library_logging
     _HAS_ENHANCED_LOGGING = True
 except ImportError:
     _HAS_ENHANCED_LOGGING = False
@@ -42,6 +49,119 @@ except ImportError:
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
+
+
+def cleanup_memory():
+    """Comprehensive memory cleanup function."""
+    try:
+        # Get memory info before cleanup
+        if _HAS_PSUTIL:
+            process = psutil.Process()
+            memory_before = process.memory_info().rss / 1024 / 1024  # MB
+        else:
+            memory_before = 0  # Fallback when psutil is not available
+        
+        # Clear numpy and xarray caches
+        try:
+            # Use a more robust approach that avoids accessing deprecated internals
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                
+                # Try new numpy structure first (numpy >= 1.20)
+                try:
+                    if hasattr(np, '_core') and hasattr(np._core, '_internal'):
+                        if hasattr(np._core._internal, 'clear_cache'):
+                            np._core._internal.clear_cache()
+                        elif hasattr(np._core._internal, '_clear_cache'):
+                            np._core._internal._clear_cache()
+                    else:
+                        # Fallback to older numpy structure
+                        if hasattr(np, 'core') and hasattr(np.core, '_internal'):
+                            if hasattr(np.core._internal, 'clear_cache'):
+                                np.core._internal.clear_cache()
+                except (AttributeError, TypeError):
+                    # No cache clearing available in this numpy version
+                    pass
+        except (AttributeError, ImportError, Exception):
+            # Skip cache clearing if not available or fails
+            pass
+        
+        # Clear xarray global options and caches
+        if hasattr(xr, 'set_options'):
+            # Reset xarray options to defaults
+            xr.set_options(keep_attrs=False)
+        
+        # Force garbage collection multiple times
+        for _ in range(3):
+            collected = gc.collect()
+            
+        # Force memory defragmentation if available
+        if hasattr(gc, 'set_threshold'):
+            # Temporarily lower GC thresholds to be more aggressive
+            old_thresholds = gc.get_threshold()
+            gc.set_threshold(10, 5, 5)
+            gc.collect()
+            # Restore original thresholds
+            gc.set_threshold(*old_thresholds)
+        
+        # Clear any cached modules if safe to do so
+        import sys
+        modules_to_clear = []
+        for module_name in list(sys.modules.keys()):
+            if (module_name.startswith('matplotlib.') or 
+                module_name.startswith('scipy.') or
+                module_name.startswith('pandas.')):
+                # Don't actually remove, just note for potential cleanup
+                pass
+        
+        # Get memory info after cleanup
+        if _HAS_PSUTIL:
+            memory_after = process.memory_info().rss / 1024 / 1024  # MB
+            memory_freed = memory_before - memory_after
+            
+            logging.info(f"Memory cleanup completed:")
+            logging.info(f"  - Memory before: {memory_before:.1f} MB")
+            logging.info(f"  - Memory after: {memory_after:.1f} MB")
+            if memory_freed > 0:
+                logging.info(f"  - Memory freed: {memory_freed:.1f} MB")
+            else:
+                logging.info(f"  - Memory usage: {abs(memory_freed):.1f} MB (may have increased due to logging)")
+        else:
+            logging.info(f"Memory cleanup completed (psutil not available for detailed monitoring)")
+            logging.info(f"  - Garbage collection performed")
+            logging.info(f"  - Cache clearing attempted")
+        
+    except Exception as e:
+        logging.warning(f"Memory cleanup encountered an issue: {e}")
+        # Still perform basic garbage collection
+        gc.collect()
+
+
+def initialize_memory_management():
+    """Initialize memory management settings for optimal performance."""
+    try:
+        # Configure garbage collection for better memory management
+        gc.set_threshold(700, 10, 10)  # More aggressive collection
+        
+        # Enable garbage collection debugging if needed (disable in production)
+        # gc.set_debug(gc.DEBUG_STATS)
+        
+        # Configure numpy for memory efficiency
+        if hasattr(np, 'seterr'):
+            np.seterr(all='ignore')  # Ignore numpy warnings to reduce memory overhead
+        
+        # Configure xarray for memory efficiency  
+        if hasattr(xr, 'set_options'):
+            xr.set_options(
+                keep_attrs=False,  # Don't keep attributes to save memory
+                display_style='text',  # Use text display to save memory
+            )
+        
+        logging.info("Memory management initialized with optimized settings")
+        
+    except Exception as e:
+        logging.warning(f"Failed to initialize memory management settings: {e}")
 
 
 def print_welcome_message():
@@ -94,9 +214,9 @@ def setup_directories(main_nl):
     print('OpenBench Log File: {}'.format(log_file))
     
     if _HAS_ENHANCED_LOGGING:
-        # Use enhanced logging system
+        # Use enhanced logging system with separate console and file levels
         logging_manager = setup_logging(
-            level=logging.INFO,
+            level=logging.INFO,  # File level: INFO and above
             console=True,
             file=True,
             structured=False,  # Can be enabled for JSON logs
@@ -114,21 +234,45 @@ def setup_directories(main_nl):
             case_dir=base_path
         )
         
-        # Set specific log file
+        # Set specific log file with INFO level
         logging_manager.add_file_handler(
             filename=f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log',
-            formatter=logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            formatter=logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'),
+            level=logging.INFO
         )
+        
+        # Configure console handler to show only WARNING and above
+        console_handler = None
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.StreamHandler) and handler.stream.name == '<stdout>':
+                console_handler = handler
+                break
+        
+        if console_handler:
+            console_handler.setLevel(logging.WARNING)
     else:
-        # Fallback to standard logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_file),
-                logging.StreamHandler(stream=sys.stdout),
-            ]
-        )
+        # Fallback to standard logging with separate levels for console and file
+        # Clear any existing handlers
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        
+        # Create formatters
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        
+        # File handler: INFO and above
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        
+        # Console handler: WARNING and above
+        console_handler = logging.StreamHandler(stream=sys.stdout)
+        console_handler.setLevel(logging.WARNING)
+        console_handler.setFormatter(formatter)
+        
+        # Configure root logger
+        logging.root.setLevel(logging.INFO)  # Overall level
+        logging.root.addHandler(file_handler)
+        logging.root.addHandler(console_handler)
     return directories
 
 
@@ -148,6 +292,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                    fig_nml):
     """Run the evaluation process for each item."""
     for evaluation_item in evaluation_items:
+        print(f"  • Processing {evaluation_item}...")
         logging.info(f"Start running {evaluation_item} evaluation...")
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
@@ -181,6 +326,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         if main_nl['general']['only_drawing']:
             LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
         else:
+            from openbench.core.comparison.Mod_Landcover_Groupby import LC_groupby
             LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_IGBP_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
@@ -189,6 +335,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         if main_nl['general']['only_drawing']:
             LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
         else:
+            from openbench.core.comparison.Mod_Landcover_Groupby import LC_groupby
             LC = LC_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         LC.scenarios_PFT_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
@@ -197,6 +344,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         if main_nl['general']['only_drawing']:
             CZ = CZ_groupby_only_drawing(main_nl, score_vars, metric_vars)
         else:
+            from openbench.core.comparison.Mod_ClimateZone_Groupby import CZ_groupby
             CZ = CZ_groupby(main_nl, score_vars, metric_vars)
         basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
         CZ.scenarios_CZ_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
@@ -212,6 +360,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
     general_info['ref_source'] = ref_source
     general_info['sim_source'] = sim_source
 
+    from openbench.data.Mod_DatasetProcessing import DatasetProcessing
     dataset_processer = DatasetProcessing(general_info)
     if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
         onetimeref = True
@@ -325,6 +474,7 @@ def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score
         if main_nl['general']['only_drawing']:
             evaluater = Evaluation_stn_only_drawing(general_info, fig_nml)
         else:
+            from openbench.core.evaluation.Mod_Evaluation import Evaluation_stn
             evaluater = Evaluation_stn(general_info, fig_nml)
         evaluater.make_evaluation_P()
 
@@ -332,6 +482,7 @@ def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score
         if main_nl['general']['only_drawing']:
             evaluater = Evaluation_grid_only_drawing(general_info, fig_nml)
         else:
+            from openbench.core.evaluation.Mod_Evaluation import Evaluation_grid
             evaluater = Evaluation_grid(general_info, fig_nml)
         evaluater.make_Evaluation()
 
@@ -347,9 +498,11 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
     if main_nl['general']['only_drawing']:
         ch = ComparisonProcessing_only_drawing(main_nl, score_vars, metric_vars)
     else:
+        from openbench.core.comparison.Mod_Comparison import ComparisonProcessing
         ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
 
     for cvar in comparison_vars:
+        print(f"  \u2022 Processing {cvar} comparison...")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {cvar} comparison...******************")
         if cvar in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
@@ -371,6 +524,9 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     if not statistic_vars:
         return
 
+    # Import here to avoid circular imports
+    from openbench.core.statistic.Mod_Statistics import StatisticsProcessing
+    
     logging.info("Running statistical analysis...")
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     stats_handler = StatisticsProcessing(
@@ -380,6 +536,7 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     )
 
     for statistic in statistic_vars:
+        print(f"  \u2022 Processing {statistic} analysis...")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
         if statistic in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
@@ -406,6 +563,11 @@ def main():
     # Setup directories
     setup_directories(main_nl)
 
+    # Initialize memory management and perform initial cleanup
+    initialize_memory_management()
+    cleanup_memory()
+
+    print("🚀 Starting OpenBench evaluation process...")
     logging.info("Starting OpenBench evaluation process...")
 
     # Load namelists
@@ -447,30 +609,45 @@ def main():
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
+        print("📊 Running evaluation process...")
         start_time = time.time()
         run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                        fig_nml['Validation'])
         end_time = time.time()
         evaluation_time = (end_time - start_time) / 60
+        print(f"✅ Evaluation process completed in {evaluation_time:.2f} minutes.")
         logging.info(f"Evaluation process completed in {evaluation_time:.2f} minutes.")
+        # Clean up memory after evaluation
+        cleanup_memory()
 
     # Run comparison if enabled
     if main_nl['general']['comparison']:
+        print("📈 Running comparison process...")
         start_time = time.time()
         run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,
                        fig_nml['Comparison'])
         end_time = time.time()
         comparison_time = (end_time - start_time) / 60
+        print(f"✅ Comparison process completed in {comparison_time:.2f} minutes.")
         logging.info(f"Comparison process completed in {comparison_time:.2f} minutes.")
+        # Clean up memory after comparison
+        cleanup_memory()
 
     # Run statistics if enabled
     if main_nl['general']['statistics']:
+        print("📊 Running statistics process...")
         start_time = time.time()
         run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
         statistic_time = (end_time - start_time) / 60
+        print(f"✅ Statistics process completed in {statistic_time:.2f} minutes.")
         logging.info(f"Statistics process completed in {statistic_time:.2f} minutes.")
+        # Clean up memory after statistics
+        cleanup_memory()
 
+    # Final memory cleanup
+    cleanup_memory()
+    print("🎉 OpenBench evaluation process completed successfully!")
     logging.info("OpenBench evaluation process completed successfully.")
 
 

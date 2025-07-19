@@ -1,5 +1,5 @@
 general:
-  root_dir: ./data/reference/grid_ref/Energy/Rn-Xu2022_0p25/process_data
+  root_dir: ./dataset/reference/grid_ref/Energy/Rn-Xu2022_0p25/process_data
   timezone: 0.0
   data_type: grid
   data_groupby: Month

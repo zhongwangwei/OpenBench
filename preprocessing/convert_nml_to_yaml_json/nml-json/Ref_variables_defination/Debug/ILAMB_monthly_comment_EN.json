@@ -6,7 +6,7 @@
 
   /* Basic settings: Configures the format of this reference data */
   "general": {
-    "root_dir": "./data/reference/debug/ILAMB", // Data storage path
+    "root_dir": "./dataset/reference/debug/ILAMB", // Data storage path
     "timezone": 0.0,                           // Time zone used by the data
     "data_type": "grid",                       // Data type ("grid" or "stn")
     "data_groupby": "Single",                  // Data aggregation type (for grid: "year", "month", "day"; for all times aggregated together or stn: "single")
