@@ -9,6 +9,13 @@ import os
 import pandas as pd
 import matplotlib
 import logging
+
+# Try to import cftime for datetime conversion
+try:
+    import cftime
+    _HAS_CFTIME = True
+except ImportError:
+    _HAS_CFTIME = False
 try:
     from openbench.util.Mod_Converttype import Convert_Type
 except ImportError:
@@ -18,6 +25,45 @@ except ImportError:
     from openbench.util.Mod_Converttype import Convert_Type
 from .Fig_toolbox import convert_unit
 from openbench.data.Lib_Unit import UnitProcessing
+
+
+def convert_cftime_to_pandas(data_array):
+    """
+    Convert cftime datetime objects to pandas datetime for plotting compatibility.
+    
+    Args:
+        data_array (xr.DataArray): DataArray with potentially cftime datetime index
+        
+    Returns:
+        xr.DataArray: DataArray with pandas datetime index
+    """
+    if 'time' not in data_array.coords:
+        return data_array
+    
+    time_coord = data_array.coords['time']
+    
+    # Check if we have cftime objects
+    if _HAS_CFTIME and hasattr(time_coord.values, '__iter__'):
+        try:
+            # Try to detect if we have cftime objects
+            first_time = time_coord.values.flat[0] if hasattr(time_coord.values, 'flat') else time_coord.values[0]
+            if isinstance(first_time, cftime.datetime):
+                # Convert cftime to pandas datetime
+                pd_times = pd.to_datetime([
+                    f"{t.year:04d}-{t.month:02d}-{t.day:02d}T{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
+                    for t in time_coord.values
+                ])
+                # Create a new DataArray with converted time coordinate
+                return data_array.assign_coords(time=pd_times)
+        except (AttributeError, TypeError, IndexError):
+            # If conversion fails, try xarray's built-in conversion
+            try:
+                return data_array.assign_coords(time=pd.to_datetime(time_coord.values))
+            except:
+                # If all else fails, return original
+                pass
+    
+    return data_array
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 import sys
@@ -294,9 +340,13 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     fig, ax = plt.subplots(1, 1, figsize=(option['x_wise'], option['y_wise']))
     max_time_len = max(len(sim), len(obs))
 
-    obs.plot.line(x='time', label='Obs', linewidth=lines[0]/max_time_len, linestyle=linestyles[0], alpha=alphas[0], color=colors[0],
+    # Convert cftime to pandas datetime for plotting compatibility
+    obs_plot = convert_cftime_to_pandas(obs)
+    sim_plot = convert_cftime_to_pandas(sim)
+
+    obs_plot.plot.line(x='time', label='Obs', linewidth=lines[0]/max_time_len, linestyle=linestyles[0], alpha=alphas[0], color=colors[0],
                     marker=markers[0], markersize=markersizes[0]/max_time_len)
-    sim.plot.line(x='time', label='Sim', linewidth=lines[1]/max_time_len, linestyle=linestyles[1], alpha=alphas[1], color=colors[1],
+    sim_plot.plot.line(x='time', label='Sim', linewidth=lines[1]/max_time_len, linestyle=linestyles[1], alpha=alphas[1], color=colors[1],
                     marker=markers[1], markersize=markersizes[1]/max_time_len, add_legend=True)
 
     for spine in ax.spines.values():
