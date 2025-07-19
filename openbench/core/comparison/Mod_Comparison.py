@@ -47,6 +47,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.compare_nml = {}
         # Add default weight attribute
         self.weight = self.main_nml['general'].get('weight', 'none')  # Default to 'none' if not specified
+        self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
+        self._pft_station_warning_shown = False   # Track if PFT station data warning has been shown
 
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
@@ -175,7 +177,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
 
                                 if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                    logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                    if not self._igbp_station_warning_shown:
+                                        logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                        self._igbp_station_warning_shown = True
                                     pass
                                 else:
                                     dir_path = os.path.join(basedir, 'output', 'comparisons', 'IGBP_groupby',
@@ -382,7 +386,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            logging.warning(f"warning: station data is not supported for PFT class comparison")
+                            if not self._pft_station_warning_shown:
+                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                self._pft_station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')

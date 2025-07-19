@@ -26,6 +26,8 @@ class LC_groupby(metrics, scores):
         self.author = "Zhongwang Wei"
         self.main_nml = main_nml
         self.general_config = self.main_nml['general']
+        self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
+        self._pft_station_warning_shown = False   # Track if PFT station data warning has been shown
         # update self based on self.general_config
         self.__dict__.update(self.general_config)
         # Extract remapping information from main namelist
@@ -139,7 +141,9 @@ class LC_groupby(metrics, scores):
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                            if not self._igbp_station_warning_shown:
+                                logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                self._igbp_station_warning_shown = True
                             pass
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'IGBP_groupby',
@@ -408,7 +412,9 @@ class LC_groupby(metrics, scores):
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            logging.warning(f"warning: station data is not supported for PFT class comparison")
+                            if not self._pft_station_warning_shown:
+                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                self._pft_station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
