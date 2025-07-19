@@ -1,5 +1,5 @@
 general:
-  root_dir: ./data/reference/grid_ref/Urban/AH4GUC
+  root_dir: ./dataset/reference/grid_ref/Urban/AH4GUC
   timezone: UTC
   data_type: grid
   data_groupby: Single

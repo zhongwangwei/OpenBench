@@ -3,7 +3,7 @@
    timezone =  0.0
    data_type =  grid
    data_groupby =  month
-   dir = ./data/simulation/trajectory2/02/history/
+   dir = ./dataset/simulation/trajectory2/02/history/
    fulllist =
    tim_res =  month
    grid_res = 0.5

@@ -961,7 +961,7 @@ class visualization_replot_files:
                 option["bbox_to_anchor_y"] = col4.number_input("Y position of legend", value=0.)
             # x、y、width、height
 
-        option['data_path'] = path + f'/data/'
+        option['data_path'] = path + f'/dataset/'
         geo_Compare_lines(option, selected_item, self.ref, self.sim)
 
 

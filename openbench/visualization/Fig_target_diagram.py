@@ -1435,7 +1435,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
     thexoffset = find_exp(maxx)
     if use_sci_notation(maxx): 
         ixsoffset = True
-        xsoffset_str = "$\tx\mathdefault{10^{"+ str(thexoffset) +"}}\mathdefault{}$"
+        xsoffset_str = r"$\tx\mathdefault{10^{"+ str(thexoffset) +r"}}\mathdefault{}$"
     else:
         ixsoffset = False
         xsoffset_str = 'None'
@@ -1443,7 +1443,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
     theyoffset = find_exp(maxy)
     if use_sci_notation(maxy): 
         iysoffset = True
-        ysoffset_str = "$\tx\mathdefault{10^{"+str(theyoffset)+"}}\mathdefault{}$"
+        ysoffset_str = r"$\tx\mathdefault{10^{"+str(theyoffset)+r"}}\mathdefault{}$"
     else:
         iysoffset = False
         ysoffset_str = 'None'

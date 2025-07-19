@@ -9,7 +9,13 @@ import math
 import os
 import pandas as pd
 import matplotlib
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))

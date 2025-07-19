@@ -4,7 +4,7 @@ OpenBench Package
 
 Land Surface Model Benchmarking System with unified API.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """

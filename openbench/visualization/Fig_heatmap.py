@@ -2,7 +2,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 
 import os
 import sys
@@ -15,7 +21,7 @@ from .Fig_toolbox import get_index, convert_unit, get_colormap
 def make_scenarios_scores_comparison_heat_map(file, score, option):
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep='\s+', header=0)
+    df = pd.read_csv(file, sep=r'\s+', header=0)
     df = Convert_Type.convert_Frame(df)
     # exclude the first column
     df.set_index('Item', inplace=True)

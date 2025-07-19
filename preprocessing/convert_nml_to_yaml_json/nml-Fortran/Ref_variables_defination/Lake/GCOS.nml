@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./data/reference/grid_ref/Dam_River_Lake/Lake_surface_water_temperature_SAT
+   root_dir          =  ./dataset/reference/grid_ref/Dam_River_Lake/Lake_surface_water_temperature_SAT
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

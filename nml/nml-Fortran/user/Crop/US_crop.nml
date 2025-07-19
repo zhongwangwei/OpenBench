@@ -3,7 +3,7 @@
    timezone =  0.0
    data_type =  grid
    data_groupby =  Year
-   dir = ./data/simulation/crop/noirrig/history
+   dir = ./dataset/simulation/crop/noirrig/history
    fulllist =
    tim_res  =  Year
    grid_res = 0.5
