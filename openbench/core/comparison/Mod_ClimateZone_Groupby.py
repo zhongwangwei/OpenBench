@@ -23,6 +23,7 @@ class CZ_groupby(metrics, scores):
         self.name = 'StatisticsDataHandler'
         self.version = '0.3'
         self.release = '0.3'
+        self._station_warning_shown = False  # Track if station data warning has been shown
         self.date = 'June 2024'
         self.author = "Zhongwang Wei"
         self.main_nml = main_nml
@@ -154,7 +155,9 @@ class CZ_groupby(metrics, scores):
                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            logging.warning(f"warning: station data is not supported for Climate zone class comparison")
+                            if not self._station_warning_shown:
+                                logging.warning(f"warning: station data is not supported for Climate zone class comparison")
+                                self._station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
