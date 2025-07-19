@@ -17,6 +17,7 @@ import shutil
 import sys
 import time
 import glob
+import platform
 import xarray as xr
 import numpy as np
 import gc
@@ -164,12 +165,50 @@ def initialize_memory_management():
         logging.warning(f"Failed to initialize memory management settings: {e}")
 
 
+def get_platform_colors():
+    """Get color codes based on platform support."""
+    system = platform.system().lower()
+    
+    # Check if terminal supports colors
+    supports_color = (
+        hasattr(sys.stdout, 'isatty') and sys.stdout.isatty() and
+        os.environ.get('TERM', '') != 'dumb' and
+        ('COLORTERM' in os.environ or 
+         os.environ.get('TERM', '').endswith(('color', '256color', 'truecolor')))
+    )
+    
+    # Windows Command Prompt has limited ANSI support
+    if system == 'windows' and not os.environ.get('WT_SESSION'):
+        supports_color = False
+    
+    if supports_color:
+        return {
+            'reset': '\033[0m',
+            'bold': '\033[1m',
+            'cyan': '\033[1;36m',
+            'green': '\033[1;32m',
+            'yellow': '\033[1;33m',
+            'blue': '\033[1;34m',
+            'magenta': '\033[1;35m',
+            'red': '\033[1;31m'
+        }
+    else:
+        # Fallback to no colors for compatibility
+        return {
+            'reset': '', 'bold': '', 'cyan': '', 'green': '',
+            'yellow': '', 'blue': '', 'magenta': '', 'red': ''
+        }
+
 def print_welcome_message():
-    """Print a more beautiful welcome message and ASCII art."""
-    print("\n\n")
-    print("=" * 80)
-    print("""
-    \033[1;36m  
+    """Print a cross-platform compatible welcome message."""
+    colors = get_platform_colors()
+    width = 80
+    
+    print("\n")
+    print("=" * width)
+    
+    # ASCII art with platform-aware colors
+    print(f"""{colors['cyan']}
    ____                   ____                  _     
   / __ \\                 |  _ \\                | |    
  | |  | |_ __   ___ _ __ | |_) | ___ _ __   ___| |__  
@@ -177,22 +216,39 @@ def print_welcome_message():
  | |__| | |_) |  __/ | | | |_) |  __/ | | | (__| | | |
   \\____/| .__/ \\___|_| |_|____/ \\___|_| |_|\\___|_| |_|
         | |                                           
-        |_|                                           \033[0m
+        |_|                                           {colors['reset']}
     """)
-    print("\033[1;32m" + "=" * 80 + "\033[0m")
-    print("\033[1;33mWelcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!\033[0m")
-    print("\033[1;32m" + "=" * 80 + "\033[0m")
-    print("\n\033[1mThis system evaluate various land surface model outputs against reference data.\033[0m")
-    print("\n\033[1;34mKey Features:\033[0m")
-    print("  * Multi-model support")
-    print("  * Comprehensive variable evaluation")
-    print("  * Advanced metrics and scoring")
-    print("  * Customizable benchmarking")
-    print("\n\033[1;32m" + "=" * 80 + "\033[0m")
-    print("\033[1;35mInitializing OpenBench Evaluation System...\033[0m")
-    # input("\033[1mPress Enter to begin the benchmarking process...\033[0m")
-    print("\033[1;32m" + "=" * 80 + "\033[0m")
-    print("\n")
+    
+    print(f"{colors['green']}" + "=" * width + f"{colors['reset']}")
+    print(f"{colors['yellow']}{colors['bold']}Welcome to OpenBench: The Open Land Surface Model Benchmark Evaluation System!{colors['reset']}")
+    print(f"{colors['green']}" + "=" * width + f"{colors['reset']}")
+    
+    # System information
+    system_info = f"Running on {platform.system()} {platform.release()}"
+    print(f"\n{colors['blue']}{colors['bold']}System Info:{colors['reset']} {system_info}")
+    
+    print(f"\n{colors['bold']}This system evaluates various land surface model outputs against reference data.{colors['reset']}")
+    
+    print(f"\n{colors['blue']}{colors['bold']}Key Features:{colors['reset']}")
+    features = [
+        "🌍 Multi-model support",
+        "📊 Comprehensive variable evaluation", 
+        "📈 Advanced metrics and scoring",
+        "⚙️  Customizable benchmarking",
+        "🚀 Enhanced parallel processing",
+        "💾 Intelligent caching system"
+    ]
+    
+    for feature in features:
+        # Use simple bullets for non-Unicode terminals
+        if not colors['reset']:  # No color support likely means limited Unicode
+            feature = feature.replace('🌍', '*').replace('📊', '*').replace('📈', '*').replace('⚙️', '*').replace('🚀', '*').replace('💾', '*')
+        print(f"  {feature}")
+    
+    print(f"\n{colors['green']}" + "=" * width + f"{colors['reset']}")
+    print(f"{colors['magenta']}{colors['bold']}Initializing OpenBench Evaluation System...{colors['reset']}")
+    print(f"{colors['green']}" + "=" * width + f"{colors['reset']}")
+    print("")
 
 
 def setup_directories(main_nl):
@@ -288,11 +344,36 @@ def load_namelists(nl, main_nl):
     return ref_nml, sim_nml, stats_nml, fig_nml
 
 
+def print_phase_header(phase_name, icon=""):
+    """Print a cross-platform compatible phase header."""
+    colors = get_platform_colors()
+    width = 60
+    
+    # Use simple text for non-Unicode terminals
+    if not colors['reset']:
+        icon = icon.replace('🔍', '[EVAL]').replace('📈', '[COMP]').replace('📊', '[STAT]')
+    
+    print(f"\n{colors['green']}" + "=" * width + f"{colors['reset']}")
+    print(f"{colors['bold']}{colors['cyan']}{icon} {phase_name.upper()}{colors['reset']}")
+    print(f"{colors['green']}" + "=" * width + f"{colors['reset']}")
+
+def print_item_progress(item_name, icon="📊"):
+    """Print progress for individual items."""
+    colors = get_platform_colors()
+    
+    # Use simple text for non-Unicode terminals
+    if not colors['reset']:
+        icon = icon.replace('📊', '*').replace('📋', '*').replace('📈', '*')
+    
+    print(f"  {icon} {colors['blue']}Processing {item_name}...{colors['reset']}")
+
 def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                    fig_nml):
     """Run the evaluation process for each item."""
+    print_phase_header("EVALUATION PHASE", "🔍")
+    
     for evaluation_item in evaluation_items:
-        print(f"  • Processing {evaluation_item}...")
+        print_item_progress(evaluation_item, "📊")
         logging.info(f"Start running {evaluation_item} evaluation...")
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
@@ -501,8 +582,10 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
         from openbench.core.comparison.Mod_Comparison import ComparisonProcessing
         ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
 
+    print_phase_header("COMPARISON PHASE", "📈")
+    
     for cvar in comparison_vars:
-        print(f"  \u2022 Processing {cvar} comparison...")
+        print_item_progress(f"{cvar} comparison", "📋")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {cvar} comparison...******************")
         if cvar in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
@@ -535,8 +618,10 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
         num_cores=main_nl['general']['num_cores']
     )
 
+    print_phase_header("STATISTICS PHASE", "📊")
+    
     for statistic in statistic_vars:
-        print(f"  \u2022 Processing {statistic} analysis...")
+        print_item_progress(f"{statistic} analysis", "📈")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
         logging.info(f"********************Start running {statistic} analysis...******************")
         if statistic in ['Mean', 'Median', 'Max', 'Min', 'Sum']:
@@ -567,7 +652,9 @@ def main():
     initialize_memory_management()
     cleanup_memory()
 
-    print("🚀 Starting OpenBench evaluation process...")
+    colors = get_platform_colors()
+    rocket = "🚀" if colors['reset'] else ">>>"
+    print(f"{rocket} {colors['bold']}{colors['green']}Starting OpenBench evaluation process...{colors['reset']}")
     logging.info("Starting OpenBench evaluation process...")
 
     # Load namelists
@@ -609,45 +696,62 @@ def main():
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
-        print("📊 Running evaluation process...")
         start_time = time.time()
         run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                        fig_nml['Validation'])
         end_time = time.time()
         evaluation_time = (end_time - start_time) / 60
-        print(f"✅ Evaluation process completed in {evaluation_time:.2f} minutes.")
+        colors = get_platform_colors()
+        check = "✅" if colors['reset'] else "[OK]"
+        print(f"\n{check} {colors['bold']}{colors['green']}Evaluation process completed in {evaluation_time:.2f} minutes.{colors['reset']}")
+        print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Evaluation process completed in {evaluation_time:.2f} minutes.")
         # Clean up memory after evaluation
         cleanup_memory()
 
     # Run comparison if enabled
     if main_nl['general']['comparison']:
-        print("📈 Running comparison process...")
+        colors = get_platform_colors()
+        chart = "📈" if colors['reset'] else ">>>"
+        print(f"{chart} {colors['bold']}{colors['blue']}Running comparison process...{colors['reset']}")
         start_time = time.time()
         run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,
                        fig_nml['Comparison'])
         end_time = time.time()
         comparison_time = (end_time - start_time) / 60
-        print(f"✅ Comparison process completed in {comparison_time:.2f} minutes.")
+        colors = get_platform_colors()
+        check = "✅" if colors['reset'] else "[OK]"
+        print(f"\n{check} {colors['bold']}{colors['green']}Comparison process completed in {comparison_time:.2f} minutes.{colors['reset']}")
+        print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Comparison process completed in {comparison_time:.2f} minutes.")
         # Clean up memory after comparison
         cleanup_memory()
 
     # Run statistics if enabled
     if main_nl['general']['statistics']:
-        print("📊 Running statistics process...")
+        colors = get_platform_colors()
+        chart = "📊" if colors['reset'] else ">>>"
+        print(f"{chart} {colors['bold']}{colors['blue']}Running statistics process...{colors['reset']}")
         start_time = time.time()
         run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
         statistic_time = (end_time - start_time) / 60
-        print(f"✅ Statistics process completed in {statistic_time:.2f} minutes.")
+        colors = get_platform_colors()
+        check = "✅" if colors['reset'] else "[OK]"
+        print(f"\n{check} {colors['bold']}{colors['green']}Statistics process completed in {statistic_time:.2f} minutes.{colors['reset']}")
+        print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Statistics process completed in {statistic_time:.2f} minutes.")
         # Clean up memory after statistics
         cleanup_memory()
 
     # Final memory cleanup
     cleanup_memory()
-    print("🎉 OpenBench evaluation process completed successfully!")
+    
+    colors = get_platform_colors()
+    party = "🎉" if colors['reset'] else "[SUCCESS]"
+    print(f"\n{colors['green']}" + "=" * 60 + f"{colors['reset']}")
+    print(f"{party} {colors['bold']}{colors['green']}OpenBench evaluation process completed successfully!{colors['reset']}")
+    print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
     logging.info("OpenBench evaluation process completed successfully.")
 
 

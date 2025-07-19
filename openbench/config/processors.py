@@ -37,6 +37,18 @@ except ImportError:
     class ConfigurationError(Exception):
         pass
 
+# Import caching - CacheSystem is mandatory for data processing modules
+try:
+    from openbench.data.Mod_CacheSystem import cached, get_cache_manager
+    _HAS_CACHE = True
+except ImportError:
+    _HAS_CACHE = False
+    # Make CacheSystem optional for config processors since they're less compute-intensive
+    def cached(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 
 class GeneralInfoReader(NamelistReader):
     """
@@ -45,6 +57,10 @@ class GeneralInfoReader(NamelistReader):
     This class handles complex data processing tasks including time resolution
     normalization, station data filtering, and evaluation parameter processing.
     """
+    
+    # Class-level sets to track which warnings have already been shown
+    _custom_filter_warnings_shown = set()
+    _time_resolution_warning_shown = False
     
     def __init__(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], ref_nml: Dict[str, Any],
                  metric_vars: list, score_vars: list, comparison_vars: list, statistic_vars: list,
@@ -213,7 +229,10 @@ class GeneralInfoReader(NamelistReader):
                 ref_td = self._resolution_to_timedelta(self.ref_freq)
                 sim_td = self._resolution_to_timedelta(self.sim_freq)
                 if ref_td != sim_td:
-                    logging.warning(f"Time resolution mismatch may cause alignment issues")
+                    # Only show warning once
+                    if not GeneralInfoReader._time_resolution_warning_shown:
+                        logging.warning(f"Time resolution mismatch may cause alignment issues")
+                        GeneralInfoReader._time_resolution_warning_shown = True
             except:
                 logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq}")
     
@@ -263,6 +282,7 @@ class GeneralInfoReader(NamelistReader):
             else:
                 self.stn_info = pd.DataFrame()
     
+    @cached(key_prefix="station_lists", ttl=3600)
     def _read_and_merge_station_lists(self):
         """Read and merge station lists from reference and simulation sources."""
         if self.ref_data_type == 'stn' and self.sim_data_type == 'stn':
@@ -361,7 +381,10 @@ class GeneralInfoReader(NamelistReader):
             custom_module = importlib.import_module(f"custom.{self.ref_source}_filter")
             return getattr(custom_module, f"filter_{self.ref_source}")
         except (ImportError, AttributeError) as e:
-            logging.warning(f"Custom filter for {self.ref_source} not available: {e}. Using default filter.")
+            # Only show warning once per ref_source
+            if self.ref_source not in GeneralInfoReader._custom_filter_warnings_shown:
+                logging.warning(f"Custom filter for {self.ref_source} not available. Using default filter.")
+                GeneralInfoReader._custom_filter_warnings_shown.add(self.ref_source)
             return None
     
     def _apply_default_filter(self):
@@ -520,6 +543,7 @@ class GeneralInfoReader(NamelistReader):
                 'error': f"Error reading file: {str(e)}"
             }
     
+    @cached(key_prefix="station_batch", ttl=1800)
     def _process_station_batch(self, stations_df, required_var, dir_column, n_jobs=-1):
         """Process a batch of stations in parallel."""
         if not _HAS_DATA_LIBS:
