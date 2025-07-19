@@ -33,6 +33,16 @@ except ImportError:
         items = args[1]
         return [func(item) for item in items]
 
+# Import CacheSystem - CacheSystem is mandatory for evaluation engine
+try:
+    from openbench.data.Mod_CacheSystem import cached, get_cache_manager
+    _HAS_CACHE = True
+except ImportError:
+    raise RuntimeError(
+        "CacheSystem is required for evaluation engine (务必使用CacheSystem). "
+        "Please ensure openbench.data.Mod_CacheSystem is available."
+    )
+
 # Check the platform
 from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
@@ -124,6 +134,7 @@ class Evaluation_grid(metrics, scores):
         logging.info("╚═══════════════════════════════════════════════════════════════╝")
         logging.info(" ")
 
+    @cached(key_prefix="eval_metric", ttl=1800)
     def process_metric(self, metric, s, o, vkey=''):
         try:
             pb = getattr(self, metric)(s, o)
@@ -182,6 +193,7 @@ class Evaluation_grid(metrics, scores):
         finally:
             gc.collect()  # Clean up memory after processing each score
 
+    @cached(key_prefix="grid_eval", ttl=1800)
     def make_Evaluation(self, **kwargs):
         try:
             ref_path = os.path.join(self.casedir, 'output', 'data', 
@@ -448,6 +460,7 @@ class Evaluation_stn(metrics, scores):
         finally:
             gc.collect()  # Clean up memory after processing each station
 
+    @cached(key_prefix="station_eval", ttl=1800)
     def make_evaluation_P(self):
         try:
             stnlist = os.path.join(self.casedir, "stn_list.txt")

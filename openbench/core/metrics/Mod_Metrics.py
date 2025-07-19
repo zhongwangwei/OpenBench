@@ -3,6 +3,16 @@ import numpy as np
 import sys
 import xarray as xr
 import logging
+
+# Import CacheSystem - CacheSystem is mandatory for metrics calculation
+try:
+    from openbench.data.Mod_CacheSystem import cached, get_cache_manager
+    _HAS_CACHE = True
+except ImportError:
+    raise RuntimeError(
+        "CacheSystem is required for metrics calculation (务必使用CacheSystem). "
+        "Please ensure openbench.data.Mod_CacheSystem is available."
+    )
 class metrics:
     """
     A class for calculating various statistical metrics for model evaluation.

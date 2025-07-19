@@ -37,16 +37,15 @@ except ImportError:
         print("Error handler imported")
         exit()
 
-# Import caching
+# Import caching - CacheSystem is now mandatory for data processing modules
 try:
-    from data.Mod_CacheSystem import cached, get_cache_manager
+    from openbench.data.Mod_CacheSystem import cached, get_cache_manager
     _HAS_CACHE = True
 except ImportError:
-    _HAS_CACHE = False
-    def cached(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
+    raise RuntimeError(
+        "CacheSystem is required for data processing modules. "
+        "Please ensure openbench.data.Mod_CacheSystem is available."
+    )
 
 
 class MetricCalculator(IMetricsCalculator if _HAS_DEPENDENCIES else object):
@@ -104,6 +103,7 @@ class BiasCalculator(MetricCalculator):
         super().__init__("bias", "Mean bias", "units of variable")
     
     @error_handler(reraise=True)
+    @cached(key_prefix="bias_calc", ttl=1800)
     def calculate(self, simulation: xr.Dataset, reference: xr.Dataset) -> float:
         """Calculate bias."""
         if not self.validate_inputs(simulation, reference):
@@ -128,6 +128,7 @@ class RMSECalculator(MetricCalculator):
         super().__init__("RMSE", "Root Mean Square Error", "units of variable")
     
     @error_handler(reraise=True)
+    @cached(key_prefix="rmse_calc", ttl=1800)
     def calculate(self, simulation: xr.Dataset, reference: xr.Dataset) -> float:
         """Calculate RMSE."""
         if not self.validate_inputs(simulation, reference):
@@ -152,6 +153,7 @@ class CorrelationCalculator(MetricCalculator):
         super().__init__("correlation", "Pearson correlation coefficient", "dimensionless")
     
     @error_handler(reraise=True)
+    @cached(key_prefix="corr_calc", ttl=1800)
     def calculate(self, simulation: xr.Dataset, reference: xr.Dataset) -> float:
         """Calculate correlation."""
         if not self.validate_inputs(simulation, reference):
@@ -183,6 +185,7 @@ class NSECalculator(MetricCalculator):
         super().__init__("NSE", "Nash-Sutcliffe Efficiency", "dimensionless")
     
     @error_handler(reraise=True)
+    @cached(key_prefix="nse_calc", ttl=1800)
     def calculate(self, simulation: xr.Dataset, reference: xr.Dataset) -> float:
         """Calculate NSE."""
         if not self.validate_inputs(simulation, reference):
