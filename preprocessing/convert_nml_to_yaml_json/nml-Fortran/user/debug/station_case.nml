@@ -4,13 +4,13 @@
     data_type      = stn
     data_groupby   = single
     tim_res        = day
-    fulllist       = ./data/simulation/debug/station_case.csv
+    fulllist       = ./dataset/simulation/debug/station_case.csv
     grid_res       = 1.
     syear          = 
     eyear          = 
     suffix         = 
     prefix         = 
-    root_dir       = ./data/simulation/debug/stn
+    root_dir       = ./dataset/simulation/debug/stn
 /
 
 
