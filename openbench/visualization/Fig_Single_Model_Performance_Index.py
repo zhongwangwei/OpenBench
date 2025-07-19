@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 from matplotlib import rcParams
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 import math
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D

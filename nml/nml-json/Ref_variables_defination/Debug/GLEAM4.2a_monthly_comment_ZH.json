@@ -6,7 +6,7 @@
 
 	/*基础设置：设置该参考数据格式*/
   "general": {
-    "root_dir": "./data/reference/debug/GLEAM4.2a_monthly/",//数据存放路径
+    "root_dir": "./dataset/reference/debug/GLEAM4.2a_monthly/",//数据存放路径
     "timezone": 0,         //数据所使用时区
     "data_type": "grid",   //数据类型（"grid"或"stn"）
     "data_groupby": "Year",//数据聚合类型（如grid则为"year","month","day"，如所有时间聚合在一起或stn为"single"）

@@ -5,7 +5,7 @@ Configuration Processors for OpenBench
 This module provides complex configuration processing classes that handle
 OpenBench-specific data processing and analysis logic.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Version: 2.0
 Date: July 2025
 """

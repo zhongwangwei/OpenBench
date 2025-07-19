@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./data/reference/grid_ref/Water/GRACE-SeDA/",
+    "root_dir": "./dataset/reference/grid_ref/Water/GRACE-SeDA/",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "Single",

@@ -1,6 +1,6 @@
 &general
   model_namelist    = ./nml/Mod_variables_defination/LS3MIP.nml                               #the unit and variable defination will be default in here
-  root_dir          =  ./data/simulation/LS3MIP/
+  root_dir          =  ./dataset/simulation/LS3MIP/
   timezone          =  0.0
   data_type         =  grid
   data_groupby      =  Single

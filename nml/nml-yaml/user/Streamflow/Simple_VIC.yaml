@@ -3,7 +3,7 @@ general:
   timezone: 0.0
   data_type: grid
   data_groupby: Month
-  dir: ./data/simulation/discharge/Simple_VIC
+  dir: ./dataset/simulation/discharge/Simple_VIC
   fulllist: ''
   tim_res: day
   grid_res: 0.1

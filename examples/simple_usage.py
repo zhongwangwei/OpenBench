@@ -5,7 +5,7 @@ OpenBench Simple Usage Examples
 
 This script demonstrates how to use the new unified OpenBench API.
 
-Author: OpenBench Contributors
+Author: Zhongwang Wei
 Date: July 2025
 """
 

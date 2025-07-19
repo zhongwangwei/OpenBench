@@ -481,8 +481,8 @@ class mange_simulation:
                     newlib['general']['suffix'] = ''
                     newlib['general']['prefix'] = ''
 
-                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './data/'
-                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './data/'
+                if 'root_dir' not in newlib['general']: newlib['general']['root_dir'] = './dataset/'
+                if not newlib['general']['root_dir']: newlib['general']['root_dir'] = './dataset/'
                 try:
                     newlib['general']['root_dir'] = self.path_finder.find_path(newlib['general']['root_dir'],
                                                                                f"new_simlib_{newlib['Sim_casename']}_root_dir",

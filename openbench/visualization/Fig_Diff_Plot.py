@@ -15,7 +15,13 @@ import xarray as xr
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from Mod_Converttype import Convert_Type
+try:
+    from openbench.util.Mod_Converttype import Convert_Type
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from openbench.util.Mod_Converttype import Convert_Type
 from matplotlib import rcParams
 
 import os
