@@ -23,7 +23,8 @@
     Mann_Kendall_Trend_Test_source         = ./nml/nml-Fortran/fignml/Mann_Kendall_Trend_Test.nml
     Correlation_source                     = ./nml/nml-Fortran/fignml/Correlation.nml
     Standard_Deviation_source              = ./nml/nml-Fortran/fignml/Standard_Deviation.nml
-    Functional_Response_source                = ./nml/nml-Fortran/fignml/Functional_Response.nml
+    Functional_Response_source             = ./nml/nml-Fortran/fignml/Functional_Response.nml
+    RadarMap_source                        = ./nml/nml-Fortran/fignml/RadarMap.nml
 /
 
 &statistic_nml
