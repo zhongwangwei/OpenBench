@@ -20,9 +20,11 @@
   comparison        = False  # True:  comparison 
   statistics        = False   # True: show statistics
   debug_mode        = True    # True: show debug information
+  only_drawing      = False   # True: only drawing figures, not running evaluation and comparison
   weight            = area # area, mass  # weight for metrics and scores
   IGBP_groupby      = True   # True: show metics and scores grouped by IGBP
   PFT_groupby       = True   # True: show metics and scores grouped by PFT
+  Climate_zone_groupby = True # True: show metics and scores grouped by Climate zone
   unified_mask      = True    # True: mask the observation data with all simulation datasets to ensure consistent coverage
 /
 
@@ -231,6 +233,7 @@ Mann_Kendall_Trend_Test         = False
 Correlation                     = True
 Standard_Deviation              = False
 Functional_Response             = False
+RadarMap                        = False
 /
 
 &statistics
