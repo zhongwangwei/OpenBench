@@ -20,9 +20,11 @@ general:
   comparison: false
   statistics: false
   debug_mode: true
+  only_drawing: false
   weight: area
   IGBP_groupby: true
   PFT_groupby: true
+  Climate_zone_groupby: true
   unified_mask: true
 evaluation_items:
   Gross_Primary_Productivity: false
@@ -186,6 +188,7 @@ comparisons:
   Correlation: true
   Standard_Deviation: false
   Functional_Response: false
+  RadarMap: false
 statistics:
   Z_Score: false
   Hellinger_Distance: false

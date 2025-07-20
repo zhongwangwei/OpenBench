@@ -20,9 +20,11 @@
     comparison       = True
     statistics       = True
     debug_mode       = True
+    only_drawing     = False   # True: only drawing figures, not running evaluation and comparison
     weight           = None
     IGBP_groupby     = True
     PFT_groupby      = True
+    Climate_zone_groupby = True
     unified_mask     = True
 /
 
@@ -215,6 +217,7 @@
     Correlation                    = True
     Standard_Deviation             = True
     Functional_Response            = True
+    RadarMap                       = True
 /
 
 
