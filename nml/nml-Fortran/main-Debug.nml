@@ -217,6 +217,7 @@
     Correlation                    = False
     Standard_Deviation             = True
     Functional_Response            = False
+    RadarMap                       = False
 /
 
 

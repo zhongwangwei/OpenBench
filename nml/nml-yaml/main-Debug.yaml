@@ -187,6 +187,7 @@ comparisons:
   Correlation: false
   Standard_Deviation: true
   Functional_Response: false
+  RadarMap: false
 statistics:
   Z_Score: true
   Hellinger_Distance: false

@@ -1,0 +1,21 @@
+&general
+  x_wise =  8
+  y_wise =  5
+  dpi = 300
+  saving_format =  jpg
+  font_family   = DejaVu Sans
+  font_size = 24
+
+  title =  
+  titlesize =  20
+  linewidth = 2.5
+  patch_linewidth = 1
+  lines_linestyle = --
+  xtick_labelsize = 12
+  legend_fontsize = 12
+  legend_title = Simulations
+  ticks_format = .2f
+  vmin_max_on = false
+  vmin = 0
+  vmax = 1
+/

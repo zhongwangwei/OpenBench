@@ -25,6 +25,7 @@
     "weight": "None",
     "IGBP_groupby": true,
     "PFT_groupby": true,
+    "Climate_zone_groupby": true,
     "unified_mask": true
   },
   "evaluation_items": {
@@ -190,7 +191,8 @@
     "Mann_Kendall_Trend_Test": true,
     "Correlation": true,
     "Standard_Deviation": true,
-    "Functional_Response": true
+    "Functional_Response": true,
+    "RadarMap": false
   },
   "statistics": {
     "Z_Score": false,
