@@ -25,7 +25,7 @@
     "weight": "area",
     "IGBP_groupby": true,
     "PFT_groupby": true,
-    "Climate_zone_groupby": true,
+    "Climate_zone_groupby":  true,
     "unified_mask": true
   },
   "evaluation_items": {
