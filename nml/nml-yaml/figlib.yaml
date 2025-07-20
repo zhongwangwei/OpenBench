@@ -22,6 +22,7 @@ comparison_nml:
   Correlation_source: ./nml/nml-yaml/fignml/Correlation.yaml
   Standard_Deviation_source: ./nml/nml-yaml/fignml/Standard_Deviation.yaml
   Functional_Response_source: ./nml/nml-yaml/fignml/Functional_Response.yaml
+  RadarMap_source: ./nml/nml-yaml/fignml/RadarMap.yaml
 statistic_nml:
   Basic_source: ./nml/nml-yaml/fignml/Basic.yaml
   Mann_Kendall_Trend_Test_source: ./nml/nml-yaml/fignml/Mann_Kendall_Trend_Test.yaml
