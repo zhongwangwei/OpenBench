@@ -34,6 +34,7 @@
     "weight": "None",             // Whether to apply weighting ("area", "mass", "None")
     "IGBP_groupby": true,         // Whether to aggregate metics and scores by IGBP
     "PFT_groupby": true,          // Whether to aggregate metics and scores by PFT
+    "Climate_zone_groupby": true, // Whether to aggregate metics and scores by Climate zone
     "unified_mask": true          // Whether to evaluate only overlapping areas when model data are all gridded
   },
   /* Evaluation items: Defines evaluable variables and their switches,
@@ -216,7 +217,8 @@
     "Mann_Kendall_Trend_Test": false,
     "Correlation": false,
     "Standard_Deviation": true,
-    "Functional_Response": false
+    "Functional_Response": false,
+    "RadarMap": false
   },
   /* Statistical analysis: Defines statistical analysis methods,
      with the statistics module enabled in basic settings,

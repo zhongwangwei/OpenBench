@@ -34,6 +34,7 @@
     "weight": "None",             //是否加权计算（"area"，"mass"，"None"）
     "IGBP_groupby": true,         //是否进行IGBP分类聚合
     "PFT_groupby": true,          //是否进行PFT分类聚合
+    "Climate_zone_groupby": true, //是否进行气候带分类聚合
     "unified_mask": true          //当模型数据均为grid时，是否只评估重合区域
   },
   /*评估项目：定义可评估变量及其开关，
@@ -216,7 +217,8 @@
     "Mann_Kendall_Trend_Test": false,
     "Correlation": false,
     "Standard_Deviation": true,
-    "Functional_Response": false
+    "Functional_Response": false,
+    "RadarMap": false
   },
   /*统计分析：定义统计分析方法，  
   基础设置中统计模块开启，
