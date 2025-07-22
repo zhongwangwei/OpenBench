@@ -829,7 +829,25 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 except:
                     ds['time'] = time_index
             time_var = ds.time
+            # Safely set calendar attribute using encoding
+            try:
+                time_var.encoding['calendar'] = 'proleptic_gregorian'
+            except Exception:
+                try:
+                    # If encoding fails, create new time coordinate with calendar attribute
+                    new_time = xr.DataArray(
+                        time_var.values,
+                        dims=['time'],
+                        attrs={'calendar': 'proleptic_gregorian'}
+                    )
+                    ds = ds.assign_coords(time=new_time)
+                    time_var = ds.time
+                except Exception:
+                    # If all else fails, just continue without setting calendar
+                    logging.debug("Could not set calendar attribute, proceeding without it")
+                    pass
             time_values = time_var
+            
             # Create a complete time series based on the specified time frequency and range 
             # Compare the actual time with the complete time series to find the missing time
             # print('Checking time series completeness...')
@@ -1155,12 +1173,14 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         finally:
             gc.collect()
 
+
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
             station = Convert_Type.convert_Frame(station)
             output_file = os.path.join(self.casedir, 'output', 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+            # Handle calendar attribute safely
             data.to_netcdf(output_file)
             logging.info(f"Saved station data to {output_file}")
         finally:
@@ -1202,6 +1222,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             output_file = os.path.join(self.casedir, 'output', 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
+
             data.to_netcdf(output_file)
             logging.info(f"Saved extracted station data to {output_file}")
         finally:
