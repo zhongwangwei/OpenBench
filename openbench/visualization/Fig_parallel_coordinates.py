@@ -78,9 +78,8 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             data = df_selected[scores].values
 
             # Create a new figure
-
-            # Create the parallel coordinate plot
             try:
+            # Create the parallel coordinate plot
                 fig, ax = parallel_coordinate_plot(data, list(scores), model_names,
                                                    models_to_highlight=model_names,
                                                    models_to_highlight_by_line=option["models_to_highlight_by_line"],
@@ -105,7 +104,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_scores_{evaluation_item}_{ref_source}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
-                logging.error(f"Error in {evaluation_item} - {ref_source}")
+                logging.error(f"Error in {evaluation_item} - {ref_source}, Scores contains Na  (Removing)")
 
     # -------第二种情况：多个item，多个模型，一个score，每幅图一个score
     option['situation'] = 2
@@ -191,7 +190,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
-                logging.error(f"Error in {score} - {item_combination}")
+                logging.error(f"Error in {score} - {item_combination} ")
     # ------------in the end of the function----------------
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -229,8 +228,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Iterate over each score
             # Select the columns with the names of the score
             data = df_selected[metrics].values
-
-            # Create a new figure
             try:
                 plt.subplots(figsize=figsize)
 
@@ -259,7 +256,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_metrics_{evaluation_item}_{ref_source}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
-                logging.error(f"Error in {evaluation_item} - {ref_source}")
+                logging.error(f"Error in {evaluation_item} - {ref_source}, metrics contains Nan (Removing) ")
 
     option['situation'] = 2
     if not option['set_legend']:
@@ -348,7 +345,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{metric}_{'_'.join(item_combination)}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
-                logging.error(f"Error in {metric} - {item_combination}")
+                logging.error(f"Error in {metric} - {item_combination} -4")
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):
     # Quick initial QC
