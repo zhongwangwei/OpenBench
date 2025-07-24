@@ -8,6 +8,7 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 import cmaps
+import math
 
 def process_unit(ref_unit,sim_unit,metric):
     all_metrics_units = {
@@ -245,7 +246,10 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
             max_num = max(-mticks[0], mticks[-1])
             mticks = np.linspace(-max_num,max_num,5)
 
-
+    if mticks[0] == mticks[-1]:
+        n = get_least_significant_digit(mticks[-1])
+        mticks[-1] = mticks[-1] + n
+        mticks[0] = mticks[0] - n
 
     cmap = get_colormap('cmp_b2r')
 
@@ -293,3 +297,9 @@ def tick_length(num):
         length = len(decimal_part) + len(integer_part) + point_part
     
     return length
+
+def get_least_significant_digit(num):
+    if num == 0:
+        return 0  # 0 没有数量级
+    magnitude = math.floor(math.log10(abs(num)))
+    return 10 ** magnitude

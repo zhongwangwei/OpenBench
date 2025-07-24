@@ -53,7 +53,7 @@ def stat_mann_kendall_trend_test(self, data):
                 vectorize=True,
                 dask='parallelized',
                 output_dtypes=[float],
-                output_sizes={'mk_params': 4}
+                dask_gufunc_kwargs={'mk_params': 4}
             )
 
             # Create separate variables for each component

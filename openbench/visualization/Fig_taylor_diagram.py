@@ -31,8 +31,6 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
     fig, ax = plt.subplots(figsize=(option['x_wise'], option['y_wise']))
 
     MARKERS = generate_markers(sim_sources, option)
-    # print(MARKERS)
-
     if option['Normalized']:
         stds = STDs / STDs[0]
     else:
