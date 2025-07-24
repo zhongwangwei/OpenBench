@@ -26,6 +26,7 @@ sys.path.insert(0, current_dir)
 import cmaps
 from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
 
+
 def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # read the data
     df = pd.read_csv(file, header=0)
@@ -88,7 +89,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, norm=norm, vmin=option['vmin'], vmax=option['vmax'],
+        cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, vmin=option['vmin'], vmax=option['vmax'],
                         marker=option['marker'], linewidths=0.5,
                         edgecolors='black', alpha=0.9, zorder=10)
         
