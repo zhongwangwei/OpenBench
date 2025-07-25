@@ -9,7 +9,7 @@ def adjust_time_CLM5(info, ds,syear,eyear,tim_res):
       num_value, time_unit = match.groups()
       num_value = int(num_value) if num_value else 1   
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-      if time_unit.lower() in ['m', 'month', 'mon']:
+      if time_unit.lower() in ['m','me', 'month', 'mon']:
          logging.info('Adjusting time values for monthly CLM5 output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(months=1)
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:

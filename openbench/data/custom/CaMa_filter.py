@@ -12,7 +12,7 @@ def adjust_time_CaMa(info, ds,syear,eyear,tim_res):
          ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:%M:%S'))
       except:
          logging.info('time format error')
-      if time_unit.lower() in ['m', 'month', 'mon']:
+      if time_unit.lower() in ['m','me', 'month', 'mon']:
          pass
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
          logging.info('Adjusting time values for daily CaMa output...')

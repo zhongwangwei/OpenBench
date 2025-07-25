@@ -869,7 +869,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                                              tim_res: str) -> xr.Dataset:
         model = self.sim_source if datasource == 'sim' else self.ref_source
         try:
-            custom_module = importlib.import_module(f"custom.{model}_filter")
+            custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
             ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
         except (ImportError, AttributeError):
@@ -903,7 +903,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             model = self.sim_source if datasource == 'sim' else self.ref_source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
-                custom_module = importlib.import_module(f"custom.{model}_filter")
+                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
                 self, ds = custom_filter(self, ds)
             except AttributeError:
