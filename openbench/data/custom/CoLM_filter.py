@@ -9,7 +9,7 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       num_value, time_unit = match.groups()
       num_value = int(num_value) if num_value else 1   
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-      if time_unit.lower() in ['m', 'month', 'mon']:
+      if time_unit.lower() in ['m','me', 'month', 'mon']:
          # Handle river-related variables for monthly data
          if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
                          'rivdph', 'rivvel', 'fldout', 'fldsto', 'flddph', 'fldfrc',
