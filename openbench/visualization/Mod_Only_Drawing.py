@@ -710,7 +710,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 stds[i+1] = list[i*4]
                                 cors[i+1] = list[i*4+1]
                                 RMSs[i+1] = list[i*4+2]
-
                             make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources,
                                                                         option)
                         finally:
@@ -1469,6 +1468,13 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                 for i, sim1 in enumerate(sim_sources):
                     for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
+                        sim_data_type1 = sim_nml[f'{evaluation_item}'][f'{sim1}_data_type']
+                        sim_data_type2 = sim_nml[f'{evaluation_item}'][f'{sim2}_data_type']
+                        if sim_data_type1 == 'stn' or sim_data_type2 == 'stn':
+                            logging.warning(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
+                            logging.warning("All simulation sources must be gridded data")
+                            continue
+
                         try:
                             output_file = os.path.join(dir_path,
                                                        f'{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc')

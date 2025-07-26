@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import rcParams
 from matplotlib.lines import Line2D
+import logging
 
 def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered, option):
     font = {'family': option['font']}
@@ -103,7 +104,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
             min_value = 0
     except:
         min_value, max_value = None, None
-        print(
+        logging.error(
             f"Error: {evaluation_item} {ref_source} {varname} Kernel Density Estimate failed!")  # ValueError: array must not contain infs or NaNs
 
     if option['vert']:
