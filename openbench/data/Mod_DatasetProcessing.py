@@ -32,6 +32,7 @@ from openbench.util.Mod_Converttype import Convert_Type
 # Import interfaces
 try:
     from openbench.util.Mod_Interfaces import IDataProcessor, IDataLoader, BaseProcessor, ProcessingPipeline
+
     _HAS_INTERFACES = True
 except ImportError:
     _HAS_INTERFACES = False
@@ -43,62 +44,81 @@ except ImportError:
 # Import data pipeline
 try:
     from openbench.data.Mod_DataPipeline import (
-        create_standard_pipeline, 
-        process_dataset, 
+        create_standard_pipeline,
+        process_dataset,
         DataPipelineBuilder,
         DataValidationProcessor,
         CoordinateProcessor
     )
+
     _HAS_PIPELINE = True
 except ImportError:
     _HAS_PIPELINE = False
+
+
     def create_standard_pipeline(*args, **kwargs):
         return None
+
+
     def process_dataset(data, *args, **kwargs):
         return data
 
 # Import unified exception handling
 try:
     from openbench.util.Mod_Exceptions import (
-        DataProcessingError, 
-        FileSystemError, 
-        error_handler, 
+        DataProcessingError,
+        FileSystemError,
+        error_handler,
         safe_execute,
         validate_file_exists,
         log_performance_warning
     )
+
     _HAS_EXCEPTIONS = True
 except ImportError:
     _HAS_EXCEPTIONS = False
     # Fallback error handling
     DataProcessingError = Exception
     FileSystemError = Exception
+
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
+
     def safe_execute(func, *args, **kwargs):
         return func(*args, **kwargs)
+
+
     def validate_file_exists(path):
         pass
+
+
     def log_performance_warning(*args, **kwargs):
         pass
-
 
 # Import enhanced logging if available
 try:
     from openbench.util.Mod_LoggingSystem import get_logging_manager, performance_logged
+
     _HAS_ENHANCED_LOGGING = True
 except ImportError:
     _HAS_ENHANCED_LOGGING = False
+
+
     def performance_logged(operation=None):
         def decorator(func):
             return func
+
         return decorator
 
 # Import caching system (required for data processing)
 try:
     from openbench.data.Mod_CacheSystem import get_cache_manager, cached, DataCache
+
     _HAS_CACHE = True
 except ImportError:
     raise ImportError(
@@ -106,6 +126,7 @@ except ImportError:
         "Please ensure openbench.data.Mod_CacheSystem is available. "
         "This module provides essential caching functionality for data processing performance."
     )
+
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # logging.getLogger("xarray").setLevel(logging.WARNING)
@@ -134,7 +155,7 @@ def performance_monitor(func: Callable) -> Callable:
             # Calculate execution time and memory usage
             end_time = time.time()
             execution_time = end_time - start_time
-            
+
             try:
                 end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
                 end_cpu = process.cpu_percent()
@@ -153,7 +174,7 @@ def performance_monitor(func: Callable) -> Callable:
             # Use enhanced performance warning if available
             if _HAS_EXCEPTIONS:
                 log_performance_warning(func.__name__, execution_time)
-            
+
             # Log warning if memory usage is high
             try:
                 total_memory = psutil.virtual_memory().total / (1024 ** 3)
@@ -168,7 +189,7 @@ def performance_monitor(func: Callable) -> Callable:
             # Log error with performance context
             end_time = time.time()
             execution_time = end_time - start_time
-            
+
             try:
                 end_mem = process.memory_info().rss / 1024 / 1024 / 1024
                 memory_used = end_mem - start_mem
@@ -190,7 +211,7 @@ def get_system_resources():
         dict: Dictionary containing system resource information
     """
     import platform
-    
+
     # Initialize default values
     result = {
         'total_memory_gb': 8,  # Default values
@@ -198,7 +219,7 @@ def get_system_resources():
         'cpu_count': 4,
         'cpu_freq_mhz': 0
     }
-    
+
     try:
         # Get memory information - works on all platforms
         memory_info = psutil.virtual_memory()
@@ -206,7 +227,7 @@ def get_system_resources():
         result['available_memory_gb'] = memory_info.available / (1024 ** 3)
     except Exception as e:
         logging.warning(f"Failed to get memory info: {e}")
-    
+
     try:
         # Get CPU count - works on all platforms
         cpu_count = psutil.cpu_count(logical=False)
@@ -217,7 +238,7 @@ def get_system_resources():
             result['cpu_count'] = psutil.cpu_count(logical=True) or 4
     except Exception as e:
         logging.warning(f"Failed to get CPU count: {e}")
-    
+
     # Get CPU frequency with platform-specific handling
     cpu_freq_from_psutil = False
     try:
@@ -230,7 +251,7 @@ def get_system_resources():
             cpu_freq_from_psutil = True
     except Exception as e:
         logging.debug(f"psutil.cpu_freq() failed: {e}")
-    
+
     # If psutil didn't work, try platform-specific fallbacks
     if not cpu_freq_from_psutil:
         try:
@@ -244,7 +265,7 @@ def get_system_resources():
         except Exception as e:
             logging.debug(f"Platform-specific CPU frequency detection failed: {e}")
             # CPU frequency is optional, so we continue with 0
-    
+
     return result
 
 
@@ -252,29 +273,29 @@ def _get_macos_cpu_freq():
     """Get CPU frequency on macOS."""
     try:
         import subprocess
-        
+
         # For Apple Silicon Macs, try sysctl to get CPU frequency
         try:
-            result = subprocess.run(['sysctl', '-n', 'hw.cpufrequency_max'], 
-                                  capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['sysctl', '-n', 'hw.cpufrequency_max'],
+                                    capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout.strip().isdigit():
                 # Convert Hz to MHz
                 return float(result.stdout.strip()) / 1000000
         except Exception:
             pass
-        
+
         # Try alternative sysctl commands for Apple Silicon
         try:
-            result = subprocess.run(['sysctl', '-n', 'hw.cpufrequency'], 
-                                  capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['sysctl', '-n', 'hw.cpufrequency'],
+                                    capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout.strip().isdigit():
                 return float(result.stdout.strip()) / 1000000
         except Exception:
             pass
-        
+
         # For Intel Macs or fallback, try system_profiler
-        result = subprocess.run(['system_profiler', 'SPHardwareDataType'], 
-                              capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['system_profiler', 'SPHardwareDataType'],
+                                capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             import re
             for line in result.stdout.split('\n'):
@@ -293,7 +314,7 @@ def _get_macos_cpu_freq():
                         return 4000  # M3 estimated max frequency
                     elif 'M4' in line:
                         return 4400  # M4 estimated max frequency
-        
+
         return 0
     except Exception:
         return 0
@@ -317,8 +338,8 @@ def _get_windows_cpu_freq():
     try:
         import subprocess
         # Try wmic command
-        result = subprocess.run(['wmic', 'cpu', 'get', 'MaxClockSpeed', '/format:value'], 
-                              capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['wmic', 'cpu', 'get', 'MaxClockSpeed', '/format:value'],
+                                capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             for line in result.stdout.split('\n'):
                 if 'MaxClockSpeed=' in line:
@@ -376,12 +397,12 @@ def calculate_optimal_cores(cpu_count: int, available_memory_gb: float, dataset_
 
 
 class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
-    
+
     def __init__(self, config: Dict[str, Any]):
         # Initialize base processor if available
         if _HAS_INTERFACES:
             super().__init__(name=config.get('name', 'BaseDatasetProcessing'))
-        
+
         self.initialize_attributes(config)
         self.setup_output_directories()
         self.initialize_resource_parameters()
@@ -405,13 +426,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             'lat': 'auto',
             'lon': 'auto'
         }
-    
+
     def setup_data_pipeline(self, config: Dict[str, Any]):
         """Setup data processing pipeline with configuration."""
         if not _HAS_PIPELINE:
             self.pipeline = None
             return
-        
+
         # Create pipeline configuration
         pipeline_config = {
             'enable_validation': config.get('enable_validation', True),
@@ -429,10 +450,10 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 'time': 'time'
             }
         }
-        
+
         # Update with user configuration
         pipeline_config.update(config.get('pipeline_config', {}))
-        
+
         # Create pipeline
         try:
             self.pipeline = create_standard_pipeline(pipeline_config)
@@ -484,32 +505,32 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         """
         if not USE_NEW_FREQ_ALIASES:
             return freq
-            
+
         # Map of legacy to new frequency aliases
         legacy_to_new = {
-            'M': 'ME',    # Month end
-            'Y': 'YE',    # Year end
-            'Q': 'QE',    # Quarter end
-            'H': 'h',     # Hour
-            'T': 'min',   # Minute
-            'S': 's',     # Second
-            'L': 'ms',    # Millisecond
-            'U': 'us',    # Microsecond
-            'N': 'ns',    # Nanosecond
+            'M': 'ME',  # Month end
+            'Y': 'YE',  # Year end
+            'Q': 'QE',  # Quarter end
+            'H': 'h',  # Hour
+            'T': 'min',  # Minute
+            'S': 's',  # Second
+            'L': 'ms',  # Millisecond
+            'U': 'us',  # Microsecond
+            'N': 'ns',  # Nanosecond
         }
-        
+
         # Handle compound frequencies like '3M' -> '3ME'
         import re
         pattern = r'(\d*)([A-Z])'
-        
+
         def replacer(match):
             number = match.group(1)
             letter = match.group(2)
             new_letter = legacy_to_new.get(letter, letter)
             return number + new_letter
-        
+
         return re.sub(pattern, replacer, freq)
-    
+
     def _normalize_frequency(self, freq: str) -> str:
         """
         Convert human-readable frequency strings to pandas-compatible codes.
@@ -523,18 +544,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         # Use appropriate frequency aliases based on pandas version
         if USE_NEW_FREQ_ALIASES:
             freq_map = {
-                'month': 'ME',    # Month End (new alias)
+                'month': 'ME',  # Month End (new alias)
                 'mon': 'ME',
                 'monthly': 'ME',
                 'day': 'D',
                 'daily': 'D',
-                'hour': 'h',      # Hour (lowercase in new pandas)
+                'hour': 'h',  # Hour (lowercase in new pandas)
                 'Hour': 'h',
                 'hr': 'h',
                 'Hr': 'h',
                 'h': 'h',
                 'hourly': 'h',
-                'year': 'YE',     # Year End (new alias)
+                'year': 'YE',  # Year End (new alias)
                 'yr': 'YE',
                 'yearly': 'YE',
                 'week': 'W',
@@ -543,36 +564,36 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             }
         else:
             freq_map = {
-                'month': 'M',     # Month (old alias)
+                'month': 'M',  # Month (old alias)
                 'mon': 'M',
                 'monthly': 'M',
                 'day': 'D',
                 'daily': 'D',
-                'hour': 'H',      # Hour (uppercase in old pandas)
+                'hour': 'H',  # Hour (uppercase in old pandas)
                 'Hour': 'H',
                 'hr': 'H',
                 'Hr': 'H',
                 'h': 'H',
                 'hourly': 'H',
-                'year': 'Y',      # Year (old alias)
+                'year': 'Y',  # Year (old alias)
                 'yr': 'Y',
                 'yearly': 'Y',
                 'week': 'W',
                 'wk': 'W',
                 'weekly': 'W',
             }
-        
+
         # Convert to lowercase for case-insensitive matching
         normalized_freq = freq.lower().strip()
-        
+
         # Get mapped frequency or use original if no mapping found
         result_freq = freq_map.get(normalized_freq, freq)
-        
+
         # Don't convert if we already got a mapped frequency from freq_map
         # Only convert if we're returning the original frequency
         if result_freq == freq:
             result_freq = self._convert_legacy_freq_alias(result_freq)
-        
+
         return result_freq
 
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
@@ -594,14 +615,14 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 if self.debug_mode:
                     logging.warning(
                         f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}")
-        
+
         # Apply frequency normalization to timing resolution attributes
         if hasattr(self, 'compare_tim_res'):
             original_freq = self.compare_tim_res
             self.compare_tim_res = self._normalize_frequency(self.compare_tim_res)
             if self.compare_tim_res != original_freq:
                 logging.debug(f"Normalized frequency: {original_freq} -> {self.compare_tim_res}")
-        
+
         # Also normalize other timing resolution attributes
         for attr in ['sim_tim_res', 'ref_tim_res']:
             if hasattr(self, attr):
@@ -653,7 +674,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             self._preprocess(datasource)
             logging.info(f"{datasource.capitalize()} data prepared!")
             return None
-        
+
         # Interface mode - data is xr.Dataset
         elif isinstance(data, xr.Dataset):
             # Use enhanced pipeline if available
@@ -664,22 +685,22 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     return processed_data
                 except Exception as e:
                     logging.warning(f"Pipeline processing failed, falling back to basic processing: {e}")
-            
+
             # Fallback to basic processing
             if _HAS_INTERFACES and hasattr(super(), 'validate_input'):
                 if not self.validate_input(data):
                     raise ValueError("Input dataset validation failed")
-            
+
             # Apply basic processing steps
             processed_data = self.check_dataset(data)
             processed_data = self.check_coordinate(processed_data)
-            
+
             return processed_data
-        
+
         # Backward compatibility - no arguments provided
         else:
             raise ValueError("Either datasource string or xr.Dataset must be provided")
-    
+
     def process_legacy(self, datasource: str) -> None:
         """Legacy processing method for backward compatibility."""
         return self.process(datasource)
@@ -847,7 +868,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     logging.debug("Could not set calendar attribute, proceeding without it")
                     pass
             time_values = time_var
-            
+
             # Create a complete time series based on the specified time frequency and range 
             # Compare the actual time with the complete time series to find the missing time
             # print('Checking time series completeness...')
@@ -869,7 +890,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                                              tim_res: str) -> xr.Dataset:
         model = self.sim_source if datasource == 'sim' else self.ref_source
         try:
-            custom_module = importlib.import_module(f"custom.{model}_filter")
+            custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
             ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
         except (ImportError, AttributeError):
@@ -900,10 +921,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if datasource == 'stat':
             return ds[varname[0]]
         else:
-            model = self.sim_source if datasource == 'sim' else self.ref_source
+            try:
+                model = getattr(self, f"{self.sim_source}_model") if datasource == 'sim' else self.ref_source
+            except:
+                model = self.sim_source if datasource == 'sim' else self.ref_source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
-                custom_module = importlib.import_module(f"custom.{model}_filter")
+                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
                 self, ds = custom_filter(self, ds)
             except AttributeError:
@@ -932,13 +956,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
         value, unit = match.groups()
         value = int(value)
-        
+
         # Get frequency map based on pandas version
         if USE_NEW_FREQ_ALIASES:
             freq_map = {'month': 'ME', 'day': 'D', 'hour': 'h', 'year': 'YE', 'week': 'W'}
         else:
             freq_map = {'month': 'M', 'day': 'D', 'hour': 'H', 'year': 'Y', 'week': 'W'}
-            
+
         freq = freq_map.get(unit.lower())
         if not freq:
             logging.error(f"Unsupported time unit: {unit}")
@@ -1173,7 +1197,6 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         finally:
             gc.collect()
 
-
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
             station = Convert_Type.convert_Frame(station)
@@ -1345,7 +1368,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                     logging.debug(f"Removed temporary file: {temp_file}")
                 except OSError as e:
                     failed_removals.append((temp_file, str(e)))
-        
+
         # Only warn if we actually failed to remove existing files
         if failed_removals:
             logging.warning(f"Failed to remove {len(failed_removals)} temporary file(s)")
@@ -1507,7 +1530,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             if data is None:
                 logging.warning(f"No data to save for {data_source} year {year} - all regrid methods failed")
                 return
-            
+
             # Convert sparse arrays to dense arrays
             data = data.resample(time=self.compare_tim_res).mean()
             data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
@@ -1526,10 +1549,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        
+
         # Cache system will be initialized on-demand to avoid serialization issues
         self._cache_initialized = False
-    
+
     def _get_cache(self):
         """Get cache manager with lazy initialization."""
         if not self._cache_initialized:
