@@ -15,23 +15,13 @@ from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
 from ..statistic import statistics_calculate
 from openbench.util.Mod_Converttype import Convert_Type
-from openbench.visualization.Fig_heatmap import make_scenarios_scores_comparison_heat_map
-from openbench.visualization.Fig_taylor_diagram import make_scenarios_comparison_Taylor_Diagram
-from openbench.visualization.Fig_target_diagram import make_scenarios_comparison_Target_Diagram
-from openbench.visualization.Fig_kernel_density_estimate import make_scenarios_comparison_Kernel_Density_Estimate
-from openbench.visualization.Fig_parallel_coordinates import make_scenarios_comparison_parallel_coordinates
-from openbench.visualization.Fig_portrait_plot_seasonal import make_scenarios_comparison_Portrait_Plot_seasonal
-from openbench.visualization.Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
-from openbench.visualization.Fig_Relative_Score import make_scenarios_comparison_Relative_Score
-from openbench.visualization.Fig_Single_Model_Performance_Index import make_scenarios_comparison_Single_Model_Performance_Index
-from openbench.visualization.Fig_Ridgeline_Plot import make_scenarios_comparison_Ridgeline_Plot
-from openbench.visualization.Fig_Diff_Plot import make_scenarios_comparison_Diff_Plot
-from openbench.visualization.Fig_radarmap import make_scenarios_comparison_radar_map
-from openbench.visualization.Fig_Standard_Deviation import make_Standard_Deviation
+from ...visualization import *
+
 
 logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
 warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
 logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
+
 
 class ComparisonProcessing(metrics, scores, statistics_calculate):
     def __init__(self, main_nml, scores, metrics):
@@ -48,7 +38,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         # Add default weight attribute
         self.weight = self.main_nml['general'].get('weight', 'none')  # Default to 'none' if not specified
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
-        self._pft_station_warning_shown = False   # Track if PFT station data warning has been shown
+        self._pft_station_warning_shown = False  # Track if PFT station data warning has been shown
 
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
@@ -780,8 +770,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     normalized_weights.fillna(0)).mean(skipna=True).values
                                             else:
                                                 std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
-                                            stds[0] = std_ref
 
+                                        stds[0] = std_ref
                                         output_file.write(f"{std_ref}\t")
                                     finally:
                                         gc.collect()  # Clean up memory after processing each simulation source
@@ -1122,8 +1112,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                             for metric in metrics:
                                                 df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
-                                                q_low, q_high = df[metric].quantile([0.05, 0.95])
-                                                df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
+                                                if df[metric].shape[0] > 2:
+                                                    q_low, q_high = df[metric].quantile([0.05, 0.95])
+                                                    df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
 
                                                 kk = df[metric].median(skipna=True)
                                                 kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
@@ -1353,8 +1344,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                                                                     'metric', season, metric=metric)
                                                             for iik in range(len(station_list['ID'])))
                                                         results = np.array(results)
-                                                        q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
-                                                        results = np.where((results >= q1) & (results <= q3), results, np.nan)
+                                                        if results[~np.isnan(results)].shape[0] > 2:
+                                                            q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
+                                                            results = np.where((results >= q1) & (results <= q3), results, np.nan)
 
                                                         mean_value = np.nanmedian(results)
                                                         kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
@@ -1479,7 +1471,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                              option)
         finally:
-            gc.collect()  # Final cleanup for the entire method
+            gc.collect()
 
     def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
@@ -1625,6 +1617,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             logging.warning(f"No files found for pattern: {file_pattern}")
                                             continue
                                         if len(all_files) < 2:
+                                            logging.warning(f"Files less than 2, passing stn {ref_source}-{sim_source}")
                                             continue
 
                                         combined_relative_scores = pd.DataFrame()
@@ -1710,6 +1703,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     logging.warning(f"No files found for pattern: {file_pattern}")
                                                     continue
                                                 if len(all_files) < 2:
+                                                    logging.warning(f"Files less than 2, passing {score} {ref_source}-{sim_source}")
                                                     continue
 
                                                 # Read all files and combine into a single dataset
@@ -2471,13 +2465,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
 
                 if ref_data_type == 'stn':
-                    try:
-                        stnlist = os.path.join(basedir, 'output', 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
-                        station_list = pd.read_csv(stnlist, header=0)
-                        station_list = Convert_Type.convert_Frame(station_list)
-                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
-                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
-                        for sim_source in sim_sources:
+                    for sim_source in sim_sources:
+                        try:
+                            stnlist = os.path.join(basedir, 'output', 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
+                            station_list = pd.read_csv(stnlist, header=0)
+                            station_list = Convert_Type.convert_Frame(station_list)
+                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
+
                             sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                             results = Parallel(n_jobs=-1)(
                                 delayed(calculate_basic_parallel)(station_list, iik, evaluation_item, ref_source, sim_source,
@@ -2489,8 +2484,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             logging.info(f"Saving evaluation to {output_path}")
                             basic_data.to_csv(output_path, index=False)
                             make_stn_plot_index(output_path, basic_method, self.main_nml['general'], (ref_source, sim_source), option)
-                    except Exception as e:
-                        logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
+                        except Exception as e:
+                            logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                 else:
                     try:
                         ds = xr.open_dataset(os.path.join(basedir, 'output', 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'))[
@@ -2696,7 +2691,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         sim = xr.open_dataset(sim_path)[sim_varname]
                                         sim = Convert_Type.convert_nc(sim)
 
-
                                         result = method_function(*[ref, sim])
 
                                         output_file = os.path.join(dir_path,
@@ -2797,8 +2791,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 output_file.write(f"{overall_mean_str}\t")
                             output_file.write("\n")
-
+                # try:
                 make_scenarios_comparison_radar_map(output_file_path, score, option)
+                # except Exception as e:
+                #     logging.error(f"Error processing RadarMap for {score}: {e}")
         finally:
             gc.collect()  # Clean up memory after processing
 
@@ -2824,6 +2820,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         try:
                             sim_varname1 = sim_nml[f'{evaluation_item}'][f'{sim1}_varname']
                             sim_varname2 = sim_nml[f'{evaluation_item}'][f'{sim2}_varname']
+                            sim_data_type1 = sim_nml[f'{evaluation_item}'][f'{sim1}_data_type']
+                            sim_data_type2 = sim_nml[f'{evaluation_item}'][f'{sim2}_data_type']
+                            if sim_data_type1 == 'stn' or sim_data_type2 == 'stn':
+                                logging.warning(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
+                                logging.warning("All simulation sources must be gridded data")
+                                continue
+
                             # if self.sim_varname is empty, then set it to item
                             if sim_varname1 is None or sim_varname1 == '':
                                 sim_varname1 = evaluation_item
@@ -2832,6 +2835,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname2 = evaluation_item
                                 sim_nml[f'{evaluation_item}'][f'{sim2}_varname'] = evaluation_item
                             # Use os.path.join for file paths
+
                             ds1_path = os.path.join(basedir, 'output', 'data',
                                                     f'{evaluation_item}_sim_{sim1}_{sim_varname1}.nc')
                             ds2_path = os.path.join(basedir, 'output', 'data',

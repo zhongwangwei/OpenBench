@@ -1,6 +1,9 @@
 import xarray as xr
 import logging
 import numpy as np
+import warnings
+
+warnings.filterwarnings('ignore', category=FutureWarning)  # Suppress numpy runtime warnings
 
 
 def stat_functional_response(self, v, u):
@@ -45,7 +48,11 @@ def stat_functional_response(self, v, u):
 
         # Calculate mean v for each bin
         df = pd.DataFrame({'u': u_valid, 'v': v_valid})
-        binned_means = df.groupby(pd.cut(df['u'], bins=u_bins))['v'].mean()
+        # binned_means = df.groupby(pd.cut(df['u'], bins=u_bins))['v'].mean()
+        binned_means = df.groupby(
+            pd.cut(df['u'], bins=u_bins),
+            observed=True  # 或 observed=False 保持当前行为
+        )['v'].mean()
 
         df['bin'] = pd.cut(df['u'], bins=u_bins)
         df['v_binned'] = df['bin'].map(binned_means)

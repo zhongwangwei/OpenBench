@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 import logging
+
 def adjust_time_TE(info, ds, syear, eyear, tim_res):
     match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
     if match:
@@ -9,7 +10,7 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
         num_value = int(num_value) if num_value else 1
 
         # Determine the frequency based on time_unit
-        if time_unit.lower() in ['m', 'month', 'mon']:
+        if time_unit.lower() in ['m', 'me', 'month', 'mon']:
             freq = f'{num_value}M'
         elif time_unit.lower() in ['d', 'day', '1d', '1day']:
             freq = f'{num_value}D'
