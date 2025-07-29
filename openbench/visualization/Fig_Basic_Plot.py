@@ -98,8 +98,8 @@ def determine_display_unit(self):
         else:
             # If units differ, try to convert to a common base unit
             try:
-                ref_data, ref_base = UnitProcessing.convert_unit(None, ref_unit)
-                sim_data, sim_base = UnitProcessing.convert_unit(None, sim_unit)
+                ref_data, ref_base = UnitProcessing.convert_unit(None, ref_unit.lower())
+                sim_data, sim_base = UnitProcessing.convert_unit(None, sim_unit.lower())
                 if ref_base == sim_base:
                     display_unit = convert_unit(ref_base)
                     logging.info(f'Converted both units to common base: {ref_base}')
