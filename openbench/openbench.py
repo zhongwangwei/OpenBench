@@ -418,10 +418,21 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                 if combination_key not in displayed_combinations:
                     ref_dataset_info = format_dataset_info(ref_source, ref_nml, evaluation_item)
                     sim_dataset_info = format_dataset_info(sim_source, sim_nml, evaluation_item)
-                    ref_type = "Station" if ref_nml[evaluation_item].get(f'{ref_source}_data_type') == 'stn' else "Grid"
-                    sim_type = "Station" if sim_nml[evaluation_item].get(f'{sim_source}_data_type') == 'stn' else "Grid"
-                    print(f"    Reference: {ref_source} ({ref_type})")
-                    print(f"    Simulation: {sim_source} ({sim_type})")
+                    # Get colors for data type highlighting
+                    colors = get_platform_colors()
+                    
+                    ref_data_type = ref_nml[evaluation_item].get(f'{ref_source}_data_type')
+                    sim_data_type = sim_nml[evaluation_item].get(f'{sim_source}_data_type')
+                    
+                    ref_type = "Station" if ref_data_type == 'stn' else "Grid"
+                    sim_type = "Station" if sim_data_type == 'stn' else "Grid"
+                    
+                    # Color code: Station = Orange/Yellow, Grid = Cyan/Blue
+                    ref_color = colors['yellow'] if ref_data_type == 'stn' else colors['cyan']
+                    sim_color = colors['yellow'] if sim_data_type == 'stn' else colors['cyan']
+                    
+                    print(f"    Reference: {ref_source} ({ref_color}{ref_type}{colors['reset']})")
+                    print(f"    Simulation: {sim_source} ({sim_color}{sim_type}{colors['reset']})")
                     displayed_combinations.add(combination_key)
                 
                 process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
