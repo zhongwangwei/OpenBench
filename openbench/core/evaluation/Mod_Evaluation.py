@@ -535,6 +535,7 @@ class Evaluation_stn(metrics, scores):
                 station_list.to_csv(metrics_path, index=False)
             
             make_plot_index_stn(self)
+
         finally:
             gc.collect()  # Final cleanup
 
