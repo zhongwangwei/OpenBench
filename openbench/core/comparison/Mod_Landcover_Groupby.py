@@ -144,7 +144,7 @@ class LC_groupby(metrics, scores):
                             if not self._igbp_station_warning_shown:
                                 logging.warning(f"warning: station data is not supported for IGBP class comparison")
                                 self._igbp_station_warning_shown = True
-                            pass
+                            continue  # Skip processing for station data
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'IGBP_groupby',
                                                     f'{sim_source}___{ref_source}')
@@ -415,6 +415,7 @@ class LC_groupby(metrics, scores):
                             if not self._pft_station_warning_shown:
                                 logging.warning(f"warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
+                            continue  # Skip processing for station data
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
