@@ -17,7 +17,6 @@ from ..statistic import statistics_calculate
 from openbench.util.Mod_Converttype import Convert_Type
 from ...visualization import *
 
-
 logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
 warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
 logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
@@ -625,7 +624,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                                    f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
                                             station_list = pd.read_csv(stnlist, header=0)
                                             station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lat', 'ref_lon', 'use_syear', 'use_eyear','lon', 'lat']
                                             station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
                                             # this should be moved to other place
                                             if ref_source.lower() == 'grdc':
