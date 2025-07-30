@@ -40,3 +40,4 @@ preprocessing/get_stn_cama_ready/Water Surface Elevation/tmp.txt
 /preprocessing/get_stn_cama_ready/Water_Surface_Elevation/bk-unupload
 preprocessing/get_stn_cama_ready/Water_Surface_Elevation/tmp.txt
 CLAUDE.md
+*.log

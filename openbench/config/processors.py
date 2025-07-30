@@ -185,6 +185,14 @@ class GeneralInfoReader(NamelistReader):
     
     def _process_time_resolutions(self):
         """Process and normalize time resolutions."""
+        # Handle special case for GRDC data with missing time resolution
+        if (self.ref_source == 'GRDC' and 
+            self.ref_data_type == 'stn' and 
+            (not self.ref_tim_res or self.ref_tim_res == '')):
+            # Set GRDC time resolution to match comparison resolution
+            self.ref_tim_res = getattr(self, 'compare_tim_res', 'D')
+            logging.info(f"GRDC reference time resolution set to comparison resolution: {self.ref_tim_res}")
+        
         self.ref_tim_res_normalized, self.ref_freq = self._normalize_time_resolution(self.ref_tim_res)
         self.sim_tim_res_normalized, self.sim_freq = self._normalize_time_resolution(self.sim_tim_res)
         self._check_time_resolution_consistency()
