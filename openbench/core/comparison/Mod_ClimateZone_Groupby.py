@@ -158,6 +158,7 @@ class CZ_groupby(metrics, scores):
                             if not self._station_warning_shown:
                                 logging.warning(f"warning: station data is not supported for Climate zone class comparison")
                                 self._station_warning_shown = True
+                            continue  # Skip processing for station data
                         else:
                             dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
