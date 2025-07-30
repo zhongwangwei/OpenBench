@@ -4,14 +4,17 @@
 
 OpenBench is a comprehensive, open-source system designed to rigorously evaluate and compare the performance of land surface models (LSMs). It provides a standardized framework for benchmarking LSM outputs against a wide array of reference datasets, encompassing various physical processes and variables. This system automates critical aspects of model evaluation, including configuration management, data processing, validation, inter-comparison, and in-depth statistical analysis. By streamlining these complex tasks, OpenBench empowers researchers and model developers to efficiently assess model capabilities, identify areas for improvement, and advance the science of land surface modeling.
 
-**Latest Updates (v2.0):**
-- ✅ **Multi-Format Configuration Support**: JSON, YAML, and Fortran Namelist formats
-- ✅ **Enhanced Modular Architecture**: 9 core modules with standardized interfaces  
-- ✅ **Cross-Platform Compatibility**: Windows, Linux, and macOS support
-- ✅ **Intelligent Parallel Processing**: Automatic multi-core utilization with progress tracking
-- ✅ **Advanced Caching System**: Memory and disk caching for improved performance
-- ✅ **Unified Error Handling**: Consistent error reporting and recovery mechanisms
-- ✅ **Enhanced Logging**: Structured JSON logs with performance metrics
+**Latest Updates (v2.0 - July 2025):**
+- ✅ **Multi-Format Configuration Support**: JSON, YAML, and Fortran Namelist formats with automatic detection
+- ✅ **Enhanced Modular Architecture**: 9 core modules with standardized interfaces and dependency injection
+- ✅ **Cross-Platform Compatibility**: Windows, Linux, and macOS support with intelligent dependency handling  
+- ✅ **Intelligent Parallel Processing**: Automatic multi-core utilization with smart worker allocation and progress tracking
+- ✅ **Advanced Caching System**: Multi-level caching (memory + disk) with LRU eviction and automatic invalidation
+- ✅ **Unified Error Handling**: Structured error reporting with graceful degradation for missing dependencies
+- ✅ **Enhanced Logging**: Dual-level logging system with clean console output and detailed file logging
+- ✅ **Memory Management**: Automatic memory optimization and cleanup during intensive operations
+- ✅ **Climate Zone Analysis**: Köppen climate zone-based groupby analysis capabilities
+- ✅ **Directory Restructuring**: Improved organization with `dataset/` directory and modular `openbench/` package
 
 ## Key Features
 
@@ -94,31 +97,39 @@ OpenBench features a modern modular architecture with 9 core modules and legacy 
 ## Setup and Configuration
 
 ### **Prerequisites**
-1. **Python Environment**: Python 3.8+ recommended
-2. **Core Dependencies**: `xarray`, `pandas`, `numpy`, `netCDF4`, `matplotlib`, `cartopy`
+1. **Python Environment**: Python 3.10+ recommended (per development guidelines)
+2. **Core Dependencies**: Install with `pip install -r requirements.txt`
+   - `xarray>=0.19.0`, `pandas>=1.3.0`, `numpy>=1.21.0`
+   - `netCDF4>=1.5.7`, `matplotlib>=3.4.0`, `cartopy>=0.20.0`
+   - `scipy>=1.7.0`, `joblib>=1.1.0`, `dask>=2022.1.0`, `flox>=0.5.0`
 3. **Optional Dependencies**: 
-   - `yaml` for YAML configuration support
-   - `f90nml` for Fortran Namelist support  
-   - `CDO` for advanced data operations (Linux/macOS)
+   - `yaml` for YAML configuration support (automatically detected)
+   - `f90nml` for Fortran Namelist support (automatically detected)
+   - `psutil` for enhanced memory monitoring
+   - `CDO` for advanced data operations (Linux/macOS only, gracefully skipped on Windows)
 
 ### **Multi-Format Configuration Support**
 OpenBench supports three configuration formats with automatic detection:
 
-#### **Directory Structure**
+#### **Project Structure**
 ```
-nml/
-├── nml-json/          # JSON configuration files
-│   ├── main-Debug.json
-│   ├── ref-Debug.json
-│   └── sim-Debug.json
-├── nml-yaml/          # YAML configuration files  
-│   ├── main-Debug.yaml
-│   ├── ref-Debug.yaml
-│   └── sim-Debug.yaml
-└── nml-Fortran/       # Fortran Namelist files
-    ├── main-Debug.nml
-    ├── ref-Debug.nml
-    └── sim-Debug.nml
+OpenBench/
+├── openbench/              # Main package directory
+│   ├── config/             # Configuration management
+│   ├── core/               # Core functionality modules
+│   ├── data/               # Data processing and pipeline
+│   ├── util/               # Utility modules
+│   └── visualization/      # Plotting and visualization
+├── dataset/                # Data files (renamed from data/)
+│   ├── reference/          # Reference datasets
+│   └── simulation/         # Model simulation outputs
+├── nml/                    # Configuration files
+│   ├── nml-json/           # JSON format configurations
+│   ├── nml-yaml/           # YAML format configurations
+│   └── nml-Fortran/        # Fortran Namelist configurations
+├── GUI/                    # Graphical user interface
+├── output/                 # Evaluation results and logs
+└── requirements.txt        # Python dependencies
 ```
 
 #### **Configuration Files**
@@ -134,19 +145,34 @@ nml/
 
 ## Usage
 
+### **Installation**
+```bash
+# Clone the repository
+git clone https://github.com/zhongwangwei/OpenBench.git
+cd OpenBench
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Quick test (optional)
+python -c "from openbench.config import *; print('Config system ready')"
+```
+
 ### **Basic Usage**
 OpenBench automatically detects configuration format and runs the evaluation:
 
 ```bash
-
-# JSON format
+# JSON format (recommended for beginners)
 python openbench/openbench.py nml/nml-json/main-Debug.json
 
-# YAML format  
+# YAML format (human-readable)
 python openbench/openbench.py nml/nml-yaml/main-Debug.yaml
 
-# Fortran Namelist format
+# Fortran Namelist format (legacy compatibility)
 python openbench/openbench.py nml/nml-Fortran/main-Debug.nml
+
+# GUI interface
+python GUI/GUI_openbench.py
 ```
 
 ### **Advanced Usage**
@@ -214,11 +240,28 @@ The specific variables and evaluation items can be configured in the namelists.
 
 ## Output
 
-The system generates a comprehensive set of outputs, typically organized into a user-defined output directory. These include:
+The system generates a comprehensive set of outputs organized in the `output/` directory:
 
-*   **Metrics and Scores:** Text files or spreadsheets containing detailed metric calculations (e.g., bias, RMSE, correlation coefficients) and aggregated performance scores for each evaluated variable and model.
-*   **Comparison Plots and Statistics:** Visualizations (e.g., time series plots, scatter plots, spatial maps) and statistical summaries comparing model outputs against reference data and against other models.
-*   **Detailed Logs and Summaries:** Log files documenting the evaluation process, including any warnings or errors, and summary reports of the evaluation findings.
+```
+output/debug/
+├── output/
+│   ├── metrics/         # Detailed metric calculations (bias, RMSE, correlation, etc.)
+│   ├── scores/          # Aggregated performance scores for each variable and model
+│   ├── data/            # Processed datasets and intermediate results
+│   ├── figures/         # Generated plots and visualizations
+│   └── comparisons/     # Cross-model comparison results
+├── log/                 # Detailed execution logs with timestamps
+│   └── openbench_YYYYMMDD_HHMMSS.log
+├── scratch/             # Temporary processing files
+└── tmp/                 # Additional temporary storage
+```
+
+**Output Features:**
+- **Structured Results**: JSON, CSV, and NetCDF formats for easy integration
+- **Rich Visualizations**: Time series, scatter plots, spatial maps, Taylor diagrams
+- **Performance Metrics**: Comprehensive statistical analysis and scoring
+- **Detailed Logging**: Both console output and file logging with performance tracking
+- **Memory-Efficient**: Automatic cleanup and optimization during processing
 
 ## Troubleshooting
 
@@ -239,9 +282,10 @@ The system generates a comprehensive set of outputs, typically organized into a 
 - **Comment Parsing**: In Fortran NML files, comments after values are automatically stripped
 
 ### **Performance Optimization**
-- **Parallel Processing**: Adjust `num_cores` in main configuration based on system resources
-- **Caching**: First runs may be slower due to cache building; subsequent runs will be faster
-- **Memory Usage**: Monitor memory usage with large datasets; reduce parallel workers if needed
+- **Parallel Processing**: Automatic worker allocation based on system resources; manually adjust `max_workers` if needed
+- **Caching**: Multi-level caching system speeds up subsequent runs significantly
+- **Memory Management**: Automatic cleanup and optimization during processing
+- **Large Datasets**: Consider reducing dataset size or increasing system memory for very large evaluations
 
 ### **Cartopy Coastline Data Download**
 An internet connection is required for Cartopy coastline data. For offline HPC environments:
@@ -305,18 +349,36 @@ OpenBench is released under the **MIT License**. See the `LICENSE` file in the r
 
 We are grateful for all contributions to the OpenBench project.
 
-## Version History
+## Recent Updates & Version History
 
-**Current Version: 2.0**
-- Release Date: July 2025
-- Major refactoring with enhanced modular architecture
-- Multi-format configuration support (JSON, YAML, Fortran NML)
-- Cross-platform compatibility (Windows, Linux, macOS)
-- Intelligent parallel processing and caching systems
-- Unified error handling and enhanced logging
+### **July 2025 Updates (v2.0)**
+- **🎯 Enhanced Console Output**: Clean, emoji-enhanced progress indicators with reduced INFO noise
+- **🗂️ Directory Restructuring**: Renamed `data/` to `dataset/` for better organization
+- **🧠 Memory Management**: Automatic memory optimization and cleanup system
+- **🌍 Climate Zone Analysis**: Köppen climate zone-based groupby functionality
+- **📦 Modular Architecture**: Reorganized modules from `script/` to `openbench/` package
+- **⚙️ Configuration Enhancement**: Better organization and format-specific subdirectories
+- **🔧 Import System**: Proper package structure with updated import paths
 
-**Previous Version: 1.0**
-- Release Date: June 2025
-- Initial open-source release
-- Basic evaluation framework
-- JSON configuration support
+### **Current Version: 2.0**
+- **Release Date**: July 2025
+- **Major Features**: 
+  - Multi-format configuration support (JSON, YAML, Fortran NML) with auto-detection
+  - Cross-platform compatibility (Windows, Linux, macOS) with intelligent dependency handling
+  - Enhanced modular architecture with 9 core modules and standardized interfaces
+  - Intelligent parallel processing with smart worker allocation and resource monitoring
+  - Advanced multi-level caching system with automatic invalidation
+  - Unified error handling with structured logging and graceful degradation
+  - Dual-level logging system (clean console + detailed file logging)
+
+### **Previous Version: 1.0**
+- **Release Date**: June 2025
+- **Features**: Initial open-source release, basic evaluation framework, JSON configuration support
+
+### **Backward Compatibility**
+OpenBench v2.0 maintains 100% compatibility with:
+- Existing configuration files (all formats)
+- Input data formats and structures
+- Output file organization
+- Legacy evaluation workflows
+- Command-line interfaces
