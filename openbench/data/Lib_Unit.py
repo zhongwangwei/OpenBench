@@ -13,6 +13,7 @@ class UnitProcessing:
 		"""
 		Generic unit conversion method.
 		Converts input unit to the base unit if possible.
+		If data is None, only returns the converted unit without data conversion.
 		"""
 		conversion_factors = {
 			'g m-2 day-1': {
@@ -20,6 +21,7 @@ class UnitProcessing:
 				'gc m-2 s-1': lambda x: x * 86400,
 				'g m-2 s-1': lambda x: x * 86400,
 				'mumolco2 m-2 s-1': lambda x: x * (12e-6 * 86400),
+				'mumolCO2 m-2 s-1': lambda x: x * (12e-6 * 86400),
 			},
 			'mm day-1': {
 				'kg m-2 s-1': lambda x: x * 86400,
@@ -89,15 +91,27 @@ class UnitProcessing:
 			},
 		}
 		logging.info(f'Converting {input_unit} to base unit...')
+		
+		# Normalize input unit for case-insensitive comparison
+		input_unit_lower = input_unit.lower()
+		
 		for base_unit, conversions in conversion_factors.items():
-			if input_unit == base_unit:
+			# Check if input unit matches base unit (case-insensitive)
+			if input_unit_lower == base_unit.lower():
 				logging.info(f'No conversion needed for {input_unit}')
 				return data, base_unit
 
-			elif input_unit in conversions:
-				converted_data = conversions[input_unit](data)
-				logging.info(f'Successfully converted {input_unit} to {base_unit}')
-				return converted_data, base_unit
+			# Check conversions (case-insensitive)
+			for conv_unit, conv_func in conversions.items():
+				if input_unit_lower == conv_unit.lower():
+					# If data is None, only return the target unit
+					if data is None:
+						logging.info(f'Unit mapping found: {input_unit} -> {base_unit}')
+						return None, base_unit
+					else:
+						converted_data = conv_func(data)
+						logging.info(f'Successfully converted {input_unit} to {base_unit}')
+						return converted_data, base_unit
 		
 		# If no conversion is found after checking all base units
 		logging.warning(f'No conversion found for {input_unit}. Using original data and unit.')
