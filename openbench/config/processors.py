@@ -317,8 +317,8 @@ class GeneralInfoReader(NamelistReader):
             self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
             self._rename_station_columns(ref_only=True)
             self.stn_list = self.ref_stn_list
-            self.stn_list['use_syear'] = self.stn_list['ref_syear']
-            self.stn_list['use_eyear'] = self.stn_list['ref_eyear']
+            self.stn_list['use_syear'] = int(self.stn_list['ref_syear'])
+            self.stn_list['use_eyear'] = int(self.stn_list['ref_eyear'])
             self.stn_list['Flag'] = False
 
     def _rename_station_columns(self, sim_only=False, ref_only=False):
@@ -416,36 +416,36 @@ class GeneralInfoReader(NamelistReader):
             sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
             ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
             syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
-            self.use_syear = pd.concat([sim_years, ref_years, syear_series], axis=1).max(axis=1)
+            self.use_syear = pd.concat([sim_years, ref_years, syear_series], axis=1).max(axis=1).astype('int')
 
             sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
             ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
             eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
-            self.use_eyear = pd.concat([sim_eyears, ref_eyears, eyear_series], axis=1).min(axis=1)
+            self.use_eyear = pd.concat([sim_eyears, ref_eyears, eyear_series], axis=1).min(axis=1).astype('int')
 
         elif self.sim_data_type == 'stn':
             # Only sim is station data
             sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
             ref_syear = pd.Series([int(self.ref_syear)] * len(self.stn_list))
             syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
-            self.use_syear = pd.concat([sim_years, ref_syear, syear_series], axis=1).max(axis=1)
+            self.use_syear = pd.concat([sim_years, ref_syear, syear_series], axis=1).max(axis=1).astype('int')
 
             sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
             ref_eyear = pd.Series([int(self.ref_eyear)] * len(self.stn_list))
             eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
-            self.use_eyear = pd.concat([sim_eyears, ref_eyear, eyear_series], axis=1).min(axis=1)
+            self.use_eyear = pd.concat([sim_eyears, ref_eyear, eyear_series], axis=1).min(axis=1).astype('int')
 
         elif self.ref_data_type == 'stn':
             # Only ref is station data
             ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
             sim_syear = pd.Series([int(self.sim_syear)] * len(self.stn_list))
             syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
-            self.use_syear = pd.concat([ref_years, sim_syear, syear_series], axis=1).max(axis=1)
+            self.use_syear = pd.concat([ref_years, sim_syear, syear_series], axis=1).max(axis=1).astype('int')
 
             ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
             sim_eyear = pd.Series([int(self.sim_eyear)] * len(self.stn_list))
             eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
-            self.use_eyear = pd.concat([ref_eyears, sim_eyear, eyear_series], axis=1).min(axis=1)
+            self.use_eyear = pd.concat([ref_eyears, sim_eyear, eyear_series], axis=1).min(axis=1).astype('int')
 
         # Set the calculated years
         self.stn_list['use_syear'] = self.use_syear
@@ -528,8 +528,8 @@ class GeneralInfoReader(NamelistReader):
     def _set_use_years(self):
         """Set the use years based on the evaluation timeframe."""
         try:
-            self.use_syear = max(int(self.ref_syear), int(self.sim_syear), int(self.syear))
-            self.use_eyear = min(int(self.ref_eyear), int(self.sim_eyear), int(self.eyear))
+            self.use_syear = int(max(int(self.ref_syear), int(self.sim_syear), int(self.syear)))
+            self.use_eyear = int(min(int(self.ref_eyear), int(self.sim_eyear), int(self.eyear)))
         except (ValueError, AttributeError) as e:
             # If any year parsing fails, use general years
             try:
