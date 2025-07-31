@@ -1,6 +1,6 @@
 {
   "general": {
-    "basename": "debug2",
+    "basename": "debug3",
     "basedir": "./output",
     "compare_tim_res": "month",
     "compare_tzone": 0.0,
@@ -165,7 +165,7 @@
   },
   "scores": {
     "nBiasScore": true,
-    "nRMSEScore": false,
+    "nRMSEScore": true,
     "nPhaseScore": false,
     "nIavScore": false,
     "nSpatialScore": true,
