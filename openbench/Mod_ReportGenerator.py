@@ -141,6 +141,15 @@ class ReportGenerator:
                 "figures": self._collect_figures(item),
                 "statistics": self._collect_statistics(item)
             }
+            
+            # Debug logging
+            logger.info(f"Collected data for {item}:")
+            logger.info(f"  - Figures: {list(item_data['figures'].keys())}")
+            logger.info(f"  - Statistics: {list(item_data['statistics'].keys())}")
+            for fig_type, figs in item_data['figures'].items():
+                if figs:
+                    logger.info(f"    {fig_type}: {len(figs)} figures")
+            
             report_data["evaluation_items"][item] = item_data
         
         # Collect comparison data
@@ -199,6 +208,40 @@ class ReportGenerator:
                             valid_data = main_var.values[~np.isnan(main_var.values)]
                             
                             if len(valid_data) > 0:
+                                # Try to extract comparison pair from filename first, then fallback to config
+                                comparison_pair = self._extract_comparison_pair(key)
+                                
+                                # If we can extract ref and sim sources from filename, try to get better name from config
+                                if "ref_" in key and "sim_" in key:
+                                    try:
+                                        # Extract ref and sim sources from filename
+                                        parts = key.split('_')
+                                        ref_source = None
+                                        sim_source = None
+                                        
+                                        for i, part in enumerate(parts):
+                                            if part == "ref" and i + 1 < len(parts):
+                                                ref_parts = []
+                                                j = i + 1
+                                                while j < len(parts) and parts[j] != "sim":
+                                                    ref_parts.append(parts[j])
+                                                    j += 1
+                                                ref_source = "_".join(ref_parts)
+                                                
+                                            elif part == "sim" and i + 1 < len(parts):
+                                                sim_parts = []
+                                                j = i + 1
+                                                while j < len(parts) and parts[j] not in ["RMSE", "KGESS", "correlation", "bias"]:
+                                                    sim_parts.append(parts[j])
+                                                    j += 1
+                                                sim_source = "_".join(sim_parts)
+                                                break
+                                        
+                                        if ref_source and sim_source:
+                                            comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
+                                    except Exception as e:
+                                        logger.warning(f"Error extracting sources from filename {key}: {e}")
+                                
                                 metrics_data[key] = {
                                     "global_mean": float(np.mean(valid_data)),
                                     "global_std": float(np.std(valid_data)),
@@ -210,7 +253,7 @@ class ReportGenerator:
                                     "data_coverage": float(len(valid_data) / main_var.size * 100),
                                     "shape": str(main_var.dims),
                                     "metric_type": self._extract_metric_type(key),
-                                    "comparison_pair": self._extract_comparison_pair(key)
+                                    "comparison_pair": comparison_pair
                                 }
                             else:
                                 logger.warning(f"No valid data found in {nc_file}")
@@ -251,7 +294,10 @@ class ReportGenerator:
         figures = {
             "metrics": [],
             "scores": [],
-            "comparisons": []
+            "comparisons": [],
+            "igbp_groupby": [],
+            "pft_groupby": [],
+            "climate_zone_groupby": []
         }
         
         # Metrics figures
@@ -271,6 +317,45 @@ class ReportGenerator:
             comp_files = glob.glob(comp_path)
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
         
+        # IGBP groupby figures
+        igbp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
+        igbp_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        igbp_files = []
+        for pattern in igbp_patterns:
+            found_files = glob.glob(os.path.join(igbp_dir, pattern))
+            if found_files:
+                igbp_files = found_files
+                break
+        figures["igbp_groupby"] = [f"IGBP_groupby/{os.path.basename(f)}" for f in igbp_files]
+        if igbp_files:
+            logger.info(f"Found IGBP groupby figures: {igbp_files}")
+        
+        # PFT groupby figures
+        pft_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
+        pft_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        pft_files = []
+        for pattern in pft_patterns:
+            found_files = glob.glob(os.path.join(pft_dir, pattern))
+            if found_files:
+                pft_files = found_files
+                break
+        figures["pft_groupby"] = [f"PFT_groupby/{os.path.basename(f)}" for f in pft_files]
+        if pft_files:
+            logger.info(f"Found PFT groupby figures: {pft_files}")
+        
+        # Climate zone groupby figures
+        climate_dir = os.path.join(self.comparisons_dir, "Climate_zone_groupby")
+        climate_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        climate_files = []
+        for pattern in climate_patterns:
+            found_files = glob.glob(os.path.join(climate_dir, pattern))
+            if found_files:
+                climate_files = found_files
+                break
+        figures["climate_zone_groupby"] = [f"Climate_zone_groupby/{os.path.basename(f)}" for f in climate_files]
+        if climate_files:
+            logger.info(f"Found Climate zone groupby figures: {climate_files}")
+        
         return figures
     
     def _collect_statistics(self, item: str) -> Dict[str, Any]:
@@ -287,7 +372,126 @@ class ReportGenerator:
             if stat_files:
                 stats[stat_dir] = [os.path.basename(f) for f in stat_files]
         
+        # Collect groupby statistics
+        groupby_stats = self._collect_groupby_statistics(item)
+        if groupby_stats:
+            stats.update(groupby_stats)
+        
         return stats
+    
+    def _collect_groupby_statistics(self, item: str) -> Dict[str, Any]:
+        """Collect groupby statistics for IGBP, PFT, and Climate zone"""
+        groupby_stats = {}
+        
+        # Define groupby types and their corresponding directories
+        groupby_types = {
+            "IGBP_groupby": "IGBP_groupby",
+            "PFT_groupby": "PFT_groupby", 
+            "Climate_zone_groupby": "Climate_zone_groupby"
+        }
+        
+        for groupby_name, groupby_dir in groupby_types.items():
+            groupby_path = os.path.join(self.comparisons_dir, groupby_dir)
+            logger.info(f"Checking groupby directory: {groupby_path}")
+            
+            # Check for CSV files with statistics (try multiple patterns)
+            csv_patterns = [
+                os.path.join(groupby_path, f"*{item}*_statistics.csv"),
+                os.path.join(groupby_path, f"*{item}*.csv"),
+                os.path.join(groupby_path, f"{item}_*.csv"),
+                os.path.join(groupby_path, "*.csv")
+            ]
+            
+            csv_files = []
+            for pattern in csv_patterns:
+                found_files = glob.glob(pattern)
+                if found_files:
+                    csv_files = found_files
+                    logger.info(f"Found CSV files with pattern {pattern}: {csv_files}")
+                    break
+            
+            if not csv_files:
+                logger.info(f"No CSV files found for {item} in {groupby_path}")
+            
+            if csv_files:
+                stats_data = []
+                for csv_file in csv_files:
+                    try:
+                        df = pd.read_csv(csv_file)
+                        stats_data.append({
+                            "file": os.path.basename(csv_file),
+                            "data": df.to_dict(orient='records'),
+                            "summary": self._generate_groupby_summary(df)
+                        })
+                    except Exception as e:
+                        logger.warning(f"Error reading {csv_file}: {e}")
+                
+                if stats_data:
+                    groupby_stats[groupby_name] = {
+                        "statistics": stats_data,
+                        "description": self._get_groupby_description(groupby_name)
+                    }
+            
+            # Also check for NetCDF files with spatial statistics
+            nc_patterns = [
+                os.path.join(groupby_path, f"*{item}*.nc"),
+                os.path.join(groupby_path, f"{item}_*.nc"),
+                os.path.join(groupby_path, "*.nc")
+            ]
+            
+            nc_files = []
+            for pattern in nc_patterns:
+                found_files = glob.glob(pattern)
+                if found_files:
+                    nc_files = found_files
+                    logger.info(f"Found NC files with pattern {pattern}: {nc_files}")
+                    break
+            
+            if nc_files:
+                if groupby_name not in groupby_stats:
+                    groupby_stats[groupby_name] = {
+                        "statistics": [],
+                        "description": self._get_groupby_description(groupby_name)
+                    }
+                
+                groupby_stats[groupby_name]["spatial_files"] = [os.path.basename(f) for f in nc_files]
+        
+        return groupby_stats
+    
+    def _generate_groupby_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generate summary statistics for groupby dataframe"""
+        summary = {}
+        
+        # Identify numeric columns for statistics
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        
+        for col in numeric_cols:
+            if not df[col].isna().all():
+                summary[col] = {
+                    "mean": float(df[col].mean()),
+                    "std": float(df[col].std()),
+                    "min": float(df[col].min()),
+                    "max": float(df[col].max()),
+                    "median": float(df[col].median()),
+                    "count": int(df[col].count())
+                }
+        
+        # Add group information if available
+        if 'group' in df.columns or 'Group' in df.columns:
+            group_col = 'group' if 'group' in df.columns else 'Group'
+            summary["groups"] = df[group_col].unique().tolist()
+            summary["group_count"] = len(df[group_col].unique())
+        
+        return summary
+    
+    def _get_groupby_description(self, groupby_name: str) -> str:
+        """Get description for groupby analysis type"""
+        descriptions = {
+            "IGBP_groupby": "International Geosphere-Biosphere Programme (IGBP) land cover classification groupby analysis",
+            "PFT_groupby": "Plant Functional Type (PFT) groupby analysis",
+            "Climate_zone_groupby": "Climate zone classification groupby analysis"
+        }
+        return descriptions.get(groupby_name, f"{groupby_name} analysis")
     
     def _collect_comparison_data(self) -> Dict[str, Any]:
         """Collect overall comparison data"""
@@ -407,24 +611,81 @@ class ReportGenerator:
         
         return f"{ref_source} vs {sim_source}"
     
+    def _get_comparison_pair_from_config(self, item: str, ref_source: str, sim_source: str) -> str:
+        """Get comparison pair from configuration instead of filename parsing"""
+        try:
+            # Get display names from configuration if available
+            ref_display_name = self._get_source_display_name(item, ref_source, 'ref')
+            sim_display_name = self._get_source_display_name(item, sim_source, 'sim')
+            
+            return f"{ref_display_name} vs {sim_display_name}"
+            
+        except Exception as e:
+            logger.warning(f"Error getting comparison pair from config for {item}: {e}")
+            return f"{ref_source} vs {sim_source}"
+    
+    def _get_source_display_name(self, item: str, source: str, source_type: str) -> str:
+        """Get display name for a source from configuration"""
+        try:
+            config_key = f"{source_type}_nml"
+            if config_key in self.config and item in self.config[config_key]:
+                # Try to get a display name or description
+                display_key = f"{source}_display_name"
+                if display_key in self.config[config_key][item]:
+                    return self.config[config_key][item][display_key]
+                
+                # Try to get from varname as display name
+                varname_key = f"{source}_varname"
+                if varname_key in self.config[config_key][item]:
+                    return self.config[config_key][item][varname_key]
+            
+            # If no display name found, return the source name
+            return source
+            
+        except Exception as e:
+            logger.warning(f"Error getting display name for {source}: {e}")
+            return source
+    
     def _generate_grid_vs_grid_stats(self, item: str) -> Dict[str, Any]:
         """Generate comprehensive grid vs grid statistics like station case format"""
         grid_stats = {}
         
-        # Define comparison pairs to look for
-        comparison_pairs = [
-            ("GLEAM4.2a_monthly", "grid_case"),
-            ("ILAMB_monthly", "grid_case")
-        ]
+        # Get reference and simulation sources from configuration
+        ref_sources = self._get_reference_sources(item)
+        sim_sources = self._get_simulation_sources(item)
+        
+        # Log what we found for debugging
+        logger.info(f"Found reference sources for {item}: {ref_sources}")
+        logger.info(f"Found simulation sources for {item}: {sim_sources}")
+        
+        # If no sources found from config, try to infer from existing files
+        if not ref_sources or not sim_sources:
+            logger.info(f"Attempting to infer sources from existing files for {item}")
+            inferred_ref_sources, inferred_sim_sources = self._infer_sources_from_files(item)
+            if not ref_sources:
+                ref_sources = inferred_ref_sources
+            if not sim_sources:
+                sim_sources = inferred_sim_sources
+            logger.info(f"After inference - ref_sources: {ref_sources}, sim_sources: {sim_sources}")
+        
+        # Generate all possible comparison pairs
+        comparison_pairs = []
+        for ref_source in ref_sources:
+            for sim_source in sim_sources:
+                comparison_pairs.append((ref_source, sim_source))
         
         for ref_source, sim_source in comparison_pairs:
             # Look for this comparison pair
             base_pattern = f"{item}_ref_{ref_source}_sim_{sim_source}_"
             
+            # Get year information from configuration
+            syear = self._get_year_info(item, ref_source, sim_source, 'syear')
+            eyear = self._get_year_info(item, ref_source, sim_source, 'eyear')
+            
             # Collect all metrics and scores for this pair
             pair_data = {
-                "use_syear": {"values": [2004], "mean": 2004.0, "std": 0.0, "min": 2004.0, "max": 2004.0, "median": 2004.0, "coverage": 100.0},
-                "use_eyear": {"values": [2005], "mean": 2005.0, "std": 0.0, "min": 2005.0, "max": 2005.0, "median": 2005.0, "coverage": 100.0}
+                "use_syear": {"values": [syear], "mean": float(syear), "std": 0.0, "min": float(syear), "max": float(syear), "median": float(syear), "coverage": 100.0},
+                "use_eyear": {"values": [eyear], "mean": float(eyear), "std": 0.0, "min": float(eyear), "max": float(eyear), "median": float(eyear), "coverage": 100.0}
             }
             
             # Search for metrics in metrics directory
@@ -509,17 +770,154 @@ class ReportGenerator:
                            if isinstance(metric_info, dict) and 'coverage' in metric_info]
                 avg_coverage = np.mean(coverages) if coverages else 100.0
                 
-                pair_key = f"{ref_source} vs {sim_source}"
+                # Get comparison pair from configuration
+                comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
+                pair_key = comparison_pair
+                
                 grid_stats[pair_key] = {
-                    "comparison_pair": f"{ref_source} vs {sim_source}",
+                    "comparison_pair": comparison_pair,
                     "station_format": True,  # Flag to use station-like display
                     "metrics": pair_data,
                     "data_coverage": float(avg_coverage)
                 }
                 
-                logger.info(f"Generated comprehensive stats for {ref_source} vs {sim_source}")
+                logger.info(f"Generated comprehensive stats for {comparison_pair}")
         
         return grid_stats
+    
+    def _infer_sources_from_files(self, item: str) -> tuple[List[str], List[str]]:
+        """Infer reference and simulation sources from existing files"""
+        ref_sources = set()
+        sim_sources = set()
+        
+        # Search in metrics and scores directories
+        search_dirs = [self.metrics_dir, self.scores_dir]
+        
+        for search_dir in search_dirs:
+            if os.path.exists(search_dir):
+                # Look for files matching the pattern: item_ref_*_sim_*
+                pattern = os.path.join(search_dir, f"{item}_ref_*_sim_*.nc")
+                files = glob.glob(pattern)
+                
+                for file_path in files:
+                    filename = os.path.basename(file_path)
+                    parts = filename.split('_')
+                    
+                    # Extract ref and sim sources
+                    ref_source = None
+                    sim_source = None
+                    
+                    for i, part in enumerate(parts):
+                        if part == "ref" and i + 1 < len(parts):
+                            # Find continuous reference name
+                            ref_parts = []
+                            j = i + 1
+                            while j < len(parts) and parts[j] != "sim":
+                                ref_parts.append(parts[j])
+                                j += 1
+                            ref_source = "_".join(ref_parts)
+                            
+                        elif part == "sim" and i + 1 < len(parts):
+                            # Find continuous simulation name
+                            sim_parts = []
+                            j = i + 1
+                            while j < len(parts) and parts[j] not in ["RMSE", "KGESS", "correlation", "bias", "nBiasScore", "nSpatialScore", "Overall"]:
+                                sim_parts.append(parts[j])
+                                j += 1
+                            sim_source = "_".join(sim_parts)
+                            break
+                    
+                    if ref_source:
+                        ref_sources.add(ref_source)
+                    if sim_source:
+                        sim_sources.add(sim_source)
+        
+        return list(ref_sources), list(sim_sources)
+    
+    def _get_reference_sources(self, item: str) -> List[str]:
+        """Get reference sources for an evaluation item from general configuration"""
+        try:
+            ref_sources = []
+            
+            # Get from general reference configuration
+            if 'ref_nml' in self.config and 'general' in self.config['ref_nml']:
+                # Look for the specific evaluation item in general section
+                if item in self.config['ref_nml']['general']:
+                    value = self.config['ref_nml']['general'][item]
+                    if isinstance(value, str) and ',' in value:
+                        # This is a list of reference sources
+                        sources = [s.strip() for s in value.split(',')]
+                        ref_sources.extend(sources)
+                    elif isinstance(value, str):
+                        # Single reference source
+                        ref_sources.append(value.strip())
+            
+            logger.info(f"Found reference sources for {item}: {ref_sources}")
+            return ref_sources
+            
+        except Exception as e:
+            logger.warning(f"Error getting reference sources for {item}: {e}")
+            return []
+    
+    def _get_simulation_sources(self, item: str) -> List[str]:
+        """Get simulation sources for an evaluation item from general configuration"""
+        try:
+            sim_sources = []
+            
+            # Get from general simulation configuration
+            if 'sim_nml' in self.config and 'general' in self.config['sim_nml']:
+                # Look for Case_lib which contains simulation sources
+                if 'Case_lib' in self.config['sim_nml']['general']:
+                    value = self.config['sim_nml']['general']['Case_lib']
+                    if isinstance(value, str) and ',' in value:
+                        sources = [s.strip() for s in value.split(',')]
+                        sim_sources.extend(sources)
+                    elif isinstance(value, str):
+                        sim_sources.append(value.strip())
+            
+            logger.info(f"Found simulation sources for {item}: {sim_sources}")
+            return sim_sources
+            
+        except Exception as e:
+            logger.warning(f"Error getting simulation sources for {item}: {e}")
+            return []
+    
+    def _get_year_info(self, item: str, ref_source: str, sim_source: str, year_type: str) -> int:
+        """Get year information from configuration"""
+        try:
+            # Try to get from reference configuration first
+            if 'ref_nml' in self.config and item in self.config['ref_nml']:
+                ref_key = f"{ref_source}_{year_type}"
+                if ref_key in self.config['ref_nml'][item]:
+                    return int(self.config['ref_nml'][item][ref_key])
+            
+            # Try to get from simulation configuration
+            if 'sim_nml' in self.config and item in self.config['sim_nml']:
+                sim_key = f"{sim_source}_{year_type}"
+                if sim_key in self.config['sim_nml'][item]:
+                    return int(self.config['sim_nml'][item][sim_key])
+            
+            # Try to get from general configuration
+            if 'general' in self.config and year_type in self.config['general']:
+                return int(self.config['general'][year_type])
+            
+            # Default values
+            if year_type == 'syear':
+                return 2004
+            elif year_type == 'eyear':
+                return 2005
+            else:
+                return 2004
+                
+        except Exception as e:
+            logger.warning(f"Error getting {year_type} for {item}: {e}")
+            # Default values
+            if year_type == 'syear':
+                return 2004
+            elif year_type == 'eyear':
+                return 2005
+            else:
+                return 2004
     
     def _find_figure(self, base_dir: str, subdir: str, pattern: str) -> Optional[str]:
         """Find a figure matching the pattern"""
@@ -810,11 +1208,15 @@ class ReportGenerator:
             <div class="summary-box">
                 {% for metric_name, values in metric_data.summary.items() %}
                     {% if values.mean is not none %}
+                    {% if metric_name in ['use_syear', 'use_eyear'] %}
+                    <p><strong>{{ metric_name }}:</strong> {{ "%.0f"|format(values.mean) }}</p>
+                    {% else %}
                     <p><strong>{{ metric_name }}:</strong> 
                        Mean = {{ "%.4f"|format(values.mean) }}, 
                        Std = {{ "%.4f"|format(values.std) }}, 
                        Range = [{{ "%.4f"|format(values.min) }}, {{ "%.4f"|format(values.max) }}]
                     </p>
+                    {% endif %}
                     {% endif %}
                 {% endfor %}
             </div>
@@ -823,6 +1225,9 @@ class ReportGenerator:
             <h4>{{ metric_data.comparison_pair }}</h4>
             <div class="summary-box">
                 {% for metric_name, metric_values in metric_data.metrics.items() %}
+                {% if metric_name in ['use_syear', 'use_eyear'] %}
+                <p><strong>{{ metric_name }}:</strong> {{ "%.0f"|format(metric_values.mean) }}</p>
+                {% else %}
                 <p><strong>{{ metric_name }}:</strong> 
                    Mean = {{ "%.4f"|format(metric_values.mean) }}, 
                    Std = {{ "%.4f"|format(metric_values.std) }}, 
@@ -830,6 +1235,7 @@ class ReportGenerator:
                    Range = [{{ "%.4f"|format(metric_values.min) }}, {{ "%.4f"|format(metric_values.max) }}], 
                    Data Coverage = {{ "%.1f"|format(metric_data.data_coverage) }}%
                 </p>
+                {% endif %}
                 {% endfor %}
             </div>
             {% endif %}
@@ -873,6 +1279,96 @@ class ReportGenerator:
             </div>
             {% endfor %}
         </div>
+        {% endif %}
+        
+        <!-- IGBP Groupby Analysis -->
+        {% if item_data.figures.igbp_groupby or item_data.statistics.get('IGBP_groupby') %}
+        <h3>IGBP Land Cover Classification Analysis</h3>
+        
+        {% if item_data.statistics.get('IGBP_groupby') %}
+        <div class="summary-box">
+            <p><strong>{{ item_data.statistics.IGBP_groupby.description }}</strong></p>
+            {% if item_data.statistics.IGBP_groupby.statistics %}
+                {% for stat_data in item_data.statistics.IGBP_groupby.statistics %}
+                <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
+                {% if stat_data.summary.groups %}
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if item_data.figures.igbp_groupby %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+            {% for fig in item_data.figures.igbp_groupby %}
+            <div class="figure-container">
+                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+        
+        <!-- PFT Groupby Analysis -->
+        {% if item_data.figures.pft_groupby or item_data.statistics.get('PFT_groupby') %}
+        <h3>Plant Functional Type (PFT) Analysis</h3>
+        
+        {% if item_data.statistics.get('PFT_groupby') %}
+        <div class="summary-box">
+            <p><strong>{{ item_data.statistics.PFT_groupby.description }}</strong></p>
+            {% if item_data.statistics.PFT_groupby.statistics %}
+                {% for stat_data in item_data.statistics.PFT_groupby.statistics %}
+                <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
+                {% if stat_data.summary.groups %}
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if item_data.figures.pft_groupby %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+            {% for fig in item_data.figures.pft_groupby %}
+            <div class="figure-container">
+                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+        
+        <!-- Climate Zone Groupby Analysis -->
+        {% if item_data.figures.climate_zone_groupby or item_data.statistics.get('Climate_zone_groupby') %}
+        <h3>Climate Zone Classification Analysis</h3>
+        
+        {% if item_data.statistics.get('Climate_zone_groupby') %}
+        <div class="summary-box">
+            <p><strong>{{ item_data.statistics.Climate_zone_groupby.description }}</strong></p>
+            {% if item_data.statistics.Climate_zone_groupby.statistics %}
+                {% for stat_data in item_data.statistics.Climate_zone_groupby.statistics %}
+                <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
+                {% if stat_data.summary.groups %}
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if item_data.figures.climate_zone_groupby %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+            {% for fig in item_data.figures.climate_zone_groupby %}
+            <div class="figure-container">
+                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endif %}
     </div>
     {% endfor %}
@@ -1126,23 +1622,37 @@ class ReportGenerator:
                         story.append(Paragraph(f"{metric_key}:", styles['Heading4']))
                         for metric_name, values in metric_data['summary'].items():
                             if isinstance(values, dict) and values.get('mean') is not None:
-                                story.append(Paragraph(
-                                    f"{metric_name}: Mean = {values['mean']:.4f}, "
-                                    f"Std = {values['std']:.4f}, Range = [{values['min']:.4f}, {values['max']:.4f}]",
-                                    styles['Normal']
-                                ))
+                                # Format year fields as simple integers, others with full statistics
+                                if metric_name in ['use_syear', 'use_eyear']:
+                                    story.append(Paragraph(
+                                        f"{metric_name}: {values['mean']:.0f}",
+                                        styles['Normal']
+                                    ))
+                                else:
+                                    story.append(Paragraph(
+                                        f"{metric_name}: Mean = {values['mean']:.4f}, "
+                                        f"Std = {values['std']:.4f}, Range = [{values['min']:.4f}, {values['max']:.4f}]",
+                                        styles['Normal']
+                                    ))
                     elif metric_data.get('station_format'):
                         # Grid vs Grid comprehensive statistics (station format)
                         story.append(Paragraph(f"{metric_data['comparison_pair']}:", styles['Heading4']))
                         for metric_name, metric_values in metric_data['metrics'].items():
-                            story.append(Paragraph(
-                                f"{metric_name}: Mean = {metric_values['mean']:.4f}, "
-                                f"Std = {metric_values['std']:.4f}, "
-                                f"Median = {metric_values['median']:.4f}, "
-                                f"Range = [{metric_values['min']:.4f}, {metric_values['max']:.4f}], "
-                                f"Data Coverage = {metric_data['data_coverage']:.1f}%",
-                                styles['Normal']
-                            ))
+                            # Format year fields as simple integers, others with full statistics
+                            if metric_name in ['use_syear', 'use_eyear']:
+                                story.append(Paragraph(
+                                    f"{metric_name}: {metric_values['mean']:.0f}",
+                                    styles['Normal']
+                                ))
+                            else:
+                                story.append(Paragraph(
+                                    f"{metric_name}: Mean = {metric_values['mean']:.4f}, "
+                                    f"Std = {metric_values['std']:.4f}, "
+                                    f"Median = {metric_values['median']:.4f}, "
+                                    f"Range = [{metric_values['min']:.4f}, {metric_values['max']:.4f}], "
+                                    f"Data Coverage = {metric_data['data_coverage']:.1f}%",
+                                    styles['Normal']
+                                ))
                 story.append(Spacer(1, 12))
             
             # Add metric figures (only those related to current evaluation item)
@@ -1174,8 +1684,20 @@ class ReportGenerator:
                         fig_path = os.path.join(metrics_figures_dir, fig)
                         if os.path.exists(fig_path):
                             try:
-                                # Create image with size limits to fit in 3x2 grid
-                                img = Image(fig_path, width=3.0*inch, height=2.0*inch)
+                                # Create image with better size limits and aspect ratio preservation
+                                img = Image(fig_path)
+                                img_width, img_height = img.drawWidth, img.drawHeight
+                                
+                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
+                                max_width = 3.5*inch
+                                max_height = 2.5*inch
+                                
+                                scale_w = max_width / img_width
+                                scale_h = max_height / img_height
+                                scale = min(scale_w, scale_h)
+                                
+                                img.drawWidth = img_width * scale
+                                img.drawHeight = img_height * scale
                                 caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
                                 
                                 # Calculate row and column position
@@ -1230,8 +1752,20 @@ class ReportGenerator:
                         fig_path = os.path.join(scores_figures_dir, fig)
                         if os.path.exists(fig_path):
                             try:
-                                # Create image with size limits to fit in 3x2 grid
-                                img = Image(fig_path, width=3.0*inch, height=2.0*inch)
+                                # Create image with better size limits and aspect ratio preservation
+                                img = Image(fig_path)
+                                img_width, img_height = img.drawWidth, img.drawHeight
+                                
+                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
+                                max_width = 3.5*inch
+                                max_height = 2.5*inch
+                                
+                                scale_w = max_width / img_width
+                                scale_h = max_height / img_height
+                                scale = min(scale_w, scale_h)
+                                
+                                img.drawWidth = img_width * scale
+                                img.drawHeight = img_height * scale
                                 caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
                                 
                                 # Calculate row and column position
@@ -1286,8 +1820,20 @@ class ReportGenerator:
                         fig_path = os.path.join(comparisons_figures_dir, fig)
                         if os.path.exists(fig_path):
                             try:
-                                # Create image with size limits to fit in 3x2 grid
-                                img = Image(fig_path, width=3.0*inch, height=2.0*inch)
+                                # Create image with better size limits and aspect ratio preservation
+                                img = Image(fig_path)
+                                img_width, img_height = img.drawWidth, img.drawHeight
+                                
+                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
+                                max_width = 3.5*inch
+                                max_height = 2.5*inch
+                                
+                                scale_w = max_width / img_width
+                                scale_h = max_height / img_height
+                                scale = min(scale_w, scale_h)
+                                
+                                img.drawWidth = img_width * scale
+                                img.drawHeight = img_height * scale
                                 caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
                                 
                                 # Calculate row and column position
@@ -1312,6 +1858,9 @@ class ReportGenerator:
                     ]))
                     story.append(fig_table)
                     story.append(Spacer(1, 10))
+            
+            # Add groupby analysis sections
+            self._add_groupby_analysis_to_pdf(story, item_data, subheading_style, caption_style)
         
         # Appendix
         story.append(PageBreak())
@@ -1337,3 +1886,103 @@ class ReportGenerator:
         
         # Build PDF
         doc.build(story)
+    
+    def _add_groupby_analysis_to_pdf(self, story, item_data, subheading_style, caption_style):
+        """Add groupby analysis sections to PDF report"""
+        from reportlab.lib.styles import getSampleStyleSheet
+        styles = getSampleStyleSheet()
+        
+        groupby_types = [
+            ("igbp_groupby", "IGBP_groupby", "IGBP Land Cover Classification Analysis"),
+            ("pft_groupby", "PFT_groupby", "Plant Functional Type (PFT) Analysis"),
+            ("climate_zone_groupby", "Climate_zone_groupby", "Climate Zone Classification Analysis")
+        ]
+        
+        for fig_key, stat_key, title in groupby_types:
+            has_figures = item_data.get('figures', {}).get(fig_key)
+            has_stats = item_data.get('statistics', {}).get(stat_key)
+            
+            if has_figures or has_stats:
+                story.append(Paragraph(title, subheading_style))
+                
+                # Add statistics summary if available
+                if has_stats:
+                    stats_data = has_stats
+                    if 'description' in stats_data:
+                        story.append(Paragraph(stats_data['description'], styles['Normal']))
+                    
+                    if 'statistics' in stats_data:
+                        for stat_data in stats_data['statistics']:
+                            file_name = stat_data['file'].replace('_', ' ').replace('.csv', '')
+                            story.append(Paragraph(f"Analysis: {file_name}", styles['Heading4']))
+                            
+                            if 'groups' in stat_data['summary']:
+                                groups_text = f"Groups analyzed: {', '.join(stat_data['summary']['groups'])} ({stat_data['summary']['group_count']} groups)"
+                                story.append(Paragraph(groups_text, styles['Normal']))
+                    
+                    story.append(Spacer(1, 10))
+                
+                # Add figures if available
+                if has_figures:
+                    comparisons_figures_dir = os.path.join(self.report_dir, "figures", "comparisons")
+                    relevant_figures = has_figures
+                    
+                    # Create 3x2 grid layout for figures
+                    for i in range(0, len(relevant_figures), 6):
+                        if i > 0:
+                            story.append(PageBreak())
+                        
+                        # Get up to 6 figures for this page
+                        page_figures = relevant_figures[i:i+6]
+                        
+                        # Create 3x2 table data
+                        table_data = [
+                            ["", ""],  # Row 1: [cell(0,0), cell(0,1)]
+                            ["", ""],  # Row 2: [cell(1,0), cell(1,1)]
+                            ["", ""]   # Row 3: [cell(2,0), cell(2,1)]
+                        ]
+                        
+                        # Fill the table with figures
+                        for idx, fig in enumerate(page_figures):
+                            fig_path = os.path.join(comparisons_figures_dir, fig)
+                            if os.path.exists(fig_path):
+                                try:
+                                    # Create image with better size limits and aspect ratio preservation
+                                    img = Image(fig_path)
+                                    img_width, img_height = img.drawWidth, img.drawHeight
+                                    
+                                    # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
+                                    max_width = 3.5*inch
+                                    max_height = 2.5*inch
+                                    
+                                    scale_w = max_width / img_width
+                                    scale_h = max_height / img_height
+                                    scale = min(scale_w, scale_h)
+                                    
+                                    img.drawWidth = img_width * scale
+                                    img.drawHeight = img_height * scale
+                                    
+                                    caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
+                                    
+                                    # Calculate row and column position
+                                    row = idx // 2  # 0, 1, or 2
+                                    col = idx % 2   # 0 or 1
+                                    
+                                    # Create cell content (image above caption)
+                                    table_data[row][col] = [img, caption]
+                                    
+                                except Exception as e:
+                                    logger.warning(f"Could not add {fig_key} figure {fig} to PDF: {e}")
+                        
+                        # Create and add the table
+                        fig_table = Table(table_data, colWidths=[3.8*inch, 3.8*inch])
+                        fig_table.setStyle(TableStyle([
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                            ('TOPPADDING', (0, 0), (-1, -1), 6),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                        ]))
+                        story.append(fig_table)
+                        story.append(Spacer(1, 10))
