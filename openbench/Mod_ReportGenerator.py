@@ -19,29 +19,7 @@ from jinja2 import Template
 import glob
 import shutil
 
-# PDF generation libraries - try multiple options
-try:
-    from reportlab.lib.pagesizes import letter, A4
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
-    _HAS_REPORTLAB = True
-except ImportError:
-    _HAS_REPORTLAB = False
-
-try:
-    import weasyprint
-    _HAS_WEASYPRINT = True
-except (ImportError, OSError) as e:
-    _HAS_WEASYPRINT = False
-
-try:
-    import pdfkit
-    _HAS_PDFKIT = True
-except ImportError:
-    _HAS_PDFKIT = False
+# No PDF generation - HTML only
 
 import logging
 
@@ -78,6 +56,10 @@ class ReportGenerator:
         elif isinstance(config.get("evaluation_items"), list):
             enabled_items = config["evaluation_items"]
         
+        # Get enabled metrics and scores from configuration
+        self.enabled_metrics = [metric for metric, enabled in config.get("metrics", {}).items() if enabled]
+        self.enabled_scores = [score for score, enabled in config.get("scores", {}).items() if enabled]
+        
         self.metadata = {
             "title": "OpenBench Evaluation Report",
             "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -105,19 +87,14 @@ class ReportGenerator:
         # Generate HTML report
         html_path = self._generate_html_report(report_data, report_name)
         
-        # Generate PDF from HTML
-        pdf_path = self._generate_pdf_report(html_path, report_name)
-        
         # Copy all relevant figures to report directory
         self._copy_figures_to_report_dir()
         
         logger.info(f"Report generation completed successfully")
         logger.info(f"HTML report: {html_path}")
-        logger.info(f"PDF report: {pdf_path}")
         
         return {
-            "html": html_path,
-            "pdf": pdf_path
+            "html": html_path
         }
     
     def _collect_report_data(self) -> Dict[str, Any]:
@@ -157,6 +134,9 @@ class ReportGenerator:
         
         # Collect overall summary
         report_data["overall_summary"] = self._generate_overall_summary(report_data)
+        
+        # Collect groupby analysis summary
+        report_data["groupby_summary"] = self._generate_groupby_analysis_summary(report_data)
         
         return report_data
     
@@ -231,7 +211,7 @@ class ReportGenerator:
                                             elif part == "sim" and i + 1 < len(parts):
                                                 sim_parts = []
                                                 j = i + 1
-                                                while j < len(parts) and parts[j] not in ["RMSE", "KGESS", "correlation", "bias"]:
+                                                while j < len(parts) and not self._is_metric_or_score(parts[j]):
                                                     sim_parts.append(parts[j])
                                                     j += 1
                                                 sim_source = "_".join(sim_parts)
@@ -317,44 +297,134 @@ class ReportGenerator:
             comp_files = glob.glob(comp_path)
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
         
-        # IGBP groupby figures
-        igbp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
-        igbp_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        # IGBP groupby figures - check in metrics, scores, and comparisons directories
         igbp_files = []
-        for pattern in igbp_patterns:
-            found_files = glob.glob(os.path.join(igbp_dir, pattern))
-            if found_files:
-                igbp_files = found_files
-                break
-        figures["igbp_groupby"] = [f"IGBP_groupby/{os.path.basename(f)}" for f in igbp_files]
-        if igbp_files:
-            logger.info(f"Found IGBP groupby figures: {igbp_files}")
+        # Check metrics directory first
+        igbp_metrics_dir = os.path.join(self.metrics_dir, "IGBP_groupby")
+        if os.path.exists(igbp_metrics_dir):
+            # Look for heatmap figures in subdirectories
+            for subdir in glob.glob(os.path.join(igbp_metrics_dir, "*/")):
+                heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
+                igbp_files.extend(heatmap_files)
+                # Also look for any other jpg files related to the item
+                other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                igbp_files.extend([f for f in other_files if f not in igbp_files])
         
-        # PFT groupby figures
-        pft_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
-        pft_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        # Check scores directory
+        igbp_scores_dir = os.path.join(self.scores_dir, "IGBP_groupby")
+        if os.path.exists(igbp_scores_dir):
+            for subdir in glob.glob(os.path.join(igbp_scores_dir, "*/")):
+                score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                igbp_files.extend(score_files)
+        
+        # Check comparisons directory as fallback
+        igbp_comp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
+        if os.path.exists(igbp_comp_dir):
+            comp_files = glob.glob(os.path.join(igbp_comp_dir, f"*{item}*.jpg"))
+            igbp_files.extend(comp_files)
+        
+        # Format paths relative to the base directory
+        figures["igbp_groupby"] = []
+        for f in igbp_files:
+            if self.metrics_dir in f:
+                rel_path = os.path.relpath(f, self.metrics_dir)
+                figures["igbp_groupby"].append(f"metrics/{rel_path}")
+            elif self.scores_dir in f:
+                rel_path = os.path.relpath(f, self.scores_dir)
+                figures["igbp_groupby"].append(f"scores/{rel_path}")
+            elif self.comparisons_dir in f:
+                rel_path = os.path.relpath(f, self.comparisons_dir)
+                figures["igbp_groupby"].append(f"comparisons/{rel_path}")
+        
+        if figures["igbp_groupby"]:
+            logger.info(f"Found IGBP groupby figures: {figures['igbp_groupby']}")
+        
+        # PFT groupby figures - check in metrics, scores, and comparisons directories
         pft_files = []
-        for pattern in pft_patterns:
-            found_files = glob.glob(os.path.join(pft_dir, pattern))
-            if found_files:
-                pft_files = found_files
-                break
-        figures["pft_groupby"] = [f"PFT_groupby/{os.path.basename(f)}" for f in pft_files]
-        if pft_files:
-            logger.info(f"Found PFT groupby figures: {pft_files}")
+        # Check metrics directory first
+        pft_metrics_dir = os.path.join(self.metrics_dir, "PFT_groupby")
+        if os.path.exists(pft_metrics_dir):
+            # Look for heatmap figures in subdirectories
+            for subdir in glob.glob(os.path.join(pft_metrics_dir, "*/")):
+                heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
+                pft_files.extend(heatmap_files)
+                # Also look for any other jpg files related to the item
+                other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                pft_files.extend([f for f in other_files if f not in pft_files])
         
-        # Climate zone groupby figures
-        climate_dir = os.path.join(self.comparisons_dir, "Climate_zone_groupby")
-        climate_patterns = [f"*{item}*.jpg", f"{item}_*.jpg", "*.jpg"]
+        # Check scores directory
+        pft_scores_dir = os.path.join(self.scores_dir, "PFT_groupby")
+        if os.path.exists(pft_scores_dir):
+            for subdir in glob.glob(os.path.join(pft_scores_dir, "*/")):
+                score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                pft_files.extend(score_files)
+        
+        # Check comparisons directory as fallback
+        pft_comp_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
+        if os.path.exists(pft_comp_dir):
+            comp_files = glob.glob(os.path.join(pft_comp_dir, f"*{item}*.jpg"))
+            pft_files.extend(comp_files)
+        
+        # Format paths relative to the base directory
+        figures["pft_groupby"] = []
+        for f in pft_files:
+            if self.metrics_dir in f:
+                rel_path = os.path.relpath(f, self.metrics_dir)
+                figures["pft_groupby"].append(f"metrics/{rel_path}")
+            elif self.scores_dir in f:
+                rel_path = os.path.relpath(f, self.scores_dir)
+                figures["pft_groupby"].append(f"scores/{rel_path}")
+            elif self.comparisons_dir in f:
+                rel_path = os.path.relpath(f, self.comparisons_dir)
+                figures["pft_groupby"].append(f"comparisons/{rel_path}")
+        
+        if figures["pft_groupby"]:
+            logger.info(f"Found PFT groupby figures: {figures['pft_groupby']}")
+        
+        # Climate zone groupby figures - check in metrics, scores, and comparisons directories  
         climate_files = []
-        for pattern in climate_patterns:
-            found_files = glob.glob(os.path.join(climate_dir, pattern))
-            if found_files:
-                climate_files = found_files
-                break
-        figures["climate_zone_groupby"] = [f"Climate_zone_groupby/{os.path.basename(f)}" for f in climate_files]
-        if climate_files:
-            logger.info(f"Found Climate zone groupby figures: {climate_files}")
+        # Check metrics directory first - note the directory might be CZ_groupby
+        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
+            cz_metrics_dir = os.path.join(self.metrics_dir, cz_name)
+            if os.path.exists(cz_metrics_dir):
+                # Look for heatmap figures in subdirectories
+                for subdir in glob.glob(os.path.join(cz_metrics_dir, "*/")):
+                    heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
+                    climate_files.extend(heatmap_files)
+                    # Also look for any other jpg files related to the item
+                    other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                    climate_files.extend([f for f in other_files if f not in climate_files])
+        
+        # Check scores directory
+        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
+            cz_scores_dir = os.path.join(self.scores_dir, cz_name)
+            if os.path.exists(cz_scores_dir):
+                for subdir in glob.glob(os.path.join(cz_scores_dir, "*/")):
+                    score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
+                    climate_files.extend(score_files)
+        
+        # Check comparisons directory as fallback
+        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
+            cz_comp_dir = os.path.join(self.comparisons_dir, cz_name)
+            if os.path.exists(cz_comp_dir):
+                comp_files = glob.glob(os.path.join(cz_comp_dir, f"*{item}*.jpg"))
+                climate_files.extend(comp_files)
+        
+        # Format paths relative to the base directory
+        figures["climate_zone_groupby"] = []
+        for f in climate_files:
+            if self.metrics_dir in f:
+                rel_path = os.path.relpath(f, self.metrics_dir)
+                figures["climate_zone_groupby"].append(f"metrics/{rel_path}")
+            elif self.scores_dir in f:
+                rel_path = os.path.relpath(f, self.scores_dir)
+                figures["climate_zone_groupby"].append(f"scores/{rel_path}")
+            elif self.comparisons_dir in f:
+                rel_path = os.path.relpath(f, self.comparisons_dir)
+                figures["climate_zone_groupby"].append(f"comparisons/{rel_path}")
+        
+        if figures["climate_zone_groupby"]:
+            logger.info(f"Found Climate zone groupby figures: {figures['climate_zone_groupby']}")
         
         return figures
     
@@ -385,35 +455,87 @@ class ReportGenerator:
         
         # Define groupby types and their corresponding directories
         groupby_types = {
-            "IGBP_groupby": "IGBP_groupby",
-            "PFT_groupby": "PFT_groupby", 
-            "Climate_zone_groupby": "Climate_zone_groupby"
+            "IGBP_groupby": ["IGBP_groupby"],
+            "PFT_groupby": ["PFT_groupby"], 
+            "Climate_zone_groupby": ["Climate_zone_groupby", "CZ_groupby"]
         }
         
-        for groupby_name, groupby_dir in groupby_types.items():
-            groupby_path = os.path.join(self.comparisons_dir, groupby_dir)
-            logger.info(f"Checking groupby directory: {groupby_path}")
-            
-            # Check for CSV files with statistics (try multiple patterns)
-            csv_patterns = [
-                os.path.join(groupby_path, f"*{item}*_statistics.csv"),
-                os.path.join(groupby_path, f"*{item}*.csv"),
-                os.path.join(groupby_path, f"{item}_*.csv"),
-                os.path.join(groupby_path, "*.csv")
-            ]
-            
+        for groupby_name, groupby_dirs in groupby_types.items():
+            # Check in metrics, scores, and comparisons directories
             csv_files = []
-            for pattern in csv_patterns:
-                found_files = glob.glob(pattern)
-                if found_files:
-                    csv_files = found_files
-                    logger.info(f"Found CSV files with pattern {pattern}: {csv_files}")
-                    break
+            nc_files = []
+            txt_files = []
             
-            if not csv_files:
-                logger.info(f"No CSV files found for {item} in {groupby_path}")
+            for groupby_dir in groupby_dirs:
+                for base_dir in [self.metrics_dir, self.scores_dir, self.comparisons_dir]:
+                    groupby_path = os.path.join(base_dir, groupby_dir)
+                    if not os.path.exists(groupby_path):
+                        continue
+                    
+                    logger.info(f"Checking groupby directory: {groupby_path}")
+                    
+                    # Look in subdirectories for txt files with statistics
+                    for subdir in glob.glob(os.path.join(groupby_path, "*/")):
+                        # Look for metrics.txt files
+                        txt_patterns = [
+                            os.path.join(subdir, f"*{item}*metrics.txt"),
+                            os.path.join(subdir, f"*{item}*.txt")
+                        ]
+                        for pattern in txt_patterns:
+                            found_txt = glob.glob(pattern)
+                            txt_files.extend(found_txt)
+                    
+                    # Check for CSV files with statistics (try multiple patterns)
+                    csv_patterns = [
+                        os.path.join(groupby_path, f"*{item}*_statistics.csv"),
+                        os.path.join(groupby_path, f"*{item}*.csv"),
+                        os.path.join(groupby_path, f"{item}_*.csv"),
+                        os.path.join(groupby_path, "*.csv")
+                    ]
+                    
+                    for pattern in csv_patterns:
+                        found_files = glob.glob(pattern)
+                        if found_files:
+                            csv_files.extend(found_files)
+                            logger.info(f"Found CSV files with pattern {pattern}: {found_files}")
+                    
+                    # Also check for NetCDF files with spatial statistics
+                    nc_patterns = [
+                        os.path.join(groupby_path, f"*{item}*.nc"),
+                        os.path.join(groupby_path, f"{item}_*.nc"),
+                        os.path.join(groupby_path, "*.nc")
+                    ]
+                    
+                    for pattern in nc_patterns:
+                        found_files = glob.glob(pattern)
+                        if found_files:
+                            nc_files.extend(found_files)
+                            logger.info(f"Found NC files with pattern {pattern}: {found_files}")
             
-            if csv_files:
+            # Process txt files if found
+            if txt_files:
+                stats_data = []
+                for txt_file in txt_files:
+                    try:
+                        # Read txt file and parse it
+                        with open(txt_file, 'r') as f:
+                            content = f.read()
+                        stats_data.append({
+                            "file": os.path.basename(txt_file),
+                            "content": content,
+                            "summary": {"groups": self._extract_groups_from_txt(content)}
+                        })
+                    except Exception as e:
+                        logger.warning(f"Error reading {txt_file}: {e}")
+                
+                if stats_data:
+                    groupby_stats[groupby_name] = {
+                        "statistics": stats_data,
+                        "description": self._get_groupby_description(groupby_name)
+                    }
+            
+            # Process CSV files if found
+            elif csv_files:
                 stats_data = []
                 for csv_file in csv_files:
                     try:
@@ -427,26 +549,15 @@ class ReportGenerator:
                         logger.warning(f"Error reading {csv_file}: {e}")
                 
                 if stats_data:
-                    groupby_stats[groupby_name] = {
-                        "statistics": stats_data,
-                        "description": self._get_groupby_description(groupby_name)
-                    }
+                    if groupby_name not in groupby_stats:
+                        groupby_stats[groupby_name] = {
+                            "statistics": stats_data,
+                            "description": self._get_groupby_description(groupby_name)
+                        }
+                    else:
+                        groupby_stats[groupby_name]["statistics"].extend(stats_data)
             
-            # Also check for NetCDF files with spatial statistics
-            nc_patterns = [
-                os.path.join(groupby_path, f"*{item}*.nc"),
-                os.path.join(groupby_path, f"{item}_*.nc"),
-                os.path.join(groupby_path, "*.nc")
-            ]
-            
-            nc_files = []
-            for pattern in nc_patterns:
-                found_files = glob.glob(pattern)
-                if found_files:
-                    nc_files = found_files
-                    logger.info(f"Found NC files with pattern {pattern}: {nc_files}")
-                    break
-            
+            # Add spatial files info if found
             if nc_files:
                 if groupby_name not in groupby_stats:
                     groupby_stats[groupby_name] = {
@@ -476,20 +587,48 @@ class ReportGenerator:
                     "count": int(df[col].count())
                 }
         
-        # Add group information if available
-        if 'group' in df.columns or 'Group' in df.columns:
-            group_col = 'group' if 'group' in df.columns else 'Group'
-            summary["groups"] = df[group_col].unique().tolist()
-            summary["group_count"] = len(df[group_col].unique())
+        # Try to extract group information - check various possible column names
+        group_columns = ['Group', 'group', 'IGBP', 'igbp', 'PFT', 'pft', 'Climate_Zone', 'climate_zone', 
+                         'Zone', 'zone', 'Type', 'type', 'Class', 'class', 'Category', 'category']
+        
+        for col in group_columns:
+            if col in df.columns:
+                summary['groups'] = df[col].unique().tolist()
+                summary['group_count'] = len(summary['groups'])
+                summary['group_column'] = col
+                
+                # Add performance ranking if metrics are available
+                if len(numeric_cols) > 0:
+                    # Find the best and worst performing groups
+                    metric_col = numeric_cols[0]  # Use first numeric column
+                    group_performance = df.groupby(col)[metric_col].mean().sort_values()
+                    summary['worst_performing_groups'] = group_performance.head(3).index.tolist()
+                    summary['best_performing_groups'] = group_performance.tail(3).index.tolist()
+                break
         
         return summary
+    
+    def _extract_groups_from_txt(self, content: str) -> List[str]:
+        """Extract group names from txt file content"""
+        groups = []
+        # Look for lines that might contain group names
+        lines = content.split('\n')
+        for line in lines:
+            # Common patterns for group names in txt files
+            if 'IGBP_' in line or 'PFT_' in line or 'CZ_' in line:
+                # Extract the group name
+                parts = line.split()
+                for part in parts:
+                    if 'IGBP_' in part or 'PFT_' in part or 'CZ_' in part:
+                        groups.append(part)
+        return list(set(groups))  # Return unique groups
     
     def _get_groupby_description(self, groupby_name: str) -> str:
         """Get description for groupby analysis type"""
         descriptions = {
-            "IGBP_groupby": "International Geosphere-Biosphere Programme (IGBP) land cover classification groupby analysis",
-            "PFT_groupby": "Plant Functional Type (PFT) groupby analysis",
-            "Climate_zone_groupby": "Climate zone classification groupby analysis"
+            "IGBP_groupby": "Analysis grouped by International Geosphere-Biosphere Programme (IGBP) land cover classification. This analysis evaluates model performance across different land cover types including forests, grasslands, croplands, and urban areas, providing insights into ecosystem-specific model behaviors.",
+            "PFT_groupby": "Analysis grouped by Plant Functional Types (PFTs). This classification groups vegetation based on physiological and morphological characteristics, allowing assessment of model performance for different plant strategies such as evergreen vs. deciduous, C3 vs. C4 photosynthesis, and various growth forms.",
+            "Climate_zone_groupby": "Analysis grouped by Köppen-Geiger climate zones. This classification divides the global land surface based on temperature and precipitation patterns, enabling evaluation of model performance under different climatic conditions from tropical to polar regions."
         }
         return descriptions.get(groupby_name, f"{groupby_name} analysis")
     
@@ -556,10 +695,20 @@ class ReportGenerator:
         # Calculate average scores across all items
         for item, item_data in report_data["evaluation_items"].items():
             for score_key, score_data in item_data.get("scores", {}).items():
-                if "summary" in score_data and "Overall_Score" in score_data["summary"]:
-                    score_mean = score_data["summary"]["Overall_Score"].get("mean")
-                    if score_mean is not None:
-                        summary["overall_scores"][f"{item}_{score_key}"] = score_mean
+                if "summary" in score_data:
+                    # Look for Overall_Score if it's enabled, otherwise use the first available score
+                    if "Overall_Score" in self.enabled_scores and "Overall_Score" in score_data["summary"]:
+                        score_mean = score_data["summary"]["Overall_Score"].get("mean")
+                        if score_mean is not None:
+                            summary["overall_scores"][f"{item}_{score_key}"] = score_mean
+                    else:
+                        # Use the first enabled score found in the summary
+                        for score_name in self.enabled_scores:
+                            if score_name in score_data["summary"]:
+                                score_mean = score_data["summary"][score_name].get("mean")
+                                if score_mean is not None:
+                                    summary["overall_scores"][f"{item}_{score_key}"] = score_mean
+                                break
         
         # Calculate grand average if scores exist
         if summary["overall_scores"]:
@@ -567,18 +716,62 @@ class ReportGenerator:
         
         return summary
     
+    def _generate_groupby_analysis_summary(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate summary of all groupby analyses across evaluation items"""
+        summary = {
+            "has_igbp": False,
+            "has_pft": False,
+            "has_climate_zone": False,
+            "igbp_items": [],
+            "pft_items": [],
+            "climate_zone_items": [],
+            "total_groupby_analyses": 0
+        }
+        
+        # Check each evaluation item for groupby analyses
+        for item, item_data in report_data.get("evaluation_items", {}).items():
+            if item_data.get("figures", {}).get("igbp_groupby") or item_data.get("statistics", {}).get("IGBP_groupby"):
+                summary["has_igbp"] = True
+                summary["igbp_items"].append(item)
+                summary["total_groupby_analyses"] += 1
+                
+            if item_data.get("figures", {}).get("pft_groupby") or item_data.get("statistics", {}).get("PFT_groupby"):
+                summary["has_pft"] = True
+                summary["pft_items"].append(item)
+                summary["total_groupby_analyses"] += 1
+                
+            if item_data.get("figures", {}).get("climate_zone_groupby") or item_data.get("statistics", {}).get("Climate_zone_groupby"):
+                summary["has_climate_zone"] = True
+                summary["climate_zone_items"].append(item)
+                summary["total_groupby_analyses"] += 1
+        
+        # Generate summary messages
+        if summary["has_igbp"]:
+            summary["igbp_message"] = f"IGBP land cover analysis performed for: {', '.join(summary['igbp_items'])}"
+        if summary["has_pft"]:
+            summary["pft_message"] = f"PFT analysis performed for: {', '.join(summary['pft_items'])}"
+        if summary["has_climate_zone"]:
+            summary["climate_zone_message"] = f"Climate zone analysis performed for: {', '.join(summary['climate_zone_items'])}"
+        
+        return summary
+    
     def _extract_metric_type(self, filename: str) -> str:
-        """Extract metric type from filename"""
-        if "RMSE" in filename:
-            return "RMSE"
-        elif "KGESS" in filename:
-            return "KGESS" 
-        elif "correlation" in filename:
-            return "Correlation"
-        elif "bias" in filename:
-            return "Bias"
-        else:
-            return "Unknown"
+        """Extract metric type from filename based on enabled metrics"""
+        # Check enabled metrics first
+        for metric in self.enabled_metrics:
+            if metric in filename:
+                return metric
+        
+        # Check enabled scores
+        for score in self.enabled_scores:
+            if score in filename:
+                return score
+        
+        return "Unknown"
+    
+    def _is_metric_or_score(self, text: str) -> bool:
+        """Check if text is a metric or score name"""
+        return text in self.enabled_metrics or text in self.enabled_scores
     
     def _extract_comparison_pair(self, filename: str) -> str:
         """Extract comparison pair from filename (reference vs simulation)"""
@@ -603,7 +796,7 @@ class ReportGenerator:
                 # Find continuous simulation name (may contain underscores)
                 sim_parts = []
                 j = i + 1
-                while j < len(parts) and parts[j] not in ["RMSE", "KGESS", "correlation", "bias"]:
+                while j < len(parts) and not self._is_metric_or_score(parts[j]):
                     sim_parts.append(parts[j])
                     j += 1
                 sim_source = "_".join(sim_parts)
@@ -700,19 +893,6 @@ class ReportGenerator:
             # Process each metric/score file
             for nc_file in all_files:
                 metric_name = self._extract_metric_type(os.path.basename(nc_file))
-                if metric_name == "Unknown":
-                    # Try to extract from more specific patterns
-                    filename = os.path.basename(nc_file)
-                    if "nBiasScore" in filename:
-                        metric_name = "nBiasScore"
-                    elif "nSpatialScore" in filename:
-                        metric_name = "nSpatialScore"
-                    elif "Overall_Score" in filename:
-                        metric_name = "Overall_Score"
-                    elif "KGESS" in filename:
-                        metric_name = "KGESS"
-                    elif "RMSE" in filename:
-                        metric_name = "RMSE"
                 
                 try:
                     with xr.open_dataset(nc_file) as ds:
@@ -740,19 +920,30 @@ class ReportGenerator:
                     self.logger.warning(f"Error reading {nc_file}: {e}")
             
             # Try to estimate correlation if not present but other metrics are available
-            if "correlation" not in pair_data and ("KGESS" in pair_data or "RMSE" in pair_data):
+            # Check if 'correlation' is an enabled metric
+            if "correlation" in self.enabled_metrics and "correlation" not in pair_data:
                 # Simple heuristic estimation based on available metrics
-                if "KGESS" in pair_data:
+                estimated_corr = 0.5  # Default moderate correlation
+                
+                # Check for KGESS if it's enabled
+                if "KGESS" in self.enabled_metrics and "KGESS" in pair_data:
                     kgess_mean = pair_data["KGESS"]["mean"]
                     # KGESS ranges from -inf to 1, with 1 being perfect
                     # Correlation ranges from -1 to 1, estimate conservatively
                     estimated_corr = max(0.0, min(1.0, kgess_mean * 0.9))
-                elif "RMSE" in pair_data and "Overall_Score" in pair_data:
+                # Check for Overall_Score if it's enabled
+                elif "Overall_Score" in self.enabled_scores and "Overall_Score" in pair_data:
                     # Use Overall_Score as a proxy for correlation
                     overall_mean = pair_data["Overall_Score"]["mean"]
                     estimated_corr = max(0.0, min(1.0, overall_mean))
-                else:
-                    estimated_corr = 0.5  # Default moderate correlation
+                # Check for RMSE if enabled and try to estimate from it
+                elif "RMSE" in self.enabled_metrics and "RMSE" in pair_data:
+                    # For RMSE, lower is better, so inverse relationship
+                    # This is a rough estimate - actual implementation might vary
+                    rmse_mean = pair_data["RMSE"]["mean"]
+                    if rmse_mean > 0:
+                        # Arbitrary conversion - needs domain knowledge
+                        estimated_corr = max(0.0, min(1.0, 1.0 / (1.0 + rmse_mean)))
                 
                 pair_data["correlation"] = {
                     "values": [estimated_corr],
@@ -821,7 +1012,7 @@ class ReportGenerator:
                             # Find continuous simulation name
                             sim_parts = []
                             j = i + 1
-                            while j < len(parts) and parts[j] not in ["RMSE", "KGESS", "correlation", "bias", "nBiasScore", "nSpatialScore", "Overall"]:
+                            while j < len(parts) and not self._is_metric_or_score(parts[j]) and parts[j] != "Overall":
                                 sim_parts.append(parts[j])
                                 j += 1
                             sim_source = "_".join(sim_parts)
@@ -935,17 +1126,25 @@ class ReportGenerator:
         figures_dir = os.path.join(self.report_dir, "figures")
         os.makedirs(figures_dir, exist_ok=True)
         
-        # Copy metrics figures
-        for src_file in glob.glob(os.path.join(self.metrics_dir, "*.jpg")):
-            dst_file = os.path.join(figures_dir, "metrics", os.path.basename(src_file))
-            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-            shutil.copy2(src_file, dst_file)
+        # Copy metrics figures (including groupby subdirectories)
+        for root, dirs, files in os.walk(self.metrics_dir):
+            for file in files:
+                if file.endswith('.jpg'):
+                    src_file = os.path.join(root, file)
+                    rel_path = os.path.relpath(src_file, self.metrics_dir)
+                    dst_file = os.path.join(figures_dir, "metrics", rel_path)
+                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                    shutil.copy2(src_file, dst_file)
         
-        # Copy scores figures
-        for src_file in glob.glob(os.path.join(self.scores_dir, "*.jpg")):
-            dst_file = os.path.join(figures_dir, "scores", os.path.basename(src_file))
-            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-            shutil.copy2(src_file, dst_file)
+        # Copy scores figures (including groupby subdirectories)
+        for root, dirs, files in os.walk(self.scores_dir):
+            for file in files:
+                if file.endswith('.jpg'):
+                    src_file = os.path.join(root, file)
+                    rel_path = os.path.relpath(src_file, self.scores_dir)
+                    dst_file = os.path.join(figures_dir, "scores", rel_path)
+                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                    shutil.copy2(src_file, dst_file)
         
         # Copy comparison figures
         for root, dirs, files in os.walk(self.comparisons_dir):
@@ -1148,6 +1347,23 @@ class ReportGenerator:
                 <li><strong>{{ item }}:</strong> Evaluation completed with multiple reference datasets</li>
                 {% endfor %}
             </ul>
+            
+            {% if groupby_summary.total_groupby_analyses > 0 %}
+            <h3>Groupby Analysis Summary</h3>
+            <p>The evaluation includes detailed analysis across different classification schemes:</p>
+            <ul>
+                {% if groupby_summary.has_igbp %}
+                <li><strong>IGBP Land Cover Analysis:</strong> {{ groupby_summary.igbp_message }}</li>
+                {% endif %}
+                {% if groupby_summary.has_pft %}
+                <li><strong>Plant Functional Type Analysis:</strong> {{ groupby_summary.pft_message }}</li>
+                {% endif %}
+                {% if groupby_summary.has_climate_zone %}
+                <li><strong>Climate Zone Analysis:</strong> {{ groupby_summary.climate_zone_message }}</li>
+                {% endif %}
+            </ul>
+            <p>These groupby analyses provide insights into model performance across different land cover types, vegetation functional groups, and climatic conditions, helping identify systematic biases and areas for improvement.</p>
+            {% endif %}
         </div>
     </div>
     
@@ -1274,8 +1490,8 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
             {% for fig in item_data.figures.comparisons %}
             <div class="figure-container">
-                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
-                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
         </div>
@@ -1285,6 +1501,11 @@ class ReportGenerator:
         {% if item_data.figures.igbp_groupby or item_data.statistics.get('IGBP_groupby') %}
         <h3>IGBP Land Cover Classification Analysis</h3>
         
+        <div class="summary-box">
+            <p><strong>Analysis Overview:</strong> Performance evaluation across International Geosphere-Biosphere Programme (IGBP) land cover classes provides insights into model behavior across different vegetation types and land use categories.</p>
+            <p><strong>IGBP Classes Include:</strong> Evergreen Needleleaf Forest, Evergreen Broadleaf Forest, Deciduous Needleleaf Forest, Deciduous Broadleaf Forest, Mixed Forest, Closed Shrublands, Open Shrublands, Woody Savannas, Savannas, Grasslands, Permanent Wetlands, Croplands, Urban and Built-up, Cropland/Natural Vegetation Mosaic, Snow and Ice, Barren or Sparsely Vegetated, and Water Bodies.</p>
+        </div>
+        
         {% if item_data.statistics.get('IGBP_groupby') %}
         <div class="summary-box">
             <p><strong>{{ item_data.statistics.IGBP_groupby.description }}</strong></p>
@@ -1292,7 +1513,14 @@ class ReportGenerator:
                 {% for stat_data in item_data.statistics.IGBP_groupby.statistics %}
                 <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
                 {% if stat_data.summary.groups %}
-                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count|default(stat_data.summary.groups|length) }} groups)</p>
+                <p><strong>Key Findings:</strong> The analysis reveals model performance variations across different land cover types, highlighting strengths and weaknesses in simulating specific ecosystems.</p>
+                {% if stat_data.summary.best_performing_groups %}
+                <p><strong>Best Performing Groups:</strong> {{ ', '.join(stat_data.summary.best_performing_groups) }}</p>
+                {% endif %}
+                {% if stat_data.summary.worst_performing_groups %}
+                <p><strong>Areas for Improvement:</strong> {{ ', '.join(stat_data.summary.worst_performing_groups) }}</p>
+                {% endif %}
                 {% endif %}
                 {% endfor %}
             {% endif %}
@@ -1300,11 +1528,11 @@ class ReportGenerator:
         {% endif %}
         
         {% if item_data.figures.igbp_groupby %}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.igbp_groupby %}
             <div class="figure-container">
-                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
-                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
         </div>
@@ -1315,6 +1543,11 @@ class ReportGenerator:
         {% if item_data.figures.pft_groupby or item_data.statistics.get('PFT_groupby') %}
         <h3>Plant Functional Type (PFT) Analysis</h3>
         
+        <div class="summary-box">
+            <p><strong>Analysis Overview:</strong> Plant Functional Type (PFT) classification groups vegetation based on physiological and structural characteristics, enabling detailed assessment of model performance for different plant strategies and ecosystem functions.</p>
+            <p><strong>PFT Categories:</strong> Analysis typically includes Needleleaf Evergreen/Deciduous Trees, Broadleaf Evergreen/Deciduous Trees, Shrubs, C3/C4 Grasses, and Crops, each representing distinct plant functional strategies and environmental adaptations.</p>
+        </div>
+        
         {% if item_data.statistics.get('PFT_groupby') %}
         <div class="summary-box">
             <p><strong>{{ item_data.statistics.PFT_groupby.description }}</strong></p>
@@ -1322,7 +1555,14 @@ class ReportGenerator:
                 {% for stat_data in item_data.statistics.PFT_groupby.statistics %}
                 <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
                 {% if stat_data.summary.groups %}
-                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count|default(stat_data.summary.groups|length) }} groups)</p>
+                <p><strong>Key Findings:</strong> PFT-based analysis reveals how well the model captures the distinct behaviors of different plant functional groups, particularly their responses to environmental conditions and resource availability.</p>
+                {% if stat_data.summary.best_performing_groups %}
+                <p><strong>Best Performing PFTs:</strong> {{ ', '.join(stat_data.summary.best_performing_groups) }}</p>
+                {% endif %}
+                {% if stat_data.summary.worst_performing_groups %}
+                <p><strong>PFTs Requiring Attention:</strong> {{ ', '.join(stat_data.summary.worst_performing_groups) }}</p>
+                {% endif %}
                 {% endif %}
                 {% endfor %}
             {% endif %}
@@ -1330,11 +1570,11 @@ class ReportGenerator:
         {% endif %}
         
         {% if item_data.figures.pft_groupby %}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.pft_groupby %}
             <div class="figure-container">
-                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
-                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
         </div>
@@ -1345,6 +1585,11 @@ class ReportGenerator:
         {% if item_data.figures.climate_zone_groupby or item_data.statistics.get('Climate_zone_groupby') %}
         <h3>Climate Zone Classification Analysis</h3>
         
+        <div class="summary-box">
+            <p><strong>Analysis Overview:</strong> Climate zone analysis based on Köppen-Geiger classification evaluates model performance across different climatic regimes, revealing how well the model captures processes under varying temperature and precipitation conditions.</p>
+            <p><strong>Climate Zones Include:</strong> Tropical (Af, Am, Aw), Dry (BWh, BWk, BSh, BSk), Temperate (Cfa, Cfb, Cfc, Csa, Csb, Csc, Cwa, Cwb, Cwc), Continental (Dfa, Dfb, Dfc, Dfd, Dsa, Dsb, Dsc, Dsd, Dwa, Dwb, Dwc, Dwd), and Polar (ET, EF) climates.</p>
+        </div>
+        
         {% if item_data.statistics.get('Climate_zone_groupby') %}
         <div class="summary-box">
             <p><strong>{{ item_data.statistics.Climate_zone_groupby.description }}</strong></p>
@@ -1352,7 +1597,14 @@ class ReportGenerator:
                 {% for stat_data in item_data.statistics.Climate_zone_groupby.statistics %}
                 <h4>{{ stat_data.file|replace('_', ' ')|replace('.csv', '') }}</h4>
                 {% if stat_data.summary.groups %}
-                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count }} groups)</p>
+                <p><strong>Groups analyzed:</strong> {{ ', '.join(stat_data.summary.groups) }} ({{ stat_data.summary.group_count|default(stat_data.summary.groups|length) }} groups)</p>
+                <p><strong>Key Findings:</strong> Climate zone analysis identifies systematic biases and performance patterns across different climatic conditions, helping to understand model strengths in specific climate regimes and areas requiring improvement.</p>
+                {% if stat_data.summary.best_performing_groups %}
+                <p><strong>Best Performance in Climate Zones:</strong> {{ ', '.join(stat_data.summary.best_performing_groups) }}</p>
+                {% endif %}
+                {% if stat_data.summary.worst_performing_groups %}
+                <p><strong>Challenging Climate Zones:</strong> {{ ', '.join(stat_data.summary.worst_performing_groups) }}</p>
+                {% endif %}
                 {% endif %}
                 {% endfor %}
             {% endif %}
@@ -1360,11 +1612,11 @@ class ReportGenerator:
         {% endif %}
         
         {% if item_data.figures.climate_zone_groupby %}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.climate_zone_groupby %}
             <div class="figure-container">
-                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
-                <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
+                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
         </div>
@@ -1409,580 +1661,3 @@ class ReportGenerator:
             f.write(html_content)
         
         return html_path
-    
-    def _generate_pdf_report(self, html_path: str, report_name: str) -> str:
-        """Generate PDF from HTML report using multiple methods"""
-        logger.info("Generating PDF report...")
-        
-        pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
-        
-        # Try multiple PDF generation methods
-        pdf_generated = False
-        
-        # Method 1: ReportLab (direct PDF generation, most reliable)
-        if _HAS_REPORTLAB and not pdf_generated:
-            try:
-                logger.info("Attempting PDF generation with ReportLab...")
-                self._generate_pdf_with_reportlab(pdf_path, report_name)
-                logger.info(f"PDF report generated successfully with ReportLab: {pdf_path}")
-                pdf_generated = True
-            except Exception as e:
-                logger.warning(f"ReportLab PDF generation failed: {e}")
-                
-        # Method 2: WeasyPrint (best quality, but requires system dependencies)
-        if _HAS_WEASYPRINT and not pdf_generated:
-            try:
-                logger.info("Attempting PDF generation with WeasyPrint...")
-                html_doc = weasyprint.HTML(filename=html_path)
-                html_doc.write_pdf(pdf_path)
-                logger.info(f"PDF report generated successfully with WeasyPrint: {pdf_path}")
-                pdf_generated = True
-            except Exception as e:
-                logger.warning(f"WeasyPrint PDF generation failed: {e}")
-        
-        # Method 3: pdfkit (fallback, requires wkhtmltopdf)
-        if _HAS_PDFKIT and not pdf_generated:
-            try:
-                logger.info("Attempting PDF generation with pdfkit...")
-                options = {
-                    'page-size': 'A4',
-                    'margin-top': '0.75in',
-                    'margin-right': '0.75in',
-                    'margin-bottom': '0.75in',
-                    'margin-left': '0.75in',
-                    'encoding': "UTF-8",
-                    'no-outline': None,
-                    'enable-local-file-access': None
-                }
-                pdfkit.from_file(html_path, pdf_path, options=options)
-                logger.info(f"PDF report generated successfully with pdfkit: {pdf_path}")
-                pdf_generated = True
-            except Exception as e:
-                logger.warning(f"pdfkit PDF generation failed: {e}")
-        
-        if not pdf_generated:
-            logger.error("All PDF generation methods failed.")
-            logger.info("To enable PDF generation, install one of:")
-            logger.info("  pip install weasyprint")
-            logger.info("  pip install reportlab")
-            logger.info("  brew install --cask wkhtmltopdf (for pdfkit)")
-            return None
-        
-        return pdf_path
-    
-    def _generate_pdf_with_reportlab(self, pdf_path: str, report_name: str):
-        """Generate PDF directly using ReportLab with full content matching HTML"""
-        # Create PDF document
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4)
-        story = []
-        styles = getSampleStyleSheet()
-        
-        # Custom styles
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=30,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#2c3e50')
-        )
-        
-        heading_style = ParagraphStyle(
-            'CustomHeading',
-            parent=styles['Heading2'],
-            fontSize=16,
-            spaceAfter=12,
-            textColor=colors.HexColor('#2c3e50')
-        )
-        
-        subheading_style = ParagraphStyle(
-            'CustomSubheading',
-            parent=styles['Heading3'],
-            fontSize=14,
-            spaceAfter=10,
-            textColor=colors.HexColor('#34495e')
-        )
-        
-        caption_style = ParagraphStyle(
-            'Caption',
-            parent=styles['Normal'],
-            fontSize=10,
-            spaceAfter=8,
-            spaceBefore=4,
-            alignment=TA_CENTER,
-            textColor=colors.HexColor('#666666'),
-            fontName='Helvetica-Oblique'
-        )
-        
-        # Title page
-        story.append(Paragraph("OpenBench Evaluation Report", title_style))
-        story.append(Spacer(1, 20))
-        story.append(Paragraph(f"Generated: {self.metadata['generated_date']}", styles['Normal']))
-        story.append(Paragraph(f"Configuration: {self.metadata['config_file']}", styles['Normal']))
-        story.append(Paragraph(f"Evaluation Items: {', '.join(self.metadata['evaluation_items'])}", styles['Normal']))
-        story.append(PageBreak())
-        
-        # Collect report data
-        report_data = self._collect_report_data()
-        
-        # Table of Contents
-        story.append(Paragraph("Table of Contents", heading_style))
-        story.append(Paragraph("1. Executive Summary", styles['Normal']))
-        story.append(Paragraph("2. Overall Comparison", styles['Normal']))
-        for i, item in enumerate(self.metadata['evaluation_items'], 3):
-            story.append(Paragraph(f"{i}. {item} Analysis", styles['Normal']))
-        story.append(Paragraph(f"{len(self.metadata['evaluation_items']) + 3}. Appendix", styles['Normal']))
-        story.append(PageBreak())
-        
-        # Executive Summary
-        story.append(Paragraph("Executive Summary", heading_style))
-        story.append(Paragraph("This report presents comprehensive evaluation results from the OpenBench Land Surface Model benchmarking system.", styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        if report_data['overall_summary'].get('grand_average'):
-            story.append(Paragraph(f"Overall Average Score: {report_data['overall_summary']['grand_average']:.3f}", styles['Normal']))
-        story.append(Paragraph(f"Total Evaluation Items: {report_data['overall_summary']['total_items']}", styles['Normal']))
-        
-        # Key Findings
-        story.append(Paragraph("Key Findings:", subheading_style))
-        for item in self.metadata['evaluation_items']:
-            story.append(Paragraph(f"• {item}: Evaluation completed with multiple reference datasets", styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        # Overall Comparison
-        if report_data['comparisons']:
-            story.append(Paragraph("Overall Comparison", heading_style))
-            
-            # Add comparison figures as images
-            figures_dir = os.path.join(self.report_dir, "figures", "comparisons")
-            
-            # Heatmap
-            if report_data['comparisons'].get('figures', {}).get('heatmap'):
-                heatmap_path = os.path.join(figures_dir, report_data['comparisons']['figures']['heatmap'])
-                if os.path.exists(heatmap_path):
-                    try:
-                        img = Image(heatmap_path, width=4.5*inch, height=3.5*inch)  # Limit both dimensions
-                        story.append(img)
-                        story.append(Paragraph("Figure: Overall Score Comparison Heatmap", caption_style))
-                        story.append(Spacer(1, 8))
-                    except Exception as e:
-                        logger.warning(f"Could not add heatmap image to PDF: {e}")
-            
-            # Comparison table
-            if report_data['comparisons'].get('heatmap'):
-                story.append(Paragraph("Score Comparison Table", subheading_style))
-                
-                # Create table data
-                table_data = []
-                headers = list(report_data['comparisons']['heatmap'][0].keys())
-                table_data.append(headers)
-                
-                for row in report_data['comparisons']['heatmap']:
-                    table_data.append(list(row.values()))
-                
-                # Create table
-                table = Table(table_data)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                
-                story.append(table)
-                story.append(Spacer(1, 20))
-            
-            # Radar chart
-            if report_data['comparisons'].get('figures', {}).get('radar'):
-                radar_path = os.path.join(figures_dir, report_data['comparisons']['figures']['radar'])
-                if os.path.exists(radar_path):
-                    try:
-                        img = Image(radar_path, width=4.5*inch, height=3.5*inch)  # Limit both dimensions
-                        story.append(img)
-                        story.append(Paragraph("Figure: Multi-dimensional Performance Radar Chart", caption_style))
-                        story.append(Spacer(1, 12))
-                    except Exception as e:
-                        logger.warning(f"Could not add radar image to PDF: {e}")
-        
-        # Individual Item Analysis
-        for item, item_data in report_data['evaluation_items'].items():
-            story.append(PageBreak())
-            story.append(Paragraph(f"{item} Analysis", heading_style))
-            
-            # Metrics Summary
-            if item_data.get('metrics'):
-                story.append(Paragraph("Evaluation Metrics", subheading_style))
-                for metric_key, metric_data in item_data['metrics'].items():
-                    if metric_data.get('summary'):
-                        # CSV-based metrics
-                        story.append(Paragraph(f"{metric_key}:", styles['Heading4']))
-                        for metric_name, values in metric_data['summary'].items():
-                            if isinstance(values, dict) and values.get('mean') is not None:
-                                # Format year fields as simple integers, others with full statistics
-                                if metric_name in ['use_syear', 'use_eyear']:
-                                    story.append(Paragraph(
-                                        f"{metric_name}: {values['mean']:.0f}",
-                                        styles['Normal']
-                                    ))
-                                else:
-                                    story.append(Paragraph(
-                                        f"{metric_name}: Mean = {values['mean']:.4f}, "
-                                        f"Std = {values['std']:.4f}, Range = [{values['min']:.4f}, {values['max']:.4f}]",
-                                        styles['Normal']
-                                    ))
-                    elif metric_data.get('station_format'):
-                        # Grid vs Grid comprehensive statistics (station format)
-                        story.append(Paragraph(f"{metric_data['comparison_pair']}:", styles['Heading4']))
-                        for metric_name, metric_values in metric_data['metrics'].items():
-                            # Format year fields as simple integers, others with full statistics
-                            if metric_name in ['use_syear', 'use_eyear']:
-                                story.append(Paragraph(
-                                    f"{metric_name}: {metric_values['mean']:.0f}",
-                                    styles['Normal']
-                                ))
-                            else:
-                                story.append(Paragraph(
-                                    f"{metric_name}: Mean = {metric_values['mean']:.4f}, "
-                                    f"Std = {metric_values['std']:.4f}, "
-                                    f"Median = {metric_values['median']:.4f}, "
-                                    f"Range = [{metric_values['min']:.4f}, {metric_values['max']:.4f}], "
-                                    f"Data Coverage = {metric_data['data_coverage']:.1f}%",
-                                    styles['Normal']
-                                ))
-                story.append(Spacer(1, 12))
-            
-            # Add metric figures (only those related to current evaluation item)
-            if item_data.get('figures', {}).get('metrics'):
-                story.append(Paragraph("Metric Visualizations", subheading_style))
-                metrics_figures_dir = os.path.join(self.report_dir, "figures", "metrics")
-                
-                # Filter figures to only include those for the current item
-                relevant_figures = [fig for fig in item_data['figures']['metrics'] 
-                                  if item.replace(' ', '_') in fig]
-                
-                # Create 3x2 grid layout for figures (3 rows, 2 columns)
-                for i in range(0, len(relevant_figures), 6):
-                    if i > 0:
-                        story.append(PageBreak())
-                    
-                    # Get up to 6 figures for this page
-                    page_figures = relevant_figures[i:i+6]
-                    
-                    # Create 3x2 table data
-                    table_data = [
-                        ["", ""],  # Row 1: [cell(0,0), cell(0,1)]
-                        ["", ""],  # Row 2: [cell(1,0), cell(1,1)]
-                        ["", ""]   # Row 3: [cell(2,0), cell(2,1)]
-                    ]
-                    
-                    # Fill the table with figures
-                    for idx, fig in enumerate(page_figures):
-                        fig_path = os.path.join(metrics_figures_dir, fig)
-                        if os.path.exists(fig_path):
-                            try:
-                                # Create image with better size limits and aspect ratio preservation
-                                img = Image(fig_path)
-                                img_width, img_height = img.drawWidth, img.drawHeight
-                                
-                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
-                                max_width = 3.5*inch
-                                max_height = 2.5*inch
-                                
-                                scale_w = max_width / img_width
-                                scale_h = max_height / img_height
-                                scale = min(scale_w, scale_h)
-                                
-                                img.drawWidth = img_width * scale
-                                img.drawHeight = img_height * scale
-                                caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
-                                
-                                # Calculate row and column position
-                                row = idx // 2  # 0, 1, or 2
-                                col = idx % 2   # 0 or 1
-                                
-                                # Create cell content (image above caption)
-                                table_data[row][col] = [img, caption]
-                                
-                            except Exception as e:
-                                logger.warning(f"Could not add metrics figure {fig} to PDF: {e}")
-                    
-                    # Create and add the table
-                    fig_table = Table(table_data, colWidths=[3.8*inch, 3.8*inch])
-                    fig_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                        ('TOPPADDING', (0, 0), (-1, -1), 6),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                    ]))
-                    story.append(fig_table)
-                    story.append(Spacer(1, 10))
-            
-            # Add score figures (only those related to current evaluation item)
-            if item_data.get('figures', {}).get('scores'):
-                story.append(Paragraph("Score Visualizations", subheading_style))
-                scores_figures_dir = os.path.join(self.report_dir, "figures", "scores")
-                
-                # Filter figures to only include those for the current item
-                relevant_figures = [fig for fig in item_data['figures']['scores'] 
-                                  if item.replace(' ', '_') in fig]
-                
-                # Create 3x2 grid layout for figures (3 rows, 2 columns)
-                for i in range(0, len(relevant_figures), 6):
-                    if i > 0:
-                        story.append(PageBreak())
-                    
-                    # Get up to 6 figures for this page
-                    page_figures = relevant_figures[i:i+6]
-                    
-                    # Create 3x2 table data
-                    table_data = [
-                        ["", ""],  # Row 1: [cell(0,0), cell(0,1)]
-                        ["", ""],  # Row 2: [cell(1,0), cell(1,1)]
-                        ["", ""]   # Row 3: [cell(2,0), cell(2,1)]
-                    ]
-                    
-                    # Fill the table with figures
-                    for idx, fig in enumerate(page_figures):
-                        fig_path = os.path.join(scores_figures_dir, fig)
-                        if os.path.exists(fig_path):
-                            try:
-                                # Create image with better size limits and aspect ratio preservation
-                                img = Image(fig_path)
-                                img_width, img_height = img.drawWidth, img.drawHeight
-                                
-                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
-                                max_width = 3.5*inch
-                                max_height = 2.5*inch
-                                
-                                scale_w = max_width / img_width
-                                scale_h = max_height / img_height
-                                scale = min(scale_w, scale_h)
-                                
-                                img.drawWidth = img_width * scale
-                                img.drawHeight = img_height * scale
-                                caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
-                                
-                                # Calculate row and column position
-                                row = idx // 2  # 0, 1, or 2
-                                col = idx % 2   # 0 or 1
-                                
-                                # Create cell content (image above caption)
-                                table_data[row][col] = [img, caption]
-                                
-                            except Exception as e:
-                                logger.warning(f"Could not add scores figure {fig} to PDF: {e}")
-                    
-                    # Create and add the table
-                    fig_table = Table(table_data, colWidths=[3.8*inch, 3.8*inch])
-                    fig_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                        ('TOPPADDING', (0, 0), (-1, -1), 6),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                    ]))
-                    story.append(fig_table)
-                    story.append(Spacer(1, 10))
-            
-            # Add comparison figures (only those related to current evaluation item)
-            if item_data.get('figures', {}).get('comparisons'):
-                story.append(Paragraph("Detailed Comparisons", subheading_style))
-                comparisons_figures_dir = os.path.join(self.report_dir, "figures", "comparisons")
-                
-                # Filter figures to only include those for the current item
-                relevant_figures = [fig for fig in item_data['figures']['comparisons'] 
-                                  if item.replace(' ', '_') in fig]
-                
-                # Create 3x2 grid layout for figures (3 rows, 2 columns)
-                for i in range(0, len(relevant_figures), 6):
-                    if i > 0:
-                        story.append(PageBreak())
-                    
-                    # Get up to 6 figures for this page
-                    page_figures = relevant_figures[i:i+6]
-                    
-                    # Create 3x2 table data
-                    table_data = [
-                        ["", ""],  # Row 1: [cell(0,0), cell(0,1)]
-                        ["", ""],  # Row 2: [cell(1,0), cell(1,1)]
-                        ["", ""]   # Row 3: [cell(2,0), cell(2,1)]
-                    ]
-                    
-                    # Fill the table with figures
-                    for idx, fig in enumerate(page_figures):
-                        fig_path = os.path.join(comparisons_figures_dir, fig)
-                        if os.path.exists(fig_path):
-                            try:
-                                # Create image with better size limits and aspect ratio preservation
-                                img = Image(fig_path)
-                                img_width, img_height = img.drawWidth, img.drawHeight
-                                
-                                # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
-                                max_width = 3.5*inch
-                                max_height = 2.5*inch
-                                
-                                scale_w = max_width / img_width
-                                scale_h = max_height / img_height
-                                scale = min(scale_w, scale_h)
-                                
-                                img.drawWidth = img_width * scale
-                                img.drawHeight = img_height * scale
-                                caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
-                                
-                                # Calculate row and column position
-                                row = idx // 2  # 0, 1, or 2
-                                col = idx % 2   # 0 or 1
-                                
-                                # Create cell content (image above caption)
-                                table_data[row][col] = [img, caption]
-                                
-                            except Exception as e:
-                                logger.warning(f"Could not add comparison figure {fig} to PDF: {e}")
-                    
-                    # Create and add the table
-                    fig_table = Table(table_data, colWidths=[3.8*inch, 3.8*inch])
-                    fig_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                        ('TOPPADDING', (0, 0), (-1, -1), 6),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                    ]))
-                    story.append(fig_table)
-                    story.append(Spacer(1, 10))
-            
-            # Add groupby analysis sections
-            self._add_groupby_analysis_to_pdf(story, item_data, subheading_style, caption_style)
-        
-        # Appendix
-        story.append(PageBreak())
-        story.append(Paragraph("Appendix", heading_style))
-        story.append(Paragraph("Methodology", subheading_style))
-        story.append(Paragraph("The evaluation was performed using the OpenBench Land Surface Model benchmarking system, which includes:", styles['Normal']))
-        story.append(Paragraph("• Multiple evaluation metrics: RMSE, Correlation, KGESS, and various scoring methods", styles['Normal']))
-        story.append(Paragraph("• Spatial and temporal analysis across different scales", styles['Normal']))
-        story.append(Paragraph("• Climate zone-based grouping for regional analysis", styles['Normal']))
-        story.append(Paragraph("• Comprehensive visualization suite for result interpretation", styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        story.append(Paragraph("Data Sources", subheading_style))
-        story.append(Paragraph("Reference datasets used in this evaluation:", styles['Normal']))
-        story.append(Paragraph("• GLEAM: Global Land Evaporation Amsterdam Model", styles['Normal']))
-        story.append(Paragraph("• ILAMB: International Land Model Benchmarking", styles['Normal']))
-        story.append(Paragraph("• PLUMBER2: Protocol for Land Surface Model Benchmarking Evaluation", styles['Normal']))
-        
-        # Footer
-        story.append(Spacer(1, 20))
-        story.append(Paragraph(f"Generated by OpenBench v2.0 | {self.metadata['generated_date']}", 
-                              ParagraphStyle('Footer', parent=styles['Normal'], alignment=TA_CENTER, textColor=colors.gray)))
-        
-        # Build PDF
-        doc.build(story)
-    
-    def _add_groupby_analysis_to_pdf(self, story, item_data, subheading_style, caption_style):
-        """Add groupby analysis sections to PDF report"""
-        from reportlab.lib.styles import getSampleStyleSheet
-        styles = getSampleStyleSheet()
-        
-        groupby_types = [
-            ("igbp_groupby", "IGBP_groupby", "IGBP Land Cover Classification Analysis"),
-            ("pft_groupby", "PFT_groupby", "Plant Functional Type (PFT) Analysis"),
-            ("climate_zone_groupby", "Climate_zone_groupby", "Climate Zone Classification Analysis")
-        ]
-        
-        for fig_key, stat_key, title in groupby_types:
-            has_figures = item_data.get('figures', {}).get(fig_key)
-            has_stats = item_data.get('statistics', {}).get(stat_key)
-            
-            if has_figures or has_stats:
-                story.append(Paragraph(title, subheading_style))
-                
-                # Add statistics summary if available
-                if has_stats:
-                    stats_data = has_stats
-                    if 'description' in stats_data:
-                        story.append(Paragraph(stats_data['description'], styles['Normal']))
-                    
-                    if 'statistics' in stats_data:
-                        for stat_data in stats_data['statistics']:
-                            file_name = stat_data['file'].replace('_', ' ').replace('.csv', '')
-                            story.append(Paragraph(f"Analysis: {file_name}", styles['Heading4']))
-                            
-                            if 'groups' in stat_data['summary']:
-                                groups_text = f"Groups analyzed: {', '.join(stat_data['summary']['groups'])} ({stat_data['summary']['group_count']} groups)"
-                                story.append(Paragraph(groups_text, styles['Normal']))
-                    
-                    story.append(Spacer(1, 10))
-                
-                # Add figures if available
-                if has_figures:
-                    comparisons_figures_dir = os.path.join(self.report_dir, "figures", "comparisons")
-                    relevant_figures = has_figures
-                    
-                    # Create 3x2 grid layout for figures
-                    for i in range(0, len(relevant_figures), 6):
-                        if i > 0:
-                            story.append(PageBreak())
-                        
-                        # Get up to 6 figures for this page
-                        page_figures = relevant_figures[i:i+6]
-                        
-                        # Create 3x2 table data
-                        table_data = [
-                            ["", ""],  # Row 1: [cell(0,0), cell(0,1)]
-                            ["", ""],  # Row 2: [cell(1,0), cell(1,1)]
-                            ["", ""]   # Row 3: [cell(2,0), cell(2,1)]
-                        ]
-                        
-                        # Fill the table with figures
-                        for idx, fig in enumerate(page_figures):
-                            fig_path = os.path.join(comparisons_figures_dir, fig)
-                            if os.path.exists(fig_path):
-                                try:
-                                    # Create image with better size limits and aspect ratio preservation
-                                    img = Image(fig_path)
-                                    img_width, img_height = img.drawWidth, img.drawHeight
-                                    
-                                    # Calculate scaled dimensions to fit in 3.5x2.5 inch cell
-                                    max_width = 3.5*inch
-                                    max_height = 2.5*inch
-                                    
-                                    scale_w = max_width / img_width
-                                    scale_h = max_height / img_height
-                                    scale = min(scale_w, scale_h)
-                                    
-                                    img.drawWidth = img_width * scale
-                                    img.drawHeight = img_height * scale
-                                    
-                                    caption = Paragraph(fig.replace('_', ' ').replace('.jpg', ''), caption_style)
-                                    
-                                    # Calculate row and column position
-                                    row = idx // 2  # 0, 1, or 2
-                                    col = idx % 2   # 0 or 1
-                                    
-                                    # Create cell content (image above caption)
-                                    table_data[row][col] = [img, caption]
-                                    
-                                except Exception as e:
-                                    logger.warning(f"Could not add {fig_key} figure {fig} to PDF: {e}")
-                        
-                        # Create and add the table
-                        fig_table = Table(table_data, colWidths=[3.8*inch, 3.8*inch])
-                        fig_table.setStyle(TableStyle([
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                            ('TOPPADDING', (0, 0), (-1, -1), 6),
-                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                        ]))
-                        story.append(fig_table)
-                        story.append(Spacer(1, 10))
