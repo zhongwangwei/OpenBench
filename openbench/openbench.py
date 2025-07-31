@@ -37,6 +37,7 @@ from openbench.config import NamelistReader, GeneralInfoReader, UpdateNamelist, 
 from openbench.visualization.Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, CZ_groupby_only_drawing, ComparisonProcessing_only_drawing
 from openbench.data.Mod_Preprocessing import check_required_nml, run_files_check
 from openbench.util.Mod_Converttype import Convert_Type
+from openbench.Mod_ReportGenerator import ReportGenerator
 import logging
 from datetime import datetime
 
@@ -782,6 +783,48 @@ def main():
         # Clean up memory after statistics
         cleanup_memory()
 
+    # Generate comprehensive report if enabled
+    if main_nl['general'].get('generate_report', True):
+        colors = get_platform_colors()
+        report_icon = "📝" if colors['reset'] else ">>>"
+        print(f"\n{report_icon} {colors['bold']}{colors['blue']}Generating comprehensive evaluation report...{colors['reset']}")
+        start_time = time.time()
+        
+        try:
+            # Prepare configuration for report generator
+            report_config = {
+                'config_file': sys.argv[1],
+                'evaluation_items': list(evaluation_items),
+                'metrics': dict(main_nl.get('metrics', {})),
+                'scores': dict(main_nl.get('scores', {})),
+                'comparisons': dict(main_nl.get('comparisons', {})),
+                'statistics': dict(main_nl.get('statistics', {}))
+            }
+            
+            # Initialize report generator
+            basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
+            output_basedir = os.path.join(basedir, "output")
+            report_gen = ReportGenerator(report_config, output_basedir)
+            
+            # Generate reports
+            report_paths = report_gen.generate_report()
+            
+            end_time = time.time()
+            report_time = (end_time - start_time) / 60
+            
+            check = "✅" if colors['reset'] else "[OK]"
+            print(f"\n{check} {colors['bold']}{colors['green']}Report generation completed in {report_time:.2f} minutes.{colors['reset']}")
+            if report_paths.get('html'):
+                print(f"   📄 HTML Report: {report_paths['html']}")
+            if report_paths.get('pdf'):
+                print(f"   📄 PDF Report: {report_paths['pdf']}")
+            
+            logging.info(f"Report generation completed in {report_time:.2f} minutes.")
+            
+        except Exception as e:
+            logging.error(f"Error generating report: {e}")
+            logging.warning("Continuing without report generation...")
+    
     # Final memory cleanup
     cleanup_memory()
     
