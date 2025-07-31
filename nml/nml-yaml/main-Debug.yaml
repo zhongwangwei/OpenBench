@@ -15,7 +15,7 @@ general:
   simulation_nml: ./nml/nml-yaml/sim-Debug.yaml
   statistics_nml: ./nml/nml-yaml/stats.yaml
   figure_nml: ./nml/nml-yaml/figlib.yaml
-  num_cores: 48
+  num_cores: 4
   evaluation: true
   comparison: true
   statistics: false
@@ -26,6 +26,7 @@ general:
   PFT_groupby:  true
   Climate_zone_groupby: true
   unified_mask: true
+  generate_report: true
 evaluation_items:
   Biomass: false
   Burned_Area: false
