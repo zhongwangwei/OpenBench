@@ -37,7 +37,7 @@ from openbench.config import NamelistReader, GeneralInfoReader, UpdateNamelist, 
 from openbench.visualization.Mod_Only_Drawing import Evaluation_grid_only_drawing, Evaluation_stn_only_drawing, LC_groupby_only_drawing, CZ_groupby_only_drawing, ComparisonProcessing_only_drawing
 from openbench.data.Mod_Preprocessing import check_required_nml, run_files_check
 from openbench.util.Mod_Converttype import Convert_Type
-from openbench.Mod_ReportGenerator import ReportGenerator
+from openbench.util.Mod_ReportGenerator import ReportGenerator
 import logging
 from datetime import datetime
 

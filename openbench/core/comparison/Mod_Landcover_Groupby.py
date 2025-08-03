@@ -146,7 +146,7 @@ class LC_groupby(metrics, scores):
                                 self._igbp_station_warning_shown = True
                             continue  # Skip processing for station data
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'IGBP_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -200,7 +200,7 @@ class LC_groupby(metrics, scores):
                                 logging.error('Error: No metrics for IGBP class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'IGBP_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -299,14 +299,14 @@ class LC_groupby(metrics, scores):
                             else:
                                 logging.error('Error: No scores for IGBP class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'IGBP_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'IGBP_groupby')
         #if os.path.exists(metricsdir_path):
         #    shutil.rmtree(metricsdir_path)
         #print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'IGBP_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'IGBP_groupby')
         #if os.path.exists(scoresdir_path):
         #    shutil.rmtree(scoresdir_path)
         #print(f"Re-creating output directory: {scoresdir_path}")
@@ -417,7 +417,7 @@ class LC_groupby(metrics, scores):
                                 self._pft_station_warning_shown = True
                             continue  # Skip processing for station data
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'PFT_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -474,7 +474,7 @@ class LC_groupby(metrics, scores):
                                 logging.error('Error: No scores for PFT class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'PFT_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -573,14 +573,14 @@ class LC_groupby(metrics, scores):
                             else:
                                 logging.error('Error: No scores for PFT class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'PFT_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'PFT_groupby')
         #if os.path.exists(metricsdir_path):
        #     shutil.rmtree(metricsdir_path)
         #print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'PFT_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'PFT_groupby')
         #if os.path.exists(scoresdir_path):
        #     shutil.rmtree(scoresdir_path)
         #print(f"Re-creating output directory: {scoresdir_path}")
