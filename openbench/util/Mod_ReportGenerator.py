@@ -60,6 +60,9 @@ class ReportGenerator:
         self.enabled_metrics = [metric for metric, enabled in config.get("metrics", {}).items() if enabled]
         self.enabled_scores = [score for score, enabled in config.get("scores", {}).items() if enabled]
         
+        # Get enabled comparisons from configuration
+        self.enabled_comparisons = [comp for comp, enabled in config.get("comparisons", {}).items() if enabled]
+        
         self.metadata = {
             "title": "OpenBench Evaluation Report",
             "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -297,129 +300,79 @@ class ReportGenerator:
             comp_files = glob.glob(comp_path)
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
         
-        # IGBP groupby figures - check in metrics, scores, and comparisons directories
+        # IGBP groupby figures - now primarily in comparisons directory
         igbp_files = []
-        # Check metrics directory first
-        igbp_metrics_dir = os.path.join(self.metrics_dir, "IGBP_groupby")
-        if os.path.exists(igbp_metrics_dir):
+        # Check comparisons directory as the primary location
+        igbp_comp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
+        if os.path.exists(igbp_comp_dir):
             # Look for heatmap figures in subdirectories
-            for subdir in glob.glob(os.path.join(igbp_metrics_dir, "*/")):
+            for subdir in glob.glob(os.path.join(igbp_comp_dir, "*/")):
                 heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
                 igbp_files.extend(heatmap_files)
                 # Also look for any other jpg files related to the item
                 other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
                 igbp_files.extend([f for f in other_files if f not in igbp_files])
-        
-        # Check scores directory
-        igbp_scores_dir = os.path.join(self.scores_dir, "IGBP_groupby")
-        if os.path.exists(igbp_scores_dir):
-            for subdir in glob.glob(os.path.join(igbp_scores_dir, "*/")):
-                score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                igbp_files.extend(score_files)
-        
-        # Check comparisons directory as fallback
-        igbp_comp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
-        if os.path.exists(igbp_comp_dir):
-            comp_files = glob.glob(os.path.join(igbp_comp_dir, f"*{item}*.jpg"))
-            igbp_files.extend(comp_files)
+            # Also check the root directory
+            root_files = glob.glob(os.path.join(igbp_comp_dir, f"*{item}*.jpg"))
+            igbp_files.extend(root_files)
         
         # Format paths relative to the base directory
         figures["igbp_groupby"] = []
         for f in igbp_files:
-            if self.metrics_dir in f:
-                rel_path = os.path.relpath(f, self.metrics_dir)
-                figures["igbp_groupby"].append(f"metrics/{rel_path}")
-            elif self.scores_dir in f:
-                rel_path = os.path.relpath(f, self.scores_dir)
-                figures["igbp_groupby"].append(f"scores/{rel_path}")
-            elif self.comparisons_dir in f:
+            if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["igbp_groupby"].append(f"comparisons/{rel_path}")
         
         if figures["igbp_groupby"]:
             logger.info(f"Found IGBP groupby figures: {figures['igbp_groupby']}")
         
-        # PFT groupby figures - check in metrics, scores, and comparisons directories
+        # PFT groupby figures - now primarily in comparisons directory
         pft_files = []
-        # Check metrics directory first
-        pft_metrics_dir = os.path.join(self.metrics_dir, "PFT_groupby")
-        if os.path.exists(pft_metrics_dir):
+        # Check comparisons directory as the primary location
+        pft_comp_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
+        if os.path.exists(pft_comp_dir):
             # Look for heatmap figures in subdirectories
-            for subdir in glob.glob(os.path.join(pft_metrics_dir, "*/")):
+            for subdir in glob.glob(os.path.join(pft_comp_dir, "*/")):
                 heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
                 pft_files.extend(heatmap_files)
                 # Also look for any other jpg files related to the item
                 other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
                 pft_files.extend([f for f in other_files if f not in pft_files])
-        
-        # Check scores directory
-        pft_scores_dir = os.path.join(self.scores_dir, "PFT_groupby")
-        if os.path.exists(pft_scores_dir):
-            for subdir in glob.glob(os.path.join(pft_scores_dir, "*/")):
-                score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                pft_files.extend(score_files)
-        
-        # Check comparisons directory as fallback
-        pft_comp_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
-        if os.path.exists(pft_comp_dir):
-            comp_files = glob.glob(os.path.join(pft_comp_dir, f"*{item}*.jpg"))
-            pft_files.extend(comp_files)
+            # Also check the root directory
+            root_files = glob.glob(os.path.join(pft_comp_dir, f"*{item}*.jpg"))
+            pft_files.extend(root_files)
         
         # Format paths relative to the base directory
         figures["pft_groupby"] = []
         for f in pft_files:
-            if self.metrics_dir in f:
-                rel_path = os.path.relpath(f, self.metrics_dir)
-                figures["pft_groupby"].append(f"metrics/{rel_path}")
-            elif self.scores_dir in f:
-                rel_path = os.path.relpath(f, self.scores_dir)
-                figures["pft_groupby"].append(f"scores/{rel_path}")
-            elif self.comparisons_dir in f:
+            if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["pft_groupby"].append(f"comparisons/{rel_path}")
         
         if figures["pft_groupby"]:
             logger.info(f"Found PFT groupby figures: {figures['pft_groupby']}")
         
-        # Climate zone groupby figures - check in metrics, scores, and comparisons directories  
+        # Climate zone groupby figures - now primarily in comparisons directory  
         climate_files = []
-        # Check metrics directory first - note the directory might be CZ_groupby
+        # Check comparisons directory as the primary location - note the directory might be CZ_groupby
         for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
-            cz_metrics_dir = os.path.join(self.metrics_dir, cz_name)
-            if os.path.exists(cz_metrics_dir):
+            cz_comp_dir = os.path.join(self.comparisons_dir, cz_name)
+            if os.path.exists(cz_comp_dir):
                 # Look for heatmap figures in subdirectories
-                for subdir in glob.glob(os.path.join(cz_metrics_dir, "*/")):
+                for subdir in glob.glob(os.path.join(cz_comp_dir, "*/")):
                     heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
                     climate_files.extend(heatmap_files)
                     # Also look for any other jpg files related to the item
                     other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
                     climate_files.extend([f for f in other_files if f not in climate_files])
-        
-        # Check scores directory
-        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
-            cz_scores_dir = os.path.join(self.scores_dir, cz_name)
-            if os.path.exists(cz_scores_dir):
-                for subdir in glob.glob(os.path.join(cz_scores_dir, "*/")):
-                    score_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                    climate_files.extend(score_files)
-        
-        # Check comparisons directory as fallback
-        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
-            cz_comp_dir = os.path.join(self.comparisons_dir, cz_name)
-            if os.path.exists(cz_comp_dir):
-                comp_files = glob.glob(os.path.join(cz_comp_dir, f"*{item}*.jpg"))
-                climate_files.extend(comp_files)
+                # Also check the root directory
+                root_files = glob.glob(os.path.join(cz_comp_dir, f"*{item}*.jpg"))
+                climate_files.extend(root_files)
         
         # Format paths relative to the base directory
         figures["climate_zone_groupby"] = []
         for f in climate_files:
-            if self.metrics_dir in f:
-                rel_path = os.path.relpath(f, self.metrics_dir)
-                figures["climate_zone_groupby"].append(f"metrics/{rel_path}")
-            elif self.scores_dir in f:
-                rel_path = os.path.relpath(f, self.scores_dir)
-                figures["climate_zone_groupby"].append(f"scores/{rel_path}")
-            elif self.comparisons_dir in f:
+            if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["climate_zone_groupby"].append(f"comparisons/{rel_path}")
         
@@ -633,30 +586,52 @@ class ReportGenerator:
         return descriptions.get(groupby_name, f"{groupby_name} analysis")
     
     def _collect_comparison_data(self) -> Dict[str, Any]:
-        """Collect overall comparison data"""
+        """Collect overall comparison data based on enabled comparisons"""
         comparison_data = {}
         
-        # Overall comparison files
-        comparison_files = {
-            "heatmap": os.path.join(self.comparisons_dir, "HeatMap", "scenarios_Overall_Score_comparison.txt"),
-            "parallel_coords": os.path.join(self.comparisons_dir, "Parallel_Coordinates", "Parallel_Coordinates_evaluations.txt"),
-            "radar": os.path.join(self.comparisons_dir, "RadarMap", "scenarios_Overall_Score_comparison.txt")
+        # Check if comparison is enabled in general settings
+        if not self.config.get("general", {}).get("comparison", True):
+            logger.info("Comparison is disabled in configuration, skipping comparison data collection")
+            return comparison_data
+        
+        # Define mapping between comparison types and their files/figures
+        comparison_mappings = {
+            "HeatMap": {
+                "data_file": os.path.join(self.comparisons_dir, "HeatMap", "scenarios_Overall_Score_comparison.txt"),
+                "figure_pattern": "*heatmap.jpg",
+                "data_key": "heatmap"
+            },
+            "Parallel_Coordinates": {
+                "data_file": os.path.join(self.comparisons_dir, "Parallel_Coordinates", "Parallel_Coordinates_evaluations.txt"),
+                "figure_pattern": "*Overall_Score*.jpg",
+                "data_key": "parallel_coords"
+            },
+            "RadarMap": {
+                "data_file": os.path.join(self.comparisons_dir, "RadarMap", "scenarios_Overall_Score_comparison.txt"),
+                "figure_pattern": "*radarmap.jpg",
+                "data_key": "radar"
+            }
         }
         
-        for key, filepath in comparison_files.items():
-            if os.path.exists(filepath):
-                try:
-                    df = pd.read_csv(filepath, sep='\t')
-                    comparison_data[key] = df.to_dict(orient='records')
-                except Exception as e:
-                    logger.warning(f"Error reading {filepath}: {e}")
+        # Collect data only for enabled comparisons
+        figures = {}
+        for comp_type, mapping in comparison_mappings.items():
+            if comp_type in self.enabled_comparisons:
+                # Collect data file
+                if os.path.exists(mapping["data_file"]):
+                    try:
+                        df = pd.read_csv(mapping["data_file"], sep='\t')
+                        comparison_data[mapping["data_key"]] = df.to_dict(orient='records')
+                    except Exception as e:
+                        logger.warning(f"Error reading {mapping['data_file']}: {e}")
+                
+                # Collect figure
+                figure_path = self._find_figure(self.comparisons_dir, comp_type, mapping["figure_pattern"])
+                if figure_path:
+                    figures[mapping["data_key"]] = figure_path
         
-        # Collect comparison figures
-        comparison_data["figures"] = {
-            "heatmap": self._find_figure(self.comparisons_dir, "HeatMap", "*heatmap.jpg"),
-            "radar": self._find_figure(self.comparisons_dir, "RadarMap", "*radarmap.jpg"),
-            "parallel": self._find_figure(self.comparisons_dir, "Parallel_Coordinates", "*Overall_Score*.jpg")
-        }
+        if figures:
+            comparison_data["figures"] = figures
         
         return comparison_data
     
@@ -1313,10 +1288,10 @@ class ReportGenerator:
         <h3>Table of Contents</h3>
         <ul>
             <li><a href="#summary">Executive Summary</a></li>
-            <li><a href="#overall-comparison">Overall Comparison</a></li>
             {% for item in metadata.evaluation_items %}
             <li><a href="#{{ item|replace(' ', '-')|lower }}">{{ item }} Analysis</a></li>
             {% endfor %}
+            <li><a href="#overall-comparison">Overall Comparison</a></li>
             <li><a href="#appendix">Appendix</a></li>
         </ul>
     </div>
@@ -1366,49 +1341,6 @@ class ReportGenerator:
             {% endif %}
         </div>
     </div>
-    
-    <!-- Overall Comparison -->
-    {% if comparisons %}
-    <div class="section" id="overall-comparison">
-        <h2>Overall Comparison</h2>
-        
-        {% if comparisons.figures.heatmap %}
-        <div class="figure-container">
-            <img src="figures/comparisons/{{ comparisons.figures.heatmap }}" alt="Overall Score Heatmap">
-            <div class="figure-caption">Figure: Overall Score Comparison Heatmap</div>
-        </div>
-        {% endif %}
-        
-        {% if comparisons.heatmap %}
-        <h3>Score Comparison Table</h3>
-        <table>
-            <thead>
-                <tr>
-                    {% for key in comparisons.heatmap[0].keys() %}
-                    <th>{{ key }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in comparisons.heatmap %}
-                <tr>
-                    {% for value in row.values() %}
-                    <td>{{ value }}</td>
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-        
-        {% if comparisons.figures.radar %}
-        <div class="figure-container">
-            <img src="figures/comparisons/{{ comparisons.figures.radar }}" alt="Radar Map">
-            <div class="figure-caption">Figure: Multi-dimensional Performance Radar Chart</div>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
     
     <!-- Individual Item Analysis -->
     {% for item, item_data in evaluation_items.items() %}
@@ -1490,7 +1422,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
             {% for fig in item_data.figures.comparisons %}
             <div class="figure-container">
-                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1624,6 +1556,49 @@ class ReportGenerator:
         {% endif %}
     </div>
     {% endfor %}
+    
+    <!-- Overall Comparison -->
+    {% if comparisons %}
+    <div class="section" id="overall-comparison">
+        <h2>Overall Comparison</h2>
+        
+        {% if comparisons.figures.heatmap %}
+        <div class="figure-container">
+            <img src="figures/comparisons/{{ comparisons.figures.heatmap }}" alt="Overall Score Heatmap">
+            <div class="figure-caption">Figure: Overall Score Comparison Heatmap</div>
+        </div>
+        {% endif %}
+        
+        {% if comparisons.heatmap %}
+        <h3>Score Comparison Table</h3>
+        <table>
+            <thead>
+                <tr>
+                    {% for key in comparisons.heatmap[0].keys() %}
+                    <th>{{ key }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparisons.heatmap %}
+                <tr>
+                    {% for value in row.values() %}
+                    <td>{{ value }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        
+        {% if comparisons.figures.radar %}
+        <div class="figure-container">
+            <img src="figures/comparisons/{{ comparisons.figures.radar }}" alt="Radar Map">
+            <div class="figure-caption">Figure: Multi-dimensional Performance Radar Chart</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
     
     <!-- Appendix -->
     <div class="section" id="appendix">
