@@ -160,7 +160,7 @@ class CZ_groupby(metrics, scores):
                                 self._station_warning_shown = True
                             continue  # Skip processing for station data
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'CZ_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -217,7 +217,7 @@ class CZ_groupby(metrics, scores):
                                 logging.error('Error: No scores for climate zone class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'CZ_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -316,14 +316,14 @@ class CZ_groupby(metrics, scores):
                             else:
                                 logging.error('Error: No scores for climate zone class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'CZ_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
         # if os.path.exists(metricsdir_path):
         #     shutil.rmtree(metricsdir_path)
         # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'CZ_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
