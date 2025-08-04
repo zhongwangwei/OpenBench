@@ -266,9 +266,9 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
         general_info = general_info_object.to_dict()
         general_info['ref_source'] = ref_source
         general_info['sim_source'] = sim_source
-        if isinstance(general_info['use_syear'], int):
-            min_year = general_info['use_syear']
-            max_year = general_info['use_eyear']
+        if isinstance(general_info['use_syear'], (int, float)):
+            min_year = int(general_info['use_syear'])
+            max_year = int(general_info['use_eyear'])
         else:
             min_year = min(general_info['use_syear'])
             max_year = max(general_info['use_eyear'])

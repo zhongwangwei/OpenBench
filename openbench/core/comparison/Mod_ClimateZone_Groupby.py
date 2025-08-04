@@ -60,7 +60,7 @@ class CZ_groupby(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/metrics/CZ_groupby/CZ_info.txt'
+            grid_info = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_info.txt'
 
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
@@ -73,7 +73,7 @@ class CZ_groupby(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             CZtype_orig = './dataset/Climate_zone.nc'
-            CZtype_remap = f'{self.casedir}/output/metrics/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
             self.CZ_dir = CZtype_remap
 
@@ -96,7 +96,7 @@ class CZ_groupby(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1,30))
-            CZtype_remap = f'{self.casedir}/output/metrics/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
             ds_regrid.to_netcdf(CZtype_remap)
             self.CZ_dir = CZtype_remap
 
@@ -199,7 +199,7 @@ class CZ_groupby(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/metrics/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -208,7 +208,7 @@ class CZ_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -275,7 +275,7 @@ class CZ_groupby(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/scores/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
@@ -309,7 +309,7 @@ class CZ_groupby(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"CZ class scores comparison results are saved to {output_file_path2}")
