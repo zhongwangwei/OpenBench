@@ -15,7 +15,7 @@
     simulation_nml   = ./nml/nml-Fortran/sim-Debug.nml
     statistics_nml   = ./nml/nml-Fortran/stats.nml
     figure_nml       = ./nml/nml-Fortran/figlib.nml
-    num_cores        = 48
+    num_cores        = 4
     evaluation       = True
     comparison       = True
     statistics       = False
@@ -26,6 +26,7 @@
     PFT_groupby      = True
     Climate_zone_groupby = True
     unified_mask     = True
+    generate_report  = True
 /
 
 
