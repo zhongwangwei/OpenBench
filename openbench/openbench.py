@@ -357,8 +357,8 @@ def print_phase_header(phase_name, icon=""):
     print(f"{colors['bold']}{colors['cyan']}{icon} {phase_name.upper()}{colors['reset']}")
     print(f"{colors['green']}" + "=" * width + f"{colors['reset']}")
 
-def print_item_progress(item_name, icon="📊"):
-    """Print progress for individual items."""
+def print_item_progress(item_name, icon="📊", ref_dataset=None, sim_dataset=None):
+    """Print progress for individual items with dataset information."""
     colors = get_platform_colors()
     
     # Use simple text for non-Unicode terminals
@@ -366,6 +366,21 @@ def print_item_progress(item_name, icon="📊"):
         icon = icon.replace('📊', '*').replace('📋', '*').replace('📈', '*')
     
     print(f"  {icon} {colors['blue']}Processing {item_name}...{colors['reset']}")
+    
+    # Print dataset information if provided
+    if ref_dataset:
+        print(f"    Reference dataset: {ref_dataset}")
+    if sim_dataset:
+        print(f"    Simulation dataset: {sim_dataset}")
+
+def format_dataset_info(source_name, data_config, evaluation_item):
+    """Format dataset information showing name and type (station/grid)."""
+    data_type = data_config[evaluation_item].get(f'{source_name}_data_type', 'unknown')
+    data_type_display = 'station' if data_type == 'stn' else 'grid' if data_type == 'grid' else data_type
+    return f"{source_name} ({data_type_display})"
+
+# Global set to track displayed dataset combinations
+displayed_combinations = set()
 
 def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                    fig_nml):
@@ -386,6 +401,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         # Rearrange simulation sources to put station data first
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
         
+        
         if not main_nl['general']['only_drawing']:
             for ref_source in ref_sources:
                 onetimeref = True
@@ -397,6 +413,28 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         for ref_source in ref_sources:
             onetimeref = True
             for sim_source in sim_sources:
+                # Display dataset information for each combination
+                combination_key = f"{evaluation_item}_{ref_source}_{sim_source}"
+                if combination_key not in displayed_combinations:
+                    ref_dataset_info = format_dataset_info(ref_source, ref_nml, evaluation_item)
+                    sim_dataset_info = format_dataset_info(sim_source, sim_nml, evaluation_item)
+                    # Get colors for data type highlighting
+                    colors = get_platform_colors()
+                    
+                    ref_data_type = ref_nml[evaluation_item].get(f'{ref_source}_data_type')
+                    sim_data_type = sim_nml[evaluation_item].get(f'{sim_source}_data_type')
+                    
+                    ref_type = "Station" if ref_data_type == 'stn' else "Grid"
+                    sim_type = "Station" if sim_data_type == 'stn' else "Grid"
+                    
+                    # Color code: Station = Orange/Yellow, Grid = Cyan/Blue
+                    ref_color = colors['yellow'] if ref_data_type == 'stn' else colors['cyan']
+                    sim_color = colors['yellow'] if sim_data_type == 'stn' else colors['cyan']
+                    
+                    print(f"    Reference: {ref_source} ({ref_color}{ref_type}{colors['reset']})")
+                    print(f"    Simulation: {sim_source} ({sim_color}{sim_type}{colors['reset']})")
+                    displayed_combinations.add(combination_key)
+                
                 process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
                                 statistic_vars, evaluation_item, sim_source, ref_source, fig_nml)
                 onetimeref = False
