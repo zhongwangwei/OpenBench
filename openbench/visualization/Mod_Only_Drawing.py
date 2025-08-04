@@ -128,7 +128,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 self._igbp_station_warning_shown = True
                             pass
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'IGBP_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -138,7 +138,7 @@ class LC_groupby_only_drawing(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -146,7 +146,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No metrics for IGBP class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'IGBP_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -154,7 +154,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                                                  f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
@@ -183,7 +183,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.warning(f"warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'PFT_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -193,7 +193,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -202,14 +202,14 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No scores for PFT class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'PFT_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
                                                                  f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"PFT class scores comparison results are saved to {output_file_path2}")
@@ -260,7 +260,7 @@ class CZ_groupby_only_drawing(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/metrics/CZ_groupby/CZ_info.txt'
+            grid_info = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_info.txt'
 
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
@@ -273,7 +273,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             CZtype_orig = './dataset/Climate_zone.nc'
-            CZtype_remap = f'{self.casedir}/output/metrics/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
             self.CZ_dir = CZtype_remap
 
@@ -296,7 +296,7 @@ class CZ_groupby_only_drawing(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(0, 16))
-            CZtype_remap = f'{self.casedir}/output/metrics/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
             ds_regrid.to_netcdf(CZtype_remap)
             self.CZ_dir = CZtype_remap
 
@@ -359,7 +359,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                 logging.warning(f"warning: station data is not supported for Climate zone class comparison")
                                 self._station_warning_shown = True
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'metrics', 'CZ_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -398,7 +398,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/metrics/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -407,7 +407,7 @@ class CZ_groupby_only_drawing(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -416,7 +416,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No scores for climate zone class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'scores', 'CZ_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -474,7 +474,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/scores/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
@@ -508,21 +508,21 @@ class CZ_groupby_only_drawing(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"CZ class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.error('Error: No scores for climate zone class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'metrics', 'CZ_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
         # if os.path.exists(metricsdir_path):
         #     shutil.rmtree(metricsdir_path)
         # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'scores', 'CZ_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
@@ -1275,7 +1275,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 else:
                     try:
                         output_path = os.path.join(dir_path, f'{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc')
-                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                        # Skip global map plotting for nSpatialScore since it's constant globally
+                        if basic_method != 'nSpatialScore':
+                            make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing Grid {basic_method} calculations for {ref_source}: {e}")
 
@@ -1288,7 +1290,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 if sim_data_type != 'stn':
                     try:
                         output_path = os.path.join(dir_path, f'{evaluation_item}_sim_{sim_source}_{sim_varname}_{basic_method}.nc')
-                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                        # Skip global map plotting for nSpatialScore since it's constant globally
+                        if basic_method != 'nSpatialScore':
+                            make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {sim_source}: {e}")
 
