@@ -161,6 +161,11 @@ def make_plot_index_grid(self):
 
     # print("\033[1;32m" + "=" * 80 + "\033[0m")
     for score in self.scores:
+        # Skip global map plotting for nSpatialScore since it's constant globally
+        if score == 'nSpatialScore':
+            print(f'skipping global map plotting for score: {score} (constant globally)')
+            continue
+            
         option = self.fig_nml['make_geo_plot_index']
         print(f'plotting score: {score}')
         option['colorbar_label'] = score.replace('_', '\n')
@@ -580,6 +585,11 @@ def make_plot_index_stn(self):
         plot_stn_map(self, lon_select, lat_select, plotvar, cmap, norm, metric, 'metrics', mticks, option)
 
     for score in self.scores:
+        # Skip global map plotting for nSpatialScore since it's constant globally
+        if score == 'nSpatialScore':
+            print(f'skipping station map plotting for score: {score} (constant globally)')
+            continue
+            
         option = self.fig_nml['make_stn_plot_index']
         print(f'plotting score: {score}')
         option['colorbar_label'] = score.replace('_', '\n')

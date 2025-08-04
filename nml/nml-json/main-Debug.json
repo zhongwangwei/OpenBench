@@ -1,6 +1,6 @@
 {
   "general": {
-    "basename": "debug",
+    "basename": "debug3",
     "basedir": "./output",
     "compare_tim_res": "month",
     "compare_tzone": 0.0,
@@ -16,7 +16,7 @@
     "simulation_nml": "./nml/nml-json/sim-Debug.json",
     "statistics_nml": "./nml/nml-json/stats-Debug.json",
     "figure_nml": "./nml/nml-json/figlib.json",
-    "num_cores": 48,
+    "num_cores": 8,
     "evaluation": true,
     "comparison": true,
     "statistics": false,
@@ -26,7 +26,8 @@
     "IGBP_groupby": true,
     "PFT_groupby": true,
     "Climate_zone_groupby": true,
-    "unified_mask": true
+    "unified_mask": true,
+    "generate_report": true
   },
   "evaluation_items": {
     "Biomass": false,
@@ -164,7 +165,7 @@
   },
   "scores": {
     "nBiasScore": true,
-    "nRMSEScore": false,
+    "nRMSEScore": true,
     "nPhaseScore": false,
     "nIavScore": false,
     "nSpatialScore": true,
@@ -172,13 +173,13 @@
     "The_Ideal_Point_score": false
   },
   "comparisons": {
-    "HeatMap": false,
-    "Taylor_Diagram": false,
-    "Target_Diagram": false,
-    "Kernel_Density_Estimate": false,
-    "Whisker_Plot": false,
-    "Parallel_Coordinates": false,
-    "Portrait_Plot_seasonal": false,
+    "HeatMap": true,
+    "Taylor_Diagram": true,
+    "Target_Diagram": true,
+    "Kernel_Density_Estimate": true,
+    "Whisker_Plot": true,
+    "Parallel_Coordinates": true,
+    "Portrait_Plot_seasonal": true,
     "Single_Model_Performance_Index": true,
     "Relative_Score": false,
     "Ridgeline_Plot": false,

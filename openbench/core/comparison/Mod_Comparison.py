@@ -2494,7 +2494,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         result = method_function(*[ds])
                         output_path = os.path.join(dir_path, f'{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc')
                         self.save_result(output_path, basic_method, Convert_Type.convert_nc(result))
-                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                        # Skip global map plotting for nSpatialScore since it's constant globally
+                        if basic_method != 'nSpatialScore':
+                            make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing Grid {basic_method} calculations for {ref_source}: {e}")
 
@@ -2513,7 +2515,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         result = method_function(*[ds])
                         output_path = os.path.join(dir_path, f'{evaluation_item}_sim_{sim_source}_{sim_varname}_{basic_method}.nc')
                         self.save_result(output_path, basic_method, Convert_Type.convert_nc(result))
-                        make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
+                        # Skip global map plotting for nSpatialScore since it's constant globally
+                        if basic_method != 'nSpatialScore':
+                            make_geo_plot_index(output_path, basic_method, self.main_nml['general'], option)
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {sim_source}: {e}")
 
