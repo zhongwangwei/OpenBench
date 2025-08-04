@@ -59,7 +59,7 @@ class LC_groupby(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/metrics/IGBP_groupby/grid_info.txt'
+            grid_info = f'{self.casedir}/output/comparisons/IGBP_groupby/grid_info.txt'
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
@@ -71,7 +71,7 @@ class LC_groupby(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             IGBPtype_orig = './dataset/IGBP.nc'
-            IGBPtype_remap = f'{self.casedir}/output/metrics/IGBP_groupby/IGBP_remap.nc'
+            IGBPtype_remap = f'{self.casedir}/output/comparisons/IGBP_groupby/IGBP_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, IGBPtype_orig, IGBPtype_remap, self.target_grid)
             self.IGBP_dir = IGBPtype_remap
 
@@ -94,7 +94,7 @@ class LC_groupby(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1, 18))
-            IGBPtype_remap = f'{self.casedir}/output/metrics/IGBP_groupby/IGBP_remap.nc'
+            IGBPtype_remap = f'{self.casedir}/output/comparisons/IGBP_groupby/IGBP_remap.nc'
             ds_regrid.to_netcdf(IGBPtype_remap)
             self.IGBP_dir = IGBPtype_remap
 
@@ -183,7 +183,7 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -192,7 +192,7 @@ class LC_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -259,7 +259,7 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
                                             
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
@@ -292,7 +292,7 @@ class LC_groupby(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
@@ -331,7 +331,7 @@ class LC_groupby(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/metrics/PFT_groupby/PFT_info.txt'
+            grid_info = f'{self.casedir}/output/comparisons/PFT_groupby/PFT_info.txt'
 
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
@@ -344,7 +344,7 @@ class LC_groupby(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             PFTtype_orig = './dataset/PFT.nc'
-            PFTtype_remap = f'{self.casedir}/output/metrics/PFT_groupby/PFT_remap.nc'
+            PFTtype_remap = f'{self.casedir}/output/comparisons/PFT_groupby/PFT_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, PFTtype_orig, PFTtype_remap, self.target_grid)
             self.PFT_dir = PFTtype_remap
 
@@ -367,7 +367,7 @@ class LC_groupby(metrics, scores):
             )
             target_dataset = create_regridding_dataset(new_grid)
             ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(0, 16))
-            PFTtype_remap = f'{self.casedir}/output/metrics/PFT_groupby/PFT_remap.nc'
+            PFTtype_remap = f'{self.casedir}/output/comparisons/PFT_groupby/PFT_remap.nc'
             ds_regrid.to_netcdf(PFTtype_remap)
             self.PFT_dir = PFTtype_remap
 
@@ -456,7 +456,7 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -465,7 +465,7 @@ class LC_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/metrics/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -532,7 +532,7 @@ class LC_groupby(metrics, scores):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
+                                                f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
@@ -566,7 +566,7 @@ class LC_groupby(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/scores/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"PFT class scores comparison results are saved to {output_file_path2}")
