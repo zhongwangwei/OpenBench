@@ -19,7 +19,12 @@ from jinja2 import Template
 import glob
 import shutil
 
-# No PDF generation - HTML only
+# Import PDF generation libraries
+try:
+    from xhtml2pdf import pisa
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
 
 import logging
 
@@ -87,18 +92,30 @@ class ReportGenerator:
         # Collect all data
         report_data = self._collect_report_data()
         
+        # Copy all relevant figures to report directory first
+        self._copy_figures_to_report_dir()
+        
+        # Verify figure paths before generating reports
+        self._verify_figure_paths(report_data)
+        
         # Generate HTML report
         html_path = self._generate_html_report(report_data, report_name)
         
-        # Copy all relevant figures to report directory
-        self._copy_figures_to_report_dir()
+        # Generate PDF report (after figures are copied)
+        pdf_path = self._generate_pdf_report(html_path, report_name)
         
         logger.info(f"Report generation completed successfully")
         logger.info(f"HTML report: {html_path}")
+        if pdf_path:
+            logger.info(f"PDF report: {pdf_path}")
         
-        return {
+        result = {
             "html": html_path
         }
+        if pdf_path:
+            result["pdf"] = pdf_path
+        
+        return result
     
     def _collect_report_data(self) -> Dict[str, Any]:
         """Collect all data needed for the report"""
@@ -1101,35 +1118,100 @@ class ReportGenerator:
         figures_dir = os.path.join(self.report_dir, "figures")
         os.makedirs(figures_dir, exist_ok=True)
         
+        # Track copied files for debugging
+        copied_count = 0
+        
         # Copy metrics figures (including groupby subdirectories)
-        for root, dirs, files in os.walk(self.metrics_dir):
-            for file in files:
-                if file.endswith('.jpg'):
-                    src_file = os.path.join(root, file)
-                    rel_path = os.path.relpath(src_file, self.metrics_dir)
-                    dst_file = os.path.join(figures_dir, "metrics", rel_path)
-                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                    shutil.copy2(src_file, dst_file)
+        if os.path.exists(self.metrics_dir):
+            for root, dirs, files in os.walk(self.metrics_dir):
+                for file in files:
+                    if file.endswith('.jpg'):
+                        src_file = os.path.join(root, file)
+                        rel_path = os.path.relpath(src_file, self.metrics_dir)
+                        dst_file = os.path.join(figures_dir, "metrics", rel_path)
+                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        shutil.copy2(src_file, dst_file)
+                        copied_count += 1
+                        logger.debug(f"Copied metrics figure: {rel_path}")
         
         # Copy scores figures (including groupby subdirectories)
-        for root, dirs, files in os.walk(self.scores_dir):
-            for file in files:
-                if file.endswith('.jpg'):
-                    src_file = os.path.join(root, file)
-                    rel_path = os.path.relpath(src_file, self.scores_dir)
-                    dst_file = os.path.join(figures_dir, "scores", rel_path)
-                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                    shutil.copy2(src_file, dst_file)
+        if os.path.exists(self.scores_dir):
+            for root, dirs, files in os.walk(self.scores_dir):
+                for file in files:
+                    if file.endswith('.jpg'):
+                        src_file = os.path.join(root, file)
+                        rel_path = os.path.relpath(src_file, self.scores_dir)
+                        dst_file = os.path.join(figures_dir, "scores", rel_path)
+                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        shutil.copy2(src_file, dst_file)
+                        copied_count += 1
+                        logger.debug(f"Copied scores figure: {rel_path}")
         
         # Copy comparison figures
-        for root, dirs, files in os.walk(self.comparisons_dir):
-            for file in files:
-                if file.endswith('.jpg'):
-                    src_file = os.path.join(root, file)
-                    rel_path = os.path.relpath(src_file, self.comparisons_dir)
-                    dst_file = os.path.join(figures_dir, "comparisons", rel_path)
-                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                    shutil.copy2(src_file, dst_file)
+        if os.path.exists(self.comparisons_dir):
+            for root, dirs, files in os.walk(self.comparisons_dir):
+                for file in files:
+                    if file.endswith('.jpg'):
+                        src_file = os.path.join(root, file)
+                        rel_path = os.path.relpath(src_file, self.comparisons_dir)
+                        dst_file = os.path.join(figures_dir, "comparisons", rel_path)
+                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        shutil.copy2(src_file, dst_file)
+                        copied_count += 1
+                        logger.debug(f"Copied comparison figure: {rel_path}")
+        
+        logger.info(f"Copied {copied_count} figures to report directory")
+    
+    def _verify_figure_paths(self, report_data: Dict[str, Any]):
+        """Verify that all referenced figures exist in the report directory"""
+        logger.info("Verifying figure paths...")
+        figures_dir = os.path.join(self.report_dir, "figures")
+        missing_figures = []
+        total_figures = 0
+        
+        # Check figures for each evaluation item
+        for item, item_data in report_data.get("evaluation_items", {}).items():
+            figures = item_data.get("figures", {})
+            
+            # Check all figure types
+            for fig_type, fig_list in figures.items():
+                for fig_path in fig_list:
+                    total_figures += 1
+                    # Build the expected path in the reports directory
+                    if fig_type == "metrics":
+                        expected_path = os.path.join(figures_dir, "metrics", fig_path)
+                    elif fig_type == "scores":
+                        expected_path = os.path.join(figures_dir, "scores", fig_path)
+                    elif fig_type == "comparisons":
+                        expected_path = os.path.join(figures_dir, "comparisons", fig_path.replace("comparisons/", ""))
+                    elif fig_type in ["igbp_groupby", "pft_groupby", "climate_zone_groupby"]:
+                        # These are already prefixed with "comparisons/"
+                        expected_path = os.path.join(figures_dir, fig_path)
+                    else:
+                        expected_path = os.path.join(figures_dir, fig_path)
+                    
+                    if not os.path.exists(expected_path):
+                        missing_figures.append(f"{item}/{fig_type}: {fig_path} -> {expected_path}")
+                        logger.warning(f"Missing figure: {expected_path}")
+        
+        # Check comparison figures
+        comparisons = report_data.get("comparisons", {})
+        if "figures" in comparisons:
+            for fig_key, fig_path in comparisons["figures"].items():
+                total_figures += 1
+                expected_path = os.path.join(figures_dir, "comparisons", fig_path)
+                if not os.path.exists(expected_path):
+                    missing_figures.append(f"comparison/{fig_key}: {fig_path} -> {expected_path}")
+                    logger.warning(f"Missing comparison figure: {expected_path}")
+        
+        if missing_figures:
+            logger.warning(f"Found {len(missing_figures)} missing figures out of {total_figures} total figures:")
+            for missing in missing_figures[:10]:  # Show first 10
+                logger.warning(f"  - {missing}")
+            if len(missing_figures) > 10:
+                logger.warning(f"  ... and {len(missing_figures) - 10} more")
+        else:
+            logger.info(f"All {total_figures} figures verified successfully")
     
     def _generate_html_report(self, report_data: Dict[str, Any], report_name: str) -> str:
         """Generate HTML report from collected data"""
@@ -1636,3 +1718,182 @@ class ReportGenerator:
             f.write(html_content)
         
         return html_path
+    
+    def _generate_pdf_report(self, html_path: str, report_name: str) -> Optional[str]:
+        """
+        Generate PDF report from HTML file using xhtml2pdf
+        
+        Args:
+            html_path: Path to the HTML file
+            report_name: Base name for the PDF file
+            
+        Returns:
+            Path to generated PDF file, or None if generation failed
+        """
+        if not PDF_AVAILABLE:
+            logger.warning("PDF generation not available. Please install xhtml2pdf.")
+            logger.warning("Run: pip install xhtml2pdf")
+            return None
+        
+        try:
+            logger.info("Generating PDF report using xhtml2pdf...")
+            pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
+            
+            # Read the HTML file
+            with open(html_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Modify HTML content for better PDF generation
+            # Convert relative image paths to absolute paths
+            import re
+            
+            # Replace relative image paths with absolute paths
+            def replace_img_src(match):
+                src = match.group(1)
+                
+                # Skip if already an absolute path or URL
+                if src.startswith(('http://', 'https://', 'file://', '/')):
+                    return match.group(0)
+                
+                # Handle paths that start with 'figures/'
+                if src.startswith('figures/'):
+                    abs_path = os.path.join(self.report_dir, src)
+                    abs_path = os.path.abspath(abs_path)  # Normalize the path
+                    if os.path.exists(abs_path):
+                        logger.debug(f"Converting image path: {src} -> {abs_path}")
+                        return f'src="file://{abs_path}"'
+                    else:
+                        logger.warning(f"Image file not found: {abs_path}")
+                        return f'src="file://{abs_path}"'  # Keep file:// prefix even if not found
+                
+                # Handle other relative paths
+                elif not src.startswith('./'):
+                    # If it's a relative path without ./, try to resolve it relative to report dir
+                    potential_path = os.path.join(self.report_dir, src)
+                    potential_path = os.path.abspath(potential_path)
+                    if os.path.exists(potential_path):
+                        logger.debug(f"Converting relative path: {src} -> {potential_path}")
+                        return f'src="file://{potential_path}"'
+                
+                return match.group(0)
+            
+            html_content = re.sub(r'src="([^"]+)"', replace_img_src, html_content)
+            
+            # Debug: log some sample conversions
+            sample_matches = re.findall(r'src="([^"]*figures[^"]*)"', html_content)
+            if sample_matches:
+                logger.debug(f"Sample converted image paths: {sample_matches[:5]}")  # Show first 5
+            
+            # Add PDF-specific CSS
+            pdf_css = """
+            <style type="text/css" media="print">
+                @page {
+                    margin: 2cm;
+                    size: A4;
+                }
+                body {
+                    font-size: 10pt;
+                    line-height: 1.3;
+                }
+                .header {
+                    page-break-inside: avoid;
+                }
+                .section {
+                    page-break-inside: avoid;
+                    margin-bottom: 1em;
+                }
+                .figure-container {
+                    page-break-inside: avoid;
+                    text-align: center;
+                    margin: 1em 0;
+                }
+                .figure-container img {
+                    max-width: 80%;
+                    height: auto;
+                }
+                table {
+                    font-size: 8pt;
+                    width: 100%;
+                }
+                th, td {
+                    padding: 4px;
+                    font-size: 8pt;
+                }
+                h2 {
+                    page-break-after: avoid;
+                    font-size: 14pt;
+                }
+                h3 {
+                    page-break-after: avoid;
+                    font-size: 12pt;
+                }
+                h4 {
+                    page-break-after: avoid;
+                    font-size: 11pt;
+                }
+            </style>
+            """
+            
+            # Insert PDF CSS into HTML head
+            html_content = html_content.replace('</head>', pdf_css + '</head>')
+            
+            # Generate PDF
+            with open(pdf_path, 'wb') as pdf_file:
+                result = pisa.CreatePDF(
+                    html_content, 
+                    dest=pdf_file,
+                    encoding='utf-8',
+                    link_callback=self._link_callback
+                )
+                
+                if result.err:
+                    logger.error(f"PDF generation had errors: {result.err}")
+                    return None
+            
+            logger.info(f"PDF report generated successfully: {pdf_path}")
+            return pdf_path
+            
+        except Exception as e:
+            logger.error(f"Error generating PDF report: {e}")
+            return None
+    
+    def _link_callback(self, uri, rel):
+        """
+        Callback function to handle local file links in PDF generation
+        """
+        # Handle file:// URLs
+        if uri.startswith('file://'):
+            path = uri[7:]  # Remove 'file://' prefix
+            if os.path.exists(path):
+                logger.debug(f"Link callback found file: {path}")
+                return path
+            else:
+                logger.warning(f"Link callback file not found: {path}")
+                return path  # Return path anyway, let PDF generator handle it
+        
+        # Handle relative paths directly
+        elif uri.startswith('figures/'):
+            abs_path = os.path.join(self.report_dir, uri)
+            abs_path = os.path.abspath(abs_path)
+            if os.path.exists(abs_path):
+                logger.debug(f"Link callback resolved relative path: {uri} -> {abs_path}")
+                return abs_path
+            else:
+                logger.warning(f"Link callback could not find relative path: {uri} -> {abs_path}")
+                return abs_path
+        
+        # Handle other relative paths (like ./output/...)
+        elif uri.startswith('./') and 'figures' in uri:
+            # Extract the figures part
+            if 'reports/figures' in uri:
+                figures_part = uri.split('reports/figures/')[-1]
+                abs_path = os.path.join(self.report_dir, 'figures', figures_part)
+                abs_path = os.path.abspath(abs_path)
+                if os.path.exists(abs_path):
+                    logger.debug(f"Link callback resolved complex relative path: {uri} -> {abs_path}")
+                    return abs_path
+                else:
+                    logger.warning(f"Link callback could not find complex relative path: {uri} -> {abs_path}")
+                    return abs_path
+        
+        return uri
