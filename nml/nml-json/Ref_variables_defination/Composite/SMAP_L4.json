@@ -93,7 +93,7 @@
     "prefix": "SMAP_L4_SM_gph_",
     "suffix": ""
   },
-  "Surface_Air_Temperature": {
+  "Surface_Soil_Temperature": {
     "varname": "surface_temp",
     "varunit": "c",
     "prefix": "SMAP_L4_SM_gph_",
