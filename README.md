@@ -346,7 +346,7 @@ OpenBench is released under the **MIT License**. See the `LICENSE` file in the r
 *   Zixin Wei (PhD student)
 *   Xionghui Xu (PhD student)
 *   Dr. Wenzong Dong
-*   SiSi Chen (PhD student)
+*   Sisi Chen (PhD student)
 
 We are grateful for all contributions to the OpenBench project.
 
