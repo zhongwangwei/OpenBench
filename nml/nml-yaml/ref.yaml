@@ -207,3 +207,5 @@ def_nml:
   MSWEP: ./nml/Ref_variables_defination/Forcing/MSWEP.yaml
   MSWEP_0p25: ./nml/Ref_variables_defination/Forcing/MSWEP_0p25.yaml
   CLM5: ./nml/Ref_variables_defination/Defination/CLM5.yaml
+  IMERG_v7: ./nml/nml-json/Ref_variables_defination/Forcing/IMERG_v7.yaml
+
