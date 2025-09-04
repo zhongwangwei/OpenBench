@@ -263,6 +263,7 @@ MSWEP_0p25                = ./nml/nml-Fortran/Ref_variables_defination/Forcing/M
 CERES_EBAF_Ed4.2          = ./nml/nml-Fortran/Ref_variables_defination/Energy/CERES_EBAF_Ed4.2.nml
 CLARA_AVHRR               = ./nml/nml-Fortran/Ref_variables_defination/Energy/CLARA_AVHRR.nml
 CARE                      = ./nml/nml-Fortran/Ref_variables_defination/Energy/CARE.nml
+MERG_v7                   = ./nml/nml-json/Ref_variables_defination/Forcing/MERG_v7.nml
 
 #Definition
 CLM5                      = ./nml/nml-Fortran/Ref_variables_defination/Defination/CLM5.nml
