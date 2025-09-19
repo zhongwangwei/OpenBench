@@ -34,26 +34,26 @@
   #========================Evaluation_Items====================
   #*******************Ecosystem and Carbon Cycle****************
     Biomass                          = False
-    Burned_Area                      = False
+#    Burned_Area                      = False
     Ecosystem_Respiration            = False
     Gross_Primary_Productivity       = False
     Leaf_Area_Index                  = False
-    Leaf_Greenness                   = False
+#    Leaf_Greenness                   = False
     Methane                          = False
     Net_Ecosystem_Exchange           = False
     Nitrogen_Fixation                = False
     Soil_Carbon                      = False
-    Veg_Cover_In_Fraction            = False
+#    Veg_Cover_In_Fraction            = False
   #**************************************************************
 
 
   #*******************      Hydrology Cycle      ****************
     Canopy_Interception              = False
     Canopy_Transpiration             = False
-    Depth_Of_Surface_Water           = False
+#    Depth_Of_Surface_Water           = False
     Evapotranspiration               = True
-    Ground_Evaporation               = False
-    Groundwater_Recharge_Rate        = False
+#    Ground_Evaporation               = False
+#    Groundwater_Recharge_Rate        = False
     Permafrost                       = False
     Root_Zone_Soil_Moisture          = False
     Snow_Depth                       = False
@@ -64,8 +64,8 @@
     Terrestrial_Water_Storage_Change = False
     Total_Runoff                     = False
     Water_Evaporation                = False
-    Water_Storage_In_Aquifer         = False
-    Water_Table_Depth                = False
+#    Water_Storage_In_Aquifer         = False
+#    Water_Table_Depth                = False
   #**************************************************************
 
 
