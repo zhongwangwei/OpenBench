@@ -235,7 +235,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option['extend'])
     else:
-        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=option['vmin'], vmax=option['vmax'], extent=extent,
+        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=mticks[0], vmax=mticks[-1], extent=extent,
                        origin=origin)
 
     for spine in ax.spines.values():
