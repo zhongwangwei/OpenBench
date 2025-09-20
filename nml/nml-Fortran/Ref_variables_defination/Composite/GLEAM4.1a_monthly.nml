@@ -29,12 +29,12 @@ suffix            =  _GLEAM_v4.1a_MO
 sub_dir           =  Eb
 varname           =  Eb
 varunit           =  mm month-1
-prefix            =  Ei_
+prefix            =  Eb_
 suffix            =  _GLEAM_v4.1a_MO
 /
 
 &Snow_Sublimation
-sub_dir           =  Eb
+sub_dir           =  Es
 varname           =  Es
 varunit           =  mm month-1
 prefix            =  Es_
