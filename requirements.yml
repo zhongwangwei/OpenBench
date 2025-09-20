@@ -4,7 +4,7 @@ channels:
   - defaults
 channel_priority: strict
 dependencies:
-  - python>=3.10
+  - python>=3.11
   - netCDF4>=1.5.7
   - xarray>=0.19.0
   - numpy>=1.21.0
@@ -15,6 +15,8 @@ dependencies:
   - dask>=2022.1.0
   - cartopy>=0.20.0
   - flox>=0.5.0
-  
+  - cftime>=1.5.0
+  # - tqdm>=2.2.0
+  # - cdo>=1.9.10
   # - statsmodels
   # - xesmf
