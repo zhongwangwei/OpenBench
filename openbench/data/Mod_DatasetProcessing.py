@@ -825,7 +825,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             num_value, time_unit = match.groups()
             num_value = int(num_value) if num_value else 1
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
-            if time_unit.lower() in ['m', 'month', 'mon']:
+            if time_unit.lower() in ['m', 'month', 'mon','me']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
