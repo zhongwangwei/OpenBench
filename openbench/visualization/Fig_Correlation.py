@@ -18,51 +18,52 @@ except ImportError:
     import os
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from openbench.util.Mod_Converttype import Convert_Type
+from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
 
-def get_index(vmin, vmax, colormap):
-    def get_ticks(vmin, vmax):
-        if 2 >= vmax - vmin > 1:
-            colorbar_ticks = 0.2
-        elif 5 >= vmax - vmin > 2:
-            colorbar_ticks = 0.5
-        elif 10 >= vmax - vmin > 5:
-            colorbar_ticks = 1
-        elif 20 >= vmax - vmin > 10:
-            colorbar_ticks = 2
-        elif 50 >= vmax - vmin > 20:
-            colorbar_ticks = 5
-        elif 100 >= vmax - vmin > 50:
-            colorbar_ticks = 10
-        elif 200 >= vmax - vmin > 100:
-            colorbar_ticks = 20
-        elif 500 >= vmax - vmin > 200:
-            colorbar_ticks = 50
-        elif 1000 >= vmax - vmin > 500:
-            colorbar_ticks = 100
-        elif 2000 >= vmax - vmin > 1000:
-            colorbar_ticks = 200
-        elif 10000 >= vmax - vmin > 2000:
-            colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
-        else:
-            colorbar_ticks = 0.10
-        return colorbar_ticks
+# def get_index(vmin, vmax, colormap):
+#     def get_ticks(vmin, vmax):
+#         if 2 >= vmax - vmin > 1:
+#             colorbar_ticks = 0.2
+#         elif 5 >= vmax - vmin > 2:
+#             colorbar_ticks = 0.5
+#         elif 10 >= vmax - vmin > 5:
+#             colorbar_ticks = 1
+#         elif 20 >= vmax - vmin > 10:
+#             colorbar_ticks = 2
+#         elif 50 >= vmax - vmin > 20:
+#             colorbar_ticks = 5
+#         elif 100 >= vmax - vmin > 50:
+#             colorbar_ticks = 10
+#         elif 200 >= vmax - vmin > 100:
+#             colorbar_ticks = 20
+#         elif 500 >= vmax - vmin > 200:
+#             colorbar_ticks = 50
+#         elif 1000 >= vmax - vmin > 500:
+#             colorbar_ticks = 100
+#         elif 2000 >= vmax - vmin > 1000:
+#             colorbar_ticks = 200
+#         elif 10000 >= vmax - vmin > 2000:
+#             colorbar_ticks = 10 ** math.floor(math.log10(vmax - vmin)) / 2
+#         else:
+#             colorbar_ticks = 0.10
+#         return colorbar_ticks
 
-    colorbar_ticks = get_ticks(vmin, vmax)
-    ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
-    mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
-              mticks]
-    if mticks[0] < vmin and mticks[-1] < vmax:
-        mticks = mticks[1:]
-    elif mticks[0] > vmin and mticks[-1] > vmax:
-        mticks = mticks[:-1]
-    elif mticks[0] < vmin and mticks[-1] > vmax:
-        mticks = mticks[1:-1]
+#     colorbar_ticks = get_ticks(vmin, vmax)
+#     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
+#     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
+#     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in
+#               mticks]
+#     if mticks[0] < vmin and mticks[-1] < vmax:
+#         mticks = mticks[1:]
+#     elif mticks[0] > vmin and mticks[-1] > vmax:
+#         mticks = mticks[:-1]
+#     elif mticks[0] < vmin and mticks[-1] > vmax:
+#         mticks = mticks[1:-1]
 
-    cmap = cm.get_cmap(colormap)
-    bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
-    norm = colors.BoundaryNorm(bnd, cmap.N)
-    return mticks, norm, bnd
+#     cmap = cm.get_cmap(colormap)
+#     bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
+#     norm = colors.BoundaryNorm(bnd, cmap.N)
+#     return mticks, norm, bnd
 
 
 def make_Correlation(file, method_name, main_nml, option):
@@ -110,7 +111,7 @@ def make_Correlation(file, method_name, main_nml, option):
     if option['show_method'] == 'interpolate':
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=option['cmap'], norm=norm, extend=option['extend'])
     else:
-        cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
+        cs = ax.imshow(data, cmap=option['cmap'], vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     coastline = cfeature.NaturalEarthFeature(
         'physical', 'coastline', '50m', edgecolor='0.6', facecolor='none')

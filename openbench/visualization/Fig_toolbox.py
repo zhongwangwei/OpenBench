@@ -167,6 +167,79 @@ def convert_unit(input_str):
 
     return result
 
+# def get_index(vmin, vmax, colormap='Spectral', varname=''):
+#     def get_ticks(vmin, vmax):
+#         diff = vmax - vmin
+#         small_value = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+#         large_value = sorted(set([int(i * 10**e) if i * 10**e > 10 else i * 10**e for e in range(4) for i in [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10] if i * 10**e <= 10000]))
+#         ALLOWED_TICKS = small_value + large_value
+#         TARGET_NUM_TICKS = 4
+#         ideal_tick = diff / TARGET_NUM_TICKS
+#         for tick in ALLOWED_TICKS:
+#             if tick >= ideal_tick:
+#                 return tick
+#         return ALLOWED_TICKS[-1]
+
+#     # 变量分类
+#     list1 = ['percent_bias','bias','PBIAS_HF','PBIAS_LF','pbiasfdc','pc_max','pc_min','pc_ampli','rSD','rv']
+#     list2 = ['NSE','KGE','KGESS','ubNSE','ubKGE','KGEkm','KGElf','KGEnp','rNSE','sKGE','wNSE','wsNSE']
+#     list3 = ['absolute_percent_bias','mean_absolute_error','RMSE','MSE','ubRMSE','CRMSD','nrmse','rsr','SMPI','ssq']
+#     list4 = ['correlation_R2','index_agreement','LNSE','mNSE','valindex','L','rd','pfactor']
+#     score_list = ['BiasScore', 'RMSEScore', 'PhaseScore', 'IavScore', 'SpatialScore', 'Overall_Score', 'The_Ideal_Point_score']
+#     list5 = ['correlation','ubcorrelation','ubcorrelation_R2','rSpearman','kappa_coeff']
+#     list6 = ['md','ve','rfactor']
+    
+#     # 计算基础刻度
+#     colorbar_ticks = get_ticks(vmin, vmax)
+#     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
+#     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
+#     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
+    
+#     # 根据变量类型调整刻度范围
+#     if (varname in list1) and (vmin <0 and vmax > 0):
+#         max_abs = max(abs(vmin), abs(vmax))
+#         if max_abs > 3*colorbar_ticks:
+#             mticks = [-4*colorbar_ticks, -2*colorbar_ticks, 0, 2*colorbar_ticks, 4*colorbar_ticks]
+#         else:
+#             mticks = [-2*colorbar_ticks, -colorbar_ticks, 0, colorbar_ticks, 2*colorbar_ticks]
+#     elif ((varname in list2) or (varname in list5) and (vmin < 0) and (vmax > 0)):
+#         mticks = [-1,-0.5, 0, 0.5, 1]
+#     else:
+#         # 处理其他类型变量
+#         if mticks[0] < 0 and mticks[-1] > 0:
+#             max_num = max(-mticks[0], mticks[-1])
+#             mticks = np.linspace(-max_num, max_num, 5)
+#         else:
+#             mticks = np.linspace(mticks[0],mticks[0]+4*colorbar_ticks,5)
+    
+#     # 确保mticks不为空且有足够的范围
+#     if len(mticks) == 0:
+#         mticks = [vmin, vmax]
+#     elif mticks[0] == mticks[-1]:
+#         # 处理单一值情况
+#         n = (vmax - vmin) / 10.0 if vmax != vmin else 0.1
+#         mticks = [mticks[0] - n, mticks[0], mticks[0] + n]
+    
+#     # 固定使用cmp_b2r颜色映射
+#     cmap = get_colormap('cmp_b2r')
+    
+#     # 设置边界和标准化
+#     new_ticks = mticks[1]-mticks[0]
+#     bnd = mticks
+#     norm = colors.Normalize(vmin=mticks[0], vmax=mticks[-1])
+    
+#     # 确定扩展方式
+#     if vmin <= mticks[0] and vmax >= mticks[-1]:
+#         extend = 'both'
+#     elif vmin <= mticks[0]:
+#         extend = 'min'
+#     elif vmax >= mticks[-1]:
+#         extend = 'max'
+#     else:
+#         extend = 'neither'
+    
+#     return cmap, mticks, norm, bnd, extend
+
 def get_colormap(cmap_name):
     """
     Dynamically retrieve the colormap attribute from the cmaps object based on the input string.
@@ -236,7 +309,10 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
         if vmin < 0:
             mticks = [-1,0,1]
         else:
-            mtcisk = [x for x in mticks if x <= 1]
+            mticks = [x for x in mticks if x <= 1]
+    # elif varname in list1:
+    #     maxvalue = mticks.max()
+    #     mticks = np.linspace(-maxvalue, maxvalue,3)
     elif varname in list3:
         mticks = [x for x in mticks if x >= 0]
     elif (varname in list4) or (varname in score_list):
@@ -244,7 +320,7 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
     else:
         if (mticks[0] < 0) & (mticks[-1] > 0):
             max_num = max(-mticks[0], mticks[-1])
-            mticks = np.linspace(-max_num,max_num,5)
+            mticks = np.linspace(-max_num,max_num,3)
 
     if mticks[0] == mticks[-1]:
         n = get_least_significant_digit(mticks[-1])
@@ -262,15 +338,16 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
     # elif (mticks[0] >= 0):
     #     cmap = get_colormap('cmocean_amp')
     
-    bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
+    # bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
+    bnd = mticks
     # norm = colors.BoundaryNorm(bnd, cmap.N)
-    norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    norm = colors.Normalize(vmin=mticks[0], vmax=mticks[-1])
 
-    if vmin < mticks[0] and vmax > mticks[-1]:
+    if vmin <= mticks[0] and vmax >= mticks[-1]:
         extend = 'both'
-    elif vmin < mticks[0]:
+    elif vmin <= mticks[0]:
         extend = 'min'
-    elif vmax > mticks[-1]:
+    elif vmax >= mticks[-1]:
         extend = 'max'
     else:
         extend = 'neither'
