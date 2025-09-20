@@ -21,7 +21,7 @@
     "comparison": true,
     "statistics": false,
     "debug_mode": true,
-    "only_drawing": false,
+    "only_drawing": true,
     "weight": "None",
     "IGBP_groupby": true,
     "PFT_groupby": true,
@@ -114,7 +114,7 @@
   "metrics": {
     "percent_bias": false,
     "absolute_percent_bias": false,
-    "bias": false,
+    "bias": true,
     "mean_absolute_error": false,
     "RMSE": true,
     "MSE": false,
