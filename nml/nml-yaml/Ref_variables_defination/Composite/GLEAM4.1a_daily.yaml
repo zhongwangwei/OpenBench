@@ -23,10 +23,10 @@ Soil_Evaporation:
   sub_dir: Eb
   varname: Eb
   varunit: mm day-1
-  prefix: Ei_
+  prefix: Eb_
   suffix: _GLEAM_v4.2a
 Snow_Sublimation:
-  sub_dir: Eb
+  sub_dir: Es
   varname: Es
   varunit: mm day-1
   prefix: Es_
