@@ -959,6 +959,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Kernel Density Estimate - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     file_paths = []
@@ -1489,6 +1493,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Whisker Plot - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
@@ -1938,6 +1946,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             if isinstance(sim_sources, str): sim_sources = [sim_sources]
             if isinstance(ref_sources, str): ref_sources = [ref_sources]
             for score in scores:
+                # Skip nSpatialScore since it's a constant value
+                if score == 'nSpatialScore':
+                    logging.info(f"Skipping {score} for Ridgeline Plot - it's a constant value")
+                    continue
                 for ref_source in ref_sources:
                     file_paths = []
                     datasets_filtered = []
@@ -2099,8 +2111,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 # Check if both 'stn' and grid data exist
                 if 'stn' in data_types and any(dt != 'stn' for dt in data_types):
-                    logging.warning(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
-                    logging.warning("All simulation sources must be either station data or gridded data")
+                    logging.warning(f"Cannot compare station and gridded data together for {evaluation_item}")
+                    logging.warning("All simulation sources must be either station data or gridded data; skipping this evaluation item")
                     continue
 
                 ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
@@ -2826,8 +2838,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             sim_data_type1 = sim_nml[f'{evaluation_item}'][f'{sim1}_data_type']
                             sim_data_type2 = sim_nml[f'{evaluation_item}'][f'{sim2}_data_type']
                             if sim_data_type1 == 'stn' or sim_data_type2 == 'stn':
-                                logging.warning(f"Error: Cannot compare station and gridded data together for {evaluation_item}")
-                                logging.warning("All simulation sources must be gridded data")
+                                logging.warning(f"Cannot compare station and gridded data together for {evaluation_item}")
+                                logging.warning("All simulation sources must be gridded data; skipping this evaluation item")
                                 continue
 
                             # if self.sim_varname is empty, then set it to item

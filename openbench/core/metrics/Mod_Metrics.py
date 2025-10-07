@@ -287,6 +287,9 @@ class metrics:
         return ia.squeeze()
 
     def kappa_coeff(self,s,o):
+        """
+        Calculate Kappa coefficient with division by zero protection.
+        """
         s = (s).astype(int)
         o = (o).astype(int)
         n = len(s)
@@ -311,7 +314,13 @@ class metrics:
         PA = np.sum(kappa_mat,axis=0)/tot
         PB = np.sum(kappa_mat,axis=1)/tot
         Pe = np.sum(PA*PB)
-        kappa_coeff = (Pa-Pe)/(1-Pe)
+
+        # Protect against division by zero when Pe ≈ 1
+        if abs(1 - Pe) < 1e-10:
+            logging.warning("Pe is approximately 1, kappa coefficient is undefined. Returning NaN.")
+            kappa_coeff = np.nan
+        else:
+            kappa_coeff = (Pa-Pe)/(1-Pe)
 
         return kappa_mat, kappa_coeff
 
@@ -323,11 +332,16 @@ class metrics:
             s: simulated
             o: observed
         output:
-            rv : relative variability, amplitude ratio 
+            rv : relative variability, amplitude ratio
         Reference:
         ****
         '''
-        return s.std(dim='time') / o.std(dim='time') - 1.0
+        o_std = o.std(dim='time')
+        # Protect against division by zero when observed std is 0 or very small
+        if np.any(o_std == 0) or np.any(np.isnan(o_std)):
+            logging.warning("Observed data has zero or NaN standard deviation. Returning NaN for relative variability.")
+            return xr.where(o_std == 0, np.nan, s.std(dim='time') / o_std - 1.0)
+        return s.std(dim='time') / o_std - 1.0
 
     def ubNSE(self,s,o):
         """
@@ -419,7 +433,16 @@ class metrics:
         s=s.dropna(dim='time').astype(np.float32)
         o=o.dropna(dim='time').astype(np.float32)
 
-        return (s.max(dim='time')-s.min(dim='time'))/ (o.max(dim='time')- o.min(dim='time')) -1.0 #(np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
+        # Calculate amplitude (range) for observed data
+        o_range = o.max(dim='time') - o.min(dim='time')
+
+        # Protect against division by zero when observed data has zero range (constant data)
+        if np.any(o_range == 0) or np.any(np.isnan(o_range)):
+            logging.warning("Observed data has zero or NaN range. Returning NaN for amplitude ratio.")
+            s_range = s.max(dim='time') - s.min(dim='time')
+            return xr.where(o_range == 0, np.nan, s_range / o_range - 1.0)
+
+        return (s.max(dim='time')-s.min(dim='time'))/ o_range -1.0 #(np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
    
     def rSD(self,s,o):
         #Ratio of standard deviations

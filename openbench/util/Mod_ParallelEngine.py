@@ -20,9 +20,16 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from functools import partial
 import threading
 import queue
-import psutil
 from tqdm import tqdm
 import numpy as np
+
+# Try to import psutil for resource monitoring, use fallback if not available
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+    logging.warning("psutil not available. Resource monitoring will be limited.")
 
 # Import dependencies
 try:
@@ -60,14 +67,36 @@ except ImportError:
         return decorator
 
 
+class TaskError:
+    """Container for failed task information."""
+
+    def __init__(self, index: int, item: Any, error: Exception):
+        """
+        Initialize task error.
+
+        Args:
+            index: Task index
+            item: Task input item
+            error: Exception that occurred
+        """
+        self.index = index
+        self.item = item
+        self.error = error
+        self.error_type = type(error).__name__
+        self.error_message = str(error)
+
+    def __repr__(self):
+        return f"TaskError(index={self.index}, type={self.error_type}, msg={self.error_message})"
+
+
 class TaskResult:
     """Container for task execution results."""
-    
-    def __init__(self, task_id: str, success: bool, result: Any = None, 
+
+    def __init__(self, task_id: str, success: bool, result: Any = None,
                  error: Optional[Exception] = None, duration: float = 0.0):
         """
         Initialize task result.
-        
+
         Args:
             task_id: Unique task identifier
             success: Whether task completed successfully
@@ -89,22 +118,35 @@ class ResourceMonitor:
     def __init__(self):
         """Initialize resource monitor."""
         self.cpu_count = mp.cpu_count()
-        self.memory_total = psutil.virtual_memory().total
+        if _HAS_PSUTIL:
+            self.memory_total = psutil.virtual_memory().total
+        else:
+            self.memory_total = 0  # Fallback when psutil not available
         self._lock = threading.Lock()
-    
+
     def get_available_resources(self) -> Dict[str, Any]:
         """Get current available system resources."""
         with self._lock:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory()
-            
-            return {
-                'cpu_available': max(1, int(self.cpu_count * (100 - cpu_percent) / 100)),
-                'cpu_percent_used': cpu_percent,
-                'memory_available_gb': memory.available / (1024**3),
-                'memory_percent_used': memory.percent,
-                'load_average': os.getloadavg()[0] if hasattr(os, 'getloadavg') else 0
-            }
+            if _HAS_PSUTIL:
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+
+                return {
+                    'cpu_available': max(1, int(self.cpu_count * (100 - cpu_percent) / 100)),
+                    'cpu_percent_used': cpu_percent,
+                    'memory_available_gb': memory.available / (1024**3),
+                    'memory_percent_used': memory.percent,
+                    'load_average': os.getloadavg()[0] if hasattr(os, 'getloadavg') else 0
+                }
+            else:
+                # Fallback when psutil not available
+                return {
+                    'cpu_available': self.cpu_count,
+                    'cpu_percent_used': 0.0,
+                    'memory_available_gb': 0.0,
+                    'memory_percent_used': 0.0,
+                    'load_average': os.getloadavg()[0] if hasattr(os, 'getloadavg') else 0
+                }
     
     def can_schedule_task(self, cpu_required: int = 1, 
                          memory_required_gb: float = 1.0) -> bool:
@@ -283,18 +325,26 @@ class ParallelEngine:
         
         return results
     
-    def _map_concurrent(self, func: Callable, items: List[Any], 
+    def _map_concurrent(self, func: Callable, items: List[Any],
                        n_workers: int, task_name: str) -> List[Any]:
-        """Map using concurrent.futures backend."""
+        """
+        Map using concurrent.futures backend with partial failure support.
+
+        Now supports partial failure - failed tasks are recorded but don't
+        stop the entire batch. Returns results with TaskError objects for
+        failed tasks.
+        """
         results = [None] * len(items)
-        
+        failed_tasks = []
+        successful_tasks = 0
+
         with ProcessPoolExecutor(max_workers=n_workers) as executor:
             # Submit all tasks
             future_to_index = {
-                executor.submit(func, item): i 
+                executor.submit(func, item): i
                 for i, item in enumerate(items)
             }
-            
+
             # Track progress
             if self.show_progress:
                 with tqdm(total=len(items), desc=task_name) as pbar:
@@ -302,15 +352,40 @@ class ParallelEngine:
                         index = future_to_index[future]
                         try:
                             results[index] = future.result()
+                            successful_tasks += 1
                         except Exception as e:
                             logging.error(f"Task {index} failed: {e}")
-                            raise
+                            # Store error information instead of raising immediately
+                            results[index] = TaskError(index, items[index], e)
+                            failed_tasks.append(index)
                         pbar.update(1)
             else:
                 for future in as_completed(future_to_index):
                     index = future_to_index[future]
-                    results[index] = future.result()
-        
+                    try:
+                        results[index] = future.result()
+                        successful_tasks += 1
+                    except Exception as e:
+                        logging.error(f"Task {index} failed: {e}")
+                        results[index] = TaskError(index, items[index], e)
+                        failed_tasks.append(index)
+
+        # Report failure statistics
+        if failed_tasks:
+            failure_rate = len(failed_tasks) / len(items)
+            logging.warning(f"Task completion: {successful_tasks}/{len(items)} succeeded, "
+                          f"{len(failed_tasks)} failed ({failure_rate*100:.1f}%)")
+
+            # Raise error if all tasks failed
+            if len(failed_tasks) == len(items):
+                raise RuntimeError(f"All {len(items)} tasks failed in {task_name}")
+
+            # Warn if more than 50% failed
+            if failure_rate > 0.5:
+                logging.warning(f"More than 50% of tasks failed ({len(failed_tasks)}/{len(items)})")
+        else:
+            logging.info(f"All {len(items)} tasks completed successfully")
+
         return results
     
     def _map_threading(self, func: Callable, items: List[Any], 
@@ -370,7 +445,54 @@ class ParallelEngine:
                 result = reduce_func(result, item)
         
         return result
-    
+
+    @staticmethod
+    def filter_successful_results(results: List[Any]) -> Tuple[List[Any], List[TaskError]]:
+        """
+        Separate successful results from failed tasks.
+
+        Args:
+            results: List of results potentially containing TaskError objects
+
+        Returns:
+            Tuple of (successful_results, failed_tasks)
+        """
+        successful = []
+        failed = []
+
+        for result in results:
+            if isinstance(result, TaskError):
+                failed.append(result)
+            else:
+                successful.append(result)
+
+        return successful, failed
+
+    @staticmethod
+    def get_failure_summary(failed_tasks: List[TaskError]) -> Dict[str, Any]:
+        """
+        Generate summary of failed tasks.
+
+        Args:
+            failed_tasks: List of TaskError objects
+
+        Returns:
+            Dictionary with failure statistics
+        """
+        if not failed_tasks:
+            return {'total_failures': 0}
+
+        error_types = {}
+        for task in failed_tasks:
+            error_types[task.error_type] = error_types.get(task.error_type, 0) + 1
+
+        return {
+            'total_failures': len(failed_tasks),
+            'error_types': error_types,
+            'failed_indices': [t.index for t in failed_tasks],
+            'sample_errors': [f"{t.error_type}: {t.error_message}" for t in failed_tasks[:3]]
+        }
+
     def submit_batch(self, tasks: List[Tuple[Callable, Tuple, Dict]],
                     task_name: str = "Batch Processing") -> List[TaskResult]:
         """

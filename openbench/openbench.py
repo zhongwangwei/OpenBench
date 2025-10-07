@@ -38,6 +38,8 @@ from openbench.visualization.Mod_Only_Drawing import Evaluation_grid_only_drawin
 from openbench.data.Mod_Preprocessing import check_required_nml, run_files_check
 from openbench.util.Mod_Converttype import Convert_Type
 from openbench.util.Mod_ReportGenerator import ReportGenerator
+from openbench.util.Mod_FileIO import safe_open_netcdf, safe_save_netcdf
+from openbench.util.Mod_ProgressMonitor import HeartbeatMonitor
 import logging
 from datetime import datetime
 
@@ -387,7 +389,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                    fig_nml):
     """Run the evaluation process for each item."""
     print_phase_header("EVALUATION PHASE", "🔍")
-    
+
     for evaluation_item in evaluation_items:
         print_item_progress(evaluation_item, "📊")
         logging.info(f"Start running {evaluation_item} evaluation...")
@@ -401,8 +403,8 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         ref_sources = sorted(ref_sources, key=lambda x: 0 if ref_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
         # Rearrange simulation sources to put station data first
         sim_sources = sorted(sim_sources, key=lambda x: 0 if sim_nml[evaluation_item].get(f'{x}_data_type') == 'stn' else 1)
-        
-        
+
+
         if not main_nl['general']['only_drawing']:
             for ref_source in ref_sources:
                 onetimeref = True
@@ -410,6 +412,11 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                     process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                                 evaluation_item, sim_source, ref_source, fig_nml)
                     onetimeref = False
+
+        # Clean up memory after data preprocessing
+        import gc
+        gc.collect()
+        logging.info(f"Memory cleaned after preprocessing {evaluation_item}")
 
         for ref_source in ref_sources:
             onetimeref = True
@@ -439,6 +446,13 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                 process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
                                 statistic_vars, evaluation_item, sim_source, ref_source, fig_nml)
                 onetimeref = False
+
+                # Clean up memory after each evaluation
+                gc.collect()
+
+        # Clean up memory after completing all evaluations for this item
+        gc.collect()
+        logging.info(f"Memory cleaned after completing {evaluation_item}")
 
     main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')
     main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')
@@ -472,139 +486,153 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
 
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
-    logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
-    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
-                                            evaluation_item, sim_source, ref_source)
-    general_info = general_info_object.to_dict()
-    # Add ref_source and sim_source to general_info
-    general_info['ref_source'] = ref_source
-    general_info['sim_source'] = sim_source
+    try:
+        logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
+        general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                                                evaluation_item, sim_source, ref_source)
+        general_info = general_info_object.to_dict()
+        # Add ref_source and sim_source to general_info
+        general_info['ref_source'] = ref_source
+        general_info['sim_source'] = sim_source
 
-    from openbench.data.Mod_DatasetProcessing import DatasetProcessing
-    dataset_processer = DatasetProcessing(general_info)
-    if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        onetimeref = True
-    if onetimeref == True:
-        dataset_processer.process('ref')
-    else:
-        logging.info("Skip processing ref data")
-    dataset_processer.process('sim')
-
-    # Clear scratch directory
-    scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
-    shutil.rmtree(scratch_dir, ignore_errors=True)
-    logging.info(f"Re-creating output directory: {scratch_dir}")
-    os.makedirs(scratch_dir)
-    if main_nl['general']['unified_mask']:
+        from openbench.data.Mod_DatasetProcessing import DatasetProcessing
+        dataset_processer = DatasetProcessing(general_info)
         if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-            pass
+            onetimeref = True
+        if onetimeref == True:
+            dataset_processer.process('ref')
         else:
-            # Mask the observation data with simulation data to ensure consistent coverage
-            logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
-            import time
-            
-            def wait_for_file(file_path, max_wait_time=30, check_interval=1):
-                """Wait for a file to exist and be readable."""
-                start_time = time.time()
-                elapsed = 0
-                while elapsed < max_wait_time:
-                    if os.path.exists(file_path):
-                        try:
-                            size = os.path.getsize(file_path)
-                            if size > 0:
-                                logging.info(f"File found after {elapsed:.1f}s: {file_path} ({size} bytes)")
-                                return True
-                            else:
-                                logging.debug(f"File exists but empty at {elapsed:.1f}s: {file_path}")
-                        except (OSError, IOError) as e:
-                            logging.debug(f"Error checking file at {elapsed:.1f}s: {e}")
-                    else:
-                        logging.debug(f"File still not found at {elapsed:.1f}s: {file_path}")
-                    
-                    time.sleep(check_interval)
-                    elapsed = time.time() - start_time
-                
-                logging.warning(f"File not found after {max_wait_time}s: {file_path}")
-                return False
-            
-            ref_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc'
-            # Convert to absolute path to ensure consistency
-            ref_file_path_abs = os.path.abspath(ref_file_path)
-            
-            try:
-                o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
-            except FileNotFoundError as e:
-                logging.info(f"Ref data file not found, processing now: {ref_file_path_abs}")
-                logging.info(f"Processing ref data")
-                dataset_processer.process('ref')
-                
-                # Check immediately after processing
-                if os.path.exists(ref_file_path_abs):
-                    logging.info(f"Ref file created immediately after processing: {ref_file_path_abs}")
+            logging.info("Skip processing ref data")
+        dataset_processer.process('sim')
+
+        # Clear scratch directory
+        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+        logging.info(f"Re-creating output directory: {scratch_dir}")
+        os.makedirs(scratch_dir)
+        if main_nl['general']['unified_mask']:
+            if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
+                pass
+            else:
+                # Mask the observation data with simulation data to ensure consistent coverage
+                logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
+                import time
+
+                def wait_for_file(file_path, max_wait_time=30, check_interval=1):
+                    """Wait for a file to exist and be readable."""
+                    start_time = time.time()
+                    elapsed = 0
+                    while elapsed < max_wait_time:
+                        if os.path.exists(file_path):
+                            try:
+                                size = os.path.getsize(file_path)
+                                if size > 0:
+                                    logging.info(f"File found after {elapsed:.1f}s: {file_path} ({size} bytes)")
+                                    return True
+                                else:
+                                    logging.debug(f"File exists but empty at {elapsed:.1f}s: {file_path}")
+                            except (OSError, IOError) as e:
+                                logging.debug(f"Error checking file at {elapsed:.1f}s: {e}")
+                        else:
+                            logging.debug(f"File still not found at {elapsed:.1f}s: {file_path}")
+
+                        time.sleep(check_interval)
+                        elapsed = time.time() - start_time
+
+                    logging.warning(f"File not found after {max_wait_time}s: {file_path}")
+                    return False
+
+                ref_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc'
+                # Convert to absolute path to ensure consistency
+                ref_file_path_abs = os.path.abspath(ref_file_path)
+
+                try:
                     o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
-                else:
-                    # Wait for the file to be created and available
-                    logging.info(f"Waiting for ref data file to be created: {ref_file_path_abs}")
-                    if wait_for_file(ref_file_path_abs):
-                        o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
-                    else:
-                        logging.error(f"Timeout waiting for ref data file: {ref_file_path_abs}")
-                        raise FileNotFoundError(f"Ref data file not available after processing: {ref_file_path_abs}")
-            o = Convert_Type.convert_nc(o)
-            
-            sim_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
-            # Convert to absolute path to ensure consistency
-            sim_file_path_abs = os.path.abspath(sim_file_path)
-            
-            try:
-                s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
-            except FileNotFoundError as e:
-                logging.info(f"Sim data file not found, processing now: {sim_file_path_abs}")
-                logging.info(f"Processing sim data")
-                dataset_processer.process('sim')
-                
-                # Check immediately after processing
-                if os.path.exists(sim_file_path_abs):
-                    logging.info(f"Sim file created immediately after processing: {sim_file_path_abs}")
+                except FileNotFoundError as e:
+                    logging.info(f"Ref data file not found, processing now: {ref_file_path_abs}")
+                    logging.info(f"Processing ref data")
+                    dataset_processer.process('ref')
+
+                    # Wait a moment for file system to sync
+                    import time
+                    time.sleep(0.5)
+
+                    # Try again after processing
+                    o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
+                o = Convert_Type.convert_nc(o)
+
+                sim_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
+                # Convert to absolute path to ensure consistency
+                sim_file_path_abs = os.path.abspath(sim_file_path)
+
+                try:
                     s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
-                else:
-                    # Wait for the sim file to be created and available
-                    logging.info(f"Waiting for sim data file to be created: {sim_file_path_abs}")
-                    if wait_for_file(sim_file_path_abs):
-                        s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
-                    else:
-                        logging.error(f"Timeout waiting for sim data file: {sim_file_path_abs}")
-                        raise FileNotFoundError(f"Sim data file not available after processing: {sim_file_path_abs}")
-            s = Convert_Type.convert_nc(s)
-            s['time'] = o['time']
-            mask1 = np.isnan(s) | np.isnan(o)
-            o.values[mask1] = np.nan
-            # Use absolute path for final save as well
-            o.to_netcdf(ref_file_path_abs)
+                except FileNotFoundError as e:
+                    logging.info(f"Sim data file not found, processing now: {sim_file_path_abs}")
+                    logging.info(f"Processing sim data")
+                    dataset_processer.process('sim')
+
+                    # Wait a moment for file system to sync
+                    import time
+                    time.sleep(0.5)
+
+                    # Try again after processing
+                    s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
+                s = Convert_Type.convert_nc(s)
+                s['time'] = o['time']
+                mask1 = np.isnan(s) | np.isnan(o)
+                o.values[mask1] = np.nan
+                # Use absolute path for final save
+                o.to_netcdf(ref_file_path_abs)
+
+                # Close datasets to free memory
+                if hasattr(s, 'close'):
+                    s.close()
+                if hasattr(o, 'close'):
+                    o.close()
+                del s, o, mask1
+
+    finally:
+        # Ensure cleanup even if there's an error
+        import gc
+        gc.collect()
 
 
 def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                        evaluation_item, sim_source, ref_source, fig_nml):
     """Process a single evaluation for given sources."""
-    general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
-                                            evaluation_item, sim_source, ref_source)
-    general_info = general_info_object.to_dict()
-    # Run Evaluation
-    if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
-        if main_nl['general']['only_drawing']:
-            evaluater = Evaluation_stn_only_drawing(general_info, fig_nml)
-        else:
-            from openbench.core.evaluation.Mod_Evaluation import Evaluation_stn
-            evaluater = Evaluation_stn(general_info, fig_nml)
-        evaluater.make_evaluation_P()
+    # Start heartbeat monitor for this evaluation
+    monitor_name = f"Evaluating {evaluation_item} ({ref_source} vs {sim_source})"
 
-    else:
-        if main_nl['general']['only_drawing']:
-            evaluater = Evaluation_grid_only_drawing(general_info, fig_nml)
-        else:
-            from openbench.core.evaluation.Mod_Evaluation import Evaluation_grid
-            evaluater = Evaluation_grid(general_info, fig_nml)
-        evaluater.make_Evaluation()
+    with HeartbeatMonitor(monitor_name, heartbeat_interval=30):
+        try:
+            general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
+                                                    evaluation_item, sim_source, ref_source)
+            general_info = general_info_object.to_dict()
+
+            # Run Evaluation
+            if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
+                if main_nl['general']['only_drawing']:
+                    evaluater = Evaluation_stn_only_drawing(general_info, fig_nml)
+                else:
+                    from openbench.core.evaluation.Mod_Evaluation import Evaluation_stn
+                    evaluater = Evaluation_stn(general_info, fig_nml)
+                evaluater.make_evaluation_P()
+
+            else:
+                if main_nl['general']['only_drawing']:
+                    evaluater = Evaluation_grid_only_drawing(general_info, fig_nml)
+                else:
+                    from openbench.core.evaluation.Mod_Evaluation import Evaluation_grid
+                    evaluater = Evaluation_grid(general_info, fig_nml)
+                evaluater.make_Evaluation()
+
+        finally:
+            # Clean up evaluater object and collect garbage
+            if 'evaluater' in locals():
+                del evaluater
+            import gc
+            gc.collect()
 
 
 def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars, fig_nml):
@@ -622,7 +650,7 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
         ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
 
     print_phase_header("COMPARISON PHASE", "📈")
-    
+
     for cvar in comparison_vars:
         print_item_progress(f"{cvar} comparison", "📋")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
@@ -639,6 +667,16 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
             exit(1)
         logging.info(f"<<<<<<<<<<<<<<<<<<<<<<<<<Done running {cvar} comparison...<<<<<<<<<<<<<<<<<<<<<<")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
+
+        # Clean up memory after each comparison
+        import gc
+        gc.collect()
+        logging.info(f"Memory cleaned after {cvar} comparison")
+
+    # Final cleanup after all comparisons
+    import gc
+    gc.collect()
+    logging.info("Memory cleaned after all comparisons")
 
 
 def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
@@ -658,7 +696,7 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     )
 
     print_phase_header("STATISTICS PHASE", "📊")
-    
+
     for statistic in statistic_vars:
         print_item_progress(f"{statistic} analysis", "📈")
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
@@ -673,16 +711,49 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
             logging.error(f"Error: The {statistic} module does not exist!")
             logging.error(f"Please add the {statistic} function in the stats_handler class!")
             exit(1)
+
+        # Clean up memory after each statistic
+        import gc
+        gc.collect()
+        logging.info(f"Memory cleaned after {statistic} analysis")
+
     logging.info("Statistical analysis completed.")
+
+    # Final cleanup after all statistics
+    import gc
+    gc.collect()
+    logging.info("Memory cleaned after all statistics")
 
 
 def main():
     """Main function to orchestrate the evaluation process."""
     print_welcome_message()
 
+    # Validate command line arguments
+    if len(sys.argv) < 2:
+        colors = get_platform_colors()
+        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file path required{colors['reset']}")
+        print(f"\n{colors['bold']}Usage:{colors['reset']} python openbench.py <config_file_path>")
+        print(f"\n{colors['bold']}Examples:{colors['reset']}")
+        print(f"  python openbench.py nml/nml-json/main-Debug.json")
+        print(f"  python openbench.py nml/nml-yaml/main-Debug.yaml")
+        print(f"  python openbench.py nml/nml-Fortran/main-Debug.nml")
+        sys.exit(1)
+
     # Initialize NamelistReader and load main namelist
     nl = NamelistReader()
-    main_nl = nl.read_namelist(sys.argv[1])
+    config_file = sys.argv[1]
+
+    # Validate config file exists
+    if not os.path.exists(config_file):
+        colors = get_platform_colors()
+        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file not found{colors['reset']}")
+        print(f"  File: {config_file}")
+        sys.exit(1)
+
+    main_nl = nl.read_namelist(config_file)
 
     # Setup directories
     setup_directories(main_nl)
