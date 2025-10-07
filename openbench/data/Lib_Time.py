@@ -24,9 +24,9 @@ class timelib:
             'monthly': 'ME',
             'day': 'D',
             'daily': 'D',
-            'hour': 'H',
-            'hr': 'H',
-            'hourly': 'H',
+            'hour': 'h',  # Changed from 'H' to 'h' to avoid FutureWarning
+            'hr': 'h',    # Changed from 'H' to 'h' to avoid FutureWarning
+            'hourly': 'h',  # Changed from 'H' to 'h' to avoid FutureWarning
             'year': 'Y',
             'yr': 'Y',
             'yearly': 'Y',
