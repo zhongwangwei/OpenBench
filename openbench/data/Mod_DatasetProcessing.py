@@ -7,8 +7,15 @@ import shutil
 import gc
 import time
 import functools
-import psutil
 from typing import List, Dict, Any, Tuple, Callable, Union
+
+# Try to import psutil for performance monitoring, use fallback if not available
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+    logging.warning("psutil not available. Performance monitoring will be limited.")
 
 # Module-level set to track custom filter warnings
 _MODULE_CUSTOM_FILTER_WARNINGS = set()
@@ -137,15 +144,18 @@ def performance_monitor(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Get initial memory usage
-        try:
-            process = psutil.Process(os.getpid())
-            start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-            start_time = time.time()
-            start_cpu = process.cpu_percent()
-        except Exception as e:
-            logging.warning(f"Failed to get system resources: {e}")
+        start_time = time.time()
+        if _HAS_PSUTIL:
+            try:
+                process = psutil.Process(os.getpid())
+                start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                start_cpu = process.cpu_percent()
+            except Exception as e:
+                logging.warning(f"Failed to get system resources: {e}")
+                start_mem = 0
+                start_cpu = 0
+        else:
             start_mem = 0
-            start_time = time.time()
             start_cpu = 0
 
         try:
@@ -156,32 +166,39 @@ def performance_monitor(func: Callable) -> Callable:
             end_time = time.time()
             execution_time = end_time - start_time
 
-            try:
-                end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-                end_cpu = process.cpu_percent()
-                memory_used = end_mem - start_mem
-                cpu_used = end_cpu - start_cpu
-            except:
+            if _HAS_PSUTIL:
+                try:
+                    end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                    end_cpu = process.cpu_percent()
+                    memory_used = end_mem - start_mem
+                    cpu_used = end_cpu - start_cpu
+                except Exception as e:
+                    logging.warning(f"Failed to get end system resources: {e}")
+                    memory_used = 0
+                    cpu_used = 0
+            else:
                 memory_used = 0
                 cpu_used = 0
 
-            # Log performance 
-            logging.info(f"Performance  for {func.__name__}:")
+            # Log performance
+            logging.info(f"Performance for {func.__name__}:")
             logging.info(f"  Execution time: {execution_time:.2f} seconds")
-            logging.info(f"  Memory usage: {memory_used:.3f} GB")
-            logging.info(f"  CPU usage: {cpu_used:.1f}%")
+            if _HAS_PSUTIL:
+                logging.info(f"  Memory usage: {memory_used:.3f} GB")
+                logging.info(f"  CPU usage: {cpu_used:.1f}%")
 
             # Use enhanced performance warning if available
             if _HAS_EXCEPTIONS:
                 log_performance_warning(func.__name__, execution_time)
 
             # Log warning if memory usage is high
-            try:
-                total_memory = psutil.virtual_memory().total / (1024 ** 3)
-                if memory_used > 0.8 * total_memory:  # 80% of total memory
-                    logging.warning(f"High memory usage detected in {func.__name__}: {memory_used:.3f} GB")
-            except:
-                pass  # Ignore errors in memory check
+            if _HAS_PSUTIL:
+                try:
+                    total_memory = psutil.virtual_memory().total / (1024 ** 3)
+                    if memory_used > 0.8 * total_memory:  # 80% of total memory
+                        logging.warning(f"High memory usage detected in {func.__name__}: {memory_used:.3f} GB")
+                except Exception as e:
+                    logging.debug(f"Failed to check total memory: {e}")
 
             return result
 
@@ -190,10 +207,13 @@ def performance_monitor(func: Callable) -> Callable:
             end_time = time.time()
             execution_time = end_time - start_time
 
-            try:
-                end_mem = process.memory_info().rss / 1024 / 1024 / 1024
-                memory_used = end_mem - start_mem
-            except:
+            if _HAS_PSUTIL:
+                try:
+                    end_mem = process.memory_info().rss / 1024 / 1024 / 1024
+                    memory_used = end_mem - start_mem
+                except Exception:
+                    memory_used = 0
+            else:
                 memory_used = 0
 
             logging.error(f"Error in {func.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
@@ -913,17 +933,39 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             ds = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
-        except:
+        except Exception as e:
+            # Check if varname list is empty
+            if not varname or len(varname) == 0:
+                logging.error("Variable name list is empty")
+                raise ValueError("Variable name list cannot be empty")
+
+            # Check if variable exists in dataset
+            if varname[0] not in ds:
+                available_vars = list(ds.data_vars) + list(ds.coords)
+                logging.error(f"Variable '{varname[0]}' not found in dataset")
+                logging.error(f"Available variables: {available_vars}")
+                raise KeyError(f"Variable '{varname[0]}' not in dataset")
+
             ds = Convert_Type.convert_nc(ds[varname[0]])
         return ds
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == 'stat':
+            # Validate varname list is not empty
+            if not varname or len(varname) == 0:
+                raise ValueError("Variable name list cannot be empty for station data")
+
+            # Validate variable exists in dataset
+            if varname[0] not in ds:
+                available_vars = list(ds.data_vars) + list(ds.coords)
+                raise KeyError(f"Variable '{varname[0]}' not found in station dataset. Available: {available_vars}")
+
             return ds[varname[0]]
         else:
             try:
                 model = getattr(self, f"{self.sim_source}_model") if datasource == 'sim' else self.ref_source
-            except:
+            except AttributeError:
+                # Fallback to source name if model attribute doesn't exist
                 model = self.sim_source if datasource == 'sim' else self.ref_source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
@@ -1013,10 +1055,20 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str,
                      tim_res: str) -> xr.Dataset:
-        try:
-            var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
-        except:
+        # Try primary path first
+        var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
+
+        # Try alternative path if no files found
+        if not var_files:
             var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
+
+        # Verify files were found
+        if not var_files:
+            logging.error(f"No files found for year {year} with prefix '{prefix}' and suffix '{suffix}'")
+            logging.error(f"Searched in: {dirx}")
+            logging.error(f"  - Pattern 1: {os.path.join(dirx, f'{prefix}{year}*{suffix}.nc')}")
+            logging.error(f"  - Pattern 2: {os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc')}")
+            raise FileNotFoundError(f"No data files found for year {year}")
 
         datasets = []
         try:
@@ -1089,7 +1141,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             # 确保我们获取实际的数据数组而不是方法
             if isinstance(ds, xr.Dataset):
                 # 如果是数据集，获取第一个变量的数据
-                var_name = list(ds.data_vars)[0]
+                data_vars_list = list(ds.data_vars)
+                if not data_vars_list:
+                    logging.error("Dataset has no data variables")
+                    raise ValueError("Dataset must contain at least one data variable")
+                var_name = data_vars_list[0]
                 data_array = ds[var_name].values
             elif isinstance(ds, xr.DataArray):
                 # 如果是数据数组，直接获取值
@@ -1141,9 +1197,17 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
         varname = self.ref_varname if datasource == 'ref' else self.sim_varname
+
+        # Validate varname list is not empty
+        if not varname or len(varname) == 0:
+            logging.error("Variable name list is empty")
+            raise ValueError("Variable name list cannot be empty for station data")
+
         # Check if the variable exists in the dataset
         if varname[0] not in stn_data:
+            available_vars = list(stn_data.data_vars) + list(stn_data.coords)
             logging.error(f"Variable '{varname[0]}' not found in the station data.")
+            logging.error(f"Available variables: {available_vars}")
             raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
 
         ds = stn_data[varname[0]]

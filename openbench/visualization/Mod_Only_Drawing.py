@@ -381,8 +381,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                     # Calculate and print median values
 
                                     for metric in self.metrics:
-                                        ds = xr.open_dataset(
-                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        metric_file = f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'
+                                        if not os.path.exists(metric_file):
+                                            logging.error(f"File not found in only_drawing mode: {metric_file}")
+                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            continue
+                                        ds = xr.open_dataset(metric_file)
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
@@ -436,8 +440,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                     # Calculate and print mean values
 
                                     for score in self.scores:
-                                        ds = xr.open_dataset(
-                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        score_file = f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
+                                        if not os.path.exists(score_file):
+                                            logging.error(f"File not found in only_drawing mode: {score_file}")
+                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            continue
+                                        ds = xr.open_dataset(score_file)
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
@@ -448,8 +456,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                                f'{ref_varname}']
+                                            ref_data_file = f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                                            if not os.path.exists(ref_data_file):
+                                                logging.error(f"File not found in only_drawing mode: {ref_data_file}")
+                                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                continue
+                                            o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -481,8 +493,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                                    f'{ref_varname}']
+                                                ref_data_file = f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                                                if not os.path.exists(ref_data_file):
+                                                    logging.error(f"File not found in only_drawing mode: {ref_data_file}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
+                                                o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
@@ -698,6 +714,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     for ref_source in ref_sources:
                         try:
                             output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.txt")
+                            if not os.path.exists(output_file_path):
+                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                continue
                             stds = np.zeros(len(sim_sources) + 1)
                             cors = np.zeros(len(sim_sources) + 1)
                             RMSs = np.zeros(len(sim_sources) + 1)
@@ -737,6 +757,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     for ref_source in ref_sources:
                         try:
                             output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.txt")
+                            if not os.path.exists(output_file_path):
+                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                continue
                             biases = np.zeros(len(sim_sources))
                             rmses = np.zeros(len(sim_sources))
                             crmsds = np.zeros(len(sim_sources))
@@ -775,6 +799,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Kernel Density Estimate - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     file_paths = []
@@ -795,6 +823,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                                                 file_path = os.path.join(basedir, 'output', 'scores',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
@@ -841,6 +873,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
@@ -879,6 +915,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.txt")
 
             # Deal with output_file_path, remove the column and its index with any nan values
+            if not os.path.exists(output_file_path):
+                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                return
             df = pd.read_csv(output_file_path, sep='\t', header=0)
             df = df.dropna(axis=1, how='any')
             # If index in scores or metrics was dropped, then remove the corresponding scores or metrics
@@ -919,6 +959,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Whisker Plot - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
@@ -938,6 +982,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                                                 file_path = os.path.join(basedir, 'output', 'scores',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
@@ -945,6 +993,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'scores',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
@@ -983,12 +1035,20 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
                                             else:
                                                 file_path = os.path.join(basedir, 'output', 'metrics',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[metric].values
@@ -1071,6 +1131,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             if isinstance(sim_sources, str): sim_sources = [sim_sources]
             if isinstance(ref_sources, str): ref_sources = [ref_sources]
             for score in scores:
+                # Skip nSpatialScore since it's a constant value
+                if score == 'nSpatialScore':
+                    logging.info(f"Skipping {score} for Ridgeline Plot - it's a constant value")
+                    continue
                 for ref_source in ref_sources:
                     file_paths = []
                     datasets_filtered = []
@@ -1091,6 +1155,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 ref_varname = evaluation_item
                             file_path = os.path.join(basedir, 'output', 'scores',
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             df = Convert_Type.convert_Frame(df)
@@ -1098,6 +1166,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         else:
                             file_path = os.path.join(basedir, 'output', 'scores',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
@@ -1133,13 +1205,20 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 ref_varname = evaluation_item
                             file_path = os.path.join(basedir, 'output', 'metrics',
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             data = df[metric].values
                         else:
                             file_path = os.path.join(basedir, 'output', 'metrics',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
-
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[metric].values

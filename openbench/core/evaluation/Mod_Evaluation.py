@@ -195,18 +195,23 @@ class Evaluation_grid(metrics, scores):
 
     @cached(key_prefix="grid_eval", ttl=1800)
     def make_Evaluation(self, **kwargs):
+        ref_ds = None
+        sim_ds = None
         try:
-            ref_path = os.path.join(self.casedir, 'output', 'data', 
+            ref_path = os.path.join(self.casedir, 'output', 'data',
                                   f'{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')
-            sim_path = os.path.join(self.casedir, 'output', 'data', 
+            sim_path = os.path.join(self.casedir, 'output', 'data',
                                   f'{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
-            
-            o = xr.open_dataset(ref_path)[f'{self.ref_varname}']
-            s = xr.open_dataset(sim_path)[f'{self.sim_varname}']
+
+            # Open datasets and keep references for proper cleanup
+            ref_ds = xr.open_dataset(ref_path)
+            sim_ds = xr.open_dataset(sim_path)
+            o = ref_ds[f'{self.ref_varname}']
+            s = sim_ds[f'{self.sim_varname}']
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
-            s['time'] = o['time'] 
+            s['time'] = o['time']
             if self.item == 'Terrestrial_Water_Storage_Change':
                 logging.info("Processing Terrestrial Water Storage Change...")
                 # Calculate time difference while preserving coordinates
@@ -221,7 +226,7 @@ class Evaluation_grid(metrics, scores):
             s.values[mask1] = np.nan
             o.values[mask1] = np.nan
             logging.info("=" * 80)
-            
+
             # Parallel processing of metrics if available and beneficial
             if _HAS_PARALLEL_ENGINE and len(self.metrics) > 3:
                 logging.info("Processing metrics in parallel")
@@ -260,6 +265,11 @@ class Evaluation_grid(metrics, scores):
             logging.info("=" * 80)
             make_plot_index_grid(self)
         finally:
+            # Close datasets to free memory and file handles
+            if ref_ds is not None:
+                ref_ds.close()
+            if sim_ds is not None:
+                sim_ds.close()
             gc.collect()  # Final cleanup
 
 class Evaluation_stn(metrics, scores):
@@ -308,14 +318,19 @@ class Evaluation_stn(metrics, scores):
                 station_list[f'{score}'] = [-9999.0] * len(station_list['ID'])
             
             for iik in range(len(station_list['ID'])):
+                sim_ds = None
+                ref_ds = None
                 try:
                     sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
                     ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                    
-                    s = xr.open_dataset(sim_path)[self.sim_varname]
-                    o = xr.open_dataset(ref_path)[self.ref_varname]
+
+                    # Open datasets and keep references for proper cleanup
+                    sim_ds = xr.open_dataset(sim_path)
+                    ref_ds = xr.open_dataset(ref_path)
+                    s = sim_ds[self.sim_varname]
+                    o = ref_ds[self.ref_varname]
                     s['time'] = o['time']
                     mask1 = np.isnan(s) | np.isnan(o)
                     s.values[mask1] = np.nan
@@ -336,6 +351,11 @@ class Evaluation_stn(metrics, scores):
                             logging.error('No such score')
                             sys.exit(1)
                 finally:
+                    # Close datasets to free memory and file handles
+                    if sim_ds is not None:
+                        sim_ds.close()
+                    if ref_ds is not None:
+                        ref_ds.close()
                     gc.collect()  # Clean up memory after each station
 
             logging.info('Comparison dataset prepared!')
@@ -390,14 +410,19 @@ class Evaluation_stn(metrics, scores):
             gc.collect()  # Final cleanup
 
     def make_evaluation_parallel(self, station_list, iik):
+        sim_ds = None
+        ref_ds = None
         try:
             sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
             ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-            
-            s = xr.open_dataset(sim_path)[self.sim_varname].to_array().squeeze()
-            o = xr.open_dataset(ref_path)[self.ref_varname].to_array().squeeze()
+
+            # Open datasets and keep references for proper cleanup
+            sim_ds = xr.open_dataset(sim_path)
+            ref_ds = xr.open_dataset(ref_path)
+            s = sim_ds[self.sim_varname].to_array().squeeze()
+            o = ref_ds[self.ref_varname].to_array().squeeze()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
@@ -458,6 +483,11 @@ class Evaluation_stn(metrics, scores):
                           float(row['correlation']), lat_lon)
             return row
         finally:
+            # Close datasets to free memory and file handles
+            if sim_ds is not None:
+                sim_ds.close()
+            if ref_ds is not None:
+                ref_ds.close()
             gc.collect()  # Clean up memory after processing each station
 
     @cached(key_prefix="station_eval", ttl=1800)
