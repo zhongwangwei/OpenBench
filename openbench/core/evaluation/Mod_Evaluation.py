@@ -49,6 +49,16 @@ from ..scoring.Mod_Scores import scores
 from openbench.visualization import *
 from openbench.util.Mod_Converttype import Convert_Type
 
+# Import climatology processor
+try:
+    from openbench.data.Mod_Climatology import ClimatologyProcessor, process_climatology_evaluation
+    _HAS_CLIMATOLOGY = True
+except ImportError:
+    _HAS_CLIMATOLOGY = False
+    ClimatologyProcessor = None
+    def process_climatology_evaluation(*args, **kwargs):
+        return args[0], args[1], args[2]
+
 # Import modular evaluation engine
 try:
     from .Mod_EvaluationEngine import (
@@ -211,7 +221,48 @@ class Evaluation_grid(metrics, scores):
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
-            s['time'] = o['time']
+            # Process climatology if applicable
+            if _HAS_CLIMATOLOGY:
+                original_metrics = self.metrics.copy() if hasattr(self.metrics, 'copy') else list(self.metrics)
+                original_scores = self.scores.copy() if hasattr(self.scores, 'copy') else list(self.scores)
+
+                # Combine metrics and scores for filtering
+                all_evaluations = list(self.metrics) + list(self.scores)
+
+                o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
+                    ref_ds, sim_ds, all_evaluations
+                )
+
+                if o_clim is not None and s_clim is not None:
+                    # Climatology evaluation mode
+                    logging.info("=" * 80)
+                    logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
+                    logging.info("=" * 80)
+
+                    o = o_clim[f'{self.ref_varname}']
+                    s = s_clim[f'{self.sim_varname}']
+                    o = Convert_Type.convert_nc(o)
+                    s = Convert_Type.convert_nc(s)
+
+                    # Update metrics and scores to only supported ones
+                    self.metrics = [m for m in self.metrics if m in supported_evaluations]
+                    self.scores = [sc for sc in self.scores if sc in supported_evaluations]
+
+                    if len(self.metrics) < len(original_metrics):
+                        skipped_metrics = set(original_metrics) - set(self.metrics)
+                        logging.info(f"Skipped metrics for climatology: {skipped_metrics}")
+
+                    if len(self.scores) < len(original_scores):
+                        skipped_scores = set(original_scores) - set(self.scores)
+                        logging.info(f"Skipped scores for climatology: {skipped_scores}")
+
+                    logging.info("=" * 80)
+                else:
+                    # Regular time series evaluation
+                    s['time'] = o['time']
+            else:
+                s['time'] = o['time']
+
             if self.item == 'Terrestrial_Water_Storage_Change':
                 logging.info("Processing Terrestrial Water Storage Change...")
                 # Calculate time difference while preserving coordinates
@@ -331,12 +382,35 @@ class Evaluation_stn(metrics, scores):
                     ref_ds = xr.open_dataset(ref_path)
                     s = sim_ds[self.sim_varname]
                     o = ref_ds[self.ref_varname]
-                    s['time'] = o['time']
+
+                    # Process climatology if applicable
+                    current_metrics = self.metrics
+                    current_scores = self.scores
+
+                    if _HAS_CLIMATOLOGY:
+                        all_evaluations = list(self.metrics) + list(self.scores)
+                        o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
+                            ref_ds, sim_ds, all_evaluations
+                        )
+
+                        if o_clim is not None and s_clim is not None:
+                            # Climatology evaluation for this station
+                            o = o_clim[self.ref_varname]
+                            s = s_clim[self.sim_varname]
+
+                            # Filter to supported evaluations
+                            current_metrics = [m for m in self.metrics if m in supported_evaluations]
+                            current_scores = [sc for sc in self.scores if sc in supported_evaluations]
+                        else:
+                            s['time'] = o['time']
+                    else:
+                        s['time'] = o['time']
+
                     mask1 = np.isnan(s) | np.isnan(o)
                     s.values[mask1] = np.nan
                     o.values[mask1] = np.nan
 
-                    for metric in self.metrics:
+                    for metric in current_metrics:
                         if hasattr(self, metric):
                             pb = getattr(self, metric)(s, o)
                             station_list.loc[iik, f'{metric}'] = pb.values
@@ -344,9 +418,10 @@ class Evaluation_stn(metrics, scores):
                             logging.error('No such metric')
                             sys.exit(1)
 
-                    for score in self.scores:
+                    for score in current_scores:
                         if hasattr(self, score):
                             pb = getattr(self, score)(s, o)
+                            station_list.loc[iik, f'{score}'] = pb.values
                         else:
                             logging.error('No such score')
                             sys.exit(1)
