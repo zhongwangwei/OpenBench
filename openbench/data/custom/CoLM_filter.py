@@ -78,13 +78,21 @@ def filter_CoLM(info,ds):   #update info as well
 
    if info.item == "Crop_Yield_Maize":
       try:
+         # Calculate total area with protection against division by zero
+         total_area = (ds['area_rainfed_temp_corn'].fillna(0) +
+                      ds['area_irrigated_temp_corn'].fillna(0) +
+                      ds['area_rainfed_trop_corn'].fillna(0) +
+                      ds['area_irrigated_trop_corn'].fillna(0))
+
+         # Replace zero total area with NaN to avoid division by zero
+         total_area = total_area.where(total_area > 0, np.nan)
+
          ds['Crop_Yield_Maize']=(((ds['f_cropprodc_rainfed_temp_corn'].fillna(0)*ds['area_rainfed_temp_corn'].fillna(0))+
                                     (ds['f_cropprodc_irrigated_temp_corn'].fillna(0)*ds['area_irrigated_temp_corn'].fillna(0)) +
                                     (ds['f_cropprodc_rainfed_trop_corn'].fillna(0)*ds['area_rainfed_trop_corn'].fillna(0)) +
                                     (ds['f_cropprodc_irrigated_trop_corn'].fillna(0)*ds['area_irrigated_trop_corn'].fillna(0)))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn'].fillna(0)+ds['area_irrigated_temp_corn'].fillna(0)+ds['area_rainfed_trop_corn'].fillna(0)+
-                                    ds['area_irrigated_trop_corn'].fillna(0))*(3600.*24.*365.))/100.
-      except:
+                                    (10**6)*2.5*(10**(-6))/total_area*(3600.*24.*365.))/100.
+      except Exception as e:
          logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
