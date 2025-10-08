@@ -229,8 +229,14 @@ class Evaluation_grid(metrics, scores):
                 # Combine metrics and scores for filtering
                 all_evaluations = list(self.metrics) + list(self.scores)
 
+                # Get data_groupby information from instance attributes
+                ref_data_groupby = getattr(self, 'ref_data_groupby', None)
+                sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+
                 o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
-                    ref_ds, sim_ds, all_evaluations
+                    ref_ds, sim_ds, all_evaluations,
+                    ref_data_groupby=ref_data_groupby,
+                    sim_data_groupby=sim_data_groupby
                 )
 
                 if o_clim is not None and s_clim is not None:
@@ -389,8 +395,15 @@ class Evaluation_stn(metrics, scores):
 
                     if _HAS_CLIMATOLOGY:
                         all_evaluations = list(self.metrics) + list(self.scores)
+
+                        # Get data_groupby information from instance attributes
+                        ref_data_groupby = getattr(self, 'ref_data_groupby', None)
+                        sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+
                         o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
-                            ref_ds, sim_ds, all_evaluations
+                            ref_ds, sim_ds, all_evaluations,
+                            ref_data_groupby=ref_data_groupby,
+                            sim_data_groupby=sim_data_groupby
                         )
 
                         if o_clim is not None and s_clim is not None:
