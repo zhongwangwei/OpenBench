@@ -1,0 +1,18 @@
+{
+  "general": {
+    "root_dir": "./dataset/reference/climatology",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "climatology",
+    "syear": 2000,
+    "eyear": 2020,
+    "tim_res": "Month",
+    "grid_res": 0.5
+  },
+  "Evapotranspiration": {
+    "varname": "ET",
+    "varunit": "mm month-1",
+    "prefix": "ET_climatology",
+    "suffix": ""
+  }
+}

@@ -40,6 +40,18 @@ class ClimatologyProcessor:
             'nIavScore',    # Interannual variability score requires multiple years
         ]
 
+    def is_climatology_mode(self, data_groupby: str) -> bool:
+        """
+        Check if the configuration indicates climatology mode.
+
+        Args:
+            data_groupby: Data groupby type from configuration
+
+        Returns:
+            bool: True if data_groupby is 'climatology'
+        """
+        return str(data_groupby).strip().lower() == 'climatology'
+
     def detect_climatology_type(self, ds: xr.Dataset) -> Optional[str]:
         """
         Detect the climatology type of a dataset based on its time dimension.
@@ -210,9 +222,11 @@ class ClimatologyProcessor:
 
 
 def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
-                                   metrics: List[str]) -> Tuple[Optional[xr.Dataset],
-                                                                  Optional[xr.Dataset],
-                                                                  List[str]]:
+                                   metrics: List[str],
+                                   ref_data_groupby: str = None,
+                                   sim_data_groupby: str = None) -> Tuple[Optional[xr.Dataset],
+                                                                           Optional[xr.Dataset],
+                                                                           List[str]]:
     """
     Process datasets for climatology evaluation.
 
@@ -220,26 +234,45 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
         ref_ds: Reference dataset
         sim_ds: Simulation dataset
         metrics: List of metrics to evaluate
+        ref_data_groupby: Reference data groupby type (if 'climatology', triggers climatology mode)
+        sim_data_groupby: Simulation data groupby type (if 'climatology', triggers climatology mode)
 
     Returns:
         Tuple of (processed reference, processed simulation, supported metrics)
     """
     processor = ClimatologyProcessor()
 
-    # Prepare reference climatology
-    ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
+    # First check configuration - if data_groupby is "climatology", force climatology mode
+    is_ref_climatology = processor.is_climatology_mode(ref_data_groupby) if ref_data_groupby else False
+    is_sim_climatology = processor.is_climatology_mode(sim_data_groupby) if sim_data_groupby else False
 
-    # If not a climatology, return original data
-    if clim_type is None:
-        logging.debug("Not a climatology evaluation - using original time series")
-        return ref_ds, sim_ds, metrics
+    if is_ref_climatology or is_sim_climatology:
+        logging.info("气候态评估模式已激活 (data_groupby='climatology')")
 
-    # Prepare simulation climatology
-    sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
+        # Prepare reference climatology
+        ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
+
+        if clim_type is None:
+            logging.error("参考数据不符合气候态格式 (需要1个或12个时间点)")
+            return None, None, []
+
+        # Prepare simulation climatology
+        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
+    else:
+        # Fallback to auto-detection based on data dimensions
+        ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
+
+        # If not a climatology, return original data
+        if clim_type is None:
+            logging.debug("非气候态评估 - 使用原始时间序列")
+            return ref_ds, sim_ds, metrics
+
+        # Prepare simulation climatology
+        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
 
     # Validate compatibility
     if not processor.validate_climatology_compatibility(ref_processed, sim_processed):
-        logging.error("Climatology compatibility validation failed")
+        logging.error("气候态兼容性验证失败")
         return None, None, []
 
     # Filter supported metrics
@@ -247,6 +280,6 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
 
     if len(supported_metrics) < len(metrics):
         unsupported = set(metrics) - set(supported_metrics)
-        logging.info(f"Skipping unsupported metrics for climatology: {unsupported}")
+        logging.info(f"跳过不支持气候态评估的指标: {unsupported}")
 
     return ref_processed, sim_processed, supported_metrics
