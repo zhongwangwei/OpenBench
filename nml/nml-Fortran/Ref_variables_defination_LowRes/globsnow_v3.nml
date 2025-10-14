@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Water"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 1980
+  eyear = 2020
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Snow_Water_Equivalent
+  sub_dir = "Snow_Water_Equivalent/globsnow_v3"
+  varname = "swe"
+  varunit = "mm"
+  prefix = ""
+  suffix = ""
+/
+

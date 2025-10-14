@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Water"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 1985
+  eyear = 2021
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Terrestrial_Water_Storage_Change
+  sub_dir = "Terrestrial_Water_Storage_Change/GRAiCE"
+  varname = "twsc"
+  varunit = "cm"
+  prefix = ""
+  suffix = ""
+/
+
