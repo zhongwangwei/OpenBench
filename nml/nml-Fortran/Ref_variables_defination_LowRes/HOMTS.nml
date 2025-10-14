@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Meteo"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 1960
+  eyear = 2017
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Surface_Soil_Temperature
+  sub_dir = "Surface_Soil_Temperature/HOMTS"
+  varname = "TS"
+  varunit = "degC"
+  prefix = ""
+  suffix = ""
+/
+

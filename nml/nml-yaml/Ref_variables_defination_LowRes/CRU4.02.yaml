@@ -1,0 +1,15 @@
+general:
+  root_dir: ./dataset/Reference/Grid/LowRes/Meteo
+  timezone: 0
+  data_type: grid
+  data_groupby: Single
+  syear: 1979
+  eyear: 2016
+  tim_res: Month
+  grid_res: 0.25
+Surface_Relative_Humidity:
+  sub_dir: Surface_Relative_Humidity/CRU4.02
+  varname: rhums
+  varunit: percent
+  prefix: 
+  suffix: 

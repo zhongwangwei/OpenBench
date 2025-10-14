@@ -1,0 +1,19 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/LowRes/Bio",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "syear": 1981,
+    "eyear": 2018,
+    "tim_res": "Month",
+    "grid_res": 0.25
+  },
+  "Net_Primary_Production": {
+    "sub_dir": "Net_Primary_Production/GLASS",
+    "varname": "NPP",
+    "varunit": "gC m-2 day-1",
+    "prefix": "GLASS_NPP_",
+    "suffix": "_monmean_0p25deg"
+  }
+}

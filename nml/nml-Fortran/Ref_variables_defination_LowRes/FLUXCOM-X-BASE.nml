@@ -1,0 +1,27 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Bio"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Year"
+  syear = 2001
+  eyear = 2021
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Gross_Primary_Productivity
+  sub_dir = "Gross_Primary_Productivity/FLUXCOM-X-BASE"
+  varname = "GPP"
+  varunit = "gC m-2 day-1"
+  prefix = "GPP_"
+  suffix = "_025_monthly"
+/
+
+&Net_Ecosystem_Exchange
+  sub_dir = "Net_Ecosystem_Exchange/FLUXCOM-X-BASE"
+  varname = "NEE"
+  varunit = "gC m-2 day-1"
+  prefix = "NEE_"
+  suffix = "_025_monthly"
+/
+

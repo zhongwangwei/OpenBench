@@ -94,6 +94,39 @@ OpenBench features a modern modular architecture with 9 core modules and legacy 
 *   **Community Collaboration:** As an open-source project, it encourages collaboration, knowledge sharing, and the development of best practices in land surface model evaluation.
 *   **Flexibility and Customization:** Adapts to diverse research needs through its configurable and extensible design.
 
+## Reference Data Download
+
+OpenBench provides categorized reference datasets at different resolutions for comprehensive land surface model evaluation:
+
+### **Data Resolution Categories**
+We organize reference data into three resolution categories for different evaluation needs:
+
+- **LowRes (Low Resolution)**: Daily or monthly data at ≤0.25° spatial resolution
+- **MidRes (Mid Resolution)**: Daily data at ≤0.25° spatial resolution
+- **HighRes (High Resolution)**: Sub-daily data at ≤0.1° spatial resolution
+
+### **Available Data Downloads**
+
+#### **LowRes Data (Currently Available)**
+We have compiled a collection of open-source LowRes reference datasets licensed under Creative Commons Attribution 4.0 International (CC BY-NC-SA 4.0). All data ownership belongs to the original authors. If any copyright infringement is identified, the data will be removed immediately.
+
+**Download Links:**
+- **Google Drive**: https://drive.google.com/drive/folders/1jn2ZHBRslgRg2ETEcuVrRA1iDvd4wl9C?usp=sharing
+- **Baidu Netdisk (China Mirror)**: https://pan.baidu.com/s/1ChwQVxOdxfNx73wNvaUI6A?pwd=xhcg
+  Extraction Code: `xhcg`
+
+**Note**:
+- MidRes and HighRes datasets are under preparation and will be released in future updates.
+- Station-based observational data is not included due to copyright restrictions. Users should download station data directly from original sources.
+- Users are free to add their own reference datasets following the data structure conventions described in the documentation.
+
+### **Data Usage Guidelines**
+- All reference data remains the property of the original authors
+- Please cite the original data sources when using the datasets
+- Follow the Creative Commons license terms (CC BY-NC-SA 4.0)
+- Commercial use requires additional permissions from original authors
+- Report any licensing concerns to the OpenBench team
+
 ## Setup and Configuration
 
 ### **Prerequisites**

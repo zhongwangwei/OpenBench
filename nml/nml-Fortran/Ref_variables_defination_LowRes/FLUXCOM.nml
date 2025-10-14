@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Heat"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 1980
+  eyear = 2014
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Latent_Heat
+  sub_dir = "Latent_Heat/FLUXCOM"
+  varname = "le"
+  varunit = "W m-2"
+  prefix = ""
+  suffix = ""
+/
+

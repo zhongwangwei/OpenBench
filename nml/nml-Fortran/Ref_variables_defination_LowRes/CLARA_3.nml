@@ -1,0 +1,75 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Heat"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Year"
+  syear = 1979
+  eyear = 2023
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Net_Radiation
+  sub_dir = "Net_Radiation/CLARA_3"
+  varname = "Rn"
+  varunit = "W m-2"
+  prefix = "Rnmm"
+  suffix = ""
+/
+
+&Surface_Upward_SW_Radiation
+  sub_dir = "Surface_Upward_SW_Radiation/CLARA_3"
+  varname = "SUS"
+  varunit = "W m-2"
+  prefix = "SUSmm"
+  suffix = ""
+/
+
+&Surface_Upward_LW_Radiation
+  sub_dir = "Surface_Upward_LW_Radiation/CLARA_3"
+  varname = "SUL"
+  varunit = "W m-2"
+  prefix = "SULmm"
+  suffix = ""
+/
+
+&Surface_Net_SW_Radiation
+  sub_dir = "Surface_Net_SW_Radiation/CLARA_3"
+  varname = "SNS"
+  varunit = "W m-2"
+  prefix = "SNSmm"
+  suffix = ""
+/
+
+&Surface_Net_LW_Radiation
+  sub_dir = "Surface_Net_LW_Radiation/CLARA_3"
+  varname = "SNL"
+  varunit = "W m-2"
+  prefix = "SNLmm"
+  suffix = ""
+/
+
+&Surface_Albedo
+  sub_dir = "Surface_Albedo/CLARA_3"
+  varname = "SAL"
+  varunit = "1"
+  prefix = "SALmm"
+  suffix = ""
+/
+
+&Surface_Downward_SW_Radiation
+  sub_dir = "Surface_Downward_SW_Radiation/CLARA_3"
+  varname = "SIS"
+  varunit = "W m-2"
+  prefix = "SISmm"
+  suffix = ""
+/
+
+&Surface_Downward_LW_Radiation
+  sub_dir = "Surface_Downward_LW_Radiation/CLARA_3"
+  varname = "SDL"
+  varunit = "W m-2"
+  prefix = "SDLmm"
+  suffix = ""
+/
+

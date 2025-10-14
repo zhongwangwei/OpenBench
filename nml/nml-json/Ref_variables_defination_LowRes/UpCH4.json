@@ -1,0 +1,19 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/LowRes/Bio",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "Single",
+    "syear": 2001,
+    "eyear": 2018,
+    "tim_res": "Month",
+    "grid_res": 0.25
+  },
+  "Wetland_Methane_Emission": {
+    "sub_dir": "Wetland_Methane_Emission/UpCH4",
+    "varname": "mean_ch4",
+    "varunit": "gC m-2 day-1",
+    "prefix": "",
+    "suffix": ""
+  }
+}

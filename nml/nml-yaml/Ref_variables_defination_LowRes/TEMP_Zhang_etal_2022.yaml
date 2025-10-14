@@ -1,0 +1,21 @@
+general:
+  root_dir: ./dataset/Reference/Grid/LowRes/Anth
+  timezone: 0
+  data_type: grid
+  data_groupby: Single
+  syear: 2003
+  eyear: 2020
+  tim_res: Month
+  grid_res: 0.25
+Urban_Air_Temperature_Max:
+  sub_dir: Urban/TEMP_Zhang_etal_2022
+  varname: TMAX
+  varunit: K
+  prefix: 
+  suffix: 
+Urban_Air_Temperature_Min:
+  sub_dir: Urban/TEMP_Zhang_etal_2022
+  varname: TMIN
+  varunit: K
+  prefix: 
+  suffix: 

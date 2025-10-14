@@ -1,0 +1,19 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/LowRes/Water",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "syear": 1901,
+    "eyear": 2023,
+    "tim_res": "Month",
+    "grid_res": 0.25
+  },
+  "Precipitation": {
+    "sub_dir": "Precipitation/CRU_TS_4.08",
+    "varname": "pre",
+    "varunit": "mm day-1",
+    "prefix": "cru_ts4.08.1901.2023.",
+    "suffix": ".dat"
+  }
+}
