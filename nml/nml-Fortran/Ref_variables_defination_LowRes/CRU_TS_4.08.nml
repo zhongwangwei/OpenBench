@@ -1,0 +1,51 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Meteo"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 1901
+  eyear = 2023
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Surface_Air_Temperature
+  sub_dir = "Surface_Air_Temperature/CRU_TS_4.08"
+  varname = "tmp"
+  varunit = "degC"
+  prefix = ""
+  suffix = ""
+/
+
+&Diurnal_Max_Temperature
+  sub_dir = "Diurnal_Max_Temperature/CRU_TS_4.08"
+  varname = "tmx"
+  varunit = "degC"
+  prefix = ""
+  suffix = ""
+/
+
+&Diurnal_Min_Temperature
+  sub_dir = "Diurnal_Min_Temperature/CRU_TS_4.08"
+  varname = "tmn"
+  varunit = "degC"
+  prefix = ""
+  suffix = ""
+/
+
+&Cloud_Cover
+  sub_dir = "Cloud_Cover/CRU_TS_4.08"
+  varname = "cld"
+  varunit = "percent"
+  prefix = ""
+  suffix = ""
+/
+
+&Ground_Frost_Frequency
+  sub_dir = "Ground_Frost_Frequency/CRU_TS_4.08"
+  varname = "frs"
+  varunit = "days"
+  prefix = ""
+  suffix = ""
+/
+

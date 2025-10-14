@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Anth"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 2001
+  eyear = 2019
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Urban_Latent_Heat_Flux
+  sub_dir = "Urban/ETMonitor"
+  varname = "LE"
+  varunit = "W m-2"
+  prefix = ""
+  suffix = ""
+/
+

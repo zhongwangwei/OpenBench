@@ -1,0 +1,33 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/LowRes",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "syear": 1980,
+    "eyear": 2023,
+    "tim_res": "Month",
+    "grid_res": 0.25
+  },
+  "Latent_Heat": {
+    "sub_dir": "Heat/Latent_Heat/ERA5LAND",
+    "varname": "slhf",
+    "varunit": "W m-2",
+    "prefix": "ERA5LAND_",
+    "suffix": "_monmean_surface_latent_heat_flux_1D_0p25"
+  },
+  "Surface_Specific_Humidity": {
+    "sub_dir": "Meteo/Surface_Specific_Humidity/ERA5LAND",
+    "varname": "Q",
+    "varunit": "kg kg-1",
+    "prefix": "ERA5LAND_",
+    "suffix": "_Q_monmean_0p25"
+  },
+  "Surface_Wind_Speed": {
+    "sub_dir": "Meteo/Surface_Wind_Speed/ERA5LAND",
+    "varname": "ws",
+    "varunit": "m s-1",
+    "prefix": "ERA5LAND_",
+    "suffix": "_ws_monmean_0p25"
+  }
+}

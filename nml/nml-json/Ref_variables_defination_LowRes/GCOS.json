@@ -1,0 +1,19 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/LowRes/Meteo",
+    "timezone": 0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "syear": 1995,
+    "eyear": 2023,
+    "tim_res": "Month",
+    "grid_res": 0.25
+  },
+  "Lake_Surface_Water_Temperature": {
+    "sub_dir": "Lake_Surface_Water_Temperature/GCOS",
+    "varname": "lake_surface_water_temperature",
+    "varunit": "K",
+    "prefix": "LAKES-L3S-LSWT-",
+    "suffix": "_monmean"
+  }
+}

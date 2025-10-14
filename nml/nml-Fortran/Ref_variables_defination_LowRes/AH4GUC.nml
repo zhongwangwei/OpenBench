@@ -1,0 +1,19 @@
+&general
+  root_dir = "./dataset/Reference/Grid/LowRes/Anth"
+  timezone = 0
+  data_type = "grid"
+  data_groupby = "Single"
+  syear = 2010
+  eyear = 2010
+  tim_res = "Month"
+  grid_res = 0.25
+/
+
+&Urban_Anthropogenic_Heat_Flux
+  sub_dir = "Urban/AH4GUC"
+  varname = "AHE"
+  varunit = "W m-2"
+  prefix = ""
+  suffix = ""
+/
+

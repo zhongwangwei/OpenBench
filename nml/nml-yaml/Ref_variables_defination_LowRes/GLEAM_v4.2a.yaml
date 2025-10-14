@@ -1,0 +1,57 @@
+general:
+  root_dir: ./dataset/Reference/Grid/LowRes/Water
+  timezone: 0
+  data_type: grid
+  data_groupby: Year
+  syear: 1980
+  eyear: 2023
+  tim_res: Month
+  grid_res: 0.25
+Evapotranspiration:
+  sub_dir: Evapotranspiration/GLEAM_v4.2a
+  varname: E
+  varunit: mm day-1
+  prefix: E_
+  suffix: _GLEAM_v4.2a
+Canopy_Interception:
+  sub_dir: Canopy_Interception/GLEAM_v4.2a
+  varname: Ei
+  varunit: mm day-1
+  prefix: Ei_
+  suffix: _GLEAM_v4.2a
+Transpiration:
+  sub_dir: Transpiration/GLEAM_v4.2a
+  varname: Et
+  varunit: mm day-1
+  prefix: Et_
+  suffix: _GLEAM_v4.2a
+Bare_Soil_Evaporation:
+  sub_dir: Bare_Soil_Evaporation/GLEAM_v4.2a
+  varname: Eb
+  varunit: mm day-1
+  prefix: Eb_
+  suffix: _GLEAM_v4.2a
+Open_Water_Evaporation:
+  sub_dir: Open_Water_Evaporation/GLEAM4.2a
+  varname: Ew
+  varunit: mm day-1
+  prefix: Ew_
+  suffix: _GLEAM_v4.2a
+Root_Zone_Soil_Moisture:
+  sub_dir: Root_Zone_Soil_Moisture/GLEAM_v4.2a
+  varname: SMrz
+  varunit: m3 m-3
+  prefix: SMrz_
+  suffix: _GLEAM_v4.2a
+Surface_Soil_Moisture:
+  sub_dir: Surface_Soil_Moisture/GLEAM_v4.2a
+  varname: SMs
+  varunit: m3 m-3
+  prefix: SMs_
+  suffix: _GLEAM_v4.2a
+Sensible_Heat:
+  sub_dir: ../Heat/Sensible_Heat/GLEAM_v4.2a
+  varname: H
+  varunit: W m-2
+  prefix: H_
+  suffix: _GLEAM_v4.2a
