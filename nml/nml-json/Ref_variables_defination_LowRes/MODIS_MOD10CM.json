@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Water",
+    "root_dir": "./dataset/reference/Grid/LowRes/Water",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Snow_Cover_Extent/MODIS_MOD10CM",
     "varname": "Snow_Cover_Monthly_CMG",
     "varunit": "percent",
-    "prefix": "",
+    "prefix": "MOD10CM_merged_0p25d",
     "suffix": ""
   }
 }

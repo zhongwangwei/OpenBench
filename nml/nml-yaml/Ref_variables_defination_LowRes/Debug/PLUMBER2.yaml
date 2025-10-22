@@ -1,0 +1,16 @@
+general:
+  root_dir: ./dataset/reference/debug/PLUMBER2
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Day
+  grid_res: ''
+  syear: ''
+  eyear: ''
+  fulllist: ./dataset/reference/debug/PLUMBER2.csv
+Sensible_Heat:
+  varname: Qh_cor
+  varunit: w m-2
+Latent_Heat:
+  varname: Qle_cor
+  varunit: w m-2

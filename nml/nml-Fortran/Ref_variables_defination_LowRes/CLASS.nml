@@ -1,19 +1,19 @@
 &general
-  root_dir = "./dataset/Reference/Grid/LowRes/Heat"
+  root_dir = ./dataset/reference/Grid/LowRes/Heat
   timezone = 0
-  data_type = "grid"
-  data_groupby = "Single"
+  data_type = grid
+  data_groupby = Single
   syear = 2003
   eyear = 2009
-  tim_res = "Month"
+  tim_res = Month
   grid_res = 0.25
 /
 
 &Ground_Heat
-  sub_dir = "Ground_Heat/CLASS"
-  varname = "hfdsl"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Ground_Heat/CLASS
+  varname = hfdsl
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 

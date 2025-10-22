@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Water",
+    "root_dir": "./dataset/reference/Grid/LowRes/Water",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Snow_Water_Equivalent/globsnow_v3",
     "varname": "swe",
     "varunit": "mm",
-    "prefix": "",
+    "prefix": "globsnow_v3_swe_monthly_lonlat_0.25deg",
     "suffix": ""
   }
 }
