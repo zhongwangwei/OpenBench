@@ -1,19 +1,19 @@
 &general
-  root_dir = "./dataset/Reference/Grid/LowRes/Water"
+  root_dir = ./dataset/reference/Grid/LowRes/Water
   timezone = 0
-  data_type = "grid"
-  data_groupby = "Single"
+  data_type = grid
+  data_groupby = Single
   syear = 1902
   eyear = 2019
-  tim_res = "Month"
+  tim_res = Month
   grid_res = 0.25
 /
 
 &Total_Runoff
-  sub_dir = "Total_Runoff/GRUN_ENSEMBLE"
-  varname = "Runoff"
-  varunit = "mm day-1"
-  prefix = ""
-  suffix = ""
+  sub_dir = Total_Runoff/GRUN_ENSEMBLE
+  varname = Runoff
+  varunit = mm day-1
+  prefix = G-RUN_ENSEMBLE_MMM
+  suffix = 
 /
 

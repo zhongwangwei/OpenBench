@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Water
+  root_dir: ./dataset/reference/Grid/LowRes/Water
   timezone: 0
   data_type: grid
   data_groupby: Single
@@ -11,5 +11,5 @@ Terrestrial_Water_Storage_Change:
   sub_dir: Terrestrial_Water_Storage_Change/GRAiCE
   varname: twsc
   varunit: cm
-  prefix: 
-  suffix: 
+  prefix: GRAiCE_twsc_ensmean
+  suffix: ''

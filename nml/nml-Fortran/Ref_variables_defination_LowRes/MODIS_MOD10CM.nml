@@ -1,19 +1,19 @@
 &general
-  root_dir = "./dataset/Reference/Grid/LowRes/Water"
+  root_dir = ./dataset/reference/Grid/LowRes/Water
   timezone = 0
-  data_type = "grid"
-  data_groupby = "Single"
+  data_type = grid
+  data_groupby = Single
   syear = 2000
   eyear = 2024
-  tim_res = "Month"
+  tim_res = Month
   grid_res = 0.25
 /
 
 &Snow_Cover_Extent
-  sub_dir = "Snow_Cover_Extent/MODIS_MOD10CM"
-  varname = "Snow_Cover_Monthly_CMG"
-  varunit = "percent"
-  prefix = ""
-  suffix = ""
+  sub_dir = Snow_Cover_Extent/MODIS_MOD10CM
+  varname = Snow_Cover_Monthly_CMG
+  varunit = percent
+  prefix = MOD10CM_merged_0p25d
+  suffix = 
 /
 

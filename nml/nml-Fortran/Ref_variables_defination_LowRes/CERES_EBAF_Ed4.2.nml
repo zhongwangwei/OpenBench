@@ -1,67 +1,67 @@
 &general
-  root_dir = "./dataset/Reference/Grid/LowRes/Heat"
+  root_dir = ./dataset/reference/Grid/LowRes/Heat
   timezone = 0
-  data_type = "grid"
-  data_groupby = "Single"
+  data_type = grid
+  data_groupby = Single
   syear = 2000
   eyear = 2024
-  tim_res = "Month"
+  tim_res = Month
   grid_res = 0.25
 /
 
 &Net_Radiation
-  sub_dir = "Net_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_net_tot_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Net_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_net_tot_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Upward_SW_Radiation
-  sub_dir = "Surface_Upward_SW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_sw_up_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Upward_SW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_sw_up_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Upward_LW_Radiation
-  sub_dir = "Surface_Upward_LW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_lw_up_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Upward_LW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_lw_up_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Net_SW_Radiation
-  sub_dir = "Surface_Net_SW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_net_sw_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Net_SW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_net_sw_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Net_LW_Radiation
-  sub_dir = "Surface_Net_LW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_net_lw_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Net_LW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_net_lw_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Downward_SW_Radiation
-  sub_dir = "Surface_Downward_SW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_sw_down_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Downward_SW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_sw_down_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
 &Surface_Downward_LW_Radiation
-  sub_dir = "Surface_Downward_LW_Radiation/CERES_EBAF_Ed4.2"
-  varname = "sfc_lw_down_all_mon"
-  varunit = "W m-2"
-  prefix = ""
-  suffix = ""
+  sub_dir = Surface_Downward_LW_Radiation/CERES_EBAF_Ed4.2
+  varname = sfc_lw_down_all_mon
+  varunit = W m-2
+  prefix = 
+  suffix = 
 /
 
