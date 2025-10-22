@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Water
+  root_dir: ./dataset/reference/Grid/LowRes/Water
   timezone: 0
   data_type: grid
   data_groupby: Single
@@ -11,5 +11,5 @@ Precipitation:
   sub_dir: Precipitation/GPCC
   varname: precip
   varunit: mm day-1
-  prefix: 
-  suffix: 
+  prefix: precip.mon.total.0.25x0.25.v2022_mm_day
+  suffix: ''

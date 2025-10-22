@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Anth",
+    "root_dir": "./dataset/reference/Grid/LowRes/Anth",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -12,8 +12,8 @@
   "Urban_Albedo": {
     "sub_dir": "Urban/MCD43A3",
     "varname": "Albedo_wsa",
-    "varunit": "1",
-    "prefix": "",
+    "varunit": 1,
+    "prefix": "Urban_MCD43A3_2010_settime",
     "suffix": ""
   }
 }

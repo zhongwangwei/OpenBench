@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Anth
+  root_dir: ./dataset/reference/Grid/LowRes/Anth
   timezone: 0
   data_type: grid
   data_groupby: Single
@@ -11,5 +11,5 @@ Urban_Surface_Temperature:
   sub_dir: Urban/MODIS_LST
   varname: LST_D
   varunit: degC
-  prefix: 
-  suffix: 
+  prefix: MODIS_LST_2003-2020
+  suffix: ''

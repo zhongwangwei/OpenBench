@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Meteo",
+    "root_dir": "./dataset/reference/Grid/LowRes/Meteo",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,35 +13,35 @@
     "sub_dir": "Surface_Air_Temperature/CRU_TS_4.08",
     "varname": "tmp",
     "varunit": "degC",
-    "prefix": "",
+    "prefix": "tmp",
     "suffix": ""
   },
   "Diurnal_Max_Temperature": {
     "sub_dir": "Diurnal_Max_Temperature/CRU_TS_4.08",
     "varname": "tmx",
     "varunit": "degC",
-    "prefix": "",
+    "prefix": "tmx",
     "suffix": ""
   },
   "Diurnal_Min_Temperature": {
     "sub_dir": "Diurnal_Min_Temperature/CRU_TS_4.08",
     "varname": "tmn",
     "varunit": "degC",
-    "prefix": "",
+    "prefix": "tmn",
     "suffix": ""
   },
   "Cloud_Cover": {
     "sub_dir": "Cloud_Cover/CRU_TS_4.08",
     "varname": "cld",
     "varunit": "percent",
-    "prefix": "",
+    "prefix": "cld",
     "suffix": ""
   },
   "Ground_Frost_Frequency": {
     "sub_dir": "Ground_Frost_Frequency/CRU_TS_4.08",
     "varname": "frs",
     "varunit": "days",
-    "prefix": "",
+    "prefix": "frs",
     "suffix": ""
   }
 }
