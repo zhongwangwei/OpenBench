@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Water",
+    "root_dir": "./dataset/reference/Grid/LowRes/Water",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Snow_Depth/SMAP_L4",
     "varname": "snow_depth",
     "varunit": "m",
-    "prefix": "",
+    "prefix": "SMAP_L4_snow_depth",
     "suffix": ""
   }
 }

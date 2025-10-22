@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Meteo
+  root_dir: ./dataset/reference/Grid/LowRes/Meteo
   timezone: 0
   data_type: grid
   data_groupby: Single
@@ -11,5 +11,5 @@ Surface_Relative_Humidity:
   sub_dir: Surface_Relative_Humidity/CRU4.02
   varname: rhums
   varunit: percent
-  prefix: 
-  suffix: 
+  prefix: rhums
+  suffix: ''

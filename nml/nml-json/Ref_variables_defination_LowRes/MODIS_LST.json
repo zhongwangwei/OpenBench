@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Anth",
+    "root_dir": "./dataset/reference/Grid/LowRes/Anth",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Urban/MODIS_LST",
     "varname": "LST_D",
     "varunit": "degC",
-    "prefix": "",
+    "prefix": "MODIS_LST_2003-2020",
     "suffix": ""
   }
 }

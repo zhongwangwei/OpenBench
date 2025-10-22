@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Bio",
+    "root_dir": "./dataset/reference/Grid/LowRes/Bio",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Biomass/ESACCI-BIOMASS-L4",
     "varname": "agb",
     "varunit": "Mg ha-1",
-    "prefix": "",
+    "prefix": "ESACCI-BIOMASS-L4-AGB-MERGED-0p25deg-fv6.0",
     "suffix": ""
   }
 }

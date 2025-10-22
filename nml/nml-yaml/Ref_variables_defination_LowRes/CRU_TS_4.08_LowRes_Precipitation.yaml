@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Water
+  root_dir: ./dataset/reference/Grid/LowRes/Water
   timezone: 0
   data_type: grid
   data_groupby: Year

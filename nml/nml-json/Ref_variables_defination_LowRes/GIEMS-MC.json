@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Water",
+    "root_dir": "./dataset/reference/Grid/LowRes/Water",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -12,8 +12,8 @@
   "Inundation_Fraction": {
     "sub_dir": "Inundation_Fraction/GIEMS_MC/",
     "varname": "total_water_fraction",
-    "varunit": "",
-    "prefix": "",
+    "varunit": "m",
+    "prefix": "GIEMS-MC_water_fraction_map_setrange",
     "suffix": ""
   },
   "Inundation_Area": {

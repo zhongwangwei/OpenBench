@@ -13,7 +13,7 @@
     "sub_dir": "Urban/AH4GUC",
     "varname": "AHE",
     "varunit": "W m-2",
-    "prefix": "",
+    "prefix": "AH4GUC_2010_monmean_settime",
     "suffix": ""
   }
 }

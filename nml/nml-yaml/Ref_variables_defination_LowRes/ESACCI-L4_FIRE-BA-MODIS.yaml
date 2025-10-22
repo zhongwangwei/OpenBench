@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Grid/LowRes/Bio
+  root_dir: ./dataset/reference/Grid/LowRes/Bio
   timezone: 0
   data_type: grid
   data_groupby: Year
@@ -12,4 +12,4 @@ Burned_Area:
   varname: burned_area
   varunit: ha
   prefix: ESACCI-L4_FIRE-BA-MODIS-fv5.1_
-  suffix: 
+  suffix: ''
