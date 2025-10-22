@@ -9,7 +9,7 @@ general:
   - ILAMB_monthly
   - PLUMBER2
 def_nml:
-  GLEAM_hybird_PLUMBER2: ./nml/nml-yaml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.yaml
-  ILAMB_monthly: ./nml/nml-yaml/Ref_variables_defination/Debug/ILAMB_monthly.yaml
-  PLUMBER2: ./nml/nml-yaml/Ref_variables_defination/Debug/PLUMBER2.yaml
-  GLEAM4.2a_monthly: ./nml/nml-yaml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.yaml
+  GLEAM_hybird_PLUMBER2: ./nml/nml-yaml/Ref_variables_defination_LowRes/Debug/GLEAM_hybird_PLUMBER2.yaml
+  ILAMB_monthly: ./nml/nml-yaml/Ref_variables_defination_LowRes/Debug/ILAMB_monthly.yaml
+  PLUMBER2: ./nml/nml-yaml/Ref_variables_defination_LowRes/Debug/PLUMBER2.yaml
+  GLEAM4.2a_monthly: ./nml/nml-yaml/Ref_variables_defination_LowRes/Debug/GLEAM4.2a_monthly.yaml

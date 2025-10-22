@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Anth",
+    "root_dir": "./dataset/reference/Grid/LowRes/Anth",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Urban/ETMonitor",
     "varname": "LE",
     "varunit": "W m-2",
-    "prefix": "",
+    "prefix": "2001-2019_LE_0.5",
     "suffix": ""
   }
 }

@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Bio",
+    "root_dir": "./dataset/reference/Grid/LowRes/Bio",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Wetland_Methane_Emission/UpCH4",
     "varname": "mean_ch4",
     "varunit": "gC m-2 day-1",
-    "prefix": "",
+    "prefix": "upch4_v04_m1_TgCH4month_Aw",
     "suffix": ""
   }
 }
