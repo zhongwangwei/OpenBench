@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Bio",
+    "root_dir": "./dataset/reference/Grid/LowRes/Bio",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,21 +13,21 @@
     "sub_dir": "Gross_Primary_Productivity/GloFlux",
     "varname": "gpp",
     "varunit": "gC m-2 day-1",
-    "prefix": "",
+    "prefix": "GloFlux_GPP_0p25",
     "suffix": ""
   },
   "Net_Ecosystem_Exchange": {
     "sub_dir": "Net_Ecosystem_Exchange/GloFlux",
     "varname": "nee",
     "varunit": "gC m-2 day-1",
-    "prefix": "",
+    "prefix": "GloFlux_NEE_0p25",
     "suffix": ""
   },
   "Ecosystem_Respiration": {
     "sub_dir": "Ecosystem_Respiration/GloFlux",
     "varname": "reco",
     "varunit": "gC m-2 day-1",
-    "prefix": "",
+    "prefix": "GloFlux_RECO_0p25",
     "suffix": ""
   }
 }

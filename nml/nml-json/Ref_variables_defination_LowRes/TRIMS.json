@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Grid/LowRes/Anth",
+    "root_dir": "./dataset/reference/Grid/LowRes/Anth",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",
@@ -13,7 +13,7 @@
     "sub_dir": "Urban/TRIMS",
     "varname": "LST_N",
     "varunit": "K",
-    "prefix": "",
+    "prefix": "TRIMS_LST_2000-2020",
     "suffix": ""
   }
 }
