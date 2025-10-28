@@ -66,7 +66,6 @@
   Precipitation = True
   Runoff = False
   Transpiration = False
-  Albedo = False
   Ground_Heat = True
   Latent_Heat = True
   Net_Radiation = True

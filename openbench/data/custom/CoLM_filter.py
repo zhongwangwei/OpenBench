@@ -287,16 +287,16 @@ def filter_CoLM(info,ds):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['f_wliq_soisno']
-   if info.item == "Albedo":
+   if info.item == "Surface_Albedo":
       try:
-            ds['Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
+            ds['Surface_Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
 
-            info.sim_varname = ['Albedo']
+            info.sim_varname = ['Surface_Albedo']
             info.sim_varunit = 'unitless'
       except Exception as e:
          logging.error(f"Surface Albedo calculation processing ERROR: {e}")
          return info, None
-      return info, ds['Albedo']
+      return info, ds['Surface_Albedo']
 
 
    if info.item == "Surface_Wind_Speed":

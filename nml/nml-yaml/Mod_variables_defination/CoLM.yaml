@@ -30,7 +30,7 @@ Surface_Net_SW_Radiation:
 Surface_Net_LW_Radiation:
   varname: ''
   varunit: w m-2
-Albedo:
+Surface_Albedo:
   varname: ''
   varunit: unitless
 Gross_Primary_Productivity:

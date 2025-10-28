@@ -26,7 +26,6 @@
   Surface_Albedo_ref_source = CLARA_3_LowRes
   Surface_Downward_SW_Radiation_ref_source = CLARA_3_LowRes
   Surface_Downward_LW_Radiation_ref_source = CLARA_3_LowRes
-  Albedo_ref_source = CLARA_3_LowRes
   Gross_Primary_Productivity_ref_source = FLUXCOM-X-BASE_LowRes
   Net_Ecosystem_Exchange_ref_source = FLUXCOM-X-BASE_LowRes
   Ecosystem_Respiration_ref_source = GloFlux_LowRes
