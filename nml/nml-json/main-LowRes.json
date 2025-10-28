@@ -66,7 +66,6 @@
     "Precipitation": true,
     "Runoff": true,
     "Transpiration": true,
-    "Albedo": true,
     "Ground_Heat": true,
     "Latent_Heat": true,
     "Net_Radiation": true,

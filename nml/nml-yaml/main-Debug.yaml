@@ -57,7 +57,7 @@ evaluation_items:
   Water_Evaporation: false
 #  Water_Storage_In_Aquifer: false
 #  Water_Table_Depth: false
-  Albedo: false
+  Surface_Albedo: false
   Ground_Heat: false
   Latent_Heat: true
   Net_Radiation: false
