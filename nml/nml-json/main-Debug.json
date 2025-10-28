@@ -51,7 +51,7 @@
     "Terrestrial_Water_Storage_Change": false,
     "Total_Runoff": false,
     "Water_Evaporation": false,
-    "Albedo": false,
+    "Surface_Albedo": false,
     "Ground_Heat": false,
     "Latent_Heat": true,
     "Net_Radiation": false,

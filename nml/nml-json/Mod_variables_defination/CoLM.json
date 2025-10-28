@@ -42,7 +42,7 @@
     "varname": "",
     "varunit": "w m-2"
   },
-  "Albedo": {
+  "Surface_Albedo": {
     "varname": "",
     "varunit": "unitless"
   },
