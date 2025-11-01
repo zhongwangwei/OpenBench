@@ -40,6 +40,12 @@ from openbench.util.Mod_Converttype import Convert_Type
 from openbench.util.Mod_ReportGenerator import ReportGenerator
 from openbench.util.Mod_FileIO import safe_open_netcdf, safe_save_netcdf
 from openbench.util.Mod_ProgressMonitor import HeartbeatMonitor
+from openbench.util.Mod_PreValidation import run_pre_validation, ValidationError
+from openbench.util.Mod_ConfigCheck import (
+    get_platform_colors,
+    print_config_summary,
+    perform_early_validation
+)
 import logging
 from datetime import datetime
 
@@ -167,40 +173,6 @@ def initialize_memory_management():
     except Exception as e:
         logging.warning(f"Failed to initialize memory management settings: {e}")
 
-
-def get_platform_colors():
-    """Get color codes based on platform support."""
-    system = platform.system().lower()
-    
-    # Check if terminal supports colors
-    supports_color = (
-        hasattr(sys.stdout, 'isatty') and sys.stdout.isatty() and
-        os.environ.get('TERM', '') != 'dumb' and
-        ('COLORTERM' in os.environ or 
-         os.environ.get('TERM', '').endswith(('color', '256color', 'truecolor')))
-    )
-    
-    # Windows Command Prompt has limited ANSI support
-    if system == 'windows' and not os.environ.get('WT_SESSION'):
-        supports_color = False
-    
-    if supports_color:
-        return {
-            'reset': '\033[0m',
-            'bold': '\033[1m',
-            'cyan': '\033[1;36m',
-            'green': '\033[1;32m',
-            'yellow': '\033[1;33m',
-            'blue': '\033[1;34m',
-            'magenta': '\033[1;35m',
-            'red': '\033[1;31m'
-        }
-    else:
-        # Fallback to no colors for compatibility
-        return {
-            'reset': '', 'bold': '', 'cyan': '', 'green': '',
-            'yellow': '', 'blue': '', 'magenta': '', 'red': ''
-        }
 
 def print_welcome_message():
     """Print a cross-platform compatible welcome message."""
@@ -729,30 +701,12 @@ def main():
     """Main function to orchestrate the evaluation process."""
     print_welcome_message()
 
-    # Validate command line arguments
-    if len(sys.argv) < 2:
-        colors = get_platform_colors()
-        error_icon = "❌" if colors['reset'] else "[ERROR]"
-        print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file path required{colors['reset']}")
-        print(f"\n{colors['bold']}Usage:{colors['reset']} python openbench.py <config_file_path>")
-        print(f"\n{colors['bold']}Examples:{colors['reset']}")
-        print(f"  python openbench.py nml/nml-json/main-Debug.json")
-        print(f"  python openbench.py nml/nml-yaml/main-Debug.yaml")
-        print(f"  python openbench.py nml/nml-Fortran/main-Debug.nml")
-        sys.exit(1)
+    # Perform early validation: command line args, config file existence, external configs
+    # This consolidates all early-stage checks and provides clear error messages
+    config_file = perform_early_validation()
 
     # Initialize NamelistReader and load main namelist
     nl = NamelistReader()
-    config_file = sys.argv[1]
-
-    # Validate config file exists
-    if not os.path.exists(config_file):
-        colors = get_platform_colors()
-        error_icon = "❌" if colors['reset'] else "[ERROR]"
-        print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file not found{colors['reset']}")
-        print(f"  File: {config_file}")
-        sys.exit(1)
-
     main_nl = nl.read_namelist(config_file)
 
     # Setup directories
@@ -780,9 +734,55 @@ def main():
     # Check required files before proceeding
     check_required_nml(main_nl, sim_nml, ref_nml, evaluation_items)
 
-    # Update namelists
+    # Update namelists - this merges external configs (def_nml) into main namelists
     UpdateNamelist(main_nl, sim_nml, ref_nml, evaluation_items)
     UpdateFigNamelist(main_nl, fig_nml, comparison_vars, statistic_vars)
+
+    # Run comprehensive pre-validation AFTER UpdateNamelist
+    # At this point, all external configs have been merged, so we can validate the final configuration
+    colors = get_platform_colors()
+    validate_icon = "🔍" if colors['reset'] else "[VALIDATE]"
+    print(f"\n{validate_icon} {colors['bold']}{colors['cyan']}Running comprehensive pre-validation...{colors['reset']}")
+    logging.info("=" * 80)
+    logging.info("Starting comprehensive pre-validation (after UpdateNamelist)")
+    logging.info("=" * 80)
+
+    try:
+        # Run pre-validation with all checks
+        # Pre-validation runs AFTER UpdateNamelist to validate the merged configuration
+        # - Path existence validation
+        # - Namelist completeness checking
+        # - Unit validation (units now directly in nml[item][f'{source}_varunit'])
+        # - Dimension compatibility checking
+        skip_data_check = main_nl['general'].get('skip_data_precheck', False)
+        validation_success = run_pre_validation(
+            main_nl, sim_nml, ref_nml, list(evaluation_items),
+            skip_data_check=skip_data_check
+        )
+
+        if not validation_success:
+            error_icon = "❌" if colors['reset'] else "[ERROR]"
+            print(f"\n{error_icon} {colors['red']}{colors['bold']}Pre-validation failed. Please fix the errors above.{colors['reset']}")
+            sys.exit(1)
+
+        check_icon = "✅" if colors['reset'] else "[OK]"
+        print(f"{check_icon} {colors['bold']}{colors['green']}Pre-validation completed successfully{colors['reset']}")
+        logging.info("Pre-validation completed successfully")
+
+    except ValidationError as e:
+        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        print(f"\n{error_icon} {colors['red']}{colors['bold']}Validation Error: {str(e)}{colors['reset']}")
+        logging.error(f"Validation failed: {str(e)}")
+        sys.exit(1)
+    except Exception as e:
+        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        print(f"\n{error_icon} {colors['red']}{colors['bold']}Unexpected validation error: {str(e)}{colors['reset']}")
+        logging.error(f"Unexpected validation error: {str(e)}", exc_info=True)
+        sys.exit(1)
+
+    # Print configuration summary after validation
+    print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars)
+
     if main_nl['general']['statistics'] and not main_nl['general']['evaluation'] and not main_nl['general']['comparison']:
         pass
     else:
