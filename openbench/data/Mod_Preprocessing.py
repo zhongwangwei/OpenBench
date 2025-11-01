@@ -199,6 +199,16 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
                         logging.error("**************************************************")
                         sys.exit(1)
                     for source in ref_sources:
+                        # Check if source exists in def_nml
+                        if source not in ref_nml.get('def_nml', {}):
+                            logging.error("**************************************************")
+                            logging.error(f"Error: Reference source '{source}' not found in ref_nml['def_nml']")
+                            logging.error(f"       Evaluation item: {evaluation_item}")
+                            logging.error(f"       Available sources in def_nml: {list(ref_nml.get('def_nml', {}).keys())}")
+                            logging.error(f"       Check your configuration file for typos!")
+                            logging.error("**************************************************")
+                            sys.exit(1)
+
                         # Construct path to variable-specific namelist
                         var_nml_path = ref_nml['def_nml'][source]
                         if not os.path.exists(var_nml_path):
@@ -208,6 +218,16 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
                             sys.exit(1)
 
                     for source in sim_sources:
+                        # Check if source exists in def_nml
+                        if source not in sim_nml.get('def_nml', {}):
+                            logging.error("**************************************************")
+                            logging.error(f"Error: Simulation source '{source}' not found in sim_nml['def_nml']")
+                            logging.error(f"       Evaluation item: {evaluation_item}")
+                            logging.error(f"       Available sources in def_nml: {list(sim_nml.get('def_nml', {}).keys())}")
+                            logging.error(f"       Check your configuration file for typos!")
+                            logging.error("**************************************************")
+                            sys.exit(1)
+
                         # Construct path to variable-specific namelist
                         var_nml_path = sim_nml['def_nml'][source]
                         if not os.path.exists(var_nml_path):
