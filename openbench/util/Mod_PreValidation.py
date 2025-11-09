@@ -811,9 +811,16 @@ class PreValidator:
             if f'info.item == "{item}"' in source_code or f"info.item == '{item}'" in source_code:
                 logging.debug(f"    Custom filter {filter_name}_filter handles {item}")
                 return True
-            else:
-                logging.debug(f"    Custom filter {filter_name}_filter exists but doesn't handle {item}")
-                return False
+
+            # For dedicated filters (filter name matches the item-specific source),
+            # assume it handles that item even without explicit checks
+            # For example: GRDC filter for Streamflow, CaMa filter for Streamflow, etc.
+            if source_type == 'reference' and filter_name.upper() in ['GRDC', 'CAMA']:
+                logging.debug(f"    Dedicated filter {filter_name}_filter assumed to handle {item}")
+                return True
+
+            logging.debug(f"    Custom filter {filter_name}_filter exists but doesn't handle {item}")
+            return False
 
         except ImportError:
             logging.debug(f"    No custom filter module found: {filter_name}_filter")
