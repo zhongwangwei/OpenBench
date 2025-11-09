@@ -170,6 +170,7 @@ metrics:
   wNSE: false
   wsNSE: false
   index_agreement: false
+  MFM: false
 scores:
   nBiasScore: false
   nRMSEScore: false
