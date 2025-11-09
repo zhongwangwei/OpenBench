@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/nml-Fortran/Mod_variables_defination/CaMaFlood.nml                               #the unit and variable defination will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Month
+   dir = ./dataset/simulation/cama/
+   fulllist =
+   tim_res =  day
+   grid_res =  0.25
+   suffix = 
+   prefix = FUXI-test_hist_cama_
+   syear =  2005
+   eyear =  2014
+/
