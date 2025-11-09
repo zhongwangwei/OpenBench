@@ -3,7 +3,7 @@
 Memory Management and Cleanup Module
 
 This module provides comprehensive memory management and cleanup utilities
-for the OpenBench evaluation system.
+for the OpenBench evaluation system, including memory cleanup and file cleanup.
 
 Author: Zhongwang Wei (zhongwang007@gmail.com)
 Date: Nov 2025
@@ -11,6 +11,8 @@ Date: Nov 2025
 
 import gc
 import logging
+import os
+import shutil
 import numpy as np
 import xarray as xr
 
@@ -246,3 +248,63 @@ def log_memory_usage(label="Current"):
         logging.info(f"{label} memory usage: {memory_mb:.1f} MB")
     else:
         logging.debug(f"{label} memory usage: (psutil not available)")
+
+
+def cleanup_old_outputs(main_nl, clean_level='tmp'):
+    """Clean up old outputs and temporary files before running.
+
+    Args:
+        main_nl: Main namelist configuration
+        clean_level: Level of cleanup to perform
+            - 'tmp': Only clean tmp and scratch directories (default)
+            - 'all': Clean tmp, scratch, and all outputs (metrics, scores, data)
+            - 'none': Skip cleanup
+
+    Returns:
+        int: Number of directories cleaned
+    """
+    if clean_level == 'none':
+        return 0
+
+    # Import here to avoid circular dependency
+    from openbench.util.Mod_ConfigCheck import get_platform_colors
+
+    base_path = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'])
+
+    # Directories to clean based on level
+    cleanup_dirs = []
+
+    if clean_level in ['tmp', 'all']:
+        cleanup_dirs.extend([
+            os.path.join(base_path, 'tmp'),
+            os.path.join(base_path, 'scratch')
+        ])
+
+    if clean_level == 'all':
+        cleanup_dirs.extend([
+            os.path.join(base_path, 'output', 'metrics'),
+            os.path.join(base_path, 'output', 'scores'),
+            os.path.join(base_path, 'output', 'data')
+        ])
+
+    colors = get_platform_colors()
+    clean_icon = "🧹" if colors['reset'] else "[CLEAN]"
+
+    cleaned_count = 0
+    for dir_path in cleanup_dirs:
+        if os.path.exists(dir_path):
+            try:
+                # Count files before cleaning
+                file_count = sum(len(files) for _, _, files in os.walk(dir_path))
+                if file_count > 0:
+                    print(f"{clean_icon} Cleaning {dir_path} ({file_count} files)...")
+                    shutil.rmtree(dir_path)
+                    cleaned_count += 1
+            except Exception as e:
+                print(f"{colors['yellow']}Warning: Could not clean {dir_path}: {e}{colors['reset']}")
+
+    if cleaned_count > 0:
+        check_icon = "✅" if colors['reset'] else "[OK]"
+        print(f"{check_icon} {colors['green']}Cleaned {cleaned_count} directories{colors['reset']}\n")
+
+    return cleaned_count
