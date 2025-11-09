@@ -60,18 +60,18 @@ def filter_GRDC(info):
         logging.error("sim_grid_res is not defined in info object")
         sys.exit(1)
 
-    if not isinstance(info.sim_grid_res, (int, float)):
-        logging.warning(f"sim_grid_res must be a number, got {type(info.sim_grid_res)}")
-        # sys.exit(1)
-
     valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
-    # ask user to input the resolution
-    # add the reason for the input
     logging.info("The simulation grid resolution can be different from the LSM grid resolution")
+
+    # Try to convert sim_grid_res to float
     try:
         info.sim_grid_res = float(info.sim_grid_res)
-    except:
-        info.sim_grid_res = float(input("Please input the simulation grid resolution: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)"))
+    except Exception as e:
+        logging.error("Could not convert sim_grid_res to float")
+        logging.error(f"sim_grid_res value: {info.sim_grid_res}, type: {type(info.sim_grid_res)}")
+        logging.error(f"Error: {e}")
+        logging.error("Please check the grid_res setting in your simulation configuration")
+        sys.exit(1)
     if info.sim_grid_res not in valid_resolutions:
         logging.warning(f"sim_grid_res value {info.sim_grid_res} is not in the list of standard resolutions: {valid_resolutions}")
         logging.warning("This may cause issues with grid coordinate calculations")

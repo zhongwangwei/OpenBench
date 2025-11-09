@@ -300,26 +300,44 @@ class GeneralInfoReader(NamelistReader):
 
     @cached(key_prefix="station_lists", ttl=3600)
     def _read_and_merge_station_lists(self):
-        """Read and merge station lists from reference and simulation sources."""
+        """Read and merge station lists from reference and simulation sources.
+
+        Note: If fulllist is empty, skip file reading and let custom filters
+        populate the station list (e.g., GRDC_filter, CaMa_filter).
+        """
         if self.ref_data_type == 'stn' and self.sim_data_type == 'stn':
             # Both ref and sim are station data
-            self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-            self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
-            self._rename_station_columns()
-            self.stn_list = pd.merge(self.sim_stn_list, self.ref_stn_list, how='inner', on='ID')
+            # Only read if fulllist paths are provided
+            if self.sim_fulllist and self.ref_fulllist:
+                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self._rename_station_columns()
+                self.stn_list = pd.merge(self.sim_stn_list, self.ref_stn_list, how='inner', on='ID')
+            else:
+                # Empty fulllist - rely on custom filter to populate station list
+                logging.debug("fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
         elif self.sim_data_type == 'stn':
             # Only sim is station data
-            self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-            self._rename_station_columns(sim_only=True)
-            self.stn_list = self.sim_stn_list
+            if self.sim_fulllist:
+                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self._rename_station_columns(sim_only=True)
+                self.stn_list = self.sim_stn_list
+            else:
+                logging.debug("sim fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
         elif self.ref_data_type == 'stn':
             # Only ref is station data
-            self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
-            self._rename_station_columns(ref_only=True)
-            self.stn_list = self.ref_stn_list
-            self.stn_list['use_syear'] = self.stn_list['ref_syear']
-            self.stn_list['use_eyear'] = self.stn_list['ref_eyear']
-            self.stn_list['Flag'] = False
+            if self.ref_fulllist:
+                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self._rename_station_columns(ref_only=True)
+                self.stn_list = self.ref_stn_list
+                self.stn_list['use_syear'] = self.stn_list['ref_syear']
+                self.stn_list['use_eyear'] = self.stn_list['ref_eyear']
+                self.stn_list['Flag'] = False
+            else:
+                logging.debug("ref fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
 
     def _rename_station_columns(self, sim_only=False, ref_only=False):
         """Rename station columns to standard names."""
