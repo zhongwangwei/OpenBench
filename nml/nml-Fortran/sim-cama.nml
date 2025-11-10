@@ -1,0 +1,10 @@
+&general
+    Streamflow_sim_source = FUXI
+/
+
+
+&def_nml
+    FUXI      = ./nml/nml-Fortran/user/FUXI/FUXI.nml
+/
+
+

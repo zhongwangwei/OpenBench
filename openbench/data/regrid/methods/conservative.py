@@ -19,6 +19,7 @@ def conservative_regrid(
     data: xr.DataArray,
     target_ds: xr.Dataset,
     latitude_coord: str | None,
+    time_dim: str | None = "time",
     skipna: bool = True,
     nan_threshold: float = 1.0,
     output_chunks: dict[Hashable, int] | None = None,
@@ -30,6 +31,7 @@ def conservative_regrid(
     data: xr.Dataset,
     target_ds: xr.Dataset,
     latitude_coord: str | None,
+    time_dim: str | None = "time",
     skipna: bool = True,
     nan_threshold: float = 1.0,
     output_chunks: dict[Hashable, int] | None = None,
@@ -40,6 +42,7 @@ def conservative_regrid(
     data: xr.DataArray | xr.Dataset,
     target_ds: xr.Dataset,
     latitude_coord: str | Hashable | None,
+    time_dim: str | None = "time",
     skipna: bool = True,
     nan_threshold: float = 1.0,
     output_chunks: dict[Hashable, int] | None = None,
@@ -79,7 +82,11 @@ def conservative_regrid(
                 break
 
     # Make sure the regridding coordinates are sorted
-    coord_names = [coord for coord in target_ds.coords if coord in data.coords]
+    # Exclude time dimension from regridding coordinates
+    coord_names = [
+        coord for coord in target_ds.coords 
+        if coord in data.coords and coord != time_dim
+    ]
     target_ds_sorted = xr.Dataset(coords=target_ds.coords)
     for coord_name in coord_names:
         target_ds_sorted = utils.ensure_monotonic(target_ds_sorted, coord_name)
@@ -94,6 +101,7 @@ def conservative_regrid(
         skipna,
         nan_threshold,
         output_chunks,
+        time_dim,
     )
 
     regridded_data = regridded_data.reindex_like(target_ds, copy=False)
@@ -107,7 +115,8 @@ def conservative_regrid_dataset(
     latitude_coord: Hashable,
     skipna: bool,
     nan_threshold: float,
-    output_chunks: dict[Hashable, int] | None = None,
+    output_chunks: dict[Hashable, int] | None,
+    time_dim: str | None,
 ) -> xr.Dataset:
     """Dataset implementation of the conservative regridding method."""
     data_vars = dict(data.data_vars)

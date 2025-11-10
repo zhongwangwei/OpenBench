@@ -183,6 +183,7 @@
     wNSE                  = False
     wsNSE                 = False
     index_agreement       = False
+    MFM                   = True
 /
 
 
