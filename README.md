@@ -1,227 +1,155 @@
 # OpenBench: The Open Source Land Surface Model Benchmarking System
 
-## Overview
+> A fully automated, cross-platform framework for benchmarking land surface models (LSMs) against curated reference datasets with consistent metrics, visualizations, and reports.
 
-OpenBench is a comprehensive, open-source system designed to rigorously evaluate and compare the performance of land surface models (LSMs). It provides a standardized framework for benchmarking LSM outputs against a wide array of reference datasets, encompassing various physical processes and variables. This system automates critical aspects of model evaluation, including configuration management, data processing, validation, inter-comparison, and in-depth statistical analysis. By streamlining these complex tasks, OpenBench empowers researchers and model developers to efficiently assess model capabilities, identify areas for improvement, and advance the science of land surface modeling.
+OpenBench standardizes every stage of LSM evaluation—configuration management, preprocessing, validation, scoring, visualization, and reporting—so researchers can focus on insights instead of wiring. The project is actively maintained and targets Windows, Linux, and macOS with emphasis on reproducibility and modularity.
 
-**Latest Updates (v2.0 - July 2025):**
-- ✅ **Multi-Format Configuration Support**: JSON, YAML, and Fortran Namelist formats with automatic detection
-- ✅ **Enhanced Modular Architecture**: 9 core modules with standardized interfaces and dependency injection
-- ✅ **Cross-Platform Compatibility**: Windows, Linux, and macOS support with intelligent dependency handling  
-- ✅ **Intelligent Parallel Processing**: Automatic multi-core utilization with smart worker allocation and progress tracking
-- ✅ **Advanced Caching System**: Multi-level caching (memory + disk) with LRU eviction and automatic invalidation
-- ✅ **Unified Error Handling**: Structured error reporting with graceful degradation for missing dependencies
-- ✅ **Enhanced Logging**: Dual-level logging system with clean console output and detailed file logging
-- ✅ **Memory Management**: Automatic memory optimization and cleanup during intensive operations
-- ✅ **Climate Zone Analysis**: Köppen climate zone-based groupby analysis capabilities
-- ✅ **Directory Restructuring**: Improved organization with `dataset/` directory and modular `openbench/` package
+## Contents
+- [Highlights](#highlights)
+- [Core Capabilities](#core-capabilities)
+- [Architecture & Repository Layout](#architecture--repository-layout)
+- [Getting Started](#getting-started)
+- [Running Benchmarks](#running-benchmarks)
+- [Configuration Reference](#configuration-reference)
+- [Outputs & Reports](#outputs--reports)
+- [Development & Testing](#development--testing)
+- [Troubleshooting & Performance](#troubleshooting--performance)
+- [Customization & Extensibility](#customization--extensibility)
+- [Contributing](#contributing)
+- [Version History](#version-history)
+- [License & Credits](#license--credits)
 
-## Key Features
+## Highlights
+- **Latest Release:** v2.0 (July 2025)
+- **Multi-format configs:** JSON, YAML, and Fortran Namelist with automatic detection.
+- **Modular architecture:** Nine cohesive subsystems (config, data pipeline, evaluation, scoring, visualization, etc.) with dependency injection.
+- **Parallel & cached:** Adaptive worker allocation, memory-aware scheduling, and multi-level caching.
+- **Unified logging:** Clean console progress plus detailed file logs with structured context.
+- **GUI + API:** Desktop interface (`GUI/GUI_openbench.py`) and Python API (`openbench.openbench_api.OpenBench`) for scripted workflows.
+- **Climate analytics:** Built-in Köppen climate zone group-by and land-cover grouping tools.
 
-*   **Multi-Model Support:** Seamlessly evaluate and compare outputs from various land surface models, such as the Community Land Model (CLM5) and the Common Land Model (CoLM).
-*   **Multi-Format Configuration:** Full support for JSON, YAML, and Fortran Namelist configuration formats with automatic format detection and fallback mechanisms.
-*   **Cross-Platform Compatibility:** Runs on Windows, Linux, and macOS with intelligent handling of platform-specific dependencies.
-*   **Diverse Data Handling:** Accommodates a wide range of data types, including gridded datasets and station-based observations, ensuring comprehensive model assessment.
-*   **Comprehensive Evaluation:** Performs thorough evaluations across multiple biophysical variables, covering crucial aspects of the energy cycle, carbon cycle, hydrological cycle, and human activity impacts.
-*   **Intelligent Parallel Processing:** Automatic multi-core utilization with smart worker allocation, progress tracking, and resource monitoring.
-*   **Advanced Caching System:** Multi-level caching (memory + disk) with LRU eviction and automatic invalidation for improved performance.
-*   **Advanced Metrics and Scoring:** Generates a suite of detailed metrics and performance scores, providing quantitative insights into model accuracy and behavior.
-*   **In-depth Statistical Analysis:** Conducts robust statistical analyses to assess model performance, identify biases, and quantify uncertainties.
-*   **Enhanced Error Handling:** Unified error handling system with structured logging and graceful degradation for missing dependencies.
-*   **Modular Architecture:** Built with 9 core modules featuring standardized interfaces, dependency injection, and plugin system for extensibility.
-*   **Visualization Support:** Includes libraries for generating visualizations to aid in the interpretation of evaluation results.
-*   **Regridding Capabilities:** Provides tools for regridding data to common spatial resolutions, facilitating consistent comparisons.
+## Core Capabilities
+- **Multi-model comparisons** for CLM, CoLM, and other LSM outputs using common scoring metrics.
+- **Data ingestion** for gridded datasets and station observations with configurable preprocessing.
+- **Advanced evaluation metrics** (bias, RMSE, correlation, Taylor scores, Model Fidelity Metric) and customizable scoring pipelines.
+- **Automated visualization** (maps, time series, scatter, Taylor diagrams) with reproducible styling.
+- **Resilient error handling** that surfaces actionable diagnostics without halting complete runs.
+- **Smart resource management** leveraging psutil when present, plus automatic cleanup of temp assets.
+- **Extensible plugin points** for new metrics, filters, cache strategies, and report templates.
 
-## Main Components
+## Architecture & Repository Layout
+OpenBench is organized as a Python package with focused subpackages. Refer to `AGENTS.md` for contributor-specific conventions.
 
-OpenBench features a modern modular architecture with 9 core modules and legacy integration:
+| Area | Location | Responsibility |
+| --- | --- | --- |
+| Configuration | `openbench/config/` | Readers, writers, and validation helpers for JSON/YAML/NML namelists. |
+| Data Pipeline | `openbench/data/` | Preprocessing, caching (`Mod_CacheSystem`), climatology helpers, and regridding utilities. |
+| Core Logic | `openbench/core/` | Evaluation, metrics, scoring, comparison, and statistics engines. |
+| Utilities | `openbench/util/` | Logging, progress monitors, report generation, interface definitions, memory management. |
+| Visualization | `openbench/visualization/` | Plotting routines for grid, station, land-cover, and climate-zone views. |
+| GUI | `GUI/` | Standalone desktop interface built on the same APIs. |
+| Config Samples | `nml/` | Format-specific example namelists (`nml-json/`, `nml-yaml/`, `nml-Fortran/`). |
+| Datasets | `dataset/` | Reference data and curated simulations (not versioned by default). |
+| Outputs | `output/` | Generated metrics, scores, figures, reports, logs, scratch, and tmp folders. |
 
-### **Core Modules (New Architecture)**
-1.  **`Mod_ConfigManager.py`**: Unified configuration management supporting JSON, YAML, and Fortran Namelist formats with schema validation
-2.  **`Mod_Exceptions.py`**: Standardized error handling system with structured logging and graceful degradation
-3.  **`Mod_Interfaces.py`**: Abstract base classes and interfaces ensuring component compatibility
-4.  **`Mod_DataPipeline.py`**: Streamlined data processing pipeline with validation and caching
-5.  **`Mod_EvaluationEngine.py`**: Modular evaluation engine with pluggable metrics and parallel processing
-6.  **`Mod_OutputManager.py`**: Multi-format output management with metadata preservation
-7.  **`Mod_LoggingSystem.py`**: Enhanced logging with JSON formatting and performance metrics
-8.  **`Mod_ParallelEngine.py`**: Intelligent parallel processing with automatic resource management
-9.  **`Mod_CacheSystem.py`**: Multi-level caching system with memory and disk storage
-
-### **Enhanced Legacy Components**
-- **`openbench.py`**: Main entry point with enhanced multi-format configuration support
-- **`Mod_Evaluation.py`**: Core evaluation logic integrated with new modules while maintaining compatibility
-- **`Mod_DatasetProcessing.py`**: Data processing enhanced with pipeline integration and caching
-- **`Mod_Comparison.py`**: Cross-model comparison with improved parallel processing
-- **`Mod_Namelist.py`**: Legacy namelist support with new ConfigManager integration
-- **`Mod_Metrics.py`**: Statistical metrics calculation with enhanced parallel execution
-- **`Mod_Scores.py`**: Performance scoring with new evaluation engine integration
-- **`Mod_Statistics.py`**: Statistical analysis with enhanced logging and caching
-
-### **Supporting Libraries**
-- **`Lib_Unit/`**: Unit conversion library ensuring dataset consistency
-- **`figlib/`**: Visualization libraries for evaluation result plots
-- **`regrid/`**: Spatial regridding operations (modified from `xarray-regrid`)
-- **`custom/`**: User-defined scripts and filters
-- **`statistic/`**: Statistical functions and base classes
-- **`config/`**: Configuration readers and validators for multiple formats
-
-## Architecture Highlights
-
-### **Enhanced Performance**
-- **Parallel Processing**: Automatic multi-core utilization with smart worker allocation based on system resources
-- **Intelligent Caching**: Memory and disk caching with LRU eviction policies for faster subsequent runs
-- **Data Pipelines**: Streamlined processing with validation and error recovery
-- **Resource Monitoring**: Real-time CPU and memory usage tracking with automatic optimization
-
-### **Improved Reliability**
-- **Unified Error Handling**: Consistent error reporting with structured logging and graceful degradation
-- **Configuration Validation**: Schema-based validation for all configuration formats with helpful error messages
-- **Format Flexibility**: Automatic detection and parsing of JSON, YAML, and Fortran Namelist formats
-- **Interface Contracts**: Abstract base classes ensure component compatibility and extensibility
-
-### **Better Maintainability**
-- **Modular Design**: 9 independent, testable, and reusable core modules
-- **Dependency Injection**: Configurable backends and implementations for different platforms
-- **Plugin System**: Extensible metrics, formatters, and data processors
-- **Legacy Integration**: 100% backward compatibility with existing workflows and configurations
-
-## Benefits of using OpenBench
-
-*   **Standardized Evaluation:** Provides a consistent and reproducible framework for benchmarking LSMs, reducing subjectivity and improving comparability of results across studies.
-*   **Efficiency and Automation:** Automates many time-consuming tasks involved in model evaluation, freeing up researchers to focus on analysis and interpretation.
-*   **Comprehensive Insights:** Delivers a holistic view of model performance through a wide range of metrics, scores, and statistical analyses.
-*   **Facilitates Model Improvement:** Helps identify model strengths and weaknesses, guiding efforts for model development and refinement.
-*   **Community Collaboration:** As an open-source project, it encourages collaboration, knowledge sharing, and the development of best practices in land surface model evaluation.
-*   **Flexibility and Customization:** Adapts to diverse research needs through its configurable and extensible design.
-
-## Reference Data Download
-
-OpenBench provides categorized reference datasets at different resolutions for comprehensive land surface model evaluation:
-
-### **Data Resolution Categories**
-We organize reference data into three resolution categories for different evaluation needs:
-
-- **LowRes (Low Resolution)**: Daily or monthly data at ≤0.25° spatial resolution
-- **MidRes (Mid Resolution)**: Daily data at ≤0.25° spatial resolution
-- **HighRes (High Resolution)**: Sub-daily data at ≤0.1° spatial resolution
-
-### **Available Data Downloads**
-
-#### **LowRes Data (Currently Available)**
-We have compiled a collection of open-source LowRes reference datasets licensed under Creative Commons Attribution 4.0 International (CC BY-NC-SA 4.0). All data ownership belongs to the original authors. If any copyright infringement is identified, the data will be removed immediately.
-
-**Download Links:**
-- **Google Drive**: https://drive.google.com/drive/folders/1jn2ZHBRslgRg2ETEcuVrRA1iDvd4wl9C?usp=sharing
-- **Baidu Netdisk (China Mirror)**: https://pan.baidu.com/s/1ChwQVxOdxfNx73wNvaUI6A?pwd=xhcg
-  Extraction Code: `xhcg`
-
-**Note**:
-- MidRes and HighRes datasets are under preparation and will be released in future updates.
-- Station-based observational data is not included due to copyright restrictions. Users should download station data directly from original sources.
-- Users are free to add their own reference datasets following the data structure conventions described in the documentation.
-
-### **Data Usage Guidelines**
-- All reference data remains the property of the original authors
-- Please cite the original data sources when using the datasets
-- Follow the Creative Commons license terms (CC BY-NC-SA 4.0)
-- Commercial use requires additional permissions from original authors
-- Report any licensing concerns to the OpenBench team
-
-## Setup and Configuration
-
-### **Prerequisites**
-1. **Python Environment**: Python 3.10+ recommended (per development guidelines)
-2. **Core Dependencies**: Install with `pip install -r requirements.txt`
-   - `xarray>=0.19.0`, `pandas>=1.3.0`, `numpy>=1.21.0`
-   - `netCDF4>=1.5.7`, `matplotlib>=3.4.0`, `cartopy>=0.20.0`
-   - `scipy>=1.7.0`, `joblib>=1.1.0`, `dask>=2022.1.0`, `flox>=0.5.0`
-3. **Optional Dependencies**: 
-   - `yaml` for YAML configuration support (automatically detected)
-   - `f90nml` for Fortran Namelist support (automatically detected)
-   - `psutil` for enhanced memory monitoring
-   - `CDO` for advanced data operations (Linux/macOS only, gracefully skipped on Windows)
-
-### **Multi-Format Configuration Support**
-OpenBench supports three configuration formats with automatic detection:
-
-#### **Project Structure**
 ```
 OpenBench/
-├── openbench/              # Main package directory
-│   ├── config/             # Configuration management
-│   ├── core/               # Core functionality modules
-│   ├── data/               # Data processing and pipeline
-│   ├── util/               # Utility modules
-│   └── visualization/      # Plotting and visualization
-├── dataset/                # Data files (renamed from data/)
-│   ├── reference/          # Reference datasets
-│   └── simulation/         # Model simulation outputs
-├── nml/                    # Configuration files
-│   ├── nml-json/           # JSON format configurations
-│   ├── nml-yaml/           # YAML format configurations
-│   └── nml-Fortran/        # Fortran Namelist configurations
-├── GUI/                    # Graphical user interface
-├── output/                 # Evaluation results and logs
-└── requirements.txt        # Python dependencies
+├── openbench/
+│   ├── config/            # Config readers/writers
+│   ├── core/              # Evaluation, metrics, scoring, comparison
+│   ├── data/              # Preprocessing, caching, climatology
+│   ├── util/              # Logging, validation, reports, helpers
+│   ├── visualization/     # Plotting modules
+│   ├── openbench.py       # CLI entry point
+│   └── openbench_api.py   # High-level Python API
+├── preprocessing/         # Conversion scripts and station prep workflows
+├── GUI/                   # Desktop UI
+├── dataset/               # Reference and simulation data (user-provided)
+├── nml/                   # Sample configuration sets (JSON/YAML/NML)
+├── output/                # Evaluation artifacts (gitignored)
+├── docs/ / doc/           # User guides and PDF manuals
+└── AGENTS.md              # Contributor guide (coding and PR conventions)
 ```
 
-#### **Configuration Files**
-- **Main Configuration** (`main.*`): Overall evaluation settings, paths, and processing options
-- **Reference Configuration** (`ref.*`): Reference dataset definitions and sources
-- **Simulation Configuration** (`sim.*`): Model output dataset configurations
-- **Variable Definitions**: Model and reference variable mappings in respective subdirectories
+## Getting Started
 
-### **Cross-Platform Compatibility**
-- **Windows**: Automatic detection and graceful handling of missing CDO dependency
-- **Linux/macOS**: Full functionality including CDO operations
-- **All Platforms**: Core evaluation features work universally
+### Requirements
+- Python **3.10+** (3.11 tested). Use a virtual environment to isolate dependencies.
+- Core libraries from `requirements.txt`: `xarray`, `numpy`, `pandas`, `netCDF4`, `dask`, `cartopy`, `matplotlib`, `scipy`, `joblib`, `flox`, `jinja2`, `xhtml2pdf`.
+- Optional: `psutil` for enhanced memory telemetry, `f90nml` for NML parsing, `PyYAML` for YAML support (auto-detected), `cdo` binary for advanced regridding (Linux/macOS).
 
-## Usage
+### Setup
+1. Clone and enter the repository:
+   ```bash
+   git clone https://github.com/zhongwangwei/OpenBench.git
+   cd OpenBench
+   ```
+2. Create/activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+4. (Optional) Install extras:
+   ```bash
+   pip install psutil f90nml pyyaml pytest
+   ```
+5. Populate `dataset/` with reference and simulation data (see docs in `doc/` and `docs/` for acquisition guidance).
 
-### **Installation**
+## Running Benchmarks
+
+### Command-Line Workflow
+Use the main driver `openbench/openbench.py`. The file format is inferred from the extension.
+
 ```bash
-# Clone the repository
-git clone https://github.com/zhongwangwei/OpenBench.git
-cd OpenBench
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Quick test (optional)
-python -c "from openbench.config import *; print('Config system ready')"
-```
-
-### **Basic Usage**
-OpenBench automatically detects configuration format and runs the evaluation:
-
-```bash
-# JSON format (recommended for beginners)
+# JSON example
 python openbench/openbench.py nml/nml-json/main-Debug.json
 
-# YAML format (human-readable)
+# YAML example
 python openbench/openbench.py nml/nml-yaml/main-Debug.yaml
 
-# Fortran Namelist format (legacy compatibility)
+# Fortran Namelist example
 python openbench/openbench.py nml/nml-Fortran/main-Debug.nml
+```
 
-# GUI interface
+Common options:
+- Duplicate an existing `main-*.json|yaml|nml` and adjust paths to your datasets.
+- Use absolute paths if launching from outside the repo.
+- Provide a custom output directory inside the configuration (`general.basedir`).
+
+### GUI Workflow
+```
 python GUI/GUI_openbench.py
 ```
+The GUI wraps the same configuration loaders and evaluation engines; saved runs honor the CLI directory structure.
 
-### **Advanced Usage**
-```bash
-# Using full paths
-python openbench/openbench.py /path/to/your/config.json
+### API Workflow
+```python
+from openbench.openbench_api import OpenBench
 
-# API Usage (Python script)
-from openbench.openbench_api import OpenBenchAPI
-api = OpenBenchAPI()
-results = api.run_evaluation("nml/nml-json/main-Debug.json")
+ob = OpenBench.from_config("nml/nml-json/main-Debug.json")
+ob.run()  # Executes the full pipeline
+summary = ob.results
 ```
+Use `OpenBench.from_dict()` to construct runs programmatically or embed OpenBench inside a broader orchestration system.
 
-### **Configuration Format Examples**
+### Preprocessing Utilities
+- `preprocessing/convert_nml_to_yaml_json/convert_nml_to_yaml_json.py`: regenerates synchronized JSON/YAML configs from Fortran namelists.
+- `preprocessing/get_stn_*`: prepares station-based datasets for ingestion.
 
-#### **JSON Configuration**
+## Configuration Reference
+Configurations are split into complementary files:
+
+- **Main (`main-*`)**: top-level metadata, run name, output directory, toggles for evaluation modules.
+- **Reference (`ref-*`)**: lists reference products and variable mappings.
+- **Simulation (`sim-*`)**: describes model outputs, units, spatial/temporal metadata.
+- **Optional extras**: land-cover groups, climate zones, plotting presets.
+
+Example JSON:
 ```json
 {
   "general": {
@@ -237,7 +165,7 @@ results = api.run_evaluation("nml/nml-json/main-Debug.json")
 }
 ```
 
-#### **YAML Configuration**
+Example YAML:
 ```yaml
 general:
   basename: debug
@@ -249,7 +177,7 @@ evaluation_items:
   Latent_Heat: true
 ```
 
-#### **Fortran Namelist Configuration**
+Example Fortran Namelist:
 ```fortran
 &general
   basename = debug
@@ -259,160 +187,100 @@ evaluation_items:
 /
 ```
 
-## Supported Evaluations
+### Tips
+- Stick to forward slashes for portability.
+- Keep dataset-relative paths (`./dataset/...`) for easier sharing.
+- Use `openbench/util/Mod_ConfigCheck.py` helpers (invoked automatically) for early validation.
 
-OpenBench supports the evaluation of a wide range of variables and processes, typically categorized into:
-
-*   **Radiation and Energy Cycle:** (e.g., net radiation, sensible heat flux, latent heat flux)
-*   **Ecosystem and Carbon Cycle:** (e.g., gross primary productivity, net ecosystem exchange, soil carbon)
-*   **Hydrology Cycle:** (e.g., evapotranspiration, runoff, soil moisture, snow water equivalent)
-*   **Human Activity:** (e.g., impacts of urban areas, crop management, dam operations on land surface processes)
-*   **Forcing Variables:** (e.g., precipitation, air temperature, humidity - often used for input validation or understanding driver impacts)
-
-The specific variables and evaluation items can be configured in the namelists.
-
-## Output
-
-The system generates a comprehensive set of outputs organized in the `output/` directory:
+## Outputs & Reports
+Results are stored beneath `output/<basename>/`:
 
 ```
 output/debug/
 ├── output/
-│   ├── metrics/         # Detailed metric calculations (bias, RMSE, correlation, etc.)
-│   ├── scores/          # Aggregated performance scores for each variable and model
-│   ├── data/            # Processed datasets and intermediate results
-│   ├── figures/         # Generated plots and visualizations
-│   └── comparisons/     # Cross-model comparison results
-├── log/                 # Detailed execution logs with timestamps
-│   └── openbench_YYYYMMDD_HHMMSS.log
-├── scratch/             # Temporary processing files
-└── tmp/                 # Additional temporary storage
+│   ├── metrics/        # CSV/JSON/NetCDF metric summaries
+│   ├── scores/         # Aggregated scoring tables
+│   ├── data/           # Processed intermediate datasets
+│   ├── figures/        # Maps, scatter plots, Taylor diagrams
+│   └── comparisons/    # Cross-model comparisons
+├── log/                # Timestamped log files
+├── scratch/            # Working data
+└── tmp/                # Temporary assets
 ```
 
-**Output Features:**
-- **Structured Results**: JSON, CSV, and NetCDF formats for easy integration
-- **Rich Visualizations**: Time series, scatter plots, spatial maps, Taylor diagrams
-- **Performance Metrics**: Comprehensive statistical analysis and scoring
-- **Detailed Logging**: Both console output and file logging with performance tracking
-- **Memory-Efficient**: Automatic cleanup and optimization during processing
+Key characteristics:
+- Metrics and scores are organized per variable and evaluation scope (grid, station, climate zone).
+- Figures mirror the evaluation structure for quick inspection.
+- Logs include both console-friendly summaries and structured entries (JSON if enabled).
+- Automatic cleanup removes stale scratch/tmp directories between runs.
 
-## Troubleshooting
+## Development & Testing
+- Adhere to `AGENTS.md` for coding style, naming, and PR expectations (PEP 8, 4-space indentation, descriptive names).
+- Prefer colocating new utilities with similar modules (e.g., new evaluation logic under `openbench/core/evaluation/`).
+- Recommended workflow:
+  ```bash
+  # Lint / style (optional)
+  python -m compileall openbench
 
-### **Platform-Specific Issues**
+  # Functional smoke tests
+  python openbench/openbench.py nml/nml-json/main-Debug.json
+  python openbench/openbench.py nml/nml-yaml/main-Debug.yaml
+  ```
+- Automated tests (if added) should live under `tests/` and use `pytest`. Mirror the package structure (`tests/core/test_metrics.py`, etc.) and keep fixtures lightweight (mocked xarray datasets).
+- Document reproducibility steps in PRs: configuration used, dataset subset, observed metrics.
 
-#### **Windows Users**
-- **CDO Dependency**: CDO is not available on Windows. OpenBench automatically detects this and gracefully skips CDO-dependent operations
-- **Path Handling**: Use forward slashes (/) in configuration files for cross-platform compatibility
-- **Memory Management**: Windows may require adjusting parallel workers for large datasets
+## Troubleshooting & Performance
 
-#### **Linux/macOS Users**
-- **CDO Installation**: Install CDO via package manager (`apt install cdo`, `brew install cdo`)
-- **File Permissions**: Ensure write permissions for output directories
+### Platform Notes
+- **Windows:** `cdo` is optional and skipped automatically. Prefer forward slashes in configs. Lower worker counts if memory constrained.
+- **Linux/macOS:** Install `cdo` via `apt`, `yum`, or `brew` for advanced regridding. Ensure user write access to `output/`.
 
-### **Configuration Issues**
-- **Format Detection**: OpenBench automatically detects JSON/YAML/NML formats
-- **Path Errors**: Use relative paths from the working directory or absolute paths
-- **Comment Parsing**: In Fortran NML files, comments after values are automatically stripped
+### Configuration Issues
+- Missing file errors typically stem from relative path mismatches—start from repository root or convert to absolute paths.
+- Comments in NML files are stripped automatically; keep formatting consistent.
+- Use the preprocessing scripts to convert Fortran namelists whenever reference files change.
 
-### **Performance Optimization**
-- **Parallel Processing**: Automatic worker allocation based on system resources; manually adjust `max_workers` if needed
-- **Caching**: Multi-level caching system speeds up subsequent runs significantly
-- **Memory Management**: Automatic cleanup and optimization during processing
-- **Large Datasets**: Consider reducing dataset size or increasing system memory for very large evaluations
+### Performance Tips
+- Override `general.max_workers` when working on small machines; OpenBench will otherwise auto-detect cores.
+- Enable caching and reuse `output/<case>/tmp` for multi-run experiments; caches are invalidated when configs change.
+- Large evaluations benefit from chunked datasets (via `dask`) and the optional `psutil` monitor for early warnings.
 
-### **Cartopy Coastline Data Download**
-An internet connection is required for Cartopy coastline data. For offline HPC environments:
-
+### Cartopy & Offline Assets
+Cartopy downloads coastline data on first run. For offline/HPC clusters:
 ```python
 import cartopy
-print(cartopy.config['data_dir'])
+print(cartopy.config["data_dir"])
 ```
+Populate that directory with Natural Earth datasets (see README instructions in `doc/CLIMATOLOGY_EVALUATION.md`).
 
-Download Natural Earth datasets from https://www.naturalearthdata.com/downloads/ and place them in:
-```
-└── cartopy_data_dir/
-    ├── shapefiles/
-    │   ├── natural_earth/
-    │   │   ├── cultural/
-    │   │   └── physical/
-    └── raster/
-        └── natural_earth/
-```
+## Customization & Extensibility
+- **Custom metrics**: Implement new functions under `openbench/core/metrics/` and register them with the evaluation engine.
+- **Reporting**: Extend `openbench/util/Mod_ReportGenerator.py` templates (Jinja2) for custom PDF/HTML layouts.
+- **Filters & preprocessing**: Drop scripts in `openbench/data/custom/` or extend `Mod_DataPipeline.py` for specialized QC.
+- **API integrations**: Leverage `OpenBench` class to integrate with workflow managers (Airflow, Snakemake, etc.).
 
-### **Common Error Solutions**
-- **Configuration File Not Found**: Check file paths and ensure files exist
-- **Module Import Errors**: Install missing dependencies with `pip install package_name`
-- **Memory Errors**: Reduce dataset size or adjust parallel processing settings
-- **Plotting Errors**: Ensure matplotlib backend is properly configured
+## Contributing
+We welcome issues, feature proposals, and pull requests.
 
-## Customization
+1. **Discuss first**: Open an issue for large changes to align on scope.
+2. **Fork & branch**: `feature/<topic>` or `bugfix/<issue-number>`.
+3. **Follow style**: PEP 8, meaningful names, logging via `Mod_LoggingSystem`, and refer to `AGENTS.md` for directory-specific expectations.
+4. **Test**: Run at least one JSON and one YAML scenario (plus any new pytest suites).
+5. **Commit messages**: Use short, imperative summaries (`Add Model Fidelity Metric support`).
+6. **Pull request checklist**:
+   - Clear description and screenshots of new visuals (if applicable).
+   - Commands/configs used for validation.
+   - Note any dataset or config updates that require downstream reruns.
 
-OpenBench is designed to be flexible:
+## Version History
+- **v2.0 (July 2025)**  
+  - Multi-format config detection, enhanced modular architecture, smart parallel engine, multi-level caching, structured logging, Köppen climate analysis, GUI refresh, dataset directory restructuring.
+- **v1.0 (June 2025)**  
+  - Initial open-source release with JSON configs and baseline evaluation workflow.
 
-*   **Custom Filters:** Users can develop and integrate custom Python scripts into the `custom/` directory to handle specific data processing needs, such as filtering data based on quality flags, selecting specific regions or time periods, or applying complex transformations.
-*   **Configurable Evaluations:** Evaluation items (variables to be analyzed), metrics to be calculated, and scoring methodologies can be precisely defined and modified within the namelist files, allowing users to tailor the benchmarking process to their specific research questions.
+## License & Credits
+- Licensed under the **MIT License** (see `LICENSE`).
+- Cite “OpenBench: The Open Source Land Surface Model Benchmarking System” in publications referencing this toolkit.
+- Primary contacts: Zhongwang Wei (zhongwang007@gmail.com) and the OpenBench contributor team listed in `docs/` and commit history.
 
-## How to Contribute
-
-We welcome contributions from the community to enhance and expand OpenBench! Whether you're interested in adding support for new models, incorporating additional reference datasets, developing new analysis metrics, or improving the software's usability, your input is valuable.
-
-Here's how you can contribute:
-
-1.  **Fork the Repository:** Start by forking the official OpenBench repository on GitHub.
-2.  **Create a New Branch:** Create a dedicated branch for your changes (e.g., `feature/new-metric` or `bugfix/issue-123`).
-3.  **Make Your Changes:** Implement your improvements, ensuring your code adheres to the project's coding style and includes clear comments.
-4.  **Test Your Changes:** If applicable, add unit tests for any new functionality and ensure all existing tests pass.
-5.  **Write Clear Commit Messages:** Follow good practices for writing informative commit messages.
-6.  **Submit a Pull Request:** Once your changes are ready, submit a pull request to the main OpenBench repository. Provide a clear description of the changes you've made and why they are beneficial.
-
-Please also consider opening an issue on GitHub to discuss significant changes or new features before investing a lot of time in development.
-
-## License
-
-OpenBench is released under the **MIT License**. See the `LICENSE` file in the repository for full details. This permissive license allows for broad use and modification of the software, encouraging open collaboration and dissemination.
-
-## Contributors
-
-*   Zhongwang Wei (zhongwang007@gmail.com)
-*   Qingchen Xu (PhD student)
-*   Fan Bai (MS student)
-*   Zixin Wei (PhD student)
-*   Xionghui Xu (PhD student)
-*   Dr. Wenzong Dong
-*   Sisi Chen (PhD student)
-
-We are grateful for all contributions to the OpenBench project.
-
-## Recent Updates & Version History
-
-### **July 2025 Updates (v2.0)**
-- **🎯 Enhanced Console Output**: Clean, emoji-enhanced progress indicators with reduced INFO noise
-- **🗂️ Directory Restructuring**: Renamed `data/` to `dataset/` for better organization
-- **🧠 Memory Management**: Automatic memory optimization and cleanup system
-- **🌍 Climate Zone Analysis**: Köppen climate zone-based groupby functionality
-- **📦 Modular Architecture**: Reorganized modules from `script/` to `openbench/` package
-- **⚙️ Configuration Enhancement**: Better organization and format-specific subdirectories
-- **🔧 Import System**: Proper package structure with updated import paths
-
-### **Current Version: 2.0**
-- **Release Date**: July 2025
-- **Major Features**: 
-  - Multi-format configuration support (JSON, YAML, Fortran NML) with auto-detection
-  - Cross-platform compatibility (Windows, Linux, macOS) with intelligent dependency handling
-  - Enhanced modular architecture with 9 core modules and standardized interfaces
-  - Intelligent parallel processing with smart worker allocation and resource monitoring
-  - Advanced multi-level caching system with automatic invalidation
-  - Unified error handling with structured logging and graceful degradation
-  - Dual-level logging system (clean console + detailed file logging)
-
-### **Previous Version: 1.0**
-- **Release Date**: June 2025
-- **Features**: Initial open-source release, basic evaluation framework, JSON configuration support
-
-### **Backward Compatibility**
-OpenBench v2.0 maintains 100% compatibility with:
-- Existing configuration files (all formats)
-- Input data formats and structures
-- Output file organization
-- Legacy evaluation workflows
-- Command-line interfaces
+For deeper guidance, explore the PDF manuals in `doc/` and `docs/`, plus the contributor instructions in `AGENTS.md`. Happy benchmarking!
