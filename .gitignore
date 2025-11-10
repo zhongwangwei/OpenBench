@@ -43,3 +43,5 @@ CLAUDE.md
 *.log
 /dataset/reference/grid/LowRes
 /dataset/reference/grid/MidRes
+/dataset/reference
+/dataset/simulation

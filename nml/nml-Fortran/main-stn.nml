@@ -1,18 +1,18 @@
 &general
-  basename = LowRes
+  basename = stn
   basedir = ./output
-  compare_tim_res = month
+  compare_tim_res = Month
   compare_tzone = 0.0
   compare_grid_res = 0.25
-  syear = 2004
-  eyear = 2005
+  syear = 2006
+  eyear = 2014
   min_year = 1.0
   max_lat = 90.0
   min_lat = -90.0
   max_lon = 180.0
   min_lon = -180.0
-  reference_nml = ./nml/nml-Fortran/ref-LowRes.nml
-  simulation_nml = ./nml/nml-Fortran/sim_China_Runoff.nml
+  reference_nml = ./nml/nml-Fortran/ref-stn.nml
+  simulation_nml = ./nml/nml-Fortran/sim-cama.nml
   statistics_nml = ./nml/nml-Fortran/stats.nml
   figure_nml = ./nml/nml-Fortran/figlib.nml
   num_cores = 48
@@ -25,15 +25,15 @@
   IGBP_groupby = False
   PFT_groupby = False
   Climate_zone_groupby = False
-  unified_mask = True
-  generate_report = True
+  unified_mask = False
+  generate_report = False
 /
 
 &evaluation_items
   Biomass                     = False
   Burned_Area                 = False
   Ecosystem_Respiration       = False
-  Gross_Primary_Productivity  = True
+  Gross_Primary_Productivity  = False
   Leaf_Area_Index             = False
   Leaf_Greenness              = False
   Methane                     = False
@@ -43,48 +43,48 @@
   Veg_Cover_In_Fraction       = False
   Net_Primary_Production      = False
   Wetland_Methane_Emission    = False
-  Canopy_Interception         = True
+  Canopy_Interception         = False
   Canopy_Transpiration        = False
   Depth_Of_Surface_Water          = False
-  Evapotranspiration              = True
+  Evapotranspiration              = False
   Ground_Evaporation              = False
   Groundwater_Recharge_Rate       = False
   Permafrost                      = False
-  Root_Zone_Soil_Moisture         = True
-  Snow_Depth                      = True
-  Snow_Water_Equivalent           = True
+  Root_Zone_Soil_Moisture         = False
+  Snow_Depth                      = False
+  Snow_Water_Equivalent           = False
   Soil_Evaporation                = False
   Surface_Snow_Cover_In_Fraction  = False
-  Surface_Soil_Moisture           = True
-  Terrestrial_Water_Storage_Change = True
-  Total_Runoff                    = True
+  Surface_Soil_Moisture           = False
+  Terrestrial_Water_Storage_Change = False
+  Total_Runoff                    = False
   Water_Evaporation               = False
   Water_Storage_In_Aquifer        = False
   Water_Table_Depth               = False
   Bare_Soil_Evaporation = False
   Open_Water_Evaporation = False
-  Precipitation = True
+  Precipitation = False
   Runoff = False
   Transpiration = False
-  Ground_Heat = True
-  Latent_Heat = True
-  Net_Radiation = True
+  Ground_Heat = False
+  Latent_Heat = False
+  Net_Radiation = False
   Root_Zone_Soil_Temperature = False
-  Sensible_Heat = True
-  Surface_Net_LW_Radiation = True
-  Surface_Net_SW_Radiation = True
-  Surface_Soil_Temperature = True
-  Surface_Upward_LW_Radiation = True
-  Surface_Upward_SW_Radiation = True
+  Sensible_Heat = False
+  Surface_Net_LW_Radiation = False
+  Surface_Net_SW_Radiation = False
+  Surface_Soil_Temperature = False
+  Surface_Upward_LW_Radiation = False
+  Surface_Upward_SW_Radiation = False
   Surface_Albedo = False
-  Surface_Downward_LW_Radiation = True
-  Surface_Downward_SW_Radiation = True
-  Diurnal_Max_Temperature = True
-  Diurnal_Min_Temperature = True
+  Surface_Downward_LW_Radiation = False
+  Surface_Downward_SW_Radiation = False
+  Diurnal_Max_Temperature = False
+  Diurnal_Min_Temperature = False
   Diurnal_Temperature_Range = False
-  Surface_Air_Temperature = True
-  Surface_Relative_Humidity = True
-  Surface_Specific_Humidity = True
+  Surface_Air_Temperature = False
+  Surface_Relative_Humidity = False
+  Surface_Specific_Humidity = False
   Surface_Wind_Speed = False
   Cloud_Cover = False
   Ground_Frost_Frequency = False
@@ -113,7 +113,7 @@
   Lake_Water_Level = False
   Lake_Water_Volume = False
   River_Water_Level = False
-  Streamflow = False
+  Streamflow = True
   Urban_Air_Temperature_Max = False
   Urban_Air_Temperature_Min = False
   Urban_Albedo = False
@@ -123,7 +123,7 @@
 /
 
 &metrics
-  percent_bias = False
+  percent_bias = True
   absolute_percent_bias = False
   bias = True
   mean_absolute_error = False
@@ -138,7 +138,7 @@
   NSE = False
   LNSE = False
   KGE = False
-  KGESS = False
+  KGESS = True
   kappa_coeff = False
   rv = False
   ubNSE = False
@@ -173,7 +173,7 @@
   wNSE = False
   wsNSE = False
   index_agreement = False
-  MFM = False
+  MFM = True
 /
 
 &scores

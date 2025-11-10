@@ -124,6 +124,7 @@ class Regridder:
             ds_formatted,
             ds_target_grid,
             latitude_coord,
+            time_dim,
             skipna,
             nan_threshold,
             output_chunks,

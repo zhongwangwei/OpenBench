@@ -1,0 +1,9 @@
+&general
+  Streamflow_ref_source=GRDC
+/
+
+&def_nml
+  GRDC=./nml/nml-Fortran/Ref_variables_defination_station/GRDC.nml
+/
+
+

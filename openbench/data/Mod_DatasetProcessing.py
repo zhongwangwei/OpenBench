@@ -138,89 +138,103 @@ except ImportError:
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # logging.getLogger("xarray").setLevel(logging.WARNING)
 
-def performance_monitor(func: Callable) -> Callable:
-    """Enhanced decorator to monitor function performance with error handling."""
+def performance_monitor(func: Callable = None, *, silent_on_error: bool = False) -> Callable:
+    """Enhanced decorator to monitor function performance with error handling.
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # Get initial memory usage
-        start_time = time.time()
-        if _HAS_PSUTIL:
-            try:
-                process = psutil.Process(os.getpid())
-                start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-                start_cpu = process.cpu_percent()
-            except Exception as e:
-                logging.warning(f"Failed to get system resources: {e}")
+    Args:
+        func: The function to decorate
+        silent_on_error: If True, don't log errors (only re-raise them)
+    """
+
+    def decorator(f: Callable) -> Callable:
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            # Get initial memory usage
+            start_time = time.time()
+            if _HAS_PSUTIL:
+                try:
+                    process = psutil.Process(os.getpid())
+                    start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                    start_cpu = process.cpu_percent()
+                except Exception as e:
+                    logging.warning(f"Failed to get system resources: {e}")
+                    start_mem = 0
+                    start_cpu = 0
+            else:
                 start_mem = 0
                 start_cpu = 0
-        else:
-            start_mem = 0
-            start_cpu = 0
 
-        try:
-            # Execute the function
-            result = func(*args, **kwargs)
+            try:
+                # Execute the function
+                result = f(*args, **kwargs)
 
-            # Calculate execution time and memory usage
-            end_time = time.time()
-            execution_time = end_time - start_time
+                # Calculate execution time and memory usage
+                end_time = time.time()
+                execution_time = end_time - start_time
 
-            if _HAS_PSUTIL:
-                try:
-                    end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-                    end_cpu = process.cpu_percent()
-                    memory_used = end_mem - start_mem
-                    cpu_used = end_cpu - start_cpu
-                except Exception as e:
-                    logging.warning(f"Failed to get end system resources: {e}")
+                if _HAS_PSUTIL:
+                    try:
+                        end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                        end_cpu = process.cpu_percent()
+                        memory_used = end_mem - start_mem
+                        cpu_used = end_cpu - start_cpu
+                    except Exception as e:
+                        logging.warning(f"Failed to get end system resources: {e}")
+                        memory_used = 0
+                        cpu_used = 0
+                else:
                     memory_used = 0
                     cpu_used = 0
-            else:
-                memory_used = 0
-                cpu_used = 0
 
-            # Log performance
-            logging.info(f"Performance for {func.__name__}:")
-            logging.info(f"  Execution time: {execution_time:.2f} seconds")
-            if _HAS_PSUTIL:
-                logging.info(f"  Memory usage: {memory_used:.3f} GB")
-                logging.info(f"  CPU usage: {cpu_used:.1f}%")
+                # Log performance
+                logging.info(f"Performance for {f.__name__}:")
+                logging.info(f"  Execution time: {execution_time:.2f} seconds")
+                if _HAS_PSUTIL:
+                    logging.info(f"  Memory usage: {memory_used:.3f} GB")
+                    logging.info(f"  CPU usage: {cpu_used:.1f}%")
 
-            # Use enhanced performance warning if available
-            if _HAS_EXCEPTIONS:
-                log_performance_warning(func.__name__, execution_time)
+                # Use enhanced performance warning if available
+                # Disabled to reduce log noise
+                # if _HAS_EXCEPTIONS:
+                #     log_performance_warning(f.__name__, execution_time)
 
-            # Log warning if memory usage is high
-            if _HAS_PSUTIL:
-                try:
-                    total_memory = psutil.virtual_memory().total / (1024 ** 3)
-                    if memory_used > 0.8 * total_memory:  # 80% of total memory
-                        logging.warning(f"High memory usage detected in {func.__name__}: {memory_used:.3f} GB")
-                except Exception as e:
-                    logging.debug(f"Failed to check total memory: {e}")
+                # Log warning if memory usage is high
+                if _HAS_PSUTIL:
+                    try:
+                        total_memory = psutil.virtual_memory().total / (1024 ** 3)
+                        if memory_used > 0.8 * total_memory:  # 80% of total memory
+                            logging.warning(f"High memory usage detected in {f.__name__}: {memory_used:.3f} GB")
+                    except Exception as e:
+                        logging.debug(f"Failed to check total memory: {e}")
 
-            return result
+                return result
 
-        except Exception as e:
-            # Log error with performance context
-            end_time = time.time()
-            execution_time = end_time - start_time
+            except Exception as e:
+                # Log error with performance context (unless silent)
+                end_time = time.time()
+                execution_time = end_time - start_time
 
-            if _HAS_PSUTIL:
-                try:
-                    end_mem = process.memory_info().rss / 1024 / 1024 / 1024
-                    memory_used = end_mem - start_mem
-                except Exception:
+                if _HAS_PSUTIL:
+                    try:
+                        end_mem = process.memory_info().rss / 1024 / 1024 / 1024
+                        memory_used = end_mem - start_mem
+                    except Exception:
+                        memory_used = 0
+                else:
                     memory_used = 0
-            else:
-                memory_used = 0
 
-            logging.error(f"Error in {func.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
-            logging.error(str(e))
-            raise
+                if not silent_on_error:
+                    logging.error(f"Error in {f.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
+                    logging.error(str(e))
+                raise
 
-    return wrapper
+        return wrapper
+
+    # Support both @performance_monitor and @performance_monitor(silent_on_error=True)
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
 
 
 def get_system_resources():
@@ -1407,7 +1421,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
             output_file = self.get_output_filename(data_params)
-            with ProgressBar():
+            # Try to use ProgressBar, but fall back to silent mode if it fails (e.g., non-interactive environment)
+            try:
+                with ProgressBar():
+                    ds.to_netcdf(output_file)
+            except (OSError, IOError, BrokenPipeError):
+                # ProgressBar failed (likely non-interactive environment), save without progress bar
                 ds.to_netcdf(output_file)
             gc.collect()  # Add garbage collection after saving combined data
 
@@ -1509,25 +1528,33 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         new_grid = self.create_target_grid()
 
         remapping_methods = [
-            self.remap_interpolate,
-            self.remap_xesmf,
-            self.remap_cdo
+            self.remap_cdo,         # CDO - most stable, climate science standard
+            self.remap_xesmf,       # xESMF - fallback option
+            self.remap_interpolate  # Conservative regrid - last resort
         ]
+
+        # Collect errors but don't report until all methods fail
+        errors = []
 
         for method in remapping_methods:
             try:
                 return method(data, new_grid)
             except Exception as e:
-                logging.warning(f"{method.__name__} failed: {e}")
+                errors.append(f"{method.__name__}: {e}")
+                continue
 
         # If all remapping methods fail, try basic interpolation as fallback
-        logging.warning("All remapping methods failed, trying basic interpolation")
         try:
             return self.remap_basic_interpolation(data, new_grid)
         except Exception as e:
-            logging.warning(f"Basic interpolation also failed: {e}")
-            logging.warning("Returning original data without remapping")
-            return data
+            errors.append(f"remap_basic_interpolation: {e}")
+
+        # All methods failed - now report all errors
+        logging.error("All remapping methods failed:")
+        for error in errors:
+            logging.error(f"  - {error}")
+        logging.warning("Returning original data without remapping")
+        return data
 
     @performance_monitor
     @cached(key_prefix="create_target_grid", ttl=7200)  # Cache for 2 hours (grid rarely changes)
@@ -1536,7 +1563,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         lat_new = np.arange(self.min_lat + self.compare_grid_res / 2, self.max_lat, self.compare_grid_res)
         return xr.Dataset({'lon': lon_new, 'lat': lat_new})
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_interpolate(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         from openbench.data.regrid import Grid, Regridder
         grid = Grid(
@@ -1556,27 +1583,74 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         # target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
         # return data.regrid.conservative(target_dataset,nan_threshold=0)
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import xesmf as xe
         regridder = xe.Regridder(data, new_grid, 'conservative')
         return regridder(data)
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import subprocess
         import tempfile
+        import os
 
-        with tempfile.NamedTemporaryFile(suffix='.nc') as temp_input, \
-                tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
-                tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
-            data.to_netcdf(temp_input.name)
-            self.create_target_grid_file(temp_grid.name, new_grid)
+        # Prepare data - ensure proper coordinate attributes
+        data_prepared = data.copy()
 
-            cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
-            subprocess.run(cmd, shell=True, check=True)
+        # Add CF-compliant coordinate attributes if missing
+        if 'lon' in data_prepared.coords:
+            if 'standard_name' not in data_prepared['lon'].attrs:
+                data_prepared['lon'].attrs['standard_name'] = 'longitude'
+            if 'units' not in data_prepared['lon'].attrs:
+                data_prepared['lon'].attrs['units'] = 'degrees_east'
 
-            return Convert_Type.convert_nc(xr.open_dataset(temp_output.name))
+        if 'lat' in data_prepared.coords:
+            if 'standard_name' not in data_prepared['lat'].attrs:
+                data_prepared['lat'].attrs['standard_name'] = 'latitude'
+            if 'units' not in data_prepared['lat'].attrs:
+                data_prepared['lat'].attrs['units'] = 'degrees_north'
+
+        temp_input_name = None
+        temp_output_name = None
+        temp_grid_name = None
+
+        try:
+            # Create temporary files
+            temp_input = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+            temp_input_name = temp_input.name
+            temp_input.close()
+
+            temp_output = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+            temp_output_name = temp_output.name
+            temp_output.close()
+
+            temp_grid = tempfile.NamedTemporaryFile(suffix='.txt', delete=False)
+            temp_grid_name = temp_grid.name
+            temp_grid.close()
+
+            # Save data to NetCDF with NETCDF4_CLASSIC format for CDO compatibility
+            data_prepared.to_netcdf(temp_input_name, format='NETCDF4_CLASSIC')
+
+            # Create target grid file
+            self.create_target_grid_file(temp_grid_name, new_grid)
+
+            # Use remapcon (conservative remapping) - CDO's standard conservative method
+            cmd = f"cdo -s remapcon,{temp_grid_name} {temp_input_name} {temp_output_name}"
+            subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+
+            # Read result
+            result_ds = xr.open_dataset(temp_output_name)
+            return Convert_Type.convert_nc(result_ds)
+
+        finally:
+            # Clean up temporary files
+            for f in [temp_input_name, temp_output_name, temp_grid_name]:
+                if f and os.path.exists(f):
+                    try:
+                        os.unlink(f)
+                    except:
+                        pass
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         with open(filename, 'w') as f:

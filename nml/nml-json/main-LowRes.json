@@ -171,7 +171,8 @@
     "ve": false,
     "wNSE": false,
     "wsNSE": false,
-    "index_agreement": false
+    "index_agreement": false,
+    "MFM": false
   },
   "scores": {
     "nBiasScore": false,
