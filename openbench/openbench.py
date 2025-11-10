@@ -103,7 +103,7 @@ def print_welcome_message():
         "🌍 Multi-model support",
         "📊 Comprehensive variable evaluation", 
         "📈 Advanced metrics and scoring",
-        "⚙️  Customizable benchmarking",
+        "⚙️ Customizable benchmarking",
         "🚀 Enhanced parallel processing",
         "💾 Intelligent caching system"
     ]
@@ -122,6 +122,9 @@ def print_welcome_message():
 
 def setup_directories(main_nl):
     """Create necessary directories for the evaluation process."""
+    import os, sys, io, logging
+    from datetime import datetime
+
     base_path = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'])
     directories = {
         'tmp': os.path.join(base_path, 'tmp'),
@@ -134,72 +137,83 @@ def setup_directories(main_nl):
     for dir_path in directories.values():
         os.makedirs(dir_path, exist_ok=True)
 
+    # ---- Make stdout/stderr UTF-8 tolerant BEFORE any logging config
+    try:
+        enc = (getattr(sys.stdout, "encoding", "") or "").lower()
+        if hasattr(sys.stdout, "buffer") and "utf-8" not in enc:
+            sys.stdout = io.TextIOWrapper(
+                sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+        enc = (getattr(sys.stderr, "encoding", "") or "").lower()
+        if hasattr(sys.stderr, "buffer") and "utf-8" not in enc:
+            sys.stderr = io.TextIOWrapper(
+                sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True
+            )
+    except Exception:
+        pass
+
     # Configure logging
     log_file = os.path.join(directories['log'], f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    print('OpenBench Log File: {}'.format(log_file))
-    
+    print(f'OpenBench Log File: {log_file}')
+
     if _HAS_ENHANCED_LOGGING:
-        # Use enhanced logging system with separate console and file levels
         logging_manager = setup_logging(
-            level=logging.INFO,  # File level: INFO and above
+            level=logging.INFO,
             console=True,
-            file=True,
-            structured=False,  # Can be enabled for JSON logs
-            async_mode=False,  # Can be enabled for better performance
+            file=False,
+            structured=False,
+            async_mode=False,
             base_dir=directories['log']
         )
-        
-        # Configure library logging to reduce noise
+
         configure_library_logging()
-        
-        # Add context information
-        logging_manager.add_context(
-            app_name="OpenBench",
-            version="0.1",
-            case_dir=base_path
-        )
-        
-        # Set specific log file with INFO level
-        logging_manager.add_file_handler(
-            filename=f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log',
-            formatter=logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'),
-            level=logging.INFO
-        )
-        
-        # Configure console handler to show only WARNING and above
-        console_handler = None
-        for handler in logging.getLogger().handlers:
-            if isinstance(handler, logging.StreamHandler) and handler.stream.name == '<stdout>':
-                console_handler = handler
-                break
-        
-        if console_handler:
-            console_handler.setLevel(logging.WARNING)
-    else:
-        # Fallback to standard logging with separate levels for console and file
-        # Clear any existing handlers
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-        
-        # Create formatters
+
+        # 上下文
+        logging_manager.add_context(app_name="OpenBench", version="0.1", case_dir=base_path)
+
+        root_logger = logging.getLogger()
+
+        for h in list(root_logger.handlers):
+            if isinstance(h, logging.FileHandler):
+                root_logger.removeHandler(h)
+
+        # 统一添加 UTF-8 文件 handler
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        
-        # File handler: INFO and above
-        file_handler = logging.FileHandler(log_file)
+        fh = logging.FileHandler(log_file, encoding='utf-8')
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        root_logger.addHandler(fh)
+
+        for h in root_logger.handlers:
+            if isinstance(h, logging.StreamHandler):
+                try:
+                    h.stream = sys.stdout
+                except Exception:
+                    pass
+                h.setLevel(logging.WARNING)
+
+        root_logger.setLevel(logging.INFO)
+
+    else:
+        for h in logging.root.handlers[:]:
+            logging.root.removeHandler(h)
+
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+        # 文件：UTF-8
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
-        
-        # Console handler: WARNING and above
+
         console_handler = logging.StreamHandler(stream=sys.stdout)
         console_handler.setLevel(logging.WARNING)
         console_handler.setFormatter(formatter)
-        
-        # Configure root logger
-        logging.root.setLevel(logging.INFO)  # Overall level
+
+        logging.root.setLevel(logging.INFO)
         logging.root.addHandler(file_handler)
         logging.root.addHandler(console_handler)
-    return directories
 
+    return directories
 
 def load_namelists(nl, main_nl):
     """Load reference, simulation, and statistics namelists."""
