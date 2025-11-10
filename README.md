@@ -25,7 +25,7 @@ OpenBench standardizes every stage of LSM evaluation—configuration management,
 - **Modular architecture:** Nine cohesive subsystems (config, data pipeline, evaluation, scoring, visualization, etc.) with dependency injection.
 - **Parallel & cached:** Adaptive worker allocation, memory-aware scheduling, and multi-level caching.
 - **Unified logging:** Clean console progress plus detailed file logs with structured context.
-- **GUI + API:** Desktop interface (`GUI/GUI_openbench.py`) and Python API (`openbench.openbench_api.OpenBench`) for scripted workflows.
+- **GUI + API (preview):** Desktop interface and Python API are in active development and not yet feature-complete.
 - **Climate analytics:** Built-in Köppen climate zone group-by and land-cover grouping tools.
 
 ## Core Capabilities
@@ -121,13 +121,13 @@ Common options:
 - Use absolute paths if launching from outside the repo.
 - Provide a custom output directory inside the configuration (`general.basedir`).
 
-### GUI Workflow
+### GUI Preview (Experimental)
 ```
 python GUI/GUI_openbench.py
 ```
-The GUI wraps the same configuration loaders and evaluation engines; saved runs honor the CLI directory structure.
+The desktop interface is still under development, may be missing features, and is not yet recommended for production workflows.
 
-### API Workflow
+### API Preview (Experimental)
 ```python
 from openbench.openbench_api import OpenBench
 
@@ -135,7 +135,7 @@ ob = OpenBench.from_config("nml/nml-json/main-Debug.json")
 ob.run()  # Executes the full pipeline
 summary = ob.results
 ```
-Use `OpenBench.from_dict()` to construct runs programmatically or embed OpenBench inside a broader orchestration system.
+The programmatic API is evolving and subject to breaking changes; treat it as a preview interface until the formal release notes mark it stable.
 
 ### Preprocessing Utilities
 - `preprocessing/convert_nml_to_yaml_json/convert_nml_to_yaml_json.py`: regenerates synchronized JSON/YAML configs from Fortran namelists.
@@ -257,7 +257,7 @@ Populate that directory with Natural Earth datasets (see README instructions in 
 - **Custom metrics**: Implement new functions under `openbench/core/metrics/` and register them with the evaluation engine.
 - **Reporting**: Extend `openbench/util/Mod_ReportGenerator.py` templates (Jinja2) for custom PDF/HTML layouts.
 - **Filters & preprocessing**: Drop scripts in `openbench/data/custom/` or extend `Mod_DataPipeline.py` for specialized QC.
-- **API integrations**: Leverage `OpenBench` class to integrate with workflow managers (Airflow, Snakemake, etc.).
+- **API integrations (preview)**: Leverage the evolving `OpenBench` class carefully when integrating with workflow managers (Airflow, Snakemake, etc.).
 
 ## Contributing
 We welcome issues, feature proposals, and pull requests.
@@ -277,6 +277,11 @@ We welcome issues, feature proposals, and pull requests.
   - Multi-format config detection, enhanced modular architecture, smart parallel engine, multi-level caching, structured logging, Köppen climate analysis, GUI refresh, dataset directory restructuring.
 - **v1.0 (June 2025)**  
   - Initial open-source release with JSON configs and baseline evaluation workflow.
+
+## Citation
+If you use OpenBench in scientific work, please cite:
+
+Wei, Z., Xu, Q., Bai, F., Xu, X., Wei, Z., Dong, W., Liang, H., Wei, N., Lu, X., Li, L. and Zhang, S., 2025. OpenBench: a land model evaluation system. *Geoscientific Model Development*, 18(18), 6517-6540.
 
 ## License & Credits
 - Licensed under the **MIT License** (see `LICENSE`).
