@@ -63,6 +63,7 @@ def process_unit(ref_unit,sim_unit,metric):
         'wNSE': 'Unitless',  # Weighted Nash-Sutcliffe efficiency
         'wsNSE': 'Unitless',  # Weighted seasonal Nash-Sutcliffe Efficiency
         'index_agreement': 'Unitless',  # Index of agreement
+        'MFM': 'Unitless',  # Model Fidelity Metric
     }
 
     unit = all_metrics_units[metric]

@@ -46,6 +46,13 @@ from openbench.util.Mod_ConfigCheck import (
     print_config_summary,
     perform_early_validation
 )
+from openbench.util.Mod_MemoryManager import (
+    cleanup_memory,
+    initialize_memory_management,
+    get_memory_usage,
+    log_memory_usage,
+    cleanup_old_outputs
+)
 import logging
 from datetime import datetime
 
@@ -59,119 +66,6 @@ except ImportError:
 # Suppress warnings
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning'
 os.environ['PYTHONWARNINGS'] = 'ignore::FutureWarning'
-
-
-def cleanup_memory():
-    """Comprehensive memory cleanup function."""
-    try:
-        # Get memory info before cleanup
-        if _HAS_PSUTIL:
-            process = psutil.Process()
-            memory_before = process.memory_info().rss / 1024 / 1024  # MB
-        else:
-            memory_before = 0  # Fallback when psutil is not available
-        
-        # Clear numpy and xarray caches
-        try:
-            # Use a more robust approach that avoids accessing deprecated internals
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                
-                # Try new numpy structure first (numpy >= 1.20)
-                try:
-                    if hasattr(np, '_core') and hasattr(np._core, '_internal'):
-                        if hasattr(np._core._internal, 'clear_cache'):
-                            np._core._internal.clear_cache()
-                        elif hasattr(np._core._internal, '_clear_cache'):
-                            np._core._internal._clear_cache()
-                    else:
-                        # Fallback to older numpy structure
-                        if hasattr(np, 'core') and hasattr(np.core, '_internal'):
-                            if hasattr(np.core._internal, 'clear_cache'):
-                                np.core._internal.clear_cache()
-                except (AttributeError, TypeError):
-                    # No cache clearing available in this numpy version
-                    pass
-        except (AttributeError, ImportError, Exception):
-            # Skip cache clearing if not available or fails
-            pass
-        
-        # Clear xarray global options and caches
-        if hasattr(xr, 'set_options'):
-            # Reset xarray options to defaults
-            xr.set_options(keep_attrs=False)
-        
-        # Force garbage collection multiple times
-        for _ in range(3):
-            collected = gc.collect()
-            
-        # Force memory defragmentation if available
-        if hasattr(gc, 'set_threshold'):
-            # Temporarily lower GC thresholds to be more aggressive
-            old_thresholds = gc.get_threshold()
-            gc.set_threshold(10, 5, 5)
-            gc.collect()
-            # Restore original thresholds
-            gc.set_threshold(*old_thresholds)
-        
-        # Clear any cached modules if safe to do so
-        import sys
-        modules_to_clear = []
-        for module_name in list(sys.modules.keys()):
-            if (module_name.startswith('matplotlib.') or 
-                module_name.startswith('scipy.') or
-                module_name.startswith('pandas.')):
-                # Don't actually remove, just note for potential cleanup
-                pass
-        
-        # Get memory info after cleanup
-        if _HAS_PSUTIL:
-            memory_after = process.memory_info().rss / 1024 / 1024  # MB
-            memory_freed = memory_before - memory_after
-            
-            logging.info(f"Memory cleanup completed:")
-            logging.info(f"  - Memory before: {memory_before:.1f} MB")
-            logging.info(f"  - Memory after: {memory_after:.1f} MB")
-            if memory_freed > 0:
-                logging.info(f"  - Memory freed: {memory_freed:.1f} MB")
-            else:
-                logging.info(f"  - Memory usage: {abs(memory_freed):.1f} MB (may have increased due to logging)")
-        else:
-            logging.info(f"Memory cleanup completed (psutil not available for detailed monitoring)")
-            logging.info(f"  - Garbage collection performed")
-            logging.info(f"  - Cache clearing attempted")
-        
-    except Exception as e:
-        logging.warning(f"Memory cleanup encountered an issue: {e}")
-        # Still perform basic garbage collection
-        gc.collect()
-
-
-def initialize_memory_management():
-    """Initialize memory management settings for optimal performance."""
-    try:
-        # Configure garbage collection for better memory management
-        gc.set_threshold(700, 10, 10)  # More aggressive collection
-        
-        # Enable garbage collection debugging if needed (disable in production)
-        # gc.set_debug(gc.DEBUG_STATS)
-        
-        # Configure numpy for memory efficiency
-        if hasattr(np, 'seterr'):
-            np.seterr(all='ignore')  # Ignore numpy warnings to reduce memory overhead
-        
-        # Configure xarray for memory efficiency  
-        if hasattr(xr, 'set_options'):
-            xr.set_options(
-                keep_attrs=False,  # Don't keep attributes to save memory
-                display_style='text',  # Use text display to save memory
-            )
-        
-        logging.info("Memory management initialized with optimized settings")
-        
-    except Exception as e:
-        logging.warning(f"Failed to initialize memory management settings: {e}")
 
 
 def print_welcome_message():
@@ -699,7 +593,15 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
 
 def main():
     """Main function to orchestrate the evaluation process."""
+    # Clean up memory garbage before starting (silent mode before logging setup)
+    cleanup_memory(verbose=False)
+
     print_welcome_message()
+
+    # Display initial memory cleanup
+    colors = get_platform_colors()
+    clean_icon = "🧹" if colors['reset'] else "[CLEAN]"
+    print(f"\n{clean_icon} {colors['cyan']}Performing initial memory cleanup...{colors['reset']}")
 
     # Perform early validation: command line args, config file existence, external configs
     # This consolidates all early-stage checks and provides clear error messages
@@ -709,14 +611,21 @@ def main():
     nl = NamelistReader()
     main_nl = nl.read_namelist(config_file)
 
+    # Clean up old outputs before running
+    # clean_level options: 'tmp' (default), 'all', 'none'
+    clean_level = main_nl['general'].get('clean_level', 'tmp')
+    cleanup_old_outputs(main_nl, clean_level=clean_level)
+
     # Setup directories
     setup_directories(main_nl)
 
-    # Initialize memory management and perform initial cleanup
-    initialize_memory_management()
-    cleanup_memory()
-
+    # Initialize memory management and perform detailed cleanup
     colors = get_platform_colors()
+    mem_icon = "💾" if colors['reset'] else "[MEM]"
+    print(f"\n{mem_icon} {colors['cyan']}Initializing memory management...{colors['reset']}")
+    initialize_memory_management()
+    cleanup_memory()  # This will log detailed cleanup info to log file
+
     rocket = "🚀" if colors['reset'] else ">>>"
     print(f"{rocket} {colors['bold']}{colors['green']}Starting OpenBench evaluation process...{colors['reset']}")
     logging.info("Starting OpenBench evaluation process...")
