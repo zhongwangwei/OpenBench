@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/Forcing/CN05.1
+  root_dir: ./dataset/Reference/Grid/Forcing/CN05.1
   timezone: 0.0
   data_type: grid
   data_groupby: single

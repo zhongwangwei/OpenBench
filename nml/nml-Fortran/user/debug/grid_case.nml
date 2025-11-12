@@ -10,6 +10,6 @@
   prefix         = grid_case_hist_
   syear          = 2004
   eyear          = 2005
-  root_dir       = ./dataset/simulation/debug/grid
+  root_dir       = ./dataset/Simulation/debug/grid
 /
 

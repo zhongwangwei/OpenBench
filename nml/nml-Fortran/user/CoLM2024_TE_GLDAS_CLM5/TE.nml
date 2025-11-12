@@ -3,7 +3,7 @@
    timezone =  0.0
    data_type =  grid
    data_groupby = Year
-   dir = ./dataset/simulation/LSMs/TE/
+   dir = ./dataset/Simulation/LSMs/TE/
    fulllist =
    tim_res =  Month
    syear =  1955

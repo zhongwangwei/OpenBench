@@ -3,7 +3,7 @@
    timezone =  0.0
    data_type =  grid
    data_groupby =  Month
-   dir = ./dataset/simulation/FUXI/
+   dir = ./dataset/Simulation/FUXI/
    fulllist =
    tim_res =  day
    grid_res =  0.25

@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/reference/grid_ref/Forcing/GPCP/GPCPv3.2mon",
+    "root_dir": "./dataset/Reference/Grid/Forcing/GPCP/GPCPv3.2mon",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "Month",

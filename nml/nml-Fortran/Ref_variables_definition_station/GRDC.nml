@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/station/Water/StreamFlow/GRDC/
+   root_dir          =  ./dataset/Reference/Station/Water/StreamFlow/GRDC/
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single

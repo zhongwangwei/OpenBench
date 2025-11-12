@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/grid_ref/Dam_River_Lake/Inundation/GIEMS_v2_2020/regrid_0.25d/
+   root_dir          =  ./dataset/Reference/Grid/Dam_River_Lake/Inundation/GIEMS_v2_2020/regrid_0.25d/
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

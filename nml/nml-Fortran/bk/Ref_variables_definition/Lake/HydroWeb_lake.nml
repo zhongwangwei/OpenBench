@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/stn_ref/Dam_River_Lake/HydroWeb_2.0/output/lake
+   root_dir          =  ./dataset/Reference/Station/Dam_River_Lake/HydroWeb_2.0/output/lake
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -7,7 +7,7 @@
    grid_res          =  
    syear             =  1900
    eyear             =  2022
-   fulllist          =  ./dataset/reference/stn_ref/Dam_River_Lake/HydroWeb_2.0/hydroprd_lake.csv
+   fulllist          =  ./dataset/Reference/Station/Dam_River_Lake/HydroWeb_2.0/hydroprd_lake.csv
 /
 
 ############################   ############################

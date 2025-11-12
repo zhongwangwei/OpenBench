@@ -4,7 +4,7 @@
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "month",
-    "dir": "./dataset/simulation/LSMs/GLDAS",
+    "dir": "./dataset/Simulation/LSMs/GLDAS",
     "fulllist": "",
     "tim_res": "month",
     "grid_res": 0.25,

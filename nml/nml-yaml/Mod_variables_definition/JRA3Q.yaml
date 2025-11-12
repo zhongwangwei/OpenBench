@@ -1,0 +1,20 @@
+general:
+  model: CoLM
+Precipitation:
+  varname: tprate
+  varunit: mm s-1
+Surface_Downward_SW_Radiation:
+  varname: dswrf
+  varunit: w m-2
+Surface_Downward_LW_Radiation:
+  varname: dlwrf
+  varunit: w m-2
+Surface_Air_Temperature:
+  varname: tmp
+  varunit: k
+Surface_Specific_Humidity:
+  varname: spfh
+  varunit: kg kg-1
+Surface_Wind_Speed:
+  varname: ws
+  varunit: m s-1

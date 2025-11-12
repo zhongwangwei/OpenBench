@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/grid_ref/ERA5LAND_0p25/daily
+   root_dir          =  ./dataset/Reference/Grid/ERA5LAND_0p25/daily
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

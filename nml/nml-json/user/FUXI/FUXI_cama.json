@@ -1,0 +1,16 @@
+{
+  "general": {
+    "model_namelist": "./nml/nml-Fortran/Mod_variables_definition/CaMaFlood.nml",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Month",
+    "dir": "./dataset/Simulation/FUXI/cama/",
+    "fulllist": "",
+    "tim_res": "day",
+    "grid_res": 0.25,
+    "suffix": "",
+    "prefix": "FUXI-test_hist_cama_",
+    "syear": 2005,
+    "eyear": 2014
+  }
+}

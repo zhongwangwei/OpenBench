@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/reference/grid_ref/Water/Transpiration_Li_etal2024/",
+    "root_dir": "./dataset/Reference/Grid/Water/Transpiration_Li_etal2024/",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Year",

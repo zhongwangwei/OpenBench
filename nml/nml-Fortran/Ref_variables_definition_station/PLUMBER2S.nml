@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/station/Composite/PLUMBER2S/dataset/
+   root_dir          =  ./dataset/Reference/Station/Composite/PLUMBER2S/dataset/
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -7,7 +7,7 @@
    grid_res          =  
    syear             =  
    eyear             =  
-   fulllist          =   ./dataset/reference/station/Composite/PLUMBER2S/list/LIST_PLUMBER2S.csv
+   fulllist          =   ./dataset/Reference/Station/Composite/PLUMBER2S/list/LIST_PLUMBER2S.csv
 /
 
 ############################  Radiation and Energy Cycle  ############################

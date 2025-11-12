@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/FLUXCOM-X-BASE
+  root_dir: ./dataset/Reference/Grid/FLUXCOM-X-BASE
   timezone: 0.0
   data_type: grid
   data_groupby: Year

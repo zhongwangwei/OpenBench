@@ -3,7 +3,7 @@ general:
   timezone: 0.0
   data_type: grid
   data_groupby: month
-  dir: ./dataset/simulation/trajectory2/12/history/
+  dir: ./dataset/Simulation/trajectory2/12/history/
   fulllist: ''
   tim_res: month
   grid_res: 0.5

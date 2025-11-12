@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/reference/stn_ref/Dam_River_Lake/StreamFlow/GRDC/",
+    "root_dir": "./dataset/Reference/Station/Dam_River_Lake/StreamFlow/GRDC/",
     "timezone": 0.0,
     "data_type": "stn",
     "data_groupby": "single",

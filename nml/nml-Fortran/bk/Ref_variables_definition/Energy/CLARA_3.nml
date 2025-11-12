@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/grid_ref/Energy/CLARA_3
+   root_dir          =  ./dataset/Reference/Grid/Energy/CLARA_3
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

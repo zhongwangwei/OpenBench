@@ -14,6 +14,6 @@
     "prefix": "grid_case_hist_",                // Prefix for data name (here, full data name format is grid_case_hist_2004-01.nc, prefix is grid_case_hist_)
     "syear": 2004,                              // Start year (beginning in January of this year)
     "eyear": 2005,                              // End year (ending in December of this year)
-    "root_dir": "./dataset/simulation/debug/grid"  // Data storage path
+    "root_dir": "./dataset/Simulation/debug/grid"  // Data storage path
   }
 }

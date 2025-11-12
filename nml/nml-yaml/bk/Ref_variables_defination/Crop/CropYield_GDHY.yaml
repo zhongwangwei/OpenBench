@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/Crop/GDHY2019ver
+  root_dir: ./dataset/Reference/Grid/Crop/GDHY2019ver
   timezone: 0.0
   data_type: grid
   data_groupby: Year
