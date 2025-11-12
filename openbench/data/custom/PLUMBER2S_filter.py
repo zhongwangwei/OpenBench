@@ -1,9 +1,9 @@
 import logging
 
 
-def filter_FLUX_PLUMBER2(info, ds=None):
+def filter_PLUMBER2S(info, ds=None):
     """
-    Filter for FLUX_PLUMBER2 reference data.
+    Filter for PLUMBER2S reference data.
 
     Handles fallback logic for variables that may have alternative names.
 
