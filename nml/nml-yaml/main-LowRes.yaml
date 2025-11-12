@@ -13,8 +13,8 @@ general:
   min_lon: -180.0
   reference_nml: ./nml/nml-yaml/ref-LowRes.yaml
   simulation_nml: ./nml/nml-yaml/sim.yaml
-  statistics_nml: ./nml/nml-yaml/stats.yaml
-  figure_nml: ./nml/nml-yaml/figlib.yaml
+  statistics_nml: ./nml/nml-json/stats.yaml
+  figure_nml: ./nml/nml-json/figlib.yaml
   num_cores: 48
   evaluation: true
   comparison: true
@@ -32,39 +32,38 @@ evaluation_items:
   Burned_Area: true
   Ecosystem_Respiration: true
   Gross_Primary_Productivity: true
-#  Leaf_Area_Index: false
-#  Leaf_Greenness: false
-#  Methane: false
+  Leaf_Area_Index: false
+  Leaf_Greenness: false
+  Methane: false
   Net_Ecosystem_Exchange: true
-#  Nitrogen_Fixation: false
-#  Soil_Carbon: false
-#  Veg_Cover_In_Fraction: false
+  Nitrogen_Fixation: false
+  Soil_Carbon: false
+  Veg_Cover_In_Fraction: false
   Net_Primary_Production: true
   Wetland_Methane_Emission: true
   Canopy_Interception: true
-#  Canopy_Transpiration: true
-#  Depth_Of_Surface_Water: false
+  Canopy_Transpiration: true
+  Depth_Of_Surface_Water: false
   Evapotranspiration: true
-#  Ground_Evaporation: false
-#  Groundwater_Recharge_Rate: false
-#  Permafrost: false
+  Ground_Evaporation: false
+  Groundwater_Recharge_Rate: false
+  Permafrost: false
   Root_Zone_Soil_Moisture: true
   Snow_Depth: true
   Snow_Water_Equivalent: true
-#  Soil_Evaporation: true
-#  Surface_Snow_Cover_In_Fraction: true
+  Soil_Evaporation: true
+  Surface_Snow_Cover_In_Fraction: true
   Surface_Soil_Moisture: true
   Terrestrial_Water_Storage_Change: true
   Total_Runoff: true
-#  Water_Evaporation: true
-#  Water_Storage_In_Aquifer: false
-#  Water_Table_Depth: false
+  Water_Evaporation: true
+  Water_Storage_In_Aquifer: false
+  Water_Table_Depth: false
   Bare_Soil_Evaporation: true
   Open_Water_Evaporation: true
   Precipitation: true
   Runoff: true
   Transpiration: true
-#  Albedo: true
   Ground_Heat: true
   Latent_Heat: true
   Net_Radiation: true
@@ -80,39 +79,39 @@ evaluation_items:
   Surface_Downward_SW_Radiation: true
   Diurnal_Max_Temperature: true
   Diurnal_Min_Temperature: true
-#  Diurnal_Temperature_Range: false
+  Diurnal_Temperature_Range: false
   Surface_Air_Temperature: true
   Surface_Relative_Humidity: true
   Surface_Specific_Humidity: true
-#  Surface_Wind_Speed: false
+  Surface_Wind_Speed: false
   Cloud_Cover: true
   Ground_Frost_Frequency: true
   Lake_Surface_Water_Temperature: true
-#  Crop_Emergence_DOY_Wheat: false
-#  Crop_Heading_DOY_Corn: false
-#  Crop_Heading_DOY_Wheat: false
-#  Crop_Maturity_DOY_Corn: false
-#  Crop_Maturity_DOY_Wheat: false
-#  Crop_V3_DOY_Corn: false
-#  Crop_Yield_Corn: false
-#  Crop_Yield_Maize: false
-#  Crop_Yield_Rice: false
-#  Crop_Yield_Soybean: false
-#  Crop_Yield_Wheat: false
-#  Total_Irrigation_Amount: true
-#  Dam_Inflow: false
-#  Dam_Outflow: false
-#  Dam_Water_Elevation: false
-#  Dam_Water_Storage: false
+  Crop_Emergence_DOY_Wheat: false
+  Crop_Heading_DOY_Corn: false
+  Crop_Heading_DOY_Wheat: false
+  Crop_Maturity_DOY_Corn: false
+  Crop_Maturity_DOY_Wheat: false
+  Crop_V3_DOY_Corn: false
+  Crop_Yield_Corn: false
+  Crop_Yield_Maize: false
+  Crop_Yield_Rice: false
+  Crop_Yield_Soybean: false
+  Crop_Yield_Wheat: false
+  Total_Irrigation_Amount: true
+  Dam_Inflow: false
+  Dam_Outflow: false
+  Dam_Water_Elevation: false
+  Dam_Water_Storage: false
   Inundation_Area: false
   Inundation_Fraction: false
-#  Lake_Ice_Fraction_Cover: false
-#  Lake_Temperature: false
-#  Lake_Water_Area: false
-#  Lake_Water_Level: false
-#  Lake_Water_Volume: false
-#  River_Water_Level: false
-#  Streamflow: false
+  Lake_Ice_Fraction_Cover: false
+  Lake_Temperature: false
+  Lake_Water_Area: false
+  Lake_Water_Level: false
+  Lake_Water_Volume: false
+  River_Water_Level: false
+  Streamflow: false
   Urban_Air_Temperature_Max: true
   Urban_Air_Temperature_Min: true
   Urban_Albedo: true

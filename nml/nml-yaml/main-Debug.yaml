@@ -13,15 +13,15 @@ general:
   min_lon: -180.0
   reference_nml: ./nml/nml-yaml/ref-Debug.yaml
   simulation_nml: ./nml/nml-yaml/sim-Debug.yaml
-  statistics_nml: ./nml/nml-yaml/stats.yaml
+  statistics_nml: ./nml/nml-yaml/stats-Debug.yaml
   figure_nml: ./nml/nml-yaml/figlib.yaml
-  num_cores: 4
+  num_cores: 8
   evaluation: true
   comparison: true
   statistics: false
   debug_mode: true
   only_drawing: false
-  weight: area
+  weight: "None"
   IGBP_groupby: true
   PFT_groupby:  true
   Climate_zone_groupby: true
@@ -111,7 +111,7 @@ evaluation_items:
 metrics:
   percent_bias: false
   absolute_percent_bias: false
-  bias: false
+  bias: true
   mean_absolute_error: false
   RMSE: true
   MSE: false
@@ -119,7 +119,7 @@ metrics:
   CRMSD: false
   nrmse: false
   L: false
-  correlation: true
+  correlation: false
   correlation_R2: false
   NSE: false
   LNSE: false
@@ -161,24 +161,24 @@ metrics:
   index_agreement: false
   MFM: false
 scores:
-  nBiasScore: false
-  nRMSEScore: false
+  nBiasScore: true
+  nRMSEScore: true
   nPhaseScore: false
   nIavScore: false
-  nSpatialScore: false
+  nSpatialScore: true
   Overall_Score: true
   The_Ideal_Point_score: false
 comparisons:
   HeatMap: true
-  Taylor_Diagram: false
-  Target_Diagram: false
+  Taylor_Diagram: true
+  Target_Diagram: true
   Kernel_Density_Estimate: true
-  Whisker_Plot: false
-  Parallel_Coordinates: false
-  Portrait_Plot_seasonal: false
+  Whisker_Plot: true
+  Parallel_Coordinates: true
+  Portrait_Plot_seasonal: true
   Single_Model_Performance_Index: true
   Relative_Score: false
-  Ridgeline_Plot: true
+  Ridgeline_Plot: false
   Diff_Plot: false
   Mean: false
   Median: false
@@ -187,14 +187,21 @@ comparisons:
   Sum: false
   Mann_Kendall_Trend_Test: false
   Correlation: false
-  Standard_Deviation: true
+  Standard_Deviation: false
   Functional_Response: false
   RadarMap: false
 statistics:
-  Z_Score: true
+  Mean: true
+  Median: false
+  Min: false
+  Max: false
+  Sum: false
+  Mann_Kendall_Trend_Test: true
+  Correlation: false
+  Standard_Deviation: false
+  Functional_Response: false
+  Z_Score: false
   Hellinger_Distance: false
   Three_Cornered_Hat: false
   Partial_Least_Squares_Regression: false
-  False_Discovery_Rate: false
   ANOVA: false
-  Mann_Kendall_Trend_Test: true

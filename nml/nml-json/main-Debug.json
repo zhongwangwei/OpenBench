@@ -1,6 +1,6 @@
 {
   "general": {
-    "basename": "debug3",
+    "basename": "Debug",
     "basedir": "./output",
     "compare_tim_res": "month",
     "compare_tzone": 0.0,
