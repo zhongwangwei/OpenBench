@@ -5,6 +5,7 @@ import sys
 import warnings
 import logging
 import gc
+import importlib
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -362,6 +363,88 @@ class Evaluation_stn(metrics, scores):
         logging.info(" ")
         logging.info(" ")
 
+    @staticmethod
+    def _normalize_var_selector(selector):
+        if isinstance(selector, (list, tuple)):
+            return list(selector)
+        if isinstance(selector, np.ndarray):
+            return selector.tolist()
+        return [selector]
+
+    def _load_station_dataset(self, dataset, datasource):
+        attr_name = 'ref_varname' if datasource == 'ref' else 'sim_varname'
+        selector = getattr(self, attr_name)
+        selector_list = self._normalize_var_selector(selector)
+
+        if not selector_list:
+            raise KeyError(f"Variable selector for {attr_name} is empty")
+
+        try:
+            return dataset[selector_list]
+        except KeyError:
+            fallback = self._apply_station_custom_filter(dataset, datasource, attr_name, selector_list[0])
+            if fallback is not None:
+                return fallback
+
+            available_vars = list(dataset.data_vars) + list(dataset.coords)
+            logging.error(
+                "Variable '%s' not found in %s dataset. Available variables: %s",
+                selector_list[0], datasource, available_vars
+            )
+            raise
+
+    def _apply_station_custom_filter(self, dataset, datasource, attr_name, canonical_name):
+        model = self.ref_source if datasource == 'ref' else self.sim_source
+
+        try:
+            custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+            custom_filter = getattr(custom_module, f"filter_{model}")
+        except (ImportError, AttributeError):
+            logging.warning(
+                "Variable '%s' missing in %s dataset for %s, no custom filter available",
+                canonical_name, datasource, model
+            )
+            return None
+
+        attr_value = getattr(self, attr_name)
+        attr_is_sequence = isinstance(attr_value, (list, tuple, np.ndarray))
+        original_attr = list(attr_value) if attr_is_sequence else attr_value
+
+        try:
+            logging.warning(
+                "Variable '%s' missing in %s dataset for %s; applying custom fallback",
+                canonical_name, datasource, model
+            )
+            updated_self, filtered_data = custom_filter(self, dataset)
+            if filtered_data is None:
+                return None
+            fallback_ds = self._convert_filtered_data_to_dataset(filtered_data, canonical_name)
+            return fallback_ds
+        finally:
+            if attr_is_sequence:
+                setattr(self, attr_name, list(original_attr))
+            else:
+                setattr(self, attr_name, original_attr)
+
+    @staticmethod
+    def _convert_filtered_data_to_dataset(filtered_data, canonical_name):
+        if isinstance(filtered_data, xr.Dataset):
+            if canonical_name in filtered_data:
+                return filtered_data[[canonical_name]]
+            data_vars = list(filtered_data.data_vars)
+            if data_vars:
+                return filtered_data[[data_vars[0]]]
+            return None
+
+        data_array = filtered_data
+        if not isinstance(data_array, xr.DataArray):
+            data_array = xr.DataArray(data_array)
+
+        if not getattr(data_array, 'name', None) or data_array.name != canonical_name:
+            data_array = data_array.rename(canonical_name)
+
+        return data_array.to_dataset(name=canonical_name)
+
     def make_evaluation(self):
         try:
             # read station information
@@ -386,8 +469,8 @@ class Evaluation_stn(metrics, scores):
                     # Open datasets and keep references for proper cleanup
                     sim_ds = xr.open_dataset(sim_path)
                     ref_ds = xr.open_dataset(ref_path)
-                    s = sim_ds[self.sim_varname]
-                    o = ref_ds[self.ref_varname]
+                    s = self._load_station_dataset(sim_ds, 'sim')
+                    o = self._load_station_dataset(ref_ds, 'ref')
 
                     # Process climatology if applicable
                     current_metrics = self.metrics
@@ -497,6 +580,7 @@ class Evaluation_stn(metrics, scores):
         finally:
             gc.collect()  # Final cleanup
 
+
     def make_evaluation_parallel(self, station_list, iik):
         sim_ds = None
         ref_ds = None
@@ -515,8 +599,10 @@ class Evaluation_stn(metrics, scores):
             # Open datasets and keep references for proper cleanup
             sim_ds = xr.open_dataset(sim_path)
             ref_ds = xr.open_dataset(ref_path)
-            s = sim_ds[self.sim_varname].to_array().squeeze()
-            o = ref_ds[self.ref_varname].to_array().squeeze()
+            s_ds = self._load_station_dataset(sim_ds, 'sim')
+            o_ds = self._load_station_dataset(ref_ds, 'ref')
+            s = s_ds.to_array().squeeze()
+            o = o_ds.to_array().squeeze()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
@@ -529,15 +615,18 @@ class Evaluation_stn(metrics, scores):
             # for based plot
             try:
                 row['KGESS'] = self.KGESS(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"KGESS calculation failed: {e}")
                 row['KGESS'] = -9999.0
             try:
                 row['RMSE'] = self.rmse(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"RMSE calculation failed: {e}")
                 row['RMSE'] = -9999.0
             try:
                 row['correlation'] = self.correlation(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"Correlation calculation failed: {e}")
                 row['correlation'] = -9999.0
 
             for metric in self.metrics:

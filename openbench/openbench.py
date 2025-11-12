@@ -53,12 +53,13 @@ from openbench.util.Mod_MemoryManager import (
     log_memory_usage,
     cleanup_old_outputs
 )
+from openbench.util.Mod_CacheCleanup import cleanup_all_cache
 import logging
 from datetime import datetime
 
 # Import enhanced logging system
 try:
-    from openbench.Mod_LoggingSystem import setup_logging, get_logging_manager, configure_library_logging
+    from openbench.util.Mod_LoggingSystem import setup_logging, get_logging_manager, configure_library_logging
     _HAS_ENHANCED_LOGGING = True
 except ImportError:
     _HAS_ENHANCED_LOGGING = False
@@ -110,7 +111,7 @@ def print_welcome_message():
     
     for feature in features:
         # Use simple bullets for non-Unicode terminals
-        if not colors['reset']:  # No color support likely means limited Unicode
+        if not colors['unicode_support']:
             feature = feature.replace('🌍', '*').replace('📊', '*').replace('📈', '*').replace('⚙️', '*').replace('🚀', '*').replace('💾', '*')
         print(f"  {feature}")
     
@@ -221,7 +222,8 @@ def load_namelists(nl, main_nl):
     sim_nml = nl.read_namelist(main_nl["general"]["simulation_nml"])
     try:
         stats_nml = nl.read_namelist(main_nl["general"]["statistics_nml"])
-    except:
+    except (KeyError, FileNotFoundError, IOError) as e:
+        logging.debug(f"Statistics namelist not available: {e}")
         stats_nml = None
     fig_nml = nl.read_namelist(main_nl["general"]["figure_nml"])
     return ref_nml, sim_nml, stats_nml, fig_nml
@@ -231,9 +233,9 @@ def print_phase_header(phase_name, icon=""):
     """Print a cross-platform compatible phase header."""
     colors = get_platform_colors()
     width = 60
-    
+
     # Use simple text for non-Unicode terminals
-    if not colors['reset']:
+    if not colors['unicode_support']:
         icon = icon.replace('🔍', '[EVAL]').replace('📈', '[COMP]').replace('📊', '[STAT]')
     
     print(f"\n{colors['green']}" + "=" * width + f"{colors['reset']}")
@@ -243,9 +245,9 @@ def print_phase_header(phase_name, icon=""):
 def print_item_progress(item_name, icon="📊", ref_dataset=None, sim_dataset=None):
     """Print progress for individual items with dataset information."""
     colors = get_platform_colors()
-    
+
     # Use simple text for non-Unicode terminals
-    if not colors['reset']:
+    if not colors['unicode_support']:
         icon = icon.replace('📊', '*').replace('📋', '*').replace('📈', '*')
     
     print(f"  {icon} {colors['blue']}Processing {item_name}...{colors['reset']}")
@@ -334,8 +336,8 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         gc.collect()
         logging.info(f"Memory cleaned after completing {evaluation_item}")
 
-    main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', 'True')
-    main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', 'True')
+    main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', True)
+    main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', True)
     if main_nl['general']['IGBP_groupby']:
         if main_nl['general']['only_drawing']:
             LC = LC_groupby_only_drawing(main_nl, score_vars, metric_vars)
@@ -379,7 +381,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         dataset_processer = DatasetProcessing(general_info)
         if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
             onetimeref = True
-        if onetimeref == True:
+        if onetimeref:
             dataset_processer.process('ref')
         else:
             logging.info("Skip processing ref data")
@@ -459,7 +461,11 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     # Try again after processing
                     s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
                 s = Convert_Type.convert_nc(s)
-                s['time'] = o['time']
+                # Align time dimension if compatible
+                if len(s['time']) == len(o['time']):
+                    s['time'] = o['time']
+                else:
+                    logging.warning(f"Time dimension mismatch: sim has {len(s['time'])} points, ref has {len(o['time'])} points")
                 mask1 = np.isnan(s) | np.isnan(o)
                 o.values[mask1] = np.nan
                 # Use absolute path for final save
@@ -607,14 +613,29 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
 
 def main():
     """Main function to orchestrate the evaluation process."""
+    # Clean up Python cache files before starting
+    colors = get_platform_colors()
+    cache_icon = "🧹" if colors['unicode_support'] else"[CACHE]"
+    print(f"\n{cache_icon} {colors['cyan']}Cleaning up Python cache files...{colors['reset']}")
+
+    # Clean __pycache__ directories (silent mode before logging setup)
+    try:
+        stats = cleanup_all_cache(verbose=False)
+        if stats['pycache_dirs_removed'] > 0 or stats['total_files_removed'] > 0:
+            print(f"  ✓ Removed {stats['pycache_dirs_removed']} __pycache__ directories")
+            print(f"  ✓ Removed {stats['total_files_removed']} cached files")
+        else:
+            print(f"  ✓ No cache files found (already clean)")
+    except Exception as e:
+        print(f"  ⚠ Cache cleanup warning: {e}")
+
     # Clean up memory garbage before starting (silent mode before logging setup)
     cleanup_memory(verbose=False)
 
     print_welcome_message()
 
     # Display initial memory cleanup
-    colors = get_platform_colors()
-    clean_icon = "🧹" if colors['reset'] else "[CLEAN]"
+    clean_icon = "🧹" if colors['unicode_support'] else"[CLEAN]"
     print(f"\n{clean_icon} {colors['cyan']}Performing initial memory cleanup...{colors['reset']}")
 
     # Perform early validation: command line args, config file existence, external configs
@@ -635,12 +656,12 @@ def main():
 
     # Initialize memory management and perform detailed cleanup
     colors = get_platform_colors()
-    mem_icon = "💾" if colors['reset'] else "[MEM]"
+    mem_icon = "💾" if colors['unicode_support'] else"[MEM]"
     print(f"\n{mem_icon} {colors['cyan']}Initializing memory management...{colors['reset']}")
     initialize_memory_management()
     cleanup_memory()  # This will log detailed cleanup info to log file
 
-    rocket = "🚀" if colors['reset'] else ">>>"
+    rocket = "🚀" if colors['unicode_support'] else">>>"
     print(f"{rocket} {colors['bold']}{colors['green']}Starting OpenBench evaluation process...{colors['reset']}")
     logging.info("Starting OpenBench evaluation process...")
 
@@ -664,7 +685,7 @@ def main():
     # Run comprehensive pre-validation AFTER UpdateNamelist
     # At this point, all external configs have been merged, so we can validate the final configuration
     colors = get_platform_colors()
-    validate_icon = "🔍" if colors['reset'] else "[VALIDATE]"
+    validate_icon = "🔍" if colors['unicode_support'] else"[VALIDATE]"
     print(f"\n{validate_icon} {colors['bold']}{colors['cyan']}Running comprehensive pre-validation...{colors['reset']}")
     logging.info("=" * 80)
     logging.info("Starting comprehensive pre-validation (after UpdateNamelist)")
@@ -684,21 +705,21 @@ def main():
         )
 
         if not validation_success:
-            error_icon = "❌" if colors['reset'] else "[ERROR]"
+            error_icon = "❌" if colors['unicode_support'] else"[ERROR]"
             print(f"\n{error_icon} {colors['red']}{colors['bold']}Pre-validation failed. Please fix the errors above.{colors['reset']}")
             sys.exit(1)
 
-        check_icon = "✅" if colors['reset'] else "[OK]"
+        check_icon = "✅" if colors['unicode_support'] else"[OK]"
         print(f"{check_icon} {colors['bold']}{colors['green']}Pre-validation completed successfully{colors['reset']}")
         logging.info("Pre-validation completed successfully")
 
     except ValidationError as e:
-        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        error_icon = "❌" if colors['unicode_support'] else"[ERROR]"
         print(f"\n{error_icon} {colors['red']}{colors['bold']}Validation Error: {str(e)}{colors['reset']}")
         logging.error(f"Validation failed: {str(e)}")
         sys.exit(1)
     except Exception as e:
-        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        error_icon = "❌" if colors['unicode_support'] else"[ERROR]"
         print(f"\n{error_icon} {colors['red']}{colors['bold']}Unexpected validation error: {str(e)}{colors['reset']}")
         logging.error(f"Unexpected validation error: {str(e)}", exc_info=True)
         sys.exit(1)
@@ -712,20 +733,7 @@ def main():
         run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                         fig_nml)
 
-    # xu output nml information:
-    # logging.info(f"xu output nml information before running")
-    # logging.info(f"main_nl: {main_nl}, type: {type(main_nl)}")
-    # logging.info(f"ref_nml: {ref_nml}, type: {type(ref_nml)}")
-    # logging.info(f"sim_nml: {sim_nml}, type: {type(sim_nml)}")
-    # logging.info(f"stats_nml: {stats_nml}, type: {type(stats_nml)}")
-    # logging.info(f"fig_nml: {fig_nml}, type: {type(fig_nml)}")
-    # logging.info(f"evaluation_items: {evaluation_items}, type: {type(evaluation_items)}")
-    # logging.info(f"metric_vars: {metric_vars}, type: {type(metric_vars)}")
-    # logging.info(f"score_vars: {score_vars}, type: {type(score_vars)}")
-    # logging.info(f"comparison_vars: {comparison_vars}, type: {type(comparison_vars)}")
-    # logging.info(f"statistic_vars: {statistic_vars}, type: {type(statistic_vars)}")
-
-    main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', 'True')
+    main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', True)
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
@@ -735,7 +743,7 @@ def main():
         end_time = time.time()
         evaluation_time = (end_time - start_time) / 60
         colors = get_platform_colors()
-        check = "✅" if colors['reset'] else "[OK]"
+        check = "✅" if colors['unicode_support'] else"[OK]"
         print(f"\n{check} {colors['bold']}{colors['green']}Evaluation process completed in {evaluation_time:.2f} minutes.{colors['reset']}")
         print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Evaluation process completed in {evaluation_time:.2f} minutes.")
@@ -745,7 +753,7 @@ def main():
     # Run comparison if enabled
     if main_nl['general']['comparison']:
         colors = get_platform_colors()
-        chart = "📈" if colors['reset'] else ">>>"
+        chart = "📈" if colors['unicode_support'] else">>>"
         print(f"{chart} {colors['bold']}{colors['blue']}Running comparison process...{colors['reset']}")
         start_time = time.time()
         run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars, comparison_vars,
@@ -753,7 +761,7 @@ def main():
         end_time = time.time()
         comparison_time = (end_time - start_time) / 60
         colors = get_platform_colors()
-        check = "✅" if colors['reset'] else "[OK]"
+        check = "✅" if colors['unicode_support'] else"[OK]"
         print(f"\n{check} {colors['bold']}{colors['green']}Comparison process completed in {comparison_time:.2f} minutes.{colors['reset']}")
         print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Comparison process completed in {comparison_time:.2f} minutes.")
@@ -763,14 +771,14 @@ def main():
     # Run statistics if enabled
     if main_nl['general']['statistics']:
         colors = get_platform_colors()
-        chart = "📊" if colors['reset'] else ">>>"
+        chart = "📊" if colors['unicode_support'] else">>>"
         print(f"{chart} {colors['bold']}{colors['blue']}Running statistics process...{colors['reset']}")
         start_time = time.time()
         run_statistics(main_nl, stats_nml, statistic_vars, fig_nml['Statistic'])
         end_time = time.time()
         statistic_time = (end_time - start_time) / 60
         colors = get_platform_colors()
-        check = "✅" if colors['reset'] else "[OK]"
+        check = "✅" if colors['unicode_support'] else"[OK]"
         print(f"\n{check} {colors['bold']}{colors['green']}Statistics process completed in {statistic_time:.2f} minutes.{colors['reset']}")
         print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")
         logging.info(f"Statistics process completed in {statistic_time:.2f} minutes.")
@@ -780,7 +788,7 @@ def main():
     # Generate comprehensive report if enabled
     if main_nl['general'].get('generate_report', True):
         colors = get_platform_colors()
-        report_icon = "📝" if colors['reset'] else ">>>"
+        report_icon = "📝" if colors['unicode_support'] else">>>"
         print(f"\n{report_icon} {colors['bold']}{colors['blue']}Generating comprehensive evaluation report...{colors['reset']}")
         start_time = time.time()
         
@@ -806,7 +814,7 @@ def main():
             end_time = time.time()
             report_time = (end_time - start_time) / 60
             
-            check = "✅" if colors['reset'] else "[OK]"
+            check = "✅" if colors['unicode_support'] else"[OK]"
             print(f"\n{check} {colors['bold']}{colors['green']}Report generation completed in {report_time:.2f} minutes.{colors['reset']}")
             if report_paths.get('html'):
                 print(f"   📄 HTML Report: {report_paths['html']}")
@@ -823,7 +831,7 @@ def main():
     cleanup_memory()
     
     colors = get_platform_colors()
-    party = "🎉" if colors['reset'] else "[SUCCESS]"
+    party = "🎉" if colors['unicode_support'] else"[SUCCESS]"
     print(f"\n{colors['green']}" + "=" * 60 + f"{colors['reset']}")
     print(f"{party} {colors['bold']}{colors['green']}OpenBench evaluation process completed successfully!{colors['reset']}")
     print(f"{colors['green']}" + "=" * 60 + f"{colors['reset']}")

@@ -94,7 +94,7 @@ def filter_GRDC(info):
     for i, result in enumerate(results):
         for key, value in result.items():
             station_list.at[i, key] = value
-    ind = station_list[station_list['Flag'] == True].index
+    ind = station_list[station_list['Flag']].index
     data_select = station_list.loc[ind]
 
     if info.sim_grid_res == 0.25:
