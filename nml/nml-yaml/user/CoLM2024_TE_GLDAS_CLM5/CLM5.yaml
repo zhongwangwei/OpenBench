@@ -1,5 +1,5 @@
 general:
-  model_namelist: ./nml/Mod_variables_defination/CLM5.nml
+  model_namelist: ./nml/Mod_variables_definition/CLM5.nml
   timezone: 0.0
   data_type: grid
   data_groupby: month

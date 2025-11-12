@@ -1,5 +1,5 @@
 &general
-   model_namelist    =  ./nml-Fortran/Mod_variables_defination/TE.nml                    
+   model_namelist    =  ./nml-Fortran/Mod_variables_definition/TE.nml                    
    timezone =  0.0
    data_type =  grid
    data_groupby = Year

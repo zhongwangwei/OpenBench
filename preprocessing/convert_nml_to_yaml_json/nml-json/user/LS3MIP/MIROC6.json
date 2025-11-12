@@ -1,6 +1,6 @@
 {
   "general": {
-    "model_namelist": "./nml/Mod_variables_defination/LS3MIP.nml",
+    "model_namelist": "./nml/Mod_variables_definition/LS3MIP.nml",
     "root_dir": "./dataset/simulation/LS3MIP/",
     "timezone": 0.0,
     "data_type": "grid",

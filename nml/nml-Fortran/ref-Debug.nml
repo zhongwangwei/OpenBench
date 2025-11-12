@@ -6,10 +6,10 @@
 
 
 &def_nml
-    GLEAM_hybird_PLUMBER2 = ./nml/nml-Fortran/Ref_variables_defination_LowRes/Debug/GLEAM_hybird_PLUMBER2.nml
-    ILAMB_monthly         = ./nml/nml-Fortran/Ref_variables_defination_LowRes/Debug/ILAMB_monthly.nml
-    PLUMBER2              = ./nml/nml-Fortran/Ref_variables_defination_LowRes/Debug/PLUMBER2.nml
-    GLEAM4.2a_monthly     = ./nml/nml-Fortran/Ref_variables_defination_LowRes/Debug/GLEAM4.2a_monthly.nml
+    GLEAM_hybird_PLUMBER2 = ./nml/nml-Fortran/Ref_variables_definition_LowRes/Debug/GLEAM_hybird_PLUMBER2.nml
+    ILAMB_monthly         = ./nml/nml-Fortran/Ref_variables_definition_LowRes/Debug/ILAMB_monthly.nml
+    PLUMBER2              = ./nml/nml-Fortran/Ref_variables_definition_LowRes/Debug/PLUMBER2.nml
+    GLEAM4.2a_monthly     = ./nml/nml-Fortran/Ref_variables_definition_LowRes/Debug/GLEAM4.2a_monthly.nml
 /
 
 

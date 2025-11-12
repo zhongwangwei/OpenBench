@@ -1,5 +1,5 @@
 general:
-  model_namelist: ./nml/nml-yaml/Mod_variables_defination/CoLM.yaml
+  model_namelist: ./nml/nml-yaml/Mod_variables_definition/CoLM.yaml
   timezone: 0.0
   data_type: stn
   data_groupby: single
