@@ -30,7 +30,7 @@ from joblib import Parallel, delayed
 try:
     pd_version = tuple(int(x) for x in pd.__version__.split('.')[:2])
     USE_NEW_FREQ_ALIASES = pd_version >= (2, 2)  # New aliases introduced in pandas 2.2
-except:
+except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
 from .Lib_Unit import UnitProcessing
@@ -670,8 +670,6 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
             self.station_list = Convert_Type.convert_Frame(pd.read_csv(os.path.join(self.casedir, "stn_list.txt"), header=0))
             output_dir = os.path.join(self.casedir, 'output', 'data', f'stn_{self.ref_source}_{self.sim_source}')
-            # shutil.rmtree(output_dir, ignore_errors=True)
-            # print(f"Re-creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
@@ -785,11 +783,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             try:
                 ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                  coords={'time': time_index, 'lat': lat, 'lon': lon})
-            except:
+            except (ValueError, TypeError) as e:
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                      coords={'time': time_index, 'lon': lon, 'lat': lat})
-                except:
+                except (ValueError, TypeError) as e2:
                     ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                      coords={'lat': lat, 'lon': lon, 'time': time_index})
             ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -798,7 +796,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if not hasattr(ds['time'], 'dt'):
             try:
                 ds['time'] = pd.to_datetime(ds['time'])
-            except:
+            except (ValueError, TypeError, AttributeError) as e:
                 lon = ds.lon.values
                 lat = ds.lat.values
                 data = ds.values
@@ -806,11 +804,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                      coords={'time': time_index, 'lat': lat, 'lon': lon})
-                except:
+                except (ValueError, TypeError) as e:
                     try:
                         ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                          coords={'time': time_index, 'lon': lon, 'lat': lat})
-                    except:
+                    except (ValueError, TypeError) as e2:
                         ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                          coords={'lat': lat, 'lon': lon, 'time': time_index})
                     ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -827,13 +825,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = ds.sortby('time')
         try:
             return ds.transpose('time', 'lat', 'lon')[f'{ds.name}']
-        except:
+        except (ValueError, KeyError) as e:
             try:
                 return ds.transpose('time', 'lat', 'lon')
-            except:
+            except (ValueError, KeyError) as e2:
                 try:
                     return ds.transpose('time', 'lon', 'lat')
-                except:
+                except (ValueError, KeyError) as e3:
                     return ds.squeeze()
 
     @performance_monitor
@@ -863,25 +861,25 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     ds['time'] = time_index
             elif time_unit.lower() in ['d', 'day', '1d', '1day']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     ds['time'] = time_index
             elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     ds['time'] = time_index
             elif time_unit.lower() in ['y', 'year', '1y', '1year']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-01-01T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-01-01T00:00:00'))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     ds['time'] = time_index
             time_var = ds.time
             # Safely set calendar attribute using encoding
@@ -905,7 +903,6 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             # Create a complete time series based on the specified time frequency and range 
             # Compare the actual time with the complete time series to find the missing time
-            # print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0 and len(missing_times) < len(time_var):
                 logging.warning("Time series is not complete. Missing time values found: ")
@@ -914,9 +911,6 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
-            else:
-                # print('Time series is complete.')
-                pass
         return ds
 
     @performance_monitor
@@ -938,7 +932,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             try:
                 ds = xr.open_dataset(VarFile)  # .squeeze()
-            except:
+            except (ValueError, OSError) as e:
                 ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
@@ -1210,90 +1204,106 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             gc.collect()
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
-        varname = self.ref_varname if datasource == 'ref' else self.sim_varname
-        original_varname = varname[0] if isinstance(varname, list) else varname  # Save original
+        var_attr = self.ref_varname if datasource == 'ref' else self.sim_varname
+        var_attr_is_list = isinstance(var_attr, list)
 
-        # Validate varname list is not empty
-        if not varname or len(varname) == 0:
-            logging.error("Variable name list is empty")
-            raise ValueError("Variable name list cannot be empty for station data")
+        # Work on a copy of the current variable list so that temporary
+        # fallbacks do not mutate the original configuration.
+        current_var_list = list(var_attr) if var_attr_is_list else [var_attr]
+        original_var_list = list(var_attr) if var_attr_is_list else [var_attr]
+        original_varname = original_var_list[0] if original_var_list else None
 
-        # Check if the variable exists in the dataset
-        if varname[0] not in stn_data:
-            # Try to apply custom filter for variable fallback
-            model = self.ref_source if datasource == 'ref' else self.sim_source
-            try:
-                import importlib
-                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
-                custom_filter = getattr(custom_module, f"filter_{model}")
+        try:
+            # Validate varname list is not empty
+            if not current_var_list:
+                logging.error("Variable name list is empty")
+                raise ValueError("Variable name list cannot be empty for station data")
 
-                # Call custom filter with dataset
-                logging.info(f"Variable '{varname[0]}' not found, trying custom filter for {model}")
-                updated_self, filtered_data = custom_filter(self, stn_data)
+            # Check if the variable exists in the dataset
+            if current_var_list[0] not in stn_data:
+                # Try to apply custom filter for variable fallback
+                model = self.ref_source if datasource == 'ref' else self.sim_source
+                try:
+                    import importlib
+                    custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                    custom_filter = getattr(custom_module, f"filter_{model}")
+                    
+                    # Call custom filter with dataset
+                    logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
+                    updated_self, filtered_data = custom_filter(self, stn_data)
 
-                # If custom filter handled it, use the updated info and data
-                if updated_self is not None and filtered_data is not None:
-                    # Update varname based on what the filter set
-                    if datasource == 'ref':
-                        varname = self.ref_varname
+                    # If custom filter handled it, use the updated info and data
+                    if updated_self is not None and filtered_data is not None:
+                        # Update varname based on what the filter set (ensure copy)
+                        if datasource == 'ref':
+                            new_var_attr = self.ref_varname
+                        else:
+                            new_var_attr = self.sim_varname
+                        current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                        logging.info(f"Custom filter updated variable to: {current_var_list[0]}")
+                        ds = filtered_data
                     else:
-                        varname = self.sim_varname
-                    logging.info(f"Custom filter updated variable to: {varname[0]}")
-                    ds = filtered_data
-                else:
-                    # Custom filter didn't handle this case, raise error
+                        # Custom filter didn't handle this case, raise error
+                        available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                        logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
+                        logging.error(f"Available variables: {available_vars}")
+                        raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+                except (ImportError, AttributeError):
+                    # No custom filter available, raise original error
                     available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                    logging.error(f"Variable '{varname[0]}' not found in the station data.")
+                    logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
                     logging.error(f"Available variables: {available_vars}")
-                    raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
-            except (ImportError, AttributeError):
-                # No custom filter available, raise original error
-                available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                logging.error(f"Variable '{varname[0]}' not found in the station data.")
-                logging.error(f"Available variables: {available_vars}")
-                logging.error(f"No custom filter available for {model}")
-                raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
-        else:
-            ds = stn_data[varname[0]]
+                    logging.error(f"No custom filter available for {model}")
+                    raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+            else:
+                ds = stn_data[current_var_list[0]]
 
-        # Check the time dimension
-        if 'time' not in ds.dims:
-            logging.error("Time dimension not found in the station data.")
-            raise ValueError("Time dimension not found in the station data.")
+            # Check the time dimension
+            if 'time' not in ds.dims:
+                logging.error("Time dimension not found in the station data.")
+                raise ValueError("Time dimension not found in the station data.")
 
-        # Ensure the time coordinate is datetime
-        if not np.issubdtype(ds.time.dtype, np.datetime64):
-            ds['time'] = pd.to_datetime(ds.time.values)
+            # Ensure the time coordinate is datetime
+            if not np.issubdtype(ds.time.dtype, np.datetime64):
+                ds['time'] = pd.to_datetime(ds.time.values)
 
-        # Select the time range before resampling
-        ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
+            # Select the time range before resampling
+            ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
 
-        # Resample only if there's data in the selected time range
-        if len(ds.time) > 0:
-            ds = ds.resample(time=self.compare_tim_res).mean()
-        else:
-            logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-            return None  # or return an empty dataset with the correct structure
+            # Resample only if there's data in the selected time range
+            if len(ds.time) > 0:
+                ds = ds.resample(time=self.compare_tim_res).mean()
+            else:
+                logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
+                return None  # or return an empty dataset with the correct structure
 
-        # ds = ds.resample(time=self.compare_tim_res).mean()
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
+            # ds = ds.resample(time=self.compare_tim_res).mean()
+            ds = self.check_coordinate(ds)
+            ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
 
-        # Apply unit conversion for station data
-        current_varunit = getattr(self, f"{datasource}_varunit")
-        if current_varunit:
-            try:
-                ds, converted_unit = self.process_units(ds, current_varunit)
-                logging.info(f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}")
-            except Exception as e:
-                logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
+            # Apply unit conversion for station data
+            current_varunit = getattr(self, f"{datasource}_varunit")
+            if current_varunit:
+                try:
+                    ds, converted_unit = self.process_units(ds, current_varunit)
+                    logging.info(f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}")
+                except Exception as e:
+                    logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
 
-        ds = self.select_timerange(ds, start_year, end_year)
+            ds = self.select_timerange(ds, start_year, end_year)
 
-        # Store original variable name as attribute for later renaming if needed
-        ds.attrs['_original_varname'] = original_varname
+            # Store original variable name as attribute for later renaming if needed
+            if original_varname:
+                ds.attrs['_original_varname'] = original_varname
 
-        return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
+            return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
+        finally:
+            # Restore the canonical variable definition so that fallback
+            # adjustments do not leak into subsequent stations
+            if datasource == 'ref':
+                self.ref_varname = list(original_var_list) if var_attr_is_list else original_varname
+            else:
+                self.sim_varname = list(original_var_list) if var_attr_is_list else original_varname
 
     @performance_monitor
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
@@ -1305,6 +1315,11 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             with xr.open_dataset(file_path) as stn_data:
                 stn_data = Convert_Type.convert_nc(stn_data)
                 processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
+                if processed_data is None:
+                    logging.info(
+                        f"Skipping station {station['ID']} ({datasource}) - no valid data after processing"
+                    )
+                    return
                 self.save_station_data(processed_data, station, datasource)
         finally:
             gc.collect()
@@ -1319,12 +1334,21 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             # Rename variable back to original name if needed (for variable fallback scenarios)
             if '_original_varname' in data.attrs:
                 original_varname = data.attrs['_original_varname']
-                current_varname = data.name if hasattr(data, 'name') else None
+                current_varname = data.name if hasattr(data, 'name') and data.name else None
 
-                if current_varname and current_varname != original_varname:
-                    logging.info(f"Renaming variable '{current_varname}' back to '{original_varname}' before saving")
-                    # Convert DataArray to Dataset, rename, then extract
-                    data_to_save = data.to_dataset(name=original_varname)
+                # Always rename if original_varname is different from current name
+                if current_varname != original_varname:
+                    logging.info(f"Renaming variable '{current_varname}' back to '{original_varname}' before saving (station {station['ID']})")
+                    # Convert DataArray to Dataset with the original variable name
+                    if current_varname:
+                        data_to_save = data.to_dataset(name=original_varname)
+                    else:
+                        # If no current name, convert to dataset and rename the variable
+                        data_to_save = data.to_dataset()
+                        # Get the first (and should be only) data variable name
+                        current_var_list = list(data_to_save.data_vars)
+                        if current_var_list:
+                            data_to_save = data_to_save.rename({current_var_list[0]: original_varname})
                     # Remove the temporary attribute
                     if '_original_varname' in data_to_save.attrs:
                         del data_to_save.attrs['_original_varname']
@@ -1569,7 +1593,8 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             try:
                 from regrid.regrid_wgs84 import convert_to_wgs84_xesmf
                 data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
-            except:
+            except (ImportError, ValueError, RuntimeError) as e:
+                logging.debug(f"xesmf regridding failed, falling back to scipy: {e}")
                 from regrid.regrid_wgs84 import convert_to_wgs84_scipy
                 data = convert_to_wgs84_scipy(data, self.compare_grid_res)
 
@@ -1714,8 +1739,8 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                 if f and os.path.exists(f):
                     try:
                         os.unlink(f)
-                    except:
-                        pass
+                    except (OSError, PermissionError) as e:
+                        logging.debug(f"Could not delete temporary file {f}: {e}")
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         with open(filename, 'w') as f:

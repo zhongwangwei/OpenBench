@@ -170,18 +170,18 @@ class GeneralInfoReader(NamelistReader):
             if nml[item][f'{source}_data_type'] == 'stn':
                 try:
                     setattr(self, f'{source_type}_fulllist', str(nml[item][f'{source}_fulllist']))
-                except:
+                except (KeyError, TypeError) as e:
                     try:
                         setattr(self, f'{source_type}_fulllist', str(nml['general'][f'{source}_fulllist']))
-                    except:
-                        logging.error(f'read {source_type}_fulllist namelist error')
+                    except (KeyError, TypeError) as e2:
+                        logging.error(f'read {source_type}_fulllist namelist error: {e2}')
 
             # Handle uparea attributes for station data
             try:
                 setattr(self, f'{source_type}_max_uparea', str(nml[item][f'{source}_max_uparea']))
                 setattr(self, f'{source_type}_min_uparea', str(nml[item][f'{source}_min_uparea']))
-            except:
-                pass
+            except (KeyError, TypeError, AttributeError):
+                pass  # Optional attributes, skip if not present
 
     def _process_data_types(self):
         """Process and validate data types."""
@@ -248,8 +248,8 @@ class GeneralInfoReader(NamelistReader):
                     if not GeneralInfoReader._time_resolution_warning_shown:
                         logging.warning(f"Time resolution mismatch may cause alignment issues")
                         GeneralInfoReader._time_resolution_warning_shown = True
-            except:
-                logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq}")
+            except (ValueError, AttributeError, TypeError) as e:
+                logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq} ({e})")
 
     def _is_valid_resolution(self, resolution: str) -> bool:
         """Check if a resolution string is valid."""

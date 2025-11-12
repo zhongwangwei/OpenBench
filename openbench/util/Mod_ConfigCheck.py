@@ -21,7 +21,7 @@ def get_platform_colors() -> Dict[str, str]:
     Get color codes based on platform support.
 
     Returns:
-        Dict[str, str]: Dictionary of color codes for terminal output
+        Dict[str, str]: Dictionary of color codes for terminal output, including 'unicode_support' boolean
     """
     system = platform.system().lower()
 
@@ -37,6 +37,20 @@ def get_platform_colors() -> Dict[str, str]:
     if system == 'windows' and not os.environ.get('WT_SESSION'):
         supports_color = False
 
+    # Check if terminal supports Unicode (emoji)
+    # Most modern terminals support Unicode, but old Windows Command Prompt doesn't
+    supports_unicode = True
+    if system == 'windows':
+        # Old Windows Command Prompt doesn't support Unicode well
+        if not os.environ.get('WT_SESSION'):  # Not Windows Terminal
+            supports_unicode = False
+    # Check encoding
+    try:
+        if sys.stdout.encoding and 'utf' not in sys.stdout.encoding.lower():
+            supports_unicode = False
+    except (AttributeError, TypeError):
+        pass
+
     if supports_color:
         return {
             'reset': '\033[0m',
@@ -46,13 +60,15 @@ def get_platform_colors() -> Dict[str, str]:
             'yellow': '\033[1;33m',
             'blue': '\033[1;34m',
             'magenta': '\033[1;35m',
-            'red': '\033[1;31m'
+            'red': '\033[1;31m',
+            'unicode_support': supports_unicode
         }
     else:
         # Fallback to no colors for compatibility
         return {
             'reset': '', 'bold': '', 'cyan': '', 'green': '',
-            'yellow': '', 'blue': '', 'magenta': '', 'red': ''
+            'yellow': '', 'blue': '', 'magenta': '', 'red': '',
+            'unicode_support': supports_unicode
         }
 
 

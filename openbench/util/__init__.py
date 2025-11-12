@@ -19,6 +19,7 @@ try:
     from .Mod_LoggingSystem import get_logging_manager
     from .Mod_OutputManager import ModularOutputManager
     from .Mod_ParallelEngine import ParallelEngine
+    from .Mod_CacheCleanup import cleanup_all_cache, cleanup_pycache, get_cache_size
 except ImportError:
     # Graceful handling if some modules are not available
     pass
@@ -29,5 +30,8 @@ __all__ = [
     'Convert_Type',
     'get_logging_manager',
     'ModularOutputManager',
-    'ParallelEngine'
+    'ParallelEngine',
+    'cleanup_all_cache',
+    'cleanup_pycache',
+    'get_cache_size'
 ]

@@ -651,23 +651,27 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     row = {}
                                                     try:
                                                         row['std_s'] = self.stat_standard_deviation(s).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"std_s calculation failed: {e}")
                                                         row['std_s'] = np.nan
                                                     try:
                                                         row['std_o'] = self.stat_standard_deviation(o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"std_o calculation failed: {e}")
                                                         row['std_o'] = np.nan
                                                     try:
                                                         row['CRMSD'] = self.CRMSD(s, o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"CRMSD calculation failed: {e}")
                                                         row['CRMSD'] = np.nan
                                                     try:
                                                         row['correlation'] = self.correlation(s, o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"correlation calculation failed: {e}")
                                                         row['correlation'] = np.nan
                                                     return row
                                                 finally:
-                                                    gc.collect()  # Clean up memory after processing each station
+                                                    pass  # Memory cleanup handled at higher level
 
                                             results = Parallel(n_jobs=-1)(
                                                 delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
@@ -773,12 +777,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         stds[0] = std_ref
                                         output_file.write(f"{std_ref}\t")
                                     finally:
-                                        gc.collect()  # Clean up memory after processing each simulation source
+                                        pass  # Memory cleanup handled at method level
                             try:
                                 make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources,
                                                                          option)
-                            except:
-                                logging.error(f"Error: {evaluation_item} {ref_source} Error!")
+                            except (ValueError, RuntimeError, IOError, OSError) as e:
+                                logging.error(f"Error: {evaluation_item} {ref_source} Taylor diagram generation failed: {e}")
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
                 finally:
@@ -862,19 +866,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     row = {}
                                                     try:
                                                         row['CRMSD'] = self.CRMSD(s, o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"CRMSD calculation failed: {e}")
                                                         row['CRMSD'] = np.nan
                                                     try:
                                                         row['bias'] = self.bias(s, o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"bias calculation failed: {e}")
                                                         row['bias'] = np.nan
                                                     try:
                                                         row['rmse'] = self.RMSE(s, o).values
-                                                    except:
+                                                    except (ValueError, RuntimeError, AttributeError) as e:
+                                                        logging.debug(f"rmse calculation failed: {e}")
                                                         row['rmse'] = np.nan
                                                     return row
                                                 finally:
-                                                    gc.collect()  # Clean up memory after processing each station
+                                                    pass  # Memory cleanup handled at higher level
 
                                             results = Parallel(n_jobs=-1)(
                                                 delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
@@ -928,14 +935,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             output_file.write(f"{crmsd_sim}\t")
                                             crmsds[i] = crmsd_sim
                                     finally:
-                                        gc.collect()  # Clean up memory after processing each simulation source
+                                        pass  # Memory cleanup handled at method level
 
                                 output_file.write("\n")
                                 try:
                                     make_scenarios_comparison_Target_Diagram(dir_path, evaluation_item, biases, rmses, crmsds, ref_source,
                                                                              sim_sources, option)
-                                except:
-                                    logging.error(f"Error: {evaluation_item} {ref_source} error!")
+                                except (ValueError, RuntimeError, IOError, OSError) as e:
+                                    logging.error(f"Error: {evaluation_item} {ref_source} Target diagram generation failed: {e}")
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
                 finally:
@@ -1000,8 +1007,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     try:
                                         make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
                                                                                           score, datasets_filtered, option)
-                                    except:
-                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!")
+                                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed: {e}")
                                 finally:
                                     gc.collect()  # Clean up memory after processing each reference source
                         finally:
@@ -1049,8 +1056,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     try:
                                         make_scenarios_comparison_Kernel_Density_Estimate(dir_path, evaluation_item, ref_source, sim_sources,
                                                                                           metric, datasets_filtered, option)
-                                    except:
-                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed: {e}")
                                 finally:
                                     gc.collect()  # Clean up memory after processing each reference source
                         finally:
@@ -1179,7 +1186,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                             output_file.write("\n")
                                     finally:
-                                        gc.collect()  # Clean up memory after processing each simulation source
+                                        pass  # Memory cleanup handled at method level
                             finally:
                                 gc.collect()  # Clean up memory after processing each reference source
                     finally:
@@ -1211,8 +1218,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         q_value = pb.quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                         pb = pb.where((pb >= q_value[0]) & (pb <= q_value[1]), np.nan)
-                    except:
-                        pass
+                    except (ValueError, RuntimeError, AttributeError) as e:
+                        logging.debug(f"Quantile filtering failed for {metric}: {e}")
 
                     try:
                         pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
@@ -1221,8 +1228,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                    f'{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
                         os.makedirs(os.path.dirname(output_path), exist_ok=True)
                         pb_da.to_netcdf(output_path)
-                    except:
-                        pass
+                    except (OSError, IOError, PermissionError, ValueError) as e:
+                        logging.debug(f"Failed to save portrait plot data for {metric}: {e}")
                     return np.nanmedian(pb)
                 finally:
                     gc.collect()  # Clean up memory after processing each metric
@@ -1237,8 +1244,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                    f'{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
                         os.makedirs(os.path.dirname(output_path), exist_ok=True)
                         pb_da.to_netcdf(output_path)
-                    except:
-                        pass
+                    except (OSError, IOError, PermissionError, ValueError) as e:
+                        logging.debug(f"Failed to save portrait plot data for {score}: {e}")
 
                     if self.weight.lower() == 'area':
                         weights = np.cos(np.deg2rad(o.lat))
@@ -1335,7 +1342,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     elif metric_or_score == 'score':
                                                         return process_score(casedir, item, ref_source, sim_source, score, s_season, o_season)
                                                 finally:
-                                                    gc.collect()  # Clean up memory after processing each station
+                                                    pass  # Memory cleanup handled at higher level
 
                                             seasons = ['DJF', 'MAM', 'JJA', 'SON']
                                             for metric in metrics:
@@ -1465,7 +1472,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 gc.collect()  # Clean up memory after processing grid data
                                         output_file.write("\n")
                                     finally:
-                                        gc.collect()  # Clean up memory after processing each simulation source
+                                        pass  # Memory cleanup handled at method level
                             finally:
                                 gc.collect()  # Clean up memory after processing each reference source
                     finally:
@@ -1533,8 +1540,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     try:
                                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, score,
                                                                                datasets_filtered, option)
-                                    except:
-                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!")
+                                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed: {e}")
                                 finally:
                                     gc.collect()  # Clean up memory after processing each reference source
                         finally:
@@ -1581,8 +1588,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     try:
                                         make_scenarios_comparison_Whisker_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                                                datasets_filtered, option)
-                                    except:
-                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!")
+                                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed: {e}")
                                 finally:
                                     gc.collect()  # Clean up memory after processing each reference source
                         finally:
@@ -1681,7 +1688,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 lat_mapping = merged_df.set_index('ID')['ref_lat'].to_dict()
                                                 combined_relative_scores['ref_lon'] = combined_relative_scores['ID'].map(lon_mapping)
                                                 combined_relative_scores['ref_lat'] = combined_relative_scores['ID'].map(lat_mapping)
-                                            except:
+                                            except (KeyError, ValueError) as e:
+                                                logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
                                                 lon_mapping = merged_df.set_index('ID')['sim_lon'].to_dict()
                                                 lat_mapping = merged_df.set_index('ID')['sim_lat'].to_dict()
                                                 combined_relative_scores['sim_lon'] = combined_relative_scores['ID'].map(lon_mapping)
@@ -1696,8 +1704,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         try:
                                             make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source,
                                                                                      scores, 'stn', self.main_nml['general'], option)
-                                        except:
-                                            logging.info(f"No files found")
+                                        except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
+                                            logging.info(f"No files found for relative score plot: {e}")
 
                                     else:
                                         for score in scores:
@@ -1749,8 +1757,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         try:
                                             make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid',
                                                                                      self.main_nml['general'], option)
-                                        except:
-                                            logging.info(f"No files found")
+                                        except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
+                                            logging.info(f"No files found for relative score plot: {e}")
                                 finally:
                                     gc.collect()  # Clean up memory after processing each simulation source
                         finally:
@@ -1985,8 +1993,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         make_scenarios_comparison_Ridgeline_Plot(dir_path, evaluation_item, ref_source, sim_sources, score,
                                                                  datasets_filtered, option)
-                    except:
-                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Ridgeline_Plot failed!")
+                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                        logging.error(f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Ridgeline_Plot failed: {e}")
 
             for metric in metrics:
                 for ref_source in ref_sources:
@@ -2030,9 +2038,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         make_scenarios_comparison_Ridgeline_Plot(dir_path, evaluation_item, ref_source, sim_sources, metric,
                                                                  datasets_filtered, option)
-                    except:
+                    except (ValueError, RuntimeError, IOError, OSError) as e:
                         logging.error(
-                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!")
+                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Ridgeline Plot failed: {e}")
 
     def to_dict(self):
         return self.__dict__
@@ -2149,7 +2157,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 try:
                                     lon_select = df['ref_lon'].values
                                     lat_select = df['ref_lat'].values
-                                except:
+                                except (KeyError, ValueError) as e:
+                                    logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
                                     lon_select = df['sim_lon'].values
                                     lat_select = df['sim_lat'].values
                                 anomaly = station_df[sim_source] - ensemble_mean
@@ -2195,7 +2204,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 try:
                                     lon_select = df['ref_lon'].values
                                     lat_select = df['ref_lat'].values
-                                except:
+                                except (KeyError, ValueError) as e:
+                                    logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
                                     lon_select = df['sim_lon'].values
                                     lat_select = df['sim_lat'].values
                                 anomaly = station_df[sim_source] - ensemble_mean
@@ -2233,7 +2243,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         try:
                                             lon_select = df1['ref_lon'].values
                                             lat_select = df1['ref_lat'].values
-                                        except:
+                                        except (KeyError, ValueError) as e:
+                                            logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
                                             lon_select = df1['sim_lon'].values
                                             lat_select = df1['sim_lat'].values
                                         diff_df = pd.DataFrame({
@@ -2268,7 +2279,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         try:
                                             lon_select = df1['ref_lon'].values
                                             lat_select = df1['ref_lat'].values
-                                        except:
+                                        except (KeyError, ValueError) as e:
+                                            logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
                                             lon_select = df1['sim_lon'].values
                                             lat_select = df1['sim_lat'].values
                                         diff_df = pd.DataFrame({
@@ -2452,11 +2464,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             result_o = method_function(*[o])
             try:
                 row['ref_value'] = result_o.values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"ref_value extraction failed: {e}")
                 row['ref_value'] = -9999.0
             try:
                 row['sim_value'] = result_s.values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"sim_value extraction failed: {e}")
                 row['sim_value'] = -9999.0
             return row
 

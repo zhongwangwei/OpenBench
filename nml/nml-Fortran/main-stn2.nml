@@ -1,5 +1,5 @@
 &general
-  basename = stn
+  basename = stn3
   basedir = ./output
   compare_tim_res = Month
   compare_tzone = 0.0
