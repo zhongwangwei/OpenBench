@@ -1,5 +1,5 @@
 &general
-   model_namelist    =  ./nml-Fortran/Mod_variables_defination/CaMaFlood.nml                               #the unit and variable defination will be default in here
+   model_namelist    =  ./nml-Fortran/Mod_variables_definition/CaMaFlood.nml                               #the unit and variable definition will be default in here
    timezone =  0.0
    data_type =  grid
    data_groupby =  Month

@@ -29,18 +29,18 @@
 
 
 &def_Mod
-    MATSIRO    = ./nml/Mod_variables_defination/MATSIRO.nml
-    JULES7     = ./nml/Mod_variables_defination/JULES7.nml
-    GLDAS2     = ./nml/Mod_variables_defination/GLDAS2.nml
-    VIC5       = ./nml/Mod_variables_defination/VIC5.nml
-    BCCAVIM    = ./nml/Mod_variables_defination/BCCAVIM.nml
-    LS3MIP     = ./nml/Mod_variables_defination/LS3MIP.nml
-    NoahMP5    = ./nml/Mod_variables_defination/NoahMP5.nml
-    CaMaFlood  = ./nml/Mod_variables_defination/CaMaFlood.nml
-    CLM5       = ./nml/Mod_variables_defination/CLM5.nml
-    LEM2       = ./nml/Mod_variables_defination/LEM2.nml
-    CoLM       = ./nml/Mod_variables_defination/CoLM.nml
-    test_model = /media/zhwei/data02/Streamlit/Openbench/nml/Mod_variables_defination/test_model.nml
+    MATSIRO    = ./nml/Mod_variables_definition/MATSIRO.nml
+    JULES7     = ./nml/Mod_variables_definition/JULES7.nml
+    GLDAS2     = ./nml/Mod_variables_definition/GLDAS2.nml
+    VIC5       = ./nml/Mod_variables_definition/VIC5.nml
+    BCCAVIM    = ./nml/Mod_variables_definition/BCCAVIM.nml
+    LS3MIP     = ./nml/Mod_variables_definition/LS3MIP.nml
+    NoahMP5    = ./nml/Mod_variables_definition/NoahMP5.nml
+    CaMaFlood  = ./nml/Mod_variables_definition/CaMaFlood.nml
+    CLM5       = ./nml/Mod_variables_definition/CLM5.nml
+    LEM2       = ./nml/Mod_variables_definition/LEM2.nml
+    CoLM       = ./nml/Mod_variables_definition/CoLM.nml
+    test_model = /media/zhwei/data02/Streamlit/Openbench/nml/Mod_variables_definition/test_model.nml
 /
 
 

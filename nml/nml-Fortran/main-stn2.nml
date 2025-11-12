@@ -5,14 +5,14 @@
   compare_tzone = 0.0
   compare_grid_res = 0.25
   syear = 2006
-  eyear = 2014
+  eyear = 2010
   min_year = 1.0
   max_lat = 90.0
   min_lat = -90.0
   max_lon = 180.0
   min_lon = -180.0
   reference_nml = ./nml/nml-Fortran/ref-stn.nml
-  simulation_nml = ./nml/nml-Fortran/sim-cama.nml
+  simulation_nml = ./nml/nml-Fortran/sim-FUXI.nml
   statistics_nml = ./nml/nml-Fortran/stats.nml
   figure_nml = ./nml/nml-Fortran/figlib.nml
   num_cores = 48
@@ -70,7 +70,7 @@
   Latent_Heat = False
   Net_Radiation = False
   Root_Zone_Soil_Temperature = False
-  Sensible_Heat = False
+  Sensible_Heat = True
   Surface_Net_LW_Radiation = False
   Surface_Net_SW_Radiation = False
   Surface_Soil_Temperature = False

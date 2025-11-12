@@ -43,7 +43,34 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       exit()
    return ds
 
-def filter_CoLM(info,ds):   #update info as well
+def filter_CoLM(info, ds=None):   #update info as well
+   # If ds is None, this is being called from the configuration context (station filtering).
+   # For station filtering, we need to call the default filter to properly handle time range filtering.
+   if ds is None:
+      # Call default filter to handle station time range filtering
+      if hasattr(info, '_apply_default_filter'):
+         info._apply_default_filter()
+      return
+
+   # Handle Gross Primary Productivity with fallback from f_gpp to f_assim
+   if info.item == "Gross_Primary_Productivity":
+      try:
+         # If f_gpp exists, let default processing handle it
+         if 'f_gpp' in ds.variables:
+            return None, None
+         # Fall back to f_assim only if f_gpp is not available
+         elif 'f_assim' in ds.variables:
+            logging.warning('f_gpp not found, falling back to f_assim for Gross_Primary_Productivity')
+            info.sim_varname = ['f_assim']
+            info.sim_varunit = 'mol m-2 s-1'
+            return info, ds['f_assim']
+         else:
+            logging.error('Neither f_gpp nor f_assim found in dataset for Gross_Primary_Productivity')
+            return info, None
+      except Exception as e:
+         logging.error(f"Gross_Primary_Productivity processing ERROR: {e}")
+         return info, None
+
    if info.item == "Crop_Yield_Corn":
       try:
          ds['Crop_Yield_Corn'] = (

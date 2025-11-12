@@ -6,10 +6,10 @@
 
 
 &def_nml
-    GLEAM_hybird_PLUMBER2 = ./nml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.nml
-    ILAMB_monthly         = ./nml/Ref_variables_defination/Debug/ILAMB_monthly.nml
-    PLUMBER2              = ./nml/Ref_variables_defination/Debug/PLUMBER2.nml
-    GLEAM4.2a_monthly     = ./nml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.nml
+    GLEAM_hybird_PLUMBER2 = ./nml/Ref_variables_definition/Debug/GLEAM_hybird_PLUMBER2.nml
+    ILAMB_monthly         = ./nml/Ref_variables_definition/Debug/ILAMB_monthly.nml
+    PLUMBER2              = ./nml/Ref_variables_definition/Debug/PLUMBER2.nml
+    GLEAM4.2a_monthly     = ./nml/Ref_variables_definition/Debug/GLEAM4.2a_monthly.nml
 /
 
 

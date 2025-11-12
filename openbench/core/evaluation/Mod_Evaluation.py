@@ -506,6 +506,12 @@ class Evaluation_stn(metrics, scores):
             ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
+            # Check if both files exist before processing
+            if not os.path.exists(sim_path) or not os.path.exists(ref_path):
+                station_id = station_list['ID'][iik]
+                logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
+                return None
+
             # Open datasets and keep references for proper cleanup
             sim_ds = xr.open_dataset(sim_path)
             ref_ds = xr.open_dataset(ref_path)

@@ -27,9 +27,9 @@
   /* Data source settings: Defines the specific configurations for the reference data sources specified above,
      detailed configurations should be set according to the specified file paths */
   "def_nml": {
-    "GLEAM_hybird_PLUMBER2": "./nml/Ref_variables_defination/Debug/GLEAM_hybird_PLUMBER2.json",
-    "ILAMB_monthly": "./nml/Ref_variables_defination/Debug/ILAMB_monthly.json",
-    "PLUMBER2": "./nml/Ref_variables_defination/Debug/PLUMBER2.json",
-    "GLEAM4.2a_monthly": "./nml/Ref_variables_defination/Debug/GLEAM4.2a_monthly.json"
+    "GLEAM_hybird_PLUMBER2": "./nml/Ref_variables_definition/Debug/GLEAM_hybird_PLUMBER2.json",
+    "ILAMB_monthly": "./nml/Ref_variables_definition/Debug/ILAMB_monthly.json",
+    "PLUMBER2": "./nml/Ref_variables_definition/Debug/PLUMBER2.json",
+    "GLEAM4.2a_monthly": "./nml/Ref_variables_definition/Debug/GLEAM4.2a_monthly.json"
   }
 }

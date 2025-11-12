@@ -1,6 +1,6 @@
 {
   "general": {
-    "model_namelist": "./nml/Mod_variables_defination/CoLM.json",
+    "model_namelist": "./nml/Mod_variables_definition/CoLM.json",
     "timezone": 0.0,
     "data_type": "stn",
     "data_groupby": "single",

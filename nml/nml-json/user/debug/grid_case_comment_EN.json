@@ -3,7 +3,7 @@
      Defines the format of a specific simulation result to be compared */
 
   "general": {
-    "model_namelist": "./nml/Mod_variables_defination/CoLM.json", // Model used, here CoLM results, with various model formats pre-configured, refer to corresponding models under ./nml/Mod_variables_defination/
+    "model_namelist": "./nml/Mod_variables_definition/CoLM.json", // Model used, here CoLM results, with various model formats pre-configured, refer to corresponding models under ./nml/Mod_variables_definition/
     "timezone": 0.0,                            // Time zone used by the model results
     "data_type": "grid",                        // Data type ("grid" or "stn")
     "data_groupby": "month",                    // Data aggregation type (for grid: "year", "month", "day"; for stn: "single")

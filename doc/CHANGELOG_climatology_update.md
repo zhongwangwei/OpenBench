@@ -79,7 +79,7 @@ o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
 - 最简配置示例和常见用例
 
 #### 3.3 示例配置
-- `nml/nml-json/Ref_variables_defination/climatology_example.json`:
+- `nml/nml-json/Ref_variables_definition/climatology_example.json`:
   气候态评估配置示例
 
 ### 4. 新增测试
@@ -176,7 +176,7 @@ INFO - Calculated monthly climatology from simulation data
 ### 新增的文件
 1. `docs/climatology_evaluation_guide.md` - 详细使用指南
 2. `docs/climatology_quick_start.md` - 快速入门
-3. `nml/nml-json/Ref_variables_defination/climatology_example.json` - 配置示例
+3. `nml/nml-json/Ref_variables_definition/climatology_example.json` - 配置示例
 4. `tests/test_climatology_mode_detection.py` - 单元测试
 5. `CHANGELOG_climatology_update.md` - 本变更日志
 
