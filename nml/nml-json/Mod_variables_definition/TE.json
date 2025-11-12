@@ -1,0 +1,265 @@
+{
+  "general": {
+    "model": "TE"
+  },
+  "Sensible_Heat": {
+    "varname": "SENS",
+    "varunit": "W m-2"
+  },
+  "Latent_Heat": {
+    "varname": "LTNT",
+    "varunit": "W m-2"
+  },
+  "Net_Radiation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Ground_Heat": {
+    "varname": "GFLXTL",
+    "varunit": "W m-2"
+  },
+  "Surface_Upward_SW_Radiation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Upward_LW_Radiation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Net_SW_Radiation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Net_LW_Radiation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Albedo": {
+    "varname": "ALB",
+    "varunit": "percentage"
+  },
+  "Gross_Primary_Productivity": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Net_Ecosystem Exchange": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Ecosystem_Respiration": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Veg_Cover_In_Fraction": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Leaf_Greenness": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Leaf_Area_Index": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Stem_Area_Index": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Evapotranspiration": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Canopy_Evaporation_Canopy_Transpiration": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Canopy_Interception": {
+    "varname": "EIFLX",
+    "varunit": "kg m-2 s-1"
+  },
+  "Ground_Evaporation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Soil_Evaporation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Snow_Evaporation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Canopy_Transpiration": {
+    "varname": "ETFLX",
+    "varunit": "kg m-2 s-1"
+  },
+  "Total_Runoff": {
+    "varname": "RUNOFF",
+    "varunit": "kg m-2 s-1"
+  },
+  "Surface_Runoff": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Subsurface_Runoff": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Saturation_Excess_Surface_Runoff": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Infiltration": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Groundwater_Recharge_Rate": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Snow_Water_Equivalent": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Snow_Depth": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Snow_Cover_In_Fraction": {
+    "varname": "SNRAT",
+    "varunit": "unitless"
+  },
+  "Lake_temperature": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Lake_Ice_Fraction_Cover": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Water_Table_Depth": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Depth_Of_Surface_Water": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Water_Storage_In_Aquifer": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Soil_Moisture": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Root-Zone_Soil_Moisture": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Soil_Temperature": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Streamflow": {
+    "varname": "OUTFLW",
+    "varunit": "m3 s-1"
+  },
+  "Inundation_Fraction": {
+    "varname": "FLDFRC",
+    "varunit": "unitless"
+  },
+  "Inundation_Area": {
+    "varname": "FLDARE",
+    "varunit": "m2"
+  },
+  "Total_Water_Storage": {
+    "varname": "STORGE",
+    "varunit": "m3"
+  },
+  "Sensible_Heat_From_Urban": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Latent_Heat_From_Urban": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Sensible_Heat_From_Urban_Roof": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Latent_Heat_From_Urban_Roof": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Waste_Heat_From_Heat_or_Cool_AC": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Sensible_Flux_From_Heat_or_Cool_AC": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Flux_From_Metabolism": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Flux_From_Traffic": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Temperature_Of_Urban_Roof": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Dam_Inflow": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Dam_Outflow": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Diurnal_Temperature_Range": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Diurnal_Max_Temperature": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Diurnal_Min_Temperature": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Downward_SW_Radiation": {
+    "varname": "SSRD",
+    "varunit": "W m-2"
+  },
+  "Surface_Downward_LW_Radiation": {
+    "varname": "SLRD",
+    "varunit": "W m-2"
+  },
+  "Surface_Relative_Humidity": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Vapor_Pressure": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Specific_Humidity": {
+    "varname": "GDQ",
+    "varunit": "unitless"
+  },
+  "Precipitation": {
+    "varname": "",
+    "varunit": ""
+  },
+  "Surface_Air_Temperature": {
+    "varname": "",
+    "varunit": ""
+  }
+}

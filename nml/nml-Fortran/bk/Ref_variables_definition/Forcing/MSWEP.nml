@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/grid_ref/Forcing/MSWEP_V280/Precipitation_merged/
+   root_dir          =  ./dataset/Reference/Grid/Forcing/MSWEP_V280/Precipitation_merged/
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Year

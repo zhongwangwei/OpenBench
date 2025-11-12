@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/Energy/HOMTS_update
+  root_dir: ./dataset/Reference/Grid/Energy/HOMTS_update
   timezone: 0.0
   data_type: grid
   data_groupby: Single
