@@ -1211,6 +1211,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
         varname = self.ref_varname if datasource == 'ref' else self.sim_varname
+        original_varname = varname[0] if isinstance(varname, list) else varname  # Save original
 
         # Validate varname list is not empty
         if not varname or len(varname) == 0:
@@ -1219,12 +1220,41 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
         # Check if the variable exists in the dataset
         if varname[0] not in stn_data:
-            available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-            logging.error(f"Variable '{varname[0]}' not found in the station data.")
-            logging.error(f"Available variables: {available_vars}")
-            raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
+            # Try to apply custom filter for variable fallback
+            model = self.ref_source if datasource == 'ref' else self.sim_source
+            try:
+                import importlib
+                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                custom_filter = getattr(custom_module, f"filter_{model}")
 
-        ds = stn_data[varname[0]]
+                # Call custom filter with dataset
+                logging.info(f"Variable '{varname[0]}' not found, trying custom filter for {model}")
+                updated_self, filtered_data = custom_filter(self, stn_data)
+
+                # If custom filter handled it, use the updated info and data
+                if updated_self is not None and filtered_data is not None:
+                    # Update varname based on what the filter set
+                    if datasource == 'ref':
+                        varname = self.ref_varname
+                    else:
+                        varname = self.sim_varname
+                    logging.info(f"Custom filter updated variable to: {varname[0]}")
+                    ds = filtered_data
+                else:
+                    # Custom filter didn't handle this case, raise error
+                    available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                    logging.error(f"Variable '{varname[0]}' not found in the station data.")
+                    logging.error(f"Available variables: {available_vars}")
+                    raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
+            except (ImportError, AttributeError):
+                # No custom filter available, raise original error
+                available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                logging.error(f"Variable '{varname[0]}' not found in the station data.")
+                logging.error(f"Available variables: {available_vars}")
+                logging.error(f"No custom filter available for {model}")
+                raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
+        else:
+            ds = stn_data[varname[0]]
 
         # Check the time dimension
         if 'time' not in ds.dims:
@@ -1259,6 +1289,10 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                 logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
 
         ds = self.select_timerange(ds, start_year, end_year)
+
+        # Store original variable name as attribute for later renaming if needed
+        ds.attrs['_original_varname'] = original_varname
+
         return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
 
     @performance_monitor
@@ -1281,8 +1315,28 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             output_file = os.path.join(self.casedir, 'output', 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
-            # Handle calendar attribute safely
-            data.to_netcdf(output_file)
+
+            # Rename variable back to original name if needed (for variable fallback scenarios)
+            if '_original_varname' in data.attrs:
+                original_varname = data.attrs['_original_varname']
+                current_varname = data.name if hasattr(data, 'name') else None
+
+                if current_varname and current_varname != original_varname:
+                    logging.info(f"Renaming variable '{current_varname}' back to '{original_varname}' before saving")
+                    # Convert DataArray to Dataset, rename, then extract
+                    data_to_save = data.to_dataset(name=original_varname)
+                    # Remove the temporary attribute
+                    if '_original_varname' in data_to_save.attrs:
+                        del data_to_save.attrs['_original_varname']
+                    data_to_save.to_netcdf(output_file)
+                else:
+                    # Remove the temporary attribute
+                    if '_original_varname' in data.attrs:
+                        del data.attrs['_original_varname']
+                    data.to_netcdf(output_file)
+            else:
+                data.to_netcdf(output_file)
+
             logging.info(f"Saved station data to {output_file}")
         finally:
             if hasattr(data, 'close'):
@@ -1298,7 +1352,12 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
             station_data = self.extract_single_station_data(dataset, station, datasource)
             processed_data = self.process_extracted_data(station_data, start_year, end_year)
-            self.save_extracted_data(processed_data, station, datasource)
+
+            # Only save if processed_data is not None (i.e., had valid time range)
+            if processed_data is not None:
+                self.save_extracted_data(processed_data, station, datasource)
+            else:
+                logging.info(f"Skipping station {station['ID']} - no data in time range {start_year}-{end_year}")
         finally:
             gc.collect()
 
@@ -1315,6 +1374,12 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     @performance_monitor
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
         data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
+
+        # Check if time dimension is empty after slicing
+        if len(data.time) == 0:
+            logging.warning(f"No data available in time range {start_year}-{end_year}. Skipping this station.")
+            return None
+
         data = data  # .where((data > -1e20) & (data < 1e20), np.nan)
         return data.resample(time=self.compare_tim_res).mean()
 

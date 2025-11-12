@@ -1,5 +1,5 @@
 general:
-  model_namelist: ./nml/Mod_variables_defination/CoLM.nml
+  model_namelist: ./nml/Mod_variables_definition/CoLM.nml
   timezone: 0.0
   data_type: stn
   data_groupby: year

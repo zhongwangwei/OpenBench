@@ -14,9 +14,9 @@
     ]
   },
   "def_nml": {
-    "GLEAM_hybird_PLUMBER2": "./nml/nml-json/Ref_variables_defination_LowRes/Debug/GLEAM_hybird_PLUMBER2.json",
-    "ILAMB_monthly": "./nml/nml-json/Ref_variables_defination_LowRes/Debug/ILAMB_monthly.json",
-    "PLUMBER2": "./nml/nml-json/Ref_variables_defination_LowRes/Debug/PLUMBER2.json",
-    "GLEAM4.2a_monthly": "./nml/nml-json/Ref_variables_defination_LowRes/Debug/GLEAM4.2a_monthly.json"
+    "GLEAM_hybird_PLUMBER2": "./nml/nml-json/Ref_variables_definition_LowRes/Debug/GLEAM_hybird_PLUMBER2.json",
+    "ILAMB_monthly": "./nml/nml-json/Ref_variables_definition_LowRes/Debug/ILAMB_monthly.json",
+    "PLUMBER2": "./nml/nml-json/Ref_variables_definition_LowRes/Debug/PLUMBER2.json",
+    "GLEAM4.2a_monthly": "./nml/nml-json/Ref_variables_definition_LowRes/Debug/GLEAM4.2a_monthly.json"
   }
 }

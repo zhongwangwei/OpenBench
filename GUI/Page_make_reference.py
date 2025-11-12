@@ -866,7 +866,7 @@ class make_reference(mange_reference):
 
         self.ref = self.initial.ref()
         self.classification = self.initial.classification()
-        self.lib_path = os.path.join(st.session_state.namelist_path, 'Ref_variables_defination')
+        self.lib_path = os.path.join(st.session_state.namelist_path, 'Ref_variables_definition')
 
     def step2_set(self):
         if 'ref_change' not in st.session_state:
