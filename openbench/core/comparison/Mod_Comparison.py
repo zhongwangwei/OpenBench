@@ -1221,15 +1221,17 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     except (ValueError, RuntimeError, AttributeError) as e:
                         logging.debug(f"Quantile filtering failed for {metric}: {e}")
 
-                    try:
-                        pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
-                        pb_da = Convert_Type.convert_nc(pb_da)
-                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
-                                                   f'{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        pb_da.to_netcdf(output_path)
-                    except (OSError, IOError, PermissionError, ValueError) as e:
-                        logging.debug(f"Failed to save portrait plot data for {metric}: {e}")
+                    # Only save NetCDF for gridded data (with lat/lon dimensions)
+                    if hasattr(pb, 'dims') and 'lat' in pb.dims and 'lon' in pb.dims:
+                        try:
+                            pb_da = Convert_Type.convert_nc(pb)
+                            pb_da.name = metric
+                            output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
+                                                       f'{item}_ref_{ref_source}_sim_{sim_source}_{metric}{vkey}.nc')
+                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                            pb_da.to_netcdf(output_path)
+                        except (OSError, IOError, PermissionError, ValueError, AttributeError) as e:
+                            logging.debug(f"Failed to save portrait plot data for {metric}: {e}")
                     return np.nanmedian(pb)
                 finally:
                     gc.collect()  # Clean up memory after processing each metric
@@ -1237,27 +1239,35 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             def process_score(casedir, item, ref_source, sim_source, score, s, o, vkey=None):
                 try:
                     pb = getattr(self, score)(s, o)
-                    try:
-                        pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
-                        pb_da = Convert_Type.convert_nc(pb_da)
-                        output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
-                                                   f'{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        pb_da.to_netcdf(output_path)
-                    except (OSError, IOError, PermissionError, ValueError) as e:
-                        logging.debug(f"Failed to save portrait plot data for {score}: {e}")
 
-                    if self.weight.lower() == 'area':
-                        weights = np.cos(np.deg2rad(o.lat))
-                        pb = pb.where(np.isfinite(pb), np.nan).weighted(weights).mean(skipna=True)
-                    elif self.weight.lower() == 'mass':
-                        area_weights = np.cos(np.deg2rad(o.lat))
-                        flux_weights = np.abs(o.mean('time'))
-                        combined_weights = area_weights * flux_weights
-                        normalized_weights = combined_weights / combined_weights.sum()
-                        pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True)
+                    # Only save NetCDF for gridded data (with lat/lon dimensions)
+                    if hasattr(pb, 'dims') and 'lat' in pb.dims and 'lon' in pb.dims:
+                        try:
+                            pb_da = Convert_Type.convert_nc(pb)
+                            pb_da.name = score
+                            output_path = os.path.join(casedir, 'output', 'comparisons', 'Portrait_Plot_seasonal',
+                                                       f'{item}_ref_{ref_source}_sim_{sim_source}_{score}{vkey}.nc')
+                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                            pb_da.to_netcdf(output_path)
+                        except (OSError, IOError, PermissionError, ValueError, AttributeError) as e:
+                            logging.debug(f"Failed to save portrait plot data for {score}: {e}")
+
+                    # Apply weighting only for gridded data
+                    if hasattr(pb, 'dims') and 'lat' in pb.dims and 'lon' in pb.dims:
+                        if self.weight.lower() == 'area':
+                            weights = np.cos(np.deg2rad(pb.coords['lat']))
+                            pb = pb.where(np.isfinite(pb), np.nan).weighted(weights).mean(skipna=True)
+                        elif self.weight.lower() == 'mass':
+                            area_weights = np.cos(np.deg2rad(pb.coords['lat']))
+                            flux_weights = np.abs(o.mean('time'))
+                            combined_weights = area_weights * flux_weights
+                            normalized_weights = combined_weights / combined_weights.sum()
+                            pb = pb.where(np.isfinite(pb), np.nan).weighted(normalized_weights.fillna(0)).mean(skipna=True)
+                        else:
+                            pb = pb.mean(skipna=True)
                     else:
-                        pb = pb.mean(skipna=True)
+                        # For station data, just take the mean
+                        pb = pb.mean(skipna=True) if hasattr(pb, 'mean') else pb
                     return Convert_Type.convert_nc(pb)
                 finally:
                     gc.collect()  # Clean up memory after processing each score
