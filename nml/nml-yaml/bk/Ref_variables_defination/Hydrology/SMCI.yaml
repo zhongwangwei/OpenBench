@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/Water/SMCI/9km
+  root_dir: ./dataset/Reference/Grid/Water/SMCI/9km
   timezone: 0.0
   data_type: grid
   data_groupby: Single

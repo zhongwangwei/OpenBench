@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/reference/grid_ref/Water/SMAP_L3/processed",
+    "root_dir": "./dataset/Reference/Grid/Water/SMAP_L3/processed",
     "timezone": 0,
     "data_type": "grid",
     "data_groupby": "Single",

@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/stn_ref/Water/Transpiration_GLEAM_hybird/GLEAM_hybird
+   root_dir          =  ./dataset/Reference/Station/Water/Transpiration_GLEAM_hybird/GLEAM_hybird
    timezone          =  0.0
    data_type         =  stn
    data_groupby      =  single
@@ -7,7 +7,7 @@
    grid_res          =  
    syear             =  
    eyear             =  
-   fulllist          =  ./dataset/reference/stn_ref/Water/Transpiration_GLEAM_hybird/Transpiration_GLEAM_hybird.csv
+   fulllist          =  ./dataset/Reference/Station/Water/Transpiration_GLEAM_hybird/Transpiration_GLEAM_hybird.csv
 /
 
 &Canopy_Transpiration

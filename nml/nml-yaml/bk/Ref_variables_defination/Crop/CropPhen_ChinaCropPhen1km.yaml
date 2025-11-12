@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/reference/grid_ref/WaterUse/GIWUED
+  root_dir: ./dataset/Reference/Grid/WaterUse/GIWUED
   timezone: 0.0
   data_type: grid
   data_groupby: single

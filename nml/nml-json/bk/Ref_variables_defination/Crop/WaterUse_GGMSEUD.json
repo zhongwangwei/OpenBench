@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/reference/grid_ref/WaterUse/GGMSEUD",
+    "root_dir": "./dataset/Reference/Grid/WaterUse/GGMSEUD",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "single",

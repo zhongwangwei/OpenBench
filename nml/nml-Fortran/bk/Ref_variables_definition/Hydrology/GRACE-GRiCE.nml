@@ -1,5 +1,5 @@
 &general
-   root_dir          =  ./dataset/reference/grid_ref/Water/GRAiCE/processed/
+   root_dir          =  ./dataset/Reference/Grid/Water/GRAiCE/processed/
    timezone          =  0.0
    data_type         =  grid
    data_groupby      =  Single

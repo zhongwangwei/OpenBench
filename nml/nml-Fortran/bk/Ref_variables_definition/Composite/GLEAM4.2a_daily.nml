@@ -1,5 +1,5 @@
 &general
-  root_dir          =  ./dataset/reference/grid_ref/GLEAM/v4.2/v4.2a/daily/
+  root_dir          =  ./dataset/Reference/Grid/GLEAM/v4.2/v4.2a/daily/
   timezone          =  0
   data_type         =  grid
   data_groupby      =  Year

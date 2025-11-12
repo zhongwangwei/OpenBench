@@ -1,5 +1,5 @@
 &general
-  root_dir          =  ./dataset/reference/grid_ref/Ecosystem/soilgrid
+  root_dir          =  ./dataset/Reference/Grid/Ecosystem/soilgrid
   timezone          =  0
   data_type         =  grid
   data_groupby      =  Single
