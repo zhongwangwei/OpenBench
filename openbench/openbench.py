@@ -401,7 +401,6 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
             else:
                 # Mask the observation data with simulation data to ensure consistent coverage
                 logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
-                import time
 
                 def wait_for_file(file_path, max_wait_time=60, check_interval=1):
                     """Wait for a file to exist and be readable."""
