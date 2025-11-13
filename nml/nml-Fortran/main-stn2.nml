@@ -46,7 +46,7 @@
   Canopy_Interception         = False
   Canopy_Transpiration        = True
   Depth_Of_Surface_Water          = False
-  Evapotranspiration              = False
+  Evapotranspiration              = True
   Ground_Evaporation              = False
   Groundwater_Recharge_Rate       = False
   Permafrost                      = False

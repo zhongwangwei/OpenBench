@@ -7,10 +7,10 @@
    grid_res          =  
    syear             =  
    eyear             =  
-   fulllist          =  ./dataset/Reference/Station/Water/Evapotranspiration/Xu_et_al2025/dataset/list/Xu_et_al2025.csv
+   fulllist          =  ./dataset/Reference/Station/Water/Evapotranspiration/Xu_et_al2025/list/Xu_et_al2025.csv
 /
 
-&Canopy_Transpiration
+&Evapotranspiration
 #You could also define it separately
 #If you define it separately, the &general setting will be ignored in this variable
 varname           =  et
