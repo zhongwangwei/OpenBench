@@ -12,16 +12,18 @@ Release: 0.1
 Date: Mar 2023
 """
 
+import gc
+import glob
+import logging
 import os
+import platform
 import shutil
 import sys
 import time
-import glob
-import platform
-import xarray as xr
+from datetime import datetime
+
 import numpy as np
-import gc
-import time
+import xarray as xr
 
 # Try to import psutil for memory monitoring, use fallback if not available
 try:
@@ -56,8 +58,6 @@ from openbench.util.Mod_MemoryManager import (
 )
 from openbench.util.Mod_DirectoryUtils import reset_directory
 from openbench.util.Mod_CacheCleanup import cleanup_all_cache
-import logging
-from datetime import datetime
 from openbench.data.Mod_DatasetProcessing import DatasetProcessing
 
 # Import enhanced logging system
@@ -299,7 +299,6 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
                     onetimeref = False
 
         # Clean up memory after data preprocessing
-        import gc
         gc.collect()
         logging.info(f"Memory cleaned after preprocessing {evaluation_item}")
 
@@ -369,13 +368,36 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         CZ.scenarios_CZ_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                             fig_nml['Climate_zone_groupby'])
 
-    scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
-    reset_directory(scratch_dir)
-    logging.info(f"Scratch directory reset: {scratch_dir}")
+    # Clean up all groupby objects to release file handles
+    if 'LC' in locals():
+        del LC
+    if 'CZ' in locals():
+        del CZ
+
+    # Force garbage collection to ensure all file handles are released
+    gc.collect()
+    logging.info("Groupby objects cleaned up")
 
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
     try:
+        # Reset scratch directory at the beginning of each process_mask call
+        # This ensures clean temporary space for each sim_source/ref_source combination
+        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+
+        # Force garbage collection before resetting scratch directory
+        gc.collect()
+
+        # Small delay to ensure any pending I/O operations complete
+        time.sleep(0.5)
+
+        try:
+            reset_directory(scratch_dir, timeout=60.0, max_retries=5, retry_delay=2.0)
+            logging.info(f"Scratch directory reset for {evaluation_item} ({ref_source} vs {sim_source})")
+        except Exception as e:
+            logging.warning(f"Scratch directory reset encountered issues: {e}")
+            logging.warning("Continuing with existing scratch directory state")
+
         logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
         general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                                                 evaluation_item, sim_source, ref_source)
@@ -427,57 +449,88 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                 # Convert to absolute path to ensure consistency
                 ref_file_path_abs = os.path.abspath(ref_file_path)
 
+                ref_ds = None
+                sim_ds = None
                 try:
-                    o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
-                except FileNotFoundError as e:
-                    logging.info(f"Ref data file not found, processing now: {ref_file_path_abs}")
-                    logging.info(f"Processing ref data")
-                    dataset_processer.process('ref')
+                    # Open datasets with context manager to ensure proper cleanup
+                    try:
+                        ref_ds = xr.open_dataset(ref_file_path_abs)
+                        o = ref_ds[f'{general_info["ref_varname"]}']
+                    except FileNotFoundError as e:
+                        logging.info(f"Ref data file not found, processing now: {ref_file_path_abs}")
+                        logging.info(f"Processing ref data")
+                        dataset_processer.process('ref')
 
-                    # Wait a moment for file system to sync
-                    #time.sleep(2.5)
+                        # Wait a moment for file system to sync
+                        #time.sleep(2.5)
 
-                    # Try again after processing
-                    o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
-                o = Convert_Type.convert_nc(o)
+                        # Try again after processing
+                        ref_ds = xr.open_dataset(ref_file_path_abs)
+                        o = ref_ds[f'{general_info["ref_varname"]}']
+                    o = Convert_Type.convert_nc(o)
 
-                sim_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
-                # Convert to absolute path to ensure consistency
-                sim_file_path_abs = os.path.abspath(sim_file_path)
+                    sim_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
+                    # Convert to absolute path to ensure consistency
+                    sim_file_path_abs = os.path.abspath(sim_file_path)
 
-                try:
-                    s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
-                except FileNotFoundError as e:
-                    logging.info(f"Sim data file not found, processing now: {sim_file_path_abs}")
-                    logging.info(f"Processing sim data")
-                    dataset_processer.process('sim')
+                    try:
+                        sim_ds = xr.open_dataset(sim_file_path_abs)
+                        s = sim_ds[f'{general_info["sim_varname"]}']
+                    except FileNotFoundError as e:
+                        logging.info(f"Sim data file not found, processing now: {sim_file_path_abs}")
+                        logging.info(f"Processing sim data")
+                        dataset_processer.process('sim')
 
-                    # Wait a moment for file system to sync
-                    #time.sleep(2.5)
+                        # Wait a moment for file system to sync
+                        #time.sleep(2.5)
 
-                    # Try again after processing
-                    s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
-                s = Convert_Type.convert_nc(s)
-                # Align time dimension if compatible
-                if len(s['time']) == len(o['time']):
-                    s['time'] = o['time']
-                else:
-                    logging.warning(f"Time dimension mismatch: sim has {len(s['time'])} points, ref has {len(o['time'])} points")
-                mask1 = np.isnan(s) | np.isnan(o)
-                o.values[mask1] = np.nan
-                # Use absolute path for final save
-                o.to_netcdf(ref_file_path_abs)
+                        # Try again after processing
+                        sim_ds = xr.open_dataset(sim_file_path_abs)
+                        s = sim_ds[f'{general_info["sim_varname"]}']
+                    s = Convert_Type.convert_nc(s)
 
-                # Close datasets to free memory
-                if hasattr(s, 'close'):
-                    s.close()
-                if hasattr(o, 'close'):
-                    o.close()
-                del s, o, mask1
+                    # Align time dimension if compatible
+                    if len(s['time']) == len(o['time']):
+                        s['time'] = o['time']
+                    else:
+                        logging.warning(f"Time dimension mismatch: sim has {len(s['time'])} points, ref has {len(o['time'])} points")
+
+                    # Create mask and apply it
+                    mask1 = np.isnan(s) | np.isnan(o)
+                    o.values[mask1] = np.nan
+
+                    # Load data into memory before closing datasets
+                    o_data = o.load()
+
+                    # Close parent datasets first
+                    if ref_ds is not None:
+                        ref_ds.close()
+                        ref_ds = None
+                    if sim_ds is not None:
+                        sim_ds.close()
+                        sim_ds = None
+
+                    # Now save the modified data
+                    o_data.to_netcdf(ref_file_path_abs)
+
+                    # Clean up variables
+                    del o, s, mask1, o_data
+
+                finally:
+                    # Ensure datasets are closed even if there's an error
+                    if ref_ds is not None:
+                        try:
+                            ref_ds.close()
+                        except Exception:
+                            pass
+                    if sim_ds is not None:
+                        try:
+                            sim_ds.close()
+                        except Exception:
+                            pass
 
     finally:
         # Ensure cleanup even if there's an error
-        import gc
         gc.collect()
 
 
@@ -514,7 +567,6 @@ def process_evaluation(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score
             # Clean up evaluater object and collect garbage
             if 'evaluater' in locals():
                 del evaluater
-            import gc
             gc.collect()
 
 
@@ -552,12 +604,10 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
         logging.info("\033[1;32m" + "=" * 80 + "\033[0m")
 
         # Clean up memory after each comparison
-        import gc
         gc.collect()
         logging.info(f"Memory cleaned after {cvar} comparison")
 
     # Final cleanup after all comparisons
-    import gc
     gc.collect()
     logging.info("Memory cleaned after all comparisons")
 
@@ -596,14 +646,12 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
             exit(1)
 
         # Clean up memory after each statistic
-        import gc
         gc.collect()
         logging.info(f"Memory cleaned after {statistic} analysis")
 
     logging.info("Statistical analysis completed.")
 
     # Final cleanup after all statistics
-    import gc
     gc.collect()
     logging.info("Memory cleaned after all statistics")
 
