@@ -44,7 +44,7 @@
   Net_Primary_Production      = False
   Wetland_Methane_Emission    = False
   Canopy_Interception         = False
-  Canopy_Transpiration        = False
+  Canopy_Transpiration        = True
   Depth_Of_Surface_Water          = False
   Evapotranspiration              = False
   Ground_Evaporation              = False
