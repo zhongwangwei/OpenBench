@@ -1,0 +1,18 @@
+&general
+   root_dir          =  ./dataset/Reference/Station/Water/Transpiration/GLEAM_Hybird/dataset
+   timezone          =  0.0
+   data_type         =  stn
+   data_groupby      =  single
+   tim_res           =  Day
+   grid_res          =  
+   syear             =  
+   eyear             =  
+   fulllist          =  ./dataset/Reference/Station/Water/Transpiration/GLEAM_Hybird/list/Transpiration_GLEAM_hybird.csv
+/
+
+&Canopy_Transpiration
+#You could also define it separately
+#If you define it separately, the &general setting will be ignored in this variable
+varname           =  et
+varunit           =  mm day-1
+/

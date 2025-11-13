@@ -54,6 +54,7 @@ from openbench.util.Mod_MemoryManager import (
     log_memory_usage,
     cleanup_old_outputs
 )
+from openbench.util.Mod_DirectoryUtils import reset_directory
 from openbench.util.Mod_CacheCleanup import cleanup_all_cache
 import logging
 from datetime import datetime
@@ -368,6 +369,10 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         CZ.scenarios_CZ_groupby_comparison(basedir, sim_nml, ref_nml, evaluation_items, score_vars, metric_vars,
                                             fig_nml['Climate_zone_groupby'])
 
+    scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+    reset_directory(scratch_dir)
+    logging.info(f"Scratch directory reset: {scratch_dir}")
+
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
     try:
@@ -387,14 +392,6 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         else:
             logging.info("Skip processing ref data")
         dataset_processer.process('sim')
-
-        # Clear scratch directory
-        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
-        # Wait a moment for file system to sync
-        time.sleep(2.5)
-        shutil.rmtree(scratch_dir, ignore_errors=True)
-        logging.info(f"Re-creating output directory: {scratch_dir}")
-        os.makedirs(scratch_dir)
         if main_nl['general']['unified_mask']:
             if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
                 pass
@@ -402,7 +399,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                 # Mask the observation data with simulation data to ensure consistent coverage
                 logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
 
-                def wait_for_file(file_path, max_wait_time=60, check_interval=1):
+                def wait_for_file(file_path, max_wait_time=30, check_interval=1):
                     """Wait for a file to exist and be readable."""
                     start_time = time.time()
                     elapsed = 0
@@ -438,7 +435,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     dataset_processer.process('ref')
 
                     # Wait a moment for file system to sync
-                    time.sleep(2.5)
+                    #time.sleep(2.5)
 
                     # Try again after processing
                     o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
@@ -456,7 +453,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     dataset_processer.process('sim')
 
                     # Wait a moment for file system to sync
-                    time.sleep(2.5)
+                    #time.sleep(2.5)
 
                     # Try again after processing
                     s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
