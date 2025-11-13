@@ -21,6 +21,7 @@ import platform
 import xarray as xr
 import numpy as np
 import gc
+import time
 
 # Try to import psutil for memory monitoring, use fallback if not available
 try:
@@ -56,6 +57,7 @@ from openbench.util.Mod_MemoryManager import (
 from openbench.util.Mod_CacheCleanup import cleanup_all_cache
 import logging
 from datetime import datetime
+from openbench.data.Mod_DatasetProcessing import DatasetProcessing
 
 # Import enhanced logging system
 try:
@@ -377,7 +379,6 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         general_info['ref_source'] = ref_source
         general_info['sim_source'] = sim_source
 
-        from openbench.data.Mod_DatasetProcessing import DatasetProcessing
         dataset_processer = DatasetProcessing(general_info)
         if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
             onetimeref = True
@@ -389,6 +390,8 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
 
         # Clear scratch directory
         scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+        # Wait a moment for file system to sync
+        time.sleep(2.5)
         shutil.rmtree(scratch_dir, ignore_errors=True)
         logging.info(f"Re-creating output directory: {scratch_dir}")
         os.makedirs(scratch_dir)
@@ -400,7 +403,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                 logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
                 import time
 
-                def wait_for_file(file_path, max_wait_time=30, check_interval=1):
+                def wait_for_file(file_path, max_wait_time=60, check_interval=1):
                     """Wait for a file to exist and be readable."""
                     start_time = time.time()
                     elapsed = 0
@@ -436,8 +439,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     dataset_processer.process('ref')
 
                     # Wait a moment for file system to sync
-                    import time
-                    time.sleep(0.5)
+                    time.sleep(2.5)
 
                     # Try again after processing
                     o = xr.open_dataset(ref_file_path_abs)[f'{general_info["ref_varname"]}']
@@ -455,8 +457,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     dataset_processer.process('sim')
 
                     # Wait a moment for file system to sync
-                    import time
-                    time.sleep(0.5)
+                    time.sleep(2.5)
 
                     # Try again after processing
                     s = xr.open_dataset(sim_file_path_abs)[f'{general_info["sim_varname"]}']
