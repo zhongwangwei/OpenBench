@@ -60,6 +60,31 @@ from openbench.util.Mod_DirectoryUtils import reset_directory
 from openbench.util.Mod_CacheCleanup import cleanup_all_cache
 from openbench.data.Mod_DatasetProcessing import DatasetProcessing
 
+
+def _ensure_sysconf_accessible():
+    """Patch os.sysconf to avoid sandbox PermissionError for semaphore queries."""
+    if getattr(os, "_openbench_sysconf_patched", False):
+        return
+
+    original_sysconf = os.sysconf
+
+    def safe_sysconf(name):
+        if name == 'SC_SEM_NSEMS_MAX':
+            try:
+                return original_sysconf(name)
+            except PermissionError:
+                logging.warning(
+                    "SC_SEM_NSEMS_MAX not accessible; using conservative fallback value."
+                )
+                return 256
+        return original_sysconf(name)
+
+    os.sysconf = safe_sysconf
+    os._openbench_sysconf_patched = True
+
+
+_ensure_sysconf_accessible()
+
 # Import enhanced logging system
 try:
     from openbench.util.Mod_LoggingSystem import setup_logging, get_logging_manager, configure_library_logging

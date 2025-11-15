@@ -858,23 +858,157 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             num_value = int(num_value) if num_value else 1
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
             if time_unit.lower() in ['m', 'month', 'mon','me']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
+                # Normalize to monthly resolution without enforcing a specific day match.
+                # Set times to 15th for plotting/consistency, but do NOT reindex/fill missing months.
+                # Compare by month presence only.
+                mid_month = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
                 except (ValueError, AttributeError, TypeError):
-                    ds['time'] = time_index
+                    # If we cannot format, keep existing times but ensure datetime type
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
+                    except Exception:
+                        ds['time'] = mid_month
+                # Use mid-month index for monthly comparison/fill
+                time_index = mid_month
+                time_var = ds.time
+                # Remove potential duplicate timestamps created by monthly normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for monthly data; proceeding.")
+                        pass
+                # For monthly data: only check by Year-Month presence and avoid reindexing/filling.
+                expected_months = pd.period_range(start=f'{syear}-01', end=f'{eyear}-12', freq='M')
+                # Build a PeriodIndex from the existing timestamps for robust monthly comparison
+                try:
+                    present_months = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='M')
+                except Exception:
+                    # Fallback: coerce via Series then to_period
+                    present_months = pd.to_datetime(pd.Series(ds['time'].values))
+                    present_months = present_months.dt.to_period('M')
+                missing_months = expected_months.difference(pd.PeriodIndex(present_months, freq='M'))
+                # If months are missing, reindex to monthly midpoints and fill with NaN for missing months
+                if len(missing_months) > 0:
+                    logging.info(f"Monthly data has {len(missing_months)} missing month(s) between {syear} and {eyear}; filling missing months with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
+                # Normalize to daily resolution (set to 12:00), and fill missing days by reindexing.
+                day_noon = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
                 try:
-                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
+                    ds['time'] = pd.to_datetime(ds['time'].dt.floor('D').dt.strftime('%Y-%m-%dT12:00:00'))
                 except (ValueError, AttributeError, TypeError):
-                    ds['time'] = time_index
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('D').dt.strftime('%Y-%m-%dT12:00:00'))
+                    except Exception:
+                        ds['time'] = day_noon
+                # Use daily noon index for comparison/fill
+                time_index = day_noon
+                time_var = ds.time
+                # Remove duplicates potentially created by normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for daily data; proceeding.")
+                        pass
+                # Check by date presence and fill missing by reindexing
+                expected_days = pd.period_range(start=f'{syear}-01-01', end=f'{eyear}-12-31', freq='D')
+                try:
+                    present_days = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='D')
+                except Exception:
+                    # Fallback: coerce to datetime first, then derive daily periods safely.
+                    fallback_days = pd.to_datetime(pd.Series(ds['time'].values))
+                    fallback_days = fallback_days.dt.to_period('D')
+                    present_days = pd.PeriodIndex(fallback_days, freq='D')
+                missing_days = expected_days.difference(present_days)
+                if len(missing_days) > 0:
+                    logging.info(f"Daily data has {len(missing_days)} missing day(s) between {syear} and {eyear}; filling missing days with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
+                # Normalize to hourly resolution (set to HH:30), and fill missing hours by reindexing.
+                hour_mid = pd.to_datetime(pd.Series(time_index).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
                 try:
-                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
+                    ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
                 except (ValueError, AttributeError, TypeError):
-                    ds['time'] = time_index
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
+                    except Exception:
+                        ds['time'] = hour_mid
+                # Use mid-hour index for comparison/fill
+                time_index = hour_mid
+                time_var = ds.time
+                # Remove duplicates potentially created by normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for hourly data; proceeding.")
+                        pass
+                # Check by hour presence and fill missing by reindexing
+                expected_hours = pd.period_range(start=f'{syear}-01-01', end=f'{eyear}-12-31 23:00:00', freq='H')
+                try:
+                    present_hours = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='H')
+                except Exception:
+                    present_hours = pd.to_datetime(pd.Series(ds['time'].values))
+                    present_hours = present_hours.dt.to_period('H')
+                missing_hours = expected_hours.difference(pd.PeriodIndex(present_hours, freq='H'))
+                if len(missing_hours) > 0:
+                    logging.info(f"Hourly data has {len(missing_hours)} missing hour(s) between {syear} and {eyear}; filling missing hours with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['y', 'year', '1y', '1year']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-01-01T00:00:00'))
                 try:
@@ -905,8 +1039,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             # Compare the actual time with the complete time series to find the missing time
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0 and len(missing_times) < len(time_var):
-                logging.warning("Time series is not complete. Missing time values found: ")
-                print(missing_times)
+                logging.warning("Time series is not complete. Missing time values found.")
                 logging.info('Filling missing time values with np.nan')
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
@@ -1195,11 +1328,24 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     def process_station_data(self, data_params: Dict[str, Any]) -> None:
         try:
             logging.info("Processing station data")
-            Parallel(n_jobs=-1)(
-                delayed(self._make_stn_parallel)(
-                    self.station_list, data_params['datasource'], i
-                ) for i in range(len(self.station_list['ID']))
-            )
+            if not hasattr(self, 'station_list') or self.station_list is None or self.station_list.empty:
+                logging.error("Station list is empty; cannot process station data.")
+                return
+
+            indices = range(len(self.station_list['ID']))
+            try:
+                Parallel(n_jobs=-1)(
+                    delayed(self._make_stn_parallel)(
+                        self.station_list, data_params['datasource'], i
+                    ) for i in indices
+                )
+            except (PermissionError, OSError) as exc:
+                logging.warning(
+                    "Parallel station processing unavailable (%s). Falling back to sequential execution.",
+                    exc
+                )
+                for i in indices:
+                    self._make_stn_parallel(self.station_list, data_params['datasource'], i)
         finally:
             gc.collect()
 
@@ -1387,13 +1533,53 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
+        if dataset is None:
+            logging.error(f"Dataset is None for station {station['ID']} ({datasource})")
+            raise ValueError("Dataset cannot be None when extracting station data")
+
         if datasource == 'ref':
-            return dataset.sel(lat=[station['sim_lat']], lon=[station['sim_lon']], method="nearest")
+            lat_key, lon_key = 'sim_lat', 'sim_lon'
         elif datasource == 'sim':
-            return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
+            lat_key, lon_key = 'ref_lat', 'ref_lon'
         else:
             logging.error(f"Invalid datasource: {datasource}")
             raise ValueError(f"Invalid datasource: {datasource}")
+
+        # Fallback to reference coordinates if simulation coordinates are unavailable
+        if lat_key not in station or pd.isna(station.get(lat_key)):
+            lat_key = 'ref_lat'
+        if lon_key not in station or pd.isna(station.get(lon_key)):
+            lon_key = 'ref_lon'
+
+        target_lat = float(station[lat_key])
+        target_lon = float(station[lon_key])
+
+        lon_coord = 'lon' if 'lon' in dataset.coords else 'x'
+        lat_coord = 'lat' if 'lat' in dataset.coords else 'y'
+
+        try:
+            return dataset.sel({
+                lat_coord: [target_lat],
+                lon_coord: [target_lon]
+            }, method="nearest")
+        except (KeyError, ValueError, pd.errors.InvalidIndexError) as exc:
+            logging.debug(
+                "Coordinate selection failed for station %s (%s): %s. Falling back to manual indexing.",
+                station['ID'], datasource, exc
+            )
+
+            lat_values = dataset[lat_coord].values
+            lon_values = dataset[lon_coord].values
+
+            lat_idx = int(np.argmin(np.abs(lat_values - target_lat)))
+            lon_idx = int(np.argmin(np.abs(lon_values - target_lon)))
+
+            data = dataset.isel({lat_coord: lat_idx, lon_coord: lon_idx})
+            data = data.expand_dims({
+                lat_coord: [lat_values[lat_idx]],
+                lon_coord: [lon_values[lon_idx]]
+            })
+            return data
 
     @performance_monitor
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
