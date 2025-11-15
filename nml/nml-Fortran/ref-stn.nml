@@ -3,6 +3,7 @@
   Sensible_Heat_ref_source=PLUMBER2S,FLUX_PLUMBER2
   Canopy_Transpiration_ref_source=GLEAM_Hydrid
   Evapotranspiration_ref_source=Xu_et_al2025_stn
+  Leaf_Area_Index_ref_source=LAI_Yuan2011
 /
 
 &def_nml
@@ -11,6 +12,7 @@
   FLUX_PLUMBER2=./nml/nml-Fortran/Ref_variables_definition_station/FLUX_PLUMBER2.nml
   GLEAM_Hydrid=./nml/nml-Fortran/Ref_variables_definition_station/Transpiration_GLEAM_hybird.nml
   Xu_et_al2025_stn=./nml/nml-Fortran/Ref_variables_definition_station/Xu_et_al2025_stn.nml
+  LAI_Yuan2011=./nml/nml-Fortran/Ref_variables_definition_station/LAI_Yuan2011.nml
 /
 
 

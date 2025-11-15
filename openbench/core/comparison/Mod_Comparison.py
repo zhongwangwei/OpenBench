@@ -2642,6 +2642,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Use os.path.join for file paths
                             sim_path = os.path.join(basedir, 'output', 'data',
                                                     f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                            if not os.path.exists(sim_path):
+                                logging.warning(f"Skipping {method_name} for {evaluation_item} {sim_source}: file not found at {sim_path}")
+                                continue
                             sim = xr.open_dataset(sim_path)[sim_varname]
                             sim = Convert_Type.convert_nc(sim)
 
@@ -2652,6 +2655,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                             self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} for {evaluation_item} {sim_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
                     finally:
@@ -2667,6 +2672,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Use os.path.join for file paths
                             ref_path = os.path.join(basedir, 'output', 'data',
                                                     f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                            if not os.path.exists(ref_path):
+                                logging.warning(f"Skipping {method_name} for {evaluation_item} {ref_source}: file not found at {ref_path}")
+                                continue
                             ref = xr.open_dataset(ref_path)[ref_varname]
                             ref = Convert_Type.convert_nc(ref)
 
@@ -2677,6 +2685,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                             self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
                             make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} for {evaluation_item} {ref_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
                     finally:

@@ -1448,6 +1448,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                        f'{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
                             make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} drawing for {evaluation_item} {sim_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
                     finally:
@@ -1464,6 +1466,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                        f'{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
 
                             make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} drawing for {evaluation_item} {ref_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
                     finally:

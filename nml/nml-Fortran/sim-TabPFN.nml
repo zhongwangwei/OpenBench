@@ -1,0 +1,12 @@
+&general
+    Streamflow_sim_source    = TabPFN_cama,TabPFN_cama2,GRFR_cama
+/
+
+
+&def_nml
+    TabPFN_cama = ./nml/nml-Fortran/user/TabPFN/TabPFN_cama.nml
+    TabPFN_cama2 = ./nml/nml-Fortran/user/TabPFN/TabPFN_cama2.nml
+      GRFR_cama =./nml/nml-Fortran/user/TabPFN/GRFR_cama.nml
+/
+
+

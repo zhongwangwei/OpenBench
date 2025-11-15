@@ -3,6 +3,7 @@
     Sensible_Heat_sim_source = FUXI
     Canopy_Transpiration_sim_source=FUXI
     Evapotranspiration_sim_source=FUXI
+    Leaf_Area_Index_sim_source=FUXI
 /
 
 
