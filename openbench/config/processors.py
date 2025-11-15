@@ -380,12 +380,11 @@ class GeneralInfoReader(NamelistReader):
 
     def _filter_stations(self):
         """Filter stations based on criteria."""
-        if self.ref_source.lower() == 'grdc':
-            pass
-        else:
-            if not hasattr(self, 'stn_list') or self.stn_list.empty:
-                logging.warning("No station list available for filtering")
-                return
+        if not hasattr(self, 'stn_list') or self.stn_list is None:
+            self.stn_list = pd.DataFrame()
+
+        if self.ref_source.lower() != 'grdc' and self.stn_list.empty:
+            logging.warning("No station list available for filtering; attempting to generate one.")
 
         initial_count = len(self.stn_list)
         # Get custom filter if available

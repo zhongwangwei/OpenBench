@@ -445,6 +445,47 @@ class Evaluation_stn(metrics, scores):
 
         return data_array.to_dataset(name=canonical_name)
 
+    def _normalize_time_coordinate(self, data_array):
+        """
+        Normalize time coordinates to the configured comparison resolution.
+
+        Ensures reference/simulation station series use identical timestamps even when
+        source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
+        """
+        if not hasattr(data_array, 'coords') or 'time' not in data_array.coords:
+            return data_array
+
+        compare_res = str(getattr(self, 'compare_tim_res', '') or '').strip().lower()
+        if not compare_res:
+            return data_array
+
+        try:
+            times = pd.to_datetime(data_array['time'].values)
+        except Exception as err:
+            logging.debug(f"Station time normalization skipped: {err}")
+            return data_array
+
+        if times.size == 0:
+            return data_array
+
+        normalized = None
+        if compare_res in {'day', 'd', '1d', 'daily'}:
+            normalized = (times.floor('D') + pd.Timedelta(hours=12)).values
+        elif compare_res in {'hour', 'h', '1h', 'hourly'}:
+            normalized = (times.floor('H') + pd.Timedelta(minutes=30)).values
+        elif compare_res in {'month', 'mon', 'm', '1m', 'monthly'}:
+            normalized = (times.to_period('M').to_timestamp(how='start') + pd.Timedelta(days=14, hours=12)).values
+        elif compare_res in {'year', 'yr', 'y', '1y', 'annual', 'yearly'}:
+            normalized = (times.to_period('Y').to_timestamp(how='start') + pd.Timedelta(days=182, hours=12)).values
+        else:
+            return data_array
+
+        try:
+            data_array = data_array.assign_coords(time=('time', normalized))
+        except Exception as err:
+            logging.debug(f"Failed to assign normalized station times: {err}")
+        return data_array
+
     def make_evaluation(self):
         try:
             # read station information
@@ -501,6 +542,8 @@ class Evaluation_stn(metrics, scores):
                             s['time'] = o['time']
                     else:
                         s['time'] = o['time']
+                    s = self._normalize_time_coordinate(s)
+                    o = self._normalize_time_coordinate(o)
 
                     mask1 = np.isnan(s) | np.isnan(o)
                     s.values[mask1] = np.nan
@@ -605,8 +648,32 @@ class Evaluation_stn(metrics, scores):
             o = o_ds.to_array().squeeze()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
+            s = self._normalize_time_coordinate(s)
+            o = self._normalize_time_coordinate(o)
 
-            s['time'] = o['time']
+            # Align by common timestamps to avoid dimension conflicts
+            try:
+                s_times = pd.to_datetime(s['time'].values)
+                o_times = pd.to_datetime(o['time'].values)
+                # Intersect exact timestamps (normalization handled upstream)
+                common_times = np.intersect1d(s_times.values if hasattr(s_times, "values") else s_times,
+                                              o_times.values if hasattr(o_times, "values") else o_times)
+                if common_times.size == 0:
+                    station_id = station_list['ID'][iik]
+                    logging.warning(f"Skipping station {station_id} - no overlapping time steps after alignment")
+                    return None
+                # Select and sort by common times
+                s = s.sel(time=common_times).sortby('time')
+                o = o.sel(time=common_times).sortby('time')
+            except Exception as e:
+                logging.debug(f"Time alignment fallback due to: {e}")
+                # Fallback to assigning if shapes already match
+                if s.sizes.get('time') == o.sizes.get('time'):
+                    s['time'] = o['time']
+                else:
+                    station_id = station_list['ID'][iik]
+                    logging.warning(f"Skipping station {station_id} - failed to align time coordinates")
+                    return None
             mask1 = np.isnan(s) | np.isnan(o)
             s.values[mask1] = np.nan
             o.values[mask1] = np.nan
@@ -751,4 +818,3 @@ class Evaluation_stn(metrics, scores):
 
         finally:
             gc.collect()  # Final cleanup
-
