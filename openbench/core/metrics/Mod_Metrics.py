@@ -865,11 +865,11 @@ class metrics:
                 return np.nan
 
             # Calculate MFM
-            mfm_value = 1 - math.sqrt(
+            mfm_value = (math.sqrt(3) - math.sqrt(
                 (1 - normalized_error) ** 2 +
                 (1 - variability_capture) ** 2 +
                 (1 - distribution_similarity) ** 2
-            )
+            )) / math.sqrt(3)
 
             return mfm_value
 
