@@ -281,8 +281,7 @@ We welcome issues, feature proposals, and pull requests.
 ## Citation
 If you use OpenBench in scientific work, please cite:
 
-Wei, Z., Xu, Q., Bai, F., Xu, X., Wei, Z., Dong, W., Liang, H., Wei, N., Lu, X., Li, L. and Zhang, S., 2025. OpenBench: a land model evaluation system. *Geoscientific Model Development*, 18(18), 6517-6540.
-
+Wei, Z., Xu, Q., Bai, F., Xu, X., Wei, Z., Dong, W., Liang, H., Wei, N., Lu, X., Li, L., Zhang, S., Yuan, H., Liu, L., and Dai, Y.: OpenBench: a land model evaluation system, Geosci. Model Dev., 18, 6517–6540, https://doi.org/10.5194/gmd-18-6517-2025, 2025.
 ## License & Credits
 - Licensed under the **MIT License** (see `LICENSE`).
 - Cite “OpenBench: The Open Source Land Surface Model Benchmarking System” in publications referencing this toolkit.
