@@ -59,6 +59,8 @@ class UnitProcessing:
 				'm3 m-3': lambda x: x,
 				'm2 m-2': lambda x: x,
 				'g g-1': lambda x: x,
+				'1': lambda x: x,  # Dimensionless (numeric representation)
+				'0': lambda x: x,  # Sometimes used as placeholder for unitless
 			},
 			'k': {
 				'c': lambda x: x + 273.15,

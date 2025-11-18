@@ -1,5 +1,5 @@
 &general
-  root_dir = ./dataset/Reference/Grid/LowRes/Bio
+  root_dir = ./dataset/Reference/Grid/LowRes/Bio/
   timezone = 0
   data_type = grid
   data_groupby = Year

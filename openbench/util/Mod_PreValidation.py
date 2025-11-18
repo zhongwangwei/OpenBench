@@ -21,6 +21,8 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Union, Optional
 from pathlib import Path
 import warnings
+import re
+import importlib.util
 
 
 class ValidationError(Exception):
@@ -328,6 +330,49 @@ class PreValidator:
         for sim_source in sim_sources:
             self._validate_source_config(item, sim_source, self.sim_nml, 'simulation')
 
+    def _check_filter_handles_item(self, model: str, item: str) -> Tuple[bool, Optional[str]]:
+        """
+        Check if a filter file handles a specific evaluation item.
+
+        Args:
+            model: Model name (e.g., 'CoLM', 'CLM5')
+            item: Evaluation item name (e.g., 'Precipitation')
+
+        Returns:
+            Tuple of (handles_item: bool, filter_path: Optional[str])
+        """
+        # Construct filter file path
+        filter_filename = f"{model}_filter.py"
+        filter_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'data', 'custom', filter_filename
+        )
+
+        if not os.path.exists(filter_path):
+            return False, None
+
+        try:
+            # Read filter file content
+            with open(filter_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Check if the filter handles this item
+            # Look for patterns like: if info.item == "Precipitation":
+            patterns = [
+                rf'if\s+info\.item\s*==\s*["\']({re.escape(item)})["\']',
+                rf'elif\s+info\.item\s*==\s*["\']({re.escape(item)})["\']',
+            ]
+
+            for pattern in patterns:
+                if re.search(pattern, content):
+                    return True, filter_path
+
+            return False, None
+
+        except Exception as e:
+            logging.debug(f"Error checking filter {filter_path}: {e}")
+            return False, None
+
     def _validate_source_config(self, item: str, source: str, nml: Dict[str, Any], source_type: str):
         """
         Validate configuration for a specific data source after UpdateNamelist.
@@ -353,10 +398,23 @@ class PreValidator:
             f'{source}_varunit',  # Note: varunit after UpdateNamelist
         ]
 
+        # Get model name if available (for filter checking)
+        model_name = nml[item].get(f'{source}_model', None)
+
+        # Check if filter handles this item (only for simulation sources with model info)
+        filter_handles_item = False
+        filter_path = None
+        if source_type == 'simulation' and model_name:
+            filter_handles_item, filter_path = self._check_filter_handles_item(model_name, item)
+
         missing_fields = []
         for field in required_fields:
             value = nml[item].get(field)
             if value is None or value == '':
+                # Skip varname and varunit validation if filter handles this item
+                if filter_handles_item and field in [f'{source}_varname', f'{source}_varunit']:
+                    logging.info(f"  ✓ {field} will be handled by filter: {filter_path}")
+                    continue
                 missing_fields.append(field)
 
         if missing_fields:
@@ -437,7 +495,7 @@ class PreValidator:
                 'gc m-2 day-1': ['gc m-2 s-1', 'g c m-2 s-1', 'g c m-2 day-1', 'g m-2 s-1', 'mol m-2 s-1', 'mumolco2 m-2 s-1'],
                 'mm day-1': ['kg m-2 s-1', 'mm s-1', 'mm hr-1', 'mm h-1', 'mm hour-1', 'mm mon-1', 'mm m-1', 'mm month-1', 'w m-2 heat', 'mm 3hour-1'],
                 'w m-2': ['mj m-2 day-1', 'mj m-2 d-1'],
-                'unitless': ['percent', 'percentage', '%', 'g kg-1', 'fraction', 'm3 m-3', 'm2 m-2', 'g g-1'],
+                'unitless': ['percent', 'percentage', '%', 'g kg-1', 'fraction', 'm3 m-3', 'm2 m-2', 'g g-1', '1', '0'],
                 'k': ['c', 'degc', 'degreec', 'degree c', 'celsius', 'f', 'degf', 'degreef', 'degree f', 'fahrenheit'],
                 'm3 s-1': ['m3 day-1', 'm3 d-1', 'l s-1'],
                 'mcm': ['m3', 'km3', 'million cubic meters'],
@@ -570,14 +628,19 @@ class PreValidator:
         # After UpdateNamelist, units are directly in nml[item][f'{source}_varunit']
         if item in nml:
             # Try varunit first (standard format after UpdateNamelist)
-            unit = nml[item].get(f'{source}_varunit', '').strip()
-            if unit:
-                return unit
+            unit_value = nml[item].get(f'{source}_varunit', '')
+            # Convert to string if it's not already (handle integer values like 0)
+            if unit_value is not None and unit_value != '':
+                unit = str(unit_value).strip()
+                if unit:
+                    return unit
 
             # Fallback to _unit for backward compatibility
-            unit = nml[item].get(f'{source}_unit', '').strip()
-            if unit:
-                return unit
+            unit_value = nml[item].get(f'{source}_unit', '')
+            if unit_value is not None and unit_value != '':
+                unit = str(unit_value).strip()
+                if unit:
+                    return unit
 
         return None
 
