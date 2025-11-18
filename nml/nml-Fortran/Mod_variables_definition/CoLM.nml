@@ -59,7 +59,7 @@ model=CoLM
 ############################Ecosystem and Carbon Cycle############################
 &Gross_Primary_Productivity
    varname =  f_gpp
-   varunit =  g m-2 s-1 
+   varunit =  g m-2 s-1
 /
 
 &Canopy_Assimilation_Rate
