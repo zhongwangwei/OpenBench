@@ -1068,30 +1068,58 @@ class ReportGenerator:
     def _get_year_info(self, item: str, ref_source: str, sim_source: str, year_type: str) -> int:
         """Get year information from configuration"""
         try:
-            # Try to get from reference configuration first
+            # Get reference years
+            ref_syear = None
+            ref_eyear = None
             if 'ref_nml' in self.config and item in self.config['ref_nml']:
-                ref_key = f"{ref_source}_{year_type}"
-                if ref_key in self.config['ref_nml'][item]:
-                    return int(self.config['ref_nml'][item][ref_key])
-            
-            # Try to get from simulation configuration
+                ref_syear_key = f"{ref_source}_syear"
+                ref_eyear_key = f"{ref_source}_eyear"
+                if ref_syear_key in self.config['ref_nml'][item]:
+                    ref_syear = int(self.config['ref_nml'][item][ref_syear_key])
+                if ref_eyear_key in self.config['ref_nml'][item]:
+                    ref_eyear = int(self.config['ref_nml'][item][ref_eyear_key])
+
+            # Get simulation years
+            sim_syear = None
+            sim_eyear = None
             if 'sim_nml' in self.config and item in self.config['sim_nml']:
-                sim_key = f"{sim_source}_{year_type}"
-                if sim_key in self.config['sim_nml'][item]:
-                    return int(self.config['sim_nml'][item][sim_key])
-            
-            # Try to get from general configuration
-            if 'general' in self.config and year_type in self.config['general']:
-                return int(self.config['general'][year_type])
-            
-            # Default values
+                sim_syear_key = f"{sim_source}_syear"
+                sim_eyear_key = f"{sim_source}_eyear"
+                if sim_syear_key in self.config['sim_nml'][item]:
+                    sim_syear = int(self.config['sim_nml'][item][sim_syear_key])
+                if sim_eyear_key in self.config['sim_nml'][item]:
+                    sim_eyear = int(self.config['sim_nml'][item][sim_eyear_key])
+
+            # Get general configuration years
+            config_syear = None
+            config_eyear = None
+            if 'general' in self.config:
+                if 'syear' in self.config['general']:
+                    config_syear = int(self.config['general']['syear'])
+                if 'eyear' in self.config['general']:
+                    config_eyear = int(self.config['general']['eyear'])
+
+            # Calculate actual use_syear and use_eyear (intersection)
             if year_type == 'syear':
-                return 2004
+                # use_syear = max(ref_syear, sim_syear, config_syear)
+                years = [y for y in [ref_syear, sim_syear, config_syear] if y is not None]
+                if years:
+                    return max(years)
+                else:
+                    logger.warning(f"Could not determine syear for {item}, using default 2004")
+                    return 2004
             elif year_type == 'eyear':
-                return 2005
+                # use_eyear = min(ref_eyear, sim_eyear, config_eyear)
+                years = [y for y in [ref_eyear, sim_eyear, config_eyear] if y is not None]
+                if years:
+                    return min(years)
+                else:
+                    logger.warning(f"Could not determine eyear for {item}, using default 2005")
+                    return 2005
             else:
+                logger.warning(f"Unknown year_type: {year_type}, using default 2004")
                 return 2004
-                
+
         except Exception as e:
             logger.warning(f"Error getting {year_type} for {item}: {e}")
             # Default values
