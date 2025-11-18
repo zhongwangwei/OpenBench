@@ -1112,7 +1112,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 logging.info(f"Loading custom variable filter for {model}")
                 custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
-                self, ds = custom_filter(self, ds)
+                self, ds_or_da = custom_filter(self, ds)
+
+                # If filter returned a Dataset, extract the variable; if DataArray, use directly
+                if isinstance(ds_or_da, xr.Dataset):
+                    current_varname = getattr(self, f"{datasource}_varname")
+                    var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                    if var_to_extract in ds_or_da:
+                        return ds_or_da[var_to_extract]
+                    else:
+                        raise KeyError(f"Variable {var_to_extract} not found in filtered dataset")
+                else:
+                    return ds_or_da
             except AttributeError:
                 # Only show warning once per model using module-level tracking
                 if model not in _MODULE_CUSTOM_FILTER_WARNINGS:

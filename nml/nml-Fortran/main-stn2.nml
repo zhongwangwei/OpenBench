@@ -1,7 +1,7 @@
 &general
   basename = FUXI2
   basedir = ./output
-  compare_tim_res = Day #Day
+  compare_tim_res = Month #Day
   compare_tzone = 0.0
   compare_grid_res = 0.1
   syear = 2005
@@ -34,7 +34,7 @@
   Burned_Area                 = False
   Ecosystem_Respiration       = False
   Gross_Primary_Productivity  = False
-  Leaf_Area_Index             = False
+  Leaf_Area_Index             = True
   Leaf_Greenness              = False
   Methane                     = False
   Net_Ecosystem_Exchange      = False
@@ -65,7 +65,7 @@
   Open_Water_Evaporation = False
   Precipitation = False
   Runoff = False
-  Transpiration = False
+  Canopy_Transpiration = True
   Ground_Heat = False
   Latent_Heat = False
   Net_Radiation = False

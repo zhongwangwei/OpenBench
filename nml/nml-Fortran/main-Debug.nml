@@ -36,7 +36,7 @@
     Biomass                          = False
 #    Burned_Area                      = False
     Ecosystem_Respiration            = False
-    Gross_Primary_Productivity       = False
+    Gross_Primary_Productivity       = True
     Leaf_Area_Index                  = False
 #    Leaf_Greenness                   = False
     Methane                          = False
@@ -71,7 +71,7 @@
 
   #*******************  Radiation and Energy Cycle  *************
     Albedo                           = False
-    Ground_Heat                      = False
+    Ground_Heat                      = True
     Latent_Heat                      = True
     Net_Radiation                    = False
     Root_Zone_Soil_Temperature       = False
@@ -88,7 +88,7 @@
     Diurnal_Max_Temperature          = False
     Diurnal_Min_Temperature          = False
     Diurnal_Temperature_Range        = False
-    Precipitation                    = False
+    Precipitation                    = True
     Surface_Air_Temperature          = False
     Surface_Downward_LW_Radiation    = False
     Surface_Downward_SW_Radiation    = False
@@ -200,7 +200,7 @@
 
 &comparisons
     HeatMap                        = True
-    Taylor_Diagram                 = False
+    Taylor_Diagram                 = True
     Target_Diagram                 = False
     Kernel_Density_Estimate        = True
     Whisker_Plot                   = False
@@ -217,7 +217,7 @@
     Sum                            = False
     Mann_Kendall_Trend_Test        = False
     Correlation                    = False
-    Standard_Deviation             = True
+    Standard_Deviation             = False
     Functional_Response            = False
     RadarMap                       = False
 /

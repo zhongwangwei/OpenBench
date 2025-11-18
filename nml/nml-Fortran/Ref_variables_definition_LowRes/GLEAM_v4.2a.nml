@@ -26,7 +26,7 @@
 /
 
 
-&Transpiration
+&Canopy_Transpiration
   sub_dir = Transpiration/GLEAM_v4.2a
   varname = Et
   varunit = mm day-1
