@@ -819,7 +819,11 @@ class metrics:
             # Find dominant frequency
             if N // 2 < 1:
                 return 0.0
-            dominant_freq_idx = np.argmax(np.abs(fft_obs[1:N // 2 + 1])) + 1
+
+            if len(sim) > 365:
+                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1:N // 2 + 1])), 33) + 1
+            else:
+                dominant_freq_idx = np.argmax(np.abs(fft_obs[1:N // 2 + 1])) + 1
 
             # Calculate phase difference
             phase_obs = np.angle(fft_obs)
@@ -865,7 +869,7 @@ class metrics:
                 return np.nan
 
             # Calculate MFM
-            mfm_value = (math.sqrt(3) - math.sqrt(
+            mfm_value = 1 - (math.sqrt(
                 (1 - normalized_error) ** 2 +
                 (1 - variability_capture) ** 2 +
                 (1 - distribution_similarity) ** 2
