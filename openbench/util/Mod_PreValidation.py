@@ -690,6 +690,14 @@ class PreValidator:
                 import glob
                 pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
                 files = glob.glob(pattern)
+                # Filter files: only keep files where prefix is followed by digit (year), not letters
+                # This prevents matching "prefix_cama_year.nc" when we want "prefix_year.nc"
+                if files:
+                    prefix_escaped = re.escape(prefix)
+                    suffix_escaped = re.escape(suffix) if suffix else ''
+                    file_pattern = re.compile(rf'^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$')
+                    filtered_files = [f for f in files if file_pattern.match(os.path.basename(f))]
+                    files = filtered_files if filtered_files else files  # Fallback to original
                 if files:
                     sample_file = files[0]
 
@@ -912,6 +920,24 @@ class PreValidator:
         prefix = nml[item].get(f'{source}_prefix', '')
         suffix = nml[item].get(f'{source}_suffix', '')
 
+        # Helper function to filter files: only keep files where the part after prefix contains no letters before digits
+        # This prevents matching files like "prefix_cama_year" when we want "prefix_year"
+        def filter_files_no_letters_before_year(files, prefix, suffix):
+            """Filter files to exclude those with letters between prefix and year."""
+            if not files:
+                return files
+            filtered = []
+            prefix_escaped = re.escape(prefix)
+            suffix_escaped = re.escape(suffix) if suffix else ''
+            # Pattern: prefix + (year starting with digit) + (only digits and symbols, no letters) + suffix + .nc
+            # Match files like: prefix2006-01.nc, prefix2006.nc but not prefix_cama_2006.nc
+            pattern = re.compile(rf'^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$')
+            for f in files:
+                filename = os.path.basename(f)
+                if pattern.match(filename):
+                    filtered.append(f)
+            return filtered if filtered else files  # Return original if no matches (fallback)
+
         # Try to find a sample file based on data_groupby
         if data_groupby == 'single':
             sample_file = os.path.join(data_dir, f"{prefix}{suffix}.nc")
@@ -921,12 +947,14 @@ class PreValidator:
             # Find any year file
             pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
             files = glob.glob(pattern)
+            files = filter_files_no_letters_before_year(files, prefix, suffix)
             if files:
                 return files[0]
         elif data_groupby == 'month':
             # Find any month file
             pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
             files = glob.glob(pattern)
+            files = filter_files_no_letters_before_year(files, prefix, suffix)
             if files:
                 return files[0]
 
