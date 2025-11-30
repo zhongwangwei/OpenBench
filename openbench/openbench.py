@@ -870,7 +870,10 @@ def main():
                 'metrics': dict(main_nl.get('metrics', {})),
                 'scores': dict(main_nl.get('scores', {})),
                 'comparisons': dict(main_nl.get('comparisons', {})),
-                'statistics': dict(main_nl.get('statistics', {}))
+                'statistics': dict(main_nl.get('statistics', {})),
+                'general': dict(main_nl.get('general', {})),
+                'ref_nml': dict(ref_nml) if ref_nml else {},
+                'sim_nml': dict(sim_nml) if sim_nml else {}
             }
             
             # Initialize report generator
