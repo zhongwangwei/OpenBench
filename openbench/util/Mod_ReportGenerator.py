@@ -863,15 +863,20 @@ class ReportGenerator:
             # Look for this comparison pair
             base_pattern = f"{item}_ref_{ref_source}_sim_{sim_source}_"
             
-            # Get year information from configuration
+            # Get year information from data files
             syear = self._get_year_info(item, ref_source, sim_source, 'syear')
             eyear = self._get_year_info(item, ref_source, sim_source, 'eyear')
-            
+
             # Collect all metrics and scores for this pair
-            pair_data = {
-                "use_syear": {"values": [syear], "mean": float(syear), "std": 0.0, "min": float(syear), "max": float(syear), "median": float(syear), "coverage": 100.0},
-                "use_eyear": {"values": [eyear], "mean": float(eyear), "std": 0.0, "min": float(eyear), "max": float(eyear), "median": float(eyear), "coverage": 100.0}
-            }
+            pair_data = {}
+            if syear is not None:
+                pair_data["use_syear"] = {"values": [syear], "mean": float(syear), "std": 0.0, "min": float(syear), "max": float(syear), "median": float(syear), "coverage": 100.0}
+            else:
+                pair_data["use_syear"] = {"values": [np.nan], "mean": np.nan, "std": np.nan, "min": np.nan, "max": np.nan, "median": np.nan, "coverage": 0.0}
+            if eyear is not None:
+                pair_data["use_eyear"] = {"values": [eyear], "mean": float(eyear), "std": 0.0, "min": float(eyear), "max": float(eyear), "median": float(eyear), "coverage": 100.0}
+            else:
+                pair_data["use_eyear"] = {"values": [np.nan], "mean": np.nan, "std": np.nan, "min": np.nan, "max": np.nan, "median": np.nan, "coverage": 0.0}
             
             # Search for metrics in metrics directory
             metrics_files = glob.glob(os.path.join(self.metrics_dir, f"{base_pattern}*.nc"))
@@ -1065,70 +1070,38 @@ class ReportGenerator:
             logger.warning(f"Error getting simulation sources for {item}: {e}")
             return []
     
-    def _get_year_info(self, item: str, ref_source: str, sim_source: str, year_type: str) -> int:
-        """Get year information from configuration"""
-        try:
-            # Get reference years
-            ref_syear = None
-            ref_eyear = None
-            if 'ref_nml' in self.config and item in self.config['ref_nml']:
-                ref_syear_key = f"{ref_source}_syear"
-                ref_eyear_key = f"{ref_source}_eyear"
-                if ref_syear_key in self.config['ref_nml'][item]:
-                    ref_syear = int(self.config['ref_nml'][item][ref_syear_key])
-                if ref_eyear_key in self.config['ref_nml'][item]:
-                    ref_eyear = int(self.config['ref_nml'][item][ref_eyear_key])
+    def _get_year_info(self, item: str, ref_source: str, sim_source: str, year_type: str) -> Optional[int]:
+        """Get year information directly from NetCDF data files"""
+        years_found = []
 
-            # Get simulation years
-            sim_syear = None
-            sim_eyear = None
-            if 'sim_nml' in self.config and item in self.config['sim_nml']:
-                sim_syear_key = f"{sim_source}_syear"
-                sim_eyear_key = f"{sim_source}_eyear"
-                if sim_syear_key in self.config['sim_nml'][item]:
-                    sim_syear = int(self.config['sim_nml'][item][sim_syear_key])
-                if sim_eyear_key in self.config['sim_nml'][item]:
-                    sim_eyear = int(self.config['sim_nml'][item][sim_eyear_key])
+        # Search patterns for data files
+        data_patterns = [
+            os.path.join(self.data_dir, f"{item}_ref_*.nc"),
+            os.path.join(self.data_dir, f"{item}_sim_*.nc"),
+        ]
 
-            # Get general configuration years
-            config_syear = None
-            config_eyear = None
-            if 'general' in self.config:
-                if 'syear' in self.config['general']:
-                    config_syear = int(self.config['general']['syear'])
-                if 'eyear' in self.config['general']:
-                    config_eyear = int(self.config['general']['eyear'])
+        for pattern in data_patterns:
+            for data_file in glob.glob(pattern):
+                try:
+                    with xr.open_dataset(data_file) as ds:
+                        if 'time' in ds.dims or 'time' in ds.coords:
+                            time_var = ds['time']
+                            if len(time_var) > 0:
+                                time_values = pd.to_datetime(time_var.values)
+                                if year_type == 'syear':
+                                    years_found.append(int(time_values.min().year))
+                                else:
+                                    years_found.append(int(time_values.max().year))
+                except Exception:
+                    pass
 
-            # Calculate actual use_syear and use_eyear (intersection)
+        if years_found:
             if year_type == 'syear':
-                # use_syear = max(ref_syear, sim_syear, config_syear)
-                years = [y for y in [ref_syear, sim_syear, config_syear] if y is not None]
-                if years:
-                    return max(years)
-                else:
-                    logger.warning(f"Could not determine syear for {item}, using default 2004")
-                    return 2004
-            elif year_type == 'eyear':
-                # use_eyear = min(ref_eyear, sim_eyear, config_eyear)
-                years = [y for y in [ref_eyear, sim_eyear, config_eyear] if y is not None]
-                if years:
-                    return min(years)
-                else:
-                    logger.warning(f"Could not determine eyear for {item}, using default 2005")
-                    return 2005
+                return max(years_found)  # use_syear = max of all start years
             else:
-                logger.warning(f"Unknown year_type: {year_type}, using default 2004")
-                return 2004
+                return min(years_found)  # use_eyear = min of all end years
 
-        except Exception as e:
-            logger.warning(f"Error getting {year_type} for {item}: {e}")
-            # Default values
-            if year_type == 'syear':
-                return 2004
-            elif year_type == 'eyear':
-                return 2005
-            else:
-                return 2004
+        return None  # Return None if no year info found
     
     def _find_figure(self, base_dir: str, subdir: str, pattern: str) -> Optional[str]:
         """Find a figure matching the pattern"""
@@ -1465,7 +1438,7 @@ class ReportGenerator:
             <h4>{{ metric_key }}</h4>
             <div class="summary-box">
                 {% for metric_name, values in metric_data.summary.items() %}
-                    {% if values.mean is not none %}
+                    {% if values.mean is not none and values.mean == values.mean %}
                     {% if metric_name in ['use_syear', 'use_eyear'] %}
                     <p><strong>{{ metric_name }}:</strong> {{ "%.0f"|format(values.mean) }}</p>
                     {% else %}
@@ -1484,7 +1457,9 @@ class ReportGenerator:
             <div class="summary-box">
                 {% for metric_name, metric_values in metric_data.metrics.items() %}
                 {% if metric_name in ['use_syear', 'use_eyear'] %}
+                {% if metric_values.mean == metric_values.mean %}
                 <p><strong>{{ metric_name }}:</strong> {{ "%.0f"|format(metric_values.mean) }}</p>
+                {% endif %}
                 {% else %}
                 <p><strong>{{ metric_name }}:</strong> 
                    Mean = {{ "%.4f"|format(metric_values.mean) }}, 
