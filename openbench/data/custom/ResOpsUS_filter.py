@@ -22,12 +22,18 @@ def _resolve_station_list(info) -> Path:
         logging.error("ResOpsUS only supports sim_grid_res values of 0.25 or 0.1 degrees.")
         raise ValueError(f"Unsupported sim_grid_res: {sim_grid_res}")
 
-    station_list = Path(info.ref_dir) / "list" / file_map[sim_grid_res]
-    if not station_list.exists():  # pragma: no cover - IO guard
-        logging.error(f"ResOpsUS station list not found: {station_list}")
-        raise FileNotFoundError(station_list)
+    filename = file_map[sim_grid_res]
+    candidates = [
+        Path(info.ref_dir) / "list" / filename,
+        Path(info.ref_dir).parent / "list" / filename,
+    ]
 
-    return station_list
+    for station_list in candidates:
+        if station_list.exists():  # pragma: no cover - IO guard
+            return station_list
+
+    logging.error(f"ResOpsUS station list not found. Tried: {', '.join(str(p) for p in candidates)}")
+    raise FileNotFoundError(candidates[0])
 
 
 def filter_ResOpsUS(info):

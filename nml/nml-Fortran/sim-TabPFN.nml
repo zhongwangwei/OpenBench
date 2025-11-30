@@ -1,5 +1,6 @@
 &general
     Streamflow_sim_source    = TabPFN_cama,TabPFN_cama2,GRFR_cama
+    Dam_Inflow_sim_source    = GRFR_cama
 /
 
 

@@ -7,8 +7,14 @@
    fulllist =
    tim_res =  day
    grid_res =  0.1
-   suffix = 
-   prefix = o_outflw
    syear =  2001
    eyear =  2005
+/
+&Streamflow
+  prefix            =  o_outflw
+  suffix            =
+/
+&Dam_Inflow
+  prefix            =  o_daminf
+  suffix            =
 /
