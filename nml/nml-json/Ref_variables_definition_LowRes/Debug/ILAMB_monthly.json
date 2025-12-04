@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Debug/ILAMB",
+    "root_dir": "./dataset/Reference/debug/ILAMB",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "Single",

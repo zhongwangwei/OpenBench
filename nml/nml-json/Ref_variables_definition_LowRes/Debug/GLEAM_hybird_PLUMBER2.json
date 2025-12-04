@@ -1,6 +1,6 @@
 {
   "general": {
-    "root_dir": "./dataset/Reference/Debug/GLEAM_hybird_PLUMBER2/",
+    "root_dir": "./dataset/Reference/debug/GLEAM_hybird_PLUMBER2/",
     "timezone": 0.0,
     "data_type": "stn",
     "data_groupby": "single",
@@ -8,7 +8,7 @@
     "grid_res": "",
     "syear": "",
     "eyear": "",
-    "fulllist": "./dataset/Reference/Debug/GLEAM_hybird_PLUMBER2.csv"
+    "fulllist": "./dataset/Reference/debug/GLEAM_hybird_PLUMBER2.csv"
   },
   "Evapotranspiration": {
     "varname": "et",

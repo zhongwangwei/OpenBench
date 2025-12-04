@@ -41,10 +41,13 @@ preprocessing/get_stn_cama_ready/Water Surface Elevation/tmp.txt
 preprocessing/get_stn_cama_ready/Water_Surface_Elevation/tmp.txt
 CLAUDE.md
 *.log
-/dataset/reference/grid/LowRes
-/dataset/reference/grid/MidRes
-/dataset/reference
-/dataset/simulation
+
 AGENTS.md
 openbench/data/custom/PLUMBER2S_README.md
 /courseware
+/dataset/Reference/Grid
+/dataset/Reference/Station
+/dataset/Simulation/FUXI
+/dataset/Simulation/GRFR-US_06min
+/dataset/Simulation/TabPFN-US_06min-dam
+/dataset/Simulation/TabPFN-US_06min-nodam
