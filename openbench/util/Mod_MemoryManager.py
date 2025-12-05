@@ -256,8 +256,8 @@ def cleanup_old_outputs(main_nl, clean_level='tmp'):
     Args:
         main_nl: Main namelist configuration
         clean_level: Level of cleanup to perform
-            - 'tmp': Only clean tmp and scratch directories (default)
-            - 'all': Clean tmp, scratch, and all outputs (metrics, scores, data)
+            - 'tmp': Only clean scratch directory (default)
+            - 'all': Clean scratch and all outputs (metrics, scores, data)
             - 'none': Skip cleanup
 
     Returns:
@@ -275,16 +275,13 @@ def cleanup_old_outputs(main_nl, clean_level='tmp'):
     cleanup_dirs = []
 
     if clean_level in ['tmp', 'all']:
-        cleanup_dirs.extend([
-            os.path.join(base_path, 'tmp'),
-            os.path.join(base_path, 'scratch')
-        ])
+        cleanup_dirs.append(os.path.join(base_path, 'scratch'))
 
     if clean_level == 'all':
         cleanup_dirs.extend([
-            os.path.join(base_path, 'output', 'metrics'),
-            os.path.join(base_path, 'output', 'scores'),
-            os.path.join(base_path, 'output', 'data')
+            os.path.join(base_path, 'metrics'),
+            os.path.join(base_path, 'scores'),
+            os.path.join(base_path, 'data')
         ])
 
     colors = get_platform_colors()
