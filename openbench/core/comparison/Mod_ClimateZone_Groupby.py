@@ -60,7 +60,7 @@ class CZ_groupby(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_info.txt'
+            grid_info = f'{self.casedir}/comparisons/CZ_groupby/CZ_info.txt'
 
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
@@ -73,7 +73,7 @@ class CZ_groupby(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             CZtype_orig = './dataset/Climate_zone.nc'
-            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
             self.CZ_dir = CZtype_remap
 
@@ -95,8 +95,8 @@ class CZ_groupby(metrics, scores):
                 resolution_lon=self.compare_grid_res,
             )
             target_dataset = create_regridding_dataset(new_grid)
-            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1,30))
-            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
+            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1, 31))
+            CZtype_remap = f'{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc'
             ds_regrid.to_netcdf(CZtype_remap)
             self.CZ_dir = CZtype_remap
 
@@ -160,7 +160,7 @@ class CZ_groupby(metrics, scores):
                                 self._station_warning_shown = True
                             continue  # Skip processing for station data
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'comparisons', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -183,7 +183,7 @@ class CZ_groupby(metrics, scores):
 
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
-                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                            f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
@@ -199,7 +199,7 @@ class CZ_groupby(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -208,7 +208,7 @@ class CZ_groupby(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -217,7 +217,7 @@ class CZ_groupby(metrics, scores):
                                 logging.error('Error: No scores for climate zone class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'CZ_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -238,7 +238,7 @@ class CZ_groupby(metrics, scores):
 
                                     for score in self.scores:
                                         ds = xr.open_dataset(
-                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                            f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
@@ -249,7 +249,7 @@ class CZ_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                            o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
@@ -275,14 +275,14 @@ class CZ_groupby(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)
@@ -309,28 +309,23 @@ class CZ_groupby(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"CZ class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.error('Error: No scores for climate zone class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'comparisons', 'CZ_groupby')
         # if os.path.exists(metricsdir_path):
         #     shutil.rmtree(metricsdir_path)
         # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'comparisons', 'CZ_groupby')
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
-        try:
-            _CZ_class_remap_cdo(self)
-        except Exception as e:
-            logging.error(f"CDO remapping failed: {e}")
-            logging.info("Falling back to xarray-regrid remapping...")
-            _CZ_class_remap(self)
+        _CZ_class_remap(self)
         _scenarios_CZ_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
