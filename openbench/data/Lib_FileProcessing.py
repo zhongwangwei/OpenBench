@@ -46,13 +46,11 @@ class FileProcessing:
       else:      
          self.remove_dir (f'{self.basedir}')
          self.create_dir (f'{self.basedir}')
-         self.tmp_dir = os.path.join(f'{self.basedir}', 'tmp')
-         self.create_dir (f'{self.tmp_dir}')
-
          self.scratch_dir = os.path.join(f'{self.basedir}', 'scratch')
          self.create_dir (f'{self.scratch_dir}')
+         self.tmp_dir = self.scratch_dir  # Use scratch for all temporary files
 
-         self.output_dir     = os.path.join(f'{self.basedir}', 'output')
+         self.output_dir     = f'{self.basedir}'
          self.outputdata_dir = os.path.join(f'{self.output_dir}','data')
          self.create_dir (f'{self.outputdata_dir}')
 

@@ -133,7 +133,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
 
                 # Save the plot
                 filename = f'{item}_{reference}'
-                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
             except:
@@ -235,7 +235,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
 
                 # Save the plot
                 filename = f'{score}_{"_".join(item_combination)}'
-                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
             except:
@@ -345,7 +345,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
 
                     # Save the plot
                     filename = f'{item}_{reference}'
-                    output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
+                    output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
                     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                     plt.close()
                 except:
@@ -446,7 +446,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
 
                 # Save the plot
                 filename = f'{metric}_{"_".join(item_combination)}'
-                output_file_path = f"{basedir}/output/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
             except:

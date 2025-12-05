@@ -131,7 +131,7 @@ def make_plot_index_grid(self):
         try:
             import math
             ds = xr.open_dataset(
-                f'{self.casedir}/output/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
+                f'{self.casedir}/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc')[metric]
             ds = Convert_Type.convert_nc(ds)
             quantiles = ds.quantile([0.05, 0.95], dim=['lat', 'lon'])
             del ds
@@ -204,7 +204,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     rcParams.update(params)
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    ds = xr.open_dataset(f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
+    ds = xr.open_dataset(f'{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc')
     ds = Convert_Type.convert_nc(ds)
 
     # Extract variables
@@ -312,7 +312,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     cb.solids.set_edgecolor("face")
 
     plt.savefig(
-        f'{self.casedir}/output/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
+        f'{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option["saving_format"]}',
         format=f'{option["saving_format"]}', dpi=option['dpi'])
     plt.close()
 
@@ -397,7 +397,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
 
     # plt.tight_layout()
     plt.savefig(
-        f'{self.casedir}/output/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option["saving_format"]}',
+        f'{self.casedir}/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option["saving_format"]}',
         format=f'{option["saving_format"]}', dpi=option['dpi'])
     plt.close(fig)
 
@@ -519,14 +519,14 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     cb.solids.set_edgecolor("face")
     # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
     plt.savefig(
-        f'{self.casedir}/output/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option["saving_format"]}',
+        f'{self.casedir}/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option["saving_format"]}',
         format=f'{option["saving_format"]}', dpi=option['dpi'])
     plt.close()
 
 
 def make_plot_index_stn(self):
     # read the data
-    df = pd.read_csv(f'{self.casedir}/output/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
+    df = pd.read_csv(f'{self.casedir}/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv',
                      header=0)
     df = Convert_Type.convert_Frame(df)
 

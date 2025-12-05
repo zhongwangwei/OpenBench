@@ -669,7 +669,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
             self.station_list = Convert_Type.convert_Frame(pd.read_csv(os.path.join(self.casedir, "stn_list.txt"), header=0))
-            output_dir = os.path.join(self.casedir, 'output', 'data', f'stn_{self.ref_source}_{self.sim_source}')
+            output_dir = os.path.join(self.casedir, 'data', f'stn_{self.ref_source}_{self.sim_source}')
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
@@ -1502,7 +1502,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
             station = Convert_Type.convert_Frame(station)
-            output_file = os.path.join(self.casedir, 'output', 'data',
+            output_file = os.path.join(self.casedir, 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
 
@@ -1624,7 +1624,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
-            output_file = os.path.join(self.casedir, 'output', 'data',
+            output_file = os.path.join(self.casedir, 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
 
@@ -1714,7 +1714,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                                                   data_dir, year)
                 for year in years
             )
-            var_files = glob.glob(os.path.join(self.casedir, 'tmp', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'))
+            var_files = glob.glob(os.path.join(self.casedir, 'scratch', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'))
         else:
             var_files = glob.glob(os.path.join(data_dir, f'{data_source}_{data_params["prefix"]}*{data_params["suffix"]}.nc'))
 
@@ -1740,15 +1740,15 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def get_output_filename(self, data_params: Dict[str, Any]) -> str:
         if data_params['datasource'] == 'ref':
-            return os.path.join(self.casedir, 'output', 'data', f'{self.item}_{data_params["datasource"]}_{self.ref_source}_{data_params["varname"][0]}.nc')
+            return os.path.join(self.casedir, 'data', f'{self.item}_{data_params["datasource"]}_{self.ref_source}_{data_params["varname"][0]}.nc')
         else:
-            return os.path.join(self.casedir, 'output', 'data', f'{self.item}_{data_params["datasource"]}_{self.sim_source}_{data_params["varname"][0]}.nc')
+            return os.path.join(self.casedir, 'data', f'{self.item}_{data_params["datasource"]}_{self.sim_source}_{data_params["varname"][0]}.nc')
 
     def cleanup_temp_files(self, data_params: Dict[str, Any]) -> None:
         """Clean up temporary files, silently skipping non-existent files."""
         failed_removals = []
         for year in range(self.minyear, self.maxyear + 1):
-            temp_file = os.path.join(self.casedir, 'tmp', f'{data_params["datasource"]}_{data_params["varname"][0]}_remap_{year}.nc')
+            temp_file = os.path.join(self.casedir, 'scratch', f'{data_params["datasource"]}_{data_params["varname"][0]}_remap_{year}.nc')
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
@@ -1833,9 +1833,9 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         new_grid = self.create_target_grid()
 
         remapping_methods = [
-            self.remap_cdo,         # CDO - most stable, climate science standard
-            self.remap_xesmf,       # xESMF - fallback option
-            self.remap_interpolate  # Conservative regrid - last resort
+            self.remap_interpolate,  # Conservative regrid - last resort
+            self.remap_cdo,          # CDO - most stable, climate science standard
+            self.remap_xesmf,        # xESMF - fallback option
         ]
 
         # Collect errors but don't report until all methods fail
@@ -1980,7 +1980,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
             varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
 
-            out_file = os.path.join(self.casedir, 'tmp', f'{data_source}_{varname}_remap_{year}.nc')
+            out_file = os.path.join(self.casedir, 'scratch', f'{data_source}_{varname}_remap_{year}.nc')
             data.to_netcdf(out_file)
             logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
         finally:

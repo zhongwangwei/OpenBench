@@ -101,7 +101,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_title(option['title'], fontsize=option['title_size'])
                 # Save the plot
 
-                output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_scores_{evaluation_item}_{ref_source}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_scores_{evaluation_item}_{ref_source}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
                 logging.error(f"Error in {evaluation_item} - {ref_source}, Scores contains Na  (Removing)")
@@ -187,7 +187,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
                 ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
                 # Save the plot
-                output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
                 logging.error(f"Error in {score} - {item_combination} ")
@@ -253,7 +253,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
                 ax.set_title(option['title'], fontsize=option['title_size'])
 
-                output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_metrics_{evaluation_item}_{ref_source}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_metrics_{evaluation_item}_{ref_source}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
                 logging.error(f"Error in {evaluation_item} - {ref_source}, metrics contains Nan (Removing) ")
@@ -342,7 +342,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
                 ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
                 # Save the plot
-                output_file_path = f"{basedir}/output/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{metric}_{'_'.join(item_combination)}.{option['saving_format']}"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{metric}_{'_'.join(item_combination)}.{option['saving_format']}"
                 fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
             except:
                 logging.error(f"Error in {metric} - {item_combination} -4")

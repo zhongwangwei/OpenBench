@@ -211,15 +211,15 @@ class OutputStructure:
         Args:
             base_dir: Base output directory
         """
+        # base_dir is now the case directory (e.g., output/Debug)
+        # All output folders are directly under base_dir, no 'output' subdirectory
         self.base_dir = Path(base_dir)
         self.structure = {
             'metrics': self.base_dir / 'metrics',
             'scores': self.base_dir / 'scores',
             'data': self.base_dir / 'data',
-            'figures': self.base_dir / 'figures',
             'comparisons': self.base_dir / 'comparisons',
             'reports': self.base_dir / 'reports',
-            'logs': self.base_dir / 'logs'
         }
     
     def create_structure(self) -> None:

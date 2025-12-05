@@ -156,11 +156,10 @@ def setup_directories(main_nl):
 
     base_path = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'])
     directories = {
-        'tmp': os.path.join(base_path, 'tmp'),
         'scratch': os.path.join(base_path, 'scratch'),
-        'metrics': os.path.join(base_path, 'output', 'metrics'),
-        'scores': os.path.join(base_path, 'output', 'scores'),
-        'data': os.path.join(base_path, 'output', 'data'),
+        'metrics': os.path.join(base_path, 'metrics'),
+        'scores': os.path.join(base_path, 'scores'),
+        'data': os.path.join(base_path, 'data'),
         'log': os.path.join(base_path, 'log')
     }
     for dir_path in directories.values():
@@ -185,62 +184,28 @@ def setup_directories(main_nl):
     log_file = os.path.join(directories['log'], f'openbench_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
     print(f'OpenBench Log File: {log_file}')
 
-    if _HAS_ENHANCED_LOGGING:
-        logging_manager = setup_logging(
-            level=logging.INFO,
-            console=True,
-            file=False,
-            structured=False,
-            async_mode=False,
-            base_dir=directories['log']
-        )
+    # Simple logging configuration for reliability
+    for h in logging.root.handlers[:]:
+        logging.root.removeHandler(h)
 
-        configure_library_logging()
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-        # 上下文
-        logging_manager.add_context(app_name="OpenBench", version="0.1", case_dir=base_path)
+    # File handler with UTF-8 encoding
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
 
-        root_logger = logging.getLogger()
+    # Console handler (only show warnings and above)
+    console_handler = logging.StreamHandler(stream=sys.stdout)
+    console_handler.setLevel(logging.WARNING)
+    console_handler.setFormatter(formatter)
 
-        for h in list(root_logger.handlers):
-            if isinstance(h, logging.FileHandler):
-                root_logger.removeHandler(h)
+    logging.root.setLevel(logging.INFO)
+    logging.root.addHandler(file_handler)
+    logging.root.addHandler(console_handler)
 
-        # 统一添加 UTF-8 文件 handler
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        fh = logging.FileHandler(log_file, encoding='utf-8')
-        fh.setLevel(logging.INFO)
-        fh.setFormatter(formatter)
-        root_logger.addHandler(fh)
-
-        for h in root_logger.handlers:
-            if isinstance(h, logging.StreamHandler):
-                try:
-                    h.stream = sys.stdout
-                except Exception:
-                    pass
-                h.setLevel(logging.WARNING)
-
-        root_logger.setLevel(logging.INFO)
-
-    else:
-        for h in logging.root.handlers[:]:
-            logging.root.removeHandler(h)
-
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
-        # 文件：UTF-8
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(formatter)
-
-        console_handler = logging.StreamHandler(stream=sys.stdout)
-        console_handler.setLevel(logging.WARNING)
-        console_handler.setFormatter(formatter)
-
-        logging.root.setLevel(logging.INFO)
-        logging.root.addHandler(file_handler)
-        logging.root.addHandler(console_handler)
+    # Log initial message to verify logging is working
+    logging.info("OpenBench logging initialized successfully")
 
     return directories
 
@@ -470,7 +435,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     logging.warning(f"File not found after {max_wait_time}s: {file_path}")
                     return False
 
-                ref_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc'
+                ref_file_path = f'{general_info["casedir"]}/data/{evaluation_item}_ref_{ref_source}_{general_info["ref_varname"]}.nc'
                 # Convert to absolute path to ensure consistency
                 ref_file_path_abs = os.path.abspath(ref_file_path)
 
@@ -494,7 +459,7 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                         o = ref_ds[f'{general_info["ref_varname"]}']
                     o = Convert_Type.convert_nc(o)
 
-                    sim_file_path = f'{general_info["casedir"]}/output/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
+                    sim_file_path = f'{general_info["casedir"]}/data/{evaluation_item}_sim_{sim_source}_{general_info["sim_varname"]}.nc'
                     # Convert to absolute path to ensure consistency
                     sim_file_path_abs = os.path.abspath(sim_file_path)
 
@@ -649,7 +614,7 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
     basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
     stats_handler = StatisticsProcessing(
         main_nl, stats_nml,
-        os.path.join(basedir, 'output', 'statistics'),
+        os.path.join(basedir, 'statistics'),
         num_cores=main_nl['general']['num_cores']
     )
 
@@ -878,7 +843,7 @@ def main():
             
             # Initialize report generator
             basedir = os.path.join(main_nl['general']['basedir'], main_nl['general']['basename'])
-            output_basedir = os.path.join(basedir, "output")
+            output_basedir = basedir
             report_gen = ReportGenerator(report_config, output_basedir)
             
             # Generate reports
@@ -902,7 +867,16 @@ def main():
     
     # Final memory cleanup
     cleanup_memory()
-    
+
+    # Clean up scratch directory after evaluation is complete
+    scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+    if os.path.exists(scratch_dir):
+        try:
+            shutil.rmtree(scratch_dir)
+            logging.info(f"Cleaned up scratch directory: {scratch_dir}")
+        except Exception as e:
+            logging.warning(f"Failed to clean up scratch directory: {e}")
+
     colors = get_platform_colors()
     party = "🎉" if colors['unicode_support'] else"[SUCCESS]"
     print(f"\n{colors['green']}" + "=" * 60 + f"{colors['reset']}")

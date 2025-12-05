@@ -121,7 +121,7 @@ class Evaluation_grid(metrics, scores):
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
         self.fig_nml = fig_nml
-        os.makedirs(os.path.join(self.casedir, 'output'), exist_ok=True)
+        os.makedirs(self.casedir, exist_ok=True)
 
         # Initialize modular evaluation engine if available
         if _HAS_MODULAR_ENGINE:
@@ -133,7 +133,7 @@ class Evaluation_grid(metrics, scores):
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
-                os.path.join(self.casedir, 'output')
+                self.casedir
             )
             logging.debug("Output manager initialized")
         else:
@@ -167,7 +167,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'output', 'metrics', 
+                output_path = os.path.join(self.casedir, 'metrics', 
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -196,7 +196,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'output', 'scores', 
+                output_path = os.path.join(self.casedir, 'scores', 
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -209,9 +209,9 @@ class Evaluation_grid(metrics, scores):
         ref_ds = None
         sim_ds = None
         try:
-            ref_path = os.path.join(self.casedir, 'output', 'data',
+            ref_path = os.path.join(self.casedir, 'data',
                                   f'{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')
-            sim_path = os.path.join(self.casedir, 'output', 'data',
+            sim_path = os.path.join(self.casedir, 'data',
                                   f'{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
 
             # Open datasets and keep references for proper cleanup
@@ -352,7 +352,7 @@ class Evaluation_stn(metrics, scores):
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
-                os.path.join(self.casedir, 'output')
+                self.casedir
             )
             logging.debug("Output manager initialized")
         else:
@@ -502,9 +502,9 @@ class Evaluation_stn(metrics, scores):
                 sim_ds = None
                 ref_ds = None
                 try:
-                    sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+                    sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                    ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+                    ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
                     # Open datasets and keep references for proper cleanup
@@ -609,14 +609,14 @@ class Evaluation_stn(metrics, scores):
             else:
                 # Original method
                 # Save metrics
-                metrics_dir = os.path.join(self.casedir, 'output', 'metrics', f'stn_{self.ref_source}_{self.sim_source}')
+                metrics_dir = os.path.join(self.casedir, 'metrics', f'stn_{self.ref_source}_{self.sim_source}')
                 os.makedirs(metrics_dir, exist_ok=True)
                 metrics_path = os.path.join(metrics_dir, f'{self.ref_varname}_{self.sim_varname}_metrics.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 station_list.to_csv(metrics_path, index=False)
                 
                 # Save scores
-                scores_dir = os.path.join(self.casedir, 'output', 'scores', f'stn_{self.ref_source}_{self.sim_source}')
+                scores_dir = os.path.join(self.casedir, 'scores', f'stn_{self.ref_source}_{self.sim_source}')
                 os.makedirs(scores_dir, exist_ok=True)
                 scores_path = os.path.join(scores_dir, f'{self.ref_varname}_{self.sim_varname}_scores.csv')
                 station_list.to_csv(scores_path, index=False)
@@ -628,9 +628,9 @@ class Evaluation_stn(metrics, scores):
         sim_ds = None
         ref_ds = None
         try:
-            sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+            sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-            ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+            ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
             # Check if both files exist before processing
@@ -801,14 +801,14 @@ class Evaluation_stn(metrics, scores):
             else:
                 # Original method
                 # Save scores
-                scores_path = os.path.join(self.casedir, 'output', 'scores',
+                scores_path = os.path.join(self.casedir, 'scores',
                                          f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
                 logging.info(f"Saving scores to {scores_path}")
                 os.makedirs(os.path.dirname(scores_path), exist_ok=True)
                 station_list.to_csv(scores_path, index=False)
                 
                 # Save metrics
-                metrics_path = os.path.join(self.casedir, 'output', 'metrics',
+                metrics_path = os.path.join(self.casedir, 'metrics',
                                           f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 os.makedirs(os.path.dirname(metrics_path), exist_ok=True)

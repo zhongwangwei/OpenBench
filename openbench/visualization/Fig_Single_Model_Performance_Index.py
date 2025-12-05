@@ -32,7 +32,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
               'text.usetex': False}
     rcParams.update(params)
 
-    data_path = f"{basedir}/output/comparisons/Single_Model_Performance_Index/SMPI_comparison.txt"
+    data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.txt"
     df = pd.read_csv(data_path, sep='\t')
     df = Convert_Type.convert_Frame(df)
     # Prepare the subplot grid
@@ -229,7 +229,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     fig.suptitle("Single Model Performance Index Comparison", fontsize=16, weight="bold", y=0.95)
 
     plt.savefig(
-        f'{basedir}/output/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.{option["saving_format"]}',
+        f'{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.{option["saving_format"]}',
         format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
     plt.close()
 
