@@ -681,6 +681,28 @@ def main():
     nl = NamelistReader()
     main_nl = nl.read_namelist(config_file)
 
+    # Set default values for optional general config keys
+    # This ensures missing keys default to False rather than causing KeyError
+    general_defaults = {
+        'evaluation': False,
+        'comparison': False,
+        'statistics': False,
+        'only_drawing': False,  # Default to running full evaluation, not just plotting
+        'unified_mask': False,
+        'IGBP_groupby': False,
+        'PFT_groupby': False,
+        'Climate_zone_groupby': False,
+    }
+    for key, default_value in general_defaults.items():
+        if key not in main_nl['general']:
+            main_nl['general'][key] = default_value
+
+    # Ensure optional top-level sections exist
+    section_defaults = ['evaluation_items', 'metrics', 'scores', 'comparisons', 'statistics']
+    for section in section_defaults:
+        if section not in main_nl:
+            main_nl[section] = {}
+
     # Clean up old outputs before running
     # clean_level options: 'tmp' (default), 'all', 'none'
     clean_level = main_nl['general'].get('clean_level', 'tmp')
@@ -768,7 +790,7 @@ def main():
         run_files_check(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars,
                         fig_nml)
 
-    main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', True)
+    main_nl['general']['only_drawing'] = main_nl['general'].get('only_drawing', False)
 
     # Run evaluation if enabled
     if main_nl['general']['evaluation']:
