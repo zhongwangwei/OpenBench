@@ -51,3 +51,7 @@ openbench/data/custom/PLUMBER2S_README.md
 /dataset/Simulation/GRFR-US_06min
 /dataset/Simulation/TabPFN-US_06min-dam
 /dataset/Simulation/TabPFN-US_06min-nodam
+nml/nml-json/main-Practice.json
+nml/nml-json/ref-Practice.json
+nml/nml-json/sim-Practice.json
+nml/nml-json/user/Practice/grid_case.json

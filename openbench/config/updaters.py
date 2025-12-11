@@ -242,9 +242,9 @@ class UpdateFigNamelist(NamelistReader):
         
         self._process_validation_item(fig_nml)
         
-        if main_nl['general']['comparison']:
+        if main_nl['general'].get('comparison', False):
             self._process_comparison_item(fig_nml, comparisons)
-        if main_nl['general']['statistics']:
+        if main_nl['general'].get('statistics', False):
             self._process_statistic_item(fig_nml, statistics)
     
     def _process_validation_item(self, fig_nml: Dict[str, Any]):

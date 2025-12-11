@@ -631,6 +631,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return result_freq
 
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
+        # Set default values for optional config keys before updating
+        self.debug_mode = False  # Default debug_mode to False
         self.__dict__.update(config)  # Changed this line
         self.sim_varname = [self.sim_varname] if isinstance(self.sim_varname, str) else self.sim_varname
         self.ref_varname = [self.ref_varname] if isinstance(self.ref_varname, str) else self.ref_varname

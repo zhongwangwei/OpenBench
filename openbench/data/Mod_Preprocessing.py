@@ -147,7 +147,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
         ]
 
         # Add statistics namelist if statistics is enabled
-        if main_nl['general']['statistics']:
+        if main_nl['general'].get('statistics', False):
             required_files.append(main_nl["general"]["statistics_nml"])
 
         # Required directories
