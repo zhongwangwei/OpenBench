@@ -128,10 +128,11 @@ python GUI/GUI_openbench.py
 The desktop interface is still under development, may be missing features, and is not yet recommended for production workflows.
 
 ### API Preview (Experimental)
+
 ```python
 from openbench.openbench_api import OpenBench
 
-ob = OpenBench.from_config("nml/nml-json/main-Debug.json")
+ob = OpenBench.from_config("nml/nml-json/main-Initial_test.json")
 ob.run()  # Executes the full pipeline
 summary = ob.results
 ```
