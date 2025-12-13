@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Initial_test/GLEAM_hybird_PLUMBER2/
+  root_dir: ./dataset/Reference/Initial_test/GLEAM_hybrid_PLUMBER2/
   timezone: 0.0
   data_type: stn
   data_groupby: single
@@ -7,7 +7,7 @@ general:
   grid_res: ''
   syear: ''
   eyear: ''
-  fulllist: ./dataset/Reference/Initial_test/GLEAM_hybird_PLUMBER2.csv
+  fulllist: ./dataset/Reference/Initial_test/GLEAM_hybrid_PLUMBER2.csv
 Evapotranspiration:
   varname: et
   varunit: mm day-1

@@ -1,6 +1,6 @@
 {
   "general": {
-    "basename": "Debug",
+    "basename": "Initial_test",
     "basedir": "./output",
     "compare_tim_res": "month",
     "compare_tzone": 0.0,
@@ -12,9 +12,9 @@
     "min_lat": -90.0,
     "max_lon": 180.0,
     "min_lon": -180.0,
-    "reference_nml": "./nml/nml-json/ref-Debug.json",
-    "simulation_nml": "./nml/nml-json/sim-Debug.json",
-    "statistics_nml": "./nml/nml-json/stats-Debug.json",
+    "reference_nml": "./nml/nml-json/ref-Initial_test.json",
+    "simulation_nml": "./nml/nml-json/sim-Initial_test.json",
+    "statistics_nml": "./nml/nml-json/stats-Initial_test.json",
     "figure_nml": "./nml/nml-json/figlib.json",
     "num_cores": 8,
     "evaluation": true,

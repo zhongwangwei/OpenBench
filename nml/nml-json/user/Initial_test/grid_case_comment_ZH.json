@@ -14,6 +14,6 @@
     "prefix": "grid_case_hist_",                //数据名称时间前缀（此处数据全称格式为grid_case_hist_2004-01.nc，前缀为grid_case_hist_）
     "syear": 2004,                              //开始年份（开始于该年1月）
     "eyear": 2005,                              //结束年份（结束于该年12月）
-    "root_dir": "./dataset/Simulation/debug/grid"  //数据存放路径
+    "root_dir": "./dataset/Simulation/Initial_test/grid"  //数据存放路径
   }
 }

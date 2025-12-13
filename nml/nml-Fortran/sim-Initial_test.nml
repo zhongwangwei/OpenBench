@@ -6,8 +6,8 @@
 
 
 &def_nml
-    grid_case      = ./nml/nml-Fortran/user/debug/grid_case.nml
-    station_case = ./nml/nml-Fortran/user/debug/station_case.nml
+    grid_case      = ./nml/nml-Fortran/user/Initial_test/grid_case.nml
+    station_case = ./nml/nml-Fortran/user/Initial_test/station_case.nml
 /
 
 

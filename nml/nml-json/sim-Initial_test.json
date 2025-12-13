@@ -14,7 +14,7 @@
     ]
   },
   "def_nml": {
-    "grid_case": "./nml/nml-json/user/debug/grid_case.json",
-    "station_case": "./nml/nml-json/user/debug/station_case.json"
+    "grid_case": "./nml/nml-json/user/Initial_test/grid_case.json",
+    "station_case": "./nml/nml-json/user/Initial_test/station_case.json"
   }
 }
