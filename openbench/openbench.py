@@ -62,7 +62,15 @@ from openbench.data.Mod_DatasetProcessing import DatasetProcessing
 
 
 def _ensure_sysconf_accessible():
-    """Patch os.sysconf to avoid sandbox PermissionError for semaphore queries."""
+    """Patch os.sysconf to avoid sandbox PermissionError for semaphore queries.
+
+    On Windows, os.sysconf does not exist, so this function is a no-op.
+    On Unix/Linux, it patches os.sysconf to handle PermissionError gracefully.
+    """
+    # Skip on platforms without sysconf (e.g., Windows)
+    if not hasattr(os, 'sysconf'):
+        return
+
     if getattr(os, "_openbench_sysconf_patched", False):
         return
 
