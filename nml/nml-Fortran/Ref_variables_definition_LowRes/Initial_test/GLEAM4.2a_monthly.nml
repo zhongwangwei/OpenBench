@@ -1,0 +1,17 @@
+&general
+  root_dir          =  ./dataset/Reference/Initial_test/GLEAM4.2a_monthly
+  timezone          =  0
+  data_type         =  grid
+  data_groupby      =  Year
+  syear             =  2004
+  eyear             =  2005
+  tim_res           =  Month        #Day or Month
+  grid_res          =  2.0
+/
+
+&Evapotranspiration
+varname           =  E
+varunit           =  mm month-1
+prefix            =  E_
+suffix            =  _GLEAM_v4.2a_MO
+/

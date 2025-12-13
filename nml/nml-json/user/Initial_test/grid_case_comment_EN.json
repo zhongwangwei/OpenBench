@@ -1,0 +1,19 @@
+{
+  /* Specific simulation configuration file (grid_case):
+     Defines the format of a specific simulation result to be compared */
+
+  "general": {
+    "model_namelist": "./nml/Mod_variables_definition/CoLM.json", // Model used, here CoLM results, with various model formats pre-configured, refer to corresponding models under ./nml/Mod_variables_definition/
+    "timezone": 0.0,                            // Time zone used by the model results
+    "data_type": "grid",                        // Data type ("grid" or "stn")
+    "data_groupby": "month",                    // Data aggregation type (for grid: "year", "month", "day"; for stn: "single")
+    "fulllist": "",                             // Specific to stn, full list of data, set to "" for grid
+    "tim_res": "month",                         // Time resolution ("year", "month", "day")
+    "grid_res": 2.0,                            // Spatial resolution (degrees)
+    "suffix": "",                               // Suffix for data name (here, full data name format is grid_case_hist_2004-01.nc, no suffix)
+    "prefix": "grid_case_hist_",                // Prefix for data name (here, full data name format is grid_case_hist_2004-01.nc, prefix is grid_case_hist_)
+    "syear": 2004,                              // Start year (beginning in January of this year)
+    "eyear": 2005,                              // End year (ending in December of this year)
+    "root_dir": "./dataset/Simulation/Initial_test/grid"  // Data storage path
+  }
+}
