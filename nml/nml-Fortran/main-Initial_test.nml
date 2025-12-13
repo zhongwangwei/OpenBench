@@ -36,7 +36,7 @@
     Biomass                          = False
 #    Burned_Area                      = False
     Ecosystem_Respiration            = False
-    Gross_Primary_Productivity       = True
+    Gross_Primary_Productivity       = False
     Leaf_Area_Index                  = False
 #    Leaf_Greenness                   = False
     Methane                          = False
@@ -71,7 +71,7 @@
 
   #*******************  Radiation and Energy Cycle  *************
     Albedo                           = False
-    Ground_Heat                      = True
+    Ground_Heat                      = False
     Latent_Heat                      = True
     Net_Radiation                    = False
     Root_Zone_Soil_Temperature       = False
@@ -88,7 +88,7 @@
     Diurnal_Max_Temperature          = False
     Diurnal_Min_Temperature          = False
     Diurnal_Temperature_Range        = False
-    Precipitation                    = True
+    Precipitation                    = False
     Surface_Air_Temperature          = False
     Surface_Downward_LW_Radiation    = False
     Surface_Downward_SW_Radiation    = False
