@@ -1,5 +1,5 @@
 &general
-    basename         = Debug
+    basename         = Initial_test
     basedir          = ./output
     compare_tim_res  = month
     compare_tzone    = 0.0
@@ -11,8 +11,8 @@
     min_lat          = -90.0
     max_lon          = 180.0
     min_lon          = -180.0
-    reference_nml    = ./nml/nml-Fortran/ref-Debug.nml
-    simulation_nml   = ./nml/nml-Fortran/sim-Debug.nml
+    reference_nml    = ./nml/nml-Fortran/ref-Initial_test.nml
+    simulation_nml   = ./nml/nml-Fortran/sim-Initial_test.nml
     statistics_nml   = ./nml/nml-Fortran/stats.nml
     figure_nml       = ./nml/nml-Fortran/figlib.nml
     num_cores        = 4

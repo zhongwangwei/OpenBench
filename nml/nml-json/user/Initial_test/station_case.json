@@ -5,12 +5,12 @@
     "data_type": "stn",
     "data_groupby": "single",
     "tim_res": "day",
-    "fulllist": "./dataset/Simulation/debug/station_case.csv",
+    "fulllist": "./dataset/Simulation/Initial_test/station_case.csv",
     "grid_res": 1.0,
     "syear": "",
     "eyear": "",
     "suffix": "",
     "prefix": "",
-    "root_dir": "./dataset/Simulation/debug/stn"
+    "root_dir": "./dataset/Simulation/Initial_test/stn"
   }
 }

@@ -1,5 +1,5 @@
 general:
-  basename: Debug
+  basename: Initial_test
   basedir: ./output
   compare_tim_res: month
   compare_tzone: 0.0
@@ -11,9 +11,9 @@ general:
   min_lat: -90.0
   max_lon: 180.0
   min_lon: -180.0
-  reference_nml: ./nml/nml-yaml/ref-Debug.yaml
-  simulation_nml: ./nml/nml-yaml/sim-Debug.yaml
-  statistics_nml: ./nml/nml-yaml/stats-Debug.yaml
+  reference_nml: ./nml/nml-yaml/ref-Initial_test.yaml
+  simulation_nml: ./nml/nml-yaml/sim-Initial_test.yaml
+  statistics_nml: ./nml/nml-yaml/stats-Initial_test.yaml
   figure_nml: ./nml/nml-yaml/figlib.yaml
   num_cores: 8
   evaluation: true
