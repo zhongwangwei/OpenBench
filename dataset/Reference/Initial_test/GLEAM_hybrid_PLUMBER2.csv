@@ -1,0 +1,3 @@
+ID,SYEAR,EYEAR,LON,LAT,Flag,DIR
+AT-Neu,2004,2005,11.3175,47.11667,TRUE,./dataset/Reference/Initial_test/GLEAM_hybrid_PLUMBER2/AT-Neu_2004-2005.nc
+AU-How,2004,2005,131.1523,-12.4943,TRUE,./dataset/Reference/Initial_test/GLEAM_hybrid_PLUMBER2/AU-How_2004-2005.nc

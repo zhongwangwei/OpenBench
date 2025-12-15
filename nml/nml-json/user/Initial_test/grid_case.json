@@ -1,0 +1,16 @@
+{
+  "general": {
+    "model_namelist": "./nml/nml-json/Mod_variables_definition/CoLM.json",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "month",
+    "fulllist": "",
+    "tim_res": "month",
+    "grid_res": 2.0,
+    "suffix": "",
+    "prefix": "grid_case_hist_",
+    "syear": 2004,
+    "eyear": 2005,
+    "root_dir": "./dataset/Simulation/Initial_test/grid"
+  }
+}

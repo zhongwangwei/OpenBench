@@ -1,0 +1,18 @@
+&general
+    model_namelist = ./nml/nml-Fortran/Mod_variables_definition/CoLM.nml
+    timezone       = 0.0
+    data_type      = stn
+    data_groupby   = single
+    tim_res        = day
+    fulllist       = ./dataset/Simulation/Initial_test/station_case.csv
+    grid_res       = 1.
+    syear          = 
+    eyear          = 
+    suffix         = 
+    prefix         = 
+    root_dir       = ./dataset/Simulation/Initial_test/stn
+/
+
+
+
+

@@ -1,0 +1,20 @@
+{
+  "general": {
+    "Evapotranspiration_sim_source": [
+      "grid_case",
+      "station_case"
+    ],
+    "Latent_Heat_sim_source": [
+      "grid_case",
+      "station_case"
+    ],
+    "Sensible_Heat_sim_source": [
+      "grid_case",
+      "station_case"
+    ]
+  },
+  "def_nml": {
+    "grid_case": "./nml/nml-json/user/Initial_test/grid_case.json",
+    "station_case": "./nml/nml-json/user/Initial_test/station_case.json"
+  }
+}
