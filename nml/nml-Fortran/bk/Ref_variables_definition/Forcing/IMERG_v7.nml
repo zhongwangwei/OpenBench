@@ -1,0 +1,17 @@
+&general
+   root_dir          =  ./dataset/Reference/Grid/Forcing/IMERG_v7/
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Month
+   tim_res           =  Day
+   grid_res          =  0.1
+   syear             =  1998
+   eyear             =  2025
+/
+
+&Precipitation
+varname           =  precipitation
+varunit           =  mm day-1
+prefix            =  IMERG_daily_
+suffix            =
+/

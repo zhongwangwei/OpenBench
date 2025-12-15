@@ -1,0 +1,163 @@
+&general
+   root_dir          =  ./dataset/Reference/Grid/ERA5LAND_0p25/daily
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Year
+   tim_res           =  Day
+   grid_res          =  0.25
+   syear             =  1950
+   eyear             =  2022
+/
+
+#*******************  Radiation and Energy Cycle  *************
+&Net_Radiation
+sub_dir           =  surface_net_radiation
+varname           =  Rnet
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =  _daymean_surface_net_radiation_1D_0p25
+/
+
+&Sensible_Heat
+sub_dir           =  surface_sensible_heat_flux
+varname           =  sshf
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =   _daymean_surface_sensible_heat_flux_1D_0p25
+/
+
+&Latent_Heat
+sub_dir           =  surface_latent_heat_flux
+varname           =  slhf
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =  _daymean_surface_latent_heat_flux_1D_0p25
+/
+
+&Albedo
+sub_dir           =   
+varname           =  
+varunit           =  
+prefix            =   
+suffix            =   
+/
+
+&Surface_Net_LW_Radiation
+sub_dir           =  surface_net_thermal_radiation
+varname           =  str
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =  _daymean_surface_net_thermal_radiation_1D_0p25
+/
+
+&Surface_Net_SW_Radiation
+sub_dir           =  surface_net_solar_radiation
+varname           =  ssr
+varunit           =  W m-2
+prefix            =  ERA5LAND_
+suffix            =   _daymean_surface_net_solar_radiation_1D_0p25
+/
+
+##############Hydrology###############
+&Evapotranspiration
+sub_dir           =  
+varname           =  
+varunit           =  
+prefix            =  
+suffix            = 
+/
+
+&Canopy_Interception
+sub_dir           =  
+varname           =  
+varunit           =  
+prefix            =  
+suffix            = 
+/
+
+&Soil_Evaporation
+sub_dir           =  
+varname           =  
+varunit           =  
+prefix            =  
+suffix            =  
+/
+
+&Surface_Soil_Moisture
+sub_dir           =  soil_moisture_lev1
+varname           =  swvl1
+varunit           =  unitless
+prefix            =  ERA5LAND_
+suffix            =  _swvl1_1D_0p25
+/
+
+&Total_Runoff
+sub_dir           =  total_runoff
+varname           =  ro
+varunit           =  m day-1
+prefix            =  ERA5LAND_
+suffix            =  _runoff_1D_0p25
+/
+
+##############Forcing###############
+&Surface_Air_Temperature 
+sub_dir           =  air_temperature_2m
+varname           =  t2m
+varunit           =  K
+prefix            =  ERA5LAND_
+suffix            =  _t2m_1D_0p25
+/
+&Diurnal_Max_Temperature 
+sub_dir           =  daymax_2m_temperature
+varname           =  t2m
+varunit           =  K
+prefix            =  ERA5LAND_
+suffix            =  _daymax_2m_temperature_1D_0p25
+/
+&Diurnal_Min_Temperature 
+sub_dir           =  air_temperature_2m
+varname           =  t2m
+varunit           =  K
+prefix            =  ERA5LAND_
+suffix            =  _daymin_2m_temperature_1D_0p25
+/
+
+&Surface_Downward_SW_Radiation
+sub_dir           =  surface_solar_radiation_downwards
+varname           =  ssrd
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =  _ssrd_1D_0p25
+/
+
+&Surface_Downward_LW_Radiation
+sub_dir           =  surface_thermal_radiation_downwards
+varname           =  strd
+varunit           =  w m-2
+prefix            =  ERA5LAND_
+suffix            =  _strd_1D_0p25
+/
+
+&Surface_Specific_Humidity
+sub_dir           =  specific_humidity
+varname           =  Q
+varunit           =  unitless
+prefix            =  ERA5LAND_
+suffix            =  _Q_1D_0p25
+/
+
+&Precipitation
+sub_dir           =  total_precipitation
+varname           =  tp
+varunit           =  m hr-1
+prefix            =  ERA5LAND_
+suffix            =  _tp_1D_0p25
+/
+
+&Surface_Wind_Speed
+sub_dir           =  wind_speed
+varname           =  ws
+varunit           =  m s-1
+prefix            =  ERA5LAND_
+suffix            =  _ws_1D_0p25
+/

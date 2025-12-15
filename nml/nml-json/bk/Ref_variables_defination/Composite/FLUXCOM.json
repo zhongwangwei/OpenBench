@@ -1,0 +1,64 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/FLUXCOM/",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Year",
+    "tim_res": "Month",
+    "grid_res": 0.5
+  },
+  "Gross_Primary_Productivity": {
+    "sub_dir": "Carbon/",
+    "varname": "GPP",
+    "varunit": "gC m-2 day-1",
+    "prefix": "GPP.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2010
+  },
+  "Net_Ecosystem_Exchange": {
+    "sub_dir": "Carbon/",
+    "varname": "NEE",
+    "varunit": "gC m-2 day-1",
+    "prefix": "NEE.RS_METEO.FP-NONE.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2010
+  },
+  "Ecosystem_Respiration": {
+    "sub_dir": "Carbon/",
+    "varname": "TER",
+    "varunit": "gC m-2 day-1",
+    "prefix": "TER.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2010
+  },
+  "Net_Radiation": {
+    "sub_dir": "Energy/",
+    "varname": "Rn",
+    "varunit": "MJ m-2 day-1",
+    "prefix": "Rn.RS_METEO.EBC-NONE.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2013
+  },
+  "Latent_Heat": {
+    "sub_dir": "Energy/",
+    "varname": "LE",
+    "varunit": "MJ m-2 day-1",
+    "prefix": "LE.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2013
+  },
+  "Sensible_Heat": {
+    "sub_dir": "Energy/",
+    "varname": "H",
+    "varunit": "MJ m-2 day-1",
+    "prefix": "H.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.",
+    "suffix": "",
+    "syear": 2001,
+    "eyear": 2013
+  }
+}

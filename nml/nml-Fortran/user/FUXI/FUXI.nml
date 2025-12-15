@@ -1,0 +1,14 @@
+&general
+   model_namelist    =  ./nml/nml-Fortran/Mod_variables_definition/CoLM.nml                               #the unit and variable definition will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Month
+   dir = ./dataset/Simulation/FUXI/
+   fulllist =
+   tim_res =  day
+   grid_res =  0.25
+   suffix =
+   prefix = FUXI-test_hist_
+   syear =  2006
+   eyear =  2010
+/

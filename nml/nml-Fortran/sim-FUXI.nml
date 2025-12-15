@@ -1,0 +1,23 @@
+&general
+    Streamflow_sim_source    = FUXI_cama
+    Sensible_Heat_sim_source = FUXI
+    Latent_Heat_sim_source   = FUXI
+    Canopy_Transpiration_sim_source=FUXI
+    Evapotranspiration_sim_source=FUXI
+    Leaf_Area_Index_sim_source=FUXI
+    Gross_Primary_Productivity_sim_source=FUXI
+    Surface_Soil_Moisture_sim_source=FUXI
+    Total_Runoff_sim_source=FUXI
+    Precipitation_sim_source=FUXI
+    Ground_Heat_sim_source=FUXI
+    Net_Radiation_sim_source=FUXI
+    Surface_Albedo_sim_source=FUXI
+/
+
+
+&def_nml
+    FUXI      = ./nml/nml-Fortran/user/FUXI/FUXI.nml
+    FUXI_cama = ./nml/nml-Fortran/user/FUXI/FUXI_cama.nml
+/
+
+

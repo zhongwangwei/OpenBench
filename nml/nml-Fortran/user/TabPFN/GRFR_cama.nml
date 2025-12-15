@@ -1,0 +1,20 @@
+&general
+   model_namelist    =  ./nml/nml-Fortran/Mod_variables_definition/CaMaFlood.nml                               #the unit and variable definition will be default in here
+   timezone =  0.0
+   data_type =  grid
+   data_groupby =  Year
+   dir = ./dataset/Simulation/GRFR-US_06min/
+   fulllist =
+   tim_res =  day
+   grid_res =  0.1
+   syear =  2001
+   eyear =  2005
+/
+&Streamflow
+  prefix            =  o_outflw
+  suffix            =
+/
+&Dam_Inflow
+  prefix            =  o_daminf
+  suffix            =
+/

@@ -60,7 +60,7 @@ def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMS
         option['title'] = evaluation_item.replace('_', " ")
     #ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
-    output_file_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Taylor_Diagram',
+    output_file_path = os.path.join(f'{basedir}', 'comparisons', 'Taylor_Diagram',
                                     f'Taylor_Diagram_{evaluation_item}_{ref_source}.{option["saving_format"]}')
     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
 
@@ -2515,9 +2515,9 @@ def check_on_off(value):
         else:
             raise ValueError('Invalid value: ' + str(value))
     elif isinstance(value, bool):
-        if value == False:
+        if not value:
             value = 'off'
-        elif value == True:
+        elif value:
             value = 'on'
     else:
         raise ValueError('Invalid value: ' + str(value))

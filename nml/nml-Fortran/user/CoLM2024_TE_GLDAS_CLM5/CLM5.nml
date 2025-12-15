@@ -1,9 +1,9 @@
 &general
-   model_namelist    = ./nml/nml-Fortran/Mod_variables_defination/CLM5.nml                               #the unit and variable defination will be default in here
+   model_namelist    = ./nml/nml-Fortran/Mod_variables_definition/CLM5.nml                               #the unit and variable definition will be default in here
    timezone =  0.0
    data_type =  grid
    data_groupby =  month
-   dir = ./dataset/simulation/LSMs/CLM5/
+   dir = ./dataset/Simulation/LSMs/CLM5/
    fulllist =
    tim_res =  month
    grid_res =  0.5

@@ -392,7 +392,7 @@ class mange_simulation:
         else:
             newlib['general'] = {}
             if newlib['Mod'] and not st.session_state.add_mod:
-                Mod_nml = self.nl.read_namelist(os.path.join(self.Mod_variables_defination, f"{newlib['Mod']}.nml"))
+                Mod_nml = self.nl.read_namelist(os.path.join(self.Mod_variables_definition, f"{newlib['Mod']}.nml"))
                 info_list = ['sub_dir', 'varname', 'varunit', 'prefix', 'suffix']
                 st.divider()
                 newlib['general']['model_namelist'] = self.sim_sources['def_Mod'][newlib['Mod']]
@@ -897,7 +897,7 @@ class mange_simulation:
 
         st.markdown(f"""
                     <div style="font-size:22px; font-weight:bold; color:#68838B; border-bottom:3px solid #68838B; padding: 5px;">
-                        Add Mod variables defination
+                        Add Mod variables definition
                     </div>""", unsafe_allow_html=True)
         st.write(' ')
         mod_lib = {}
@@ -922,7 +922,7 @@ class mange_simulation:
             'varname': {'title': 'Set varname', 'value': ''},
             'varunit': {'title': 'Set varunit', 'value': ''}
         }
-        with st.expander(' :orange[Add Mod variables defination]', expanded=True, icon=None):
+        with st.expander(' :orange[Add Mod variables definition]', expanded=True, icon=None):
             import itertools
             info_list = ['varname', 'varunit']
             tcols = itertools.cycle(st.columns(2))
@@ -939,7 +939,7 @@ class mange_simulation:
                 tcol.divider()
         col3.write('''''')
         if col3.button('Make Mod namelist', help='Yes, this is the one.'):
-            make_Mod = self.__step3_make_Mod_namelist(self.Mod_variables_defination, mod_lib, variables)
+            make_Mod = self.__step3_make_Mod_namelist(self.Mod_variables_definition, mod_lib, variables)
             if make_Mod:
                 st.success("😉 Make file successfully!!! \n Please press to Next step")
 
@@ -1269,7 +1269,7 @@ class make_simulation(mange_simulation):
         self.initial = initial
         self.nl = NamelistReader()
         self.sim_sources = self.nl.read_namelist('./GUI/Namelist_lib/Simulation_lib.nml')
-        self.Mod_variables_defination = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_defination')
+        self.Mod_variables_definition = os.path.join(st.session_state.openbench_path, 'nml', 'Mod_variables_definition')
         self.lib_path = os.path.join(st.session_state.openbench_path, 'nml', 'user')
         self.path_finder = FindPath()
         self.base_path = Path(st.session_state.openbench_path)

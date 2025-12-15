@@ -1,0 +1,82 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/Crop/CROPGRIDSv1.08/CROPGRIDSv1.08_NC_maps",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "single",
+    "tim_res": "Year",
+    "grid_res": 0.05
+  },
+  "Crop_Cropped_Area_Rice": {
+    "sub_dir": "",
+    "varname": "croparea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_rice",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Harvested_Area_Rice": {
+    "sub_dir": "",
+    "varname": "harvarea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_rice",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Cropped_Area_Wheat": {
+    "sub_dir": "",
+    "varname": "croparea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_wheat",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Harvested_Area_Wheat": {
+    "sub_dir": "",
+    "varname": "harvarea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_wheat",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Cropped_Area_Soybean": {
+    "sub_dir": "",
+    "varname": "croparea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_soybean",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Harvested_Area_Soybean": {
+    "sub_dir": "",
+    "varname": "harvarea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_soybean",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Cropped_Area_Maize": {
+    "sub_dir": "",
+    "varname": "croparea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_maize",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  },
+  "Crop_Harvested_Area_Maize": {
+    "sub_dir": "",
+    "varname": "harvarea",
+    "varunit": "ha",
+    "prefix": "CROPGRIDSv1.08_maize",
+    "suffix": "",
+    "syear": 2020,
+    "eyear": 2020
+  }
+}

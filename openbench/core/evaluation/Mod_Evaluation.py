@@ -5,6 +5,7 @@ import sys
 import warnings
 import logging
 import gc
+import importlib
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -48,6 +49,16 @@ from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
 from openbench.visualization import *
 from openbench.util.Mod_Converttype import Convert_Type
+
+# Import climatology processor
+try:
+    from openbench.data.Mod_Climatology import ClimatologyProcessor, process_climatology_evaluation
+    _HAS_CLIMATOLOGY = True
+except ImportError:
+    _HAS_CLIMATOLOGY = False
+    ClimatologyProcessor = None
+    def process_climatology_evaluation(*args, **kwargs):
+        return args[0], args[1], args[2]
 
 # Import modular evaluation engine
 try:
@@ -110,7 +121,7 @@ class Evaluation_grid(metrics, scores):
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
         self.fig_nml = fig_nml
-        os.makedirs(os.path.join(self.casedir, 'output'), exist_ok=True)
+        os.makedirs(self.casedir, exist_ok=True)
 
         # Initialize modular evaluation engine if available
         if _HAS_MODULAR_ENGINE:
@@ -122,7 +133,7 @@ class Evaluation_grid(metrics, scores):
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
-                os.path.join(self.casedir, 'output')
+                self.casedir
             )
             logging.debug("Output manager initialized")
         else:
@@ -156,7 +167,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'output', 'metrics', 
+                output_path = os.path.join(self.casedir, 'metrics', 
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -185,7 +196,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'output', 'scores', 
+                output_path = os.path.join(self.casedir, 'scores', 
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -195,18 +206,70 @@ class Evaluation_grid(metrics, scores):
 
     @cached(key_prefix="grid_eval", ttl=1800)
     def make_Evaluation(self, **kwargs):
+        ref_ds = None
+        sim_ds = None
         try:
-            ref_path = os.path.join(self.casedir, 'output', 'data', 
+            ref_path = os.path.join(self.casedir, 'data',
                                   f'{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')
-            sim_path = os.path.join(self.casedir, 'output', 'data', 
+            sim_path = os.path.join(self.casedir, 'data',
                                   f'{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
-            
-            o = xr.open_dataset(ref_path)[f'{self.ref_varname}']
-            s = xr.open_dataset(sim_path)[f'{self.sim_varname}']
+
+            # Open datasets and keep references for proper cleanup
+            ref_ds = xr.open_dataset(ref_path)
+            sim_ds = xr.open_dataset(sim_path)
+            o = ref_ds[f'{self.ref_varname}']
+            s = sim_ds[f'{self.sim_varname}']
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
-            s['time'] = o['time'] 
+            # Process climatology if applicable
+            if _HAS_CLIMATOLOGY:
+                original_metrics = self.metrics.copy() if hasattr(self.metrics, 'copy') else list(self.metrics)
+                original_scores = self.scores.copy() if hasattr(self.scores, 'copy') else list(self.scores)
+
+                # Combine metrics and scores for filtering
+                all_evaluations = list(self.metrics) + list(self.scores)
+
+                # Get data_groupby information from instance attributes
+                ref_data_groupby = getattr(self, 'ref_data_groupby', None)
+                sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+
+                o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
+                    ref_ds, sim_ds, all_evaluations,
+                    ref_data_groupby=ref_data_groupby,
+                    sim_data_groupby=sim_data_groupby
+                )
+
+                if o_clim is not None and s_clim is not None:
+                    # Climatology evaluation mode
+                    logging.info("=" * 80)
+                    logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
+                    logging.info("=" * 80)
+
+                    o = o_clim[f'{self.ref_varname}']
+                    s = s_clim[f'{self.sim_varname}']
+                    o = Convert_Type.convert_nc(o)
+                    s = Convert_Type.convert_nc(s)
+
+                    # Update metrics and scores to only supported ones
+                    self.metrics = [m for m in self.metrics if m in supported_evaluations]
+                    self.scores = [sc for sc in self.scores if sc in supported_evaluations]
+
+                    if len(self.metrics) < len(original_metrics):
+                        skipped_metrics = set(original_metrics) - set(self.metrics)
+                        logging.info(f"Skipped metrics for climatology: {skipped_metrics}")
+
+                    if len(self.scores) < len(original_scores):
+                        skipped_scores = set(original_scores) - set(self.scores)
+                        logging.info(f"Skipped scores for climatology: {skipped_scores}")
+
+                    logging.info("=" * 80)
+                else:
+                    # Regular time series evaluation
+                    s['time'] = o['time']
+            else:
+                s['time'] = o['time']
+
             if self.item == 'Terrestrial_Water_Storage_Change':
                 logging.info("Processing Terrestrial Water Storage Change...")
                 # Calculate time difference while preserving coordinates
@@ -221,7 +284,7 @@ class Evaluation_grid(metrics, scores):
             s.values[mask1] = np.nan
             o.values[mask1] = np.nan
             logging.info("=" * 80)
-            
+
             # Parallel processing of metrics if available and beneficial
             if _HAS_PARALLEL_ENGINE and len(self.metrics) > 3:
                 logging.info("Processing metrics in parallel")
@@ -260,6 +323,11 @@ class Evaluation_grid(metrics, scores):
             logging.info("=" * 80)
             make_plot_index_grid(self)
         finally:
+            # Close datasets to free memory and file handles
+            if ref_ds is not None:
+                ref_ds.close()
+            if sim_ds is not None:
+                sim_ds.close()
             gc.collect()  # Final cleanup
 
 class Evaluation_stn(metrics, scores):
@@ -284,7 +352,7 @@ class Evaluation_stn(metrics, scores):
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
-                os.path.join(self.casedir, 'output')
+                self.casedir
             )
             logging.debug("Output manager initialized")
         else:
@@ -294,6 +362,129 @@ class Evaluation_stn(metrics, scores):
         logging.info("=======================================")
         logging.info(" ")
         logging.info(" ")
+
+    @staticmethod
+    def _normalize_var_selector(selector):
+        if isinstance(selector, (list, tuple)):
+            return list(selector)
+        if isinstance(selector, np.ndarray):
+            return selector.tolist()
+        return [selector]
+
+    def _load_station_dataset(self, dataset, datasource):
+        attr_name = 'ref_varname' if datasource == 'ref' else 'sim_varname'
+        selector = getattr(self, attr_name)
+        selector_list = self._normalize_var_selector(selector)
+
+        if not selector_list:
+            raise KeyError(f"Variable selector for {attr_name} is empty")
+
+        try:
+            return dataset[selector_list]
+        except KeyError:
+            fallback = self._apply_station_custom_filter(dataset, datasource, attr_name, selector_list[0])
+            if fallback is not None:
+                return fallback
+
+            available_vars = list(dataset.data_vars) + list(dataset.coords)
+            logging.error(
+                "Variable '%s' not found in %s dataset. Available variables: %s",
+                selector_list[0], datasource, available_vars
+            )
+            raise
+
+    def _apply_station_custom_filter(self, dataset, datasource, attr_name, canonical_name):
+        model = self.ref_source if datasource == 'ref' else self.sim_source
+
+        try:
+            custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+            custom_filter = getattr(custom_module, f"filter_{model}")
+        except (ImportError, AttributeError):
+            logging.warning(
+                "Variable '%s' missing in %s dataset for %s, no custom filter available",
+                canonical_name, datasource, model
+            )
+            return None
+
+        attr_value = getattr(self, attr_name)
+        attr_is_sequence = isinstance(attr_value, (list, tuple, np.ndarray))
+        original_attr = list(attr_value) if attr_is_sequence else attr_value
+
+        try:
+            logging.warning(
+                "Variable '%s' missing in %s dataset for %s; applying custom fallback",
+                canonical_name, datasource, model
+            )
+            updated_self, filtered_data = custom_filter(self, dataset)
+            if filtered_data is None:
+                return None
+            fallback_ds = self._convert_filtered_data_to_dataset(filtered_data, canonical_name)
+            return fallback_ds
+        finally:
+            if attr_is_sequence:
+                setattr(self, attr_name, list(original_attr))
+            else:
+                setattr(self, attr_name, original_attr)
+
+    @staticmethod
+    def _convert_filtered_data_to_dataset(filtered_data, canonical_name):
+        if isinstance(filtered_data, xr.Dataset):
+            if canonical_name in filtered_data:
+                return filtered_data[[canonical_name]]
+            data_vars = list(filtered_data.data_vars)
+            if data_vars:
+                return filtered_data[[data_vars[0]]]
+            return None
+
+        data_array = filtered_data
+        if not isinstance(data_array, xr.DataArray):
+            data_array = xr.DataArray(data_array)
+
+        if not getattr(data_array, 'name', None) or data_array.name != canonical_name:
+            data_array = data_array.rename(canonical_name)
+
+        return data_array.to_dataset(name=canonical_name)
+
+    def _normalize_time_coordinate(self, data_array):
+        """
+        Normalize time coordinates to the configured comparison resolution.
+
+        Ensures reference/simulation station series use identical timestamps even when
+        source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
+        """
+        if not hasattr(data_array, 'coords') or 'time' not in data_array.coords:
+            return data_array
+
+        compare_res = str(getattr(self, 'compare_tim_res', '') or '').strip().lower()
+        if not compare_res:
+            return data_array
+
+        try:
+            times = pd.to_datetime(data_array['time'].values)
+        except Exception as err:
+            logging.debug(f"Station time normalization skipped: {err}")
+            return data_array
+
+        if times.size == 0:
+            return data_array
+
+        normalized = None
+        if compare_res in {'day', 'd', '1d', 'daily'}:
+            normalized = (times.floor('D') + pd.Timedelta(hours=12)).values
+        elif compare_res in {'hour', 'h', '1h', 'hourly'}:
+            normalized = (times.floor('H') + pd.Timedelta(minutes=30)).values
+        elif compare_res in {'month', 'mon', 'm', '1m', 'monthly'}:
+            normalized = (times.to_period('M').to_timestamp(how='start') + pd.Timedelta(days=14, hours=12)).values
+        elif compare_res in {'year', 'yr', 'y', '1y', 'annual', 'yearly'}:
+            normalized = (times.to_period('Y').to_timestamp(how='start') + pd.Timedelta(days=182, hours=12)).values
+        else:
+            return data_array
+
+        try:
+            data_array = data_array.assign_coords(time=('time', normalized))
+        except Exception as err:
+            logging.debug(f"Failed to assign normalized station times: {err}")
+        return data_array
 
     def make_evaluation(self):
         try:
@@ -308,20 +499,57 @@ class Evaluation_stn(metrics, scores):
                 station_list[f'{score}'] = [-9999.0] * len(station_list['ID'])
             
             for iik in range(len(station_list['ID'])):
+                sim_ds = None
+                ref_ds = None
                 try:
-                    sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+                    sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                    ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+                    ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                    
-                    s = xr.open_dataset(sim_path)[self.sim_varname]
-                    o = xr.open_dataset(ref_path)[self.ref_varname]
-                    s['time'] = o['time']
+
+                    # Open datasets and keep references for proper cleanup
+                    sim_ds = xr.open_dataset(sim_path)
+                    ref_ds = xr.open_dataset(ref_path)
+                    s = self._load_station_dataset(sim_ds, 'sim')
+                    o = self._load_station_dataset(ref_ds, 'ref')
+
+                    # Process climatology if applicable
+                    current_metrics = self.metrics
+                    current_scores = self.scores
+
+                    if _HAS_CLIMATOLOGY:
+                        all_evaluations = list(self.metrics) + list(self.scores)
+
+                        # Get data_groupby information from instance attributes
+                        ref_data_groupby = getattr(self, 'ref_data_groupby', None)
+                        sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+
+                        o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
+                            ref_ds, sim_ds, all_evaluations,
+                            ref_data_groupby=ref_data_groupby,
+                            sim_data_groupby=sim_data_groupby
+                        )
+
+                        if o_clim is not None and s_clim is not None:
+                            # Climatology evaluation for this station
+                            o = o_clim[self.ref_varname]
+                            s = s_clim[self.sim_varname]
+
+                            # Filter to supported evaluations
+                            current_metrics = [m for m in self.metrics if m in supported_evaluations]
+                            current_scores = [sc for sc in self.scores if sc in supported_evaluations]
+                        else:
+                            s['time'] = o['time']
+                    else:
+                        s['time'] = o['time']
+                    s = self._normalize_time_coordinate(s)
+                    o = self._normalize_time_coordinate(o)
+
                     mask1 = np.isnan(s) | np.isnan(o)
                     s.values[mask1] = np.nan
                     o.values[mask1] = np.nan
 
-                    for metric in self.metrics:
+                    for metric in current_metrics:
                         if hasattr(self, metric):
                             pb = getattr(self, metric)(s, o)
                             station_list.loc[iik, f'{metric}'] = pb.values
@@ -329,13 +557,19 @@ class Evaluation_stn(metrics, scores):
                             logging.error('No such metric')
                             sys.exit(1)
 
-                    for score in self.scores:
+                    for score in current_scores:
                         if hasattr(self, score):
                             pb = getattr(self, score)(s, o)
+                            station_list.loc[iik, f'{score}'] = pb.values
                         else:
                             logging.error('No such score')
                             sys.exit(1)
                 finally:
+                    # Close datasets to free memory and file handles
+                    if sim_ds is not None:
+                        sim_ds.close()
+                    if ref_ds is not None:
+                        ref_ds.close()
                     gc.collect()  # Clean up memory after each station
 
             logging.info('Comparison dataset prepared!')
@@ -375,33 +609,71 @@ class Evaluation_stn(metrics, scores):
             else:
                 # Original method
                 # Save metrics
-                metrics_dir = os.path.join(self.casedir, 'output', 'metrics', f'stn_{self.ref_source}_{self.sim_source}')
+                metrics_dir = os.path.join(self.casedir, 'metrics', f'stn_{self.ref_source}_{self.sim_source}')
                 os.makedirs(metrics_dir, exist_ok=True)
                 metrics_path = os.path.join(metrics_dir, f'{self.ref_varname}_{self.sim_varname}_metrics.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 station_list.to_csv(metrics_path, index=False)
                 
                 # Save scores
-                scores_dir = os.path.join(self.casedir, 'output', 'scores', f'stn_{self.ref_source}_{self.sim_source}')
+                scores_dir = os.path.join(self.casedir, 'scores', f'stn_{self.ref_source}_{self.sim_source}')
                 os.makedirs(scores_dir, exist_ok=True)
                 scores_path = os.path.join(scores_dir, f'{self.ref_varname}_{self.sim_varname}_scores.csv')
                 station_list.to_csv(scores_path, index=False)
         finally:
             gc.collect()  # Final cleanup
 
+
     def make_evaluation_parallel(self, station_list, iik):
+        sim_ds = None
+        ref_ds = None
         try:
-            sim_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+            sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-            ref_path = os.path.join(self.casedir, "output", "data", f"stn_{self.ref_source}_{self.sim_source}",
+            ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                   f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-            
-            s = xr.open_dataset(sim_path)[self.sim_varname].to_array().squeeze()
-            o = xr.open_dataset(ref_path)[self.ref_varname].to_array().squeeze()
+
+            # Check if both files exist before processing
+            if not os.path.exists(sim_path) or not os.path.exists(ref_path):
+                station_id = station_list['ID'][iik]
+                logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
+                return None
+
+            # Open datasets and keep references for proper cleanup
+            sim_ds = xr.open_dataset(sim_path)
+            ref_ds = xr.open_dataset(ref_path)
+            s_ds = self._load_station_dataset(sim_ds, 'sim')
+            o_ds = self._load_station_dataset(ref_ds, 'ref')
+            s = s_ds.to_array().squeeze()
+            o = o_ds.to_array().squeeze()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
+            s = self._normalize_time_coordinate(s)
+            o = self._normalize_time_coordinate(o)
 
-            s['time'] = o['time']
+            # Align by common timestamps to avoid dimension conflicts
+            try:
+                s_times = pd.to_datetime(s['time'].values)
+                o_times = pd.to_datetime(o['time'].values)
+                # Intersect exact timestamps (normalization handled upstream)
+                common_times = np.intersect1d(s_times.values if hasattr(s_times, "values") else s_times,
+                                              o_times.values if hasattr(o_times, "values") else o_times)
+                if common_times.size == 0:
+                    station_id = station_list['ID'][iik]
+                    logging.warning(f"Skipping station {station_id} - no overlapping time steps after alignment")
+                    return None
+                # Select and sort by common times
+                s = s.sel(time=common_times).sortby('time')
+                o = o.sel(time=common_times).sortby('time')
+            except Exception as e:
+                logging.debug(f"Time alignment fallback due to: {e}")
+                # Fallback to assigning if shapes already match
+                if s.sizes.get('time') == o.sizes.get('time'):
+                    s['time'] = o['time']
+                else:
+                    station_id = station_list['ID'][iik]
+                    logging.warning(f"Skipping station {station_id} - failed to align time coordinates")
+                    return None
             mask1 = np.isnan(s) | np.isnan(o)
             s.values[mask1] = np.nan
             o.values[mask1] = np.nan
@@ -410,15 +682,18 @@ class Evaluation_stn(metrics, scores):
             # for based plot
             try:
                 row['KGESS'] = self.KGESS(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"KGESS calculation failed: {e}")
                 row['KGESS'] = -9999.0
             try:
                 row['RMSE'] = self.rmse(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"RMSE calculation failed: {e}")
                 row['RMSE'] = -9999.0
             try:
                 row['correlation'] = self.correlation(s, o).values
-            except:
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logging.debug(f"Correlation calculation failed: {e}")
                 row['correlation'] = -9999.0
 
             for metric in self.metrics:
@@ -458,6 +733,11 @@ class Evaluation_stn(metrics, scores):
                           float(row['correlation']), lat_lon)
             return row
         finally:
+            # Close datasets to free memory and file handles
+            if sim_ds is not None:
+                sim_ds.close()
+            if ref_ds is not None:
+                ref_ds.close()
             gc.collect()  # Clean up memory after processing each station
 
     @cached(key_prefix="station_eval", ttl=1800)
@@ -521,14 +801,14 @@ class Evaluation_stn(metrics, scores):
             else:
                 # Original method
                 # Save scores
-                scores_path = os.path.join(self.casedir, 'output', 'scores',
+                scores_path = os.path.join(self.casedir, 'scores',
                                          f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
                 logging.info(f"Saving scores to {scores_path}")
                 os.makedirs(os.path.dirname(scores_path), exist_ok=True)
                 station_list.to_csv(scores_path, index=False)
                 
                 # Save metrics
-                metrics_path = os.path.join(self.casedir, 'output', 'metrics',
+                metrics_path = os.path.join(self.casedir, 'metrics',
                                           f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
@@ -538,4 +818,3 @@ class Evaluation_stn(metrics, scores):
 
         finally:
             gc.collect()  # Final cleanup
-

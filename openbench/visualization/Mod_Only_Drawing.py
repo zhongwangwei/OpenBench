@@ -34,7 +34,6 @@ class Evaluation_grid_only_drawing(metrics, scores):
         self.author = "Xionghui Xu"
         self.__dict__.update(info)
         self.fig_nml = fig_nml
-        os.makedirs(os.path.join(self.casedir, 'output'), exist_ok=True)
 
         logging.info(" ")
         logging.info("╔═══════════════════════════════════════════════════════════════╗")
@@ -59,7 +58,6 @@ class Evaluation_stn_only_drawing(metrics, scores):
         self.fig_nml = fig_nml
         if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
-        os.makedirs(os.path.join(self.casedir, 'output'), exist_ok=True)
 
         logging.info(" ")
         logging.info("╔═══════════════════════════════════════════════════════════════╗")
@@ -128,7 +126,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 self._igbp_station_warning_shown = True
                             pass
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'comparisons', 'IGBP_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -138,7 +136,7 @@ class LC_groupby_only_drawing(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -146,7 +144,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No metrics for IGBP class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'IGBP_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'IGBP_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -154,7 +152,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                                                  f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'IGBP_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
@@ -183,7 +181,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.warning(f"warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -193,7 +191,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -202,14 +200,14 @@ class LC_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No scores for PFT class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
                                                                  f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'PFT_groupby'
                                 make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"PFT class scores comparison results are saved to {output_file_path2}")
@@ -260,7 +258,7 @@ class CZ_groupby_only_drawing(metrics, scores):
             # creat a text file, record the grid information
             nx = int(360. / self.compare_grid_res)
             ny = int(180. / self.compare_grid_res)
-            grid_info = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_info.txt'
+            grid_info = f'{self.casedir}/comparisons/CZ_groupby/CZ_info.txt'
 
             with open(grid_info, 'w') as f:
                 f.write(f"gridtype = lonlat\n")
@@ -273,7 +271,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                 f.close()
             self.target_grid = grid_info
             CZtype_orig = './dataset/Climate_zone.nc'
-            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
+            CZtype_remap = f'{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
             self.CZ_dir = CZtype_remap
 
@@ -295,8 +293,8 @@ class CZ_groupby_only_drawing(metrics, scores):
                 resolution_lon=self.compare_grid_res,
             )
             target_dataset = create_regridding_dataset(new_grid)
-            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(0, 16))
-            CZtype_remap = f'{self.casedir}/output/comparisons/CZ_groupby/CZ_remap.nc'
+            ds_regrid = ds.astype(int).regrid.most_common(target_dataset, values=np.arange(1, 31))
+            CZtype_remap = f'{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc'
             ds_regrid.to_netcdf(CZtype_remap)
             self.CZ_dir = CZtype_remap
 
@@ -359,7 +357,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                 logging.warning(f"warning: station data is not supported for Climate zone class comparison")
                                 self._station_warning_shown = True
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'comparisons', 'CZ_groupby',
                                                     f'{sim_source}___{ref_source}')
                             if not os.path.exists(dir_path):
                                 os.makedirs(dir_path)
@@ -381,8 +379,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                     # Calculate and print median values
 
                                     for metric in self.metrics:
-                                        ds = xr.open_dataset(
-                                            f'{self.casedir}/output/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        metric_file = f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'
+                                        if not os.path.exists(metric_file):
+                                            logging.error(f"File not found in only_drawing mode: {metric_file}")
+                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            continue
+                                        ds = xr.open_dataset(metric_file)
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{metric}\t")
 
@@ -398,7 +400,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
                                             output_file.write(f"{median_value_str}\t")
@@ -407,7 +409,7 @@ class CZ_groupby_only_drawing(metrics, scores):
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['item'] = [evaluation_item, sim_source, ref_source]
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -416,7 +418,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                 logging.error('Error: No scores for climate zone class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'CZ_groupby',
+                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'CZ_groupby',
                                                         f'{sim_source}___{ref_source}')
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
@@ -436,8 +438,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                     # Calculate and print mean values
 
                                     for score in self.scores:
-                                        ds = xr.open_dataset(
-                                            f'{self.casedir}/output/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        score_file = f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
+                                        if not os.path.exists(score_file):
+                                            logging.error(f"File not found in only_drawing mode: {score_file}")
+                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            continue
+                                        ds = xr.open_dataset(score_file)
                                         ds = Convert_Type.convert_nc(ds)
                                         output_file.write(f"{score}\t")
 
@@ -448,8 +454,12 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                                f'{ref_varname}']
+                                            ref_data_file = f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                                            if not os.path.exists(ref_data_file):
+                                                logging.error(f"File not found in only_drawing mode: {ref_data_file}")
+                                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                continue
+                                            o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -474,15 +484,19 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
-                                                f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
+                                                f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
                                             # Calculate and write the overall mean first
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/output/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                                    f'{ref_varname}']
+                                                ref_data_file = f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
+                                                if not os.path.exists(ref_data_file):
+                                                    logging.error(f"File not found in only_drawing mode: {ref_data_file}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
+                                                o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
@@ -508,30 +522,25 @@ class CZ_groupby_only_drawing(metrics, scores):
                                         output_file.write("\n")
 
                                 selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/output/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
+                                option['path'] = f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/"
                                 option['groupby'] = 'CZ_groupby'
                                 make_CZ_based_heat_map(output_file_path2, selected_scores, 'score', option)
                                 # print(f"CZ class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.error('Error: No scores for climate zone class comparison')
 
-        metricsdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
+        metricsdir_path = os.path.join(f'{casedir}', 'comparisons', 'CZ_groupby')
         # if os.path.exists(metricsdir_path):
         #     shutil.rmtree(metricsdir_path)
         # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
-        scoresdir_path = os.path.join(f'{casedir}', 'output', 'comparisons', 'CZ_groupby')
+        scoresdir_path = os.path.join(f'{casedir}', 'comparisons', 'CZ_groupby')
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
-        try:
-            _CZ_class_remap_cdo(self)
-        except Exception as e:
-            logging.error(f"CDO remapping failed: {e}")
-            logging.info("Falling back to xarray-regrid remapping...")
-            _CZ_class_remap(self)
+        _CZ_class_remap(self)
         _scenarios_CZ_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
 class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
@@ -604,20 +613,20 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                         self._igbp_station_warning_shown = True
                                     pass
                                 else:
-                                    dir_path = os.path.join(basedir, 'output', 'comparisons', 'IGBP_groupby',
+                                    dir_path = os.path.join(basedir, 'comparisons', 'IGBP_groupby',
                                                             f'{sim_source}___{ref_source}')
                                     os.makedirs(dir_path, exist_ok=True)
 
                                     output_file_path = os.path.join(dir_path,
                                                                     f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
                                     selected_metrics = self.metrics
-                                    option['path'] = os.path.join(self.casedir, 'output', 'comparisons', 'IGBP_groupby',
+                                    option['path'] = os.path.join(self.casedir, 'comparisons', 'IGBP_groupby',
                                                                   f'{sim_source}___{ref_source}')
                                     option['item'] = [evaluation_item, sim_source, ref_source]
                                     option['groupby'] = 'IGBP_groupby'
                                     make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
 
-                                    output_file_path2 = os.path.join(basedir, 'output', 'comparisons', 'IGBP_groupby',
+                                    output_file_path2 = os.path.join(basedir, 'comparisons', 'IGBP_groupby',
                                                                      f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
                                     selected_scores = self.scores
                                     option['groupby'] = 'IGBP_groupby'
@@ -649,7 +658,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 logging.warning(f"warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
-                            dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'PFT_groupby',
+                            dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
                             os.makedirs(dir_path, exist_ok='True')
 
@@ -658,7 +667,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                             selected_metrics = self.metrics
                             # selected_metrics = list(selected_metrics)
-                            option['path'] = f"{self.casedir}/output/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
+                            option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
                             option['item'] = [evaluation_item, sim_source, ref_source]
                             option['groupby'] = 'PFT_groupby'
                             make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
@@ -673,7 +682,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_HeatMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(casedir, 'output', 'comparisons', 'HeatMap')
+            dir_path = os.path.join(casedir, 'comparisons', 'HeatMap')
             for score in scores:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
                 make_scenarios_scores_comparison_heat_map(output_file_path, score, option)
@@ -682,7 +691,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Taylor_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(casedir, 'output', 'comparisons', 'Taylor_Diagram')
+            dir_path = os.path.join(casedir, 'comparisons', 'Taylor_Diagram')
             os.makedirs(dir_path, exist_ok=True)
 
             # read the simulation source and reference source
@@ -698,6 +707,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     for ref_source in ref_sources:
                         try:
                             output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.txt")
+                            if not os.path.exists(output_file_path):
+                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                continue
                             stds = np.zeros(len(sim_sources) + 1)
                             cors = np.zeros(len(sim_sources) + 1)
                             RMSs = np.zeros(len(sim_sources) + 1)
@@ -721,7 +734,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     
     def scenarios_Target_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(casedir, 'output', 'comparisons', 'Target_Diagram')
+            dir_path = os.path.join(casedir, 'comparisons', 'Target_Diagram')
             os.makedirs(dir_path, exist_ok=True)
 
             # read the simulation source and reference source
@@ -737,6 +750,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     for ref_source in ref_sources:
                         try:
                             output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.txt")
+                            if not os.path.exists(output_file_path):
+                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                continue
                             biases = np.zeros(len(sim_sources))
                             rmses = np.zeros(len(sim_sources))
                             crmsds = np.zeros(len(sim_sources))
@@ -761,7 +778,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     
     def scenarios_Kernel_Density_Estimate_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(basedir, 'output', 'comparisons', 'Kernel_Density_Estimate')
+            dir_path = os.path.join(basedir, 'comparisons', 'Kernel_Density_Estimate')
             os.makedirs(dir_path, exist_ok=True)
 
             # fixme: add the Kernel Density Estimate
@@ -775,6 +792,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Kernel Density Estimate - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     file_paths = []
@@ -793,14 +814,18 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(basedir, 'output', 'scores',
+                                                file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
-                                                file_path = os.path.join(basedir, 'output', 'scores',
+                                                file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
@@ -839,13 +864,17 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(basedir, 'output', 'metrics',
+                                                file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
                                             else:
-                                                file_path = os.path.join(basedir, 'output', 'metrics',
+                                                file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
@@ -874,11 +903,15 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Parallel_Coordinates_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(basedir, 'output', 'comparisons', 'Parallel_Coordinates')
+            dir_path = os.path.join(basedir, 'comparisons', 'Parallel_Coordinates')
             os.makedirs(dir_path, exist_ok=True)
             output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.txt")
 
             # Deal with output_file_path, remove the column and its index with any nan values
+            if not os.path.exists(output_file_path):
+                logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                return
             df = pd.read_csv(output_file_path, sep='\t', header=0)
             df = df.dropna(axis=1, how='any')
             # If index in scores or metrics was dropped, then remove the corresponding scores or metrics
@@ -894,7 +927,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Portrait_Plot_seasonal_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(basedir, 'output', 'comparisons', 'Portrait_Plot_seasonal')
+            dir_path = os.path.join(basedir, 'comparisons', 'Portrait_Plot_seasonal')
             os.makedirs(dir_path, exist_ok=True)
             output_file_path = os.path.join(dir_path, "Portrait_Plot_seasonal.txt")
             make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
@@ -904,7 +937,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(basedir, 'output', 'comparisons', 'Whisker_Plot')
+            dir_path = os.path.join(basedir, 'comparisons', 'Whisker_Plot')
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
@@ -919,6 +952,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for score in scores:
                         try:
+                            # Skip nSpatialScore since it's a constant value
+                            if score == 'nSpatialScore':
+                                logging.info(f"Skipping {score} for Whisker Plot - it's a constant value")
+                                continue
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
@@ -936,15 +973,23 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(basedir, 'output', 'scores',
+                                                file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
-                                                file_path = os.path.join(basedir, 'output', 'scores',
+                                                file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
@@ -981,14 +1026,22 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 if ref_varname is None or ref_varname == '':
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(basedir, 'output', 'metrics',
+                                                file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
                                                 data = df[metric].values
                                             else:
-                                                file_path = os.path.join(basedir, 'output', 'metrics',
+                                                file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
+                                                if not os.path.exists(file_path):
+                                                    logging.error(f"File not found in only_drawing mode: {file_path}")
+                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[metric].values
@@ -1016,7 +1069,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(casedir, 'output', 'comparisons', 'Relative_Score')
+            dir_path = os.path.join(casedir, 'comparisons', 'Relative_Score')
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
@@ -1057,7 +1110,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option)
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
+        dir_path = os.path.join(f'{basedir}', 'comparisons', 'Ridgeline_Plot')
         # if os.path.exists(dir_path):
         #    shutil.rmtree(dir_path)
         # print(f"Re-creating output directory: {dir_path}")
@@ -1071,6 +1124,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             if isinstance(sim_sources, str): sim_sources = [sim_sources]
             if isinstance(ref_sources, str): ref_sources = [ref_sources]
             for score in scores:
+                # Skip nSpatialScore since it's a constant value
+                if score == 'nSpatialScore':
+                    logging.info(f"Skipping {score} for Ridgeline Plot - it's a constant value")
+                    continue
                 for ref_source in ref_sources:
                     file_paths = []
                     datasets_filtered = []
@@ -1089,15 +1146,23 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == '':
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(basedir, 'output', 'scores',
+                            file_path = os.path.join(basedir, 'scores',
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
-                            file_path = os.path.join(basedir, 'output', 'scores',
+                            file_path = os.path.join(basedir, 'scores',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
@@ -1111,7 +1176,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
             for metric in metrics:
                 for ref_source in ref_sources:
-                    dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Ridgeline_Plot')
+                    dir_path = os.path.join(f'{basedir}', 'comparisons', 'Ridgeline_Plot')
                     if not os.path.exists(dir_path):
                         os.makedirs(dir_path)
 
@@ -1131,15 +1196,22 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == '':
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(basedir, 'output', 'metrics',
+                            file_path = os.path.join(basedir, 'metrics',
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
                             data = df[metric].values
                         else:
-                            file_path = os.path.join(basedir, 'output', 'metrics',
+                            file_path = os.path.join(basedir, 'metrics',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
-
+                            if not os.path.exists(file_path):
+                                logging.error(f"File not found in only_drawing mode: {file_path}")
+                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[metric].values
@@ -1202,7 +1274,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             metrics: list of metrics to compare
             option: additional options
         """
-        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', 'Diff_Plot')
+        dir_path = os.path.join(f'{basedir}', 'comparisons', 'Diff_Plot')
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1246,7 +1318,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         4. Plot the results
         """
         basic_method = option['key']
-        dir_path = os.path.join(f'{basedir}', 'output', 'comparisons', basic_method)
+        dir_path = os.path.join(f'{basedir}', 'comparisons', basic_method)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1299,7 +1371,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Mann_Kendall_Trend_Test_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         method_name = 'Mann_Kendall_Trend_Test'
         method_function = getattr(self, f"stat_{method_name.lower()}", None)
-        dir_path = os.path.join(basedir, 'output', 'comparisons', 'Mann_Kendall_Trend_Test')
+        dir_path = os.path.join(basedir, 'comparisons', 'Mann_Kendall_Trend_Test')
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -1344,7 +1416,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             method_name = 'Standard_Deviation'
             method_function = getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, 'output', 'comparisons', method_name)
+            dir_path = os.path.join(basedir, 'comparisons', method_name)
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 
@@ -1369,6 +1441,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                        f'{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
                             make_Standard_Deviation(output_file, method_name, sim_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} drawing for {evaluation_item} {sim_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}")
                     finally:
@@ -1385,6 +1459,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                        f'{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
 
                             make_Standard_Deviation(output_file, method_name, ref_source, self.main_nml['general'], option)
+                        else:
+                            logging.info(f"Skipping {method_name} drawing for {evaluation_item} {ref_source}: station data type.")
                     except Exception as e:
                         logging.error(f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}")
                     finally:
@@ -1400,7 +1476,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             method_name = 'Functional_Response'
             method_function = getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, 'output', 'comparisons', method_name)
+            dir_path = os.path.join(basedir, 'comparisons', method_name)
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 
@@ -1446,7 +1522,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
-            dir_path = os.path.join(casedir, 'output', 'comparisons', 'RadarMap')
+            dir_path = os.path.join(casedir, 'comparisons', 'RadarMap')
             for score in scores:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
                 make_scenarios_comparison_radar_map(output_file_path, score, option)
@@ -1457,7 +1533,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             method_name = 'Correlation'
             method_function = getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, 'output', 'comparisons', method_name)
+            dir_path = os.path.join(basedir, 'comparisons', method_name)
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 

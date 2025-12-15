@@ -1,0 +1,30 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/Model_Comparison/CLM5",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Month",
+    "tim_res": "Month",
+    "grid_res": 0.5,
+    "syear": 1901,
+    "eyear": 2014
+  },
+  "Surface_Soil_Temperature": {
+    "varname": "TSOI_10CM",
+    "varunit": "K",
+    "prefix": "IHistClm50BgcCropGSWP_CWD-1901-2014.clm2.h0.",
+    "suffix": ""
+  },
+  "Surface_Wind_Speed": {
+    "varname": "U10",
+    "varunit": "m s-1 wind",
+    "prefix": "IHistClm50BgcCropGSWP_CWD-1901-2014.clm2.h0.",
+    "suffix": ""
+  },
+  "Surface_Air_Temperature": {
+    "varname": "TSA",
+    "varunit": "K",
+    "prefix": "IHistClm50BgcCropGSWP_CWD-1901-2014.clm2.h0.",
+    "suffix": ""
+  }
+}

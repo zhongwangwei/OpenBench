@@ -1,0 +1,19 @@
+&general
+  root_dir = ./dataset/Reference/Grid/LowRes/Water
+  timezone = 0
+  data_type = grid
+  data_groupby = Year
+  syear = 1980
+  eyear = 2022
+  tim_res = Month
+  grid_res = 0.25
+/
+
+&Runoff
+  sub_dir = Total_Runoff/GRFR
+  varname = ro
+  varunit = mm day-1
+  prefix = RUNOFF_
+  suffix = 
+/
+

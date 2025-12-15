@@ -1,0 +1,19 @@
+&general
+  root_dir = ./dataset/Reference/Grid/LowRes/Water
+  timezone = 0
+  data_type = grid
+  data_groupby = Single
+  syear = 2016
+  eyear = 2020
+  tim_res = Month
+  grid_res = 0.25
+/
+
+&Surface_Soil_Moisture
+  sub_dir = Surface_Soil_Moisture/SMAPL3
+  varname = sm_0_5
+  varunit = m3 m-3
+  prefix = SMAPL3_05deg_monthly_2016_2020
+  suffix = 
+/
+

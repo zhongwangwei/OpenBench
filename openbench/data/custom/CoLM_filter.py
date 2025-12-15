@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import re
 import logging
+from openbench.config.readers import NamelistReader
 def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
@@ -43,7 +44,48 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
       exit()
    return ds
 
-def filter_CoLM(info,ds):   #update info as well
+def filter_CoLM(info, ds=None):   #update info as well
+   # If ds is None, this is being called from the configuration context (station filtering).
+   # For station filtering, we need to call the default filter to properly handle time range filtering.
+   if ds is None:
+      # Call default filter to handle station time range filtering
+      if hasattr(info, '_apply_default_filter'):
+         info._apply_default_filter()
+      return
+   if info.item == "Precipitation":
+      try:
+         ds['Precipitation'] = ds['f_xy_rain']+ds['f_xy_snow']
+         info.sim_varname = ['Precipitation']
+         info.sim_varunit = 'mm s-1'
+      except Exception as e:
+         logging.error(f"Precipitation calculation processing ERROR: {e}")
+         return info, None
+      return info, ds['Precipitation']
+   # Handle Gross Primary Productivity with fallback from f_gpp to f_assim
+   if info.item == "Gross_Primary_Productivity":
+      # If f_gpp doesn't exist but f_assim does, rename it
+      if 'f_gpp' not in ds.variables and 'f_assim' in ds.variables:
+         logging.warning('f_gpp not found, falling back to f_assim for Gross_Primary_Productivity')
+         # Read f_assim's unit from the model namelist (not from data file)
+         try:
+            # Get model_namelist path from info object
+            model_namelist_path = getattr(info, 'sim_model_namelist', None) or getattr(info, 'model_namelist', None)
+            if model_namelist_path:
+               reader = NamelistReader()
+               model_nml = reader.read_namelist(model_namelist_path)
+               # Get unit for Canopy_Assimilation_Rate (which uses f_assim)
+               if 'Canopy_Assimilation_Rate' in model_nml and 'varunit' in model_nml['Canopy_Assimilation_Rate']:
+                  info.sim_varunit = model_nml['Canopy_Assimilation_Rate']['varunit']
+                  logging.info(f"Updated sim_varunit to {info.sim_varunit} from namelist")
+         except Exception as e:
+            logging.warning(f"Could not read f_assim unit from namelist: {e}")
+         # Rename f_assim to f_gpp in the dataset so downstream code works unchanged
+         ds = ds.rename({'f_assim': 'f_gpp'})
+      # If neither exists, log error (but let default processing handle the error)
+      elif 'f_gpp' not in ds.variables and 'f_assim' not in ds.variables:
+         logging.error('Neither f_gpp nor f_assim found in dataset for Gross_Primary_Productivity')
+      # Continue to default return at end of function
+
    if info.item == "Crop_Yield_Corn":
       try:
          ds['Crop_Yield_Corn'] = (
@@ -78,13 +120,21 @@ def filter_CoLM(info,ds):   #update info as well
 
    if info.item == "Crop_Yield_Maize":
       try:
+         # Calculate total area with protection against division by zero
+         total_area = (ds['area_rainfed_temp_corn'].fillna(0) +
+                      ds['area_irrigated_temp_corn'].fillna(0) +
+                      ds['area_rainfed_trop_corn'].fillna(0) +
+                      ds['area_irrigated_trop_corn'].fillna(0))
+
+         # Replace zero total area with NaN to avoid division by zero
+         total_area = total_area.where(total_area > 0, np.nan)
+
          ds['Crop_Yield_Maize']=(((ds['f_cropprodc_rainfed_temp_corn'].fillna(0)*ds['area_rainfed_temp_corn'].fillna(0))+
                                     (ds['f_cropprodc_irrigated_temp_corn'].fillna(0)*ds['area_irrigated_temp_corn'].fillna(0)) +
                                     (ds['f_cropprodc_rainfed_trop_corn'].fillna(0)*ds['area_rainfed_trop_corn'].fillna(0)) +
                                     (ds['f_cropprodc_irrigated_trop_corn'].fillna(0)*ds['area_irrigated_trop_corn'].fillna(0)))*
-                                    (10**6)*2.5*(10**(-6))/(ds['area_rainfed_temp_corn'].fillna(0)+ds['area_irrigated_temp_corn'].fillna(0)+ds['area_rainfed_trop_corn'].fillna(0)+
-                                    ds['area_irrigated_trop_corn'].fillna(0))*(3600.*24.*365.))/100.
-      except:
+                                    (10**6)*2.5*(10**(-6))/total_area*(3600.*24.*365.))/100.
+      except Exception as e:
          logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
@@ -279,16 +329,16 @@ def filter_CoLM(info,ds):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['f_wliq_soisno']
-   if info.item == "Albedo":
+   if info.item == "Surface_Albedo":
       try:
-            ds['Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
+            ds['Surface_Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
 
-            info.sim_varname = ['Albedo']
+            info.sim_varname = ['Surface_Albedo']
             info.sim_varunit = 'unitless'
       except Exception as e:
          logging.error(f"Surface Albedo calculation processing ERROR: {e}")
          return info, None
-      return info, ds['Albedo']
+      return info, ds['Surface_Albedo']
 
 
    if info.item == "Surface_Wind_Speed":
@@ -330,3 +380,12 @@ def filter_CoLM(info,ds):   #update info as well
          logging.error('Terrestrial Water Storage Change calculation processing ERROR!!!')
          return info, None
       return info, ds['Terrestrial_Water_Storage_Change']
+
+   # Default: extract the variable from dataset and return
+   # Get the variable name to extract
+   varname = info.sim_varname if isinstance(info.sim_varname, list) else [info.sim_varname]
+   if varname[0] in ds.variables:
+      return info, ds[varname[0]]
+   else:
+      # Variable not in dataset, raise exception to trigger default processing
+      raise KeyError(f"Variable {varname[0]} not found in dataset")

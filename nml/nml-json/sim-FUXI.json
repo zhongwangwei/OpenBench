@@ -1,0 +1,10 @@
+{
+  "general": {
+    "Streamflow_sim_source": "FUXI_cama",
+    "Sensible_Heat_sim_source": "FUXI"
+  },
+  "def_nml": {
+    "FUXI": "./nml/nml-Fortran/user/FUXI/FUXI.nml",
+    "FUXI_cama": "./nml/nml-Fortran/user/FUXI/FUXI_cama.nml"
+  }
+}

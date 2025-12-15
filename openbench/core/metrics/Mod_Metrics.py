@@ -287,6 +287,9 @@ class metrics:
         return ia.squeeze()
 
     def kappa_coeff(self,s,o):
+        """
+        Calculate Kappa coefficient with division by zero protection.
+        """
         s = (s).astype(int)
         o = (o).astype(int)
         n = len(s)
@@ -311,7 +314,13 @@ class metrics:
         PA = np.sum(kappa_mat,axis=0)/tot
         PB = np.sum(kappa_mat,axis=1)/tot
         Pe = np.sum(PA*PB)
-        kappa_coeff = (Pa-Pe)/(1-Pe)
+
+        # Protect against division by zero when Pe ≈ 1
+        if abs(1 - Pe) < 1e-10:
+            logging.warning("Pe is approximately 1, kappa coefficient is undefined. Returning NaN.")
+            kappa_coeff = np.nan
+        else:
+            kappa_coeff = (Pa-Pe)/(1-Pe)
 
         return kappa_mat, kappa_coeff
 
@@ -323,11 +332,16 @@ class metrics:
             s: simulated
             o: observed
         output:
-            rv : relative variability, amplitude ratio 
+            rv : relative variability, amplitude ratio
         Reference:
         ****
         '''
-        return s.std(dim='time') / o.std(dim='time') - 1.0
+        o_std = o.std(dim='time')
+        # Protect against division by zero when observed std is 0 or very small
+        if np.any(o_std == 0) or np.any(np.isnan(o_std)):
+            logging.warning("Observed data has zero or NaN standard deviation. Returning NaN for relative variability.")
+            return xr.where(o_std == 0, np.nan, s.std(dim='time') / o_std - 1.0)
+        return s.std(dim='time') / o_std - 1.0
 
     def ubNSE(self,s,o):
         """
@@ -419,7 +433,16 @@ class metrics:
         s=s.dropna(dim='time').astype(np.float32)
         o=o.dropna(dim='time').astype(np.float32)
 
-        return (s.max(dim='time')-s.min(dim='time'))/ (o.max(dim='time')- o.min(dim='time')) -1.0 #(np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
+        # Calculate amplitude (range) for observed data
+        o_range = o.max(dim='time') - o.min(dim='time')
+
+        # Protect against division by zero when observed data has zero range (constant data)
+        if np.any(o_range == 0) or np.any(np.isnan(o_range)):
+            logging.warning("Observed data has zero or NaN range. Returning NaN for amplitude ratio.")
+            s_range = s.max(dim='time') - s.min(dim='time')
+            return xr.where(o_range == 0, np.nan, s_range / o_range - 1.0)
+
+        return (s.max(dim='time')-s.min(dim='time'))/ o_range -1.0 #(np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
    
     def rSD(self,s,o):
         #Ratio of standard deviations
@@ -686,10 +709,192 @@ class metrics:
         
         bootstrap_smpi = np.array(bootstrap_smpi)
         smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
-        
+
         return smpi, smpi_lower, smpi_upper
-        
-    
+
+    def MFM(self, s, o, p=1, bins_suse=10, bins_phi=10, phase_penalty_scaling=4, phase=True):
+        """
+        Calculate Model Fidelity Metric (MFM) for each grid cell.
+
+        MFM integrates four components:
+        1. Normalized Mean Absolute p-Error (NMAEp) - relative error
+        2. Scaled and Unscaled Entropy difference (SUSE) - variability capture
+        3. Percentage of Histogram Intersection (PHI) - distribution matching
+        4. Phase Difference Radius - phase difference (optional)
+
+        Args:
+            s (xr.DataArray): Simulated data (time, lat, lon)
+            o (xr.DataArray): Observed data (time, lat, lon)
+            p (float): Exponent for error calculation (default=1, p=1 gives MAE, p=2 gives RMSE)
+            bins_suse (int): Number of bins for entropy calculation (default=10)
+            bins_phi (int): Number of bins for histogram intersection (default=10)
+            phase_penalty_scaling (float): Scaling factor for phase difference penalty (default=4)
+            phase (bool): Whether to include phase difference component (default=True)
+
+        Returns:
+            xr.DataArray: Model Fidelity Metric value (lat, lon)
+        """
+        import math
+
+        # Validate and align inputs
+        s, o = self._validate_inputs(s, o)
+
+        # Helper functions for single time series
+        def PHI_component(sim, obs, bins_phi):
+            """Calculate Percentage of Histogram Intersection"""
+            if len(sim) == 0 or len(obs) == 0:
+                return np.nan
+            bin_min = min(np.min(sim), np.min(obs))
+            bin_max = max(np.max(sim), np.max(obs))
+            if bin_min == bin_max:
+                return 1.0  # Perfect match if all values are the same
+            bin_edges = np.linspace(bin_min, bin_max, bins_phi + 1)
+            hist_sim, _ = np.histogram(sim, bins=bin_edges, density=False)
+            hist_obs, _ = np.histogram(obs, bins=bin_edges, density=False)
+            min_sum = np.sum(np.minimum(hist_sim, hist_obs))
+            obs_total = np.sum(hist_obs)
+            if obs_total == 0:
+                return np.nan
+            return min_sum / obs_total
+
+        def SUSE_component(sim, obs, bins_suse):
+            """Calculate Scaled and Unscaled Entropy difference"""
+            if len(sim) == 0 or len(obs) == 0:
+                return np.nan
+
+            # Scaled case
+            min_val = min(sim.min(), obs.min())
+            max_val = max(sim.max(), obs.max())
+            if min_val == max_val:
+                return 0.0  # No entropy difference if all values are the same
+            bin_edges_scaled = np.linspace(min_val, max_val, bins_suse + 1)
+
+            hist_sim_s, _ = np.histogram(sim, bins=bin_edges_scaled, density=False)
+            hist_obs_s, _ = np.histogram(obs, bins=bin_edges_scaled, density=False)
+
+            total_s_sim = np.sum(hist_sim_s)
+            total_s_obs = np.sum(hist_obs_s)
+
+            p_sim_s = hist_sim_s / total_s_sim if total_s_sim > 0 else np.zeros_like(hist_sim_s)
+            p_obs_s = hist_obs_s / total_s_obs if total_s_obs > 0 else np.zeros_like(hist_obs_s)
+
+            def entropy(p):
+                p = p[p > 0]
+                return -np.sum(p * np.log(p)) if len(p) > 0 else 0.0
+
+            Hs = abs(entropy(p_sim_s) - entropy(p_obs_s))
+
+            # Unscaled case
+            if sim.min() == sim.max():
+                Hu_sim = 0.0
+            else:
+                bin_edges_u_sim = np.linspace(sim.min(), sim.max(), bins_suse + 1)
+                hist_sim_u, _ = np.histogram(sim, bins=bin_edges_u_sim, density=False)
+                p_sim_u = hist_sim_u / np.sum(hist_sim_u) if np.sum(hist_sim_u) > 0 else np.zeros_like(hist_sim_u)
+                Hu_sim = entropy(p_sim_u)
+
+            if obs.min() == obs.max():
+                Hu_obs = 0.0
+            else:
+                bin_edges_u_obs = np.linspace(obs.min(), obs.max(), bins_suse + 1)
+                hist_obs_u, _ = np.histogram(obs, bins=bin_edges_u_obs, density=False)
+                p_obs_u = hist_obs_u / np.sum(hist_obs_u) if np.sum(hist_obs_u) > 0 else np.zeros_like(hist_obs_u)
+                Hu_obs = entropy(p_obs_u)
+
+            Hu = abs(Hu_sim - Hu_obs)
+
+            return max(Hs, Hu)
+
+        def FFT_component(sim, obs):
+            """Calculate phase difference using Fast Fourier Transform"""
+            N = len(obs)
+            if N != len(sim) or N < 3:
+                return 0.0
+
+            fft_obs = np.fft.fft(obs)
+            fft_sim = np.fft.fft(sim)
+
+            freqs = np.fft.fftfreq(N, d=1.0)
+
+            # Find dominant frequency
+            if N // 2 < 1:
+                return 0.0
+
+            if len(sim) > 365:
+                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1:N // 2 + 1])), 33) + 1
+            else:
+                dominant_freq_idx = np.argmax(np.abs(fft_obs[1:N // 2 + 1])) + 1
+
+            # Calculate phase difference
+            phase_obs = np.angle(fft_obs)
+            phase_sim = np.angle(fft_sim)
+            phase_difference_rad = phase_sim[dominant_freq_idx] - phase_obs[dominant_freq_idx]
+            phase_difference_rad = (phase_difference_rad + np.pi) % (2 * np.pi) - np.pi
+
+            return phase_difference_rad
+
+        def calculate_mfm_1d(sim, obs):
+            """Calculate MFM for a single time series"""
+            # Remove NaN values
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim_clean = sim[mask]
+            obs_clean = obs[mask]
+
+            if len(sim_clean) < 3 or len(obs_clean) < 3:
+                return np.nan
+
+            if np.mean(obs_clean) == 0:
+                return np.nan
+
+            # Calculate components
+            # 1. Normalized error with phase penalty
+            nmaep = np.power(np.mean(np.power(np.abs(sim_clean - obs_clean), p)), 1 / p) / np.mean(obs_clean)
+
+            if phase:
+                phase_difference_rad = FFT_component(sim_clean, obs_clean)
+                phase_penalty = np.cos(phase_difference_rad / phase_penalty_scaling)
+                normalized_error = phase_penalty * math.e ** (-nmaep)
+            else:
+                normalized_error = math.e ** (-nmaep)
+
+            # 2. Variability capture
+            suse = SUSE_component(sim_clean, obs_clean, bins_suse)
+            if np.isnan(suse):
+                return np.nan
+            variability_capture = math.e ** (-suse)
+
+            # 3. Distribution similarity
+            distribution_similarity = PHI_component(sim_clean, obs_clean, bins_phi)
+            if np.isnan(distribution_similarity):
+                return np.nan
+
+            # Calculate MFM
+            mfm_value = 1 - (math.sqrt(
+                (1 - normalized_error) ** 2 +
+                (1 - variability_capture) ** 2 +
+                (1 - distribution_similarity) ** 2
+            )) / math.sqrt(3)
+
+            return mfm_value
+
+        # Apply MFM to each grid cell
+        # Get dimensions
+        if 'time' in s.dims:
+            # Stack spatial dimensions for easier iteration
+            result = xr.apply_ufunc(
+                calculate_mfm_1d,
+                s,
+                o,
+                input_core_dims=[['time'], ['time']],
+                vectorize=True,
+                dask='parallelized',
+                output_dtypes=[float]
+            )
+        else:
+            # No time dimension, return NaN
+            result = xr.full_like(s.isel(time=0) if 'time' in s.dims else s, np.nan)
+
+        return result
 
 
 

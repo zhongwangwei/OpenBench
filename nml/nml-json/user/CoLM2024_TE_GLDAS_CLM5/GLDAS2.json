@@ -1,10 +1,10 @@
 {
   "general": {
-    "model_namelist": "./nml/Mod_variables_defination/GLDAS2.nml",
+    "model_namelist": "./nml/Mod_variables_definition/GLDAS2.nml",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "month",
-    "dir": "./dataset/simulation/LSMs/GLDAS",
+    "dir": "./dataset/Simulation/LSMs/GLDAS",
     "fulllist": "",
     "tim_res": "month",
     "grid_res": 0.25,

@@ -1,0 +1,14 @@
+general:
+  root_dir: ./dataset/Reference/Grid/Water/Runoff/LORA
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Single
+  tim_res: Month
+  grid_res: 0.25
+  syear: 1961
+  eyear: 2018
+Total_Runoff:
+  varname: mrro
+  varunit: kg m-2 s-1
+  prefix: LORA
+  suffix: ''

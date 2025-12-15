@@ -1,0 +1,21 @@
+&general
+  Streamflow_ref_source           = GRDC
+  Sensible_Heat_ref_source        = PLUMBER2S,FLUX_PLUMBER2
+  Canopy_Transpiration_ref_source = GLEAM_Hydrid
+  Evapotranspiration_ref_source   = Xu_et_al2025_stn
+  Leaf_Area_Index_ref_source.     = LAI_Yuan2011
+  Dam_Inflow_ref_source           = ResOpsUS
+  Dam_Outflow_ref_source          = ResOpsUS
+  Dam_Water_Storage_ref_source    = ResOpsUS
+  Dam_Water_Elevation_ref_source  = ResOpsUS
+/
+
+&def_nml
+  GRDC=./nml/nml-Fortran/Ref_variables_definition_station/GRDC.nml
+  PLUMBER2S=./nml/nml-Fortran/Ref_variables_definition_station/PLUMBER2S.nml
+  FLUX_PLUMBER2=./nml/nml-Fortran/Ref_variables_definition_station/FLUX_PLUMBER2.nml
+  GLEAM_Hydrid=./nml/nml-Fortran/Ref_variables_definition_station/Transpiration_GLEAM_hybird.nml
+  Xu_et_al2025_stn=./nml/nml-Fortran/Ref_variables_definition_station/Xu_et_al2025_stn.nml
+  LAI_Yuan2011=./nml/nml-Fortran/Ref_variables_definition_station/LAI_Yuan2011.nml
+  ResOpsUS=./nml/nml-Fortran/Ref_variables_definition_station/ResOpsUS.nml
+/

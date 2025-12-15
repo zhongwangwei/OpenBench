@@ -1,0 +1,14 @@
+general:
+  root_dir: ./dataset/Reference/Grid/Water/ET_Xu_etal_2024
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Year
+  tim_res: Day
+  grid_res: 0.1
+  syear: 1950
+  eyear: 2022
+Evapotranspiration:
+  varname: ET
+  varunit: mm day-1
+  prefix: AutoML_predict_
+  suffix: _1D_0p1

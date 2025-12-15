@@ -1,9 +1,9 @@
 general:
-  model_namelist: ./nml/Mod_variables_defination/CoLM.nml
+  model_namelist: ./nml/Mod_variables_definition/CoLM.nml
   timezone: 0.0
   data_type: grid
   data_groupby: month
-  dir: ./dataset/simulation/trajectory2/07/history/
+  dir: ./dataset/Simulation/trajectory2/07/history/
   fulllist: ''
   tim_res: month
   grid_res: 0.5

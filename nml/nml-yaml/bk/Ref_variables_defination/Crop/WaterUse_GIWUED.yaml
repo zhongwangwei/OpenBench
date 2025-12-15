@@ -1,0 +1,15 @@
+general:
+  root_dir: ./dataset/Reference/Grid/WaterUse/GIWUED
+  timezone: 0.0
+  data_type: grid
+  data_groupby: single
+  tim_res: Month
+  grid_res: 0.25
+Total_Irrigation_Amount:
+  sub_dir: ''
+  varname: IWUens
+  varunit: mm month-1
+  prefix: IWU.ens.Y
+  suffix: ''
+  syear: 2011
+  eyear: 2018

@@ -170,18 +170,18 @@ class GeneralInfoReader(NamelistReader):
             if nml[item][f'{source}_data_type'] == 'stn':
                 try:
                     setattr(self, f'{source_type}_fulllist', str(nml[item][f'{source}_fulllist']))
-                except:
+                except (KeyError, TypeError) as e:
                     try:
                         setattr(self, f'{source_type}_fulllist', str(nml['general'][f'{source}_fulllist']))
-                    except:
-                        logging.error(f'read {source_type}_fulllist namelist error')
+                    except (KeyError, TypeError) as e2:
+                        logging.error(f'read {source_type}_fulllist namelist error: {e2}')
 
             # Handle uparea attributes for station data
             try:
                 setattr(self, f'{source_type}_max_uparea', str(nml[item][f'{source}_max_uparea']))
                 setattr(self, f'{source_type}_min_uparea', str(nml[item][f'{source}_min_uparea']))
-            except:
-                pass
+            except (KeyError, TypeError, AttributeError):
+                pass  # Optional attributes, skip if not present
 
     def _process_data_types(self):
         """Process and validate data types."""
@@ -248,8 +248,8 @@ class GeneralInfoReader(NamelistReader):
                     if not GeneralInfoReader._time_resolution_warning_shown:
                         logging.warning(f"Time resolution mismatch may cause alignment issues")
                         GeneralInfoReader._time_resolution_warning_shown = True
-            except:
-                logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq}")
+            except (ValueError, AttributeError, TypeError) as e:
+                logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq} ({e})")
 
     def _is_valid_resolution(self, resolution: str) -> bool:
         """Check if a resolution string is valid."""
@@ -300,26 +300,44 @@ class GeneralInfoReader(NamelistReader):
 
     @cached(key_prefix="station_lists", ttl=3600)
     def _read_and_merge_station_lists(self):
-        """Read and merge station lists from reference and simulation sources."""
+        """Read and merge station lists from reference and simulation sources.
+
+        Note: If fulllist is empty, skip file reading and let custom filters
+        populate the station list (e.g., GRDC_filter, CaMa_filter).
+        """
         if self.ref_data_type == 'stn' and self.sim_data_type == 'stn':
             # Both ref and sim are station data
-            self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-            self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
-            self._rename_station_columns()
-            self.stn_list = pd.merge(self.sim_stn_list, self.ref_stn_list, how='inner', on='ID')
+            # Only read if fulllist paths are provided
+            if self.sim_fulllist and self.ref_fulllist:
+                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self._rename_station_columns()
+                self.stn_list = pd.merge(self.sim_stn_list, self.ref_stn_list, how='inner', on='ID')
+            else:
+                # Empty fulllist - rely on custom filter to populate station list
+                logging.debug("fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
         elif self.sim_data_type == 'stn':
             # Only sim is station data
-            self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-            self._rename_station_columns(sim_only=True)
-            self.stn_list = self.sim_stn_list
+            if self.sim_fulllist:
+                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self._rename_station_columns(sim_only=True)
+                self.stn_list = self.sim_stn_list
+            else:
+                logging.debug("sim fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
         elif self.ref_data_type == 'stn':
             # Only ref is station data
-            self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
-            self._rename_station_columns(ref_only=True)
-            self.stn_list = self.ref_stn_list
-            self.stn_list['use_syear'] = self.stn_list['ref_syear']
-            self.stn_list['use_eyear'] = self.stn_list['ref_eyear']
-            self.stn_list['Flag'] = False
+            if self.ref_fulllist:
+                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self._rename_station_columns(ref_only=True)
+                self.stn_list = self.ref_stn_list
+                self.stn_list['use_syear'] = self.stn_list['ref_syear']
+                self.stn_list['use_eyear'] = self.stn_list['ref_eyear']
+                self.stn_list['Flag'] = False
+            else:
+                logging.debug("ref fulllist is empty, will rely on custom filter to populate station list")
+                self.stn_list = pd.DataFrame()
 
     def _rename_station_columns(self, sim_only=False, ref_only=False):
         """Rename station columns to standard names."""
@@ -362,12 +380,11 @@ class GeneralInfoReader(NamelistReader):
 
     def _filter_stations(self):
         """Filter stations based on criteria."""
-        if self.ref_source.lower() == 'grdc':
-            pass
-        else:
-            if not hasattr(self, 'stn_list') or self.stn_list.empty:
-                logging.warning("No station list available for filtering")
-                return
+        if not hasattr(self, 'stn_list') or self.stn_list is None:
+            self.stn_list = pd.DataFrame()
+
+        if self.ref_source.lower() != 'grdc' and self.stn_list.empty:
+            logging.warning("No station list available for filtering; attempting to generate one.")
 
         initial_count = len(self.stn_list)
         # Get custom filter if available

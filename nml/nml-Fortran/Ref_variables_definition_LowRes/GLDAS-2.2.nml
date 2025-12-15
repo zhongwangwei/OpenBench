@@ -1,0 +1,19 @@
+&general
+  root_dir = ./dataset/Reference/Grid/LowRes/Heat
+  timezone = 0
+  data_type = grid
+  data_groupby = Single
+  syear = 2003
+  eyear = 2025
+  tim_res = Month
+  grid_res = 0.25
+/
+
+&Ground_Heat
+  sub_dir = Ground_Heat/GLDAS-2.2
+  varname = Qg_tavg
+  varunit = W m-2
+  prefix = GLDAS_CLSM025_DA1_D.G_monmean
+  suffix = 
+/
+

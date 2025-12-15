@@ -1,0 +1,19 @@
+&general
+  root_dir          =  ./dataset/Reference/Grid/Ecosystem/soilgrid
+  timezone          =  0
+  data_type         =  grid
+  data_groupby      =  Single
+  syear             =  1980
+  eyear             =  2019 
+  tim_res           =  Month        #Day or Month
+  grid_res          =  0.25
+/
+
+&Soil_Carbon
+varname           =  ocd #sm_0_5
+varunit           =  kg C m-2
+prefix            =  soilgrid_v2_ocd
+suffix            =  
+/
+
+

@@ -7,8 +7,15 @@ import shutil
 import gc
 import time
 import functools
-import psutil
 from typing import List, Dict, Any, Tuple, Callable, Union
+
+# Try to import psutil for performance monitoring, use fallback if not available
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _HAS_PSUTIL = False
+    logging.warning("psutil not available. Performance monitoring will be limited.")
 
 # Module-level set to track custom filter warnings
 _MODULE_CUSTOM_FILTER_WARNINGS = set()
@@ -23,7 +30,7 @@ from joblib import Parallel, delayed
 try:
     pd_version = tuple(int(x) for x in pd.__version__.split('.')[:2])
     USE_NEW_FREQ_ALIASES = pd_version >= (2, 2)  # New aliases introduced in pandas 2.2
-except:
+except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
 from .Lib_Unit import UnitProcessing
@@ -131,76 +138,103 @@ except ImportError:
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # logging.getLogger("xarray").setLevel(logging.WARNING)
 
-def performance_monitor(func: Callable) -> Callable:
-    """Enhanced decorator to monitor function performance with error handling."""
+def performance_monitor(func: Callable = None, *, silent_on_error: bool = False) -> Callable:
+    """Enhanced decorator to monitor function performance with error handling.
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # Get initial memory usage
-        try:
-            process = psutil.Process(os.getpid())
-            start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+    Args:
+        func: The function to decorate
+        silent_on_error: If True, don't log errors (only re-raise them)
+    """
+
+    def decorator(f: Callable) -> Callable:
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            # Get initial memory usage
             start_time = time.time()
-            start_cpu = process.cpu_percent()
-        except Exception as e:
-            logging.warning(f"Failed to get system resources: {e}")
-            start_mem = 0
-            start_time = time.time()
-            start_cpu = 0
-
-        try:
-            # Execute the function
-            result = func(*args, **kwargs)
-
-            # Calculate execution time and memory usage
-            end_time = time.time()
-            execution_time = end_time - start_time
+            if _HAS_PSUTIL:
+                try:
+                    process = psutil.Process(os.getpid())
+                    start_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                    start_cpu = process.cpu_percent()
+                except Exception as e:
+                    logging.warning(f"Failed to get system resources: {e}")
+                    start_mem = 0
+                    start_cpu = 0
+            else:
+                start_mem = 0
+                start_cpu = 0
 
             try:
-                end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
-                end_cpu = process.cpu_percent()
-                memory_used = end_mem - start_mem
-                cpu_used = end_cpu - start_cpu
-            except:
-                memory_used = 0
-                cpu_used = 0
+                # Execute the function
+                result = f(*args, **kwargs)
 
-            # Log performance 
-            logging.info(f"Performance  for {func.__name__}:")
-            logging.info(f"  Execution time: {execution_time:.2f} seconds")
-            logging.info(f"  Memory usage: {memory_used:.3f} GB")
-            logging.info(f"  CPU usage: {cpu_used:.1f}%")
+                # Calculate execution time and memory usage
+                end_time = time.time()
+                execution_time = end_time - start_time
 
-            # Use enhanced performance warning if available
-            if _HAS_EXCEPTIONS:
-                log_performance_warning(func.__name__, execution_time)
+                if _HAS_PSUTIL:
+                    try:
+                        end_mem = process.memory_info().rss / 1024 / 1024 / 1024  # Convert to GB
+                        end_cpu = process.cpu_percent()
+                        memory_used = end_mem - start_mem
+                        cpu_used = end_cpu - start_cpu
+                    except Exception as e:
+                        logging.warning(f"Failed to get end system resources: {e}")
+                        memory_used = 0
+                        cpu_used = 0
+                else:
+                    memory_used = 0
+                    cpu_used = 0
 
-            # Log warning if memory usage is high
-            try:
-                total_memory = psutil.virtual_memory().total / (1024 ** 3)
-                if memory_used > 0.8 * total_memory:  # 80% of total memory
-                    logging.warning(f"High memory usage detected in {func.__name__}: {memory_used:.3f} GB")
-            except:
-                pass  # Ignore errors in memory check
+                # Log performance
+                logging.info(f"Performance for {f.__name__}:")
+                logging.info(f"  Execution time: {execution_time:.2f} seconds")
+                if _HAS_PSUTIL:
+                    logging.info(f"  Memory usage: {memory_used:.3f} GB")
+                    logging.info(f"  CPU usage: {cpu_used:.1f}%")
 
-            return result
+                # Use enhanced performance warning if available
+                # Disabled to reduce log noise
+                # if _HAS_EXCEPTIONS:
+                #     log_performance_warning(f.__name__, execution_time)
 
-        except Exception as e:
-            # Log error with performance context
-            end_time = time.time()
-            execution_time = end_time - start_time
+                # Log warning if memory usage is high
+                if _HAS_PSUTIL:
+                    try:
+                        total_memory = psutil.virtual_memory().total / (1024 ** 3)
+                        if memory_used > 0.8 * total_memory:  # 80% of total memory
+                            logging.warning(f"High memory usage detected in {f.__name__}: {memory_used:.3f} GB")
+                    except Exception as e:
+                        logging.debug(f"Failed to check total memory: {e}")
 
-            try:
-                end_mem = process.memory_info().rss / 1024 / 1024 / 1024
-                memory_used = end_mem - start_mem
-            except:
-                memory_used = 0
+                return result
 
-            logging.error(f"Error in {func.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
-            logging.error(str(e))
-            raise
+            except Exception as e:
+                # Log error with performance context (unless silent)
+                end_time = time.time()
+                execution_time = end_time - start_time
 
-    return wrapper
+                if _HAS_PSUTIL:
+                    try:
+                        end_mem = process.memory_info().rss / 1024 / 1024 / 1024
+                        memory_used = end_mem - start_mem
+                    except Exception:
+                        memory_used = 0
+                else:
+                    memory_used = 0
+
+                if not silent_on_error:
+                    logging.error(f"Error in {f.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
+                    logging.error(str(e))
+                raise
+
+        return wrapper
+
+    # Support both @performance_monitor and @performance_monitor(silent_on_error=True)
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
 
 
 def get_system_resources():
@@ -597,6 +631,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return result_freq
 
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
+        # Set default values for optional config keys before updating
+        self.debug_mode = False  # Default debug_mode to False
         self.__dict__.update(config)  # Changed this line
         self.sim_varname = [self.sim_varname] if isinstance(self.sim_varname, str) else self.sim_varname
         self.ref_varname = [self.ref_varname] if isinstance(self.ref_varname, str) else self.ref_varname
@@ -635,9 +671,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
             self.station_list = Convert_Type.convert_Frame(pd.read_csv(os.path.join(self.casedir, "stn_list.txt"), header=0))
-            output_dir = os.path.join(self.casedir, 'output', 'data', f'stn_{self.ref_source}_{self.sim_source}')
-            # shutil.rmtree(output_dir, ignore_errors=True)
-            # print(f"Re-creating output directory: {output_dir}")
+            output_dir = os.path.join(self.casedir, 'data', f'stn_{self.ref_source}_{self.sim_source}')
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
@@ -751,11 +785,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             try:
                 ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                  coords={'time': time_index, 'lat': lat, 'lon': lon})
-            except:
+            except (ValueError, TypeError) as e:
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                      coords={'time': time_index, 'lon': lon, 'lat': lat})
-                except:
+                except (ValueError, TypeError) as e2:
                     ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                      coords={'lat': lat, 'lon': lon, 'time': time_index})
             ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -764,7 +798,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if not hasattr(ds['time'], 'dt'):
             try:
                 ds['time'] = pd.to_datetime(ds['time'])
-            except:
+            except (ValueError, TypeError, AttributeError) as e:
                 lon = ds.lon.values
                 lat = ds.lat.values
                 data = ds.values
@@ -772,11 +806,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                      coords={'time': time_index, 'lat': lat, 'lon': lon})
-                except:
+                except (ValueError, TypeError) as e:
                     try:
                         ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                          coords={'time': time_index, 'lon': lon, 'lat': lat})
-                    except:
+                    except (ValueError, TypeError) as e2:
                         ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                          coords={'lat': lat, 'lon': lon, 'time': time_index})
                     ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -793,13 +827,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = ds.sortby('time')
         try:
             return ds.transpose('time', 'lat', 'lon')[f'{ds.name}']
-        except:
+        except (ValueError, KeyError) as e:
             try:
                 return ds.transpose('time', 'lat', 'lon')
-            except:
+            except (ValueError, KeyError) as e2:
                 try:
                     return ds.transpose('time', 'lon', 'lat')
-                except:
+                except (ValueError, KeyError) as e3:
                     return ds.squeeze()
 
     @performance_monitor
@@ -825,29 +859,163 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             num_value, time_unit = match.groups()
             num_value = int(num_value) if num_value else 1
             time_index = pd.date_range(start=f'{syear}-01-01T00:00:00', end=f'{eyear}-12-31T23:59:59', freq=tim_res)
-            if time_unit.lower() in ['m', 'month', 'mon']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
+            if time_unit.lower() in ['m', 'month', 'mon','me']:
+                # Normalize to monthly resolution without enforcing a specific day match.
+                # Set times to 15th for plotting/consistency, but do NOT reindex/fill missing months.
+                # Compare by month presence only.
+                mid_month = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-15T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
-                except:
-                    ds['time'] = time_index
+                except (ValueError, AttributeError, TypeError):
+                    # If we cannot format, keep existing times but ensure datetime type
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-15T00:00:00'))
+                    except Exception:
+                        ds['time'] = mid_month
+                # Use mid-month index for monthly comparison/fill
+                time_index = mid_month
+                time_var = ds.time
+                # Remove potential duplicate timestamps created by monthly normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for monthly data; proceeding.")
+                        pass
+                # For monthly data: only check by Year-Month presence and avoid reindexing/filling.
+                expected_months = pd.period_range(start=f'{syear}-01', end=f'{eyear}-12', freq='M')
+                # Build a PeriodIndex from the existing timestamps for robust monthly comparison
+                try:
+                    present_months = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='M')
+                except Exception:
+                    # Fallback: coerce via Series then to_period
+                    present_months = pd.to_datetime(pd.Series(ds['time'].values))
+                    present_months = present_months.dt.to_period('M')
+                missing_months = expected_months.difference(pd.PeriodIndex(present_months, freq='M'))
+                # If months are missing, reindex to monthly midpoints and fill with NaN for missing months
+                if len(missing_months) > 0:
+                    logging.info(f"Monthly data has {len(missing_months)} missing month(s) between {syear} and {eyear}; filling missing months with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['d', 'day', '1d', '1day']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
+                # Normalize to daily resolution (set to 12:00), and fill missing days by reindexing.
+                day_noon = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT12:00:00'))
                 try:
-                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT12:00:00'))
-                except:
-                    ds['time'] = time_index
+                    ds['time'] = pd.to_datetime(ds['time'].dt.floor('D').dt.strftime('%Y-%m-%dT12:00:00'))
+                except (ValueError, AttributeError, TypeError):
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('D').dt.strftime('%Y-%m-%dT12:00:00'))
+                    except Exception:
+                        ds['time'] = day_noon
+                # Use daily noon index for comparison/fill
+                time_index = day_noon
+                time_var = ds.time
+                # Remove duplicates potentially created by normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for daily data; proceeding.")
+                        pass
+                # Check by date presence and fill missing by reindexing
+                expected_days = pd.period_range(start=f'{syear}-01-01', end=f'{eyear}-12-31', freq='D')
+                try:
+                    present_days = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='D')
+                except Exception:
+                    # Fallback: coerce to datetime first, then derive daily periods safely.
+                    fallback_days = pd.to_datetime(pd.Series(ds['time'].values))
+                    fallback_days = fallback_days.dt.to_period('D')
+                    present_days = pd.PeriodIndex(fallback_days, freq='D')
+                missing_days = expected_days.difference(present_days)
+                if len(missing_days) > 0:
+                    logging.info(f"Daily data has {len(missing_days)} missing day(s) between {syear} and {eyear}; filling missing days with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
-                time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-%m-%dT%H:30:00'))
+                # Normalize to hourly resolution (set to HH:30), and fill missing hours by reindexing.
+                hour_mid = pd.to_datetime(pd.Series(time_index).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
                 try:
-                    ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
-                except:
-                    ds['time'] = time_index
+                    ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
+                except (ValueError, AttributeError, TypeError):
+                    try:
+                        ds['time'] = pd.to_datetime(ds['time'].values)
+                        ds['time'] = pd.to_datetime(pd.Series(ds['time']).dt.floor('H').dt.strftime('%Y-%m-%dT%H:30:00'))
+                    except Exception:
+                        ds['time'] = hour_mid
+                # Use mid-hour index for comparison/fill
+                time_index = hour_mid
+                time_var = ds.time
+                # Remove duplicates potentially created by normalization
+                try:
+                    _, index_unique = np.unique(ds['time'], return_index=True)
+                    ds = ds.isel(time=np.sort(index_unique))
+                    time_var = ds.time
+                except Exception:
+                    pass
+                # Safely set calendar attribute using encoding
+                try:
+                    time_var.encoding['calendar'] = 'proleptic_gregorian'
+                except Exception:
+                    try:
+                        new_time = xr.DataArray(
+                            time_var.values,
+                            dims=['time'],
+                            attrs={'calendar': 'proleptic_gregorian'}
+                        )
+                        ds = ds.assign_coords(time=new_time)
+                        time_var = ds.time
+                    except Exception:
+                        logging.debug("Could not set calendar attribute for hourly data; proceeding.")
+                        pass
+                # Check by hour presence and fill missing by reindexing
+                expected_hours = pd.period_range(start=f'{syear}-01-01', end=f'{eyear}-12-31 23:00:00', freq='H')
+                try:
+                    present_hours = pd.PeriodIndex(pd.to_datetime(ds['time'].values), freq='H')
+                except Exception:
+                    present_hours = pd.to_datetime(pd.Series(ds['time'].values))
+                    present_hours = present_hours.dt.to_period('H')
+                missing_hours = expected_hours.difference(pd.PeriodIndex(present_hours, freq='H'))
+                if len(missing_hours) > 0:
+                    logging.info(f"Hourly data has {len(missing_hours)} missing hour(s) between {syear} and {eyear}; filling missing hours with NaN.")
+                    ds = ds.reindex(time=time_index)
+                return ds
             elif time_unit.lower() in ['y', 'year', '1y', '1year']:
                 time_index = pd.to_datetime(pd.Series(time_index).dt.strftime('%Y-01-01T00:00:00'))
                 try:
                     ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-01-01T00:00:00'))
-                except:
+                except (ValueError, AttributeError, TypeError):
                     ds['time'] = time_index
             time_var = ds.time
             # Safely set calendar attribute using encoding
@@ -871,18 +1039,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             # Create a complete time series based on the specified time frequency and range 
             # Compare the actual time with the complete time series to find the missing time
-            # print('Checking time series completeness...')
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0 and len(missing_times) < len(time_var):
-                logging.warning("Time series is not complete. Missing time values found: ")
-                print(missing_times)
+                logging.warning("Time series is not complete. Missing time values found.")
                 logging.info('Filling missing time values with np.nan')
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
-            else:
-                # print('Time series is complete.')
-                pass
         return ds
 
     @performance_monitor
@@ -904,7 +1067,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             try:
                 ds = xr.open_dataset(VarFile)  # .squeeze()
-            except:
+            except (ValueError, OSError) as e:
                 ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
@@ -913,23 +1076,56 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             ds = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
-        except:
+        except Exception as e:
+            # Check if varname list is empty
+            if not varname or len(varname) == 0:
+                logging.error("Variable name list is empty")
+                raise ValueError("Variable name list cannot be empty")
+
+            # Check if variable exists in dataset
+            if varname[0] not in ds:
+                available_vars = list(ds.data_vars) + list(ds.coords)
+                logging.error(f"Variable '{varname[0]}' not found in dataset")
+                logging.error(f"Available variables: {available_vars}")
+                raise KeyError(f"Variable '{varname[0]}' not in dataset")
+
             ds = Convert_Type.convert_nc(ds[varname[0]])
         return ds
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == 'stat':
+            # Validate varname list is not empty
+            if not varname or len(varname) == 0:
+                raise ValueError("Variable name list cannot be empty for station data")
+
+            # Validate variable exists in dataset
+            if varname[0] not in ds:
+                available_vars = list(ds.data_vars) + list(ds.coords)
+                raise KeyError(f"Variable '{varname[0]}' not found in station dataset. Available: {available_vars}")
+
             return ds[varname[0]]
         else:
             try:
                 model = getattr(self, f"{self.sim_source}_model") if datasource == 'sim' else self.ref_source
-            except:
+            except AttributeError:
+                # Fallback to source name if model attribute doesn't exist
                 model = self.sim_source if datasource == 'sim' else self.ref_source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
                 custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
-                self, ds = custom_filter(self, ds)
+                self, ds_or_da = custom_filter(self, ds)
+
+                # If filter returned a Dataset, extract the variable; if DataArray, use directly
+                if isinstance(ds_or_da, xr.Dataset):
+                    current_varname = getattr(self, f"{datasource}_varname")
+                    var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                    if var_to_extract in ds_or_da:
+                        return ds_or_da[var_to_extract]
+                    else:
+                        raise KeyError(f"Variable {var_to_extract} not found in filtered dataset")
+                else:
+                    return ds_or_da
             except AttributeError:
                 # Only show warning once per model using module-level tracking
                 if model not in _MODULE_CUSTOM_FILTER_WARNINGS:
@@ -1013,10 +1209,38 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str,
                      tim_res: str) -> xr.Dataset:
-        try:
-            var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
-        except:
+        # Try primary path first
+        var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
+
+        # Try alternative path if no files found
+        if not var_files:
             var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
+
+        # Filter files: only keep files where the part between prefix+year and suffix contains no letters
+        # This prevents matching files like "prefix_cama_year" when we want "prefix_year"
+        # E.g., "FUXI-test_hist_2006-01.nc" ✓, "FUXI-test_hist_cama_2006-01.nc" ✗
+        if var_files:
+            filtered_files = []
+            # Escape special regex characters in prefix and suffix
+            prefix_escaped = re.escape(prefix)
+            suffix_escaped = re.escape(suffix) if suffix else ''
+            # Pattern: prefix + year + (only digits and symbols, no letters) + suffix + .nc
+            pattern = re.compile(rf'^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc$')
+            for f in var_files:
+                filename = os.path.basename(f)
+                if pattern.match(filename):
+                    filtered_files.append(f)
+                else:
+                    logging.debug(f"Filtered out file (contains letters after year): {filename}")
+            var_files = filtered_files
+
+        # Verify files were found
+        if not var_files:
+            logging.error(f"No files found for year {year} with prefix '{prefix}' and suffix '{suffix}'")
+            logging.error(f"Searched in: {dirx}")
+            logging.error(f"  - Pattern 1: {os.path.join(dirx, f'{prefix}{year}*{suffix}.nc')}")
+            logging.error(f"  - Pattern 2: {os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc')}")
+            raise FileNotFoundError(f"No data files found for year {year}")
 
         datasets = []
         try:
@@ -1089,7 +1313,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             # 确保我们获取实际的数据数组而不是方法
             if isinstance(ds, xr.Dataset):
                 # 如果是数据集，获取第一个变量的数据
-                var_name = list(ds.data_vars)[0]
+                data_vars_list = list(ds.data_vars)
+                if not data_vars_list:
+                    logging.error("Dataset has no data variables")
+                    raise ValueError("Dataset must contain at least one data variable")
+                var_name = data_vars_list[0]
                 data_array = ds[var_name].values
             elif isinstance(ds, xr.DataArray):
                 # 如果是数据数组，直接获取值
@@ -1131,57 +1359,128 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     def process_station_data(self, data_params: Dict[str, Any]) -> None:
         try:
             logging.info("Processing station data")
-            Parallel(n_jobs=-1)(
-                delayed(self._make_stn_parallel)(
-                    self.station_list, data_params['datasource'], i
-                ) for i in range(len(self.station_list['ID']))
-            )
+            if not hasattr(self, 'station_list') or self.station_list is None or self.station_list.empty:
+                logging.error("Station list is empty; cannot process station data.")
+                return
+
+            indices = range(len(self.station_list['ID']))
+            try:
+                Parallel(n_jobs=-1)(
+                    delayed(self._make_stn_parallel)(
+                        self.station_list, data_params['datasource'], i
+                    ) for i in indices
+                )
+            except (PermissionError, OSError) as exc:
+                logging.warning(
+                    "Parallel station processing unavailable (%s). Falling back to sequential execution.",
+                    exc
+                )
+                for i in indices:
+                    self._make_stn_parallel(self.station_list, data_params['datasource'], i)
         finally:
             gc.collect()
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
-        varname = self.ref_varname if datasource == 'ref' else self.sim_varname
-        # Check if the variable exists in the dataset
-        if varname[0] not in stn_data:
-            logging.error(f"Variable '{varname[0]}' not found in the station data.")
-            raise ValueError(f"Variable '{varname[0]}' not found in the station data.")
+        var_attr = self.ref_varname if datasource == 'ref' else self.sim_varname
+        var_attr_is_list = isinstance(var_attr, list)
 
-        ds = stn_data[varname[0]]
+        # Work on a copy of the current variable list so that temporary
+        # fallbacks do not mutate the original configuration.
+        current_var_list = list(var_attr) if var_attr_is_list else [var_attr]
+        original_var_list = list(var_attr) if var_attr_is_list else [var_attr]
+        original_varname = original_var_list[0] if original_var_list else None
 
-        # Check the time dimension
-        if 'time' not in ds.dims:
-            logging.error("Time dimension not found in the station data.")
-            raise ValueError("Time dimension not found in the station data.")
+        try:
+            # Validate varname list is not empty
+            if not current_var_list:
+                logging.error("Variable name list is empty")
+                raise ValueError("Variable name list cannot be empty for station data")
 
-        # Ensure the time coordinate is datetime
-        if not np.issubdtype(ds.time.dtype, np.datetime64):
-            ds['time'] = pd.to_datetime(ds.time.values)
+            # Check if the variable exists in the dataset
+            if current_var_list[0] not in stn_data:
+                # Try to apply custom filter for variable fallback
+                model = self.ref_source if datasource == 'ref' else self.sim_source
+                try:
+                    import importlib
+                    custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                    custom_filter = getattr(custom_module, f"filter_{model}")
+                    
+                    # Call custom filter with dataset
+                    logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
+                    updated_self, filtered_data = custom_filter(self, stn_data)
 
-        # Select the time range before resampling
-        ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
+                    # If custom filter handled it, use the updated info and data
+                    if updated_self is not None and filtered_data is not None:
+                        # Update varname based on what the filter set (ensure copy)
+                        if datasource == 'ref':
+                            new_var_attr = self.ref_varname
+                        else:
+                            new_var_attr = self.sim_varname
+                        current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                        logging.info(f"Custom filter updated variable to: {current_var_list[0]}")
+                        ds = filtered_data
+                    else:
+                        # Custom filter didn't handle this case, raise error
+                        available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                        logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
+                        logging.error(f"Available variables: {available_vars}")
+                        raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+                except (ImportError, AttributeError):
+                    # No custom filter available, raise original error
+                    available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                    logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
+                    logging.error(f"Available variables: {available_vars}")
+                    logging.error(f"No custom filter available for {model}")
+                    raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+            else:
+                ds = stn_data[current_var_list[0]]
 
-        # Resample only if there's data in the selected time range
-        if len(ds.time) > 0:
-            ds = ds.resample(time=self.compare_tim_res).mean()
-        else:
-            logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-            return None  # or return an empty dataset with the correct structure
+            # Check the time dimension
+            if 'time' not in ds.dims:
+                logging.error("Time dimension not found in the station data.")
+                raise ValueError("Time dimension not found in the station data.")
 
-        # ds = ds.resample(time=self.compare_tim_res).mean()
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
+            # Ensure the time coordinate is datetime
+            if not np.issubdtype(ds.time.dtype, np.datetime64):
+                ds['time'] = pd.to_datetime(ds.time.values)
 
-        # Apply unit conversion for station data
-        current_varunit = getattr(self, f"{datasource}_varunit")
-        if current_varunit:
-            try:
-                ds, converted_unit = self.process_units(ds, current_varunit)
-                logging.info(f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}")
-            except Exception as e:
-                logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
+            # Select the time range before resampling
+            ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
 
-        ds = self.select_timerange(ds, start_year, end_year)
-        return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
+            # Resample only if there's data in the selected time range
+            if len(ds.time) > 0:
+                ds = ds.resample(time=self.compare_tim_res).mean()
+            else:
+                logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
+                return None  # or return an empty dataset with the correct structure
+
+            # ds = ds.resample(time=self.compare_tim_res).mean()
+            ds = self.check_coordinate(ds)
+            ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
+
+            # Apply unit conversion for station data
+            current_varunit = getattr(self, f"{datasource}_varunit")
+            if current_varunit:
+                try:
+                    ds, converted_unit = self.process_units(ds, current_varunit)
+                    logging.info(f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}")
+                except Exception as e:
+                    logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
+
+            ds = self.select_timerange(ds, start_year, end_year)
+
+            # Store original variable name as attribute for later renaming if needed
+            if original_varname:
+                ds.attrs['_original_varname'] = original_varname
+
+            return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
+        finally:
+            # Restore the canonical variable definition so that fallback
+            # adjustments do not leak into subsequent stations
+            if datasource == 'ref':
+                self.ref_varname = list(original_var_list) if var_attr_is_list else original_varname
+            else:
+                self.sim_varname = list(original_var_list) if var_attr_is_list else original_varname
 
     @performance_monitor
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
@@ -1193,6 +1492,11 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             with xr.open_dataset(file_path) as stn_data:
                 stn_data = Convert_Type.convert_nc(stn_data)
                 processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
+                if processed_data is None:
+                    logging.info(
+                        f"Skipping station {station['ID']} ({datasource}) - no valid data after processing"
+                    )
+                    return
                 self.save_station_data(processed_data, station, datasource)
         finally:
             gc.collect()
@@ -1200,11 +1504,40 @@ class StationDatasetProcessing(BaseDatasetProcessing):
     def save_station_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
             station = Convert_Type.convert_Frame(station)
-            output_file = os.path.join(self.casedir, 'output', 'data',
+            output_file = os.path.join(self.casedir, 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
-            # Handle calendar attribute safely
-            data.to_netcdf(output_file)
+
+            # Rename variable back to original name if needed (for variable fallback scenarios)
+            if '_original_varname' in data.attrs:
+                original_varname = data.attrs['_original_varname']
+                current_varname = data.name if hasattr(data, 'name') and data.name else None
+
+                # Always rename if original_varname is different from current name
+                if current_varname != original_varname:
+                    logging.info(f"Renaming variable '{current_varname}' back to '{original_varname}' before saving (station {station['ID']})")
+                    # Convert DataArray to Dataset with the original variable name
+                    if current_varname:
+                        data_to_save = data.to_dataset(name=original_varname)
+                    else:
+                        # If no current name, convert to dataset and rename the variable
+                        data_to_save = data.to_dataset()
+                        # Get the first (and should be only) data variable name
+                        current_var_list = list(data_to_save.data_vars)
+                        if current_var_list:
+                            data_to_save = data_to_save.rename({current_var_list[0]: original_varname})
+                    # Remove the temporary attribute
+                    if '_original_varname' in data_to_save.attrs:
+                        del data_to_save.attrs['_original_varname']
+                    data_to_save.to_netcdf(output_file)
+                else:
+                    # Remove the temporary attribute
+                    if '_original_varname' in data.attrs:
+                        del data.attrs['_original_varname']
+                    data.to_netcdf(output_file)
+            else:
+                data.to_netcdf(output_file)
+
             logging.info(f"Saved station data to {output_file}")
         finally:
             if hasattr(data, 'close'):
@@ -1220,29 +1553,80 @@ class StationDatasetProcessing(BaseDatasetProcessing):
 
             station_data = self.extract_single_station_data(dataset, station, datasource)
             processed_data = self.process_extracted_data(station_data, start_year, end_year)
-            self.save_extracted_data(processed_data, station, datasource)
+
+            # Only save if processed_data is not None (i.e., had valid time range)
+            if processed_data is not None:
+                self.save_extracted_data(processed_data, station, datasource)
+            else:
+                logging.info(f"Skipping station {station['ID']} - no data in time range {start_year}-{end_year}")
         finally:
             gc.collect()
 
     @performance_monitor
     def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
+        if dataset is None:
+            logging.error(f"Dataset is None for station {station['ID']} ({datasource})")
+            raise ValueError("Dataset cannot be None when extracting station data")
+
         if datasource == 'ref':
-            return dataset.sel(lat=[station['sim_lat']], lon=[station['sim_lon']], method="nearest")
+            lat_key, lon_key = 'sim_lat', 'sim_lon'
         elif datasource == 'sim':
-            return dataset.sel(lat=[station['ref_lat']], lon=[station['ref_lon']], method="nearest")
+            lat_key, lon_key = 'ref_lat', 'ref_lon'
         else:
             logging.error(f"Invalid datasource: {datasource}")
             raise ValueError(f"Invalid datasource: {datasource}")
 
+        # Fallback to reference coordinates if simulation coordinates are unavailable
+        if lat_key not in station or pd.isna(station.get(lat_key)):
+            lat_key = 'ref_lat'
+        if lon_key not in station or pd.isna(station.get(lon_key)):
+            lon_key = 'ref_lon'
+
+        target_lat = float(station[lat_key])
+        target_lon = float(station[lon_key])
+
+        lon_coord = 'lon' if 'lon' in dataset.coords else 'x'
+        lat_coord = 'lat' if 'lat' in dataset.coords else 'y'
+
+        try:
+            return dataset.sel({
+                lat_coord: [target_lat],
+                lon_coord: [target_lon]
+            }, method="nearest")
+        except (KeyError, ValueError, pd.errors.InvalidIndexError) as exc:
+            logging.debug(
+                "Coordinate selection failed for station %s (%s): %s. Falling back to manual indexing.",
+                station['ID'], datasource, exc
+            )
+
+            lat_values = dataset[lat_coord].values
+            lon_values = dataset[lon_coord].values
+
+            lat_idx = int(np.argmin(np.abs(lat_values - target_lat)))
+            lon_idx = int(np.argmin(np.abs(lon_values - target_lon)))
+
+            data = dataset.isel({lat_coord: lat_idx, lon_coord: lon_idx})
+            data = data.expand_dims({
+                lat_coord: [lat_values[lat_idx]],
+                lon_coord: [lon_values[lon_idx]]
+            })
+            return data
+
     @performance_monitor
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
         data = data.sel(time=slice(f'{start_year}-01-01T00:00:00', f'{end_year}-12-31T23:59:59'))
+
+        # Check if time dimension is empty after slicing
+        if len(data.time) == 0:
+            logging.warning(f"No data available in time range {start_year}-{end_year}. Skipping this station.")
+            return None
+
         data = data  # .where((data > -1e20) & (data < 1e20), np.nan)
         return data.resample(time=self.compare_tim_res).mean()
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
         try:
-            output_file = os.path.join(self.casedir, 'output', 'data',
+            output_file = os.path.join(self.casedir, 'data',
                                        f'stn_{self.ref_source}_{self.sim_source}',
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
 
@@ -1332,7 +1716,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                                                   data_dir, year)
                 for year in years
             )
-            var_files = glob.glob(os.path.join(self.casedir, 'tmp', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'))
+            var_files = glob.glob(os.path.join(self.casedir, 'scratch', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'))
         else:
             var_files = glob.glob(os.path.join(data_dir, f'{data_source}_{data_params["prefix"]}*{data_params["suffix"]}.nc'))
 
@@ -1343,7 +1727,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         with xr.open_mfdataset(var_files, combine='by_coords') as ds:
             ds = ds.sortby('time')
             output_file = self.get_output_filename(data_params)
-            with ProgressBar():
+            # Try to use ProgressBar, but fall back to silent mode if it fails (e.g., non-interactive environment)
+            try:
+                with ProgressBar():
+                    ds.to_netcdf(output_file)
+            except (OSError, IOError, BrokenPipeError):
+                # ProgressBar failed (likely non-interactive environment), save without progress bar
                 ds.to_netcdf(output_file)
             gc.collect()  # Add garbage collection after saving combined data
 
@@ -1353,15 +1742,15 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def get_output_filename(self, data_params: Dict[str, Any]) -> str:
         if data_params['datasource'] == 'ref':
-            return os.path.join(self.casedir, 'output', 'data', f'{self.item}_{data_params["datasource"]}_{self.ref_source}_{data_params["varname"][0]}.nc')
+            return os.path.join(self.casedir, 'data', f'{self.item}_{data_params["datasource"]}_{self.ref_source}_{data_params["varname"][0]}.nc')
         else:
-            return os.path.join(self.casedir, 'output', 'data', f'{self.item}_{data_params["datasource"]}_{self.sim_source}_{data_params["varname"][0]}.nc')
+            return os.path.join(self.casedir, 'data', f'{self.item}_{data_params["datasource"]}_{self.sim_source}_{data_params["varname"][0]}.nc')
 
     def cleanup_temp_files(self, data_params: Dict[str, Any]) -> None:
         """Clean up temporary files, silently skipping non-existent files."""
         failed_removals = []
         for year in range(self.minyear, self.maxyear + 1):
-            temp_file = os.path.join(self.casedir, 'tmp', f'{data_params["datasource"]}_{data_params["varname"][0]}_remap_{year}.nc')
+            temp_file = os.path.join(self.casedir, 'scratch', f'{data_params["datasource"]}_{data_params["varname"][0]}_remap_{year}.nc')
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
@@ -1421,7 +1810,8 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             try:
                 from regrid.regrid_wgs84 import convert_to_wgs84_xesmf
                 data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
-            except:
+            except (ImportError, ValueError, RuntimeError) as e:
+                logging.debug(f"xesmf regridding failed, falling back to scipy: {e}")
                 from regrid.regrid_wgs84 import convert_to_wgs84_scipy
                 data = convert_to_wgs84_scipy(data, self.compare_grid_res)
 
@@ -1445,25 +1835,33 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         new_grid = self.create_target_grid()
 
         remapping_methods = [
-            self.remap_interpolate,
-            self.remap_xesmf,
-            self.remap_cdo
+            self.remap_interpolate,  # Conservative regrid - last resort
+            self.remap_cdo,          # CDO - most stable, climate science standard
+            self.remap_xesmf,        # xESMF - fallback option
         ]
+
+        # Collect errors but don't report until all methods fail
+        errors = []
 
         for method in remapping_methods:
             try:
                 return method(data, new_grid)
             except Exception as e:
-                logging.warning(f"{method.__name__} failed: {e}")
+                errors.append(f"{method.__name__}: {e}")
+                continue
 
         # If all remapping methods fail, try basic interpolation as fallback
-        logging.warning("All remapping methods failed, trying basic interpolation")
         try:
             return self.remap_basic_interpolation(data, new_grid)
         except Exception as e:
-            logging.warning(f"Basic interpolation also failed: {e}")
-            logging.warning("Returning original data without remapping")
-            return data
+            errors.append(f"remap_basic_interpolation: {e}")
+
+        # All methods failed - now report all errors
+        logging.error("All remapping methods failed:")
+        for error in errors:
+            logging.error(f"  - {error}")
+        logging.warning("Returning original data without remapping")
+        return data
 
     @performance_monitor
     @cached(key_prefix="create_target_grid", ttl=7200)  # Cache for 2 hours (grid rarely changes)
@@ -1472,7 +1870,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         lat_new = np.arange(self.min_lat + self.compare_grid_res / 2, self.max_lat, self.compare_grid_res)
         return xr.Dataset({'lon': lon_new, 'lat': lat_new})
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_interpolate(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         from openbench.data.regrid import Grid, Regridder
         grid = Grid(
@@ -1492,27 +1890,74 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         # target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
         # return data.regrid.conservative(target_dataset,nan_threshold=0)
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import xesmf as xe
         regridder = xe.Regridder(data, new_grid, 'conservative')
         return regridder(data)
 
-    @performance_monitor
+    @performance_monitor(silent_on_error=True)
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import subprocess
         import tempfile
+        import os
 
-        with tempfile.NamedTemporaryFile(suffix='.nc') as temp_input, \
-                tempfile.NamedTemporaryFile(suffix='.nc') as temp_output, \
-                tempfile.NamedTemporaryFile(suffix='.txt') as temp_grid:
-            data.to_netcdf(temp_input.name)
-            self.create_target_grid_file(temp_grid.name, new_grid)
+        # Prepare data - ensure proper coordinate attributes
+        data_prepared = data.copy()
 
-            cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
-            subprocess.run(cmd, shell=True, check=True)
+        # Add CF-compliant coordinate attributes if missing
+        if 'lon' in data_prepared.coords:
+            if 'standard_name' not in data_prepared['lon'].attrs:
+                data_prepared['lon'].attrs['standard_name'] = 'longitude'
+            if 'units' not in data_prepared['lon'].attrs:
+                data_prepared['lon'].attrs['units'] = 'degrees_east'
 
-            return Convert_Type.convert_nc(xr.open_dataset(temp_output.name))
+        if 'lat' in data_prepared.coords:
+            if 'standard_name' not in data_prepared['lat'].attrs:
+                data_prepared['lat'].attrs['standard_name'] = 'latitude'
+            if 'units' not in data_prepared['lat'].attrs:
+                data_prepared['lat'].attrs['units'] = 'degrees_north'
+
+        temp_input_name = None
+        temp_output_name = None
+        temp_grid_name = None
+
+        try:
+            # Create temporary files
+            temp_input = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+            temp_input_name = temp_input.name
+            temp_input.close()
+
+            temp_output = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+            temp_output_name = temp_output.name
+            temp_output.close()
+
+            temp_grid = tempfile.NamedTemporaryFile(suffix='.txt', delete=False)
+            temp_grid_name = temp_grid.name
+            temp_grid.close()
+
+            # Save data to NetCDF with NETCDF4_CLASSIC format for CDO compatibility
+            data_prepared.to_netcdf(temp_input_name, format='NETCDF4_CLASSIC')
+
+            # Create target grid file
+            self.create_target_grid_file(temp_grid_name, new_grid)
+
+            # Use remapcon (conservative remapping) - CDO's standard conservative method
+            cmd = f"cdo -s remapcon,{temp_grid_name} {temp_input_name} {temp_output_name}"
+            subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+
+            # Read result
+            result_ds = xr.open_dataset(temp_output_name)
+            return Convert_Type.convert_nc(result_ds)
+
+        finally:
+            # Clean up temporary files
+            for f in [temp_input_name, temp_output_name, temp_grid_name]:
+                if f and os.path.exists(f):
+                    try:
+                        os.unlink(f)
+                    except (OSError, PermissionError) as e:
+                        logging.debug(f"Could not delete temporary file {f}: {e}")
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         with open(filename, 'w') as f:
@@ -1537,7 +1982,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
             varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
 
-            out_file = os.path.join(self.casedir, 'tmp', f'{data_source}_{varname}_remap_{year}.nc')
+            out_file = os.path.join(self.casedir, 'scratch', f'{data_source}_{varname}_remap_{year}.nc')
             data.to_netcdf(out_file)
             logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
         finally:

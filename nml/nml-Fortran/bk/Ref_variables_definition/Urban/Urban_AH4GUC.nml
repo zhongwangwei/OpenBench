@@ -1,0 +1,22 @@
+&general
+   root_dir          =   ./dataset/Reference/Grid/Urban/AH4GUC
+   timezone          =  UTC  
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.5
+   syear             =  2010
+   eyear             =  2010
+   prefix            =  AH4GUC_2010_monmean_settime
+   suffix            =  
+/
+
+&Urban_Anthropogenic_Heat_Flux
+varname           =  AHE
+varunit           =  w m-2
+
+/
+#Reference:
+#Varquez, A. C. G., Kiyomoto, S., Khanh, D. N., & Kanda, M. (2021).
+#Global 1-km present and future hourly anthropogenic heat flux. 
+#Scientific Data, 8(1), 64. https://doi.org/10.1038/s41597-021-00850-w

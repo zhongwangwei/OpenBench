@@ -1,0 +1,317 @@
+&general
+   root_dir          =  ./dataset/Reference/Grid/ILAMB
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Single
+   tim_res           =  Month
+   grid_res          =  0.5
+/
+#*******************  Radiation and Energy Cycle  *************
+&Net_Radiation
+sub_dir           =  Surface_Net_Radiation/CERESed4.1
+varname           =  rns
+varunit           =  w m-2
+prefix            =  rns
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Ground_Heat
+sub_dir           =  Ground_Heat_Flux/CLASS
+varname           =  hfdsl
+varunit           =  w m-2
+prefix            =  hfdsl
+suffix            =   
+syear             =  2003
+eyear             =  2009
+/
+
+&Sensible_Heat
+sub_dir           =  Sensible_Heat/FLUXCOM
+varname           =  sh
+varunit           =  w m-2
+prefix            =  sh
+suffix            =   
+syear             =  1980
+eyear             =  2014
+/
+
+&Latent_Heat
+sub_dir           =  Latent_Heat/FLUXCOM
+varname           =  le
+varunit           =  w m-2
+prefix            =  le
+suffix            =   
+syear             =  1980
+eyear             =  2014
+/
+
+&Surface_Upward_SW_Radiation
+sub_dir           =  Surface_Upward_SW_Radiation/CERESed4.1
+varname           =  rsus
+varunit           =  w m-2
+prefix            =  rsus
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Surface_Upward_LW_Radiation
+sub_dir           =  Surface_Upward_LW_Radiation/CERESed4.1
+varname           =  rlus
+varunit           =  w m-2
+prefix            =  rlus
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Albedo
+sub_dir           =  Albedo/GEWEX.SRB
+varname           =  albedo
+varunit           =  unitless
+prefix            =  albedo_0.5x0.5
+suffix            =   
+syear             =  1984
+eyear             =  2007
+/
+
+&Surface_Net_LW_Radiation
+sub_dir           =  Surface_Net_LW_Radiation/CERESed4.1
+varname           =  rlns
+varunit           =  W m-2
+prefix            =  rlns
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Surface_Net_SW_Radiation
+sub_dir           =  Surface_Net_SW_Radiation/CERESed4.1
+varname           =  rsns
+varunit           =  W m-2
+prefix            =  rsns
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+
+#*******************Ecosystem and Carbon Cycle****************
+&Gross_Primary_Productivity
+sub_dir           =  Gross_Primary_Productivity/FLUXCOM
+varname           =  gpp
+varunit           =  g m-2 day-1
+prefix            =  gpp
+suffix            =   
+syear             =  1980
+eyear             =  2013
+/
+
+&Biomass
+sub_dir           =  Biomass/XuSaatchi2021
+varname           =  biomass
+varunit           =  Mg ha-1
+prefix            =  XuSaatchi
+suffix            =   
+syear             =  2000
+eyear             =  2019
+tim_res           =  Year
+/
+
+&Burned_Area
+sub_dir           =  Burned_Area/GFED4.1S
+varname           =  burntArea
+varunit           =  percentage
+prefix            =  XuSaatchi
+suffix            =   
+syear             =  1997
+eyear             =  2016
+/
+
+&Carbon_Dioxide
+#sites data not support yet!!
+sub_dir           =  Carbon_Dioxide/NOAA.Emulated
+varname           =  co2
+varunit           =  ppm
+prefix            =  co2
+suffix            =   
+syear             =  1968
+eyear             =  2012
+data_type         =  stn
+/
+
+&Ecosystem_Respiration
+sub_dir           =  Ecosystem_Respiration/FLUXCOM
+varname           =  reco
+varunit           =  g m-2 day-1
+prefix            =  reco
+suffix            =   
+syear             =  1980
+eyear             =  2013
+/
+
+&Global_Net_Ecosystem_Carbon_Balance
+#not support yet!!
+sub_dir           =  Global_Net_Ecosystem_Carbon_Balance/GCP
+varname           =   
+varunit           =   
+prefix            =  nbp_1959-2016
+suffix            =   
+syear             =  1959
+eyear             =  2016
+/
+
+&Methane
+# site not support yet!!
+sub_dir           =  Global_Net_Ecosystem_Carbon_Balance/GCP
+varname           =  FCH4  
+varunit           =  g m-2 day-1 
+prefix            =  FCH4_F_ANN_monthly_wetland_tier1
+suffix            =   
+syear             =  2006
+eyear             =  2018
+data_type         =  stn
+/
+
+&Nitrogen_Fixation
+#climatoecological data is not support in current version
+sub_dir           =  Nitrogen_Fixation/Davies-Barnard
+varname           =  fBNF
+varunit           =  kg m-2 s-1
+prefix            =  fBNF_0.5x0.5
+suffix            =   
+syear             =  1980
+eyear             =  2013
+tim_res           =  climatoecological
+
+/
+
+&Soil_Carbon
+sub_dir           =  Soil_Carbon/HWSD
+varname           =  cSoilAbove1m
+varunit           =  kg m-2
+prefix            =  soilc_0.5x0.5
+suffix            =   
+syear             =  1980
+eyear             =  2013
+tim_res           =  climatoecological
+/
+
+
+
+#*******************Water and  Hydrology Cycle****************
+&Evapotranspiration
+sub_dir           =  Evapotranspiration/MOD16A2
+varname           =  et
+varunit           =  kg m-2 s-1
+prefix            =  et
+suffix            =   
+syear             =  2000
+eyear             =  2014
+/
+
+&Surface_Soil_Moisture
+sub_dir           =  Surface_Soil_Moisture/WangMao
+varname           =  mrsos
+varunit           =  kg m-2 
+prefix            =  mrsos_olc
+suffix            =   
+syear             =  1970
+eyear             =  2016
+/
+
+&Total_Runoff
+sub_dir           =  Runoff/LORA
+varname           =  mrro
+varunit           =  kg m-2 s-1
+prefix            =  LORA
+suffix            =   
+syear             =  1980
+eyear             =  2012
+/
+
+&Snow_Water_Equivalent
+sub_dir           =  Snow_Water_Equivalent/CanSISE
+varname           =  swe
+varunit           =  m
+prefix            =  swe
+suffix            =   
+syear             =  1981
+eyear             =  2010
+/
+
+&Terrestrial_Water_Storage_Anomaly
+sub_dir           =  Terrestrial_Water_Storage_Anomaly/GRACE
+varname           =  twsa
+varunit           =  kg m-2
+prefix            =  twsa_0.5x0.5
+suffix            =   
+syear             =  2002
+eyear             =  2014
+/
+
+&Permafrost
+#climatoecological data is not support in current version
+sub_dir           =  Permafrost/NSIDC
+varname           =  permafrost_extent
+varunit           =  unitless
+prefix            =  NSIDC_0.5x0.5
+suffix            =   
+syear             =  -
+eyear             =  -
+tim_res           =  climatoecological
+/
+
+
+#*******************         Forcings      **********************
+&Surface_Downward_SW_Radiation
+sub_dir           =  Surface_Downward_SW_Radiation/CERESed4.1
+varname           =  rsds
+varunit           =  W m-2
+prefix            =  rsds
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Surface_Downward_LW_Radiation
+sub_dir           =  Surface_Downward_LW_Radiation/CERESed4.1
+varname           =  rlds
+varunit           =  W m-2
+prefix            =  rlds
+suffix            =   
+syear             =  2000
+eyear             =  2018
+/
+
+&Surface_Relative_Humidity
+sub_dir           =  Surface_Relative_Humidity/CRU4.02
+varname           =  rhums
+varunit           =  percentage
+prefix            =  rhums
+suffix            =   
+syear             =  1980
+eyear             =  2017
+/
+
+&Precipitation
+sub_dir           =  Precipitation/CMAPv1904
+varname           =  pr
+varunit           =  kg m-2 s-1
+prefix            =  pr
+suffix            =   
+syear             =  1979
+eyear             =  2018
+/
+
+&Surface_Air_Temperature
+sub_dir           =  Surface_Air_Temperature/CRU4.02
+varname           =  tas
+varunit           =  K
+prefix            =  tas
+suffix            =   
+syear             =  1980
+eyear             =  2017
+/

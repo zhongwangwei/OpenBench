@@ -1,10 +1,10 @@
 {
   "general": {
-    "model_namelist": "./nml/Mod_variables_defination/CaMaFlood.json",
+    "model_namelist": "./nml/Mod_variables_definition/CaMaFlood.json",
     "timezone": 0.0,
     "data_type": "grid",
     "data_groupby": "Month",
-    "dir": "./dataset/simulation/discharge/XinAnJiang",
+    "dir": "./dataset/Simulation/discharge/XinAnJiang",
     "fulllist": "",
     "tim_res": "day",
     "grid_res": 0.1,

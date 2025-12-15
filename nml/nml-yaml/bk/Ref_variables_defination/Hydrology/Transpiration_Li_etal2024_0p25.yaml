@@ -1,0 +1,15 @@
+general:
+  root_dir: ./dataset/Reference/Grid/Water/Transpiration_Li_etal2024_0p25/
+  timezone: 0
+  data_type: grid
+  data_groupby: Year
+  syear: 2000
+  eyear: 2020
+  tim_res: Day
+  grid_res: 0.25
+Canopy_Transpiration:
+  sub_dir: ''
+  varname: Ec
+  varunit: mm day-1
+  prefix: Merged.Tveg.
+  suffix: ''

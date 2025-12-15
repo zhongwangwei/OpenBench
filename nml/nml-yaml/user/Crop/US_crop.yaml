@@ -1,9 +1,9 @@
 general:
-  model_namelist: ./nml/Mod_variables_defination/CoLM.nml
+  model_namelist: ./nml/Mod_variables_definition/CoLM.nml
   timezone: 0.0
   data_type: grid
   data_groupby: Year
-  dir: ./dataset/simulation/crop/noirrig/history
+  dir: ./dataset/Simulation/crop/noirrig/history
   fulllist: ''
   tim_res: Year
   grid_res: 0.5

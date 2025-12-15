@@ -1,0 +1,19 @@
+&general
+  root_dir = ./dataset/Reference/Grid/LowRes/Anth
+  timezone = 0
+  data_type = grid
+  data_groupby = Year
+  syear = 2011
+  eyear = 2018
+  tim_res = Month
+  grid_res = 0.25
+/
+
+&Total_Irrigation_Amount
+  sub_dir = Crop/GIWUED
+  varname = IWUens
+  varunit = mm month-1
+  prefix = IWU.ens.Y
+  suffix = 
+/
+

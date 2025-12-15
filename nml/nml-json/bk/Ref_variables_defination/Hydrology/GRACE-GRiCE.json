@@ -1,0 +1,18 @@
+{
+  "general": {
+    "root_dir": "./dataset/Reference/Grid/Water/GRAiCE/processed/",
+    "timezone": 0.0,
+    "data_type": "grid",
+    "data_groupby": "Single",
+    "tim_res": "Month",
+    "grid_res": 0.5,
+    "syear": 1985,
+    "eyear": 2021
+  },
+  "Terrestrial_Water_Storage_Change": {
+    "varname": "twsc",
+    "varunit": "cm",
+    "prefix": "GRAiCE_twsc_ensmean",
+    "suffix": ""
+  }
+}

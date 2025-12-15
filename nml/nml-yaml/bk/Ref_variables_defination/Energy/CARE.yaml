@@ -1,0 +1,15 @@
+general:
+  root_dir: ./dataset/Reference/Grid/Energy/CARE
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Month
+  tim_res: Day
+  grid_res: 0.25
+  syear: 2000
+  eyear: 2019
+Surface_Downward_LW_Radiation:
+  sub_dir: LWDR
+  varname: LWDR
+  varunit: w m-2
+  prefix: CARE_LWDR_
+  suffix: ''

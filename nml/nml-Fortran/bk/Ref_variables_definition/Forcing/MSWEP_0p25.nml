@@ -1,0 +1,17 @@
+&general
+   root_dir          =  ./dataset/Reference/Grid/Forcing/MSWEP_0p25/
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  Year
+   tim_res           =  Day
+   grid_res          =  0.25
+   syear             =  1979
+   eyear             =  2020
+/
+
+&Precipitation
+varname           =  precipitation
+varunit           =  mm day-1
+prefix            =  Precipitation_
+suffix            =  
+/

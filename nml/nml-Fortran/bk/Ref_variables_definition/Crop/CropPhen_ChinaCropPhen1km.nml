@@ -1,0 +1,71 @@
+&general
+   root_dir          =  ./dataset/Reference/Grid/WaterUse/GIWUED
+   timezone          =  0.0
+   data_type         =  grid
+   data_groupby      =  single
+   tim_res           =  Year
+   grid_res          =  0.008333
+/
+
+
+&Crop_Heading_DOY_Corn
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Maize_HE_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+&Crop_Heading_DOY_Wheat
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Wheat_HE_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+
+&Crop_Maturity_DOY_Corn
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Corn_MA_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+&Crop_Maturity_DOY_Wheat
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Wheat_MA_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+
+&Crop_V3_DOY_Corn
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Maize_V3_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+&Crop_Emergence_DOY_wheat
+sub_dir           =  
+varname           =  Band1
+varunit           =  unitless
+prefix            =  CHN_Wheat_GR&EM_
+suffix            =   
+syear             =  2000
+eyear             =  2015
+/
+
+#Reference:
+# Luo, Y., Zhang, Z., Chen, Y., Li, Z. and Tao, F., 2020. 
+# ChinaCropPhen1km: a high-resolution crop phenological dataset for three staple crops in China during 2000–2015 
+# based on leaf area index (LAI) products. Earth System Science Data, 12(1), pp.197-214.
