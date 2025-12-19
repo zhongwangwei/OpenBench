@@ -777,10 +777,15 @@ class PreValidator:
             'reason': ''
         }
 
-        # Get variable name from config
-        varname = nml[item].get(f'{source}_varname', '').strip()
+        # Get variable name from config (handle None values)
+        varname = ''
 
-        # If varname is empty, must rely on custom filter
+        # Try from nml[item] (if UpdateNamelist has run)
+        if item in nml:
+            varname_raw = nml[item].get(f'{source}_varname', '')
+            varname = str(varname_raw).strip() if varname_raw is not None else ''
+
+        # If varname is empty, use item name as default and rely on custom filter
         if not varname:
             logging.info(f"    Variable name empty for {source_type} {source} in {item}, checking custom filter...")
             filter_available = self._check_custom_filter(item, source, nml, source_type)
@@ -859,8 +864,35 @@ class PreValidator:
         # Determine filter name
         if source_type == 'simulation':
             # For simulation, try to get model name
-            model = nml[item].get(f'{source}_model', source)
-            filter_name = model
+            model = None
+
+            # First try from {source}_model attribute (if UpdateNamelist has run)
+            if item in nml:
+                model = nml[item].get(f'{source}_model')
+
+            # If not available, try reading from source definition file -> model_namelist
+            if model is None or (isinstance(model, str) and not model.strip()):
+                # Get source definition file path from def_nml
+                source_def_path = nml.get('def_nml', {}).get(source)
+                if source_def_path and os.path.exists(source_def_path):
+                    try:
+                        import yaml
+                        with open(source_def_path, 'r') as f:
+                            source_def = yaml.safe_load(f)
+                        # Get model_namelist path from source definition
+                        model_namelist_path = source_def.get('general', {}).get('model_namelist')
+                        if model_namelist_path and os.path.exists(model_namelist_path):
+                            with open(model_namelist_path, 'r') as f:
+                                model_nml = yaml.safe_load(f)
+                            model = model_nml.get('general', {}).get('model')
+                    except Exception:
+                        pass
+
+            # Final fallback to source name
+            if model is None or (isinstance(model, str) and not model.strip()):
+                filter_name = source
+            else:
+                filter_name = str(model).strip()
         else:
             # For reference, use source name
             filter_name = source

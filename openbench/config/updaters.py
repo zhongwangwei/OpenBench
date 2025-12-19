@@ -199,17 +199,28 @@ class UpdateNamelist(NamelistReader):
             if not os.access(model_namelist_path, os.R_OK):
                 logging.error(f"No read permission for file: {model_namelist_path}")
                 raise PermissionError(f"No read permission for file: {model_namelist_path}")
-            
+
             model_nml = self.read_namelist(model_namelist_path)
+            value = None
             try:
-                nml[evaluation_item][f'{source}_{attr}'] = model_nml['general'][attr]
+                value = model_nml['general'][attr]
             except KeyError:
                 try:
-                    nml[evaluation_item][f'{source}_{attr}'] = model_nml[evaluation_item][attr]
+                    value = model_nml[evaluation_item][attr]
                 except KeyError:
-                    logging.error(f"{attr} is missing in namelist")
+                    pass
+
+            # If value is empty/None and attr is 'varname', use evaluation_item as default
+            if attr == 'varname' and (value is None or (isinstance(value, str) and not value.strip())):
+                logging.info(f"varname is empty for {evaluation_item}, using '{evaluation_item}' as default (will use custom filter)")
+                value = evaluation_item
+
+            if value is not None:
+                nml[evaluation_item][f'{source}_{attr}'] = value
+            else:
+                logging.warning(f"{attr} is missing in namelist for {evaluation_item}")
         except KeyError:
-            logging.error(f"{attr} is missing in namelist")
+            logging.warning(f"{attr} is missing in namelist for {evaluation_item}")
 
 
 class UpdateFigNamelist(NamelistReader):
