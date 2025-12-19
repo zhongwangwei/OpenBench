@@ -394,7 +394,12 @@ class Evaluation_stn(metrics, scores):
             raise
 
     def _apply_station_custom_filter(self, dataset, datasource, attr_name, canonical_name):
-        model = self.ref_source if datasource == 'ref' else self.sim_source
+        # Get model name from _model attribute (e.g., TE-routing_model = "TE")
+        source = self.sim_source if datasource == 'sim' else self.ref_source
+        try:
+            model = getattr(self, f"{source}_model")
+        except AttributeError:
+            model = source
 
         try:
             custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
