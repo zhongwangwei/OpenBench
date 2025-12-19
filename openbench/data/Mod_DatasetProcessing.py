@@ -766,9 +766,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 ds = ds.rename({coord: self.coordinate_map[coord]})
         # if the longitude is not between -180 and 180, convert it to the equivalent value between -180 and 180
         if 'lon' in ds.coords:
-            ds['lon'] = (ds['lon'] + 180) % 360 - 180
-            # Reindex the dataset
-            ds = ds.reindex(lon=sorted(ds.lon.values))
+            lon_vals = ds['lon'].values
+            # Check if longitude needs conversion (0-360 to -180-180)
+            if lon_vals.max() > 180:
+                # Assign new lon values
+                ds = ds.assign_coords(lon=(ds['lon'] + 180) % 360 - 180)
+                # Sort by lon to properly align data with new coordinates
+                ds = ds.sortby('lon')
+                # Update valid_min/valid_max attributes to match new coordinate range
+                if 'valid_min' in ds['lon'].attrs:
+                    ds['lon'].attrs['valid_min'] = -180.0
+                if 'valid_max' in ds['lon'].attrs:
+                    ds['lon'].attrs['valid_max'] = 180.0
         return ds
 
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
@@ -1051,7 +1060,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def apply_model_specific_time_adjustment(self, ds: xr.Dataset, datasource: str, syear: int, eyear: int,
                                              tim_res: str) -> xr.Dataset:
-        model = self.sim_source if datasource == 'sim' else self.ref_source
+        # Get model name from _model attribute (e.g., TE-routing_model = "TE")
+        source = self.sim_source if datasource == 'sim' else self.ref_source
+        try:
+            model = getattr(self, f"{source}_model")
+        except AttributeError:
+            model = source
         try:
             custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
             custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
@@ -1073,6 +1087,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
             raise
+
         try:
             ds = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
@@ -1105,11 +1120,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             return ds[varname[0]]
         else:
+            # Get model name from _model attribute (e.g., TE-routing_model = "TE")
+            source = self.sim_source if datasource == 'sim' else self.ref_source
             try:
-                model = getattr(self, f"{self.sim_source}_model") if datasource == 'sim' else self.ref_source
+                model = getattr(self, f"{source}_model")
             except AttributeError:
-                # Fallback to source name if model attribute doesn't exist
-                model = self.sim_source if datasource == 'sim' else self.ref_source
+                model = source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
                 custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
@@ -1399,7 +1415,12 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             # Check if the variable exists in the dataset
             if current_var_list[0] not in stn_data:
                 # Try to apply custom filter for variable fallback
-                model = self.ref_source if datasource == 'ref' else self.sim_source
+                # Get model name from _model attribute (e.g., TE-routing_model = "TE")
+                source = self.sim_source if datasource == 'sim' else self.ref_source
+                try:
+                    model = getattr(self, f"{source}_model")
+                except AttributeError:
+                    model = source
                 try:
                     import importlib
                     custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")

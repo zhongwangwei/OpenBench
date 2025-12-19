@@ -33,12 +33,24 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
     return ds
 
 
-def filter_TE(info,ds):   #update info as well
+def filter_TE(info, ds):
+   """Custom filter for TE model variables."""
    if info.item == "Total_Runoff":
       try:
-         ds['RUNOFF']=(ds['RUNOFF'][:,0,:,:]).squeeze()
-         info.sim_varname='Total_Runoff'
-         info.sim_varunit='kg m-2 s-1'
+         ds['Total_Runoff'] = (ds['RUNOFF'][:, 0, :, :]).squeeze()
+         info.sim_varname = 'Total_Runoff'
+         info.sim_varunit = 'kg m-2 s-1'
       except:
          logging.error('Total_Runoff calculation processing ERROR!!!')
       return info, ds['Total_Runoff']
+
+   elif info.item == "Streamflow":
+      try:
+         # outflw has dims (time, zdepth, lat, lon), squeeze out zdepth dimension
+         ds['Streamflow'] = (ds['outflw']).squeeze()
+         info.sim_varname = 'Streamflow'
+         info.sim_varunit = 'm3 s-1'
+      except:
+         logging.error('Streamflow calculation processing ERROR!!!')
+      return info, ds['Streamflow']
+
