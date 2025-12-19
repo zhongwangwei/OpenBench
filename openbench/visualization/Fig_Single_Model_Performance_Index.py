@@ -32,8 +32,9 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
               'text.usetex': False}
     rcParams.update(params)
 
-    data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.txt"
-    df = pd.read_csv(data_path, sep='\t')
+    data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.csv"
+    # df = pd.read_csv(data_path, sep='\t')
+    df = pd.read_csv(data_path, header=0)
     df = Convert_Type.convert_Frame(df)
     # Prepare the subplot grid
     n_items = len(evaluation_items)

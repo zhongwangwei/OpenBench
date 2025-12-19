@@ -5,7 +5,6 @@ general:
   saving_format:  jpg
   font_family: DejaVu Sans
   font_size: 24
-
   title:  ''
   titlesize:  20
   linewidth: 2.5

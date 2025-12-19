@@ -19,7 +19,8 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     selected_metrics = list(selected_metrics)
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
+    df = pd.read_csv(file, skiprows=1, header=0)
+    # df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
     df = Convert_Type.convert_Frame(df)
     df.set_index('FullName', inplace=True)
     # Select the desired metrics
@@ -334,7 +335,8 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
     selected_metrics = list(selected_metrics)
     # Convert the data to a DataFrame
     # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
+    # df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
+    df = pd.read_csv(file, skiprows=1, header=0)
     df = Convert_Type.convert_Frame(df)
     df.set_index('FullName', inplace=True)
     # Select the desired metrics

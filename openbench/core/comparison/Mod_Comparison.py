@@ -484,80 +484,83 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 os.makedirs(dir_path)
 
             for score in scores:
-                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
-                with open(output_file_path, "w") as output_file:
-                    output_file.write(f"Item\t")
-                    output_file.write("Reference\t")
-                    # fixme: ugly code, need to be improved
-                    for evaluation_item in evaluation_items:
+
+                for evaluation_item in evaluation_items:
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+
+                rows = []
+                for evaluation_item in evaluation_items:
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+
+                    # if the sim_sources and ref_sources are not list, then convert them to list
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                    # if isinstance(ref_sources, str): ref_sources = [ref_sources]
+
+                    for ref_source in ref_sources:
+                        row = {
+                            "Item": evaluation_item,
+                            "Reference": ref_source
+                        }
                         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                         if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                    for sim_source in sim_sources:
-                        output_file.write(f"{sim_source}\t")
-                    output_file.write("\n")  # Move "All" to the first line
 
-                    for evaluation_item in evaluation_items:
-                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                        ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                            sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
 
-                        # if the sim_sources and ref_sources are not list, then convert them to list
-                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                        # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                        # if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                            if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                file = f"{casedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                                df = pd.read_csv(file, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
+                                overall_mean = df[f'{score}'].mean(skipna=True)
+                            else:
+                                ds = xr.open_dataset(
+                                    f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                ds = Convert_Type.convert_nc(ds)
 
-                        for ref_source in ref_sources:
-                            output_file.write(f"{evaluation_item}\t")
-                            output_file.write(f"{ref_source}\t")
-                            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                            if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                                if self.weight.lower() == 'area':
+                                    weights = np.cos(np.deg2rad(ds.lat))
+                                    overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                elif self.weight.lower() == 'mass':
+                                    # Get reference data for flux weighting
+                                    o = xr.open_dataset(
+                                        f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                        f'{ref_varname}']
+                                    o = Convert_Type.convert_nc(o)
 
-                            for sim_source in sim_sources:
-                                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                    # Calculate area weights (cosine of latitude)
+                                    area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                    file = f"{casedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
-                                    df = pd.read_csv(file, sep=',', header=0)
-                                    df = Convert_Type.convert_Frame(df)
-                                    overall_mean = df[f'{score}'].mean(skipna=True)
+                                    # Calculate absolute flux weights
+                                    flux_weights = np.abs(o.mean('time'))
+
+                                    # Combine area and flux weights
+                                    combined_weights = area_weights * flux_weights
+
+                                    # Normalize weights to sum to 1
+                                    normalized_weights = combined_weights / combined_weights.sum()
+
+                                    # Calculate weighted mean
+                                    overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
-                                    ds = xr.open_dataset(
-                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    ds = Convert_Type.convert_nc(ds)
+                                    overall_mean = ds[score].mean(skipna=True).values
 
-                                    if self.weight.lower() == 'area':
-                                        weights = np.cos(np.deg2rad(ds.lat))
-                                        overall_mean = ds[score].weighted(weights).mean(skipna=True).values
-                                    elif self.weight.lower() == 'mass':
-                                        # Get reference data for flux weighting
-                                        o = xr.open_dataset(
-                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                            f'{ref_varname}']
-                                        o = Convert_Type.convert_nc(o)
+                            overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                            row[sim_source] = overall_mean_str
+                        rows.append(row)
 
-                                        # Calculate area weights (cosine of latitude)
-                                        area_weights = np.cos(np.deg2rad(ds.lat))
-
-                                        # Calculate absolute flux weights
-                                        flux_weights = np.abs(o.mean('time'))
-
-                                        # Combine area and flux weights
-                                        combined_weights = area_weights * flux_weights
-
-                                        # Normalize weights to sum to 1
-                                        normalized_weights = combined_weights / combined_weights.sum()
-
-                                        # Calculate weighted mean
-                                        overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                    else:
-                                        overall_mean = ds[score].mean(skipna=True).values
-
-                                overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
-                                output_file.write(f"{overall_mean_str}\t")
-                            output_file.write("\n")
+                df_out = pd.DataFrame(rows)
+                fixed_cols = ["Item", "Reference"]
+                sim_cols = [c for c in df_out.columns if c not in fixed_cols]
+                df_out = df_out[fixed_cols + sim_cols]
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
+                df_out.to_csv(output_file_path, index=False)
 
                 make_scenarios_scores_comparison_heat_map(output_file_path, score, option)
         finally:
@@ -580,194 +583,196 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                     for ref_source in ref_sources:
                         try:
-                            output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.txt")
-                            with open(output_file_path, "w") as output_file:
-                                output_file.write("Item\t")
-                                output_file.write("Reference\t")
-                                for sim_source in sim_sources:
-                                    output_file.write(f"{sim_source}_std\t")
-                                    output_file.write(f"{sim_source}_COR\t")
-                                    output_file.write(f"{sim_source}_RMS\t")
-                                    output_file.write(f"{sim_source}_std_ref\t")
+                            rows = []  # ⭐ pandas 行式收集
+                            stds = np.zeros(len(sim_sources) + 1)
+                            cors = np.zeros(len(sim_sources) + 1)
+                            RMSs = np.zeros(len(sim_sources) + 1)
 
-                                output_file.write("Reference_std\t")
-                                output_file.write("\n")  # Move "All" to the first line
-                                output_file.write(f"{evaluation_item}\t")
-                                output_file.write(f"{ref_source}\t")
-                                stds = np.zeros(len(sim_sources) + 1)
-                                cors = np.zeros(len(sim_sources) + 1)
-                                RMSs = np.zeros(len(sim_sources) + 1)
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                            row = {"Item": evaluation_item, "Reference": ref_source}
+
+                            for i, sim_source in enumerate(sim_sources):
+                                try:
+                                    ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                                    ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                    sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                    # ugly code, need to be improved
+                                    # if self.sim_varname is empty, then set it to item
+                                    if sim_varname is None or sim_varname == '':
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == '':
+                                        ref_varname = evaluation_item
+                                    if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                        stnlist = os.path.join(casedir, 'metrics',
+                                                               f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
+                                        station_list = pd.read_csv(stnlist, header=0)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+                                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lat', 'ref_lon', 'use_syear', 'use_eyear', 'lon', 'lat']
+                                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
+                                        # this should be moved to other place
+                                        if ref_source.lower() == 'grdc':
+                                            station_list['ref_lon'] = station_list['lon']
+                                            station_list['ref_lat'] = station_list['lat']
+
+                                        def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
+                                                                      station_list, iik):
+                                            try:
+                                                sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
+                                                s = xr.open_dataset(sim_path)[sim_varname].squeeze()
+                                                o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                o = Convert_Type.convert_nc(o)
+                                                s = Convert_Type.convert_nc(s)
+
+                                                s['time'] = o['time']
+                                                mask1 = np.isnan(s) | np.isnan(o)
+                                                s.values[mask1] = np.nan
+                                                o.values[mask1] = np.nan
+                                                row = {}
+                                                try:
+                                                    row['std_s'] = self.stat_standard_deviation(s).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"std_s calculation failed: {e}")
+                                                    row['std_s'] = np.nan
+                                                try:
+                                                    row['std_o'] = self.stat_standard_deviation(o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"std_o calculation failed: {e}")
+                                                    row['std_o'] = np.nan
+                                                try:
+                                                    row['CRMSD'] = self.CRMSD(s, o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"CRMSD calculation failed: {e}")
+                                                    row['CRMSD'] = np.nan
+                                                try:
+                                                    row['correlation'] = self.correlation(s, o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"correlation calculation failed: {e}")
+                                                    row['correlation'] = np.nan
+                                                return row
+                                            finally:
+                                                pass  # Memory cleanup handled at higher level
+
+                                        results = Parallel(n_jobs=-1)(
+                                            delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
+                                                                               sim_varname, ref_varname, station_list, iik) for iik in
+                                            range(len(station_list['ID'])))
+
+                                        station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+
+                                        output_stn_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv")
+                                        station_list.to_csv(output_stn_path)
+
+                                        station_list = pd.read_csv(output_stn_path, header=0)
+                                        std_sim = station_list['std_s'].mean(skipna=True)
+                                        row[f"{sim_source}_std"] = std_sim
+                                        stds[i + 1] = std_sim
+                                        cor_sim = station_list['correlation'].mean(skipna=True)
+                                        row[f"{sim_source}_COR"] = cor_sim
+                                        cors[i + 1] = cor_sim
+                                        RMS_sim = station_list['CRMSD'].mean(skipna=True)
+                                        row[f"{sim_source}_RMS"] = RMS_sim
+                                        RMSs[i + 1] = RMS_sim
+                                        std_ref = station_list['std_o'].mean(skipna=True)
+
+                                    else:
                                         ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                        # ugly code, need to be improved
-                                        # if self.sim_varname is empty, then set it to item
                                         if sim_varname is None or sim_varname == '':
                                             sim_varname = evaluation_item
                                         if ref_varname is None or ref_varname == '':
                                             ref_varname = evaluation_item
-                                        if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                            stnlist = os.path.join(casedir, 'metrics',
-                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lat', 'ref_lon', 'use_syear', 'use_eyear','lon', 'lat']
-                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
-                                            # this should be moved to other place
-                                            if ref_source.lower() == 'grdc':
-                                                station_list['ref_lon'] = station_list['lon']
-                                                station_list['ref_lat'] = station_list['lat']
 
-                                            def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                          station_list, iik):
-                                                try:
-                                                    sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                        ref_path = os.path.join(casedir, 'data',
+                                                                f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                        sim_path = os.path.join(casedir, 'data',
+                                                                f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
+                                        reffile = xr.open_dataset(ref_path)[ref_varname]
+                                        simfile = xr.open_dataset(sim_path)[sim_varname]
+                                        reffile = Convert_Type.convert_nc(reffile)
+                                        simfile = Convert_Type.convert_nc(simfile)
 
-                                                    s['time'] = o['time']
-                                                    mask1 = np.isnan(s) | np.isnan(o)
-                                                    s.values[mask1] = np.nan
-                                                    o.values[mask1] = np.nan
-                                                    row = {}
-                                                    try:
-                                                        row['std_s'] = self.stat_standard_deviation(s).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"std_s calculation failed: {e}")
-                                                        row['std_s'] = np.nan
-                                                    try:
-                                                        row['std_o'] = self.stat_standard_deviation(o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"std_o calculation failed: {e}")
-                                                        row['std_o'] = np.nan
-                                                    try:
-                                                        row['CRMSD'] = self.CRMSD(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"CRMSD calculation failed: {e}")
-                                                        row['CRMSD'] = np.nan
-                                                    try:
-                                                        row['correlation'] = self.correlation(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"correlation calculation failed: {e}")
-                                                        row['correlation'] = np.nan
-                                                    return row
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
+                                        std_sim_result = self.stat_standard_deviation(simfile)
+                                        cor_result = self.correlation(simfile, reffile)
+                                        RMS_result = self.CRMSD(simfile, reffile)
 
-                                            results = Parallel(n_jobs=-1)(
-                                                delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
-                                                                                   sim_varname, ref_varname, station_list, iik) for iik in
-                                                range(len(station_list['ID'])))
-
-                                            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-
-                                            output_stn_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
-                                            station_list.to_csv(output_stn_path)
-
-                                            station_list = pd.read_csv(output_stn_path, header=0)
-                                            std_sim = station_list['std_s'].mean(skipna=True)
-                                            output_file.write(f"{std_sim}\t")
-                                            stds[i + 1] = std_sim
-                                            cor_sim = station_list['correlation'].mean(skipna=True)
-                                            output_file.write(f"{cor_sim}\t")
-                                            cors[i + 1] = cor_sim
-                                            RMS_sim = station_list['CRMSD'].mean(skipna=True)
-                                            output_file.write(f"{RMS_sim}\t")
-                                            RMSs[i + 1] = RMS_sim
-                                            std_ref = station_list['std_o'].mean(skipna=True)
-
+                                        if self.weight.lower() == 'area':
+                                            weights = np.cos(np.deg2rad(reffile.lat))
+                                            std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(
+                                                skipna=True).values
+                                            cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(weights).mean(skipna=True).values
+                                            RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == 'mass':
+                                            # Calculate area weights (cosine of latitude)
+                                            area_weights = np.cos(np.deg2rad(reffile.lat))
+                                            # Calculate absolute flux weights
+                                            flux_weights = np.abs(reffile.mean('time'))
+                                            # Combine area and flux weights
+                                            combined_weights = area_weights * flux_weights
+                                            # Normalize weights to sum to 1
+                                            normalized_weights = combined_weights / combined_weights.sum()
+                                            # Calculate weighted mean
+                                            std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(
+                                                normalized_weights.fillna(0)).mean(skipna=True).values
+                                            cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights.fillna(0)).mean(
+                                                skipna=True).values
+                                            RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights.fillna(0)).mean(
+                                                skipna=True).values
                                         else:
-                                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                            if sim_varname is None or sim_varname == '':
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == '':
-                                                ref_varname = evaluation_item
+                                            std_sim = std_sim_result.where(np.isfinite(std_sim_result)).mean(skipna=True).values
+                                            cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
+                                            RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
 
-                                            ref_path = os.path.join(casedir, 'data',
-                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                            sim_path = os.path.join(casedir, 'data',
-                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                                        row[f"{sim_source}_std"] = std_sim
+                                        stds[i + 1] = std_sim
 
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
-                                            reffile = Convert_Type.convert_nc(reffile)
-                                            simfile = Convert_Type.convert_nc(simfile)
+                                        row[f"{sim_source}_COR"] = cor_sim
+                                        cors[i + 1] = cor_sim
 
-                                            std_sim_result = self.stat_standard_deviation(simfile)
-                                            cor_result = self.correlation(simfile, reffile)
-                                            RMS_result = self.CRMSD(simfile, reffile)
+                                        row[f"{sim_source}_RMS"] = RMS_sim
+                                        RMSs[i + 1] = RMS_sim
 
-                                            if self.weight.lower() == 'area':
-                                                weights = np.cos(np.deg2rad(reffile.lat))
-                                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(weights).mean(
-                                                    skipna=True).values
-                                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(weights).mean(skipna=True).values
-                                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(weights).mean(skipna=True).values
-                                            elif self.weight.lower() == 'mass':
-                                                # Calculate area weights (cosine of latitude)
-                                                area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                # Calculate absolute flux weights
-                                                flux_weights = np.abs(reffile.mean('time'))
-                                                # Combine area and flux weights
-                                                combined_weights = area_weights * flux_weights
-                                                # Normalize weights to sum to 1
-                                                normalized_weights = combined_weights / combined_weights.sum()
-                                                # Calculate weighted mean
-                                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).weighted(
-                                                    normalized_weights.fillna(0)).mean(skipna=True).values
-                                                cor_sim = cor_result.where(np.isfinite(cor_result)).weighted(normalized_weights.fillna(0)).mean(
-                                                    skipna=True).values
-                                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).weighted(normalized_weights.fillna(0)).mean(
-                                                    skipna=True).values
-                                            else:
-                                                std_sim = std_sim_result.where(np.isfinite(std_sim_result)).mean(skipna=True).values
-                                                cor_sim = cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
-                                                RMS_sim = RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
 
-                                            output_file.write(f"{std_sim}\t")
-                                            stds[i + 1] = std_sim
+                                        if self.weight.lower() == 'area':
+                                            weights = np.cos(np.deg2rad(reffile.lat))
+                                            std_ref = self.stat_standard_deviation(reffile).where(
+                                                np.isfinite(self.stat_standard_deviation(reffile))).weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == 'mass':
+                                            # Calculate area weights (cosine of latitude)
+                                            area_weights = np.cos(np.deg2rad(reffile.lat))
+                                            # Calculate absolute flux weights
+                                            flux_weights = np.abs(reffile.mean('time'))
+                                            # Combine area and flux weights
+                                            combined_weights = area_weights * flux_weights
+                                            # Normalize weights to sum to 1
+                                            normalized_weights = combined_weights / combined_weights.sum()
+                                            # Calculate weighted mean
+                                            std_ref = self.stat_standard_deviation(reffile).where(
+                                                np.isfinite(self.stat_standard_deviation(reffile))).weighted(
+                                                normalized_weights.fillna(0)).mean(skipna=True).values
+                                        else:
+                                            std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
+                                        row[f"{sim_source}_std_ref"] = std_ref
 
-                                            output_file.write(f"{cor_sim}\t")
-                                            cors[i + 1] = cor_sim
+                                    row["Reference_std"] = stds[0]
+                                    rows.append(row)
+                                    df_out = pd.DataFrame(rows)
+                                    cols = ["Item", "Reference"]
+                                    for sim_source in sim_sources:
+                                        cols += [f"{sim_source}_std", f"{sim_source}_COR", f"{sim_source}_RMS", f"{sim_source}_std_ref"]
+                                    cols += ["Reference_std"]
+                                    df_out = df_out.reindex(columns=cols)
 
-                                            output_file.write(f"{RMS_sim}\t")
-                                            RMSs[i + 1] = RMS_sim
-
-                                            if self.weight.lower() == 'area':
-                                                weights = np.cos(np.deg2rad(reffile.lat))
-                                                std_ref = self.stat_standard_deviation(reffile).where(
-                                                    np.isfinite(self.stat_standard_deviation(reffile))).weighted(weights).mean(skipna=True).values
-                                            elif self.weight.lower() == 'mass':
-                                                # Calculate area weights (cosine of latitude)
-                                                area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                # Calculate absolute flux weights
-                                                flux_weights = np.abs(reffile.mean('time'))
-                                                # Combine area and flux weights
-                                                combined_weights = area_weights * flux_weights
-                                                # Normalize weights to sum to 1
-                                                normalized_weights = combined_weights / combined_weights.sum()
-                                                # Calculate weighted mean
-                                                std_ref = self.stat_standard_deviation(reffile).where(
-                                                    np.isfinite(self.stat_standard_deviation(reffile))).weighted(
-                                                    normalized_weights.fillna(0)).mean(skipna=True).values
-                                            else:
-                                                std_ref = self.stat_standard_deviation(reffile).mean(skipna=True).values
-
-                                        stds[0] = std_ref
-                                        output_file.write(f"{std_ref}\t")
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
+                                    # 输出 CSV
+                                    output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.csv")
+                                    df_out.to_csv(output_file_path, index=False)
+                                finally:
+                                    pass  # Memory cleanup handled at method level
                             try:
                                 make_scenarios_comparison_Taylor_Diagram(casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources,
                                                                          option)
@@ -797,142 +802,135 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                     for ref_source in ref_sources:
                         try:
-                            output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.txt")
-
-                            with open(output_file_path, "w") as output_file:
-                                output_file.write("Item\t")
-                                output_file.write("Reference\t")
-                                # ill determine the number of simulation sources
-                                sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                                if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                                for sim_source in sim_sources:
-                                    output_file.write(f"{sim_source}_bias\t")
-                                    output_file.write(f"{sim_source}_crmsd\t")
-                                    output_file.write(f"{sim_source}_rmsd\t")
-
-                                output_file.write("\n")  # Move "All" to the first line
-                                output_file.write(f"{evaluation_item}\t")
-                                output_file.write(f"{ref_source}\t")
-                                biases = np.zeros(len(sim_sources))
-                                rmses = np.zeros(len(sim_sources))
-                                crmsds = np.zeros(len(sim_sources))
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                                        if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                            if sim_varname is None or sim_varname == '':
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == '':
-                                                ref_varname = evaluation_item
-                                            stnlist = os.path.join(casedir, 'metrics',
-                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
-                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
-
-                                            def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                          station_list, iik):
-                                                try:
-                                                    sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
-
-                                                    s['time'] = o['time']
-                                                    mask1 = np.isnan(s) | np.isnan(o)
-                                                    s.values[mask1] = np.nan
-                                                    o.values[mask1] = np.nan
-                                                    row = {}
-                                                    try:
-                                                        row['CRMSD'] = self.CRMSD(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"CRMSD calculation failed: {e}")
-                                                        row['CRMSD'] = np.nan
-                                                    try:
-                                                        row['bias'] = self.bias(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"bias calculation failed: {e}")
-                                                        row['bias'] = np.nan
-                                                    try:
-                                                        row['rmse'] = self.RMSE(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"rmse calculation failed: {e}")
-                                                        row['rmse'] = np.nan
-                                                    return row
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
-
-                                            results = Parallel(n_jobs=-1)(
-                                                delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
-                                                                                   sim_varname, ref_varname, station_list, iik) for iik in
-                                                range(len(station_list['ID'])))
-
-                                            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-
-                                            output_stn_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.txt")
-                                            station_list.to_csv(output_stn_path)
-
-                                            station_list = pd.read_csv(output_stn_path, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            bias_sim = station_list['bias'].mean(skipna=True)
-                                            output_file.write(f"{bias_sim}\t")
-                                            biases[i] = bias_sim
-
-                                            rmse_sim = station_list['rmse'].mean(skipna=True)
-                                            output_file.write(f"{rmse_sim}\t")
-                                            rmses[i] = rmse_sim
-
-                                            crmsd_sim = station_list['CRMSD'].mean(skipna=True)
-                                            output_file.write(f"{crmsd_sim}\t")
-                                            crmsds[i] = crmsd_sim
-                                        else:
-                                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                            if sim_varname is None or sim_varname == '':
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == '':
-                                                ref_varname = evaluation_item
-
-                                            ref_path = os.path.join(casedir, 'data',
-                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                            sim_path = os.path.join(casedir, 'data',
-                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
-                                            reffile = Convert_Type.convert_nc(reffile)
-                                            simfile = Convert_Type.convert_nc(simfile)
-
-                                            bias_sim = self.bias(simfile, reffile).mean(skipna=True).values
-                                            output_file.write(f"{bias_sim}\t")
-                                            biases[i] = bias_sim
-                                            rmse_sim = self.RMSE(simfile, reffile).mean(skipna=True).values
-                                            output_file.write(f"{rmse_sim}\t")
-                                            rmses[i] = rmse_sim
-                                            crmsd_sim = self.CRMSD(simfile, reffile).mean(skipna=True).values
-                                            output_file.write(f"{crmsd_sim}\t")
-                                            crmsds[i] = crmsd_sim
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
-
-                                output_file.write("\n")
+                            rows = []  # ⭐ pandas 行式收集
+                            row = {"Item": evaluation_item, "Reference": ref_source}
+                            biases = np.zeros(len(sim_sources))
+                            rmses = np.zeros(len(sim_sources))
+                            crmsds = np.zeros(len(sim_sources))
+                            for i, sim_source in enumerate(sim_sources):
                                 try:
-                                    make_scenarios_comparison_Target_Diagram(dir_path, evaluation_item, biases, rmses, crmsds, ref_source,
-                                                                             sim_sources, option)
-                                except (ValueError, RuntimeError, IOError, OSError) as e:
-                                    logging.error(f"Error: {evaluation_item} {ref_source} Target diagram generation failed: {e}")
+                                    ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                                    if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                        if sim_varname is None or sim_varname == '':
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == '':
+                                            ref_varname = evaluation_item
+                                        stnlist = os.path.join(casedir, 'metrics',
+                                                               f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
+                                        station_list = pd.read_csv(stnlist, header=0)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+                                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
+
+                                        def _make_validation_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
+                                                                      station_list, iik):
+                                            try:
+                                                sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
+                                                s = xr.open_dataset(sim_path)[sim_varname].squeeze()
+                                                o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                o = Convert_Type.convert_nc(o)
+                                                s = Convert_Type.convert_nc(s)
+
+                                                s['time'] = o['time']
+                                                mask1 = np.isnan(s) | np.isnan(o)
+                                                s.values[mask1] = np.nan
+                                                o.values[mask1] = np.nan
+                                                row = {}
+                                                try:
+                                                    row['CRMSD'] = self.CRMSD(s, o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"CRMSD calculation failed: {e}")
+                                                    row['CRMSD'] = np.nan
+                                                try:
+                                                    row['bias'] = self.bias(s, o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"bias calculation failed: {e}")
+                                                    row['bias'] = np.nan
+                                                try:
+                                                    row['rmse'] = self.RMSE(s, o).values
+                                                except (ValueError, RuntimeError, AttributeError) as e:
+                                                    logging.debug(f"rmse calculation failed: {e}")
+                                                    row['rmse'] = np.nan
+                                                return row
+                                            finally:
+                                                pass  # Memory cleanup handled at higher level
+
+                                        results = Parallel(n_jobs=-1)(
+                                            delayed(_make_validation_parallel)(casedir, ref_source, sim_source, evaluation_item,
+                                                                               sim_varname, ref_varname, station_list, iik) for iik in
+                                            range(len(station_list['ID'])))
+
+                                        station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+
+                                        output_stn_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv")
+                                        station_list.to_csv(output_stn_path)
+
+                                        station_list = pd.read_csv(output_stn_path, header=0)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+                                        bias_sim = station_list['bias'].mean(skipna=True)
+                                        row[f"{sim_source}_bias"] = bias_sim
+                                        biases[i] = bias_sim
+
+                                        rmse_sim = station_list['rmse'].mean(skipna=True)
+                                        row[f"{sim_source}_crmsd"] = rmse_sim
+                                        rmses[i] = rmse_sim
+
+                                        crmsd_sim = station_list['CRMSD'].mean(skipna=True)
+                                        row[f"{sim_source}_rmsd"] = crmsd_sim
+                                        crmsds[i] = crmsd_sim
+                                    else:
+                                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                        if sim_varname is None or sim_varname == '':
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == '':
+                                            ref_varname = evaluation_item
+
+                                        ref_path = os.path.join(casedir, 'data',
+                                                                f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                        sim_path = os.path.join(casedir, 'data',
+                                                                f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+
+                                        reffile = xr.open_dataset(ref_path)[ref_varname]
+                                        simfile = xr.open_dataset(sim_path)[sim_varname]
+                                        reffile = Convert_Type.convert_nc(reffile)
+                                        simfile = Convert_Type.convert_nc(simfile)
+
+                                        bias_sim = self.bias(simfile, reffile).mean(skipna=True).values
+                                        row[f"{sim_source}_bias"] = bias_sim
+                                        biases[i] = bias_sim
+                                        rmse_sim = self.RMSE(simfile, reffile).mean(skipna=True).values
+                                        row[f"{sim_source}_crmsd"] = rmse_sim
+                                        rmses[i] = rmse_sim
+                                        crmsd_sim = self.CRMSD(simfile, reffile).mean(skipna=True).values
+                                        row[f"{sim_source}_rmsd"] = crmsd_sim
+                                        crmsds[i] = crmsd_sim
+                                finally:
+                                    pass  # Memory cleanup handled at method level
+
+                            rows.append(row)
+                            df_out = pd.DataFrame(rows)
+                            cols = ["Item", "Reference"]
+                            for sim_source in sim_sources:
+                                cols += [f"{sim_source}_bias", f"{sim_source}_crmsd", f"{sim_source}_rmsd"]
+                            df_out = df_out.reindex(columns=cols)
+                            output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.csv")
+                            df_out.to_csv(output_file_path, index=False)
+                            try:
+                                make_scenarios_comparison_Target_Diagram(dir_path, evaluation_item, biases, rmses, crmsds, ref_source,
+                                                                         sim_sources, option)
+                            except (ValueError, RuntimeError, IOError, OSError) as e:
+                                logging.error(f"Error: {evaluation_item} {ref_source} Target diagram generation failed: {e}")
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
                 finally:
@@ -1039,6 +1037,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             data = data[~np.isinf(data)]
                                             if metric == 'percent_bias':
                                                 data = data[(data >= -100) & (data <= 100)]
+                                            elif metric == 'MFM':
+                                                data = data[(data >= 0) & (data <= 1)]
                                             datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
@@ -1062,135 +1062,127 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             dir_path = os.path.join(basedir, 'comparisons', 'Parallel_Coordinates')
             os.makedirs(dir_path, exist_ok=True)
 
-            output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.txt")
-            with open(output_file_path, "w") as output_file:
-                output_file.write("Item\t")
-                output_file.write("Reference\t")
-                output_file.write("Simulation\t")
-                for score in scores:
-                    output_file.write(f"{score}\t")
-                for metric in metrics:
-                    output_file.write(f"{metric}\t")
-                output_file.write("\n")
+            output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.csv")
+            header_cols = ["Item", "Reference", "Simulation"] + list(scores) + list(metrics)
+            rows = []
 
-                # read the simulation source and reference source
-                for evaluation_item in evaluation_items:
-                    try:
-                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                        ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                        # if the sim_sources and ref_sources are not list, then convert them to list
-                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
+            # read the simulation source and reference source
+            for evaluation_item in evaluation_items:
+                try:
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                    # if the sim_sources and ref_sources are not list, then convert them to list
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
 
-                        for ref_source in ref_sources:
-                            try:
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        output_file.write(f"{evaluation_item}\t")
-                                        output_file.write(f"{ref_source}\t")
-                                        output_file.write(f"{sim_source}\t")
-                                        ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                    for ref_source in ref_sources:
+                        try:
+                            for i, sim_source in enumerate(sim_sources):
+                                try:
+                                    row = {"Item": evaluation_item, "Reference": ref_source, "Simulation": sim_source}
 
-                                        if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                            if sim_varname is None or sim_varname == '':
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == '':
-                                                ref_varname = evaluation_item
+                                    ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
 
-                                            file_path = os.path.join(basedir, 'scores',
-                                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
-                                            df = pd.read_csv(file_path, sep=',', header=0)
-                                            df = Convert_Type.convert_Frame(df)
+                                    if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                        if sim_varname is None or sim_varname == '':
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == '':
+                                            ref_varname = evaluation_item
 
-                                            for score in scores:
-                                                kk = df[score].mean(skipna=True)
-                                                kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
-                                                output_file.write(f"{kk_str}\t")
+                                        file_path = os.path.join(basedir, 'scores',
+                                                                 f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
+                                        df = pd.read_csv(file_path, sep=',', header=0)
+                                        df = Convert_Type.convert_Frame(df)
 
-                                            for metric in metrics:
-                                                df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
-                                                if df[metric].shape[0] > 2:
-                                                    q_low, q_high = df[metric].quantile([0.05, 0.95])
-                                                    df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
+                                        for score in scores:
+                                            kk = df[score].mean(skipna=True)
+                                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
+                                            row[score] = kk_str
 
-                                                kk = df[metric].median(skipna=True)
-                                                kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
-                                                output_file.write(f"{kk_str}\t")
+                                        for metric in metrics:
+                                            df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
+                                            if df[metric].shape[0] > 2:
+                                                q_low, q_high = df[metric].quantile([0.05, 0.95])
+                                                df[metric] = df[metric].where((df[metric] >= q_low) & (df[metric] <= q_high), np.nan)
 
-                                            output_file.write("\n")
-                                        else:
-                                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                            if sim_varname is None or sim_varname == '':
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == '':
-                                                ref_varname = evaluation_item
+                                            kk = df[metric].median(skipna=True)
+                                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
+                                            row[metric] = kk_str
 
-                                            ref_path = os.path.join(basedir, 'data',
-                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                            sim_path = os.path.join(basedir, 'data',
-                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                                    else:
+                                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                        if sim_varname is None or sim_varname == '':
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == '':
+                                            ref_varname = evaluation_item
 
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
-                                            reffile = Convert_Type.convert_nc(reffile)
-                                            simfile = Convert_Type.convert_nc(simfile)
+                                        ref_path = os.path.join(basedir, 'data',
+                                                                f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                        sim_path = os.path.join(basedir, 'data',
+                                                                f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                            for score in scores:
-                                                score_path = os.path.join(self.casedir, 'scores',
-                                                                          f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                                ds = xr.open_dataset(score_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                        reffile = xr.open_dataset(ref_path)[ref_varname]
+                                        simfile = xr.open_dataset(sim_path)[sim_varname]
+                                        reffile = Convert_Type.convert_nc(reffile)
+                                        simfile = Convert_Type.convert_nc(simfile)
 
-                                                if self.weight.lower() == 'area':
-                                                    weights = np.cos(np.deg2rad(reffile.lat))
-                                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(
-                                                        skipna=True).values
-                                                elif self.weight.lower() == 'mass':
-                                                    area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                    flux_weights = np.abs(reffile.mean('time'))
-                                                    combined_weights = area_weights * flux_weights
-                                                    normalized_weights = combined_weights / combined_weights.sum()
-                                                    kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(
-                                                        normalized_weights.fillna(0)).mean(skipna=True).values
-                                                else:
-                                                    kk = ds[score].mean(skipna=True).values
+                                        for score in scores:
+                                            score_path = os.path.join(self.casedir, 'scores',
+                                                                      f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                            ds = xr.open_dataset(score_path)
+                                            ds = Convert_Type.convert_nc(ds)
 
-                                                kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
-                                                output_file.write(f"{kk_str}\t")
+                                            if self.weight.lower() == 'area':
+                                                weights = np.cos(np.deg2rad(reffile.lat))
+                                                kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(weights).mean(
+                                                    skipna=True).values
+                                            elif self.weight.lower() == 'mass':
+                                                area_weights = np.cos(np.deg2rad(reffile.lat))
+                                                flux_weights = np.abs(reffile.mean('time'))
+                                                combined_weights = area_weights * flux_weights
+                                                normalized_weights = combined_weights / combined_weights.sum()
+                                                kk = ds[score].where(np.isfinite(ds[score]), np.nan).weighted(
+                                                    normalized_weights.fillna(0)).mean(skipna=True).values
+                                            else:
+                                                kk = ds[score].mean(skipna=True).values
 
-                                            for metric in metrics:
-                                                metric_path = os.path.join(self.casedir, 'metrics',
-                                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                                ds = xr.open_dataset(metric_path)
-                                                ds = Convert_Type.convert_nc(ds)
-                                                ds = ds.where(np.isfinite(ds), np.nan)
-                                                q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
-                                                ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
-                                                kk = ds[metric].median(skipna=True).values
-                                                kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
-                                                output_file.write(f"{kk_str}\t")
+                                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
+                                            row[score] = kk_str
 
-                                            output_file.write("\n")
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
-                            finally:
-                                gc.collect()  # Clean up memory after processing each reference source
-                    finally:
-                        gc.collect()  # Clean up memory after processing each evaluation item
+                                        for metric in metrics:
+                                            metric_path = os.path.join(self.casedir, 'metrics',
+                                                                       f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                            ds = xr.open_dataset(metric_path)
+                                            ds = Convert_Type.convert_nc(ds)
+                                            ds = ds.where(np.isfinite(ds), np.nan)
+                                            q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
+                                            ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
+                                            kk = ds[metric].median(skipna=True).values
+                                            kk_str = f"{kk:.2f}" if not np.isnan(kk) else "N/A"
+                                            row[metric] = kk_str
+                                        rows.append(row)
+                                finally:
+                                    pass  # Memory cleanup handled at method level
+                        finally:
+                            gc.collect()  # Clean up memory after processing each reference source
+                finally:
+                    gc.collect()  # Clean up memory after processing each evaluation item
+            df_out = pd.DataFrame(rows)
+            df_out = df_out.reindex(columns=header_cols)
+            df_out.to_csv(output_file_path, index=False, encoding="utf-8")
 
-            # Deal with output_file_path, remove the column and its index with any nan values
-            df = pd.read_csv(output_file_path, sep='\t', header=0)
+            df = pd.read_csv(output_file_path)
             df = df.dropna(axis=1, how='any')
             # If index in scores or metrics was dropped, then remove the corresponding scores or metrics
             scores = [score for score in scores if score in df.columns]
             metrics = [metric for metric in metrics if metric in df.columns]
 
-            output_file_path1 = os.path.join(dir_path, "Parallel_Coordinates_evaluations_remove_nan.txt")
-            df.to_csv(output_file_path1, sep='\t', index=False)
+            output_file_path1 = os.path.join(dir_path, "Parallel_Coordinates_evaluations_remove_nan.csv")
+            df.to_csv(output_file_path1, index=False, encoding="utf-8")
 
             make_scenarios_comparison_parallel_coordinates(output_file_path1, self.casedir, evaluation_items, scores, metrics, option)
         finally:
@@ -1262,45 +1254,113 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 finally:
                     gc.collect()  # Clean up memory after processing each score
 
-            output_file_path = os.path.join(dir_path, "Portrait_Plot_seasonal.txt")
-            with open(output_file_path, "w") as output_file:
-                output_file.write("Item\t")
-                output_file.write("Reference\t")
-                output_file.write("Simulation\t")
+            output_file_path = os.path.join(dir_path, "Portrait_Plot_seasonal.csv")
+            header_cols = ["Item", "Reference", "Simulation"]
+            seasons = ['DJF', 'MAM', 'JJA', 'SON']
+            for metric in metrics:
+                for ss in seasons:
+                    header_cols.append(f"{metric}_{ss}")
+            for score in scores:
+                for ss in seasons:
+                    header_cols.append(f"{score}_{ss}")
 
-                for metric in metrics:
-                    output_file.write(f"{metric}_DJF\t")
-                    output_file.write(f"{metric}_MAM\t")
-                    output_file.write(f"{metric}_JJA\t")
-                    output_file.write(f"{metric}_SON\t")
+            rows = []
+            for evaluation_item in evaluation_items:
+                try:
+                    logging.info(f"now processing the evaluation item: {evaluation_item}")
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
 
-                for score in scores:
-                    output_file.write(f"{score}_DJF\t")
-                    output_file.write(f"{score}_MAM\t")
-                    output_file.write(f"{score}_JJA\t")
-                    output_file.write(f"{score}_SON\t")
+                    for ref_source in ref_sources:
+                        try:
+                            for i, sim_source in enumerate(sim_sources):
+                                try:
+                                    row = {"Item": evaluation_item, "Reference": ref_source, "Simulation": sim_source}
 
-                output_file.write("\n")
+                                    ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
 
-                for evaluation_item in evaluation_items:
-                    try:
-                        logging.info(f"now processing the evaluation item: {evaluation_item}")
-                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                        ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                                    if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                                        if sim_varname is None or sim_varname == '':
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == '':
+                                            ref_varname = evaluation_item
 
-                        for ref_source in ref_sources:
-                            try:
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        output_file.write(f"{evaluation_item}\t")
-                                        output_file.write(f"{ref_source}\t")
-                                        output_file.write(f"{sim_source}\t")
-                                        ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                                        stnlist = os.path.join(basedir, 'metrics',
+                                                               f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
+                                        station_list = pd.read_csv(stnlist, header=0)
+                                        station_list = Convert_Type.convert_Frame(station_list)
+                                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
 
-                                        if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                        def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
+                                                                           station_list, iik, metric_or_score, season, metric=None,
+                                                                           score=None):
+                                            try:
+                                                sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                                ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+
+                                                s = xr.open_dataset(sim_path)[sim_varname].squeeze()
+                                                o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                o = Convert_Type.convert_nc(o)
+                                                s = Convert_Type.convert_nc(s)
+
+                                                s['time'] = o['time']
+                                                mask1 = np.isnan(s) | np.isnan(o)
+                                                s.values[mask1] = np.nan
+                                                o.values[mask1] = np.nan
+
+                                                s_season = s.sel(time=s['time.season'] == season)
+                                                o_season = o.sel(time=o['time.season'] == season)
+
+                                                if metric_or_score == 'metric':
+                                                    return process_metric(casedir, item, ref_source, sim_source, metric, s_season, o_season)
+                                                elif metric_or_score == 'score':
+                                                    return process_score(casedir, item, ref_source, sim_source, score, s_season, o_season)
+                                            finally:
+                                                pass  # Memory cleanup handled at higher level
+
+                                        seasons = ['DJF', 'MAM', 'JJA', 'SON']
+                                        for metric in metrics:
+                                            try:
+                                                for season in seasons:
+                                                    results = Parallel(n_jobs=-1)(
+                                                        delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
+                                                                                                sim_varname, ref_varname, station_list, iik,
+                                                                                                'metric', season, metric=metric)
+                                                        for iik in range(len(station_list['ID'])))
+                                                    results = np.array(results)
+                                                    if results[~np.isnan(results)].shape[0] > 2:
+                                                        q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
+                                                        results = np.where((results >= q1) & (results <= q3), results, np.nan)
+
+                                                    mean_value = np.nanmedian(results)
+                                                    kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
+                                                    row[f"{metric}_{season}"] = kk_str
+                                            finally:
+                                                gc.collect()  # Clean up memory after processing each metric
+
+                                        for score in scores:
+                                            try:
+                                                for season in seasons:
+                                                    results = Parallel(n_jobs=-1)(
+                                                        delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
+                                                                                                sim_varname, ref_varname, station_list, iik,
+                                                                                                'score', season, score=score)
+                                                        for iik in range(len(station_list['ID'])))
+                                                    mean_value = np.nanmean(results)
+                                                    kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
+                                                    row[f"{score}_{season}"] = kk_str
+                                            finally:
+                                                gc.collect()  # Clean up memory after processing each score
+                                    else:
+                                        try:
                                             ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
                                             sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                                             if sim_varname is None or sim_varname == '':
@@ -1308,176 +1368,100 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             if ref_varname is None or ref_varname == '':
                                                 ref_varname = evaluation_item
 
-                                            stnlist = os.path.join(basedir, 'metrics',
-                                                                   f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
-                                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
+                                            ref_path = os.path.join(basedir, 'data',
+                                                                    f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                                            sim_path = os.path.join(basedir, 'data',
+                                                                    f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                            def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                                               station_list, iik, metric_or_score, season, metric=None,
-                                                                               score=None):
-                                                try:
-                                                    sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                                                    ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                            o = xr.open_dataset(ref_path)[ref_varname]
+                                            s = xr.open_dataset(sim_path)[sim_varname]
+                                            o = Convert_Type.convert_nc(o)
+                                            s = Convert_Type.convert_nc(s)
 
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
+                                            o = o.where(np.isfinite(o), np.nan)
+                                            s = s.where(np.isfinite(s), np.nan)
+                                            s['time'] = o['time']
 
-                                                    s['time'] = o['time']
-                                                    mask1 = np.isnan(s) | np.isnan(o)
-                                                    s.values[mask1] = np.nan
-                                                    o.values[mask1] = np.nan
+                                            mask1 = np.isnan(s) | np.isnan(o)
+                                            s.values[mask1] = np.nan
+                                            o.values[mask1] = np.nan
 
-                                                    s_season = s.sel(time=s['time.season'] == season)
-                                                    o_season = o.sel(time=o['time.season'] == season)
+                                            s_DJF = s.sel(time=s['time.season'] == 'DJF')
+                                            o_DJF = o.sel(time=o['time.season'] == 'DJF')
+                                            s_MAM = s.sel(time=s['time.season'] == 'MAM')
+                                            o_MAM = o.sel(time=o['time.season'] == 'MAM')
+                                            s_JJA = s.sel(time=s['time.season'] == 'JJA')
+                                            o_JJA = o.sel(time=o['time.season'] == 'JJA')
+                                            s_SON = s.sel(time=s['time.season'] == 'SON')
+                                            o_SON = o.sel(time=o['time.season'] == 'SON')
 
-                                                    if metric_or_score == 'metric':
-                                                        return process_metric(casedir, item, ref_source, sim_source, metric, s_season, o_season)
-                                                    elif metric_or_score == 'score':
-                                                        return process_score(casedir, item, ref_source, sim_source, score, s_season, o_season)
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
-
-                                            seasons = ['DJF', 'MAM', 'JJA', 'SON']
                                             for metric in metrics:
                                                 try:
-                                                    for season in seasons:
-                                                        results = Parallel(n_jobs=-1)(
-                                                            delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
-                                                                                                    sim_varname, ref_varname, station_list, iik,
-                                                                                                    'metric', season, metric=metric)
-                                                            for iik in range(len(station_list['ID'])))
-                                                        results = np.array(results)
-                                                        if results[~np.isnan(results)].shape[0] > 2:
-                                                            q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
-                                                            results = np.where((results >= q1) & (results <= q3), results, np.nan)
+                                                    if hasattr(self, metric):
+                                                        k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_DJF, o_DJF,
+                                                                           vkey='_DJF')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{metric}_DJF"] = kk_str
 
-                                                        mean_value = np.nanmedian(results)
-                                                        kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
-                                                        output_file.write(f"{kk_str}\t")
+                                                        k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_MAM, o_MAM,
+                                                                           vkey='_MAM')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{metric}_MAM"] = kk_str
+
+                                                        k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_JJA, o_JJA,
+                                                                           vkey='_JJA')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{metric}_JJA"] = kk_str
+
+                                                        k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_SON, o_SON,
+                                                                           vkey='_SON')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{metric}_SON"] = kk_str
+                                                    else:
+                                                        logging.error('No such metric: ', metric)
+                                                        sys.exit(1)
                                                 finally:
                                                     gc.collect()  # Clean up memory after processing each metric
 
                                             for score in scores:
                                                 try:
-                                                    for season in seasons:
-                                                        results = Parallel(n_jobs=-1)(
-                                                            delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
-                                                                                                    sim_varname, ref_varname, station_list, iik,
-                                                                                                    'score', season, score=score)
-                                                            for iik in range(len(station_list['ID'])))
-                                                        mean_value = np.nanmean(results)
-                                                        kk_str = f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
-                                                        output_file.write(f"{kk_str}\t")
+                                                    if hasattr(self, score):
+                                                        k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_DJF, o_DJF,
+                                                                          vkey=f'_DJF')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{score}_DJF"] =kk_str
+
+                                                        k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_MAM, o_MAM,
+                                                                          vkey=f'_MAM')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{score}_MAM"]=kk_str
+
+                                                        k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_JJA, o_JJA,
+                                                                          vkey=f'_JJA')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{score}_JJA"] =kk_str
+
+                                                        k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_SON, o_SON,
+                                                                          vkey=f'_SON')
+                                                        kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                                        row[f"{score}_SON"]=kk_str
+                                                    else:
+                                                        logging.error('No such score: ', score)
+                                                        sys.exit(1)
                                                 finally:
                                                     gc.collect()  # Clean up memory after processing each score
-                                        else:
-                                            try:
-                                                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                                                if sim_varname is None or sim_varname == '':
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == '':
-                                                    ref_varname = evaluation_item
+                                        finally:
+                                            gc.collect()  # Clean up memory after processing grid data
+                                    rows.append(row)
 
-                                                ref_path = os.path.join(basedir, 'data',
-                                                                        f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                                                sim_path = os.path.join(basedir, 'data',
-                                                                        f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-
-                                                o = xr.open_dataset(ref_path)[ref_varname]
-                                                s = xr.open_dataset(sim_path)[sim_varname]
-                                                o = Convert_Type.convert_nc(o)
-                                                s = Convert_Type.convert_nc(s)
-
-                                                o = o.where(np.isfinite(o), np.nan)
-                                                s = s.where(np.isfinite(s), np.nan)
-                                                s['time'] = o['time']
-
-                                                mask1 = np.isnan(s) | np.isnan(o)
-                                                s.values[mask1] = np.nan
-                                                o.values[mask1] = np.nan
-
-                                                s_DJF = s.sel(time=s['time.season'] == 'DJF')
-                                                o_DJF = o.sel(time=o['time.season'] == 'DJF')
-                                                s_MAM = s.sel(time=s['time.season'] == 'MAM')
-                                                o_MAM = o.sel(time=o['time.season'] == 'MAM')
-                                                s_JJA = s.sel(time=s['time.season'] == 'JJA')
-                                                o_JJA = o.sel(time=o['time.season'] == 'JJA')
-                                                s_SON = s.sel(time=s['time.season'] == 'SON')
-                                                o_SON = o.sel(time=o['time.season'] == 'SON')
-
-                                                for metric in metrics:
-                                                    try:
-                                                        if hasattr(self, metric):
-                                                            k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_DJF, o_DJF,
-                                                                               vkey='_DJF')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_MAM, o_MAM,
-                                                                               vkey='_MAM')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_JJA, o_JJA,
-                                                                               vkey='_JJA')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_metric(basedir, evaluation_item, ref_source, sim_source, metric, s_SON, o_SON,
-                                                                               vkey='_SON')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-                                                        else:
-                                                            logging.error('No such metric: ', metric)
-                                                            sys.exit(1)
-                                                    finally:
-                                                        gc.collect()  # Clean up memory after processing each metric
-
-                                                for score in scores:
-                                                    try:
-                                                        if hasattr(self, score):
-                                                            k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_DJF, o_DJF,
-                                                                              vkey=f'_DJF')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_MAM, o_MAM,
-                                                                              vkey=f'_MAM')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_JJA, o_JJA,
-                                                                              vkey=f'_JJA')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-
-                                                            k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_SON, o_SON,
-                                                                              vkey=f'_SON')
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-                                                        else:
-                                                            logging.error('No such score: ', score)
-                                                            sys.exit(1)
-                                                    finally:
-                                                        gc.collect()  # Clean up memory after processing each score
-                                            finally:
-                                                gc.collect()  # Clean up memory after processing grid data
-                                        output_file.write("\n")
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
-                            finally:
-                                gc.collect()  # Clean up memory after processing each reference source
-                    finally:
-                        gc.collect()  # Clean up memory after processing each evaluation item
-
+                                finally:
+                                    pass  # Memory cleanup handled at method level
+                        finally:
+                            gc.collect()  # Clean up memory after processing each reference source
+                finally:
+                    gc.collect()  # Clean up memory after processing each evaluation item
+            df_out = pd.DataFrame(rows).reindex(columns=header_cols)
+            df_out.to_csv(output_file_path, index=False, encoding="utf-8")
             make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                              option)
         finally:
@@ -1848,92 +1832,105 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             return smpi, smpi_lower, smpi_upper
 
-        output_file_path = f"{dir_path}/SMPI_comparison.txt"
 
-        with open(output_file_path, "w") as output_file:
-            output_file.write("Item\tReference\tSimulation\tSMPI\tLower_CI\tUpper_CI\n")
-            for evaluation_item in evaluation_items:
-                sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                if isinstance(ref_sources, str): ref_sources = [ref_sources]
+        output_file_path = os.path.join(dir_path, "SMPI_comparison.csv")
+        rows = []
+        cols = ["Item", "Reference", "Simulation", "SMPI", "Lower_CI", "Upper_CI"]
+        for evaluation_item in evaluation_items:
+            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+            ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+            if isinstance(sim_sources, str): sim_sources = [sim_sources]
+            if isinstance(ref_sources, str): ref_sources = [ref_sources]
 
-                for ref_source in ref_sources:
-                    for sim_source in sim_sources:
-                        output_file.write(f"{evaluation_item}\t{ref_source}\t{sim_source}\t")
-                        ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                        sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+            for ref_source in ref_sources:
+                for sim_source in sim_sources:
+                    row = {"Item": evaluation_item, "Reference": ref_source, "Simulation": sim_source}
 
-                        if ref_data_type == 'stn' or sim_data_type == 'stn':
-                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                            if sim_varname is None or sim_varname == '':
-                                sim_varname = evaluation_item
-                            if ref_varname is None or ref_varname == '':
-                                ref_varname = evaluation_item
-                            stnlist = os.path.join(basedir, 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
-                            station_list = pd.read_csv(stnlist, header=0)
-                            station_list = Convert_Type.convert_Frame(station_list)
-                            del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
-                            station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
+                    ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                    sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
 
-                            def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
-                                                               station_list, iik):
-                                try:
-                                    s = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                     f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
-                                        sim_varname].squeeze()
-                                    o = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                     f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
-                                        ref_varname].squeeze()
-                                    o = Convert_Type.convert_nc(o)
-                                    s = Convert_Type.convert_nc(s)
+                    if ref_data_type == 'stn' or sim_data_type == 'stn':
+                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                        if sim_varname is None or sim_varname == '':
+                            sim_varname = evaluation_item
+                        if ref_varname is None or ref_varname == '':
+                            ref_varname = evaluation_item
+                        stnlist = os.path.join(basedir, 'metrics', f'{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv')
+                        station_list = pd.read_csv(stnlist, header=0)
+                        station_list = Convert_Type.convert_Frame(station_list)
+                        del_col = ['ID', 'sim_lat', 'sim_lon', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear']
+                        station_list.drop(columns=[col for col in station_list.columns if col not in del_col], inplace=True)
 
-                                    s['time'] = o['time']
-                                    mask1 = np.isnan(s) | np.isnan(o)
-                                    s.values[mask1] = np.nan
-                                    o.values[mask1] = np.nan
+                        def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
+                                                           station_list, iik):
+                            try:
+                                s = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                 f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
+                                    sim_varname].squeeze()
+                                o = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                                 f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
+                                    ref_varname].squeeze()
+                                o = Convert_Type.convert_nc(o)
+                                s = Convert_Type.convert_nc(s)
 
-                                    return calculate_smpi(s, o)
-                                finally:
-                                    gc.collect()  # Clean up memory after processing
+                                s['time'] = o['time']
+                                mask1 = np.isnan(s) | np.isnan(o)
+                                s.values[mask1] = np.nan
+                                o.values[mask1] = np.nan
 
-                            results = Parallel(n_jobs=-1)(
-                                delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
-                                                                        sim_varname, ref_varname, station_list, iik)
-                                for iik in range(len(station_list['ID'])))
-                            smpi_values, lower_values, upper_values = zip(*results)
-                            mean_smpi = np.nanmean(smpi_values).astype('float32')
-                            mean_lower = np.nanmean(lower_values).astype('float32')
-                            mean_upper = np.nanmean(upper_values).astype('float32')
-                            output_file.write(f"{mean_smpi:.4f}\t{mean_lower:.4f}\t{mean_upper:.4f}\n")
+                                return calculate_smpi(s, o)
+                            finally:
+                                gc.collect()  # Clean up memory after processing
 
-                        else:
-                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
-                            if sim_varname is None or sim_varname == '':
-                                sim_varname = evaluation_item
-                            if ref_varname is None or ref_varname == '':
-                                ref_varname = evaluation_item
-                            o_path = os.path.join(basedir, 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                            s_path = os.path.join(basedir, 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                        results = Parallel(n_jobs=-1)(
+                            delayed(_process_station_data_parallel)(basedir, ref_source, sim_source, evaluation_item,
+                                                                    sim_varname, ref_varname, station_list, iik)
+                            for iik in range(len(station_list['ID'])))
+                        smpi_values, lower_values, upper_values = zip(*results)
+                        mean_smpi = np.nanmean(smpi_values).astype('float32')
+                        mean_lower = np.nanmean(lower_values).astype('float32')
+                        mean_upper = np.nanmean(upper_values).astype('float32')
 
-                            o = xr.open_dataset(o_path)[f'{ref_varname}']
-                            s = xr.open_dataset(s_path)[f'{sim_varname}']
+                        row["SMPI"] = float(mean_smpi)
+                        row["Lower_CI"] = float(mean_lower)
+                        row["Upper_CI"] = float(mean_upper)
 
-                            o = Convert_Type.convert_nc(o)
-                            s = Convert_Type.convert_nc(s)
+                    else:
+                        ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                        sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                        if sim_varname is None or sim_varname == '':
+                            sim_varname = evaluation_item
+                        if ref_varname is None or ref_varname == '':
+                            ref_varname = evaluation_item
+                        o_path = os.path.join(basedir, 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
+                        s_path = os.path.join(basedir, 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                            s['time'] = o['time']
-                            mask1 = np.isnan(s) | np.isnan(o)
-                            s.values[mask1] = np.nan
-                            o.values[mask1] = np.nan
+                        o = xr.open_dataset(o_path)[f'{ref_varname}']
+                        s = xr.open_dataset(s_path)[f'{sim_varname}']
 
-                            smpi, lower, upper = process_smpi(basedir, evaluation_item, ref_source, sim_source, s, o)
-                            output_file.write(f"{smpi:.4f}\t{lower:.4f}\t{upper:.4f}\n")
+                        o = Convert_Type.convert_nc(o)
+                        s = Convert_Type.convert_nc(s)
 
-                logging.info(f"Completed SMPI calculation for {evaluation_item}")
-                logging.info("===============================================================================")
+                        s['time'] = o['time']
+                        mask1 = np.isnan(s) | np.isnan(o)
+                        s.values[mask1] = np.nan
+                        o.values[mask1] = np.nan
+
+                        smpi, lower, upper = process_smpi(basedir, evaluation_item, ref_source, sim_source, s, o)
+
+                        row["SMPI"] = float(smpi)
+                        row["Lower_CI"] = float(lower)
+                        row["Upper_CI"] = float(upper)
+
+                    rows.append(row)
+
+            logging.info(f"Completed SMPI calculation for {evaluation_item}")
+            logging.info("===============================================================================")
+        df_out = pd.DataFrame(rows).reindex(columns=cols)
+        for c in ["SMPI", "Lower_CI", "Upper_CI"]:
+            df_out[c] = pd.to_numeric(df_out[c], errors="coerce").round(4)
+        df_out.to_csv(output_file_path, index=False, encoding="utf-8")
         # After all calculations are done, call the plotting function
         make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option)
 
@@ -2033,6 +2030,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
                             data = data[(data >= -100) & (data <= 100)]
+                        elif metric == 'MFM':
+                            data = data[(data >= 0) & (data <= 1)]
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
                     try:
@@ -2756,80 +2755,86 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path, exist_ok=True)
 
             for score in scores:
-                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
-                with open(output_file_path, "w") as output_file:
-                    output_file.write(f"Item\t")
-                    output_file.write("Reference\t")
-                    # fixme: ugly code, need to be improved
-                    for evaluation_item in evaluation_items:
-                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                    for sim_source in sim_sources:
-                        output_file.write(f"{sim_source}\t")
-                    output_file.write("\n")  # Move "All" to the first line
+            # ===== 1) 先确定 sim_sources（表头用）=====
+                all_sim_sources = []
+                for evaluation_item in evaluation_items:
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    for s in sim_sources:
+                        if s not in all_sim_sources:
+                            all_sim_sources.append(s)
 
-                    for evaluation_item in evaluation_items:
-                        sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                        ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                # CSV 路径
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
 
-                        # if the sim_sources and ref_sources are not list, then convert them to list
-                        if isinstance(sim_sources, str): sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str): ref_sources = [ref_sources]
-                        # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
-                        # if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                # ===== 2) 行式收集 =====
+                rows = []
 
-                        for ref_source in ref_sources:
-                            output_file.write(f"{evaluation_item}\t")
-                            output_file.write(f"{ref_source}\t")
-                            sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
-                            if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                for evaluation_item in evaluation_items:
+                    sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
+                    ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
 
-                            for sim_source in sim_sources:
-                                ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
-                                sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
-                                ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
-                                sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+                    # if the sim_sources and ref_sources are not list, then convert them to list
+                    if isinstance(sim_sources, str): sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str): ref_sources = [ref_sources]
+                    # ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
+                    # if isinstance(ref_sources, str): ref_sources = [ref_sources]
 
-                                if ref_data_type == 'stn' or sim_data_type == 'stn':
-                                    file = f"{casedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
-                                    df = pd.read_csv(file, sep=',', header=0)
-                                    df = Convert_Type.convert_Frame(df)
-                                    overall_mean = df[f'{score}'].mean(skipna=True)
+                    for ref_source in ref_sources:
+                        row = {
+                            "Item": evaluation_item,
+                            "Reference": ref_source
+                        }
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f'{evaluation_item}'][f'{ref_source}_data_type']
+                            sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
+                            ref_varname = ref_nml[f'{evaluation_item}'][f'{ref_source}_varname']
+                            sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
+
+                            if ref_data_type == 'stn' or sim_data_type == 'stn':
+                                file = f"{casedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                                df = pd.read_csv(file, sep=',', header=0)
+                                df = Convert_Type.convert_Frame(df)
+                                overall_mean = df[f'{score}'].mean(skipna=True)
+                            else:
+                                ds = xr.open_dataset(
+                                    f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                ds = Convert_Type.convert_nc(ds)
+
+                                if self.weight.lower() == 'area':
+                                    weights = np.cos(np.deg2rad(ds.lat))
+                                    overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                elif self.weight.lower() == 'mass':
+                                    # Get reference data for flux weighting
+                                    o = xr.open_dataset(
+                                        f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                        f'{ref_varname}']
+                                    o = Convert_Type.convert_nc(o)
+
+                                    # Calculate area weights (cosine of latitude)
+                                    area_weights = np.cos(np.deg2rad(ds.lat))
+
+                                    # Calculate absolute flux weights
+                                    flux_weights = np.abs(o.mean('time'))
+
+                                    # Combine area and flux weights
+                                    combined_weights = area_weights * flux_weights
+
+                                    # Normalize weights to sum to 1
+                                    normalized_weights = combined_weights / combined_weights.sum()
+
+                                    # Calculate weighted mean
+                                    overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                 else:
-                                    ds = xr.open_dataset(
-                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    ds = Convert_Type.convert_nc(ds)
+                                    overall_mean = ds[score].mean(skipna=True).values
 
-                                    if self.weight.lower() == 'area':
-                                        weights = np.cos(np.deg2rad(ds.lat))
-                                        overall_mean = ds[score].weighted(weights).mean(skipna=True).values
-                                    elif self.weight.lower() == 'mass':
-                                        # Get reference data for flux weighting
-                                        o = xr.open_dataset(
-                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                            f'{ref_varname}']
-                                        o = Convert_Type.convert_nc(o)
-
-                                        # Calculate area weights (cosine of latitude)
-                                        area_weights = np.cos(np.deg2rad(ds.lat))
-
-                                        # Calculate absolute flux weights
-                                        flux_weights = np.abs(o.mean('time'))
-
-                                        # Combine area and flux weights
-                                        combined_weights = area_weights * flux_weights
-
-                                        # Normalize weights to sum to 1
-                                        normalized_weights = combined_weights / combined_weights.sum()
-
-                                        # Calculate weighted mean
-                                        overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                    else:
-                                        overall_mean = ds[score].mean(skipna=True).values
-
-                                overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
-                                output_file.write(f"{overall_mean_str}\t")
-                            output_file.write("\n")
+                            overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
+                            row[sim_source] =overall_mean_str
+                        rows.append(row)
+                df_out = pd.DataFrame(rows)
+                cols = ["Item", "Reference"] + all_sim_sources
+                df_out = df_out.reindex(columns=cols)
+                df_out.to_csv(output_file_path, index=False, encoding="utf-8")
                 # try:
                 make_scenarios_comparison_radar_map(output_file_path, score, option)
                 # except Exception as e:

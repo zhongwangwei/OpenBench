@@ -798,7 +798,7 @@ class PreValidator:
                 # Check if variable exists in file
                 try:
                     import xarray as xr
-                    with xr.open_dataset(sample_file) as ds:
+                    with xr.open_dataset(sample_file,decode_times=False) as ds:
                         if varname in ds:
                             result['available'] = True
                             logging.info(f"    ✓ Variable '{varname}' found in data file")

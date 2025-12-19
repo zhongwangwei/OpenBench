@@ -46,7 +46,8 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
                 if varname in ['KGE', 'KGESS', 'NSE']:
                     if lower_bound < -1:
                         filtered_data = np.where(data < -1, -1, data)
-
+                elif varname in ['MFM']:
+                    filtered_data = np.where(data < 0, 0, data)
                 kde = gaussian_kde(filtered_data)
                 covariance_matrix = kde.covariance
                 covariance_matrix += np.eye(covariance_matrix.shape[0]) * 1e-6  # Regularization

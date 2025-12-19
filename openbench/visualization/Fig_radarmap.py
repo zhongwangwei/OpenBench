@@ -21,7 +21,8 @@ from .Fig_toolbox import get_index, convert_unit, get_colormap
 
 
 def make_scenarios_comparison_radar_map(file, score, option):
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # df = pd.read_csv(file, sep=r'\s+', header=0)
+    df = pd.read_csv(file, header=0)
     df = Convert_Type.convert_Frame(df)
     list1 = df.iloc[:, 0].tolist()
     list2 = df.iloc[:, 1].tolist()
@@ -45,7 +46,7 @@ def make_scenarios_comparison_radar_map(file, score, option):
               'figure.figsize': [option['x_wise'], option['y_wise']],
               'figure.dpi': option['dpi'],
               'figure.autolayout': True,
-              'savefig.format': option['savefig_format'],
+              'savefig.format': option['saving_format'],
               'font.family': option['font_family'],
               'font.size': option['font_size'],
               'axes.edgecolor': 'white',
@@ -110,4 +111,4 @@ def make_scenarios_comparison_radar_map(file, score, option):
         title_fontproperties=title_font,
     )
     file2 = file[:-4]
-    plt.savefig(f'{file2}_radarmap.{option["savefig_format"]}')
+    plt.savefig(f'{file2}_radarmap.{option["saving_format"]}')
