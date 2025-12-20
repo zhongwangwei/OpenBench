@@ -1,5 +1,6 @@
 import itertools
 import logging
+import os
 import sys
 
 import matplotlib
@@ -9,6 +10,39 @@ import numpy as np
 import pandas as pd
 from matplotlib import rcParams
 from openbench.util.Mod_Converttype import Convert_Type
+
+
+def _read_comparison_file(file):
+    """
+    Read comparison file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    file_to_read = file
+
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    sep = '\t' if '\t' in first_line else ','
+    df = pd.read_csv(file_to_read, sep=sep, header=0)
+    # Remove index name to prevent it from appearing in visualizations
+    df.index.name = None
+    return df
 
 
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
@@ -38,7 +72,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     #                                                                                  #
     # ----------------------------------------------------------------------------------#
 
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
@@ -145,7 +180,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # 第二种：基于多变量，多个模型，单个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
 
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
@@ -249,7 +285,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # -------------------------------------------------------------------------------------------------------------------
     # new start metrics
 
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
@@ -355,7 +392,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()

@@ -167,25 +167,20 @@ class CZ_groupby(metrics, scores):
 
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
                                 with open(output_file_path, "w") as output_file:
-                                    # Print the table header with an additional column for the overall median
-                                    output_file.write("ID\t")
-                                    for i in range(1, 31):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["metric"]
                                     for CZ_class_name in CZ_class_names.values():
-                                        output_file.write(f"{CZ_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(CZ_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print median values
-
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall median first
                                         ds = ds.where(np.isfinite(ds), np.nan)
@@ -195,6 +190,7 @@ class CZ_groupby(metrics, scores):
                                         overall_median = ds[metric].median(skipna=True).values
                                         overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
+                                        row_values = [metric]
                                         for i in range(1, 31):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
@@ -202,9 +198,9 @@ class CZ_groupby(metrics, scores):
                                                 f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_CZ_{CZ_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                                            output_file.write(f"{median_value_str}\t")
-                                        output_file.write(f"{overall_median_str}\t")  # Write overall median
-                                        output_file.write("\n")
+                                            row_values.append(median_value_str)
+                                        row_values.append(overall_median_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
@@ -222,28 +218,22 @@ class CZ_groupby(metrics, scores):
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
                                 with open(output_file_path2, "w") as output_file:
-                                    # Print the table header with an additional column for the overall mean
-                                    output_file.write("ID\t")
-                                    for i in range(1, 31):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["score"]
                                     for CZ_class_name in CZ_class_names.values():
-                                        output_file.write(f"{CZ_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(CZ_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print mean values
-
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{score}\t")
 
                                         # Calculate and write the overall mean first
-
                                         if self.weight.lower() == 'area':
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -271,12 +261,13 @@ class CZ_groupby(metrics, scores):
 
                                         overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
+                                        row_values = [score]
                                         for i in range(1, 31):
                                             ds1 = ds.where(CZtype == i)
                                             CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                             ds1.to_netcdf(
                                                 f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_CZ_{CZ_class_name}.nc")
-                                            # Calculate and write the overall mean first
+                                            # Calculate mean value
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
@@ -302,11 +293,10 @@ class CZ_groupby(metrics, scores):
                                             else:
                                                 mean_value = ds1[score].mean(skipna=True).values
 
-                                                # mean_value = ds1[score].mean(skipna=True).values
                                             mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                            output_file.write(f"{mean_value_str}\t")
-                                        output_file.write(f"{overall_mean_str}\t")  # Write overall mean
-                                        output_file.write("\n")
+                                            row_values.append(mean_value_str)
+                                        row_values.append(overall_mean_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_scores = self.scores
                                 option['path'] = f"{self.casedir}/comparisons/CZ_groupby/{sim_source}___{ref_source}/"

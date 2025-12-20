@@ -1,4 +1,5 @@
 import itertools
+import os
 import sys
 import logging
 import matplotlib
@@ -12,10 +13,42 @@ from matplotlib.cbook import flatten
 try:
     from openbench.util.Mod_Converttype import Convert_Type
 except ImportError:
-    import sys
-    import os
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from openbench.util.Mod_Converttype import Convert_Type
+
+
+def _read_comparison_file(file):
+    """
+    Read comparison file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    file_to_read = file
+
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    sep = '\t' if '\t' in first_line else ','
+    df = pd.read_csv(file_to_read, sep=sep, header=0)
+    # Remove index name to prevent it from appearing in visualizations
+    df.index.name = None
+    return df
+
 
 def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics,
                                                    option):
@@ -44,8 +77,8 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # Set figure size
     figsize = (option['x_wise'], option['y_wise'])
 
-    # Read the data from the file
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read the data from the file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
@@ -202,7 +235,8 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         legend_bbox_to_anchor = (0.5, -0.15)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
@@ -264,7 +298,8 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
     # -------第二种情况：多个item，多个模型，一个score，每幅图一个score
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
 
     # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.

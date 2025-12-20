@@ -42,6 +42,9 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             if global_min < -1:
                 global_min = -1
             global_max = 1
+        elif varname in ['MFM']:
+            global_min = 0
+            global_max = 1
         x_range = np.linspace(global_min, global_max, 200)
         dx = x_range[1] - x_range[0]
         # Adjust these parameters to control spacing and overlap
@@ -52,6 +55,8 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             filtered_data = data
             if varname in ['KGE', 'NSE', 'KGESS']:
                 filtered_data = np.where(data < -1, -1, data)
+            elif varname in ['MFM']:
+                filtered_data = np.where(data < 0, 0, data)
 
             kde = gaussian_kde(filtered_data)
             y_range = kde(x_range)
