@@ -44,6 +44,10 @@ def stat_mann_kendall_trend_test(self, data):
             return np.array([trend, significance, p_value, tau])
 
         try:
+            # Rechunk time dimension to single chunk for apply_ufunc with dask
+            if hasattr(da, 'chunks') and da.chunks is not None:
+                da = da.chunk({'time': -1})
+
             # Apply the test to each grid point with chunking
             result = xr.apply_ufunc(
                 mk_test,
