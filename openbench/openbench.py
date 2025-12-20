@@ -42,6 +42,7 @@ from openbench.data.Mod_Preprocessing import check_required_nml, run_files_check
 from openbench.util.Mod_Converttype import Convert_Type
 from openbench.util.Mod_ReportGenerator import ReportGenerator
 from openbench.util.Mod_FileIO import safe_open_netcdf, safe_save_netcdf
+from openbench.util.Mod_DatasetLoader import open_dataset as open_dataset_chunked
 from openbench.util.Mod_ProgressMonitor import HeartbeatMonitor
 from openbench.util.Mod_PreValidation import run_pre_validation, ValidationError
 from openbench.util.Mod_ConfigCheck import (
@@ -277,6 +278,17 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         print_item_progress(evaluation_item, "📊")
         logging.info(f"Start running {evaluation_item} evaluation...")
 
+        # Reset scratch directory once per evaluation_item, not per sim_source/ref_source
+        # This prevents deleting files needed by parallel processes
+        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+        gc.collect()
+        time.sleep(0.5)
+        try:
+            reset_directory(scratch_dir, timeout=60.0, max_retries=5, retry_delay=2.0)
+            logging.info(f"Scratch directory reset for {evaluation_item}")
+        except Exception as e:
+            logging.warning(f"Scratch directory reset encountered issues: {e}")
+
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
         # Ensure sources are lists
@@ -298,7 +310,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
 
         # Clean up memory after data preprocessing
         gc.collect()
-        logging.info(f"Memory cleaned after preprocessing {evaluation_item}")
+        logging.debug(f"Memory cleaned after preprocessing {evaluation_item}")
 
         for ref_source in ref_sources:
             onetimeref = True
@@ -334,7 +346,7 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
 
         # Clean up memory after completing all evaluations for this item
         gc.collect()
-        logging.info(f"Memory cleaned after completing {evaluation_item}")
+        logging.info(f"Completed evaluation for {evaluation_item}")
 
     main_nl['general']['IGBP_groupby'] = main_nl['general'].get('IGBP_groupby', True)
     main_nl['general']['PFT_groupby'] = main_nl['general'].get('PFT_groupby', True)
@@ -374,28 +386,13 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
 
     # Force garbage collection to ensure all file handles are released
     gc.collect()
-    logging.info("Groupby objects cleaned up")
+    logging.debug("Groupby objects cleaned up")
 
 def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars, evaluation_item,
                  sim_source, ref_source, fig_nml):
     try:
-        # Reset scratch directory at the beginning of each process_mask call
-        # This ensures clean temporary space for each sim_source/ref_source combination
-        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
-
-        # Force garbage collection before resetting scratch directory
-        gc.collect()
-
-        # Small delay to ensure any pending I/O operations complete
-        time.sleep(0.5)
-
-        try:
-            reset_directory(scratch_dir, timeout=60.0, max_retries=5, retry_delay=2.0)
-            logging.info(f"Scratch directory reset for {evaluation_item} ({ref_source} vs {sim_source})")
-        except Exception as e:
-            logging.warning(f"Scratch directory reset encountered issues: {e}")
-            logging.warning("Continuing with existing scratch directory state")
-
+        # Note: scratch directory is now reset once per evaluation_item in run_evaluation()
+        # to prevent deleting files needed by parallel processes
         logging.info(f"Processing {evaluation_item} - ref: {ref_source} - sim: {sim_source}")
         general_info_object = GeneralInfoReader(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_vars, statistic_vars,
                                                 evaluation_item, sim_source, ref_source)
@@ -410,14 +407,14 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
         if onetimeref:
             dataset_processer.process('ref')
         else:
-            logging.info("Skip processing ref data")
+            logging.debug("Skip processing ref data")
         dataset_processer.process('sim')
         if main_nl['general']['unified_mask']:
             if general_info['ref_data_type'] == 'stn' or general_info['sim_data_type'] == 'stn':
                 pass
             else:
                 # Mask the observation data with simulation data to ensure consistent coverage
-                logging.info("Mask the observation data with all simulation datasets to ensure consistent coverage")
+                logging.debug("Mask the observation data with all simulation datasets to ensure consistent coverage")
 
                 def wait_for_file(file_path, max_wait_time=30, check_interval=1):
                     """Wait for a file to exist and be readable."""
@@ -450,20 +447,17 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                 ref_ds = None
                 sim_ds = None
                 try:
-                    # Open datasets with context manager to ensure proper cleanup
+                    # Open datasets with chunking for memory efficiency
                     try:
-                        ref_ds = xr.open_dataset(ref_file_path_abs)
+                        ref_ds = open_dataset_chunked(ref_file_path_abs)
                         o = ref_ds[f'{general_info["ref_varname"]}']
                     except FileNotFoundError as e:
-                        logging.info(f"Ref data file not found, processing now: {ref_file_path_abs}")
-                        logging.info(f"Processing ref data")
+                        logging.debug(f"Ref data file not found, processing now: {ref_file_path_abs}")
+                        logging.debug(f"Processing ref data")
                         dataset_processer.process('ref')
 
-                        # Wait a moment for file system to sync
-                        #time.sleep(2.5)
-
                         # Try again after processing
-                        ref_ds = xr.open_dataset(ref_file_path_abs)
+                        ref_ds = open_dataset_chunked(ref_file_path_abs)
                         o = ref_ds[f'{general_info["ref_varname"]}']
                     o = Convert_Type.convert_nc(o)
 
@@ -472,18 +466,15 @@ def process_mask(onetimeref, main_nl, sim_nml, ref_nml, metric_vars, score_vars,
                     sim_file_path_abs = os.path.abspath(sim_file_path)
 
                     try:
-                        sim_ds = xr.open_dataset(sim_file_path_abs)
+                        sim_ds = open_dataset_chunked(sim_file_path_abs)
                         s = sim_ds[f'{general_info["sim_varname"]}']
                     except FileNotFoundError as e:
-                        logging.info(f"Sim data file not found, processing now: {sim_file_path_abs}")
-                        logging.info(f"Processing sim data")
+                        logging.debug(f"Sim data file not found, processing now: {sim_file_path_abs}")
+                        logging.debug(f"Processing sim data")
                         dataset_processer.process('sim')
 
-                        # Wait a moment for file system to sync
-                        #time.sleep(2.5)
-
                         # Try again after processing
-                        sim_ds = xr.open_dataset(sim_file_path_abs)
+                        sim_ds = open_dataset_chunked(sim_file_path_abs)
                         s = sim_ds[f'{general_info["sim_varname"]}']
                     s = Convert_Type.convert_nc(s)
 
@@ -603,11 +594,11 @@ def run_comparison(main_nl, sim_nml, ref_nml, evaluation_items, score_vars, metr
 
         # Clean up memory after each comparison
         gc.collect()
-        logging.info(f"Memory cleaned after {cvar} comparison")
+        logging.debug(f"Memory cleaned after {cvar} comparison")
 
     # Final cleanup after all comparisons
     gc.collect()
-    logging.info("Memory cleaned after all comparisons")
+    logging.debug("Memory cleaned after all comparisons")
 
 
 def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
@@ -645,13 +636,13 @@ def run_statistics(main_nl, stats_nml, statistic_vars, fig_nml):
 
         # Clean up memory after each statistic
         gc.collect()
-        logging.info(f"Memory cleaned after {statistic} analysis")
+        logging.debug(f"Memory cleaned after {statistic} analysis")
 
     logging.info("Statistical analysis completed.")
 
     # Final cleanup after all statistics
     gc.collect()
-    logging.info("Memory cleaned after all statistics")
+    logging.debug("Memory cleaned after all statistics")
 
 
 def main():
