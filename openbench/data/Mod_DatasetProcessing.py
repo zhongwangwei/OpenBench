@@ -451,6 +451,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if not hasattr(self, 'num_cores') or self.num_cores <= 0:
             self.num_cores = resources['cpu_count']
 
+        # Check for disable_parallel flag (useful for debugging race conditions)
+        if hasattr(self, 'disable_parallel') and self.disable_parallel:
+            logging.warning("Parallel processing DISABLED for debugging. Setting num_cores=1")
+            self.num_cores = 1
+
         # Store resource information
         self.system_resources = resources
 
@@ -1077,7 +1082,15 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             pass
         return ds
 
-    def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
+    def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> Tuple[xr.Dataset, Dict[str, Any]]:
+        """
+        Select variable from dataset file.
+
+        Returns:
+            Tuple of (dataset, metadata_updates)
+            metadata_updates contains any varname/varunit changes from custom filters
+        """
+        metadata_updates = {}
         try:
             try:
                 ds = xr.open_dataset(VarFile)  # .squeeze()
@@ -1089,7 +1102,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             raise
 
         try:
-            ds = self.apply_custom_filter(datasource, ds, varname)
+            ds, metadata_updates = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
         except Exception as e:
             # Check if varname list is empty
@@ -1105,9 +1118,19 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 raise KeyError(f"Variable '{varname[0]}' not in dataset")
 
             ds = Convert_Type.convert_nc(ds[varname[0]])
-        return ds
+        return ds, metadata_updates
 
-    def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
+    def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> Tuple[xr.Dataset, Dict[str, Any]]:
+        """
+        Apply custom filter to dataset.
+
+        Returns:
+            Tuple of (filtered_data, metadata_updates)
+            metadata_updates is a dict with keys like 'varname', 'varunit' that should be used
+            locally instead of modifying self to avoid race conditions in parallel processing.
+        """
+        metadata_updates = {}
+
         if datasource == 'stat':
             # Validate varname list is not empty
             if not varname or len(varname) == 0:
@@ -1118,7 +1141,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 available_vars = list(ds.data_vars) + list(ds.coords)
                 raise KeyError(f"Variable '{varname[0]}' not found in station dataset. Available: {available_vars}")
 
-            return ds[varname[0]]
+            return ds[varname[0]], metadata_updates
         else:
             # Get model name from _model attribute (e.g., TE-routing_model = "TE")
             source = self.sim_source if datasource == 'sim' else self.ref_source
@@ -1130,25 +1153,59 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 logging.info(f"Loading custom variable filter for {model}")
                 custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                 custom_filter = getattr(custom_module, f"filter_{model}")
-                self, ds_or_da = custom_filter(self, ds)
+
+                # Call filter - it may return (info, ds) for backward compatibility
+                # or (metadata_dict, ds) for new race-condition-safe pattern
+                filter_result = custom_filter(self, ds)
+
+                if filter_result is None:
+                    # Filter returned None (e.g., for station configuration context)
+                    return ds, metadata_updates
+
+                result_info, ds_or_da = filter_result
+
+                # Check if filter returned metadata dict (new pattern) or modified self (old pattern)
+                if isinstance(result_info, dict):
+                    # New pattern: filter returned metadata updates
+                    metadata_updates = result_info
+                    # Extract varname/varunit from metadata for local use
+                    if 'varname' in metadata_updates:
+                        local_varname = metadata_updates['varname']
+                        if isinstance(local_varname, list):
+                            var_to_extract = local_varname[0]
+                        else:
+                            var_to_extract = local_varname
+                    else:
+                        current_varname = getattr(self, f"{datasource}_varname")
+                        var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                else:
+                    # Old pattern: filter returned (info, ds) - info is self
+                    # For backward compatibility, read the modified attributes
+                    # but log a deprecation warning
+                    logging.debug(f"Filter {model} uses old pattern (modifying info). Consider updating to return metadata dict.")
+                    current_varname = getattr(self, f"{datasource}_varname")
+                    var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                    # Capture the current state as metadata
+                    metadata_updates = {
+                        'varname': getattr(self, f"{datasource}_varname"),
+                        'varunit': getattr(self, f"{datasource}_varunit")
+                    }
 
                 # If filter returned a Dataset, extract the variable; if DataArray, use directly
                 if isinstance(ds_or_da, xr.Dataset):
-                    current_varname = getattr(self, f"{datasource}_varname")
-                    var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
                     if var_to_extract in ds_or_da:
-                        return ds_or_da[var_to_extract]
+                        return ds_or_da[var_to_extract], metadata_updates
                     else:
                         raise KeyError(f"Variable {var_to_extract} not found in filtered dataset")
                 else:
-                    return ds_or_da
+                    return ds_or_da, metadata_updates
             except AttributeError:
                 # Only show warning once per model using module-level tracking
                 if model not in _MODULE_CUSTOM_FILTER_WARNINGS:
                     logging.warning(f"Custom filter function for {model} not found.")
                     _MODULE_CUSTOM_FILTER_WARNINGS.add(model)
                 raise
-        return ds
+        return ds, metadata_updates
 
     @performance_monitor
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
@@ -1159,7 +1216,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
 
     @performance_monitor
-    @cached(key_prefix="resample_data", ttl=1800)  # Cache for 30 minutes
+    # NOTE: Caching disabled - cache key doesn't include data source identifier
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
@@ -1224,7 +1281,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
     @performance_monitor
     def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str,
-                     tim_res: str) -> xr.Dataset:
+                     tim_res: str) -> Tuple[xr.Dataset, Dict[str, Any]]:
+        """
+        Combine multiple files for a single year.
+
+        Returns:
+            Tuple of (combined_dataset, metadata_updates)
+        """
         # Try primary path first
         var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
 
@@ -1259,12 +1322,16 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             raise FileNotFoundError(f"No data files found for year {year}")
 
         datasets = []
+        metadata_updates = {}
         try:
             for file in var_files:
-                ds = self.select_var(year, year, tim_res, file, varname, datasource)
+                ds, file_metadata = self.select_var(year, year, tim_res, file, varname, datasource)
                 datasets.append(ds)
+                # Use metadata from first file (they should all be the same)
+                if not metadata_updates and file_metadata:
+                    metadata_updates = file_metadata
             data0 = xr.concat(datasets, dim="time").sortby('time')
-            return data0
+            return data0, metadata_updates
         finally:
             # Clean up memory
             for ds in datasets:
@@ -1293,21 +1360,25 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                                casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         logging.info('The dataset groupby is Single --> split it to Year')
         varfile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
-        ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
+        ds, metadata = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
         ds = self.select_timerange(ds, self.minyear, self.maxyear)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use varunit from metadata if filter updated it, otherwise use the original
+        effective_varunit = metadata.get('varunit', varunit) if metadata else varunit
+        ds, _ = self.process_units(ds, effective_varunit)
         self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
 
     @performance_monitor
     def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                     casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         logging.info('The dataset groupby is not Year --> combine it to Year')
-        ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
+        ds, metadata = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use varunit from metadata if filter updated it, otherwise use the original
+        effective_varunit = metadata.get('varunit', varunit) if metadata else varunit
+        ds, _ = self.process_units(ds, effective_varunit)
         ds = self.select_timerange(ds, syear, eyear)
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
@@ -1315,15 +1386,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     def preprocess_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                 casedir: str, suffix: str, prefix: str, datasource: str) -> None:
         varfiles = self.check_file_exist(os.path.join(dirx, f'{prefix}{syear}{suffix}.nc'))
-        ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
+        ds, metadata = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use varunit from metadata if filter updated it, otherwise use the original
+        effective_varunit = metadata.get('varunit', varunit) if metadata else varunit
+        ds, _ = self.process_units(ds, effective_varunit)
         ds = self.select_timerange(ds, syear, eyear)
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
     @performance_monitor
-    @cached(key_prefix="process_units", ttl=3600)  # Cache for 1 hour
+    # NOTE: Caching disabled for process_units - cache key doesn't include data source,
+    # causing different cases with same shape to share incorrect results
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
         try:
             # 确保我们获取实际的数据数组而不是方法
@@ -1342,8 +1416,28 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 # 如果已经是numpy数组，直接使用
                 data_array = ds
 
+            # 记录转换前的统计信息用于验证
+            valid_before = data_array[~np.isnan(data_array)]
+            mean_before = valid_before.mean() if len(valid_before) > 0 else 0
+
             # 进行单位转换
             converted_data, new_unit = UnitProcessing.convert_unit(data_array, varunit.lower())
+
+            # 验证转换后的数据完整性
+            valid_after = converted_data[~np.isnan(converted_data)]
+            mean_after = valid_after.mean() if len(valid_after) > 0 else 0
+
+            # 检查是否有异常的转换比率（超过 100000 倍可能表示双重转换）
+            if mean_before != 0 and mean_after != 0:
+                conversion_ratio = abs(mean_after / mean_before)
+                if conversion_ratio > 100000:
+                    logging.error(f"CRITICAL: Abnormal unit conversion detected! "
+                                  f"Ratio: {conversion_ratio:.0f}x, "
+                                  f"Before: {mean_before:.6f}, After: {mean_after:.2f}")
+                    logging.error(f"This may indicate double conversion. Using original data.")
+                    # 返回原始数据，避免错误传播
+                    return ds, varunit
+
             # 创建新的数据集或更新现有数据集
             if isinstance(ds, xr.Dataset):
                 # 更新数据集中的数据
@@ -1397,111 +1491,121 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             gc.collect()
 
     def process_single_station_data(self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str) -> xr.Dataset:
+        """
+        Process single station data.
+
+        IMPORTANT: This method uses local variables for varname/varunit instead of modifying
+        self attributes to avoid race conditions in parallel processing.
+        """
         var_attr = self.ref_varname if datasource == 'ref' else self.sim_varname
         var_attr_is_list = isinstance(var_attr, list)
 
-        # Work on a copy of the current variable list so that temporary
-        # fallbacks do not mutate the original configuration.
+        # Work on a copy of the current variable list - NEVER modify self attributes
         current_var_list = list(var_attr) if var_attr_is_list else [var_attr]
-        original_var_list = list(var_attr) if var_attr_is_list else [var_attr]
-        original_varname = original_var_list[0] if original_var_list else None
+        original_varname = current_var_list[0] if current_var_list else None
 
-        try:
-            # Validate varname list is not empty
-            if not current_var_list:
-                logging.error("Variable name list is empty")
-                raise ValueError("Variable name list cannot be empty for station data")
+        # Local copy of varunit - NEVER modify self attributes
+        local_varunit = getattr(self, f"{datasource}_varunit", None)
 
-            # Check if the variable exists in the dataset
-            if current_var_list[0] not in stn_data:
-                # Try to apply custom filter for variable fallback
-                # Get model name from _model attribute (e.g., TE-routing_model = "TE")
-                source = self.sim_source if datasource == 'sim' else self.ref_source
-                try:
-                    model = getattr(self, f"{source}_model")
-                except AttributeError:
-                    model = source
-                try:
-                    import importlib
-                    custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
-                    custom_filter = getattr(custom_module, f"filter_{model}")
-                    
-                    # Call custom filter with dataset
-                    logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
-                    updated_self, filtered_data = custom_filter(self, stn_data)
+        # Validate varname list is not empty
+        if not current_var_list:
+            logging.error("Variable name list is empty")
+            raise ValueError("Variable name list cannot be empty for station data")
 
-                    # If custom filter handled it, use the updated info and data
-                    if updated_self is not None and filtered_data is not None:
-                        # Update varname based on what the filter set (ensure copy)
-                        if datasource == 'ref':
-                            new_var_attr = self.ref_varname
-                        else:
-                            new_var_attr = self.sim_varname
-                        current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
-                        logging.info(f"Custom filter updated variable to: {current_var_list[0]}")
-                        ds = filtered_data
+        # Check if the variable exists in the dataset
+        if current_var_list[0] not in stn_data:
+            # Try to apply custom filter for variable fallback
+            source = self.sim_source if datasource == 'sim' else self.ref_source
+            try:
+                model = getattr(self, f"{source}_model")
+            except AttributeError:
+                model = source
+            try:
+                import importlib
+                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                custom_filter = getattr(custom_module, f"filter_{model}")
+
+                # Call custom filter with dataset
+                logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
+                filter_result = custom_filter(self, stn_data)
+
+                if filter_result is None:
+                    raise ValueError(f"Custom filter returned None for {model}")
+
+                result_info, filtered_data = filter_result
+
+                # If custom filter handled it, use the returned data
+                if filtered_data is not None:
+                    # Handle new metadata dict pattern or old pattern
+                    if isinstance(result_info, dict):
+                        # New pattern: result_info is metadata dict
+                        if 'varname' in result_info:
+                            local_varname = result_info['varname']
+                            current_var_list = list(local_varname) if isinstance(local_varname, list) else [local_varname]
+                        if 'varunit' in result_info:
+                            local_varunit = result_info['varunit']
                     else:
-                        # Custom filter didn't handle this case, raise error
-                        available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                        logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
-                        logging.error(f"Available variables: {available_vars}")
-                        raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
-                except (ImportError, AttributeError):
-                    # No custom filter available, raise original error
+                        # Old pattern: result_info is self (backward compatibility)
+                        # Read the modified attributes but DON'T store them back to self
+                        new_var_attr = getattr(self, f"{datasource}_varname")
+                        current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                        local_varunit = getattr(self, f"{datasource}_varunit", local_varunit)
+
+                    logging.info(f"Custom filter updated variable to: {current_var_list[0]}")
+                    ds = filtered_data
+                else:
+                    # Custom filter didn't handle this case, raise error
                     available_vars = list(stn_data.data_vars) + list(stn_data.coords)
                     logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
                     logging.error(f"Available variables: {available_vars}")
-                    logging.error(f"No custom filter available for {model}")
                     raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
-            else:
-                ds = stn_data[current_var_list[0]]
+            except (ImportError, AttributeError) as e:
+                # No custom filter available, raise original error
+                available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
+                logging.error(f"Available variables: {available_vars}")
+                logging.error(f"No custom filter available for {model}: {e}")
+                raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+        else:
+            ds = stn_data[current_var_list[0]]
 
-            # Check the time dimension
-            if 'time' not in ds.dims:
-                logging.error("Time dimension not found in the station data.")
-                raise ValueError("Time dimension not found in the station data.")
+        # Check the time dimension
+        if 'time' not in ds.dims:
+            logging.error("Time dimension not found in the station data.")
+            raise ValueError("Time dimension not found in the station data.")
 
-            # Ensure the time coordinate is datetime
-            if not np.issubdtype(ds.time.dtype, np.datetime64):
-                ds['time'] = pd.to_datetime(ds.time.values)
+        # Ensure the time coordinate is datetime
+        if not np.issubdtype(ds.time.dtype, np.datetime64):
+            ds['time'] = pd.to_datetime(ds.time.values)
 
-            # Select the time range before resampling
-            ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
+        # Select the time range before resampling
+        ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
 
-            # Resample only if there's data in the selected time range
-            if len(ds.time) > 0:
-                ds = ds.resample(time=self.compare_tim_res).mean()
-            else:
-                logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-                return None  # or return an empty dataset with the correct structure
+        # Resample only if there's data in the selected time range
+        if len(ds.time) > 0:
+            ds = ds.resample(time=self.compare_tim_res).mean()
+        else:
+            logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
+            return None
 
-            # ds = ds.resample(time=self.compare_tim_res).mean()
-            ds = self.check_coordinate(ds)
-            ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
+        ds = self.check_coordinate(ds)
+        ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
 
-            # Apply unit conversion for station data
-            current_varunit = getattr(self, f"{datasource}_varunit")
-            if current_varunit:
-                try:
-                    ds, converted_unit = self.process_units(ds, current_varunit)
-                    logging.info(f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}")
-                except Exception as e:
-                    logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
+        # Apply unit conversion for station data using LOCAL varunit (not from self)
+        if local_varunit:
+            try:
+                ds, converted_unit = self.process_units(ds, local_varunit)
+                logging.info(f"Applied unit conversion for {datasource} station data: {local_varunit} -> {converted_unit}")
+            except Exception as e:
+                logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
 
-            ds = self.select_timerange(ds, start_year, end_year)
+        ds = self.select_timerange(ds, start_year, end_year)
 
-            # Store original variable name as attribute for later renaming if needed
-            if original_varname:
-                ds.attrs['_original_varname'] = original_varname
+        # Store original variable name as attribute for later renaming if needed
+        if original_varname:
+            ds.attrs['_original_varname'] = original_varname
 
-            return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
-        finally:
-            # Restore the canonical variable definition so that fallback
-            # adjustments do not leak into subsequent stations
-            if datasource == 'ref':
-                self.ref_varname = list(original_var_list) if var_attr_is_list else original_varname
-            else:
-                self.sim_varname = list(original_var_list) if var_attr_is_list else original_varname
+        return ds
 
     @performance_monitor
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
@@ -1664,10 +1768,71 @@ class GridDatasetProcessing(BaseDatasetProcessing):
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
         try:
             self.prepare_grid_data(data_params)
+            # Verify all expected files exist before remapping
+            self._verify_prepared_files(data_params)
             self.remap_and_combine_data(data_params)
             self.extract_station_data_if_needed(data_params)
         finally:
             gc.collect()
+
+    def _verify_prepared_files(self, data_params: Dict[str, Any], max_retries: int = 5, retry_delay: float = 2.0) -> None:
+        """Verify that all prepared files exist before proceeding to remap.
+
+        This addresses race conditions where files written by parallel processes
+        may not be immediately visible on the filesystem (especially on external drives).
+        """
+        import time
+        import glob as glob_module
+
+        years = range(self.minyear, self.maxyear + 1)
+        data_dir = os.path.join(self.casedir, 'scratch')
+        datasource = data_params['datasource']
+        prefix = data_params['prefix']
+        suffix = data_params['suffix']
+
+        # Log what we're looking for (use warning level to ensure visibility)
+        logging.warning(f"Verifying prepared files in {data_dir}")
+        logging.warning(f"  Looking for: {datasource}_{prefix}*{suffix}.nc")
+        logging.warning(f"  Years: {self.minyear} to {self.maxyear}")
+
+        missing_files = []
+        found_files = []
+        for year in years:
+            expected_file = os.path.join(data_dir, f'{datasource}_{prefix}{year}{suffix}.nc')
+
+            # Retry logic for file system synchronization
+            for attempt in range(max_retries):
+                if os.path.exists(expected_file):
+                    found_files.append(expected_file)
+                    break
+                if attempt < max_retries - 1:
+                    logging.debug(f"Waiting for file {expected_file} to appear (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+            else:
+                missing_files.append(expected_file)
+
+        logging.warning(f"  Found {len(found_files)} files, missing {len(missing_files)} files")
+
+        if missing_files:
+            # List what files actually exist in scratch directory for debugging
+            existing_files = glob_module.glob(os.path.join(data_dir, f'{datasource}_*.nc'))
+            logging.error(f"Missing {len(missing_files)} expected file(s) after prepare_grid_data:")
+            for f in missing_files[:5]:  # Show first 5 missing
+                logging.error(f"  - {f}")
+            if len(missing_files) > 5:
+                logging.error(f"  ... and {len(missing_files) - 5} more")
+
+            logging.error(f"Files actually present in scratch directory ({len(existing_files)} total):")
+            for f in existing_files[:10]:
+                logging.error(f"  + {os.path.basename(f)}")
+            if len(existing_files) > 10:
+                logging.error(f"  ... and {len(existing_files) - 10} more")
+
+            raise FileNotFoundError(
+                f"Expected files not found after preparation. "
+                f"Missing {len(missing_files)} file(s), first: {os.path.basename(missing_files[0])}. "
+                f"Check if source data exists and prepare_grid_data completed successfully."
+            )
 
     @performance_monitor
     def prepare_grid_data(self, data_params: Dict[str, Any]) -> None:
@@ -1804,26 +1969,67 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
+        import time
         try:
             if data_source not in ['ref', 'sim']:
                 logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
                 raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
 
             var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
+
+            # Wait for file to be available (handles filesystem sync delays on external drives)
+            max_wait_time = 30  # seconds
+            wait_interval = 1.0
+            elapsed = 0
+            while not os.path.exists(var_file) and elapsed < max_wait_time:
+                logging.debug(f"Waiting for file {var_file} to appear ({elapsed}s elapsed)")
+                time.sleep(wait_interval)
+                elapsed += wait_interval
+
+            if not os.path.exists(var_file):
+                raise FileNotFoundError(
+                    f"Input file not found after waiting {max_wait_time}s: {var_file}. "
+                    f"Check if prepare_grid_data completed successfully."
+                )
+
             if self.debug_mode:
                 logging.info(f"Processing {var_file} for year {year}")
                 logging.info(f"Processing {data_source} data for year {year}")
 
-            with xr.open_dataset(var_file) as data:
+            # Use load() to eagerly load data into memory, avoiding lazy loading issues
+            # where the file might become unavailable between open and actual read
+            try:
+                data = xr.open_dataset(var_file).load()
+            except FileNotFoundError:
+                # File disappeared after os.path.exists check - retry with wait
+                logging.warning(f"File {var_file} disappeared, retrying...")
+                for retry in range(5):
+                    time.sleep(2)
+                    if os.path.exists(var_file):
+                        try:
+                            data = xr.open_dataset(var_file).load()
+                            break
+                        except FileNotFoundError:
+                            continue
+                else:
+                    raise FileNotFoundError(
+                        f"File {var_file} keeps disappearing. "
+                        f"Check external drive connection and filesystem stability."
+                    )
+
+            try:
                 data = Convert_Type.convert_nc(data)
                 data = self.preprocess_grid_data(data)
                 remapped_data = self.remap_data(data)
                 self.save_remapped_data(remapped_data, data_source, year)
+            finally:
+                if hasattr(data, 'close'):
+                    data.close()
         finally:
             gc.collect()
 
     @performance_monitor
-    @cached(key_prefix="preprocess_grid_data", ttl=3600)  # Cache for 1 hour
+    # NOTE: Caching disabled - cache key doesn't include data source identifier
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
         # Check if lon and lat are 2D
         data = self.check_coordinate(data)
@@ -2002,6 +2208,18 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
 
             varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]
+
+            # 数据完整性检查 - 检测异常值
+            if varname in data.data_vars:
+                values = data[varname].values
+                valid = values[~np.isnan(values)]
+                if len(valid) > 0:
+                    mean_val = valid.mean()
+                    max_val = valid.max()
+                    # 警告可能的异常值（例如，蒸发量不应超过 1000 mm/day）
+                    if max_val > 10000 and 'mm' in str(data[varname].attrs.get('units', '')).lower():
+                        logging.warning(f"ANOMALY DETECTED: {data_source} {varname} year {year}: "
+                                       f"mean={mean_val:.2f}, max={max_val:.2f}")
 
             out_file = os.path.join(self.casedir, 'scratch', f'{data_source}_{varname}_remap_{year}.nc')
             data.to_netcdf(out_file)

@@ -62,39 +62,80 @@ except ImportError:
 
 class CacheKey:
     """Helper class for generating cache keys."""
-    
+
     @staticmethod
     def generate(obj: Any, prefix: str = "") -> str:
         """
         Generate a unique cache key for an object.
-        
+
         Args:
             obj: Object to generate key for
             prefix: Optional prefix for the key
-            
+
         Returns:
             Unique cache key string
+
+        IMPORTANT: For xarray objects, this includes variable names, dimensions,
+        shape, coordinate keys, AND a sample of actual data values to ensure
+        different datasets with the same structure get different cache keys.
+        This prevents race condition issues where different cases would share
+        incorrect cached results.
         """
         if isinstance(obj, str):
             content = obj
         elif isinstance(obj, (dict, list, tuple)):
             content = json.dumps(obj, sort_keys=True, default=str)
         elif _HAS_DATA_LIBS and isinstance(obj, (xr.Dataset, xr.DataArray)):
-            # For xarray objects, use coordinates and shape
-            content = f"{obj.dims}_{obj.shape}_{list(obj.coords.keys())}"
+            # For xarray objects, include more identifying information to avoid
+            # cache key collisions between different datasets with same structure
+            parts = [
+                str(obj.dims),
+                str(obj.shape),
+                str(list(obj.coords.keys())),
+            ]
+
+            # Include variable names for Dataset
+            if isinstance(obj, xr.Dataset):
+                parts.append(str(list(obj.data_vars.keys())))
+            elif hasattr(obj, 'name') and obj.name:
+                parts.append(str(obj.name))
+
+            # Include a sample of actual data values to distinguish different datasets
+            # This is critical to prevent race conditions in parallel processing
+            try:
+                if isinstance(obj, xr.Dataset):
+                    for var_name in list(obj.data_vars.keys())[:1]:  # First variable only
+                        data = obj[var_name].values.flatten()
+                        # Sample first, middle, and last values if available
+                        if len(data) > 0:
+                            sample_indices = [0, len(data)//2, -1] if len(data) > 2 else list(range(len(data)))
+                            sample_values = [float(data[i]) if not np.isnan(data[i]) else 'nan' for i in sample_indices if abs(i) < len(data)]
+                            parts.append(f"sample:{sample_values}")
+                elif isinstance(obj, xr.DataArray):
+                    data = obj.values.flatten()
+                    if len(data) > 0:
+                        sample_indices = [0, len(data)//2, -1] if len(data) > 2 else list(range(len(data)))
+                        sample_values = [float(data[i]) if not np.isnan(data[i]) else 'nan' for i in sample_indices if abs(i) < len(data)]
+                        parts.append(f"sample:{sample_values}")
+            except Exception:
+                # If sampling fails, add a random component to ensure uniqueness
+                import random
+                parts.append(f"fallback:{random.randint(0, 1000000)}")
+
+            content = "_".join(parts)
         elif _HAS_DATA_LIBS and isinstance(obj, pd.DataFrame):
             # For pandas DataFrame, use shape and columns
             content = f"{obj.shape}_{list(obj.columns)}"
         else:
             content = str(obj)
-        
+
         # Generate hash
         hash_obj = hashlib.sha256(content.encode())
         key = hash_obj.hexdigest()[:16]  # Use first 16 chars
-        
+
         if prefix:
             key = f"{prefix}_{key}"
-        
+
         return key
     
     @staticmethod
@@ -505,17 +546,29 @@ class CacheManager:
         return info
 
 
-# Global cache manager
+# Global cache manager with multiprocessing-safe initialization
 _cache_manager = None
+_cache_manager_lock = threading.Lock()
 
 
 def get_cache_manager(**kwargs) -> CacheManager:
-    """Get or create global cache manager."""
+    """
+    Get or create global cache manager with thread-safe initialization.
+
+    Note: In multiprocessing environments (like Joblib's loky backend), each
+    subprocess has its own memory space, so this initialization happens
+    independently per process. The lock ensures thread-safety within each process.
+    """
     global _cache_manager
-    
+
+    # Double-checked locking pattern for thread safety
     if _cache_manager is None:
-        _cache_manager = CacheManager(**kwargs)
-    
+        with _cache_manager_lock:
+            # Check again after acquiring lock
+            if _cache_manager is None:
+                _cache_manager = CacheManager(**kwargs)
+                logging.debug(f"CacheManager initialized in process {os.getpid()}")
+
     return _cache_manager
 
 
