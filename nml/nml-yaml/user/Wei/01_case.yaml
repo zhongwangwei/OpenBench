@@ -1,0 +1,14 @@
+general:
+  model_namelist: ./nml/nml-yaml/Mod_variables_definition/CoLM.yaml
+  timezone: 0.0
+  data_type: grid
+  data_groupby: month
+  dir: ./dataset/Simulation/Case01/history/
+  fulllist: ''
+  tim_res: month
+  grid_res: 0.5
+  suffix: ''
+  prefix: Case01_hist_
+  syear: 1996
+  eyear: 2010
+

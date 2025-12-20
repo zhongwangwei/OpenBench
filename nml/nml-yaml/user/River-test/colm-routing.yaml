@@ -1,0 +1,13 @@
+general:
+  model_namelist: ./nml/nml-yaml/Mod_variables_definition/colm.yaml
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Month
+  dir: ./dataset/Simulation/River-test/colm-routing/
+  fulllist: ''
+  tim_res: Day
+  grid_res: 0.25
+  suffix: ''
+  prefix: Global_Grid_50km_IGBP_VG_hist_unitcat_setgrid_
+  syear: 2002
+  eyear: 2006
