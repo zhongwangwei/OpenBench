@@ -246,29 +246,24 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
     is_ref_climatology = processor.is_climatology_mode(ref_data_groupby) if ref_data_groupby else False
     is_sim_climatology = processor.is_climatology_mode(sim_data_groupby) if sim_data_groupby else False
 
-    if is_ref_climatology or is_sim_climatology:
-        logging.info("气候态评估模式已激活 (data_groupby='climatology')")
+    # Only trigger climatology mode when explicitly configured
+    if not (is_ref_climatology or is_sim_climatology):
+        # No climatology configuration - use original time series data
+        logging.debug("非气候态评估 - 使用原始时间序列")
+        return ref_ds, sim_ds, metrics
 
-        # Prepare reference climatology
-        ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
+    # Climatology mode explicitly enabled
+    logging.info("气候态评估模式已激活 (data_groupby='climatology')")
 
-        if clim_type is None:
-            logging.error("参考数据不符合气候态格式 (需要1个或12个时间点)")
-            return None, None, []
+    # Prepare reference climatology
+    ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
 
-        # Prepare simulation climatology
-        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
-    else:
-        # Fallback to auto-detection based on data dimensions
-        ref_processed, clim_type = processor.prepare_reference_climatology(ref_ds)
+    if clim_type is None:
+        logging.error("参考数据不符合气候态格式 (需要1个或12个时间点)")
+        return None, None, []
 
-        # If not a climatology, return original data
-        if clim_type is None:
-            logging.debug("非气候态评估 - 使用原始时间序列")
-            return ref_ds, sim_ds, metrics
-
-        # Prepare simulation climatology
-        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
+    # Prepare simulation climatology
+    sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type)
 
     # Validate compatibility
     if not processor.validate_climatology_compatibility(ref_processed, sim_processed):

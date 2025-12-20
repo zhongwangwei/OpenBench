@@ -13,11 +13,11 @@ Ground_Heat:
   varname: GFLXTL
   varunit: W m-2
 Surface_Upward_SW_Radiation:
-  varname: ''
-  varunit: ''
+  varname: SSRU
+  varunit: W m-2
 Surface_Upward_LW_Radiation:
-  varname: ''
-  varunit: ''
+  varname: SLRU
+  varunit: W m-2
 Surface_Net_SW_Radiation:
   varname: ''
   varunit: ''
@@ -49,8 +49,8 @@ Stem_Area_Index:
   varname: ''
   varunit: ''
 Evapotranspiration:
-  varname: ''
-  varunit: ''
+  varname: 
+  varunit: 
 Canopy_Evaporation_Canopy_Transpiration:
   varname: ''
   varunit: ''
@@ -67,8 +67,8 @@ Snow_Evaporation:
   varname: ''
   varunit: ''
 Canopy_Transpiration:
-  varname: ETFLX
-  varunit: kg m-2 s-1
+  varname: 
+  varunit: 
 Total_Runoff:
   varname: RUNOFF
   varunit: kg m-2 s-1
@@ -88,8 +88,8 @@ Groundwater_Recharge_Rate:
   varname: ''
   varunit: ''
 Snow_Water_Equivalent:
-  varname: ''
-  varunit: ''
+  varname: GLSNW
+  varunit: kg m2-1
 Snow_Depth:
   varname: ''
   varunit: ''
@@ -112,7 +112,7 @@ Water_Storage_In_Aquifer:
   varname: ''
   varunit: ''
 Surface_Soil_Moisture:
-  varname: ''
+  varname: '' #GLWtot
   varunit: ''
 Root-Zone_Soil_Moisture:
   varname: ''
@@ -121,8 +121,8 @@ Surface_Soil_Temperature:
   varname: ''
   varunit: ''
 Streamflow:
-  varname: ''
-  varunit: ''
+  varname: OUTFLW
+  varunit: m3 s-1
 Inundation_Fraction:
   varname: FLDFRC
   varunit: unitless

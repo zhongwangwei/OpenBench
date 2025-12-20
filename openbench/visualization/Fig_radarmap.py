@@ -12,16 +12,47 @@ from matplotlib.font_manager import FontProperties
 try:
     from openbench.util.Mod_Converttype import Convert_Type
 except ImportError:
-    import sys
-    import os
-
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from openbench.util.Mod_Converttype import Convert_Type
 from .Fig_toolbox import get_index, convert_unit, get_colormap
 
 
+def _read_comparison_file(file):
+    """
+    Read comparison file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    file_to_read = file
+
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    sep = '\t' if '\t' in first_line else ','
+    df = pd.read_csv(file_to_read, sep=sep, header=0)
+    # Remove index name to prevent it from appearing in visualizations
+    df.index.name = None
+    return df
+
+
 def make_scenarios_comparison_radar_map(file, score, option):
-    df = pd.read_csv(file, sep=r'\s+', header=0)
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     list1 = df.iloc[:, 0].tolist()
     list2 = df.iloc[:, 1].tolist()
@@ -45,7 +76,7 @@ def make_scenarios_comparison_radar_map(file, score, option):
               'figure.figsize': [option['x_wise'], option['y_wise']],
               'figure.dpi': option['dpi'],
               'figure.autolayout': True,
-              'savefig.format': option['savefig_format'],
+              'savefig.format': option['saving_format'],
               'font.family': option['font_family'],
               'font.size': option['font_size'],
               'axes.edgecolor': 'white',
@@ -110,4 +141,4 @@ def make_scenarios_comparison_radar_map(file, score, option):
         title_fontproperties=title_font,
     )
     file2 = file[:-4]
-    plt.savefig(f'{file2}_radarmap.{option["savefig_format"]}')
+    plt.savefig(f'{file2}_radarmap.{option["saving_format"]}')

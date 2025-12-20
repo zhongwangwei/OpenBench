@@ -49,7 +49,7 @@ Stem_Area_Index:
   varname: ''
   varunit: ''
 Evapotranspiration:
-  varname: Evap
+  varname: Evap_tavg
   varunit: kg m-2 s-1
 Canopy_Evaporation_Canopy_Transpiration:
   varname: ''

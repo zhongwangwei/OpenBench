@@ -19,7 +19,7 @@ Canopy_Interception:
   varunit: mm day-1
   prefix: Ei_
   suffix: _GLEAM_v4.2a
-Transpiration:
+Canopy_Transpiration:
   sub_dir: Transpiration/GLEAM_v4.2a
   varname: Et
   varunit: mm day-1
