@@ -569,6 +569,12 @@ class metrics:
             br2_value = r_squared * slope if slope <= 1 else r_squared / slope
             return br2_value
 
+        # Rechunk time dimension to single chunk for apply_ufunc with dask
+        if hasattr(data_array, 'chunks') and data_array.chunks is not None:
+            data_array = data_array.chunk({'time': -1})
+        if hasattr(obs_array, 'chunks') and obs_array.chunks is not None:
+            obs_array = obs_array.chunk({'time': -1})
+
         br2_values = xr.apply_ufunc(
             calculate_for_single_time, data_array, obs_array,
             input_core_dims=[["time"], ["time"]],
@@ -880,6 +886,13 @@ class metrics:
         # Apply MFM to each grid cell
         # Get dimensions
         if 'time' in s.dims:
+            # Rechunk time dimension to single chunk for apply_ufunc with dask
+            # This is required because time is a core dimension
+            if hasattr(s, 'chunks') and s.chunks is not None:
+                s = s.chunk({'time': -1})
+            if hasattr(o, 'chunks') and o.chunks is not None:
+                o = o.chunk({'time': -1})
+
             # Stack spatial dimensions for easier iteration
             result = xr.apply_ufunc(
                 calculate_mfm_1d,
