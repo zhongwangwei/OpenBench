@@ -1,8 +1,10 @@
 import logging
+import threading
 
 # Module-level cache for case-insensitive unit lookup
 # Format: normalized_unit_lowercase -> (base_unit, conversion_func or None)
 _UNIT_LOOKUP_CACHE = None
+_UNIT_CACHE_LOCK = threading.Lock()
 
 class UnitProcessing:
 	def __init__(self, info):
@@ -116,23 +118,29 @@ class UnitProcessing:
 		
 		# Build case-insensitive lookup dictionary (cached at module level)
 		# This converts O(n) iteration to O(1) dictionary lookup
+		# Use thread-safe initialization with double-checked locking
 		global _UNIT_LOOKUP_CACHE
 		if _UNIT_LOOKUP_CACHE is None:
-			_UNIT_LOOKUP_CACHE = {}
-			
-			# All keys are already lowercase, just build the lookup
-			for base_unit, conversions in conversion_factors.items():
-				# Add base unit itself (None means no conversion needed)
-				if base_unit not in _UNIT_LOOKUP_CACHE:
-					_UNIT_LOOKUP_CACHE[base_unit] = (base_unit, None)
-				
-				# Add all conversion units
-				for conv_unit, conv_func in conversions.items():
-					# Only add if not already present (prefer first match)
-					if conv_unit not in _UNIT_LOOKUP_CACHE:
-						_UNIT_LOOKUP_CACHE[conv_unit] = (base_unit, conv_func)
-			
-			logging.info(f'Unit lookup cache initialized with {len(_UNIT_LOOKUP_CACHE)} entries')
+			with _UNIT_CACHE_LOCK:
+				# Double-check after acquiring lock
+				if _UNIT_LOOKUP_CACHE is None:
+					temp_cache = {}
+
+					# All keys are already lowercase, just build the lookup
+					for base_unit, conversions in conversion_factors.items():
+						# Add base unit itself (None means no conversion needed)
+						if base_unit not in temp_cache:
+							temp_cache[base_unit] = (base_unit, None)
+
+						# Add all conversion units
+						for conv_unit, conv_func in conversions.items():
+							# Only add if not already present (prefer first match)
+							if conv_unit not in temp_cache:
+								temp_cache[conv_unit] = (base_unit, conv_func)
+
+					# Atomic assignment after cache is fully built
+					_UNIT_LOOKUP_CACHE = temp_cache
+					logging.info(f'Unit lookup cache initialized with {len(_UNIT_LOOKUP_CACHE)} entries')
 		
 		logging.info(f'Converting {input_unit} to base unit...')
 		

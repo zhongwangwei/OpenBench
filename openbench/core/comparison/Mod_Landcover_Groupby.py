@@ -152,24 +152,20 @@ class LC_groupby(metrics, scores):
                                 os.makedirs(dir_path)
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
                                 with open(output_file_path, "w") as output_file:
-                                    # Print the table header with an additional column for the overall mean
-                                    output_file.write("ID\t")
-                                    for i in range(1, 18):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["metric"]
                                     for igbp_class_name in igbp_class_names.values():
-                                        output_file.write(f"{igbp_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(igbp_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print mean values
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall mean first
                                         ds = ds.where(np.isfinite(ds), np.nan)
@@ -179,6 +175,7 @@ class LC_groupby(metrics, scores):
                                         overall_median = ds[metric].median(skipna=True).values
                                         overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
+                                        row_values = [metric]
                                         for i in range(1, 18):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
@@ -186,9 +183,9 @@ class LC_groupby(metrics, scores):
                                                 f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_IGBP_{igbp_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                                            output_file.write(f"{median_value_str}\t")
-                                        output_file.write(f"{overall_median_str}\t")  # Write overall median
-                                        output_file.write("\n")
+                                            row_values.append(median_value_str)
+                                        row_values.append(overall_median_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
@@ -205,27 +202,22 @@ class LC_groupby(metrics, scores):
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
 
                                 with open(output_file_path2, "w") as output_file:
-                                    # Print the table header with an additional column for the overall mean
-                                    output_file.write("ID\t")
-                                    for i in range(1, 18):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["score"]
                                     for igbp_class_name in igbp_class_names.values():
-                                        output_file.write(f"{igbp_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(igbp_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print mean values
-
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{score}\t")
-                                       
+
                                         if self.weight.lower() == 'area':
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -233,34 +225,33 @@ class LC_groupby(metrics, scores):
                                             # Get reference data for flux weighting
                                             o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
-                                            
+
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
-                                            
+
                                             # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean('time'))
-                                            
+
                                             # Combine area and flux weights
                                             combined_weights = area_weights * flux_weights
-                                            
+
                                             # Normalize weights to sum to 1
                                             normalized_weights = combined_weights / combined_weights.sum()
-                                            
+
                                             # Calculate weighted mean
                                             overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         else:
                                             overall_mean = ds[score].mean(skipna=True).values
 
-                                        # Calculate and write the overall mean first
-                                        # overall_mean = ds[score].mean(skipna=True).values
                                         overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
+                                        row_values = [score]
                                         for i in range(1, 18):
                                             ds1 = ds.where(IGBPtype == i)
                                             igbp_class_name = igbp_class_names.get(i, f"IGBP_{i}")
                                             ds1.to_netcdf(
                                                 f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_IGBP_{igbp_class_name}.nc")
-                                            
+
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
@@ -268,28 +259,28 @@ class LC_groupby(metrics, scores):
                                                 # Get reference data for flux weighting
                                                 o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
-                                                
+
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
-                                                
+
                                                 # Calculate absolute flux weights
                                                 flux_weights = np.abs(o.mean('time'))
-                                                
+
                                                 # Combine area and flux weights
                                                 combined_weights = area_weights * flux_weights
-                                                
+
                                                 # Normalize weights to sum to 1
                                                 normalized_weights = combined_weights / combined_weights.sum()
-                                                
+
                                                 # Calculate weighted mean
                                                 mean_value = ds1[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                             else:
-                                                mean_value = ds1[score].mean(skipna=True).values                                            
-                                            
+                                                mean_value = ds1[score].mean(skipna=True).values
+
                                             mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                            output_file.write(f"{mean_value_str}\t")
-                                        output_file.write(f"{overall_mean_str}\t")  # Write overall mean
-                                        output_file.write("\n")
+                                            row_values.append(mean_value_str)
+                                        row_values.append(overall_mean_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_scores = self.scores
                                 option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
@@ -419,25 +410,20 @@ class LC_groupby(metrics, scores):
 
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
                                 with open(output_file_path, "w") as output_file:
-                                    # Print the table header with an additional column for the overall median
-                                    output_file.write("ID\t")
-                                    for i in range(0, 16):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["metric"]
                                     for PFT_class_name in PFT_class_names.values():
-                                        output_file.write(f"{PFT_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(PFT_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print median values
-
                                     for metric in self.metrics:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{metric}\t")
 
                                         # Calculate and write the overall median first
                                         ds = ds.where(np.isfinite(ds), np.nan)
@@ -447,6 +433,7 @@ class LC_groupby(metrics, scores):
                                         overall_median = ds[metric].median(skipna=True).values
                                         overall_median_str = f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
 
+                                        row_values = [metric]
                                         for i in range(0, 16):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
@@ -454,9 +441,9 @@ class LC_groupby(metrics, scores):
                                                 f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}_PFT_{PFT_class_name}.nc")
                                             median_value = ds1[metric].median(skipna=True).values
                                             median_value_str = f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
-                                            output_file.write(f"{median_value_str}\t")
-                                        output_file.write(f"{overall_median_str}\t")  # Write overall median
-                                        output_file.write("\n")
+                                            row_values.append(median_value_str)
+                                        row_values.append(overall_median_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_metrics = self.metrics
                                 # selected_metrics = list(selected_metrics)
@@ -474,28 +461,22 @@ class LC_groupby(metrics, scores):
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
                                 with open(output_file_path2, "w") as output_file:
-                                    # Print the table header with an additional column for the overall mean
-                                    output_file.write("ID\t")
-                                    for i in range(0, 16):
-                                        output_file.write(f"{i}\t")
-                                    output_file.write("All\n")  # Move "All" to the first line
-                                    output_file.write("FullName\t")
+                                    # Print the table header with class names
+                                    header_values = ["score"]
                                     for PFT_class_name in PFT_class_names.values():
-                                        output_file.write(f"{PFT_class_name}\t")
-                                    output_file.write("Overall\n")  # Write "Overall" on the second line
+                                        header_values.append(PFT_class_name)
+                                    header_values.append("Overall")
+                                    output_file.write("\t".join(header_values) + "\n")
 
                                     # Calculate and print mean values
-
                                     for score in self.scores:
                                         ds = xr.open_dataset(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
-                                        output_file.write(f"{score}\t")
 
                                         # Calculate and write the overall mean first
-                                       
                                         if self.weight.lower() == 'area':
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -503,19 +484,19 @@ class LC_groupby(metrics, scores):
                                             # Get reference data for flux weighting
                                             o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
-                                            
+
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
-                                            
+
                                             # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean('time'))
-                                            
+
                                             # Combine area and flux weights
                                             combined_weights = area_weights * flux_weights
-                                            
+
                                             # Normalize weights to sum to 1
                                             normalized_weights = combined_weights / combined_weights.sum()
-                                            
+
                                             # Calculate weighted mean
                                             overall_mean = ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         else:
@@ -523,12 +504,13 @@ class LC_groupby(metrics, scores):
 
                                         overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
+                                        row_values = [score]
                                         for i in range(0, 16):
                                             ds1 = ds.where(PFTtype == i)
                                             PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                             ds1.to_netcdf(
                                                 f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}_PFT_{PFT_class_name}.nc")
-                                            # Calculate and write the overall mean first
+                                            # Calculate mean value
                                             if self.weight.lower() == 'area':
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
@@ -536,29 +518,28 @@ class LC_groupby(metrics, scores):
                                                 # Get reference data for flux weighting
                                                 o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
-                                                
+
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
-                                                
+
                                                 # Calculate absolute flux weights
                                                 flux_weights = np.abs(o.mean('time'))
-                                                
+
                                                 # Combine area and flux weights
                                                 combined_weights = area_weights * flux_weights
-                                                
+
                                                 # Normalize weights to sum to 1
                                                 normalized_weights = combined_weights / combined_weights.sum()
-                                                
+
                                                 # Calculate weighted mean
                                                 mean_value = ds1[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                             else:
-                                                mean_value = ds1[score].mean(skipna=True).values                                            
-                                            
-                                            #mean_value = ds1[score].mean(skipna=True).values
+                                                mean_value = ds1[score].mean(skipna=True).values
+
                                             mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
-                                            output_file.write(f"{mean_value_str}\t")
-                                        output_file.write(f"{overall_mean_str}\t")  # Write overall mean
-                                        output_file.write("\n")
+                                            row_values.append(mean_value_str)
+                                        row_values.append(overall_mean_str)
+                                        output_file.write("\t".join(row_values) + "\n")
 
                                 selected_scores = self.scores
                                 option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"

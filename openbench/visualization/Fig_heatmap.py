@@ -1,3 +1,7 @@
+import os
+import sys
+import logging
+
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -5,24 +9,56 @@ from matplotlib import rcParams
 try:
     from openbench.util.Mod_Converttype import Convert_Type
 except ImportError:
-    import sys
-    import os
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from openbench.util.Mod_Converttype import Convert_Type
 
-import os
-import sys
 # Add the local visualization path for cmaps
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 import cmaps
 from .Fig_toolbox import get_index, convert_unit, get_colormap
- 
+
+
+def _read_comparison_file(file):
+    """
+    Read comparison file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    file_to_read = file
+
+    # If file doesn't exist, try alternative extension
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    # Read first line to detect separator
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    # Auto-detect separator: if tabs present, use tab; otherwise use comma
+    sep = '\t' if '\t' in first_line else ','
+
+    df = pd.read_csv(file_to_read, sep=sep)
+    # Remove index name to prevent it from appearing in visualizations
+    df.index.name = None
+    return df
+
+
 def make_scenarios_scores_comparison_heat_map(file, score, option):
-    # Convert the data to a DataFrame
-    # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep=r'\s+', header=0)
-    df = Convert_Type.convert_Frame(df)
+    # Convert the data to a DataFrame with fallback and auto-detection
+    df = _read_comparison_file(file)
     # exclude the first column
     df.set_index('Item', inplace=True)
     ref_dataname = df.iloc[:, 0:]

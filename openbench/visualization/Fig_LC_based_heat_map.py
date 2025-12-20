@@ -1,4 +1,6 @@
 import math
+import os
+import logging
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -15,16 +17,106 @@ except ImportError:
     from openbench.util.Mod_Converttype import Convert_Type
 
 
+def _read_metrics_file(file):
+    """
+    Read metrics/scores file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    # Try the given file path first
+    file_to_read = file
+
+    # If file doesn't exist, try alternative extension
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    # Read first line to detect separator
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    # Auto-detect separator: if tabs present, use tab; otherwise use comma
+    if '\t' in first_line:
+        sep = '\t'
+    else:
+        sep = ','
+
+    # Read the file manually to handle inconsistent column counts from trailing tabs
+    with open(file_to_read, 'r') as f:
+        lines = f.readlines()
+
+    # Clean lines by stripping trailing tabs/whitespace
+    cleaned_lines = []
+    for line in lines:
+        # Remove trailing tabs and whitespace, then add newline back
+        cleaned_line = line.rstrip('\t \n\r') + '\n'
+        cleaned_lines.append(cleaned_line)
+
+    # Write cleaned content to a temporary string buffer
+    from io import StringIO
+    cleaned_content = ''.join(cleaned_lines)
+
+    # Read the cleaned content
+    df = pd.read_csv(StringIO(cleaned_content), sep=sep, header=0, index_col=0)
+
+    # Check if first row is "FullName" (old format with ID + FullName rows) - if so, skip ID row
+    if len(df.index) > 0 and df.index[0] == 'FullName':
+        df = pd.read_csv(StringIO(cleaned_content), sep=sep, skiprows=1, header=0, index_col=0)
+
+    # Drop any unnamed columns that may result from trailing tabs
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+
+    # Remove the index name as it shouldn't appear in visualizations
+    df.index.name = None
+
+    return df
+
+
 def make_LC_based_heat_map(file, selected_metrics, lb, option):
     selected_metrics = list(selected_metrics)
-    # Convert the data to a DataFrame
-    # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
+    # Convert the data to a DataFrame with fallback and auto-detection
+    df = _read_metrics_file(file)
+
+    # Convert string values to numeric, replacing 'N/A' with NaN
+    df = df.apply(pd.to_numeric, errors='coerce')
     df = Convert_Type.convert_Frame(df)
-    df.set_index('FullName', inplace=True)
+
     # Select the desired metrics
     # selected_metrics = ['nBiasScore', 'nRMSEScore', 'nPhaseScore', 'nIavScore', 'nSpatialScore', 'overall_score']
     df_selected = df.loc[selected_metrics]
+
+    # Mapping from numeric column IDs to IGBP class names
+    igbp_id_to_name = {
+        '1': "evergreen_needleleaf_forest",
+        '2': "evergreen_broadleaf_forest",
+        '3': "deciduous_needleleaf_forest",
+        '4': "deciduous_broadleaf_forest",
+        '5': "mixed_forests",
+        '6': "closed_shrubland",
+        '7': "open_shrublands",
+        '8': "woody_savannas",
+        '9': "savannas",
+        '10': "grasslands",
+        '11': "permanent_wetlands",
+        '12': "croplands",
+        '13': "urban_and_built_up",
+        '14': "cropland_natural_vegetation_mosaic",
+        '15': "snow_and_ice",
+        '16': "barren_or_sparsely_vegetated",
+        '17': "water_bodies",
+        'All': "Overall",
+    }
 
     shorter = {
         'PFT_groupby':
@@ -69,6 +161,17 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
         }
     }
 
+    def get_short_label(column, groupby):
+        """Get short label for column, handling both numeric IDs and class names."""
+        # First try direct lookup
+        if column in shorter.get(groupby, {}):
+            return shorter[groupby][column]
+        # For IGBP, try mapping numeric ID to class name first
+        if groupby == 'IGBP_groupby' and str(column) in igbp_id_to_name:
+            class_name = igbp_id_to_name[str(column)]
+            return shorter[groupby].get(class_name, str(column))
+        return str(column)
+
     font = {'family': 'DejaVu Sans'}
     # font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -106,7 +209,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                ha=option['x_ha'])
         else:
             item = option['groupby']
-            ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
+            ax.set_xticklabels([get_short_label(column, item) for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
 
         ax.set_ylabel('Scores', fontsize=option['ytick'] + 1)
@@ -198,7 +301,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                ha=option['x_ha'])
         else:
             item = option['groupby']
-            ax.set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
+            ax.set_xticklabels([get_short_label(column, item) for column in df_selected.columns], rotation=option['x_rotation'],
                                ha=option['x_ha'])
 
         ax.set_ylabel('Metrics', fontsize=option['ytick'] + 1)
@@ -319,7 +422,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                                      ha=option['x_ha'])
         else:
             item = option['groupby']
-            axes[-1].set_xticklabels([shorter[item][column] for column in df_selected.columns], rotation=option['x_rotation'],
+            axes[-1].set_xticklabels([get_short_label(column, item) for column in df_selected.columns], rotation=option['x_rotation'],
                                      ha=option['x_ha'])
 
         axes[-1].set_xlabel(option['xlabel'], fontsize=option['xtick'] + 1)
@@ -332,11 +435,13 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
 
 def make_CZ_based_heat_map(file, selected_metrics, lb, option):
     selected_metrics = list(selected_metrics)
-    # Convert the data to a DataFrame
-    # read the data from the file using csv, remove the first row, then set the index to the first column
-    df = pd.read_csv(file, sep=r'\s+', skiprows=1, header=0)
+    # Convert the data to a DataFrame with fallback and auto-detection
+    df = _read_metrics_file(file)
+
+    # Convert string values to numeric, replacing 'N/A' with NaN
+    df = df.apply(pd.to_numeric, errors='coerce')
     df = Convert_Type.convert_Frame(df)
-    df.set_index('FullName', inplace=True)
+
     # Select the desired metrics
     df_selected = df.loc[selected_metrics]
 

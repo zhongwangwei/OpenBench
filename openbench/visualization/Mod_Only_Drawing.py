@@ -128,34 +128,36 @@ class LC_groupby_only_drawing(metrics, scores):
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'IGBP_groupby',
                                                     f'{sim_source}___{ref_source}')
-                            if not os.path.exists(dir_path):
-                                os.makedirs(dir_path)
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
+                                # Also check for .txt extension (legacy files)
+                                output_file_path_txt = output_file_path[:-4] + '.txt'
 
-                                selected_metrics = self.metrics
-                                # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
-                                option['item'] = [evaluation_item, sim_source, ref_source]
-                                option['groupby'] = 'IGBP_groupby'
-                                make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                                if os.path.exists(output_file_path) or os.path.exists(output_file_path_txt):
+                                    selected_metrics = self.metrics
+                                    option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
+                                    option['item'] = [evaluation_item, sim_source, ref_source]
+                                    option['groupby'] = 'IGBP_groupby'
+                                    make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                                else:
+                                    logging.warning(f"Metrics file not found: {output_file_path}")
                             else:
                                 logging.error('Error: No metrics for IGBP class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'IGBP_groupby',
-                                                        f'{sim_source}___{ref_source}')
-                                if not os.path.exists(dir_path):
-                                    os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
+                                # Also check for .txt extension (legacy files)
+                                output_file_path2_txt = output_file_path2[:-4] + '.txt'
 
-                                selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
-                                option['groupby'] = 'IGBP_groupby'
-                                make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
-                                # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
+                                if os.path.exists(output_file_path2) or os.path.exists(output_file_path2_txt):
+                                    selected_scores = self.scores
+                                    option['path'] = f"{self.casedir}/comparisons/IGBP_groupby/{sim_source}___{ref_source}/"
+                                    option['groupby'] = 'IGBP_groupby'
+                                    make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
+                                else:
+                                    logging.warning(f"Scores file not found: {output_file_path2}")
                             else:
                                 logging.error('Error: No scores for IGBP class comparison')
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
@@ -183,34 +185,35 @@ class LC_groupby_only_drawing(metrics, scores):
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
                                                     f'{sim_source}___{ref_source}')
-                            if not os.path.exists(dir_path):
-                                os.makedirs(dir_path)
 
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
-                                selected_metrics = self.metrics
-                                # selected_metrics = list(selected_metrics)
-                                option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
-                                option['item'] = [evaluation_item, sim_source, ref_source]
-                                option['groupby'] = 'PFT_groupby'
-                                make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
-                                # print(f"PFT class metrics comparison results are saved to {output_file_path}")
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
+                                output_file_path_txt = output_file_path[:-4] + '.txt'
+
+                                if os.path.exists(output_file_path) or os.path.exists(output_file_path_txt):
+                                    selected_metrics = self.metrics
+                                    option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
+                                    option['item'] = [evaluation_item, sim_source, ref_source]
+                                    option['groupby'] = 'PFT_groupby'
+                                    make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
+                                else:
+                                    logging.warning(f"Metrics file not found: {output_file_path}")
                             else:
                                 logging.error('Error: No scores for PFT class comparison')
 
                             if len(self.scores) > 0:
-                                dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
-                                                        f'{sim_source}___{ref_source}')
-                                if not os.path.exists(dir_path):
-                                    os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
-                                selected_scores = self.scores
-                                option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
-                                option['groupby'] = 'PFT_groupby'
-                                make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
-                                # print(f"PFT class scores comparison results are saved to {output_file_path2}")
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
+                                output_file_path2_txt = output_file_path2[:-4] + '.txt'
+
+                                if os.path.exists(output_file_path2) or os.path.exists(output_file_path2_txt):
+                                    selected_scores = self.scores
+                                    option['path'] = f"{self.casedir}/comparisons/PFT_groupby/{sim_source}___{ref_source}/"
+                                    option['groupby'] = 'PFT_groupby'
+                                    make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
+                                else:
+                                    logging.warning(f"Scores file not found: {output_file_path2}")
                             else:
                                 logging.error('Error: No scores for PFT class comparison')
         _scenarios_PFT_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
@@ -364,7 +367,7 @@ class CZ_groupby_only_drawing(metrics, scores):
 
                             if len(self.metrics) > 0:
                                 output_file_path = os.path.join(dir_path,
-                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
                                 with open(output_file_path, "w") as output_file:
                                     # Print the table header with an additional column for the overall median
                                     output_file.write("ID\t")
@@ -423,7 +426,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                 if not os.path.exists(dir_path):
                                     os.makedirs(dir_path)
                                 output_file_path2 = os.path.join(dir_path,
-                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                 f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
                                 with open(output_file_path2, "w") as output_file:
                                     # Print the table header with an additional column for the overall mean
                                     output_file.write("ID\t")
@@ -618,7 +621,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                     os.makedirs(dir_path, exist_ok=True)
 
                                     output_file_path = os.path.join(dir_path,
-                                                                    f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                                    f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
                                     selected_metrics = self.metrics
                                     option['path'] = os.path.join(self.casedir, 'comparisons', 'IGBP_groupby',
                                                                   f'{sim_source}___{ref_source}')
@@ -627,7 +630,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                     make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
 
                                     output_file_path2 = os.path.join(basedir, 'comparisons', 'IGBP_groupby',
-                                                                     f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                                     f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
                                     selected_scores = self.scores
                                     option['groupby'] = 'IGBP_groupby'
                                     make_LC_based_heat_map(output_file_path2, selected_scores, 'score', option)
@@ -663,7 +666,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             os.makedirs(dir_path, exist_ok='True')
 
                             output_file_path = os.path.join(dir_path,
-                                                            f'{evaluation_item}_{sim_source}___{ref_source}_metrics.txt')
+                                                            f'{evaluation_item}_{sim_source}___{ref_source}_metrics.csv')
 
                             selected_metrics = self.metrics
                             # selected_metrics = list(selected_metrics)
@@ -673,7 +676,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             make_LC_based_heat_map(output_file_path, selected_metrics, 'metric', option)
 
                             output_file_path2 = os.path.join(dir_path,
-                                                             f'{evaluation_item}_{sim_source}___{ref_source}_scores.txt')
+                                                             f'{evaluation_item}_{sim_source}___{ref_source}_scores.csv')
 
                             selected_scores = self.scores
                             option['groupby'] = 'PFT_groupby'
@@ -684,7 +687,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             dir_path = os.path.join(casedir, 'comparisons', 'HeatMap')
             for score in scores:
-                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
                 make_scenarios_scores_comparison_heat_map(output_file_path, score, option)
         finally:
             gc.collect()  # Clean up memory after processing
@@ -706,11 +709,16 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for ref_source in ref_sources:
                         try:
-                            output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.txt")
+                            output_file_path = os.path.join(dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.csv")
+                            # Fallback to .txt if .csv not found
                             if not os.path.exists(output_file_path):
-                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
-                                continue
+                                output_file_path_txt = output_file_path[:-4] + '.txt'
+                                if os.path.exists(output_file_path_txt):
+                                    output_file_path = output_file_path_txt
+                                else:
+                                    logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                    continue
                             stds = np.zeros(len(sim_sources) + 1)
                             cors = np.zeros(len(sim_sources) + 1)
                             RMSs = np.zeros(len(sim_sources) + 1)
@@ -749,11 +757,16 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                     for ref_source in ref_sources:
                         try:
-                            output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.txt")
+                            output_file_path = os.path.join(dir_path, f"target_diagram_{evaluation_item}_{ref_source}.csv")
+                            # Fallback to .txt if .csv not found
                             if not os.path.exists(output_file_path):
-                                logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
-                                continue
+                                output_file_path_txt = output_file_path[:-4] + '.txt'
+                                if os.path.exists(output_file_path_txt):
+                                    output_file_path = output_file_path_txt
+                                else:
+                                    logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                    continue
                             biases = np.zeros(len(sim_sources))
                             rmses = np.zeros(len(sim_sources))
                             crmsds = np.zeros(len(sim_sources))
@@ -905,20 +918,24 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             dir_path = os.path.join(basedir, 'comparisons', 'Parallel_Coordinates')
             os.makedirs(dir_path, exist_ok=True)
-            output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.txt")
+            output_file_path = os.path.join(dir_path, "Parallel_Coordinates_evaluations.csv")
 
-            # Deal with output_file_path, remove the column and its index with any nan values
+            # Fallback to .txt if .csv not found
             if not os.path.exists(output_file_path):
-                logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
-                return
+                output_file_path_txt = output_file_path[:-4] + '.txt'
+                if os.path.exists(output_file_path_txt):
+                    output_file_path = output_file_path_txt
+                else:
+                    logging.error(f"File not found in only_drawing mode: {output_file_path}")
+                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                    return
             df = pd.read_csv(output_file_path, sep='\t', header=0)
             df = df.dropna(axis=1, how='any')
             # If index in scores or metrics was dropped, then remove the corresponding scores or metrics
             scores = [score for score in scores if score in df.columns]
             metrics = [metric for metric in metrics if metric in df.columns]
 
-            output_file_path1 = os.path.join(dir_path, "Parallel_Coordinates_evaluations_remove_nan.txt")
+            output_file_path1 = os.path.join(dir_path, "Parallel_Coordinates_evaluations_remove_nan.csv")
             df.to_csv(output_file_path1, sep='\t', index=False)
 
             make_scenarios_comparison_parallel_coordinates(output_file_path1, self.casedir, evaluation_items, scores, metrics, option)
@@ -929,7 +946,12 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             dir_path = os.path.join(basedir, 'comparisons', 'Portrait_Plot_seasonal')
             os.makedirs(dir_path, exist_ok=True)
-            output_file_path = os.path.join(dir_path, "Portrait_Plot_seasonal.txt")
+            output_file_path = os.path.join(dir_path, "Portrait_Plot_seasonal.csv")
+            # Fallback to .txt if .csv not found
+            if not os.path.exists(output_file_path):
+                output_file_path_txt = output_file_path[:-4] + '.txt'
+                if os.path.exists(output_file_path_txt):
+                    output_file_path = output_file_path_txt
             make_scenarios_comparison_Portrait_Plot_seasonal(output_file_path, self.casedir, evaluation_items, scores, metrics,
                                                              option)
         finally:
@@ -1524,7 +1546,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         try:
             dir_path = os.path.join(casedir, 'comparisons', 'RadarMap')
             for score in scores:
-                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.txt")
+                output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
                 make_scenarios_comparison_radar_map(output_file_path, score, option)
         finally:
             gc.collect()  # Clean up memory after processing

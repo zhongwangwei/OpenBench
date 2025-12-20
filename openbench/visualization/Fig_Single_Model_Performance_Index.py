@@ -1,19 +1,55 @@
+import logging
+import math
+import os
+import sys
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as st
 from matplotlib import rcParams
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 try:
     from openbench.util.Mod_Converttype import Convert_Type
 except ImportError:
-    import sys
-    import os
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from openbench.util.Mod_Converttype import Convert_Type
-import math
-from matplotlib.patches import Patch
-from matplotlib.lines import Line2D
+
+
+def _read_comparison_file(file):
+    """
+    Read comparison file with fallback logic.
+    Try .csv first, then .txt if not found.
+    Auto-detect separator (tab or comma).
+    """
+    file_to_read = file
+
+    if not os.path.exists(file):
+        if file.endswith('.csv'):
+            alt_file = file[:-4] + '.txt'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+        elif file.endswith('.txt'):
+            alt_file = file[:-4] + '.csv'
+            if os.path.exists(alt_file):
+                logging.info(f"File {file} not found, using {alt_file}")
+                file_to_read = alt_file
+
+    if not os.path.exists(file_to_read):
+        raise FileNotFoundError(f"Neither {file} nor alternative extension found")
+
+    with open(file_to_read, 'r') as f:
+        first_line = f.readline()
+
+    sep = '\t' if '\t' in first_line else ','
+    df = pd.read_csv(file_to_read, sep=sep, header=0)
+    # Remove index name to prevent it from appearing in visualizations
+    df.index.name = None
+    return df
+
 
 def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option):
     # Read the SMPI data
@@ -32,8 +68,9 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
               'text.usetex': False}
     rcParams.update(params)
 
-    data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.txt"
-    df = pd.read_csv(data_path, sep='\t')
+    data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.csv"
+    # Read file with fallback and auto-detection
+    df = _read_comparison_file(data_path)
     df = Convert_Type.convert_Frame(df)
     # Prepare the subplot grid
     n_items = len(evaluation_items)
