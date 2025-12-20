@@ -14,6 +14,13 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+# Import chunked dataset loader for memory efficiency
+try:
+    from openbench.util.Mod_DatasetLoader import open_dataset as open_dataset_chunked
+except ImportError:
+    # Fallback to standard xr.open_dataset if not available
+    open_dataset_chunked = xr.open_dataset
+
 # Import parallel engine
 try:
     from openbench.util.Mod_ParallelEngine import (
@@ -215,8 +222,8 @@ class Evaluation_grid(metrics, scores):
                                   f'{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
 
             # Open datasets and keep references for proper cleanup
-            ref_ds = xr.open_dataset(ref_path)
-            sim_ds = xr.open_dataset(sim_path)
+            ref_ds = open_dataset_chunked(ref_path)
+            sim_ds = open_dataset_chunked(sim_path)
             o = ref_ds[f'{self.ref_varname}']
             s = sim_ds[f'{self.sim_varname}']
             o = Convert_Type.convert_nc(o)
@@ -512,9 +519,9 @@ class Evaluation_stn(metrics, scores):
                     ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
                                           f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
-                    # Open datasets and keep references for proper cleanup
-                    sim_ds = xr.open_dataset(sim_path)
-                    ref_ds = xr.open_dataset(ref_path)
+                    # Open datasets (station files are small, no chunking needed)
+                    sim_ds = open_dataset_chunked(sim_path, use_chunking=False)
+                    ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
                     s = self._load_station_dataset(sim_ds, 'sim')
                     o = self._load_station_dataset(ref_ds, 'ref')
 
@@ -644,9 +651,9 @@ class Evaluation_stn(metrics, scores):
                 logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
                 return None
 
-            # Open datasets and keep references for proper cleanup
-            sim_ds = xr.open_dataset(sim_path)
-            ref_ds = xr.open_dataset(ref_path)
+            # Open datasets (station files are small, no chunking needed)
+            sim_ds = open_dataset_chunked(sim_path, use_chunking=False)
+            ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
             s_ds = self._load_station_dataset(sim_ds, 'sim')
             o_ds = self._load_station_dataset(ref_ds, 'ref')
             s = s_ds.to_array().squeeze()
