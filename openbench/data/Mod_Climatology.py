@@ -248,9 +248,9 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
 
     # Only trigger climatology mode when explicitly configured
     if not (is_ref_climatology or is_sim_climatology):
-        # No climatology configuration - use original time series data
+        # No climatology configuration - return None to indicate regular time series mode
         logging.debug("非气候态评估 - 使用原始时间序列")
-        return ref_ds, sim_ds, metrics
+        return None, None, metrics
 
     # Climatology mode explicitly enabled
     logging.info("气候态评估模式已激活 (data_groupby='climatology')")

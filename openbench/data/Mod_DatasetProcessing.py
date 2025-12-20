@@ -9,6 +9,13 @@ import time
 import functools
 from typing import List, Dict, Any, Tuple, Callable, Union
 
+# Import cached glob for performance
+try:
+    from openbench.util.Mod_DatasetLoader import cached_glob
+except ImportError:
+    # Fallback to standard glob
+    cached_glob = lambda pattern, **kwargs: sorted(glob.glob(pattern))
+
 # Try to import psutil for performance monitoring, use fallback if not available
 try:
     import psutil
@@ -187,11 +194,11 @@ def performance_monitor(func: Callable = None, *, silent_on_error: bool = False)
                     cpu_used = 0
 
                 # Log performance
-                logging.info(f"Performance for {f.__name__}:")
-                logging.info(f"  Execution time: {execution_time:.2f} seconds")
+                logging.debug(f"Performance for {f.__name__}:")
+                logging.debug(f"  Execution time: {execution_time:.2f} seconds")
                 if _HAS_PSUTIL:
-                    logging.info(f"  Memory usage: {memory_used:.3f} GB")
-                    logging.info(f"  CPU usage: {cpu_used:.1f}%")
+                    logging.debug(f"  Memory usage: {memory_used:.3f} GB")
+                    logging.debug(f"  CPU usage: {cpu_used:.1f}%")
 
                 # Use enhanced performance warning if available
                 # Disabled to reduce log noise
@@ -704,9 +711,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         # Legacy mode - data is datasource string
         if isinstance(data, str):
             datasource = data
-            logging.info(f"Processing {datasource} data")
+            logging.debug(f"Processing {datasource} data")
             self._preprocess(datasource)
-            logging.info(f"{datasource.capitalize()} data prepared!")
+            logging.debug(f"{datasource.capitalize()} data prepared!")
             return None
 
         # Interface mode - data is xr.Dataset
@@ -744,7 +751,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         data_params = self.get_data_params(datasource)
 
         if data_params['data_type'] != 'stn':
-            logging.info(f"Processing {data_params['data_type']} data")
+            logging.debug(f"Processing {data_params['data_type']} data")
             self.process_grid_data(data_params)
         else:
             self.process_station_data(data_params)
@@ -846,7 +853,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     return ds.squeeze()
 
     @performance_monitor
-    @cached(key_prefix="time_integrity", ttl=1800)  # Cache for 30 minutes
+    # NOTE: @cached removed - cache key collisions caused race conditions
     def check_dataset_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
         # Ensure the dataset has a proper time index
@@ -861,7 +868,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return ds
 
     @performance_monitor
-    @cached(key_prefix="make_time_integrity", ttl=1800)  # Cache for 30 minutes
+    # NOTE: @cached removed - cache key collisions caused race conditions
     def make_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
         if match:
@@ -1159,7 +1166,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
 
     @performance_monitor
-    @cached(key_prefix="resample_data", ttl=1800)  # Cache for 30 minutes
+    # NOTE: @cached removed - cache key collisions caused race conditions
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
@@ -1197,7 +1204,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 ds_year.attrs = {}
                 output_file = os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{year}{suffix}.nc')
                 ds_year.to_netcdf(output_file)
-                logging.info(f"Saved {output_file}")
+                logging.debug(f"Saved {output_file}")
             finally:
                 # Clean up memory
                 if ds_year is not None and hasattr(ds_year, 'close'):
@@ -1210,7 +1217,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             # Update number of cores based on dataset size
             optimal_cores = min(self.get_optimal_cores(dataset_size_gb), self.num_cores)
-            logging.info(f"Using {optimal_cores} cores for splitting years")
+            logging.debug(f"Using {optimal_cores} cores for splitting years")
 
             years = range(use_syear, use_eyear + 1)
             Parallel(n_jobs=optimal_cores)(
@@ -1225,12 +1232,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def combine_year(self, year: int, casedir: str, dirx: str, suffix: str, prefix: str, varname: List[str], datasource: str,
                      tim_res: str) -> xr.Dataset:
-        # Try primary path first
-        var_files = glob.glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
+        # Try primary path first (use cached glob for performance)
+        var_files = cached_glob(os.path.join(dirx, f'{prefix}{year}*{suffix}.nc'))
 
         # Try alternative path if no files found
         if not var_files:
-            var_files = glob.glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
+            var_files = cached_glob(os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc'))
 
         # Filter files: only keep files where the part between prefix+year and suffix contains no letters
         # This prevents matching files like "prefix_cama_year" when we want "prefix_year"
@@ -1291,7 +1298,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def preprocess_single_file(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                casedir: str, suffix: str, prefix: str, datasource: str) -> None:
-        logging.info('The dataset groupby is Single --> split it to Year')
+        logging.debug('The dataset groupby is Single --> split it to Year')
         varfile = self.check_file_exist(os.path.join(dirx, f'{prefix}{suffix}.nc'))
         ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
         ds = self.check_coordinate(ds)
@@ -1303,7 +1310,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def preprocess_non_yearly_files(self, dirx: str, syear: int, eyear: int, tim_res: str, varunit: str, varname: List[str],
                                     casedir: str, suffix: str, prefix: str, datasource: str) -> None:
-        logging.info('The dataset groupby is not Year --> combine it to Year')
+        logging.debug('The dataset groupby is not Year --> combine it to Year')
         ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
@@ -1323,7 +1330,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
     @performance_monitor
-    @cached(key_prefix="process_units", ttl=3600)  # Cache for 1 hour
+    # NOTE: @cached removed - cache key collisions caused race conditions
+    # Different datasets with same structure produced identical keys
     def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
         try:
             # 确保我们获取实际的数据数组而不是方法
@@ -1354,7 +1362,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             # 更新单位属性
             ds.attrs['units'] = new_unit
-            logging.info(f"Converted unit from {varunit} to {new_unit}")
+            logging.debug(f"Converted unit from {varunit} to {new_unit}")
 
             return ds, new_unit
 
@@ -1374,7 +1382,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 class StationDatasetProcessing(BaseDatasetProcessing):
     def process_station_data(self, data_params: Dict[str, Any]) -> None:
         try:
-            logging.info("Processing station data")
+            logging.debug("Processing station data")
             if not hasattr(self, 'station_list') or self.station_list is None or self.station_list.empty:
                 logging.error("Station list is empty; cannot process station data.")
                 return
@@ -1559,7 +1567,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             else:
                 data.to_netcdf(output_file)
 
-            logging.info(f"Saved station data to {output_file}")
+            logging.debug(f"Saved station data to {output_file}")
         finally:
             if hasattr(data, 'close'):
                 data.close()
@@ -1652,7 +1660,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                                        f'{self.item}_{datasource}_{station["ID"]}_{station["use_syear"]}_{station["use_eyear"]}.nc')
 
             data.to_netcdf(output_file)
-            logging.info(f"Saved extracted station data to {output_file}")
+            logging.debug(f"Saved extracted station data to {output_file}")
         finally:
             if hasattr(data, 'close'):
                 data.close()
@@ -1688,7 +1696,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def process_non_yearly_files(self, data_params: Dict[str, Any]) -> None:
-        logging.info(f"Combining data to yearly files...")
+        logging.debug(f"Combining data to yearly files...")
         years = range(self.minyear, self.maxyear + 1)
         Parallel(n_jobs=self.num_cores)(
             delayed(self.check_all)(data_params['data_dir'], year, year,
@@ -1737,9 +1745,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                                                   data_dir, year)
                 for year in years
             )
-            var_files = glob.glob(os.path.join(self.casedir, 'scratch', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'))
+            # Force refresh since files were just created by parallel processing
+            var_files = cached_glob(os.path.join(self.casedir, 'scratch', f'{data_source}_{data_params["varname"][0]}_remap_*.nc'), force_refresh=True)
         else:
-            var_files = glob.glob(os.path.join(data_dir, f'{data_source}_{data_params["prefix"]}*{data_params["suffix"]}.nc'))
+            var_files = cached_glob(os.path.join(data_dir, f'{data_source}_{data_params["prefix"]}*{data_params["suffix"]}.nc'))
 
         self.combine_and_save_data(var_files, data_params)
 
@@ -1787,7 +1796,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def extract_station_data_if_needed(self, data_params: Dict[str, Any]) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
-            logging.info(f"Extracting station data for {data_params['datasource']} data")
+            logging.debug(f"Extracting station data for {data_params['datasource']} data")
             self.extract_station_data(data_params)
 
     def extract_station_data(self, data_params: Dict[str, Any]) -> None:
@@ -1811,8 +1820,8 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
             var_file = os.path.join(dirx, f'{data_source}_{prefix}{year}{suffix}.nc')
             if self.debug_mode:
-                logging.info(f"Processing {var_file} for year {year}")
-                logging.info(f"Processing {data_source} data for year {year}")
+                logging.debug(f"Processing {var_file} for year {year}")
+                logging.debug(f"Processing {data_source} data for year {year}")
 
             with xr.open_dataset(var_file) as data:
                 data = Convert_Type.convert_nc(data)
@@ -1823,7 +1832,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             gc.collect()
 
     @performance_monitor
-    @cached(key_prefix="preprocess_grid_data", ttl=3600)  # Cache for 1 hour
+    # NOTE: @cached removed - cache key collisions caused race conditions
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
         # Check if lon and lat are 2D
         data = self.check_coordinate(data)

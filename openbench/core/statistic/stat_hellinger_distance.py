@@ -51,6 +51,12 @@ def stat_hellinger_distance(self, v, u):
 
         return hellinger_dist
 
+    # Rechunk time dimension to single chunk for apply_ufunc with dask
+    if hasattr(v, 'chunks') and v.chunks is not None:
+        v = v.chunk({'time': -1})
+    if hasattr(u, 'chunks') and u.chunks is not None:
+        u = u.chunk({'time': -1})
+
     # Apply the function to each grid point
     score = xr.apply_ufunc(
         calc_hellinger_distance,
