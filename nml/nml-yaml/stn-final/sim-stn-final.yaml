@@ -1,9 +1,0 @@
-general:
-  Streamflow_sim_source:
-  - colm-routing
-  - colm-cama
-  - TE-routing
-def_nml:
-  colm-routing: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-yaml/user/River-test/colm-routing.yaml
-  colm-cama: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-yaml/user/River-test/colm-cama.yaml
-  TE-routing: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-yaml/user/River-test/TE-routing.yaml
