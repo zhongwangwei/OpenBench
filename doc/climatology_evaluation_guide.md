@@ -241,6 +241,5 @@ A: 某些指标 (如相位得分、年际变率) 需要完整的时间变化信�
 
 ## 相关文档
 
-- [CLAUDE.md](../CLAUDE.md) - OpenBench 总体架构
 - [Configuration Guide](./configuration_guide.md) - 配置文件详细说明
 - [Metrics Guide](./metrics_guide.md) - 评估指标说明
