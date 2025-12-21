@@ -93,13 +93,6 @@ o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
 
 **测试结果**: ✅ 所有测试通过
 
-### 5. 文档更新
-
-更新 `CLAUDE.md`:
-- 添加 "Climatology Evaluation" 章节
-- 更新 "Data Processing Flow" 以包含气候态检测步骤
-- 提供配置示例和使用指南链接
-
 ## 向后兼容性
 
 ✅ **完全向后兼容**
@@ -171,7 +164,6 @@ INFO - Calculated monthly climatology from simulation data
 ### 修改的文件
 1. `openbench/data/Mod_Climatology.py` - 添加 `is_climatology_mode()` 方法
 2. `openbench/core/evaluation/Mod_Evaluation.py` - 更新调用方式
-3. `CLAUDE.md` - 添加气候态评估说明
 
 ### 新增的文件
 1. `docs/climatology_evaluation_guide.md` - 详细使用指南
