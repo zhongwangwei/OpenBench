@@ -1,4 +1,0 @@
-general:
-  Streamflow_ref_source: GRDC
-def_nml:
-  GRDC: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-yaml/Ref_variables_definition_station/GRDC.yaml
