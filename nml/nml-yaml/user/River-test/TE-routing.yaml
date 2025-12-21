@@ -1,0 +1,13 @@
+general:
+  model_namelist: ./nml/nml-yaml/Mod_variables_definition/TE.yaml
+  timezone: 0.0
+  data_type: grid
+  data_groupby: Year
+  dir: ./dataset/Simulation/River-test/TE-routing/
+  fulllist: ''
+  tim_res: Month
+  grid_res: 0.25
+  suffix: _GLB025
+  prefix: YEE2_JRA-55_outflw_M
+  syear: 2002
+  eyear: 2006
