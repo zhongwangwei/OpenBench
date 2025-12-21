@@ -1,0 +1,9 @@
+general:
+  Streamflow_ref_source: GRDC
+  Sensible_Heat_ref_source:
+  - PLUMBER2S
+  - FLUX_PLUMBER2
+def_nml:
+  GRDC: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-Fortran/Ref_variables_definition_station/GRDC.nml
+  PLUMBER2S: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-Fortran/Ref_variables_definition_station/PLUMBER2S.nml
+  FLUX_PLUMBER2: /Users/zhongwangwei/Desktop/OpenBench/nml/nml-Fortran/Ref_variables_definition_station/FLUX_PLUMBER2.nml
