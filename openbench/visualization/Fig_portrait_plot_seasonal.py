@@ -107,6 +107,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                                colorbar_width=option['colorbar_width'],
                                colorbar_height=option['colorbar_height'])
 
+    # Initialize variables that may not be assigned if all iterations fail
+    fig, ax, cbar, filename, output_file_path = None, None, None, None, None
     for item, references in item_references.items():
         for reference in references:
             # Initialize data_score array
@@ -171,8 +173,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
-            except:
-                logging.error(f"Error in {item} - {reference}")
+            except Exception as e:
+                logging.error(f"Error in {item} - {reference}: {e}")
     # delete the variables
     del df, unique_items, item_references, sim_sources, item, references, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 
@@ -198,6 +200,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # Generate all combinations of `Reference` values from `filtered_df`.
     all_combinations = list(itertools.product(*filtered_df['Reference']))
 
+    # Initialize variables that may not be assigned if all iterations fail
+    fig, ax, cbar, filename, output_file_path = None, None, None, None, None
     # Iterate over each score
     for score in scores:
         # Iterate over each `item_combination` in the generated combinations.
@@ -274,8 +278,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
-            except:
-                logging.error(f"Error in {score} - {item_combination}")
+            except Exception as e:
+                logging.error(f"Error in {score} - {item_combination}: {e}")
     # delete the variables
     del df, filtered_df, unique_items, sim_sources, all_combinations, score, item_combination, mask, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 
@@ -298,6 +302,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     evaluation_items = metrics
     # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df['Simulation'].unique()
+    # Initialize variables that may not be assigned if all iterations fail
+    fig, ax, cbar, filename, output_file_path = None, None, None, None, None
     # Iterate over each variable and its corresponding references
     for item, references in item_references.items():
         for reference in references:
@@ -385,8 +391,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
                     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                     plt.close()
-                except:
-                    logging.error(f"Error in {reference} - {item} {metric}")
+                except Exception as e:
+                    logging.error(f"Error in {reference} - {item} {metric}: {e}")
     del df, unique_items, item_references, metric, sim_sources, item, references, data_metric, xaxis_labels, yaxis_labels, mfigsize, fig, ax, cbar, filename, output_file_path
 
     # -------------------------------------------------------------------------------------------------------------------
@@ -487,8 +493,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
                 plt.close()
-            except:
-                logging.error(f"Error in {metric} - {item_combination}")
+            except Exception as e:
+                logging.error(f"Error in {metric} - {item_combination}: {e}")
 
     del df, filtered_df, unique_items, sim_sources, all_combinations, metric, item_combination, mask, data_metric, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
 

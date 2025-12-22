@@ -4,6 +4,6 @@ general:
   - PLUMBER2S
   - FLUX_PLUMBER2
 def_nml:
-  GRDC: ./nml/nml-Fortran/Ref_variables_definition_station/GRDC.nml
-  PLUMBER2S: ./nml/nml-Fortran/Ref_variables_definition_station/PLUMBER2S.nml
-  FLUX_PLUMBER2: ./nml/nml-Fortran/Ref_variables_definition_station/FLUX_PLUMBER2.nml
+  GRDC: ./nml/nml-yaml/Ref_variables_definition_station/GRDC.yaml
+  PLUMBER2S: ./nml/nml-yaml/Ref_variables_definition_station/PLUMBER2S.yaml
+  FLUX_PLUMBER2: ./nml/nml-yaml/Ref_variables_definition_station/FLUX_PLUMBER2.yaml
