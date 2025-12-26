@@ -40,8 +40,8 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
          pass
 
    else:
-      logging.error('tim_res error')
-      exit()
+      logging.error('tim_res error: invalid time resolution format')
+      raise ValueError('Invalid time resolution format')
    return ds
 
 def filter_CoLM(info, ds=None):   #update info as well

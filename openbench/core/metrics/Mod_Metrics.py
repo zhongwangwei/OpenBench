@@ -66,7 +66,8 @@ class metrics:
             xr.DataArray: Percent bias
         """
         s, o = self._validate_inputs(s, o)
-        return 100.0 * (s - o).sum(dim='time') / o.sum(dim='time')
+        o_sum = o.sum(dim='time')
+        return xr.where(o_sum != 0, 100.0 * (s - o).sum(dim='time') / o_sum, np.nan)
 
 
     def absolute_percent_bias(self, s, o):
@@ -231,7 +232,7 @@ class metrics:
         #1 - sum((s-o)**2)/sum((o-np.mean(o))**2)
         _tmp1=((o-o.mean(dim='time'))**2).sum(dim='time')
         _tmp2=((s-o)**2).sum(dim='time')
-        var=1-_tmp2/_tmp1
+        var = xr.where(_tmp1 != 0, 1 - _tmp2 / _tmp1, np.nan)
         return var
     
     def KGE(self,s,o):
@@ -423,7 +424,8 @@ class metrics:
         s=s.dropna(dim='time').astype(np.float32)
         o=o.dropna(dim='time').astype(np.float32)
 
-        return (s.min(dim='time')-o.min(dim='time'))/o.min(dim='time')    #(np.min(s)-np.min(o))/np.min(o)
+        o_min = o.min(dim='time')
+        return xr.where(o_min != 0, (s.min(dim='time') - o_min) / o_min, np.nan)    #(np.min(s)-np.min(o))/np.min(o)
 
     def pc_ampli(self,s,o):
         mask1 = np.isnan(s) | np.isnan(o)
@@ -448,21 +450,21 @@ class metrics:
         #Ratio of standard deviations
         #also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
         #Indicates if flow variability is being over- or underestimated; calculated from rSD in the hydroGOF R package
-        pass
-    
+        raise NotImplementedError("rSD metric is not yet implemented")
+
     def PBIAS_HF (self,s,o):
         #Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
         #also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
         #Characterizes response to large precipitation events; calculated using flows ≥ the 98th percentile flow with pbias in the hydroGOF R package
-        pass
-    
+        raise NotImplementedError("PBIAS_HF metric is not yet implemented")
+
     def PBIAS_LF (self,s,o):
         #Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
         #also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
         #Characterizes baseflow; calculated following equations in
         #Yilmaz et al. (2008) using logged flows ≤ the 30th percentile (zeros are set to the USGS observational threshold
         #of 0.01 ft3 s−1 (0.000283 m3 s−1))
-        pass
+        raise NotImplementedError("PBIAS_LF metric is not yet implemented")
 
     def APFB(self, data_array, obs_array, start_month=1, out_per_year=False, fun=None, epsilon_type="none", epsilon_value=None):
         """

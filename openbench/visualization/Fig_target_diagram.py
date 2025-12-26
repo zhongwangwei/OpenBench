@@ -467,7 +467,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     
     if option['markerlegend'] == 'on':
         # Check that marker labels have been provided
-        if option['markerlabel'] == '' and option['markers'] == None:
+        if option['markerlabel'] == '' and option['markers'] is None:
             raise ValueError('No marker labels provided.')
 
         # Plot markers of different color and symbols with labels displayed in a legend

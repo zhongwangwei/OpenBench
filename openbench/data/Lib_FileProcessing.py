@@ -76,11 +76,11 @@ class FileProcessing:
       filenames = sorted(glob.glob(f'{file_path}*.nc'))
       df = pd.DataFrame(columns=['ID', 'SYEAR', 'EYEAR', 'LON', 'LAT', 'file_path'], index=range(len(filenames)))  # 'R': R,'KGE': KGE,
       for i, file in enumerate(filenames):
-         ds = xr.open_dataset(f'{file}')
-         df.iloc[i, 0] = file.split('_')[0]
-         df.iloc[i, 1] = ds.time.dt.year[0].values
-         df.iloc[i, 2] = ds.time.dt.year[-1].values
-         df.iloc[i, 3] = ds.lon.values
-         df.iloc[i, 4] = ds.lat.values
-         df.iloc[i, 5] = path
+         with xr.open_dataset(f'{file}') as ds:
+            df.iloc[i, 0] = file.split('_')[0]
+            df.iloc[i, 1] = ds.time.dt.year[0].values
+            df.iloc[i, 2] = ds.time.dt.year[-1].values
+            df.iloc[i, 3] = ds.lon.values
+            df.iloc[i, 4] = ds.lat.values
+            df.iloc[i, 5] = path
       df.to_csv(f"{list_patch}/{dsource}_tmp.csv", index=False)

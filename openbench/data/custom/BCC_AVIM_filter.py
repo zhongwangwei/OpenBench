@@ -19,8 +19,8 @@ def adjust_time_BCC_AVIM(info, ds,syear,eyear,tim_res):
          logging.info('Adjusting time values for yearly BCC_AVIM output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
-      logging.error('tim_res error')
-      exit()
+      logging.error('tim_res error: invalid time resolution format')
+      raise ValueError('Invalid time resolution format')
    return ds
 
 
