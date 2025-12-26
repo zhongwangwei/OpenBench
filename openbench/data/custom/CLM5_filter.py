@@ -19,8 +19,8 @@ def adjust_time_CLM5(info, ds,syear,eyear,tim_res):
          logging.info('Adjusting time values for yearly CLM5 output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
    else:
-      logging.error('tim_res error')
-      exit()
+      logging.error('tim_res error: invalid time resolution format')
+      raise ValueError('Invalid time resolution format')
    return ds
 
 def filter_CLM5(info, ds):   #update info as well
@@ -38,8 +38,8 @@ def filter_CLM5(info, ds):   #update info as well
          ds['FIRA']=-ds['FIRA']
          info.sim_varname='FIRA'
          info.sim_varunit='W m-2'
-      except:
-         logging.error('Surface Net LW Radiation calculation processing ERROR!!!')
+      except Exception as e:
+         logging.error(f'Surface Net LW Radiation calculation processing ERROR: {e}')
       return info, ds['FIRA']
    
    if info.item == "Surface_Soil_Moisture":
