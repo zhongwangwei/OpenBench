@@ -468,6 +468,40 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             'lon': 'auto'
         }
 
+    @staticmethod
+    def validate_year(year, default=None, min_year=1900, max_year=2100):
+        """Validate and convert year value to integer within valid range.
+
+        Args:
+            year: Year value to validate (can be int, float, str, or None)
+            default: Default value if year is invalid
+            min_year: Minimum valid year (default 1900)
+            max_year: Maximum valid year (default 2100)
+
+        Returns:
+            Valid integer year value
+        """
+        # Handle None, empty string, or whitespace
+        if year is None or (isinstance(year, str) and year.strip() == ''):
+            return default if default is not None else min_year
+
+        # Try to convert to integer
+        try:
+            year_int = int(float(year))
+        except (ValueError, TypeError):
+            logging.warning(f"Invalid year value: {year}. Using default: {default if default else min_year}")
+            return default if default is not None else min_year
+
+        # Validate range
+        if year_int < min_year:
+            logging.warning(f"Year {year_int} is before {min_year}. Adjusting to {min_year}.")
+            return min_year
+        if year_int > max_year:
+            logging.warning(f"Year {year_int} is after {max_year}. Adjusting to {max_year}.")
+            return max_year
+
+        return year_int
+
     def setup_data_pipeline(self, config: Dict[str, Any]):
         """Setup data processing pipeline with configuration."""
         if not _HAS_PIPELINE:
@@ -788,6 +822,10 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return ds
 
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
+        # Validate year values
+        syear = self.validate_year(syear, default=1990)
+        eyear = self.validate_year(eyear, default=2020)
+
         if 'time' not in ds.coords:
             print("The dataset does not contain a 'time' coordinate.")
             # Based on the syear and eyear, create a time index
@@ -870,6 +908,10 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     # NOTE: @cached removed - cache key collisions caused race conditions
     def make_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
+        # Validate year values
+        syear = self.validate_year(syear, default=1990)
+        eyear = self.validate_year(eyear, default=2020)
+
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
         if match:
             num_value, time_unit = match.groups()
