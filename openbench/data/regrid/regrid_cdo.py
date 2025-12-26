@@ -26,10 +26,11 @@ class regridder_cdo:
       cmd = f"cdo remaplaf,{target_grid} {input_file} {output_file}"
       subprocess.run(cmd, shell=True, check=True)
 
-      # Load remapped data with xarray for further analysis (optional)
-      remapped_data = xr.open_dataset(output_file)
+      # Load remapped data with xarray and properly close file handle
+      with xr.open_dataset(output_file) as remapped_data:
+          loaded_data = remapped_data.load()
 
-      return Convert_Type.convert_nc(remapped_data)
+      return Convert_Type.convert_nc(loaded_data)
    '''
    def remaplaf_with_3D_parallel(
       source_data, source_lon, source_lat, target_lon, target_lat, n_jobs=-1

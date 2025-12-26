@@ -26,11 +26,11 @@ import cmaps
 from .Fig_toolbox import get_index, convert_unit, get_colormap, tick_length
 
 def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
-    ds = xr.open_dataset(f"{file}")
-    ds = Convert_Type.convert_nc(ds)
-    data = ds.Standard_Deviation
-    ilat = ds.lat.values
-    ilon = ds.lon.values
+    with xr.open_dataset(f"{file}") as ds:
+        ds = Convert_Type.convert_nc(ds)
+        data = ds.Standard_Deviation.load()  # Load into memory
+        ilat = ds.lat.values.copy()
+        ilon = ds.lon.values.copy()
     lon, lat = np.meshgrid(ilon, ilat)
 
     option['vmin'], option['vmax'] = 0, math.ceil(data.max().values)

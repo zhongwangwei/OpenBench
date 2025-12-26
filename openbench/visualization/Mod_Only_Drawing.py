@@ -598,7 +598,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             try:
                 # read the simulation source and reference source
                 for evaluation_item in evaluation_items:
-                    logging.info("now processing the evaluation item: ", evaluation_item)
+                    logging.info(f"now processing the evaluation item: {evaluation_item}")
                     sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                     ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                     # if the sim_sources and ref_sources are not list, then convert them to list
@@ -646,7 +646,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         def _scenarios_PFT_groupby(basedir, scores, metrics, sim_nml, ref_nml, evaluation_items):
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                logging.info("now processing the evaluation item: ", evaluation_item)
+                logging.info(f"now processing the evaluation item: {evaluation_item}")
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
