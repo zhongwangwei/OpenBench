@@ -18,7 +18,7 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
             freq = f'{num_value}H'
         else:
             logging.error(f'Unsupported time unit: {time_unit}')
-            exit()
+            raise ValueError(f'Unsupported time unit: {time_unit}')
 
         # Create a new time range based on syear, eyear, and freq
         new_time_range = pd.date_range(start=f'{syear}-01-01', end=f'{eyear}-12-31', freq=freq)
@@ -27,8 +27,8 @@ def adjust_time_TE(info, ds, syear, eyear, tim_res):
         ds['time'] = new_time_range
 
     else:
-        logging.error('tim_res error')
-        exit()
+        logging.error('tim_res error: invalid time resolution format')
+        raise ValueError('Invalid time resolution format')
 
     return ds
 

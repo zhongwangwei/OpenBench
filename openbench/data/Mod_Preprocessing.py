@@ -286,12 +286,26 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
         general_info = general_info_object.to_dict()
         general_info['ref_source'] = ref_source
         general_info['sim_source'] = sim_source
+
+        # Safe year conversion helper
+        def safe_int(value, default=1990):
+            if value is None or value == '' or (isinstance(value, str) and value.strip() == ''):
+                return default
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return default
+
         if isinstance(general_info['use_syear'], (int, float)):
-            min_year = int(general_info['use_syear'])
-            max_year = int(general_info['use_eyear'])
+            min_year = safe_int(general_info['use_syear'], 1990)
+            max_year = safe_int(general_info['use_eyear'], 2020)
         else:
-            min_year = min(general_info['use_syear'])
-            max_year = max(general_info['use_eyear'])
+            try:
+                min_year = min(general_info['use_syear'])
+                max_year = max(general_info['use_eyear'])
+            except (ValueError, TypeError):
+                min_year = 1990
+                max_year = 2020
 
         if general_info['ref_data_type'] == 'grid':
             if general_info['ref_data_groupby'].lower() == 'single':

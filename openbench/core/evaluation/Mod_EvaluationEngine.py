@@ -25,17 +25,15 @@ try:
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
-    IEvaluationEngine = object
-    IMetricsCalculator = object
-    BaseEvaluator = object
+    IEvaluationEngine = ABC
+    IMetricsCalculator = ABC
+    BaseEvaluator = ABC
     EvaluationError = Exception
     ValidationError = Exception
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
         return decorator
-        print("Error handler imported")
-        exit()
 
 # Import caching - CacheSystem is now mandatory for data processing modules
 try:
@@ -319,7 +317,11 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
         if unavailable:
             logging.warning(f"Unavailable metrics requested: {unavailable}")
             metrics = list(requested_metrics & available_metrics)
-        
+
+        if not metrics:
+            logging.error("No valid metrics available for calculation")
+            raise ValueError("No valid metrics available for calculation")
+
         # Calculate metrics
         results = {
             'metrics': {},

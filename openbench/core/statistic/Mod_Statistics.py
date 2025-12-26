@@ -601,8 +601,8 @@ class StatisticsProcessing(BasicProcessing):
                     raise ValueError("No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name.")
 
             if len(data_list) == 0:
-                logging.error(f"Warning: No data sources found for '{statistic_method}'.")
-                exit()
+                logging.error(f"No data sources found for '{statistic_method}'.")
+                raise ValueError(f"No data sources found for '{statistic_method}'.")
             # Remap data
             data_list = self.remap_data(data_list)
 
