@@ -313,10 +313,15 @@ class ReportGenerator:
                           "Ridgeline_Plot", "Kernel_Density_Estimate", "Parallel_Coordinates",
                           "HeatMap", "RadarMap", "Relative_Score", "Diff_Plot",
                           "Single_Model_Performance_Index", "Correlation", "Functional_Response",
-                          "Standard_Deviation", "Mann_Kendall_Trend_Test"]
+                          "Standard_Deviation", "Mann_Kendall_Trend_Test", "Portrait_Plot_seasonal"]
         
         for comp_dir in comparison_dirs:
-            comp_path = os.path.join(self.comparisons_dir, comp_dir, f"*{item}*.jpg")
+            # HeatMap and RadarMap show aggregate data across all items, not per-item
+            # They use naming patterns like scenarios_{score}_comparison_heatmap.jpg
+            if comp_dir in ["HeatMap", "RadarMap"]:
+                comp_path = os.path.join(self.comparisons_dir, comp_dir, "*.jpg")
+            else:
+                comp_path = os.path.join(self.comparisons_dir, comp_dir, f"*{item}*.jpg")
             comp_files = glob.glob(comp_path)
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
         
