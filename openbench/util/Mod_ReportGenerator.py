@@ -309,8 +309,11 @@ class ReportGenerator:
         figures["scores"] = [os.path.basename(f) for f in glob.glob(scores_pattern)]
         
         # Comparison figures (from various subdirectories)
-        comparison_dirs = ["Taylor_Diagram", "Target_Diagram", "Whisker_Plot", 
-                          "Ridgeline_Plot", "Kernel_Density_Estimate", "Parallel_Coordinates"]
+        comparison_dirs = ["Taylor_Diagram", "Target_Diagram", "Whisker_Plot",
+                          "Ridgeline_Plot", "Kernel_Density_Estimate", "Parallel_Coordinates",
+                          "HeatMap", "RadarMap", "Relative_Score", "Diff_Plot",
+                          "Single_Model_Performance_Index", "Correlation", "Functional_Response",
+                          "Standard_Deviation", "Mann_Kendall_Trend_Test"]
         
         for comp_dir in comparison_dirs:
             comp_path = os.path.join(self.comparisons_dir, comp_dir, f"*{item}*.jpg")
