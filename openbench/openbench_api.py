@@ -361,35 +361,42 @@ class OpenBench:
             raise ImportError("Modular evaluation system not available")
         
         self.logger.info("Running modular OpenBench evaluation")
-        
+
+        # Track datasets we open so we can close them
+        datasets_to_close = []
+
         try:
             # Load data if paths provided
             if isinstance(simulation_data, str):
                 simulation_data = xr.open_dataset(simulation_data)
+                datasets_to_close.append(simulation_data)
             if isinstance(reference_data, str):
                 reference_data = xr.open_dataset(reference_data)
-            
+                datasets_to_close.append(reference_data)
+
             # Use data from config if not provided
             if simulation_data is None and 'simulation' in self.config:
                 sim_path = self.config['simulation'].get('path')
                 if sim_path:
                     simulation_data = xr.open_dataset(sim_path)
-            
+                    datasets_to_close.append(simulation_data)
+
             if reference_data is None and 'reference' in self.config:
                 ref_path = self.config['reference'].get('path')
                 if ref_path:
                     reference_data = xr.open_dataset(ref_path)
-            
+                    datasets_to_close.append(reference_data)
+
             # Use metrics from config if not provided
             if metrics is None:
                 metrics = self.config.get('metrics', ['bias', 'RMSE', 'correlation'])
-            
+
             # Get evaluation engine
             engine = self.evaluation_engines.get(engine_type)
             if not engine:
                 engine = create_evaluation_engine(engine_type)
                 self.evaluation_engines[engine_type] = engine
-            
+
             # Run evaluation
             if simulation_data is not None and reference_data is not None:
                 eval_results = engine.evaluate(
@@ -398,7 +405,7 @@ class OpenBench:
             else:
                 # Run full evaluation using config
                 eval_results = self._run_full_config_evaluation(engine, **kwargs)
-            
+
             # Process and save results
             self.results = {
                 'evaluation_type': 'modular',
@@ -410,18 +417,25 @@ class OpenBench:
                     'engine': engine_type
                 }
             }
-            
+
             # Save results if output manager available
             if self.output_manager:
                 output_path = kwargs.get('output_path', './output/evaluation_results.json')
                 self.save_results(output_path)
-            
+
             self.logger.info("Modular evaluation completed successfully")
             return self.results
-            
+
         except Exception as e:
             self.logger.error(f"Modular evaluation failed: {e}")
             raise OpenBenchError(f"Modular evaluation failed: {e}")
+        finally:
+            # Close any datasets we opened
+            for ds in datasets_to_close:
+                try:
+                    ds.close()
+                except Exception:
+                    pass
     
     def _run_full_config_evaluation(self, engine, **kwargs) -> Dict[str, Any]:
         """Run full evaluation based on configuration."""

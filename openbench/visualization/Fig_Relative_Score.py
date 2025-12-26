@@ -302,16 +302,16 @@ def prepare_geo(output_dir, evaluation_item, ref_source, sim_source, scores, mai
         filename = f'{output_dir}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc'
         if os.path.exists(filename):
             print(filename)
-            ds = xr.open_dataset(filename)
-            ds = Convert_Type.convert_nc(ds)
-            data = ds[f'relative_{score}']
-            ilat = ds.lat.values
-            ilon = ds.lon.values
-            data = data.where(np.isfinite(data), np.nan)
-            try:
-                make_geo_plot_index(filename, data, ilat, ilon, main_nml, option)
-            except:
-                logging.error(f'ERROR: relative {score} {ref_source} {sim_source}')
+            with xr.open_dataset(filename) as ds:
+                ds = Convert_Type.convert_nc(ds)
+                data = ds[f'relative_{score}']
+                ilat = ds.lat.values
+                ilon = ds.lon.values
+                data = data.where(np.isfinite(data), np.nan)
+                try:
+                    make_geo_plot_index(filename, data, ilat, ilon, main_nml, option)
+                except Exception:
+                    logging.error(f'ERROR: relative {score} {ref_source} {sim_source}')
 
 
 def make_scenarios_comparison_Relative_Score(output_dir, evaluation_item, ref_source, sim_source, scores, data_type, main_nml, option):

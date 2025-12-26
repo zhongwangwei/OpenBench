@@ -127,8 +127,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
 
         if option['limit_on']:
             if option['value_min'] > option['value_max']:
-                print('Error: make sure your max min value was setting right!')
-                exit()
+                raise ValueError('Invalid limit settings: value_min must be less than or equal to value_max')
             else:
                 ax.set(ylim=(option['value_min'], option['value_max']))
                 # ax.set(ylim=(dmin, dmax))
@@ -148,8 +147,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
 
         if option['limit_on']:
             if option['value_min'] > option['value_max']:
-                print('Error: make sure your max min value was setting right!')
-                exit()
+                raise ValueError('Invalid limit settings: value_min must be less than or equal to value_max')
             else:
                 ax.set(xlim=(option['value_min'], option['value_max']))
                 # ax.set(xlim=(dmin, dmax))

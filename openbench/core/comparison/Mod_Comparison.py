@@ -39,6 +39,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
         self._pft_station_warning_shown = False  # Track if PFT station data warning has been shown
 
+        # Frequency mapping for time resolution parsing
+        self.freq_map = {
+            'year': 'Y', 'yr': 'Y', 'y': 'Y',
+            'month': 'M', 'mon': 'M', 'm': 'M',
+            'week': 'W', 'wk': 'W', 'w': 'W',
+            'day': 'D', 'd': 'D',
+            'hour': 'H', 'hr': 'H', 'h': 'H',
+        }
+
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
@@ -87,9 +96,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     f.write(f"xinc     =  {self.compare_grid_res}\n")
                     f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
                     f.write(f"yinc     =  {self.compare_grid_res}\n")
-                    f.close()
                 self.target_grid = grid_info
-                IGBPtype_orig = os.path.join('.', 'data', 'IGBP.nc')
+                # Use package-relative path for IGBP data
+                package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                IGBPtype_orig = os.path.join(package_dir, 'data', 'IGBP.nc')
                 IGBPtype_remap = os.path.join(self.casedir, 'comparisons', 'IGBP_groupby', 'IGBP_remap.nc')
                 regridder_cdo.largest_area_fraction_remap_cdo(self, IGBPtype_orig, IGBPtype_remap, self.target_grid)
                 self.IGBP_dir = IGBPtype_remap
@@ -98,12 +108,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         def _IGBP_class_remap(self):
             try:
-                from openbench.data.regrid import Grid, create_regridding_dataset, Regridder, Regridder
-                ds = xr.open_dataset(
-                    os.path.join(".", "data", "IGBP.nc"),
-                    chunks={"lat": 2000, "lon": 2000},
-                )
-                ds = ds["IGBP"]  # Only take the class variable.
+                from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+                # Use package-relative path for IGBP data
+                package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                igbp_path = os.path.join(package_dir, "data", "IGBP.nc")
+                with xr.open_dataset(igbp_path, chunks={"lat": 2000, "lon": 2000}) as igbp_ds:
+                    ds = igbp_ds["IGBP"].load()  # Load into memory before closing
                 ds = ds.sortby(["lat", "lon"])
                 new_grid = Grid(
                     north=self.max_lat - self.compare_grid_res / 2,
@@ -127,7 +137,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             Compare the IGBP class of the model output data and the reference data
             """
             try:
-                IGBPtype = xr.open_dataset(self.IGBP_dir)['IGBP']
+                with xr.open_dataset(self.IGBP_dir) as igbp_ds:
+                    IGBPtype = igbp_ds['IGBP'].load()
                 # convert IGBP type to int
                 IGBPtype = IGBPtype.astype(int)
 
@@ -153,7 +164,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 # read the simulation source and reference source
                 for evaluation_item in evaluation_items:
-                    logging.info("now processing the evaluation item: ", evaluation_item)
+                    logging.info(f"now processing the evaluation item: {evaluation_item}")
                     sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                     ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                     # if the sim_sources and ref_sources are not list, then convert them to list
@@ -192,7 +203,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         for metric in self.metrics:
                                             metric_path = os.path.join(self.casedir, 'metrics',
                                                                        f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                            ds = xr.open_dataset(metric_path)
+                                            with xr.open_dataset(metric_path) as ds_file:
+                                                ds = ds_file.load()
                                             output_file.write(f"{metric}\t")
 
                                             # Calculate and write the overall median first
@@ -243,7 +255,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         for score in self.scores:
                                             score_path = os.path.join(self.casedir, 'scores',
                                                                       f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                            ds = xr.open_dataset(score_path)
+                                            with xr.open_dataset(score_path) as ds_file:
+                                                ds = ds_file.load()
                                             output_file.write(f"{score}\t")
 
                                             # Calculate and write the overall mean first
@@ -301,9 +314,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 f.write(f"xinc     =  {self.compare_grid_res}\n")
                 f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
                 f.write(f"yinc     =  {self.compare_grid_res}\n")
-                f.close()
             self.target_grid = grid_info
-            PFTtype_orig = './dataset/PFT.nc'
+            # Use package-relative path for PFT data
+            package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            PFTtype_orig = os.path.join(package_dir, 'dataset', 'PFT.nc')
             PFTtype_remap = f'{self.casedir}/comparisons/PFT_groupby/PFT_remap.nc'
             regridder_cdo.largest_area_fraction_remap_cdo(self, PFTtype_orig, PFTtype_remap, self.target_grid)
             self.PFT_dir = PFTtype_remap
@@ -313,8 +327,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             Compare the PFT class of the model output data and the reference data using xarray
             """
             from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
-            ds = xr.open_dataset("./dataset/PFT.nc", chunks={"lat": 2000, "lon": 2000})
-            ds = ds["PFT"]
+            # Use package-relative path for PFT data
+            package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            pft_path = os.path.join(package_dir, "dataset", "PFT.nc")
+            with xr.open_dataset(pft_path, chunks={"lat": 2000, "lon": 2000}) as ds_file:
+                ds = ds_file["PFT"].load()
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
             new_grid = Grid(
@@ -335,7 +352,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             """
             Compare the PFT class of the model output data and the reference data
             """
-            PFTtype = xr.open_dataset(self.PFT_dir)['PFT']
+            with xr.open_dataset(self.PFT_dir) as pft_ds:
+                PFTtype = pft_ds['PFT'].load()
             # convert PFT type to int
             PFTtype = PFTtype.astype(int)
             PFT_class_names = {
@@ -359,7 +377,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             # read the simulation source and reference source
             for evaluation_item in evaluation_items:
-                logging.info("now processing the evaluation item: ", evaluation_item)
+                logging.info(f"now processing the evaluation item: {evaluation_item}")
                 sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
                 ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
                 # if the sim_sources and ref_sources are not list, then convert them to list
@@ -395,8 +413,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Calculate and print median values
 
                                 for metric in self.metrics:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                    with xr.open_dataset(
+                                        f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc') as ds_file:
+                                        ds = ds_file.load()
                                     output_file.write(f"{metric}\t")
 
                                     # Calculate and write the overall median first
@@ -442,8 +461,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 # Calculate and print mean values
 
                                 for score in self.scores:
-                                    ds = xr.open_dataset(
-                                        f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                    with xr.open_dataset(
+                                        f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc') as ds_file:
+                                        ds = ds_file.load()
                                     output_file.write(f"{score}\t")
 
                                     # Calculate and write the overall mean first
@@ -535,19 +555,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         logging.warning(f"Error reading station file {file}: {e}")
                                         overall_mean = np.nan
                                 else:
-                                    ds = xr.open_dataset(
-                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    ds = Convert_Type.convert_nc(ds)
+                                    with xr.open_dataset(
+                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc') as ds_file:
+                                        ds = Convert_Type.convert_nc(ds_file.load())
 
                                     if self.weight.lower() == 'area':
                                         weights = np.cos(np.deg2rad(ds.lat))
                                         overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                     elif self.weight.lower() == 'mass':
                                         # Get reference data for flux weighting
-                                        o = xr.open_dataset(
-                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                            f'{ref_varname}']
-                                        o = Convert_Type.convert_nc(o)
+                                        with xr.open_dataset(
+                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc') as o_file:
+                                            o = Convert_Type.convert_nc(o_file[f'{ref_varname}'].load())
 
                                         # Calculate area weights (cosine of latitude)
                                         area_weights = np.cos(np.deg2rad(ds.lat))
@@ -641,8 +660,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
                                                                             f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                    with xr.open_dataset(sim_path) as sim_ds:
+                                                        s = sim_ds[sim_varname].squeeze().load()
+                                                    with xr.open_dataset(ref_path) as ref_ds:
+                                                        o = ref_ds[ref_varname].squeeze().load()
                                                     o = Convert_Type.convert_nc(o)
                                                     s = Convert_Type.convert_nc(s)
 
@@ -711,8 +732,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             sim_path = os.path.join(casedir, 'data',
                                                                     f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
+                                            with xr.open_dataset(ref_path) as ref_ds:
+                                                reffile = ref_ds[ref_varname].load()
+                                            with xr.open_dataset(sim_path) as sim_ds:
+                                                simfile = sim_ds[sim_varname].load()
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
@@ -856,8 +879,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
                                                                             f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                    with xr.open_dataset(sim_path) as sim_ds:
+                                                        s = sim_ds[sim_varname].squeeze().load()
+                                                    with xr.open_dataset(ref_path) as ref_ds:
+                                                        o = ref_ds[ref_varname].squeeze().load()
                                                     o = Convert_Type.convert_nc(o)
                                                     s = Convert_Type.convert_nc(s)
 
@@ -922,8 +947,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             sim_path = os.path.join(casedir, 'data',
                                                                     f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
+                                            with xr.open_dataset(ref_path) as ref_ds:
+                                                reffile = ref_ds[ref_varname].load()
+                                            with xr.open_dataset(sim_path) as sim_ds:
+                                                simfile = sim_ds[sim_varname].load()
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
@@ -999,8 +1026,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             else:
                                                 file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
-                                                ds = xr.open_dataset(file_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(file_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 data = ds[score].values
                                             datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                                         finally:
@@ -1044,8 +1071,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             else:
                                                 file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
-                                                ds = xr.open_dataset(file_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(file_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 data = ds[metric].values
 
                                             data = data[~np.isinf(data)]
@@ -1146,16 +1173,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             sim_path = os.path.join(basedir, 'data',
                                                                     f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                            reffile = xr.open_dataset(ref_path)[ref_varname]
-                                            simfile = xr.open_dataset(sim_path)[sim_varname]
+                                            with xr.open_dataset(ref_path) as ref_ds:
+                                                reffile = ref_ds[ref_varname].load()
+                                            with xr.open_dataset(sim_path) as sim_ds:
+                                                simfile = sim_ds[sim_varname].load()
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
                                             for score in scores:
                                                 score_path = os.path.join(self.casedir, 'scores',
                                                                           f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                                ds = xr.open_dataset(score_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(score_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
 
                                                 if self.weight.lower() == 'area':
                                                     weights = np.cos(np.deg2rad(reffile.lat))
@@ -1177,8 +1206,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             for metric in metrics:
                                                 metric_path = os.path.join(self.casedir, 'metrics',
                                                                            f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
-                                                ds = xr.open_dataset(metric_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(metric_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 ds = ds.where(np.isfinite(ds), np.nan)
                                                 q_value = ds[metric].quantile([0.05, 0.95], dim=['lat', 'lon'], skipna=True)
                                                 ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
@@ -1336,8 +1365,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
                                                                             f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
 
-                                                    s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-                                                    o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+                                                    with xr.open_dataset(sim_path) as sim_ds:
+                                                        s = sim_ds[sim_varname].squeeze().load()
+                                                    with xr.open_dataset(ref_path) as ref_ds:
+                                                        o = ref_ds[ref_varname].squeeze().load()
                                                     o = Convert_Type.convert_nc(o)
                                                     s = Convert_Type.convert_nc(s)
 
@@ -1403,8 +1434,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 sim_path = os.path.join(basedir, 'data',
                                                                         f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                                                o = xr.open_dataset(ref_path)[ref_varname]
-                                                s = xr.open_dataset(sim_path)[sim_varname]
+                                                with xr.open_dataset(ref_path) as ref_ds:
+                                                    o = ref_ds[ref_varname].load()
+                                                with xr.open_dataset(sim_path) as sim_ds:
+                                                    s = sim_ds[sim_varname].load()
                                                 o = Convert_Type.convert_nc(o)
                                                 s = Convert_Type.convert_nc(s)
 
@@ -1542,8 +1575,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             else:
                                                 file_path = os.path.join(basedir, 'scores',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
-                                                ds = xr.open_dataset(file_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(file_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 data = ds[score].values
                                             datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
                                         finally:
@@ -1586,8 +1619,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             else:
                                                 file_path = os.path.join(basedir, 'metrics',
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
-                                                ds = xr.open_dataset(file_path)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(file_path) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 data = ds[metric].values
 
                                             data = data[~np.isinf(data)]
@@ -1736,8 +1769,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 # Read all files and combine into a single dataset
                                                 datasets = []
                                                 for file in all_files:
-                                                    ds = xr.open_dataset(file)
-                                                    ds = Convert_Type.convert_nc(ds)
+                                                    with xr.open_dataset(file) as ds_file:
+                                                        ds = Convert_Type.convert_nc(ds_file.load())
                                                     datasets.append(ds)
 
                                                 if not datasets:
@@ -1752,8 +1785,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                                 file = os.path.join(casedir, 'scores',
                                                                     f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                                ds = xr.open_dataset(file)
-                                                ds = Convert_Type.convert_nc(ds)
+                                                with xr.open_dataset(file) as ds_file:
+                                                    ds = Convert_Type.convert_nc(ds_file.load())
                                                 relative_score = (ds[score] - score_mean) / score_std
 
                                                 # Create a new dataset to store the relative score
@@ -1892,12 +1925,14 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             def _process_station_data_parallel(casedir, ref_source, sim_source, item, sim_varname, ref_varname,
                                                                station_list, iik):
                                 try:
-                                    s = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                     f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
-                                        sim_varname].squeeze()
-                                    o = xr.open_dataset(os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
-                                                                     f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"))[
-                                        ref_varname].squeeze()
+                                    sim_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                            f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                    ref_path = os.path.join(casedir, "data", f"stn_{ref_source}_{sim_source}",
+                                                            f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                                    with xr.open_dataset(sim_path) as sim_ds:
+                                        s = sim_ds[sim_varname].squeeze().load()
+                                    with xr.open_dataset(ref_path) as ref_ds:
+                                        o = ref_ds[ref_varname].squeeze().load()
                                     o = Convert_Type.convert_nc(o)
                                     s = Convert_Type.convert_nc(s)
 
@@ -1930,8 +1965,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             o_path = os.path.join(basedir, 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
                             s_path = os.path.join(basedir, 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
 
-                            o = xr.open_dataset(o_path)[f'{ref_varname}']
-                            s = xr.open_dataset(s_path)[f'{sim_varname}']
+                            with xr.open_dataset(o_path) as o_ds:
+                                o = o_ds[f'{ref_varname}'].load()
+                            with xr.open_dataset(s_path) as s_ds:
+                                s = s_ds[f'{sim_varname}'].load()
 
                             o = Convert_Type.convert_nc(o)
                             s = Convert_Type.convert_nc(s)
@@ -1997,8 +2034,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         else:
                             file_path = os.path.join(basedir, 'scores',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
-                            ds = xr.open_dataset(file_path)
-                            ds = Convert_Type.convert_nc(ds)
+                            with xr.open_dataset(file_path) as ds_file:
+                                ds = Convert_Type.convert_nc(ds_file.load())
                             data = ds[score].values
                         datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
 
@@ -2039,8 +2076,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             file_path = os.path.join(basedir, 'metrics',
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
 
-                            ds = xr.open_dataset(file_path)
-                            ds = Convert_Type.convert_nc(ds)
+                            with xr.open_dataset(file_path) as ds_file:
+                                ds = Convert_Type.convert_nc(ds_file.load())
                             data = ds[metric].values
                         data = data[~np.isinf(data)]
                         if metric == 'percent_bias':
@@ -2316,9 +2353,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Load all simulation data for this metric
                             datasets = []
                             for sim_source in sim_sources:
-                                ds = xr.open_dataset(
-                                    os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'))
-                                ds = Convert_Type.convert_nc(ds)
+                                with xr.open_dataset(
+                                    os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
                                 datasets.append(ds[metric])
                             # Calculate ensemble mean
                             ensemble_mean = xr.concat(datasets, dim='ensemble').mean('ensemble')
@@ -2352,9 +2389,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Load all simulation data for this score
                             datasets = []
                             for sim_source in sim_sources:
-                                ds = xr.open_dataset(
-                                    os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'))
-                                ds = Convert_Type.convert_nc(ds)
+                                with xr.open_dataset(
+                                    os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
                                 datasets.append(ds[score])
 
                             # Calculate ensemble mean
@@ -2390,12 +2427,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for i, sim1 in enumerate(sim_sources):
                                 for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                     try:
-                                        ds1 = xr.open_dataset(
-                                            os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc'))
-                                        ds2 = xr.open_dataset(
-                                            os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc'))
-                                        ds1 = Convert_Type.convert_nc(ds1)
-                                        ds2 = Convert_Type.convert_nc(ds2)
+                                        with xr.open_dataset(
+                                            os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim1}_{metric}.nc')) as ds1_file:
+                                            ds1 = Convert_Type.convert_nc(ds1_file.load())
+                                        with xr.open_dataset(
+                                            os.path.join(basedir, 'metrics', f'{evaluation_item}_ref_{ref_source}_sim_{sim2}_{metric}.nc')) as ds2_file:
+                                            ds2 = Convert_Type.convert_nc(ds2_file.load())
                                         diff = ds1[metric] - ds2[metric]
 
                                         ds_out = xr.Dataset()
@@ -2415,12 +2452,12 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             for i, sim1 in enumerate(sim_sources):
                                 for j, sim2 in enumerate(sim_sources[i + 1:], i + 1):
                                     try:
-                                        ds1 = xr.open_dataset(
-                                            os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc'))
-                                        ds2 = xr.open_dataset(
-                                            os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc'))
-                                        ds1 = Convert_Type.convert_nc(ds1)
-                                        ds2 = Convert_Type.convert_nc(ds2)
+                                        with xr.open_dataset(
+                                            os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim1}_{score}.nc')) as ds1_file:
+                                            ds1 = Convert_Type.convert_nc(ds1_file.load())
+                                        with xr.open_dataset(
+                                            os.path.join(basedir, 'scores', f'{evaluation_item}_ref_{ref_source}_sim_{sim2}_{score}.nc')) as ds2_file:
+                                            ds2 = Convert_Type.convert_nc(ds2_file.load())
                                         diff = ds1[score] - ds2[score]
 
                                         ds_out = xr.Dataset()
@@ -2460,8 +2497,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             sim_path = os.path.join(basedir, "data", f"stn_{ref_source}_{sim_source}", sim_filename)
             ref_path = os.path.join(basedir, "data", f"stn_{ref_source}_{sim_source}", ref_filename)
 
-            s = xr.open_dataset(sim_path)[sim_varname].squeeze()
-            o = xr.open_dataset(ref_path)[ref_varname].squeeze()
+            with xr.open_dataset(sim_path) as sim_ds:
+                s = sim_ds[sim_varname].squeeze().load()
+            with xr.open_dataset(ref_path) as ref_ds:
+                o = ref_ds[ref_varname].squeeze().load()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
@@ -2525,8 +2564,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                 else:
                     try:
-                        ds = xr.open_dataset(os.path.join(basedir, 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'))[
-                            f'{ref_varname}']
+                        with xr.open_dataset(os.path.join(basedir, 'data', f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')) as ds_file:
+                            ds = ds_file[f'{ref_varname}'].load()
                         ds = Convert_Type.convert_nc(ds)
                         method_function = getattr(self, f"stat_{basic_method.lower()}", None)
                         result = method_function(*[ds])
@@ -2546,8 +2585,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                 if sim_data_type != 'stn':
                     try:
-                        ds = xr.open_dataset(os.path.join(basedir, 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'))[
-                            f'{sim_varname}']
+                        with xr.open_dataset(os.path.join(basedir, 'data', f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')) as ds_file:
+                            ds = ds_file[f'{sim_varname}'].load()
                         ds = Convert_Type.convert_nc(ds)
                         method_function = getattr(self, f"stat_{basic_method.lower()}", None)
                         result = method_function(*[ds])
@@ -2587,9 +2626,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                 if sim_data_type != 'stn':
                     try:
-                        sim = xr.open_dataset(os.path.join(basedir, 'data',
-                                                           f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc'))[
-                            f'{sim_varname}']
+                        sim_path = os.path.join(basedir, 'data',
+                                                f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
+                        with xr.open_dataset(sim_path) as sim_ds:
+                            sim = sim_ds[f'{sim_varname}'].load()
                         sim = Convert_Type.convert_nc(sim)
 
                         result = method_function(*[sim])
@@ -2606,7 +2646,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                     try:
                         ref_path = os.path.join(basedir, 'data',
                                                 f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                        ref = xr.open_dataset(ref_path)[f'{ref_varname}']
+                        with xr.open_dataset(ref_path) as ref_ds:
+                            ref = ref_ds[f'{ref_varname}'].load()
                         ref = Convert_Type.convert_nc(ref)
                         result = method_function(*[ref])
                         output_file = os.path.join(dir_path,
@@ -2647,7 +2688,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             if not os.path.exists(sim_path):
                                 logging.warning(f"Skipping {method_name} for {evaluation_item} {sim_source}: file not found at {sim_path}")
                                 continue
-                            sim = xr.open_dataset(sim_path)[sim_varname]
+                            with xr.open_dataset(sim_path) as sim_ds:
+                                sim = sim_ds[sim_varname].load()
                             sim = Convert_Type.convert_nc(sim)
 
                             result = method_function(*[sim])
@@ -2677,7 +2719,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             if not os.path.exists(ref_path):
                                 logging.warning(f"Skipping {method_name} for {evaluation_item} {ref_source}: file not found at {ref_path}")
                                 continue
-                            ref = xr.open_dataset(ref_path)[ref_varname]
+                            with xr.open_dataset(ref_path) as ref_ds:
+                                ref = ref_ds[ref_varname].load()
                             ref = Convert_Type.convert_nc(ref)
 
                             result = method_function(*[ref])
@@ -2728,7 +2771,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             # Use os.path.join for file paths
                             ref_path = os.path.join(basedir, 'data',
                                                     f'{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')
-                            ref = xr.open_dataset(ref_path)[ref_varname]
+                            with xr.open_dataset(ref_path) as ref_ds:
+                                ref = ref_ds[ref_varname].load()
                             ref = Convert_Type.convert_nc(ref)
 
                             for sim_source in sim_sources:
@@ -2739,7 +2783,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         # Use os.path.join for file paths
                                         sim_path = os.path.join(basedir, 'data',
                                                                 f'{evaluation_item}_sim_{sim_source}_{sim_varname}.nc')
-                                        sim = xr.open_dataset(sim_path)[sim_varname]
+                                        with xr.open_dataset(sim_path) as sim_ds:
+                                            sim = sim_ds[sim_varname].load()
                                         sim = Convert_Type.convert_nc(sim)
 
                                         result = method_function(*[ref, sim])
@@ -2817,19 +2862,18 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         logging.warning(f"Error reading station file {file}: {e}")
                                         overall_mean = np.nan
                                 else:
-                                    ds = xr.open_dataset(
-                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
-                                    ds = Convert_Type.convert_nc(ds)
+                                    with xr.open_dataset(
+                                        f'{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc') as ds_file:
+                                        ds = Convert_Type.convert_nc(ds_file.load())
 
                                     if self.weight.lower() == 'area':
                                         weights = np.cos(np.deg2rad(ds.lat))
                                         overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                     elif self.weight.lower() == 'mass':
                                         # Get reference data for flux weighting
-                                        o = xr.open_dataset(
-                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
-                                            f'{ref_varname}']
-                                        o = Convert_Type.convert_nc(o)
+                                        with xr.open_dataset(
+                                            f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc') as o_file:
+                                            o = Convert_Type.convert_nc(o_file[f'{ref_varname}'].load())
 
                                         # Calculate area weights (cosine of latitude)
                                         area_weights = np.cos(np.deg2rad(ds.lat))
@@ -2902,8 +2946,10 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                             ds2_path = os.path.join(basedir, 'data',
                                                     f'{evaluation_item}_sim_{sim2}_{sim_varname2}.nc')
 
-                            ds1 = xr.open_dataset(ds1_path)[sim_varname1]
-                            ds2 = xr.open_dataset(ds2_path)[sim_varname2]
+                            with xr.open_dataset(ds1_path) as ds1_file:
+                                ds1 = ds1_file[sim_varname1].load()
+                            with xr.open_dataset(ds2_path) as ds2_file:
+                                ds2 = ds2_file[sim_varname2].load()
 
                             ds1 = Convert_Type.convert_nc(ds1)
                             ds2 = Convert_Type.convert_nc(ds2)
