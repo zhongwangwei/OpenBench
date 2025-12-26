@@ -115,16 +115,21 @@ def filter_GRDC(info):
     data_select['lon_cama'] = -9999.0
     data_select['lat_cama'] = -9999.0
     for iii in range(len(data_select['ID'])):
-        data_select['lon_cama'].values[iii] = float(lon0[int(data_select['ix1'].values[iii]) - 1])
-        data_select['lat_cama'].values[iii] = float(lat0[int(data_select['iy1'].values[iii]) - 1])
+        ix1_idx = int(data_select['ix1'].values[iii]) - 1
+        iy1_idx = int(data_select['iy1'].values[iii]) - 1
+        if ix1_idx < 0 or iy1_idx < 0:
+            logging.warning(f"Warning: ID {data_select['ID'].values[iii]} has invalid index (ix1={ix1_idx+1}, iy1={iy1_idx+1})")
+            continue
+        data_select['lon_cama'].values[iii] = float(lon0[ix1_idx])
+        data_select['lat_cama'].values[iii] = float(lat0[iy1_idx])
         if abs(data_select['lat_cama'].values[iii] - data_select['lat'].values[iii]) > 1:
             logging.warning(f"Warning: ID {data_select['ID'][iii]} lat is not match")
         if abs(data_select['lon_cama'].values[iii] - data_select['lon'].values[iii]) > 1:
             logging.warning(f"Warning: ID {data_select['ID'].values[iii]} lon is not match")
     logging.info(f"In total: {len(data_select['ID'])} stations are selected")
     if len(data_select['ID']) == 0:
-        logging.error(f"Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
-        sys.exit(1)
+        logging.error("No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
+        raise ValueError("No stations are selected")
     info.use_syear = data_select['use_syear'].min()
     info.use_eyear = data_select['use_eyear'].max()
     data_select['ref_lon'] = data_select['lon_cama']

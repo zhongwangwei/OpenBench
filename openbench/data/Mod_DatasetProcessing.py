@@ -1085,6 +1085,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return ds
 
     def select_var(self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str) -> xr.Dataset:
+        ds = None
         try:
             try:
                 ds = xr.open_dataset(VarFile)  # .squeeze()
@@ -1093,6 +1094,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
+            if ds is not None:
+                ds.close()
             raise
 
         try:
@@ -1160,8 +1163,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     def select_timerange(self, ds: xr.Dataset, syear: int, eyear: int) -> xr.Dataset:
         if (eyear < syear) or (ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59')) is None):
-            logging.error(f"Error: Attempting checking the data time range.")
-            exit()
+            logging.error(f"Error: Invalid time range (syear={syear}, eyear={eyear})")
+            raise ValueError(f"Invalid time range: eyear ({eyear}) must be >= syear ({syear})")
         else:
             return ds.sel(time=slice(f'{syear}-01-01T00:00:00', f'{eyear}-12-31T23:59:59'))
 
@@ -1976,9 +1979,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             cmd = f"cdo -s remapcon,{temp_grid_name} {temp_input_name} {temp_output_name}"
             subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
 
-            # Read result
-            result_ds = xr.open_dataset(temp_output_name)
-            return Convert_Type.convert_nc(result_ds)
+            # Read result and load into memory before cleanup
+            with xr.open_dataset(temp_output_name) as result_ds:
+                result_data = result_ds.load()
+            return Convert_Type.convert_nc(result_data)
 
         finally:
             # Clean up temporary files

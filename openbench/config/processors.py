@@ -427,41 +427,49 @@ class GeneralInfoReader(NamelistReader):
         if not hasattr(self, 'stn_list') or self.stn_list.empty:
             return
 
+        # Get default year values with fallbacks
+        default_syear = self._safe_int(self.syear, 1990)
+        default_eyear = self._safe_int(self.eyear, 2020)
+
         # Apply default time filtering logic
         if self.ref_data_type == 'stn' and self.sim_data_type == 'stn':
             # Both are station data
             sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
             ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
-            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            syear_series = pd.Series([default_syear] * len(self.stn_list))
             self.use_syear = pd.concat([sim_years, ref_years, syear_series], axis=1).max(axis=1)
 
             sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
             ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
-            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
             self.use_eyear = pd.concat([sim_eyears, ref_eyears, eyear_series], axis=1).min(axis=1)
 
         elif self.sim_data_type == 'stn':
             # Only sim is station data
             sim_years = pd.to_numeric(self.stn_list['sim_syear'], errors='coerce')
-            ref_syear = pd.Series([int(self.ref_syear)] * len(self.stn_list))
-            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            ref_syear_val = self._safe_int(self.ref_syear, default_syear)
+            ref_syear = pd.Series([ref_syear_val] * len(self.stn_list))
+            syear_series = pd.Series([default_syear] * len(self.stn_list))
             self.use_syear = pd.concat([sim_years, ref_syear, syear_series], axis=1).max(axis=1)
 
             sim_eyears = pd.to_numeric(self.stn_list['sim_eyear'], errors='coerce')
-            ref_eyear = pd.Series([int(self.ref_eyear)] * len(self.stn_list))
-            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            ref_eyear_val = self._safe_int(self.ref_eyear, default_eyear)
+            ref_eyear = pd.Series([ref_eyear_val] * len(self.stn_list))
+            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
             self.use_eyear = pd.concat([sim_eyears, ref_eyear, eyear_series], axis=1).min(axis=1)
 
         elif self.ref_data_type == 'stn':
             # Only ref is station data
             ref_years = pd.to_numeric(self.stn_list['ref_syear'], errors='coerce')
-            sim_syear = pd.Series([int(self.sim_syear)] * len(self.stn_list))
-            syear_series = pd.Series([int(self.syear)] * len(self.stn_list))
+            sim_syear_val = self._safe_int(self.sim_syear, default_syear)
+            sim_syear = pd.Series([sim_syear_val] * len(self.stn_list))
+            syear_series = pd.Series([default_syear] * len(self.stn_list))
             self.use_syear = pd.concat([ref_years, sim_syear, syear_series], axis=1).max(axis=1)
 
             ref_eyears = pd.to_numeric(self.stn_list['ref_eyear'], errors='coerce')
-            sim_eyear = pd.Series([int(self.sim_eyear)] * len(self.stn_list))
-            eyear_series = pd.Series([int(self.eyear)] * len(self.stn_list))
+            sim_eyear_val = self._safe_int(self.sim_eyear, default_eyear)
+            sim_eyear = pd.Series([sim_eyear_val] * len(self.stn_list))
+            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
             self.use_eyear = pd.concat([ref_eyears, sim_eyear, eyear_series], axis=1).min(axis=1)
 
         # Set the calculated years
@@ -521,9 +529,11 @@ class GeneralInfoReader(NamelistReader):
         if self.ref_data_type == 'grid' and self.sim_data_type == 'stn':
             # Check if reference data covers the station locations and time period
             # This is more conservative than flagging all stations as True
+            ref_sy = self._safe_int(self.ref_syear, 1900)
+            ref_ey = self._safe_int(self.ref_eyear, 2100)
             ref_time_coverage = (
-                    (self.stn_list['use_syear'] >= int(self.ref_syear)) &
-                    (self.stn_list['use_eyear'] <= int(self.ref_eyear))
+                    (self.stn_list['use_syear'] >= ref_sy) &
+                    (self.stn_list['use_eyear'] <= ref_ey)
             )
             self.stn_list['Flag'] = self.stn_list['Flag'] & ref_time_coverage
 
@@ -542,20 +552,40 @@ class GeneralInfoReader(NamelistReader):
         # Default implementation - can be overridden
         return True
 
+    @staticmethod
+    def _safe_int(value, default=None):
+        """Safely convert a value to integer, returning default if conversion fails."""
+        if value is None or value == '' or (isinstance(value, str) and value.strip() == ''):
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     def _set_use_years(self):
         """Set the use years based on the evaluation timeframe."""
-        try:
-            self.use_syear = max(int(self.ref_syear), int(self.sim_syear), int(self.syear))
-            self.use_eyear = min(int(self.ref_eyear), int(self.sim_eyear), int(self.eyear))
-        except (ValueError, AttributeError) as e:
-            # If any year parsing fails, use general years
-            try:
-                self.use_syear = int(self.syear)
-                self.use_eyear = int(self.eyear)
-            except (ValueError, AttributeError):
-                logging.error(f"Error setting use years: {e}")
-                self.use_syear = 1990  # Default fallback
-                self.use_eyear = 2020  # Default fallback
+        # Use safe conversion with fallbacks
+        ref_sy = self._safe_int(self.ref_syear)
+        sim_sy = self._safe_int(self.sim_syear)
+        gen_sy = self._safe_int(self.syear, 1990)
+
+        ref_ey = self._safe_int(self.ref_eyear)
+        sim_ey = self._safe_int(self.sim_eyear)
+        gen_ey = self._safe_int(self.eyear, 2020)
+
+        # Filter out None values and calculate
+        syear_values = [v for v in [ref_sy, sim_sy, gen_sy] if v is not None]
+        eyear_values = [v for v in [ref_ey, sim_ey, gen_ey] if v is not None]
+
+        if syear_values:
+            self.use_syear = max(syear_values)
+        else:
+            self.use_syear = 1990  # Default fallback
+
+        if eyear_values:
+            self.use_eyear = min(eyear_values)
+        else:
+            self.use_eyear = 2020  # Default fallback
 
     def to_dict(self):
         """Convert the instance attributes to a dictionary."""
