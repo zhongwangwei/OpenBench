@@ -742,7 +742,6 @@ class metrics:
         Returns:
             xr.DataArray: Model Fidelity Metric value (lat, lon)
         """
-        import math
 
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
@@ -856,20 +855,20 @@ class metrics:
 
             # Calculate components
             # 1. Normalized error with phase penalty
-            nmaep = np.power(np.mean(np.power(np.abs(sim_clean - obs_clean), p)), 1 / p) / np.mean(obs_clean)
+            nmaep = np.power(np.mean(np.power(np.abs(sim_clean - obs_clean), p)), 1 / p) / abs(np.mean(obs_clean))
 
             if phase:
                 phase_difference_rad = FFT_component(sim_clean, obs_clean)
                 phase_penalty = np.cos(phase_difference_rad / phase_penalty_scaling)
-                normalized_error = phase_penalty * math.e ** (-nmaep)
+                normalized_error = phase_penalty * np.e ** (-nmaep)
             else:
-                normalized_error = math.e ** (-nmaep)
+                normalized_error = np.e ** (-nmaep)
 
             # 2. Variability capture
             suse = SUSE_component(sim_clean, obs_clean, bins_suse)
             if np.isnan(suse):
                 return np.nan
-            variability_capture = math.e ** (-suse)
+            variability_capture = np.e ** (-suse)
 
             # 3. Distribution similarity
             distribution_similarity = PHI_component(sim_clean, obs_clean, bins_phi)
@@ -877,11 +876,11 @@ class metrics:
                 return np.nan
 
             # Calculate MFM
-            mfm_value = 1 - (math.sqrt(
+            mfm_value = 1 - np.sqrt((
                 (1 - normalized_error) ** 2 +
                 (1 - variability_capture) ** 2 +
                 (1 - distribution_similarity) ** 2
-            )) / math.sqrt(3)
+            ) / 3)
 
             return mfm_value
 
