@@ -121,8 +121,8 @@ Surface_Soil_Temperature:
   varname: ''
   varunit: ''
 Streamflow:
-  varname: OUTFLW
-  varunit: m3 s-1
+  varname: ''
+  varunit: ''
 Inundation_Fraction:
   varname: FLDFRC
   varunit: unitless
