@@ -1349,7 +1349,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
         ds = self.select_timerange(ds, self.minyear, self.maxyear)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use updated varunit from filter if available (filter may have modified it)
+        current_varunit = getattr(self, f"{datasource}_varunit", varunit)
+        ds, varunit = self.process_units(ds, current_varunit)
         self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
 
     @performance_monitor
@@ -1359,7 +1361,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use updated varunit from filter if available (filter may have modified it)
+        current_varunit = getattr(self, f"{datasource}_varunit", varunit)
+        ds, varunit = self.process_units(ds, current_varunit)
         ds = self.select_timerange(ds, syear, eyear)
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 
@@ -1370,7 +1374,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds, varunit = self.process_units(ds, varunit)
+        # Use updated varunit from filter if available (filter may have modified it)
+        current_varunit = getattr(self, f"{datasource}_varunit", varunit)
+        ds, varunit = self.process_units(ds, current_varunit)
         ds = self.select_timerange(ds, syear, eyear)
         ds.to_netcdf(os.path.join(casedir, 'scratch', f'{datasource}_{prefix}{syear}{suffix}.nc'))
 

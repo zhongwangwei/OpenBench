@@ -40,17 +40,25 @@ def filter_TE(info, ds):
          ds['Total_Runoff'] = (ds['RUNOFF'][:, 0, :, :]).squeeze()
          info.sim_varname = 'Total_Runoff'
          info.sim_varunit = 'kg m-2 s-1'
-      except:
-         logging.error('Total_Runoff calculation processing ERROR!!!')
+      except Exception as e:
+         logging.error(f'Total_Runoff calculation processing ERROR: {e}')
+         raise
       return info, ds['Total_Runoff']
 
    elif info.item == "Streamflow":
       try:
-         # outflw has dims (time, zdepth, lat, lon), squeeze out zdepth dimension
-         ds['Streamflow'] = (ds['outflw']).squeeze()
+         # Check if already processed
+         if 'Streamflow' in ds:
+            pass  # Already exists, use it directly
+         elif 'outflw' in ds:
+            ds['Streamflow'] = (ds['outflw']).squeeze()
+         else:
+            available_vars = list(ds.data_vars)
+            raise KeyError(f"Neither 'Streamflow' nor 'outflw' found. Available: {available_vars}")
          info.sim_varname = 'Streamflow'
          info.sim_varunit = 'm3 s-1'
-      except:
-         logging.error('Streamflow calculation processing ERROR!!!')
+      except Exception as e:
+         logging.error(f'Streamflow calculation processing ERROR: {e}')
+         raise
       return info, ds['Streamflow']
 
