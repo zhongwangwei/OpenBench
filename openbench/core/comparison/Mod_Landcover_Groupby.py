@@ -35,7 +35,8 @@ class LC_groupby(metrics, scores):
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
         self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
         # Set default weight method to 'none'
-        self.weight = self.main_nml['general'].get('weight', 'none')
+        # Handle null/None values from config by defaulting to 'none'
+        self.weight = self.main_nml['general'].get('weight', 'none') or 'none'
         # this should be done in read_namelist
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
