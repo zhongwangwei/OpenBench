@@ -17,6 +17,17 @@ from ..scoring.Mod_Scores import scores
 from openbench.util.Mod_Converttype import Convert_Type
 from openbench.visualization import *
 
+
+def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
+    """Open dataset with fallback to decode_times=False if initial open fails."""
+    try:
+        return xr.open_dataset(path, **kwargs)
+    except Exception as e:
+        if kwargs.get('decode_times', True) is not False:
+            logging.warning(f"Failed to open {path}: {e}. Retrying with decode_times=False")
+            return xr.open_dataset(path, decode_times=False, **kwargs)
+        raise
+
 class LC_groupby(metrics, scores):
     def __init__(self, main_nml, scores, metrics):
         self.name = 'StatisticsDataHandler'
@@ -78,7 +89,7 @@ class LC_groupby(metrics, scores):
 
         def _IGBP_class_remap(self):
             from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
-            ds = xr.open_dataset(
+            ds = _open_dataset_safe(
                 "./dataset/IGBP.nc",
                 chunks={"lat": 2000, "lon": 2000},
             )
@@ -103,7 +114,7 @@ class LC_groupby(metrics, scores):
             """
             Compare the IGBP class of the model output data and the reference data
             """
-            IGBPtype = xr.open_dataset(self.IGBP_dir)['IGBP']
+            IGBPtype = _open_dataset_safe(self.IGBP_dir)['IGBP']
             # convert IGBP type to int
             IGBPtype = IGBPtype.astype(int)
 
@@ -164,7 +175,7 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for metric in self.metrics:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -215,7 +226,7 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for score in self.scores:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -224,7 +235,7 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                            o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
@@ -258,7 +269,7 @@ class LC_groupby(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)
@@ -340,7 +351,7 @@ class LC_groupby(metrics, scores):
             Compare the PFT class of the model output data and the reference data using xarray
             """
             from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
-            ds = xr.open_dataset("./dataset/PFT.nc", chunks={"lat": 2000, "lon": 2000})
+            ds = _open_dataset_safe("./dataset/PFT.nc", chunks={"lat": 2000, "lon": 2000})
             ds = ds["PFT"]
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
@@ -362,7 +373,7 @@ class LC_groupby(metrics, scores):
             """
             Compare the PFT class of the model output data and the reference data
             """
-            PFTtype = xr.open_dataset(self.PFT_dir)['PFT']
+            PFTtype = _open_dataset_safe(self.PFT_dir)['PFT']
             # convert PFT type to int
             PFTtype = PFTtype.astype(int)
             PFT_class_names = {
@@ -422,7 +433,7 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print median values
                                     for metric in self.metrics:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -473,7 +484,7 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for score in self.scores:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -483,7 +494,7 @@ class LC_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                            o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
@@ -517,7 +528,7 @@ class LC_groupby(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)

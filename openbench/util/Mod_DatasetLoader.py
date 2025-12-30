@@ -126,6 +126,64 @@ DEFAULT_CHUNKS = {
 CHUNK_SIZE_THRESHOLD = 100 * 1024 * 1024  # 100 MB
 
 
+def _open_dataset_with_fallback(path: str, **kwargs) -> xr.Dataset:
+    """
+    Open a NetCDF dataset with fallback to decode_times=False if initial open fails.
+
+    Parameters
+    ----------
+    path : str
+        Path to the NetCDF file
+    **kwargs
+        Additional arguments passed to xr.open_dataset()
+
+    Returns
+    -------
+    xr.Dataset
+        The opened dataset
+    """
+    try:
+        return xr.open_dataset(path, **kwargs)
+    except Exception as e:
+        # If decode_times is not already set to False, try with decode_times=False
+        if kwargs.get('decode_times', True) is not False:
+            logging.warning(f"Failed to open {path} with default time decoding: {e}. Retrying with decode_times=False")
+            try:
+                return xr.open_dataset(path, decode_times=False, **kwargs)
+            except Exception as e2:
+                logging.error(f"Failed to open {path} even with decode_times=False: {e2}")
+                raise e2
+        else:
+            raise
+
+
+def open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
+    """
+    Open a NetCDF dataset with automatic fallback to decode_times=False if initial open fails.
+
+    This is a simple wrapper that can be used as a drop-in replacement for xr.open_dataset()
+    when you want automatic handling of time decoding issues.
+
+    Parameters
+    ----------
+    path : str
+        Path to the NetCDF file
+    **kwargs
+        Additional arguments passed to xr.open_dataset()
+
+    Returns
+    -------
+    xr.Dataset
+        The opened dataset
+
+    Examples
+    --------
+    >>> ds = open_dataset_safe("file.nc")  # Will try decode_times=False on failure
+    >>> ds = open_dataset_safe("file.nc", chunks={"time": 12})  # With chunking
+    """
+    return _open_dataset_with_fallback(path, **kwargs)
+
+
 def open_dataset(
     path: str,
     chunks: Optional[Union[Dict[str, int], str]] = "auto",
@@ -174,14 +232,14 @@ def open_dataset(
     if not use_chunking or file_size < size_threshold:
         # Small file: load directly into memory
         logging.debug(f"Loading small file directly: {path} ({file_size / 1024 / 1024:.1f} MB)")
-        return xr.open_dataset(path, **kwargs)
+        return _open_dataset_with_fallback(path, **kwargs)
 
     # Determine chunk sizes
     if chunks == "auto":
         chunks = _get_auto_chunks(path)
 
     logging.debug(f"Loading with chunks: {path} ({file_size / 1024 / 1024:.1f} MB), chunks={chunks}")
-    return xr.open_dataset(path, chunks=chunks, **kwargs)
+    return _open_dataset_with_fallback(path, chunks=chunks, **kwargs)
 
 
 def _get_auto_chunks(path: str) -> Dict[str, int]:
@@ -202,9 +260,14 @@ def _get_auto_chunks(path: str) -> Dict[str, int]:
     try:
         with xr.open_dataset(path) as ds:
             dims = ds.dims
-    except Exception as e:
-        logging.warning(f"Could not inspect file for auto-chunking: {e}")
-        return DEFAULT_CHUNKS.copy()
+    except Exception:
+        # Try with decode_times=False
+        try:
+            with xr.open_dataset(path, decode_times=False) as ds:
+                dims = ds.dims
+        except Exception as e:
+            logging.warning(f"Could not inspect file for auto-chunking: {e}")
+            return DEFAULT_CHUNKS.copy()
 
     chunks = {}
     for dim_name, dim_size in dims.items():
