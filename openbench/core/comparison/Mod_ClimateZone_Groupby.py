@@ -18,6 +18,17 @@ from openbench.util.Mod_Converttype import Convert_Type
 from openbench.visualization import *
 
 
+def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
+    """Open dataset with fallback to decode_times=False if initial open fails."""
+    try:
+        return xr.open_dataset(path, **kwargs)
+    except Exception as e:
+        if kwargs.get('decode_times', True) is not False:
+            logging.warning(f"Failed to open {path}: {e}. Retrying with decode_times=False")
+            return xr.open_dataset(path, decode_times=False, **kwargs)
+        raise
+
+
 class CZ_groupby(metrics, scores):
     def __init__(self, main_nml, scores, metrics):
         self.name = 'StatisticsDataHandler'
@@ -35,7 +46,8 @@ class CZ_groupby(metrics, scores):
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
         self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
         # Set default weight method to 'none'
-        self.weight = self.main_nml['general'].get('weight', 'none')
+        # Handle null/None values from config by defaulting to 'none'
+        self.weight = self.main_nml['general'].get('weight', 'none') or 'none'
         # this should be done in read_namelist
         # adjust the time frequency
         match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
@@ -82,7 +94,7 @@ class CZ_groupby(metrics, scores):
             Compare the Climate zone class of the model output data and the reference data using xarray
             """
             from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
-            ds = xr.open_dataset("./dataset/Climate_zone.nc", chunks={"lat": 2000, "lon": 2000})
+            ds = _open_dataset_safe("./dataset/Climate_zone.nc", chunks={"lat": 2000, "lon": 2000})
             ds = ds["climate_zone"]
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
@@ -104,7 +116,7 @@ class CZ_groupby(metrics, scores):
             """
             Compare the Climate zone class of the model output data and the reference data
             """
-            CZtype = xr.open_dataset(self.CZ_dir)['climate_zone']
+            CZtype = _open_dataset_safe(self.CZ_dir)['climate_zone']
             # convert CZ type to int
             CZtype = CZtype.astype(int)
             CZ_class_names = {
@@ -178,7 +190,7 @@ class CZ_groupby(metrics, scores):
 
                                     # Calculate and print median values
                                     for metric in self.metrics:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -229,7 +241,7 @@ class CZ_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for score in self.scores:
-                                        ds = xr.open_dataset(
+                                        ds = _open_dataset_safe(
                                             f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
                                         ds = Convert_Type.convert_nc(ds)
 
@@ -239,7 +251,7 @@ class CZ_groupby(metrics, scores):
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == 'mass':
                                             # Get reference data for flux weighting
-                                            o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                            o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                 f'{ref_varname}']
 
                                             # Calculate area weights (cosine of latitude)
@@ -273,7 +285,7 @@ class CZ_groupby(metrics, scores):
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == 'mass':
                                                 # Get reference data for flux weighting
-                                                o = xr.open_dataset(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
+                                                o = _open_dataset_safe(f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc')[
                                                     f'{ref_varname}']
 
                                                 # Calculate area weights (cosine of latitude)

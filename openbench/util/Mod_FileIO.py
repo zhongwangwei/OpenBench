@@ -187,11 +187,16 @@ def safe_open_netcdf(file_path: str,
             original_error=e
         )
     except Exception as e:
-        raise DataProcessingError(
-            f"Failed to open NetCDF file: {file_path}",
-            context={'file_path': file_path, 'error_type': type(e).__name__},
-            original_error=e
-        )
+        # Try with decode_times=False as fallback
+        logging.warning(f"Failed to open {file_path} with default time decoding: {e}. Retrying with decode_times=False")
+        try:
+            ds = xr.open_dataset(file_path, decode_times=False)
+        except Exception as e2:
+            raise DataProcessingError(
+                f"Failed to open NetCDF file: {file_path}",
+                context={'file_path': file_path, 'error_type': type(e).__name__},
+                original_error=e2
+            )
 
     # If variable name is specified, extract it
     if variable_name:
