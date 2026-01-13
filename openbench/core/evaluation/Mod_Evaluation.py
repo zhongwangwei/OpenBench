@@ -293,8 +293,13 @@ class Evaluation_grid(metrics, scores):
                 s.to_netcdf(sim_path)
 
             mask1 = np.isnan(s) | np.isnan(o)
-            s.values[mask1] = np.nan
-            o.values[mask1] = np.nan
+            # Make copies to avoid read-only array errors
+            s_values = s.values.copy()
+            o_values = o.values.copy()
+            s_values[mask1] = np.nan
+            o_values[mask1] = np.nan
+            s = s.copy(data=s_values)
+            o = o.copy(data=o_values)
             logging.info("=" * 80)
 
             # Parallel processing of metrics if available and beneficial
@@ -572,8 +577,13 @@ class Evaluation_stn(metrics, scores):
                     o = self._normalize_time_coordinate(o)
 
                     mask1 = np.isnan(s) | np.isnan(o)
-                    s.values[mask1] = np.nan
-                    o.values[mask1] = np.nan
+                    # Make copies to avoid read-only array errors
+                    s_values = s.values.copy()
+                    o_values = o.values.copy()
+                    s_values[mask1] = np.nan
+                    o_values[mask1] = np.nan
+                    s = s.copy(data=s_values)
+                    o = o.copy(data=o_values)
 
                     for metric in current_metrics:
                         if hasattr(self, metric):
@@ -701,8 +711,13 @@ class Evaluation_stn(metrics, scores):
                     logging.warning(f"Skipping station {station_id} - failed to align time coordinates")
                     return None
             mask1 = np.isnan(s) | np.isnan(o)
-            s.values[mask1] = np.nan
-            o.values[mask1] = np.nan
+            # Make copies to avoid read-only array errors
+            s_values = s.values.copy()
+            o_values = o.values.copy()
+            s_values[mask1] = np.nan
+            o_values[mask1] = np.nan
+            s = s.copy(data=s_values)
+            o = o.copy(data=o_values)
 
             row = {}
             # for based plot
