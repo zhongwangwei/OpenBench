@@ -39,7 +39,25 @@ def process_station(station, info, min_uparea, max_uparea):
                   logging.info(f"Station {int(station['ID'])} is selected")
     return result
 
-def filter_HydroWeb(info):
+def filter_HydroWeb(info, ds=None):
+   """Generate required station metadata for HydroWeb runs or filter dataset.
+   
+   Args:
+       info: Configuration/info object with processing parameters
+       ds: Optional xarray Dataset to filter (for data filtering mode)
+       
+   Returns:
+       For data filtering mode: Tuple of (info, filtered_data)
+       For initialization mode: None (modifies info in place)
+   """
+   # If ds is provided, we're in data filtering mode
+   if ds is not None:
+       data_vars = list(ds.data_vars)
+       if data_vars:
+           return info, ds[data_vars[0]]
+       return info, ds
+   
+   # Initialization mode
    if info.compare_tim_res.lower() != "d" :
       logging.error('The compare_res should be "Day" ')
       sys.exit(1)
@@ -125,4 +143,5 @@ def filter_HydroWeb(info):
    data_select['obs_eyear'] = data_select['obs_eyear'].astype(int)
    data_select['ID'] = data_select['ID'] #.astype(int)
    
-   data_select.to_csv(f"{info.casedir}/stn_list.txt", index=False)
+   data_select.to_csv(f"{info.casedir}/stn_HydroWeb_{info.sim_source}_list.txt", index=False)
+

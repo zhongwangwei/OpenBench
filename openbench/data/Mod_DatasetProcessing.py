@@ -711,7 +711,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == 'stn' or self.sim_data_type == 'stn':
-            self.station_list = Convert_Type.convert_Frame(pd.read_csv(os.path.join(self.casedir, "stn_list.txt"), header=0))
+            # Use ref_fulllist if available, otherwise use dataset-specific filename
+            if hasattr(self, 'ref_fulllist') and self.ref_fulllist and os.path.exists(self.ref_fulllist):
+                stnlist_path = self.ref_fulllist
+            else:
+                stnlist_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
+            self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
             output_dir = os.path.join(self.casedir, 'data', f'stn_{self.ref_source}_{self.sim_source}')
             os.makedirs(output_dir, exist_ok=True)
 

@@ -1,0 +1,13 @@
+general:
+  root_dir: ./dataset/Reference/Station/Water/Evapotranspiration/Xu_et_al2025/dataset/
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Day
+  grid_res: ''
+  syear: ''
+  eyear: ''
+  fulllist: ./dataset/Reference/Station/Water/Evapotranspiration/Xu_et_al2025/list/Xu_et_al2025.csv
+Evapotranspiration:
+  varname: et
+  varunit: mm day-1

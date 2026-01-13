@@ -1,0 +1,22 @@
+general:
+  root_dir: ./dataset/Reference/Station/Anth/Dam/ResOpsUS/dataset
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: day
+  grid_res: ''
+  syear: 1900
+  eyear: 2020
+  fulllist: ''
+Dam_Inflow:
+  varname: inflow
+  varunit: m3 s-1
+Dam_Outflow:
+  varname: outflow
+  varunit: m3 s-1
+Dam_Water_Storage:
+  varname: storage
+  varunit: million cubic meters
+Dam_Water_Elevation:
+  varname: elevation
+  varunit: m

@@ -89,10 +89,24 @@ class NamelistReader:
         ext = ext.lower()
         
         if ext == '.nml':
+            logging.warning(
+                f"\n" + "="*80 + "\n"
+                f"⚠️  DEPRECATION WARNING: Fortran NML format (.nml) is deprecated!\n"
+                f"    The Fortran NML format is no longer being updated.\n"
+                f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                f"    File: {file_path}\n" + "="*80
+            )
             return 'nml'
         elif ext in ('.yaml', '.yml'):
             return 'yaml'
         elif ext == '.json':
+            logging.warning(
+                f"\n" + "="*80 + "\n"
+                f"⚠️  DEPRECATION WARNING: JSON format (.json) is deprecated!\n"
+                f"    The JSON format is no longer being updated.\n"
+                f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                f"    File: {file_path}\n" + "="*80
+            )
             return 'json'
         else:
             # Default to nml for backward compatibility

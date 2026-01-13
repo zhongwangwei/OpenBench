@@ -36,8 +36,26 @@ def _resolve_station_list(info) -> Path:
     raise FileNotFoundError(candidates[0])
 
 
-def filter_ResOpsUS(info):
-    """Load and filter ResOpsUS station metadata based on simulation settings."""
+def filter_ResOpsUS(info, ds=None):
+    """Load and filter ResOpsUS station metadata based on simulation settings.
+    
+    Args:
+        info: Configuration/info object with processing parameters
+        ds: Optional xarray Dataset to filter (for data filtering mode)
+        
+    Returns:
+        For data filtering mode: Tuple of (info, filtered_data)
+        For initialization mode: None (modifies info in place)
+    """
+    # If ds is provided, we're in data filtering mode
+    if ds is not None:
+        # Return the first data variable or the dataset as-is
+        data_vars = list(ds.data_vars)
+        if data_vars:
+            return info, ds[data_vars[0]]
+        return info, ds
+    
+    # Initialization mode: load and filter station metadata
     station_list_path = _resolve_station_list(info)
     info.ref_fulllist = str(station_list_path)
 
@@ -83,3 +101,4 @@ def filter_ResOpsUS(info):
 
     info.use_syear = int(info.stn_list["use_syear"].min())
     info.use_eyear = int(info.stn_list["use_eyear"].max())
+

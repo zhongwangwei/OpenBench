@@ -174,6 +174,13 @@ class OpenBench:
                 try:
                     # JSON format
                     if config_path.suffix == '.json':
+                        self.logger.warning(
+                            f"\n" + "="*80 + "\n"
+                            f"⚠️  DEPRECATION WARNING: JSON format (.json) is deprecated!\n"
+                            f"    The JSON format is no longer being updated.\n"
+                            f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                            f"    File: {config_path}\n" + "="*80
+                        )
                         import json
                         with open(config_path, 'r') as f:
                             self.config = json.load(f)
@@ -195,6 +202,13 @@ class OpenBench:
                     
                     # Fortran Namelist format
                     elif config_path.suffix == '.nml':
+                        self.logger.warning(
+                            f"\n" + "="*80 + "\n"
+                            f"⚠️  DEPRECATION WARNING: Fortran NML format (.nml) is deprecated!\n"
+                            f"    The Fortran NML format is no longer being updated.\n"
+                            f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                            f"    File: {config_path}\n" + "="*80
+                        )
                         try:
                             import f90nml
                             nml = f90nml.read(str(config_path))

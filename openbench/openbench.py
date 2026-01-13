@@ -278,16 +278,17 @@ def run_evaluation(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, sco
         print_item_progress(evaluation_item, "📊")
         logging.info(f"Start running {evaluation_item} evaluation...")
 
-        # Reset scratch directory once per evaluation_item, not per sim_source/ref_source
-        # This prevents deleting files needed by parallel processes
-        scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
-        gc.collect()
-        time.sleep(0.5)
-        try:
-            reset_directory(scratch_dir, timeout=60.0, max_retries=5, retry_delay=2.0)
-            logging.info(f"Scratch directory reset for {evaluation_item}")
-        except Exception as e:
-            logging.warning(f"Scratch directory reset encountered issues: {e}")
+        # Note: scratch directory reset is now disabled because each ref/sim combination
+        # has its own subdirectory (e.g., scratch/GSIM_colm-routing/). Filters create their
+        # own subdirs as needed, so resetting the parent would delete data from other combos.
+        # scratch_dir = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'], 'scratch')
+        # gc.collect()
+        # time.sleep(0.5)
+        # try:
+        #     reset_directory(scratch_dir, timeout=60.0, max_retries=5, retry_delay=2.0)
+        #     logging.info(f"Scratch directory reset for {evaluation_item}")
+        # except Exception as e:
+        #     logging.warning(f"Scratch directory reset encountered issues: {e}")
 
         sim_sources = sim_nml['general'][f'{evaluation_item}_sim_source']
         ref_sources = ref_nml['general'][f'{evaluation_item}_ref_source']
