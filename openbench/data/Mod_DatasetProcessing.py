@@ -606,6 +606,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
         return re.sub(pattern, replacer, freq)
 
+    def _is_climatology_mode(self) -> bool:
+        """
+        Check if compare_tim_res indicates climatology mode.
+        
+        Returns:
+            bool: True if in climatology mode (climatology-year or climatology-month)
+        """
+        if not hasattr(self, 'compare_tim_res') or not self.compare_tim_res:
+            return False
+        compare_tim_res_str = str(self.compare_tim_res).strip().lower()
+        return compare_tim_res_str in ['climatology-year', 'climatology-month']
+
     def _normalize_frequency(self, freq: str) -> str:
         """
         Convert human-readable frequency strings to pandas-compatible codes.
@@ -1218,6 +1230,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     @performance_monitor
     # NOTE: @cached removed - cache key collisions caused race conditions
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
+        # Check if climatology mode - skip resampling
+        tim_res_lower = str(tim_res).strip().lower()
+        if tim_res_lower in ['climatology-year', 'climatology-month']:
+            logging.debug(f"resample_data: Climatology mode detected ({tim_res}), returning data unchanged")
+            return dfx1
+            
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
             logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
@@ -1533,7 +1551,8 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             ds = ds.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
 
             # Resample only if there's data in the selected time range
-            if len(ds.time) > 0:
+            # Skip resampling for climatology mode - handled by Mod_Climatology
+            if len(ds.time) > 0 and not self._is_climatology_mode():
                 ds = ds.resample(time=self.compare_tim_res).mean()
             else:
                 logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
@@ -1707,6 +1726,9 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             return None
 
         data = data  # .where((data > -1e20) & (data < 1e20), np.nan)
+        # Skip resampling for climatology mode - handled by Mod_Climatology
+        if self._is_climatology_mode():
+            return data
         return data.resample(time=self.compare_tim_res).mean()
 
     def save_extracted_data(self, data: xr.Dataset, station: pd.Series, datasource: str) -> None:
@@ -2064,7 +2086,9 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                 return
 
             # Convert sparse arrays to dense arrays
-            data = data.resample(time=self.compare_tim_res).mean()
+            # Skip resampling for climatology mode - handled by Mod_Climatology
+            if not self._is_climatology_mode():
+                data = data.resample(time=self.compare_tim_res).mean()
             data = data.sel(time=slice(f'{year}-01-01T00:00:00', f'{year}-12-31T23:59:59'))
 
             varname = self.ref_varname[0] if data_source == 'ref' else self.sim_varname[0]

@@ -50,15 +50,19 @@ class CZ_groupby(metrics, scores):
         self.weight = self.main_nml['general'].get('weight', 'none') or 'none'
         # this should be done in read_namelist
         # adjust the time frequency
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
-        if not match:
-            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
-            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-        value, unit = match.groups()
-        if not value:
-            value = 1
+        # Check if climatology mode - skip frequency parsing
+        if self.compare_tim_res in ['climatology-year', 'climatology-month']:
+            logging.debug(f"CZ_groupby: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
         else:
-            value = int(value)  # Convert the numerical value to an integer
+            match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+            if not match:
+                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+            value, unit = match.groups()
+            if not value:
+                value = 1
+            else:
+                value = int(value)  # Convert the numerical value to an integer
         self.metrics = metrics
         self.scores = scores
 
