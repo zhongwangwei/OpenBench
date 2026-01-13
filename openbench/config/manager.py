@@ -113,6 +113,24 @@ class ConfigManager:
         # Detect file format
         file_format = self._detect_format(config_path)
         
+        # Warn about deprecated formats
+        if file_format == '.nml':
+            self.logger.warning(
+                f"\n" + "="*80 + "\n"
+                f"⚠️  DEPRECATION WARNING: Fortran NML format (.nml) is deprecated!\n"
+                f"    The Fortran NML format is no longer being updated.\n"
+                f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                f"    File: {config_path}\n" + "="*80
+            )
+        elif file_format == '.json':
+            self.logger.warning(
+                f"\n" + "="*80 + "\n"
+                f"⚠️  DEPRECATION WARNING: JSON format (.json) is deprecated!\n"
+                f"    The JSON format is no longer being updated.\n"
+                f"    Please switch to YAML format (.yaml) for configuration files.\n"
+                f"    File: {config_path}\n" + "="*80
+            )
+        
         try:
             # Load configuration
             loader = self._loaders.get(file_format)

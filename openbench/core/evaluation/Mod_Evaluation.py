@@ -237,14 +237,19 @@ class Evaluation_grid(metrics, scores):
                 # Combine metrics and scores for filtering
                 all_evaluations = list(self.metrics) + list(self.scores)
 
-                # Get data_groupby information from instance attributes
-                ref_data_groupby = getattr(self, 'ref_data_groupby', None)
-                sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+                # Get compare_tim_res and syear from instance attributes
+                compare_tim_res = getattr(self, 'compare_tim_res', None)
+                syear = getattr(self, 'syear', None)
+                if syear:
+                    try:
+                        syear = int(syear)
+                    except (ValueError, TypeError):
+                        syear = None
 
                 o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
                     ref_ds, sim_ds, all_evaluations,
-                    ref_data_groupby=ref_data_groupby,
-                    sim_data_groupby=sim_data_groupby
+                    compare_tim_res=compare_tim_res,
+                    syear=syear
                 )
 
                 if o_clim is not None and s_clim is not None:
@@ -501,7 +506,11 @@ class Evaluation_stn(metrics, scores):
     def make_evaluation(self):
         try:
             # read station information
-            stnlist = os.path.join(self.casedir, "stn_list.txt")
+            # Use ref_fulllist if available, otherwise use dataset-specific filename
+            if hasattr(self, 'ref_fulllist') and self.ref_fulllist and os.path.exists(self.ref_fulllist):
+                stnlist = self.ref_fulllist
+            else:
+                stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
             station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
 
             # loop the keys in self.variables to get the metric output
@@ -532,14 +541,19 @@ class Evaluation_stn(metrics, scores):
                     if _HAS_CLIMATOLOGY:
                         all_evaluations = list(self.metrics) + list(self.scores)
 
-                        # Get data_groupby information from instance attributes
-                        ref_data_groupby = getattr(self, 'ref_data_groupby', None)
-                        sim_data_groupby = getattr(self, 'sim_data_groupby', None)
+                        # Get compare_tim_res and syear from instance attributes
+                        compare_tim_res = getattr(self, 'compare_tim_res', None)
+                        syear = getattr(self, 'syear', None)
+                        if syear:
+                            try:
+                                syear = int(syear)
+                            except (ValueError, TypeError):
+                                syear = None
 
                         o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
                             ref_ds, sim_ds, all_evaluations,
-                            ref_data_groupby=ref_data_groupby,
-                            sim_data_groupby=sim_data_groupby
+                            compare_tim_res=compare_tim_res,
+                            syear=syear
                         )
 
                         if o_clim is not None and s_clim is not None:
@@ -755,7 +769,11 @@ class Evaluation_stn(metrics, scores):
     @cached(key_prefix="station_eval", ttl=1800)
     def make_evaluation_P(self):
         try:
-            stnlist = os.path.join(self.casedir, "stn_list.txt")
+            # Use ref_fulllist if available, otherwise use dataset-specific filename
+            if hasattr(self, 'ref_fulllist') and self.ref_fulllist and os.path.exists(self.ref_fulllist):
+                stnlist = self.ref_fulllist
+            else:
+                stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
             station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
             
             # Use enhanced parallel engine if available

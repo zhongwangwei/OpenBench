@@ -1,20 +1,17 @@
 general:
-  root_dir: ./dataset/Reference/Station/Dam_River_Lake/StreamFlow/GRDC/
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Dai_Trenberth
   timezone: 0.0
   data_type: stn
   data_groupby: single
-  tim_res: ''
+  tim_res: Month
   grid_res: ''
   syear: 1900
   eyear: 2020
-  min_year: 1
 Streamflow:
   sub_dir: ''
-  varname: discharge
+  varname: FLOW
   varunit: m3 s-1
   suffix: ''
   prefix: ''
   fulllist: ''
-  max_uparea: 50000000000.0
-  min_uparea: 1000.0
   data_groupby: single

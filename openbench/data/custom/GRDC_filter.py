@@ -46,7 +46,30 @@ def process_station(station, info, min_uparea, max_uparea):
     return result
 
 
-def filter_GRDC(info):
+def filter_GRDC(info, ds=None):
+    """Generate required station metadata for GRDC runs or filter dataset.
+    
+    Args:
+        info: Configuration/info object with processing parameters
+        ds: Optional xarray Dataset to filter (for data filtering mode)
+        
+    Returns:
+        For data filtering mode: Tuple of (info, filtered_data)
+        For initialization mode: None (modifies info in place)
+    """
+    # If ds is provided, we're in data filtering mode
+    if ds is not None:
+        if 'discharge' in ds:
+            return info, ds['discharge']
+        elif 'runoff_mean' in ds:
+            return info, ds['runoff_mean']
+        else:
+            data_vars = list(ds.data_vars)
+            if data_vars:
+                return info, ds[data_vars[0]]
+            return info, ds
+    
+    # Initialization mode: generate station list
     max_uparea = info.ref_nml['Streamflow']['GRDC_max_uparea']
     min_uparea = info.ref_nml['Streamflow']['GRDC_min_uparea']
     if info.compare_tim_res.lower() == "h":
@@ -141,4 +164,5 @@ def filter_GRDC(info):
     data_select['obs_eyear'] = data_select['obs_eyear'].astype(int)
     data_select['ID'] = data_select['ID'].astype(int)
 
-    data_select.to_csv(f"{info.casedir}/stn_list.txt", index=False)
+    data_select.to_csv(f"{info.casedir}/stn_GRDC_{info.sim_source}_list.txt", index=False)
+

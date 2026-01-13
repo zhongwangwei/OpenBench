@@ -803,7 +803,18 @@ class PreValidator:
                 # Check if variable exists in file
                 try:
                     import xarray as xr
-                    with xr.open_dataset(sample_file) as ds:
+                    # Try with default time decoding first, then fallback to decode_times=False
+                    # for datasets with non-standard time formats (e.g., 'months since 1800 01')
+                    try:
+                        ds = xr.open_dataset(sample_file)
+                    except (ValueError, OSError) as time_err:
+                        if 'time' in str(time_err).lower() or 'decode' in str(time_err).lower() or 'calendar' in str(time_err).lower():
+                            logging.debug(f"    Retrying with decode_times=False due to: {time_err}")
+                            ds = xr.open_dataset(sample_file, decode_times=False)
+                        else:
+                            raise
+                    
+                    with ds:
                         if varname in ds:
                             result['available'] = True
                             logging.info(f"    ✓ Variable '{varname}' found in data file")

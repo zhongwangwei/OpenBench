@@ -1,55 +1,47 @@
 general:
-  basename: stn3
-  basedir: ./output
-  compare_tim_res: Month
+  basename: f
+  basedir: /Users/zhongwangwei/Desktop/aa
+  compare_tim_res: month
   compare_tzone: 0.0
-  compare_grid_res: 0.25
-  syear: 2002
-  eyear: 2006
+  compare_grid_res: 2.0
+  syear: 2000
+  eyear: 2020
   min_year: 1.0
   max_lat: 90.0
   min_lat: -90.0
   max_lon: 180.0
   min_lon: -180.0
-  reference_nml: ./nml/nml-yaml/ref-stn.yaml
-  simulation_nml: ./nml/nml-yaml/sim-river.yaml
-  statistics_nml: ./nml/nml-yaml/stats.yaml
-  figure_nml: ./nml/nml-yaml/figlib.yaml
-  num_cores: 12
+  reference_nml: /Users/zhongwangwei/Desktop/aa/f/nml/ref-f.yaml
+  simulation_nml: /Users/zhongwangwei/Desktop/aa/f/nml/sim-f.yaml
+  statistics_nml: /Users/zhongwangwei/Desktop/Github/OpenBench-wei/nml/nml-yaml/stats.yaml
+  figure_nml: /Users/zhongwangwei/Desktop/Github/OpenBench-wei/nml/nml-yaml/figlib.yaml
+  num_cores: 4
   evaluation: true
   comparison: true
   statistics: false
-  debug_mode: true
+  debug_mode: false
   only_drawing: false
   weight: None
-  IGBP_groupby: false
-  PFT_groupby: false
-  Climate_zone_groupby: false
-  unified_mask: false
-  generate_report: false
+  IGBP_groupby: true
+  PFT_groupby: true
+  Climate_zone_groupby: true
+  unified_mask: true
+  generate_report: true
 evaluation_items:
   Biomass: false
-  Burned_Area: false
   Ecosystem_Respiration: false
   Gross_Primary_Productivity: false
   Leaf_Area_Index: false
-  Leaf_Greenness: false
   Methane: false
   Net_Ecosystem_Exchange: false
   Nitrogen_Fixation: false
   Soil_Carbon: false
-  Veg_Cover_In_Fraction: false
-  Net_Primary_Production: false
-  Wetland_Methane_Emission: false
   Canopy_Interception: false
   Canopy_Transpiration: false
-  Depth_Of_Surface_Water: false
   Evapotranspiration: false
-  Ground_Evaporation: false
-  Groundwater_Recharge_Rate: false
   Permafrost: false
   Root_Zone_Soil_Moisture: false
-  Snow_Depth: false
+  Snow_Depth: true
   Snow_Water_Equivalent: false
   Soil_Evaporation: false
   Surface_Snow_Cover_In_Fraction: false
@@ -57,13 +49,7 @@ evaluation_items:
   Terrestrial_Water_Storage_Change: false
   Total_Runoff: false
   Water_Evaporation: false
-  Water_Storage_In_Aquifer: false
-  Water_Table_Depth: false
-  Bare_Soil_Evaporation: false
-  Open_Water_Evaporation: false
-  Precipitation: false
-  Runoff: false
-  Transpiration: false
+  Surface_Albedo: false
   Ground_Heat: false
   Latent_Heat: false
   Net_Radiation: false
@@ -74,19 +60,15 @@ evaluation_items:
   Surface_Soil_Temperature: false
   Surface_Upward_LW_Radiation: false
   Surface_Upward_SW_Radiation: false
-  Surface_Albedo: false
-  Surface_Downward_LW_Radiation: false
-  Surface_Downward_SW_Radiation: false
   Diurnal_Max_Temperature: false
   Diurnal_Min_Temperature: false
   Diurnal_Temperature_Range: false
+  Precipitation: false
   Surface_Air_Temperature: false
+  Surface_Downward_LW_Radiation: false
+  Surface_Downward_SW_Radiation: false
   Surface_Relative_Humidity: false
   Surface_Specific_Humidity: false
-  Surface_Wind_Speed: false
-  Cloud_Cover: false
-  Ground_Frost_Frequency: false
-  Lake_Surface_Water_Temperature: false
   Crop_Emergence_DOY_Wheat: false
   Crop_Heading_DOY_Corn: false
   Crop_Heading_DOY_Wheat: false
@@ -111,7 +93,7 @@ evaluation_items:
   Lake_Water_Level: false
   Lake_Water_Volume: false
   River_Water_Level: false
-  Streamflow: true
+  Streamflow: false
   Urban_Air_Temperature_Max: false
   Urban_Air_Temperature_Min: false
   Urban_Albedo: false
@@ -119,28 +101,37 @@ evaluation_items:
   Urban_Latent_Heat_Flux: false
   Urban_Surface_Temperature: false
 metrics:
-  percent_bias: true
+  bias: false
+  percent_bias: false
   absolute_percent_bias: false
-  bias: true
   mean_absolute_error: false
-  RMSE: true
+  RMSE: false
   MSE: false
   ubRMSE: false
   CRMSD: false
   nrmse: false
-  L: false
-  correlation: true
+  correlation: false
   correlation_R2: false
-  NSE: false
-  LNSE: false
-  KGE: false
-  KGESS: true
-  kappa_coeff: false
-  rv: false
-  ubNSE: false
-  ubKGE: false
+  rSpearman: false
   ubcorrelation: false
   ubcorrelation_R2: false
+  NSE: false
+  LNSE: false
+  KGE: true
+  KGESS: false
+  ubNSE: false
+  ubKGE: false
+  mNSE: false
+  rNSE: false
+  wNSE: false
+  wsNSE: false
+  sKGE: false
+  KGEkm: false
+  KGElf: false
+  KGEnp: false
+  L: false
+  kappa_coeff: false
+  rv: false
   pc_max: false
   pc_min: false
   pc_ampli: false
@@ -150,61 +141,45 @@ metrics:
   SMPI: false
   ggof: false
   gof: false
-  KGEkm: false
-  KGElf: false
-  KGEnp: false
   md: false
-  mNSE: false
   pbiasfdc: false
   pfactor: false
   rd: false
   rfactor: false
-  rNSE: false
-  rSpearman: false
   rsr: false
-  sKGE: false
   ssq: false
   valindex: false
   ve: false
-  wNSE: false
-  wsNSE: false
   index_agreement: false
-  MFM: true
+  MFM: false
 scores:
   nBiasScore: true
-  nRMSEScore: true
+  nRMSEScore: false
   nPhaseScore: false
   nIavScore: false
   nSpatialScore: false
-  Overall_Score: true
+  Overall_Score: false
   The_Ideal_Point_score: false
 comparisons:
-  HeatMap: true
   Taylor_Diagram: false
   Target_Diagram: false
-  Kernel_Density_Estimate: false
   Whisker_Plot: false
-  Parallel_Coordinates: false
+  Parallel_Coordinates: true
   Portrait_Plot_seasonal: false
+  Ridgeline_Plot: false
+  HeatMap: false
+  Kernel_Density_Estimate: false
+  Diff_Plot: false
+  RadarMap: false
   Single_Model_Performance_Index: false
   Relative_Score: false
-  Ridgeline_Plot: false
-  Diff_Plot: false
+  Mann_Kendall_Trend_Test: false
+  Correlation: false
+  Standard_Deviation: false
+  Functional_Response: false
   Mean: false
   Median: false
   Min: false
   Max: false
   Sum: false
-  Mann_Kendall_Trend_Test: false
-  Correlation: false
-  Standard_Deviation: true
-  Functional_Response: false
-  RadarMap: false
-statistics:
-  Z_Score: true
-  Hellinger_Distance: false
-  Three_Cornered_Hat: false
-  Partial_Least_Squares_Regression: false
-  False_Discovery_Rate: false
-  ANOVA: false
-  Mann_Kendall_Trend_Test: true
+statistics: {}
