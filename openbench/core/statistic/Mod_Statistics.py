@@ -143,7 +143,10 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
                 except Exception as e:
                     logging.warning(f"{method.__name__} failed: {e}")
 
-            remapped = remapped.resample(time=self.compare_tim_res).mean()
+            # Skip resampling for climatology mode
+            compare_tim_res_lower = str(self.compare_tim_res).strip().lower()
+            if compare_tim_res_lower not in ['climatology-year', 'climatology-month']:
+                remapped = remapped.resample(time=self.compare_tim_res).mean()
             remapped_data.append(remapped)
         return remapped_data
 
@@ -314,23 +317,27 @@ class StatisticsProcessing(BasicProcessing):
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
 
-        # this should be done in read_namelist
-        # adjust the time frequency
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
-        if not match:
-            logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
-            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-        value, unit = match.groups()
-        if not value:
-            value = 1
+        # Check if climatology mode - skip frequency parsing
+        if self.compare_tim_res in ['climatology-year', 'climatology-month']:
+            logging.info(f"StatisticsProcessing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
         else:
-            value = int(value)  # Convert the numerical value to an integer
-        # Get the corresponding pandas frequency
-        freq = self.freq_map.get(unit.lower())
-        if not freq:
-            logging.error(f"Unsupported time unit: {unit}")
-            raise ValueError(f"Unsupported time unit: {unit}")
-        self.compare_tim_res = f'{value}{freq}'
+            # this should be done in read_namelist
+            # adjust the time frequency
+            match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+            if not match:
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
+                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+            value, unit = match.groups()
+            if not value:
+                value = 1
+            else:
+                value = int(value)  # Convert the numerical value to an integer
+            # Get the corresponding pandas frequency
+            freq = self.freq_map.get(unit.lower())
+            if not freq:
+                logging.error(f"Unsupported time unit: {unit}")
+                raise ValueError(f"Unsupported time unit: {unit}")
+            self.compare_tim_res = f'{value}{freq}'
 
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)

@@ -94,15 +94,19 @@ class LC_groupby_only_drawing(metrics, scores):
         self.weight = self.main_nml['general'].get('weight', 'none')
         # this should be done in read_namelist
         # adjust the time frequency
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
-        if not match:
-            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
-            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-        value, unit = match.groups()
-        if not value:
-            value = 1
+        # Check if climatology mode - skip frequency parsing
+        if self.compare_tim_res in ['climatology-year', 'climatology-month']:
+            logging.debug(f"LC_groupby_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
         else:
-            value = int(value)  # Convert the numerical value to an integer
+            match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+            if not match:
+                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+            value, unit = match.groups()
+            if not value:
+                value = 1
+            else:
+                value = int(value)  # Convert the numerical value to an integer
         self.metrics = metrics
         self.scores = scores
     
@@ -239,15 +243,19 @@ class CZ_groupby_only_drawing(metrics, scores):
         self.weight = self.main_nml['general'].get('weight', 'none')
         # this should be done in read_namelist
         # adjust the time frequency
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
-        if not match:
-            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
-            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-        value, unit = match.groups()
-        if not value:
-            value = 1
+        # Check if climatology mode - skip frequency parsing
+        if self.compare_tim_res in ['climatology-year', 'climatology-month']:
+            logging.debug(f"CZ_groupby_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
         else:
-            value = int(value)  # Convert the numerical value to an integer
+            match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+            if not match:
+                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+            value, unit = match.groups()
+            if not value:
+                value = 1
+            else:
+                value = int(value)  # Convert the numerical value to an integer
         self.metrics = metrics
         self.scores = scores
 
@@ -568,21 +576,25 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
         # this should be done in read_namelist
         # adjust the time frequency
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
-        if not match:
-            logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
-            raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-
-        value, unit = match.groups()
-        if not value:
-            value = 1
+        # Check if climatology mode - skip frequency parsing
+        if self.compare_tim_res in ['climatology-year', 'climatology-month']:
+            logging.debug(f"ComparisonProcessing_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
         else:
-            value = int(value)  # Convert the numerical value to an integer
-        # Get the corresponding pandas frequency
-        freq = self.freq_map.get(unit.lower())
-        if not freq:
-            raise ValueError(f"Unsupported time unit: {unit}")
-        self.compare_tim_res = f'{value}{freq}E'
+            match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
+            if not match:
+                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
+
+            value, unit = match.groups()
+            if not value:
+                value = 1
+            else:
+                value = int(value)  # Convert the numerical value to an integer
+            # Get the corresponding pandas frequency
+            freq = self.freq_map.get(unit.lower())
+            if not freq:
+                raise ValueError(f"Unsupported time unit: {unit}")
+            self.compare_tim_res = f'{value}{freq}E'
 
         self.metrics = metrics
         self.scores = scores
