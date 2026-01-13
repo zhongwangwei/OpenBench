@@ -179,8 +179,12 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for metric in self.metrics:
-                                        ds = _open_dataset_safe(
-                                            f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        metric_file = f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'
+                                        # Skip if metric file doesn't exist (e.g., skipped in climatology mode)
+                                        if not os.path.exists(metric_file):
+                                            logging.debug(f"Skipping metric {metric} - file not found (possibly skipped in climatology mode)")
+                                            continue
+                                        ds = _open_dataset_safe(metric_file)
                                         ds = Convert_Type.convert_nc(ds)
 
                                         # Calculate and write the overall mean first
@@ -230,8 +234,12 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for score in self.scores:
-                                        ds = _open_dataset_safe(
-                                            f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        score_file = f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
+                                        # Skip if score file doesn't exist (e.g., skipped in climatology mode)
+                                        if not os.path.exists(score_file):
+                                            logging.debug(f"Skipping score {score} - file not found (possibly skipped in climatology mode)")
+                                            continue
+                                        ds = _open_dataset_safe(score_file)
                                         ds = Convert_Type.convert_nc(ds)
 
                                         if self.weight.lower() == 'area':
@@ -437,8 +445,12 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print median values
                                     for metric in self.metrics:
-                                        ds = _open_dataset_safe(
-                                            f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc')
+                                        metric_file = f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'
+                                        # Skip if metric file doesn't exist (e.g., skipped in climatology mode)
+                                        if not os.path.exists(metric_file):
+                                            logging.debug(f"Skipping metric {metric} - file not found (possibly skipped in climatology mode)")
+                                            continue
+                                        ds = _open_dataset_safe(metric_file)
                                         ds = Convert_Type.convert_nc(ds)
 
                                         # Calculate and write the overall median first
@@ -488,8 +500,12 @@ class LC_groupby(metrics, scores):
 
                                     # Calculate and print mean values
                                     for score in self.scores:
-                                        ds = _open_dataset_safe(
-                                            f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc')
+                                        score_file = f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
+                                        # Skip if score file doesn't exist (e.g., skipped in climatology mode)
+                                        if not os.path.exists(score_file):
+                                            logging.debug(f"Skipping score {score} - file not found (possibly skipped in climatology mode)")
+                                            continue
+                                        ds = _open_dataset_safe(score_file)
                                         ds = Convert_Type.convert_nc(ds)
 
                                         # Calculate and write the overall mean first
