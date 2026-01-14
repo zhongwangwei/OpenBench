@@ -1,5 +1,6 @@
-"""Custom filter for the GRDC-RESG (Remote Sensing-based Extension for GRDC) reference dataset.
+"""Custom filter for the CAMELSH (CAMELS Hourly Streamflow) reference dataset.
 
+Modified to match GSIM filter pattern: extracts and saves individual station NetCDF files.
 Uses parallel processing for faster station data extraction.
 """
 
@@ -12,11 +13,18 @@ import xarray as xr
 from joblib import Parallel, delayed
 
 
-def process_site(station_idx, station_ids, lons, lats, streamflow_data, times, info, scratch_dir):
+def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir):
     """Extract metadata for a single station and persist its series as NetCDF."""
-    station_id = str(int(station_ids[station_idx]))
+    station_id = str(station_ids[station_idx])
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
+    area = float(areas[station_idx])
+    
+    # Skip stations with missing coordinates or area
+    if np.isnan(lon) or np.isnan(lat):
+        return None
+    if np.isnan(area) or area < 0:
+        return None
     
     # Get time series data for this station
     streamflow = streamflow_data[station_idx, :]
@@ -33,25 +41,35 @@ def process_site(station_idx, station_ids, lons, lats, streamflow_data, times, i
     use_syear = max(start_year, int(info.sim_syear), int(info.syear))
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
-    # Apply filters: time range, spatial extent
+    # Apply filters: time range, spatial extent, and drainage area
     if ((use_eyear - use_syear) < info.min_year or
             lon < info.min_lon or lon > info.max_lon or
             lat < info.min_lat or lat > info.max_lat):
+        return None
+    
+    # Filter by drainage area if specified
+    if hasattr(info, 'min_uparea') and area < info.min_uparea:
+        return None
+    if hasattr(info, 'max_uparea') and area > info.max_uparea:
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
     
     # Save streamflow data as 1D time series
     ds_out = xr.Dataset({
-        'discharge': (['time'], streamflow)
+        'streamflow': (['time'], streamflow)
     }, coords={'time': times})
     ds_out.to_netcdf(file_path)
 
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
 
-def filter_GRDC_RESG(info, ds=None):
-    """Generate required station metadata for GRDC-RESG runs or filter dataset.
+def filter_CAMELSH(info, ds=None):
+    """Generate required station metadata for CAMELSH runs or filter dataset.
+    
+    This function serves two purposes:
+    1. When called with only `info`: Generates station metadata for CAMELSH runs
+    2. When called with `info` and `ds`: Acts as a data filter for station processing
     
     Args:
         info: Configuration/info object with processing parameters
@@ -63,10 +81,9 @@ def filter_GRDC_RESG(info, ds=None):
     """
     # If ds is provided, we're in data filtering mode
     if ds is not None:
-        if 'Disch' in ds:
-            return info, ds['Disch']
-        elif 'discharge' in ds:
-            return info, ds['discharge']
+        varname = 'streamflow'
+        if varname in ds:
+            return info, ds[varname]
         else:
             data_vars = list(ds.data_vars)
             if data_vars:
@@ -74,25 +91,26 @@ def filter_GRDC_RESG(info, ds=None):
             return info, ds
     
     # Initialization mode: generate station list
-    dataset_path = Path(info.ref_dir) / "RSEG_V01.nc"
+    dataset_path = Path(info.ref_dir) / "CAMELSH_hourly.nc"
 
     if not dataset_path.exists():
-        logging.error(f"GRDC-RESG dataset not found: {dataset_path}")
+        logging.error(f"CAMELSH dataset not found: {dataset_path}")
         return
 
-    logging.info("Loading GRDC-RESG station metadata...")
+    logging.info("Loading CAMELSH station metadata...")
     
     # Create scratch directory
-    scratch_dir = Path(info.casedir) / "scratch" / f"GRDC_RESG_{info.sim_source}"
+    scratch_dir = Path(info.casedir) / "scratch" / f"CAMELSH_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
-        station_ids = ds_file['GRDC_Num'].values
-        lons = ds_file['Lon'].values
-        lats = ds_file['Lat'].values
-        streamflow_data = ds_file['Disch'].values  # (GRDC_Num, Time)
-        times = ds_file['Time'].values
+        station_ids = ds_file['station'].values
+        lons = ds_file['lon'].values
+        lats = ds_file['lat'].values
+        areas = ds_file['drainage_area'].values
+        streamflow_data = ds_file['streamflow'].values  # (station, time)
+        times = ds_file['time'].values
         
         n_stations = len(station_ids)
         logging.info(f"Processing {n_stations} stations in parallel...")
@@ -100,7 +118,7 @@ def filter_GRDC_RESG(info, ds=None):
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
-                idx, station_ids, lons, lats, streamflow_data, times, info, scratch_dir
+                idx, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir
             ) for idx in range(n_stations)
         )
         
@@ -108,7 +126,7 @@ def filter_GRDC_RESG(info, ds=None):
         station_rows = [row for row in station_rows if row is not None]
 
     if not station_rows:
-        logging.error("No GRDC-RESG stations satisfy the selection criteria.")
+        logging.error("No CAMELSH stations satisfy the selection criteria.")
         return
 
     df = pd.DataFrame(
@@ -118,8 +136,8 @@ def filter_GRDC_RESG(info, ds=None):
 
     info.use_syear = int(df['use_syear'].min())
     info.use_eyear = int(df['use_eyear'].max())
-    info.ref_fulllist = f"{info.casedir}/stn_GRDC_RESG_{info.sim_source}_list.txt"
+    info.ref_fulllist = f"{info.casedir}/stn_CAMELSH_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)
-    logging.info(f'GRDC-RESG station list saved: {len(df)} stations')
+    logging.info(f'CAMELSH station list saved: {len(df)} stations')

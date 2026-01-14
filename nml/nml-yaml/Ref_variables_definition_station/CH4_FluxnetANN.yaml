@@ -1,0 +1,17 @@
+general:
+  root_dir: ./dataset/Reference/Station/Bio/CH4_FluxnetANN
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Month
+  grid_res: ''
+  syear: 1850
+  eyear: 2020
+FCH4:
+  sub_dir: ''
+  varname: FCH4
+  varunit: g C m-2 d-1
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single

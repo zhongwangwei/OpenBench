@@ -1,0 +1,41 @@
+general:
+  root_dir: ./dataset/Reference/Station/Heat/GEBA
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Month
+  grid_res: ''
+  syear: 1954
+  eyear: 2022
+Net_Radiation:
+  sub_dir: ''
+  varname: Rn
+  varunit: W m-2
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single
+Longwave_Incoming_Radiation:
+  sub_dir: ''
+  varname: LWin
+  varunit: W m-2
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single
+Latent_Heat_Flux:
+  sub_dir: ''
+  varname: LE
+  varunit: W m-2
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single
+Sensible_Heat_Flux:
+  sub_dir: ''
+  varname: H
+  varunit: W m-2
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single
