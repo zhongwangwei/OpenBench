@@ -1,4 +1,7 @@
-"""Custom filter for the GSHA (Global Streamflow and Hydrometric Archive) reference dataset."""
+"""Custom filter for the GSHA (Global Streamflow and Hydrometric Archive) reference dataset.
+
+Uses parallel processing for faster station data extraction.
+"""
 
 import logging
 from pathlib import Path
@@ -6,30 +9,31 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xarray as xr
+from joblib import Parallel, delayed
 
 
-def process_site(station_idx, dataset, info):
+def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir):
     """Extract metadata for a single station and persist its series as NetCDF."""
-    station_id = str(dataset['station_id'].isel(station=station_idx).values)
-    lon = float(dataset['longitude'].isel(station=station_idx).values)
-    lat = float(dataset['latitude'].isel(station=station_idx).values)
-    area = float(dataset['area'].isel(station=station_idx).values)
+    station_id = str(station_ids[station_idx])
+    lon = float(lons[station_idx])
+    lat = float(lats[station_idx])
+    area = float(areas[station_idx])
     
     # Skip stations with missing area
-    if pd.isna(area) or area < 0:
+    if np.isnan(area) or area < 0:
         return None
     
     # Get time series data for this station
-    streamflow = dataset['mean'].isel(station=station_idx)
+    streamflow = streamflow_data[station_idx, :]
     
     # Find valid time range (non-missing data)
-    valid_mask = ~np.isnan(streamflow.values)
+    valid_mask = ~np.isnan(streamflow)
     if not valid_mask.any():
         return None
     
-    valid_times = dataset['time'].where(xr.DataArray(valid_mask, dims='time'), drop=True)
-    start_year = pd.to_datetime(valid_times.values[0]).year
-    end_year = pd.to_datetime(valid_times.values[-1]).year
+    valid_indices = np.where(valid_mask)[0]
+    start_year = pd.to_datetime(times[valid_indices[0]]).year
+    end_year = pd.to_datetime(times[valid_indices[-1]]).year
 
     use_syear = max(start_year, int(info.sim_syear), int(info.syear))
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
@@ -46,16 +50,12 @@ def process_site(station_idx, dataset, info):
     if hasattr(info, 'max_uparea') and area > info.max_uparea:
         return None
 
-    scratch_dir = Path(info.casedir) / "scratch" / f"GSHA_{info.sim_source}"
-    scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = scratch_dir / f"{station_id}.nc"
     
-    # Save streamflow data - isel already removes the station dimension
-    # so we just need to squeeze any remaining singleton dimensions
-    streamflow_data = streamflow.squeeze(drop=True)
+    # Save streamflow data as 1D time series
     ds_out = xr.Dataset({
-        'discharge': streamflow_data
-    })
+        'discharge': (['time'], streamflow)
+    }, coords={'time': times})
     ds_out.to_netcdf(file_path)
 
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
@@ -92,12 +92,33 @@ def filter_GSHA(info, ds=None):
         logging.error(f"GSHA dataset not found: {dataset_path}")
         return
 
+    logging.info("Loading GSHA station metadata...")
+    
+    # Create scratch directory
+    scratch_dir = Path(info.casedir) / "scratch" / f"GSHA_{info.sim_source}"
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    
     with xr.open_dataset(dataset_path) as ds_file:
-        station_rows = []
-        for idx in range(ds_file.dims['station']):
-            result = process_site(idx, ds_file, info)
-            if result:
-                station_rows.append(result)
+        # Pre-load all data into memory for parallel processing
+        station_ids = ds_file['station_id'].values
+        lons = ds_file['longitude'].values
+        lats = ds_file['latitude'].values
+        areas = ds_file['area'].values
+        streamflow_data = ds_file['mean'].values  # (station, time)
+        times = ds_file['time'].values
+        
+        n_stations = len(station_ids)
+        logging.info(f"Processing {n_stations} stations in parallel...")
+        
+        # Process stations in parallel
+        station_rows = Parallel(n_jobs=-1, verbose=1)(
+            delayed(process_site)(
+                idx, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir
+            ) for idx in range(n_stations)
+        )
+        
+        # Filter out None results
+        station_rows = [row for row in station_rows if row is not None]
 
     if not station_rows:
         logging.error("No GSHA stations satisfy the selection criteria.")
@@ -114,5 +135,4 @@ def filter_GSHA(info, ds=None):
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)
-    logging.info('GSHA station list saved')
-
+    logging.info(f'GSHA station list saved: {len(df)} stations')

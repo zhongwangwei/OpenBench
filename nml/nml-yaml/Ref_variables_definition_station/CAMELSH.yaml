@@ -1,0 +1,17 @@
+general:
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/CAMELSH
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Hour
+  grid_res: ''
+  syear: 1980
+  eyear: 2024
+Streamflow:
+  sub_dir: ''
+  varname: streamflow
+  varunit: m3 s-1
+  suffix: ''
+  prefix: ''
+  fulllist: ''
+  data_groupby: single
