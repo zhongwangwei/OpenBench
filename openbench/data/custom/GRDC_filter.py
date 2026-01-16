@@ -164,5 +164,8 @@ def filter_GRDC(info, ds=None):
     data_select['obs_eyear'] = data_select['obs_eyear'].astype(int)
     data_select['ID'] = data_select['ID'].astype(int)
 
-    data_select.to_csv(f"{info.casedir}/stn_GRDC_{info.sim_source}_list.txt", index=False)
+    info.ref_fulllist = f"{info.casedir}/stn_GRDC_{info.sim_source}_list.txt"
+    info.stn_list = data_select.copy()
+    data_select.to_csv(info.ref_fulllist, index=False)
+    logging.info(f'GRDC station list saved: {len(data_select)} stations')
 

@@ -1,0 +1,13 @@
+general:
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/GRDC_Caravan_extension/
+  timezone: 0.0
+  data_type: stn
+  data_groupby: single
+  tim_res: Day
+  grid_res: ''
+  syear: ''
+  eyear: ''
+  fulllist: ''
+Streamflow:
+  varname: streamflow
+  varunit: m3 s-1

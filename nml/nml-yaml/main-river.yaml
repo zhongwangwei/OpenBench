@@ -182,7 +182,7 @@ comparisons:
   HeatMap: true
   Taylor_Diagram: false
   Target_Diagram: false
-  Kernel_Density_Estimate: false
+  Kernel_Density_Estimate: true
   Whisker_Plot: false
   Parallel_Coordinates: false
   Portrait_Plot_seasonal: false
