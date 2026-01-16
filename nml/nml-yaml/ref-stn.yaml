@@ -1,12 +1,15 @@
 general:
   Streamflow_ref_source:
+  - GRDC
   #- GSIM
   #- GSHA
   #- Dai_Trenberth
   #- GRDC_RESG
-  #- GRDC
   #- CAMELSH
-  - Caravan
+  #- Caravan
+  - Beck_2017
+  - GRDC_Caravan_extension
+  - GRDD
   Sensible_Heat_ref_source:
   - PLUMBER2S
   - FLUX_PLUMBER2
@@ -18,5 +21,8 @@ def_nml:
   GRDC_RESG: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_RESG.yaml
   CAMELSH: ./nml/nml-yaml/Ref_variables_definition_station/CAMELSH.yaml
   Caravan: ./nml/nml-yaml/Ref_variables_definition_station/Caravan.yaml
+  Beck_2017: ./nml/nml-yaml/Ref_variables_definition_station/Beck_2017.yaml
+  GRDC_Caravan_extension: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_Caravan_extension.yaml
+  GRDD: ./nml/nml-yaml/Ref_variables_definition_station/GRDD.yaml
   PLUMBER2S: ./nml/nml-yaml/Ref_variables_definition_station/PLUMBER2S.yaml
   FLUX_PLUMBER2: ./nml/nml-yaml/Ref_variables_definition_station/FLUX_PLUMBER2.yaml

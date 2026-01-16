@@ -384,7 +384,7 @@ class GeneralInfoReader(NamelistReader):
             self.stn_list = pd.DataFrame()
 
         if self.ref_source.lower() != 'grdc' and self.stn_list.empty:
-            logging.warning("No station list available for filtering; attempting to generate one.")
+            logging.debug("No station list available for filtering; attempting to generate one.")
 
         initial_count = len(self.stn_list)
         # Get custom filter if available
