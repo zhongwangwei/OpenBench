@@ -1,0 +1,67 @@
+general:
+  Streamflow_ref_source:
+  #- GRDC
+  #- GSIM
+  #- GSHA
+  #- Dai_Trenberth
+  #- GRDC_RESG
+  #- CAMELSH
+  #- Caravan
+  #- Beck_2017
+  #- GRDC_Caravan_extension
+  ###daily
+  #- Beck_2017_Daily
+  #- Caravan_Daily
+  #- GRDC_Caravan_extension_Daily
+  #- GRDC_Daily
+  #- Hubei_Hydro_Daily
+  #- R_ArcticNet_Daily
+  #- YRC_Daily
+  #- OpenBench_Streamflow_Daily
+  ###hourly
+  #- CAMELSH_Hourly  
+  ###monthly
+  #- BRSC_Monthly
+  #- GSIM_Monthly
+  #- GRDC_Monthly
+  #- GSHA_Monthly
+  #- GRDD_Monthly
+  #- R_ArcticNet_Monthly
+  #- Dai_Trenberth_Monthly
+  #- YCZ_Bulletin_Monthly
+  - GRDC_RESG_Monthly
+  - OpenBench_Streamflow_Monthly
+
+  Sensible_Heat_ref_source:
+  - PLUMBER2S
+  - FLUX_PLUMBER2
+def_nml:
+  ###daily
+  Beck_2017_Daily: ./nml/nml-yaml/Ref_variables_definition_station/Beck_2017_Daily.yaml
+  Caravan_Daily: ./nml/nml-yaml/Ref_variables_definition_station/Caravan_Daily.yaml
+  GRDC_Caravan_extension_Daily: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_Caravan_extension_Daily.yaml
+  GRDC_Daily: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_Daily.yaml
+  Hubei_Hydro_Daily: ./nml/nml-yaml/Ref_variables_definition_station/Hubei_Hydro_Daily.yaml
+  R_ArcticNet_Daily: ./nml/nml-yaml/Ref_variables_definition_station/R_ArcticNet_Daily.yaml
+  YRC_Daily: ./nml/nml-yaml/Ref_variables_definition_station/YRC_Daily.yaml
+  OpenBench_Streamflow_Daily: ./nml/nml-yaml/Ref_variables_definition_station/OpenBench_Streamflow_Daily.yaml
+
+  ###hourly
+  CAMELSH_Hourly: ./nml/nml-yaml/Ref_variables_definition_station/CAMELSH_Hourly.yaml
+  OpenBench_Streamflow_Hourly: ./nml/nml-yaml/Ref_variables_definition_station/OpenBench_Streamflow_Hourly.yaml
+  
+  ###monthly
+  BRSC_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/BRSC_Monthly.yaml
+  YCZ_Bulletin_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/YCZ_Bulletin_Monthly.yaml
+  GSIM_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/GSIM_Monthly.yaml
+  GRDC_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_Monthly.yaml
+  GSHA_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/GSHA_Monthly.yaml
+  GRDD_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/GRDD_Monthly.yaml
+  R_ArcticNet_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/R_ArcticNet_Monthly.yaml
+  Dai_Trenberth_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/Dai_Trenberth_Monthly.yaml
+  GRDC_RESG_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/GRDC_RESG_Monthly.yaml
+  OpenBench_Streamflow_Monthly: ./nml/nml-yaml/Ref_variables_definition_station/OpenBench_Streamflow_Monthly.yaml
+
+ 
+  PLUMBER2S: ./nml/nml-yaml/Ref_variables_definition_station/PLUMBER2S.yaml
+  FLUX_PLUMBER2: ./nml/nml-yaml/Ref_variables_definition_station/FLUX_PLUMBER2.yaml

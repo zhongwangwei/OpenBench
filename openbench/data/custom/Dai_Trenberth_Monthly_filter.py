@@ -48,7 +48,7 @@ def process_site(station_idx, dataset, info):
     if hasattr(info, 'max_uparea') and area > info.max_uparea:
         return None
 
-    scratch_dir = Path(info.casedir) / "scratch" / f"Dai_Trenberth_{info.sim_source}"
+    scratch_dir = Path(info.casedir) / "scratch" / f"Dai_Trenberth_Monthly_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = scratch_dir / f"{station_id}.nc"
     
@@ -66,8 +66,8 @@ def process_site(station_idx, dataset, info):
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
 
-def filter_Dai_Trenberth(info, ds=None):
-    """Generate required station metadata for Dai & Trenberth runs or filter dataset.
+def filter_Dai_Trenberth_Monthly(info, ds=None):
+    """Generate required station metadata for Dai_Trenberth_Monthly runs or filter dataset.
     
     Args:
         info: Configuration/info object with processing parameters
@@ -114,7 +114,7 @@ def filter_Dai_Trenberth(info, ds=None):
 
     info.use_syear = int(df['use_syear'].min())
     info.use_eyear = int(df['use_eyear'].max())
-    info.ref_fulllist = f"{info.casedir}/stn_Dai_Trenberth_{info.sim_source}_list.txt"
+    info.ref_fulllist = f"{info.casedir}/stn_Dai_Trenberth_Monthly_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)

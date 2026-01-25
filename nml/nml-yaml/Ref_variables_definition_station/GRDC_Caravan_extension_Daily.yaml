@@ -1,15 +1,17 @@
 general:
-  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Dai_Trenberth
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Daily
   timezone: 0.0
   data_type: stn
   data_groupby: single
-  tim_res: Month
+  tim_res: Day
   grid_res: ''
-  syear: 1900
-  eyear: 2020
+  syear: 1950
+  eyear: 2023
+  min_year: 1
+  area_err_threshold: 0.2
 Streamflow:
   sub_dir: ''
-  varname: FLOW
+  varname: streamflow
   varunit: m3 s-1
   suffix: ''
   prefix: ''

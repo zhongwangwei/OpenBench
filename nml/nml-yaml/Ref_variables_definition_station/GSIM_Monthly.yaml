@@ -1,13 +1,14 @@
 general:
-  root_dir: ./dataset/Reference/Station/Water/StreamFlow/GRDC/
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Monthly
   timezone: 0.0
   data_type: stn
   data_groupby: single
-  tim_res: ''
+  tim_res: Month
   grid_res: ''
   syear: 1900
   eyear: 2020
   min_year: 1
+  area_err_threshold: 0.2
 Streamflow:
   sub_dir: ''
   varname: discharge
@@ -15,6 +16,4 @@ Streamflow:
   suffix: ''
   prefix: ''
   fulllist: ''
-  max_uparea: 50000000000.0
-  min_uparea: 1000.0
   data_groupby: single

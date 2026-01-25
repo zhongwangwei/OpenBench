@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Station/Water/StreamFlow/GSIM
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Monthly
   timezone: 0.0
   data_type: stn
   data_groupby: single
@@ -7,9 +7,11 @@ general:
   grid_res: ''
   syear: 1900
   eyear: 2020
+  min_year: 1
+  area_err_threshold: 0.2
 Streamflow:
   sub_dir: ''
-  varname: MEAN
+  varname: discharge
   varunit: m3 s-1
   suffix: ''
   prefix: ''

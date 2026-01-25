@@ -1,13 +1,10 @@
 """
 Beck_2017 Custom Filter for OpenBench
 
-This filter processes the consolidated Beck_2017_daily.nc file
-and extracts individual station time series for benchmarking.
+Updated to read CaMA-Flood allocation data from consolidated NetCDF file.
+Supports multi-resolution allocation and area error threshold filtering.
 
-Features:
-- Parallel processing using joblib for efficient extraction
-- Pre-loads data into memory for faster access
-- Filters by time range, spatial extent, and drainage area
+Uses parallel processing for efficient extraction.
 """
 
 import os
@@ -20,12 +17,43 @@ from joblib import Parallel, delayed
 logger = logging.getLogger(__name__)
 
 
-def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir):
+def get_resolution_suffix(sim_grid_res):
+    """Map simulation grid resolution to CaMA resolution suffix."""
+    res_map = {
+        0.25: '15min',
+        0.1: '06min',
+        0.0833: '05min',
+        0.05: '03min',
+        0.0167: '01min'
+    }
+    for res, suffix in res_map.items():
+        if abs(float(sim_grid_res) - res) < 0.001:
+            return suffix
+    logger.warning(f"Unknown resolution {sim_grid_res}, defaulting to 03min")
+    return '03min'
+
+
+def process_site(station_idx, station_ids, lons, lats, areas,
+                 cama_lons, cama_lats, alloc_errs,
+                 streamflow_data, times, info, scratch_dir, area_err_threshold):
     """Extract metadata for a single station and persist its series as NetCDF."""
     station_id = str(station_ids[station_idx])
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
-    area = float(areas[station_idx])
+    area = float(areas[station_idx]) if not np.isnan(areas[station_idx]) else -9999.0
+    
+    # Get CaMA allocation data
+    cama_lon = float(cama_lons[station_idx])
+    cama_lat = float(cama_lats[station_idx])
+    alloc_err = float(alloc_errs[station_idx])
+    
+    # Skip if invalid CaMA allocation
+    if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lat < -90:
+        return None
+    
+    # Filter by area allocation error threshold
+    if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
+        return None
     
     # Skip if invalid coordinates
     if np.isnan(lon) or np.isnan(lat):
@@ -43,7 +71,7 @@ def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, t
     # Filter by drainage area
     min_uparea = getattr(info, 'min_uparea', 0)
     max_uparea = getattr(info, 'max_uparea', 1e12)
-    if not np.isnan(area):
+    if not np.isnan(area) and area > 0:
         if not (min_uparea <= area <= max_uparea):
             return None
     
@@ -76,9 +104,7 @@ def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, t
                 'units': 'm3 s-1'
             })
         },
-        coords={
-            'time': times
-        },
+        coords={'time': times},
         attrs={
             'station_id': station_id,
             'latitude': lat,
@@ -89,26 +115,11 @@ def process_site(station_idx, station_ids, lons, lats, areas, streamflow_data, t
     
     ds_out.to_netcdf(output_file)
     
-    return [station_id, lon, lat, use_syear, use_eyear, output_file]
+    return [station_id, cama_lon, cama_lat, use_syear, use_eyear, output_file]
 
 
-def filter_Beck_2017(info, ds=None):
-    """
-    Filter and extract Beck_2017 station data.
-    
-    Parameters
-    ----------
-    info : dict
-        Configuration/info object
-    ds : xarray.Dataset, optional
-        Dataset to filter (for data filtering mode)
-    
-    Returns
-    -------
-    tuple or str
-        (info, data) in data filtering mode
-        Path to station list file in initialization mode
-    """
+def filter_Beck_2017_Daily(info, ds=None):
+    """Filter and extract Beck_2017_Daily station data with CaMA allocation support."""
     # If ds is provided, we're in data filtering mode
     if ds is not None:
         varname = 'streamflow'
@@ -140,6 +151,18 @@ def filter_Beck_2017(info, ds=None):
     
     logger.info(f"Loading Beck_2017 data from {nc_file}")
     
+    # Get resolution suffix for CaMA variables
+    if hasattr(info, 'sim_grid_res'):
+        res_suffix = get_resolution_suffix(info.sim_grid_res)
+        logger.info(f"Using CaMA resolution: {res_suffix}")
+    else:
+        res_suffix = '03min'
+        logger.warning("sim_grid_res not defined, using default 03min resolution")
+    
+    # Get area error threshold from config (default 0.2 = 20%)
+    area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
+    logger.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
+    
     # Load data
     ds = xr.open_dataset(nc_file)
     
@@ -148,8 +171,29 @@ def filter_Beck_2017(info, ds=None):
     lons = ds['lon'].values
     lats = ds['lat'].values
     areas = ds['area'].values
-    streamflow_data = ds['discharge'].values
+    # Load streamflow data, handling potential variable name variations
+    if 'discharge' in ds:
+        streamflow_data = ds['discharge'].values
+    elif 'streamflow' in ds:
+        streamflow_data = ds['streamflow'].values
+    else:
+        raise ValueError("Neither 'discharge' nor 'streamflow' found in dataset")
     times = ds['time'].values
+    
+    # Load CaMA allocation data
+    cama_lon_var = f'cama_lon_{res_suffix}'
+    cama_lat_var = f'cama_lat_{res_suffix}'
+    alloc_err_var = f'cama_alloc_err_{res_suffix}'
+    
+    if cama_lon_var in ds:
+        cama_lons = ds[cama_lon_var].values
+        cama_lats = ds[cama_lat_var].values
+        alloc_errs = ds[alloc_err_var].values
+    else:
+        logger.warning(f"CaMA variable {cama_lon_var} not found, using original coordinates")
+        cama_lons = lons.copy()
+        cama_lats = lats.copy()
+        alloc_errs = np.zeros_like(lons)
     
     n_stations = len(station_ids)
     logger.info(f"Processing {n_stations} stations")
@@ -158,10 +202,12 @@ def filter_Beck_2017(info, ds=None):
     ds.close()
     
     # Parallel processing
-    num_cores = getattr(info, 'num_cores', 4)
+    num_cores = getattr(info, 'num_cores', -1)
     station_rows = Parallel(n_jobs=num_cores, verbose=1)(
         delayed(process_site)(
-            i, station_ids, lons, lats, areas, streamflow_data, times, info, scratch_dir
+            i, station_ids, lons, lats, areas,
+            cama_lons, cama_lats, alloc_errs,
+            streamflow_data, times, info, scratch_dir, area_err_threshold
         )
         for i in range(n_stations)
     )
@@ -184,14 +230,10 @@ def filter_Beck_2017(info, ds=None):
     info.use_syear = int(df['use_syear'].min())
     info.use_eyear = int(df['use_eyear'].max())
     info.ref_fulllist = stn_list_file
-    info.stn_list = df.copy() # Store dataframe in info object
+    info.stn_list = df.copy()
     
     # Write station list to CSV
     df.to_csv(stn_list_file, index=False)
-    
     logger.info(f"Station list saved to {stn_list_file}")
-    
-    # In initialization mode, we don't strictly need to return, 
-    # but returning key info or None is standard practice.
-    # GRDC_RESG_filter doesn't return anything explicit, so it returns None.
+
     return

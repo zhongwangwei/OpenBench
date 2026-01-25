@@ -1,5 +1,5 @@
 general:
-  basename: stn3
+  basename: river-test-mon
   basedir: ./output
   compare_tim_res: Month
   compare_tzone: 0.0
@@ -11,7 +11,7 @@ general:
   min_lat: -90.0
   max_lon: 180.0
   min_lon: -180.0
-  reference_nml: ./nml/nml-yaml/ref-stn.yaml
+  reference_nml: ./nml/nml-yaml/ref-river.yaml
   simulation_nml: ./nml/nml-yaml/sim-river.yaml
   statistics_nml: ./nml/nml-yaml/stats.yaml
   figure_nml: ./nml/nml-yaml/figlib.yaml

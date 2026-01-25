@@ -63,6 +63,21 @@ class PreValidator:
         # Get base directory for resolving relative paths
         self.base_dir = os.getcwd()
 
+        # Time resolution rank mapping (lower number = finer resolution)
+        # Used to detect invalid coarse-to-fine resolution conversions
+        self._time_resolution_ranks = {
+            # Hourly resolutions
+            'h': 1, 'hour': 1, 'hr': 1, 'hourly': 1, '1h': 1,
+            # Daily resolutions
+            'd': 2, 'day': 2, 'daily': 2, '1d': 2,
+            # Weekly resolutions
+            'w': 3, 'week': 3, 'wk': 3, 'weekly': 3,
+            # Monthly resolutions
+            'm': 4, 'me': 4, 'month': 4, 'mon': 4, 'monthly': 4, '1m': 4,
+            # Yearly resolutions
+            'y': 5, 'ye': 5, 'year': 5, 'yr': 5, 'yearly': 5, 'annual': 5, '1y': 5,
+        }
+
     def validate_all(self, skip_data_check: bool = False) -> bool:
         """
         Run all validation checks.
@@ -130,8 +145,19 @@ class PreValidator:
                 self.validation_errors.append(error_msg)
                 raise ValidationError(error_msg)
 
-            # Step 5: Variable existence validation
-            logging.info("\n🔍 Step 5: Validating variable existence in data files...")
+            # Step 5: Time resolution compatibility validation
+            logging.info("\n⏱️  Step 5: Validating time resolution compatibility...")
+            try:
+                self._validate_time_resolution_compatibility()
+                logging.info("✅ Time resolution validation completed")
+            except Exception as e:
+                error_msg = f"❌ Time resolution validation failed: {str(e)}"
+                logging.error(error_msg)
+                self.validation_errors.append(error_msg)
+                raise ValidationError(error_msg)
+
+            # Step 6: Variable existence validation
+            logging.info("\n🔍 Step 6: Validating variable existence in data files...")
             try:
                 self._validate_variable_existence()
                 logging.info("✅ Variable existence validation completed")
@@ -610,6 +636,170 @@ class PreValidator:
             logging.warning(f"  ⚠️  Could not fully validate dimensions: {str(e)}")
             logging.warning(f"     This is non-critical - dimensions will be checked during processing")
 
+    def _get_time_resolution_rank(self, tim_res: str) -> Tuple[int, str]:
+        """
+        Get the rank of a time resolution string.
+
+        Lower rank means finer resolution (Hour < Day < Month < Year).
+
+        Args:
+            tim_res: Time resolution string (e.g., 'Month', 'Day', 'Hour')
+
+        Returns:
+            Tuple of (rank, normalized_name). Returns (0, 'unknown') if not recognized.
+        """
+        if not tim_res:
+            return (0, 'unknown')
+
+        # Normalize the string
+        tim_res_lower = str(tim_res).strip().lower()
+
+        # Handle numeric prefixes like '3month', '6hour'
+        match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res_lower)
+        if match:
+            _, time_unit = match.groups()
+            tim_res_lower = time_unit
+
+        rank = self._time_resolution_ranks.get(tim_res_lower, 0)
+
+        # Get human-readable name
+        if rank == 1:
+            name = 'Hourly'
+        elif rank == 2:
+            name = 'Daily'
+        elif rank == 3:
+            name = 'Weekly'
+        elif rank == 4:
+            name = 'Monthly'
+        elif rank == 5:
+            name = 'Yearly'
+        else:
+            name = f'Unknown ({tim_res})'
+
+        return (rank, name)
+
+    def _validate_time_resolution_compatibility(self):
+        """
+        Validate that reference data time resolution is not coarser than comparison resolution.
+
+        This prevents invalid scenarios like comparing monthly reference data at daily resolution,
+        which would result in sparse/interpolated data and misleading evaluation metrics.
+
+        Raises:
+            ValidationError: If any reference source has coarser resolution than compare_tim_res
+        """
+        logging.info("  Checking time resolution compatibility...")
+
+        # Get comparison time resolution from main namelist
+        compare_tim_res = self.main_nl['general'].get('compare_tim_res', '')
+        if not compare_tim_res:
+            logging.warning("  ⚠️  compare_tim_res not specified, skipping time resolution validation")
+            return
+
+        compare_rank, compare_name = self._get_time_resolution_rank(compare_tim_res)
+        if compare_rank == 0:
+            logging.warning(f"  ⚠️  Unrecognized compare_tim_res '{compare_tim_res}', skipping validation")
+            return
+
+        logging.info(f"  Comparison time resolution: {compare_name} (compare_tim_res={compare_tim_res})")
+
+        incompatible_sources = []
+
+        # Check each evaluation item's reference sources
+        for item in self.evaluation_items:
+            ref_source_key = f'{item}_ref_source'
+            if ref_source_key not in self.ref_nml.get('general', {}):
+                continue
+
+            ref_sources = self.ref_nml['general'][ref_source_key]
+            ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
+
+            for ref_source in ref_sources:
+                # Get reference time resolution
+                ref_tim_res = None
+
+                # Try to get from merged namelist (after UpdateNamelist)
+                if item in self.ref_nml:
+                    ref_tim_res = self.ref_nml[item].get(f'{ref_source}_tim_res')
+
+                # If not found, try to read from source definition file
+                if not ref_tim_res:
+                    source_def_path = self.ref_nml.get('def_nml', {}).get(ref_source)
+                    if source_def_path and os.path.exists(source_def_path):
+                        try:
+                            import yaml
+                            with open(source_def_path, 'r') as f:
+                                source_def = yaml.safe_load(f)
+                            ref_tim_res = source_def.get('general', {}).get('tim_res')
+                        except Exception as e:
+                            logging.debug(f"  Could not read tim_res from {source_def_path}: {e}")
+
+                if not ref_tim_res:
+                    logging.debug(f"  Could not determine tim_res for {ref_source}, skipping check")
+                    continue
+
+                ref_rank, ref_name = self._get_time_resolution_rank(ref_tim_res)
+                if ref_rank == 0:
+                    logging.debug(f"  Unrecognized tim_res '{ref_tim_res}' for {ref_source}, skipping check")
+                    continue
+
+                # Check if reference resolution is coarser than comparison resolution
+                # Higher rank = coarser resolution
+                if ref_rank > compare_rank:
+                    incompatible_sources.append({
+                        'item': item,
+                        'source': ref_source,
+                        'ref_tim_res': ref_tim_res,
+                        'ref_name': ref_name,
+                        'compare_tim_res': compare_tim_res,
+                        'compare_name': compare_name
+                    })
+                else:
+                    logging.info(f"  ✓ {ref_source} ({ref_name}) → {compare_name}: OK")
+
+        # Report incompatible sources
+        if incompatible_sources:
+            error_lines = [
+                "\n" + "=" * 80,
+                "❌ TIME RESOLUTION INCOMPATIBILITY DETECTED",
+                "=" * 80,
+                "",
+                "The following reference data sources have COARSER time resolution than the",
+                f"comparison resolution (compare_tim_res={compare_tim_res}):",
+                "",
+            ]
+
+            for src in incompatible_sources:
+                error_lines.append(f"  • {src['item']} / {src['source']}:")
+                error_lines.append(f"    Reference resolution: {src['ref_name']} (tim_res={src['ref_tim_res']})")
+                error_lines.append(f"    Comparison resolution: {src['compare_name']} (compare_tim_res={src['compare_tim_res']})")
+                error_lines.append("")
+
+            error_lines.extend([
+                "⚠️  This configuration is INVALID because:",
+                "   - Coarse-resolution data (e.g., Monthly) cannot be meaningfully compared",
+                "     at finer resolution (e.g., Daily)",
+                "   - The system would create sparse/interpolated data with mostly NaN values",
+                "   - Evaluation metrics would be unreliable or misleading",
+                "",
+                "📝 To fix this issue, choose ONE of the following:",
+                "",
+                "   Option 1: Change compare_tim_res to match the coarsest reference data",
+                f"            Example: compare_tim_res: Month",
+                "",
+                "   Option 2: Use a different reference dataset with finer resolution",
+                "            Example: Use GRDC (daily) instead of GRDD (monthly)",
+                "",
+                "   Option 3: Remove the incompatible reference sources from your configuration",
+                "",
+                "=" * 80
+            ])
+
+            error_msg = "\n".join(error_lines)
+            raise ValidationError(error_msg)
+
+        logging.info("  ✓ All reference sources have compatible time resolution")
+
     def _get_unit_from_config(self, item: str, source: str, nml: Dict[str, Any]) -> Optional[str]:
         """
         Get unit from configuration after UpdateNamelist has merged external configs.
@@ -926,14 +1116,21 @@ class PreValidator:
                 logging.debug(f"    Custom filter {filter_name}_filter handles {item}")
                 return True
 
-            # For dedicated filters (filter name matches the item-specific source),
-            # assume it handles that item even without explicit checks
-            # For example: GRDC filter for Streamflow, CaMa filter for Streamflow, etc.
-            if source_type == 'reference' and filter_name.upper() in ['GRDC', 'CAMA']:
-                logging.debug(f"    Dedicated filter {filter_name}_filter assumed to handle {item}")
+            # For reference data sources, filters are typically source-specific
+            # (e.g., GSIM_Monthly_filter handles GSIM_Monthly data)
+            # These filters process their specific data format without explicit item checks
+            # So if a filter function exists for a reference source, assume it handles the item
+            if source_type == 'reference':
+                logging.debug(f"    Reference filter {filter_name}_filter assumed to handle {item}")
                 return True
 
-            logging.debug(f"    Custom filter {filter_name}_filter exists but doesn't handle {item}")
+            # For simulation sources, check if filter has generic handling (no item-specific checks)
+            # This typically means it handles all items uniformly
+            if 'info.item' not in source_code:
+                logging.debug(f"    Generic filter {filter_name}_filter (no item checks) assumed to handle {item}")
+                return True
+
+            logging.debug(f"    Custom filter {filter_name}_filter exists but doesn't explicitly handle {item}")
             return False
 
         except ImportError:
@@ -956,6 +1153,7 @@ class PreValidator:
         if not data_dir or not os.path.exists(data_dir):
             return None
 
+        data_type = nml[item].get(f'{source}_data_type', 'grid')
         data_groupby = nml[item].get(f'{source}_data_groupby', 'single')
         if isinstance(data_groupby, str):
             data_groupby = data_groupby.lower()
@@ -981,7 +1179,50 @@ class PreValidator:
                     filtered.append(f)
             return filtered if filtered else files  # Return original if no matches (fallback)
 
-        # Try to find a sample file based on data_groupby
+        # For station data, try to find source-specific consolidated file first
+        # Station data sources like GSIM_Monthly, GRDC_Monthly, etc. use consolidated files
+        # named like GSIM_monthly.nc, GRDC_monthly.nc in the data directory
+        if data_type == 'stn':
+            # Extract base source name (e.g., "GSIM" from "GSIM_Monthly")
+            # Try multiple naming patterns for station data
+            source_patterns = []
+
+            # Pattern 1: source_timeres.nc (e.g., GSIM_monthly.nc)
+            if '_' in source:
+                base_name = source.rsplit('_', 1)[0]  # GSIM_Monthly -> GSIM
+                time_suffix = source.rsplit('_', 1)[1].lower()  # Monthly -> monthly
+                source_patterns.append(f"{base_name}_{time_suffix}.nc")
+                # Also try with hyphen (e.g., R-ArcticNet_monthly.nc)
+                source_patterns.append(f"{base_name.replace('_', '-')}_{time_suffix}.nc")
+
+            # Pattern 2: prefix + suffix pattern if provided
+            if prefix or suffix:
+                source_patterns.append(f"{prefix}{suffix}.nc")
+
+            # Pattern 3: source name directly
+            source_patterns.append(f"{source}.nc")
+            source_patterns.append(f"{source.lower()}.nc")
+
+            for pattern in source_patterns:
+                sample_file = os.path.join(data_dir, pattern)
+                if os.path.exists(sample_file):
+                    logging.debug(f"    Found station data file: {sample_file}")
+                    return sample_file
+
+            # If not found by name patterns, look for files containing source base name
+            if '_' in source:
+                base_name = source.rsplit('_', 1)[0]
+                all_files = glob.glob(os.path.join(data_dir, "*.nc"))
+                for f in all_files:
+                    fname = os.path.basename(f).lower()
+                    if base_name.lower() in fname or base_name.lower().replace('_', '-') in fname:
+                        logging.debug(f"    Found station data file by pattern: {f}")
+                        return f
+
+            logging.debug(f"    No station data file found for source: {source}")
+            return None
+
+        # For grid data, try to find a sample file based on data_groupby
         if data_groupby == 'single':
             sample_file = os.path.join(data_dir, f"{prefix}{suffix}.nc")
             if os.path.exists(sample_file):
@@ -1001,7 +1242,15 @@ class PreValidator:
             if files:
                 return files[0]
 
-        # If still not found, try any .nc file in directory
+        # If still not found for grid data, try prefix+suffix patterns
+        if prefix or suffix:
+            pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
+            files = glob.glob(pattern)
+            if files:
+                return files[0]
+
+        # Last resort for grid data: try any .nc file with a reasonable name
+        # Avoid picking random files for station data as they share directories
         pattern = os.path.join(data_dir, "*.nc")
         files = glob.glob(pattern)
         if files:

@@ -1,5 +1,5 @@
 general:
-  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Caravan
+  root_dir: ./dataset/Reference/Station/Water/StreamFlow/Daily
   timezone: 0.0
   data_type: stn
   data_groupby: single
@@ -7,6 +7,8 @@ general:
   grid_res: ''
   syear: 1950
   eyear: 2023
+  min_year: 1
+  area_err_threshold: 0.2
 Streamflow:
   sub_dir: ''
   varname: streamflow
