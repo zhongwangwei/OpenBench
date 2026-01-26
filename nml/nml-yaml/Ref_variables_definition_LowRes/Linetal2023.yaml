@@ -1,0 +1,15 @@
+general:
+  root_dir: ./dataset/Reference/Grid/LowRes/Bio
+  timezone: 0
+  data_type: grid
+  data_groupby: Year
+  syear: 2000
+  eyear: 2022
+  tim_res: 8Day
+  grid_res: 0.25
+Leaf_Area_Index:
+  sub_dir: Leaf_Area_Index/Linetal2023/0p25deg_8daily
+  varname: lai
+  varunit: m2 m-2
+  prefix: lai_8-day_
+  suffix: _0p25

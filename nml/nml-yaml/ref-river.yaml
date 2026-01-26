@@ -23,14 +23,14 @@ general:
   ###monthly
   #- BRSC_Monthly
   #- GSIM_Monthly
-  #- GRDC_Monthly
+  - GRDC_Monthly
   #- GSHA_Monthly
   #- GRDD_Monthly
   #- R_ArcticNet_Monthly
   #- Dai_Trenberth_Monthly
   #- YCZ_Bulletin_Monthly
-  - GRDC_RESG_Monthly
-  - OpenBench_Streamflow_Monthly
+  #- GRDC_RESG_Monthly
+  #- OpenBench_Streamflow_Monthly
 
   Sensible_Heat_ref_source:
   - PLUMBER2S

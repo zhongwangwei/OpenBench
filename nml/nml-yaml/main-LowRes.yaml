@@ -28,96 +28,117 @@ general:
   unified_mask: true
   generate_report: true
 evaluation_items:
-  Biomass: true
-  Burned_Area: true
-  Ecosystem_Respiration: true
-  Gross_Primary_Productivity: true
-  Leaf_Area_Index: false
-  Leaf_Greenness: false
-  Methane: false
-  Net_Ecosystem_Exchange: true
-  Nitrogen_Fixation: false
-  Soil_Carbon: false
-  Veg_Cover_In_Fraction: false
-  Net_Primary_Production: true
-  Wetland_Methane_Emission: true
-  Canopy_Interception: true
-  Canopy_Transpiration: true
-  Depth_Of_Surface_Water: false
-  Evapotranspiration: true
-  Ground_Evaporation: false
-  Groundwater_Recharge_Rate: false
-  Permafrost: false
-  Root_Zone_Soil_Moisture: true
-  Snow_Depth: true
-  Snow_Water_Equivalent: true
-  Soil_Evaporation: true
-  Surface_Snow_Cover_In_Fraction: true
-  Surface_Soil_Moisture: true
-  Terrestrial_Water_Storage_Change: true
-  Total_Runoff: true
-  Water_Evaporation: true
-  Water_Storage_In_Aquifer: false
-  Water_Table_Depth: false
-  Bare_Soil_Evaporation: true
-  Open_Water_Evaporation: true
-  Precipitation: true
-  Runoff: true
-  Transpiration: true
-  Ground_Heat: true
-  Latent_Heat: true
-  Net_Radiation: true
-  Root_Zone_Soil_Temperature: true
-  Sensible_Heat: true
-  Surface_Net_LW_Radiation: true
-  Surface_Net_SW_Radiation: true
-  Surface_Soil_Temperature: true
-  Surface_Upward_LW_Radiation: true
-  Surface_Upward_SW_Radiation: true
-  Surface_Albedo: true
-  Surface_Downward_LW_Radiation: true
-  Surface_Downward_SW_Radiation: true
-  Diurnal_Max_Temperature: true
-  Diurnal_Min_Temperature: true
-  Diurnal_Temperature_Range: false
-  Surface_Air_Temperature: true
-  Surface_Relative_Humidity: true
-  Surface_Specific_Humidity: true
-  Surface_Wind_Speed: false
-  Cloud_Cover: true
-  Ground_Frost_Frequency: true
-  Lake_Surface_Water_Temperature: true
-  Crop_Emergence_DOY_Wheat: false
-  Crop_Heading_DOY_Corn: false
-  Crop_Heading_DOY_Wheat: false
-  Crop_Maturity_DOY_Corn: false
-  Crop_Maturity_DOY_Wheat: false
-  Crop_V3_DOY_Corn: false
-  Crop_Yield_Corn: false
-  Crop_Yield_Maize: false
-  Crop_Yield_Rice: false
-  Crop_Yield_Soybean: false
-  Crop_Yield_Wheat: false
-  Total_Irrigation_Amount: true
-  Dam_Inflow: false
-  Dam_Outflow: false
-  Dam_Water_Elevation: false
-  Dam_Water_Storage: false
-  Inundation_Area: false
-  Inundation_Fraction: false
-  Lake_Ice_Fraction_Cover: false
-  Lake_Temperature: false
-  Lake_Water_Area: false
-  Lake_Water_Level: false
-  Lake_Water_Volume: false
-  River_Water_Level: false
-  Streamflow: false
-  Urban_Air_Temperature_Max: true
-  Urban_Air_Temperature_Min: true
-  Urban_Albedo: true
-  Urban_Anthropogenic_Heat_Flux: true
-  Urban_Latent_Heat_Flux: true
-  Urban_Surface_Temperature: true
+  # =====================================================
+  # Bio Variables
+  # =====================================================
+  Biomass: true                           # [Grid] ESACCI-BIOMASS-L4
+  Burned_Area: true                       # [Grid] ESACCI-L4_FIRE-BA-MODIS
+  Ecosystem_Respiration: true             # [Grid] GloFlux, LGS_Reco
+  Gross_Primary_Productivity: true        # [Grid] FLUXCOM-X-BASE, GloFlux
+  Leaf_Area_Index: false                  # [Grid] Linetal2023
+  Leaf_Greenness: false                   # [Grid] (no data)
+  Methane: false                          # [Grid] (no data)
+  Net_Ecosystem_Exchange: true            # [Grid] FLUXCOM-X-BASE, GloFlux
+  Nitrogen_Fixation: false                # [Grid] (no data)
+  Soil_Carbon: false                      # [Grid] (no data)
+  Veg_Cover_In_Fraction: false            # [Grid] (no data)
+  Net_Primary_Production: true            # [Grid] GLASS
+  Wetland_Methane_Emission: true          # [Grid] UpCH4
+  # =====================================================
+  # Water Variables
+  # =====================================================
+  Canopy_Interception: true               # [Grid] GLEAM_v4.2a
+  Canopy_Transpiration: true              # [Grid] GLEAM_v4.2a
+  Depth_Of_Surface_Water: false           # [Grid] (no data)
+  Evapotranspiration: true                # [Grid] GLEAM_v4.2a
+  Ground_Evaporation: false               # [Grid] (no data)
+  Groundwater_Recharge_Rate: false        # [Grid] (no data)
+  Permafrost: false                       # [Grid] (no data)
+  Root_Zone_Soil_Moisture: true           # [Grid] GLEAM_v4.2a
+  Snow_Depth: true                        # [Grid] SMAP_L4
+  Snow_Water_Equivalent: true             # [Grid] globsnow_v3
+  Soil_Evaporation: true                  # [Grid] GLEAM_v4.2a (as Bare_Soil_Evaporation)
+  Surface_Snow_Cover_In_Fraction: true    # [Grid] MODIS_MOD10CM (as Snow_Cover_Extent)
+  Surface_Soil_Moisture: true             # [Grid] GLEAM_v4.2a, SMAPL3
+  Terrestrial_Water_Storage_Change: true  # [Grid] GRAiCE
+  Total_Runoff: true                      # [Grid] GRUN_ENSEMBLE
+  Water_Evaporation: true                 # [Grid] GLEAM_v4.2a (as Open_Water_Evaporation)
+  Water_Storage_In_Aquifer: false         # [Grid] (no data)
+  Water_Table_Depth: false                # [Grid] (no data)
+  Bare_Soil_Evaporation: true             # [Grid] GLEAM_v4.2a
+  Open_Water_Evaporation: true            # [Grid] GLEAM_v4.2a
+  Precipitation: true                     # [Grid] GPCPv3.2, GPCC, CRU_TS_4.08_LowRes_Precipitation
+  Runoff: true                            # [Grid] GRFR
+  Transpiration: true                     # [Grid] GLEAM_v4.2a
+  Inundation_Area: false                  # [Grid] GIEMS_MC, GIEMS_v2 (def: GIEMS-MC)
+  Inundation_Fraction: false              # [Grid] GIEMS_MC, GIEMS_v2 (def: GIEMS-MC)
+  # =====================================================
+  # Heat Variables
+  # =====================================================
+  Ground_Heat: true                       # [Grid] GLDAS-2.2, CLASS
+  Latent_Heat: true                       # [Grid] ERA5LAND, FLUXCOM
+  Net_Radiation: true                     # [Grid] CLARA_3, CERES_EBAF_Ed4.2
+  Root_Zone_Soil_Temperature: true        # [Grid] HOMTS, SMAP_L4 (SMAP_L4 no def for this)
+  Sensible_Heat: true                     # [Grid] GLEAM_v4.2a
+  Surface_Net_LW_Radiation: true          # [Grid] CLARA_3, CERES_EBAF_Ed4.2, CLARA_AVHRR (no def)
+  Surface_Net_SW_Radiation: true          # [Grid] CLARA_3, CERES_EBAF_Ed4.2
+  Surface_Soil_Temperature: true          # [Grid] HOMTS, SMAP_L4 (SMAP_L4 no def for this)
+  Surface_Upward_LW_Radiation: true       # [Grid] CLARA_3, CERES_EBAF_Ed4.2
+  Surface_Upward_SW_Radiation: true       # [Grid] CLARA_3, CERES_EBAF_Ed4.2
+  Surface_Albedo: true                    # [Grid] CLARA_3
+  Surface_Downward_LW_Radiation: true     # [Grid] CLARA_3, CERES_EBAF_Ed4.2, CLARA_AVHRR (no def)
+  Surface_Downward_SW_Radiation: true     # [Grid] CLARA_3, CERES_EBAF_Ed4.2, CLARA_AVHRR (no def)
+  # =====================================================
+  # Meteo Variables
+  # =====================================================
+  Diurnal_Max_Temperature: true           # [Grid] CRU_TS_4.08
+  Diurnal_Min_Temperature: true           # [Grid] CRU_TS_4.08
+  Diurnal_Temperature_Range: false        # [Grid] (no data)
+  Surface_Air_Temperature: true           # [Grid] CRU_TS_4.08
+  Surface_Relative_Humidity: true         # [Grid] CRU4.02
+  Surface_Specific_Humidity: true         # [Grid] ERA5LAND
+  Surface_Wind_Speed: false               # [Grid] ERA5LAND
+  Cloud_Cover: true                       # [Grid] CRU_TS_4.08
+  Ground_Frost_Frequency: true            # [Grid] CRU_TS_4.08
+  Lake_Surface_Water_Temperature: true    # [Grid] GCOS
+  # =====================================================
+  # Crop Variables
+  # =====================================================
+  Crop_Emergence_DOY_Wheat: false         # [Grid] (no data)
+  Crop_Heading_DOY_Corn: false            # [Grid] (no data)
+  Crop_Heading_DOY_Wheat: false           # [Grid] (no data)
+  Crop_Maturity_DOY_Corn: false           # [Grid] (no data)
+  Crop_Maturity_DOY_Wheat: false          # [Grid] (no data)
+  Crop_V3_DOY_Corn: false                 # [Grid] (no data)
+  Crop_Yield_Corn: false                  # [Grid] GDHY2019ver (no def)
+  Crop_Yield_Maize: false                 # [Grid] GDHY2019ver (no def)
+  Crop_Yield_Rice: false                  # [Grid] GDHY2019ver (no def)
+  Crop_Yield_Soybean: false               # [Grid] GDHY2019ver (no def)
+  Crop_Yield_Wheat: false                 # [Grid] GDHY2019ver (no def)
+  Total_Irrigation_Amount: true           # [Grid] GIWUED, GGMSEUD
+  # =====================================================
+  # Urban Variables
+  # =====================================================
+  Urban_Air_Temperature_Max: true         # [Grid] TEMP_Zhang_etal_2022
+  Urban_Air_Temperature_Min: true         # [Grid] TEMP_Zhang_etal_2022
+  Urban_Albedo: true                      # [Grid] MCD43A3
+  Urban_Anthropogenic_Heat_Flux: true     # [Grid] AH4GUC
+  Urban_Latent_Heat_Flux: true            # [Grid] ETMonitor
+  Urban_Surface_Temperature: true         # [Grid] MODIS_LST, TRIMS
+  # =====================================================
+  # Lake/Dam/River Variables
+  # =====================================================
+  Dam_Inflow: false                       # [Grid] (no data)
+  Dam_Outflow: false                      # [Grid] (no data)
+  Dam_Water_Elevation: false              # [Grid] (no data)
+  Dam_Water_Storage: false                # [Grid] (no data)
+  Lake_Ice_Fraction_Cover: false          # [Grid] (no data)
+  Lake_Temperature: false                 # [Grid] (no data)
+  Lake_Water_Area: false                  # [Grid] (no data)
+  Lake_Water_Level: false                 # [Grid] (no data)
+  Lake_Water_Volume: false                # [Grid] (no data)
+  River_Water_Level: false                # [Grid] (no data)
+  Streamflow: false                       # [Grid] (no data)
 metrics:
   percent_bias: false
   absolute_percent_bias: false
