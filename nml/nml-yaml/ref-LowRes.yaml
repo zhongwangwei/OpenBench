@@ -89,3 +89,5 @@ def_nml:
   MODIS_LST_LowRes: ./nml/nml-yaml/Ref_variables_definition_LowRes/MODIS_LST.yaml
   TRIMS_LowRes: ./nml/nml-yaml/Ref_variables_definition_LowRes/TRIMS.yaml
   GIEMS-MC_LowRes: ./nml/nml-yaml/Ref_variables_definition_LowRes/GIEMS-MC.yaml
+  LGS_Reco_LowRes: ./nml/nml-yaml/Ref_variables_definition_LowRes/LGS_Reco.yaml
+  Linetal2023_LowRes: ./nml/nml-yaml/Ref_variables_definition_LowRes/Linetal2023.yaml
