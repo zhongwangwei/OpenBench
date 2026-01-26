@@ -6,16 +6,16 @@ general:
   syear: 2001
   eyear: 2021
   tim_res: Month
-  grid_res: 0.25
+  grid_res: 0.5
 Gross_Primary_Productivity:
   sub_dir: Gross_Primary_Productivity/FLUXCOM-X-BASE
   varname: GPP
   varunit: gC m-2 day-1
   prefix: GPP_
-  suffix: _025_monthly
+  suffix: _050_monthly
 Net_Ecosystem_Exchange:
   sub_dir: Net_Ecosystem_Exchange/FLUXCOM-X-BASE
   varname: NEE
   varunit: gC m-2 day-1
   prefix: NEE_
-  suffix: _025_monthly
+  suffix: _050_monthly
