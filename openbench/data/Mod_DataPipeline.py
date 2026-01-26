@@ -130,6 +130,8 @@ class CoordinateProcessor(BaseProcessor if _HAS_DEPENDENCIES else object):
         self.coordinate_map = {
             'latitude': 'lat',
             'longitude': 'lon',
+            'lat_ucat': 'lat',
+            'lon_ucat': 'lon',
             'time': 'time'
         }
         self.normalize_longitude = True

@@ -522,6 +522,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             'coordinate_map': {
                 'latitude': 'lat',
                 'longitude': 'lon',
+                'lat_ucat': 'lat',
+                'lon_ucat': 'lon',
                 'time': 'time'
             }
         }

@@ -2100,8 +2100,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         return self.__dict__
 
     coordinate_map = {
-        'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon',
-        'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat',
+        'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon', 'lon_ucat': 'lon',
+        'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat', 'lat_ucat': 'lat',
         'Time': 'time', 'TIME': 'time', 't': 'time', 'T': 'time',
         'elevation': 'elev', 'height': 'elev', 'z': 'elev', 'Z': 'elev',
         'h': 'elev', 'H': 'elev', 'ELEV': 'elev', 'HEIGHT': 'elev',

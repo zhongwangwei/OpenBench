@@ -105,8 +105,8 @@ class GeneralInfoReader(NamelistReader):
 
         # Coordinate mapping for standardization
         self.coordinate_map = {
-            'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon', 'X': 'lon', 'XLONG': 'lon',
-            'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat', 'Y': 'lat', 'XLAT': 'lat',
+            'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon', 'X': 'lon', 'XLONG': 'lon', 'lon_ucat': 'lon',
+            'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat', 'Y': 'lat', 'XLAT': 'lat', 'lat_ucat': 'lat',
             'Time': 'time', 'TIME': 'time', 'XTIME': 'time', 't': 'time', 'T': 'time',
             'elevation': 'elev', 'height': 'elev', 'z': 'elev', 'Z': 'elev', 'h': 'elev', 'H': 'elev', 'ELEV': 'elev', 'HEIGHT': 'elev',
         }
