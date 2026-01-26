@@ -270,8 +270,8 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         return output_file
 
     coordinate_map = {
-        'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon',
-        'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat',
+        'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon', 'lon_ucat': 'lon',
+        'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat', 'lat_ucat': 'lat',
         'Time': 'time', 'TIME': 'time', 't': 'time', 'T': 'time',
         'elevation': 'elev', 'height': 'elev', 'z': 'elev', 'Z': 'elev',
         'h': 'elev', 'H': 'elev', 'ELEV': 'elev', 'HEIGHT': 'elev',
