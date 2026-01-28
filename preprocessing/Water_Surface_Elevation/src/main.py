@@ -1,27 +1,75 @@
 #!/usr/bin/env python3
 """WSE Pipeline CLI Entry Point."""
+import os
 import click
 from pathlib import Path
 from typing import List, Optional
 
 from .utils.config_loader import load_config
 from .utils.logger import setup_logger, get_logger
+from .constants import VALID_SOURCES, PIPELINE_STEPS, RESOLUTIONS
+
+
+def _get_env_or_default(env_var: str, default: str) -> str:
+    """Get environment variable value or default, treating empty/whitespace as unset."""
+    value = os.environ.get(env_var, '').strip()
+    return value if value else default
+
+
+def _get_env_optional(env_var: str) -> Optional[str]:
+    """Get optional environment variable, returning None if unset or empty."""
+    value = os.environ.get(env_var, '').strip()
+    return value if value else None
 
 
 def _default_config() -> dict:
-    """Return default configuration."""
+    """Return default configuration using environment variables.
+
+    Environment Variables:
+        WSE_DATA_ROOT: Root directory for data (default: ./data)
+        WSE_OUTPUT_DIR: Output directory (default: ./output)
+        WSE_CAMA_ROOT: CaMa-Flood data root (required for CaMa processing)
+        WSE_GEOID_ROOT: Geoid data root (required for EGM calculations)
+    """
     return {
-        'data_root': '/Volumes/Data01/Altimetry',
-        'output_dir': './output',
-        'cama_root': '/Volumes/Data01/2025',
-        'geoid_root': '/Volumes/Data01/AltiMaPpy-data/egm-geoids',
-        'resolutions': ['glb_01min', 'glb_03min', 'glb_05min', 'glb_06min', 'glb_15min'],
+        'data_root': _get_env_or_default('WSE_DATA_ROOT', './data'),
+        'output_dir': _get_env_or_default('WSE_OUTPUT_DIR', './output'),
+        'cama_root': _get_env_optional('WSE_CAMA_ROOT'),
+        'geoid_root': _get_env_optional('WSE_GEOID_ROOT'),
+        'resolutions': RESOLUTIONS,
         'validation': {
             'min_observations': 10,
             'check_duplicates': True,
         },
         'credentials': {},
     }
+
+
+def _validate_config(cfg: dict) -> List[str]:
+    """Validate configuration and return list of warnings.
+
+    Args:
+        cfg: Configuration dictionary
+
+    Returns:
+        List of warning messages for missing or invalid configuration
+    """
+    warnings = []
+
+    # Check required paths for full pipeline operation
+    required_paths = {
+        'cama_root': 'WSE_CAMA_ROOT environment variable or config setting',
+        'geoid_root': 'WSE_GEOID_ROOT environment variable or config setting',
+    }
+
+    for key, description in required_paths.items():
+        value = cfg.get(key)
+        if not value or (isinstance(value, str) and not value.strip()):
+            warnings.append(
+                f"Missing {key}: Set {description} for full pipeline functionality"
+            )
+
+    return warnings
 
 
 @click.command()
@@ -35,7 +83,7 @@ def _default_config() -> dict:
               help='Merge all sources into single output')
 @click.option('--skip-download', is_flag=True,
               help='Skip download check, use existing data')
-@click.option('--step', type=click.Choice(['download', 'validate', 'cama', 'reserved', 'merge']),
+@click.option('--step', type=click.Choice(PIPELINE_STEPS),
               help='Run specific step only')
 @click.option('--num-workers', '-j', type=int, default=5,
               help='Parallel download workers')
@@ -63,7 +111,7 @@ def main(source: str, config: Optional[str], output: Optional[str],
 
     # Parse sources
     if source == 'all':
-        sources = ['hydrosat', 'hydroweb', 'cgls', 'icesat']
+        sources = VALID_SOURCES.copy()
     else:
         sources = [s.strip().lower() for s in source.split(',')]
 
@@ -80,6 +128,11 @@ def main(source: str, config: Optional[str], output: Optional[str],
     cfg['skip_download'] = skip_download
     cfg['num_workers'] = num_workers
     cfg['dry_run'] = dry_run
+
+    # Validate configuration and warn about missing paths
+    config_warnings = _validate_config(cfg)
+    for warning in config_warnings:
+        logger.warning(warning)
 
     logger.info(f"WSE Pipeline - Processing sources: {', '.join(sources)}")
 

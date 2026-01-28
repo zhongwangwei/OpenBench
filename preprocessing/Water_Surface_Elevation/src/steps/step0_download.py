@@ -9,14 +9,15 @@ from ..readers.downloader import (
     CGLSDownloader, ICESatDownloader
 )
 from ..utils.logger import get_logger
+from ..constants import COMPLETENESS_THRESHOLDS
 
 logger = get_logger(__name__)
 
 COMPLETENESS_RULES = {
-    'hydrosat': {'min_files': 2000, 'pattern': '*.txt', 'subdir': 'WL_hydrosat'},
-    'hydroweb': {'min_files': 30000, 'pattern': '*.txt', 'subdir': 'hydroweb_river'},
-    'cgls':     {'min_files': 10000, 'pattern': '*.geojson', 'subdir': 'cgls_river'},
-    'icesat':   {'min_files': 15000, 'pattern': '*.h5', 'subdir': 'icesat'},
+    'hydrosat': {'min_files': COMPLETENESS_THRESHOLDS['hydrosat'], 'pattern': '*.txt', 'subdir': 'WL_hydrosat'},
+    'hydroweb': {'min_files': COMPLETENESS_THRESHOLDS['hydroweb'], 'pattern': '*.txt', 'subdir': 'hydroweb_river'},
+    'cgls':     {'min_files': COMPLETENESS_THRESHOLDS['cgls'], 'pattern': '*.geojson', 'subdir': 'cgls_river'},
+    'icesat':   {'min_files': COMPLETENESS_THRESHOLDS['icesat'], 'pattern': '*.h5', 'subdir': 'icesat'},
 }
 
 DOWNLOADERS = {

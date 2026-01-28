@@ -5,10 +5,9 @@ from datetime import datetime
 
 from ..core.station import Station, StationList
 from ..utils.logger import get_logger
+from ..constants import RESOLUTIONS
 
 logger = get_logger(__name__)
-
-RESOLUTIONS = ['glb_01min', 'glb_03min', 'glb_05min', 'glb_06min', 'glb_15min']
 
 
 class Step4Merge:
