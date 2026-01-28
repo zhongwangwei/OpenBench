@@ -193,16 +193,28 @@ def format_allocation_output(stations: List[StationMetadata],
     return output
 
 
+RESOLUTIONS = ['glb_01min', 'glb_03min', 'glb_05min', 'glb_06min', 'glb_15min']
+
+
 class Step2CaMa:
-    """Step 2: CaMa-Flood allocation class wrapper."""
+    """Step 2: Allocate stations to CaMa-Flood grid cells."""
 
     def __init__(self, config: dict):
         self.config = config
         self.logger = get_logger(__name__)
 
+        # Get CaMa configuration
+        cama_config = self.config.get('global_paths', {}).get('cama_data', {})
+        processing = self.config.get('processing', {})
+
+        self.cama_root = cama_config.get('root', '/Volumes/Data01/2025')
+        self.resolutions = processing.get('cama_resolutions',
+                                          cama_config.get('resolutions', RESOLUTIONS))
+        self.highres_tag = cama_config.get('highres_tag', '1min')
+
     def run(self, stations: StationList) -> StationList:
         """
-        Run CaMa-Flood station allocation.
+        Run CaMa allocation for all stations and resolutions.
 
         Args:
             stations: StationList from Step 1
@@ -210,23 +222,83 @@ class Step2CaMa:
         Returns:
             StationList with CaMa allocation results
         """
-        self.logger.info(f"CaMa 分配: {len(stations)} 站点")
+        self.logger.info("[Step 2] CaMa 网格分配...")
 
-        # Get CaMa configuration
-        cama_config = self.config.get('global_paths', {}).get('cama_data', {})
-        processing = self.config.get('processing', {})
-        resolutions = processing.get('cama_resolutions',
-                                     cama_config.get('resolutions', ['glb_15min']))
+        total = len(stations)
+        if total == 0:
+            self.logger.warning("没有站点需要分配")
+            return stations
 
-        # For now, we'll set placeholder CaMa results
-        # Full implementation would use the CamaAllocator
-        for station in stations:
-            for res in resolutions:
-                station.set_cama_result(res, {
-                    'success': True,
-                    'allocated': True,
-                    'resolution': res,
-                })
+        # Initialize CamaAllocator
+        try:
+            allocator = CamaAllocator(
+                cama_root=self.cama_root,
+                resolutions=self.resolutions,
+                highres_tag=self.highres_tag,
+                logger=self.logger
+            )
+        except Exception as e:
+            self.logger.error(f"初始化 CaMa 分配器失败: {e}")
+            return stations
 
-        self.logger.info(f"CaMa 分配完成: {len(stations)} 站点")
+        # Process each station
+        allocated_count = 0
+        for i, station in enumerate(stations):
+            try:
+                # Allocate station to all resolutions
+                allocation = allocator.allocate_station(
+                    station_id=station.id,
+                    lon=station.lon,
+                    lat=station.lat,
+                    elevation=station.elevation,
+                    satellite=station.metadata.get('satellite', 'Unknown')
+                )
+
+                # Store results for each resolution
+                any_success = False
+                for resolution, result in allocation.results.items():
+                    result_dict = {
+                        'success': result.success,
+                        'resolution': resolution,
+                        'flag': result.flag,
+                        'elevation': result.elevation,
+                        'dist_to_mouth': result.dist_to_mouth,
+                        'kx1': result.kx1,
+                        'ky1': result.ky1,
+                        'kx2': result.kx2,
+                        'ky2': result.ky2,
+                        'dist1': result.dist1,
+                        'dist2': result.dist2,
+                        'rivwth': result.rivwth,
+                        'ix': result.ix,
+                        'iy': result.iy,
+                        'lon_cama': result.lon_cama,
+                        'lat_cama': result.lat_cama,
+                    }
+                    if result.error_message:
+                        result_dict['error'] = result.error_message
+                    station.set_cama_result(resolution, result_dict)
+                    if result.success:
+                        any_success = True
+
+                if any_success:
+                    allocated_count += 1
+
+            except Exception as e:
+                self.logger.debug(f"分配失败 {station.id}: {e}")
+
+            # Progress logging
+            if (i + 1) % 1000 == 0:
+                self.logger.info(f"  进度: {i + 1}/{total}")
+
+        # Log summary by resolution
+        self.logger.info(f"\n分配统计:")
+        for resolution in self.resolutions:
+            success_count = sum(
+                1 for s in stations
+                if resolution in s.cama_results and s.cama_results[resolution].get('success', False)
+            )
+            self.logger.info(f"  {resolution}: {success_count}/{total} 站点分配成功")
+
+        self.logger.info(f"\n[Step 2] CaMa 分配完成: {allocated_count}/{total} 站点至少有一个分辨率分配成功")
         return stations
