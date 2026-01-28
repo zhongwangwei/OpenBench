@@ -298,14 +298,14 @@ class HydroSatDownloader:
     # 直接下载链接
     DOWNLOAD_URL = "https://hydrosat.gis.uni-stuttgart.de/data/download/WL-HydroSat.zip"
 
-    def __init__(self, output_dir: str, logger=None, verify_ssl: bool = True):
+    def __init__(self, output_dir: str, logger=None, verify_ssl: bool = False):
         """
         初始化下载器
 
         Args:
             output_dir: 输出目录
             logger: 日志记录器
-            verify_ssl: 是否验证 SSL 证书 (默认 True)
+            verify_ssl: 是否验证 SSL 证书 (默认 False，因为 HydroSat 服务器证书有问题)
         """
         self.output_dir = Path(output_dir)
         self.logger = logger
@@ -313,7 +313,7 @@ class HydroSatDownloader:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         if not verify_ssl:
-            self.log('warning', "SSL verification disabled - connections may be insecure")
+            self.log('info', "HydroSat: SSL verification disabled (server certificate issue)")
 
     def log(self, level: str, message: str):
         """记录日志"""
@@ -408,14 +408,14 @@ class HydroSatDownloader:
         return 0
 
 
-def download_hydrosat(output_dir: str, logger=None, verify_ssl: bool = True) -> Path:
+def download_hydrosat(output_dir: str, logger=None, verify_ssl: bool = False) -> Path:
     """
     下载 HydroSat 数据的便捷函数
 
     Args:
         output_dir: 输出目录
         logger: 日志记录器
-        verify_ssl: 是否验证 SSL 证书 (默认 True)
+        verify_ssl: 是否验证 SSL 证书 (默认 False，因为服务器证书有问题)
 
     Returns:
         数据目录路径
