@@ -22,7 +22,7 @@ dataset:
 
 credentials:
   username: "YOUR_EMAIL@example.com"
-  password: "YOUR_CDSE_PASSWORD"
+  password: "YOUR_PASSWORD"
 
 # ============================================================
 # 数据路径

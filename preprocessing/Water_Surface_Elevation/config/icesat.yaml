@@ -21,8 +21,8 @@ dataset:
 #   export EARTHDATA_PASSWORD="your-password"
 
 credentials:
-  username: "YOUR_EARTHDATA_USERNAME"
-  password: "YOUR_EARTHDATA_PASSWORD"
+  username: "weizhw6"
+  password: "YOUR_PASSWORD"
 
 # ============================================================
 # 数据路径
