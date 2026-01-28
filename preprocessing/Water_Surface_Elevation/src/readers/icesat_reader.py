@@ -24,6 +24,7 @@ from collections import defaultdict
 
 from .base_reader import BaseReader, create_station_from_reader
 from ..core.station import Station
+from ..exceptions import ReaderError
 
 
 class ICESatReader(BaseReader):
@@ -60,11 +61,11 @@ class ICESatReader(BaseReader):
     def scan_directory(self, path: str) -> List[str]:
         """扫描目录获取所有 ICESat 文件"""
         if path is None:
-            raise ValueError("数据路径未配置")
+            raise ReaderError("数据路径未配置")
 
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(f"路径不存在: {path}")
+            raise ReaderError(f"路径不存在: {path}")
 
         files = []
 
@@ -526,6 +527,11 @@ class ICESatReader(BaseReader):
                     except (ValueError, IndexError):
                         continue
 
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
         except Exception as e:
             self.log('warning', f"读取观测数据失败 {filepath}: {e}")
 

@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
 from .base_reader import BaseReader, StationMetadata, create_station_from_reader
+from ..exceptions import ReaderError
 from .hydroweb_reader import HydroWebReader
 from .cgls_reader import CGLSReader
 from .icesat_reader import ICESatReader
@@ -258,4 +259,6 @@ __all__ = [
     'check_data_status',
     'print_data_status',
     'download_hydrosat',
+    # 异常
+    'ReaderError',
 ]

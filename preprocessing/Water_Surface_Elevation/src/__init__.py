@@ -17,6 +17,20 @@ Usage:
 """
 
 from .pipeline import Pipeline
+from .exceptions import (
+    WSEError,
+    ReaderError,
+    ValidationError,
+    ConfigurationError,
+    DownloadError,
+)
 
 __version__ = '0.1.0'
-__all__ = ['Pipeline']
+__all__ = [
+    'Pipeline',
+    'WSEError',
+    'ReaderError',
+    'ValidationError',
+    'ConfigurationError',
+    'DownloadError',
+]

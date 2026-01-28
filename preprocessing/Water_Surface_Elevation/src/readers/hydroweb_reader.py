@@ -18,6 +18,7 @@ from typing import List, Optional, Dict, Any
 
 from .base_reader import BaseReader, create_station_from_reader
 from ..core.station import Station
+from ..exceptions import ReaderError
 
 
 class HydroWebReader(BaseReader):
@@ -133,6 +134,12 @@ class HydroWebReader(BaseReader):
 
             return metadata
 
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return None
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
         except Exception as e:
             self.log('warning', f"解析头部失败 {filepath}: {e}")
             return None
@@ -182,7 +189,14 @@ class HydroWebReader(BaseReader):
         try:
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return timeseries
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
 
+        try:
             # 跳过头部
             data_lines = [l for l in lines[self.HEADER_LINES:] if not l.startswith('#')]
 

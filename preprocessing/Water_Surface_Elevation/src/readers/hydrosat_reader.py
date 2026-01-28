@@ -20,6 +20,7 @@ from datetime import datetime
 
 from .base_reader import BaseReader, create_station_from_reader
 from ..core.station import Station
+from ..exceptions import ReaderError
 
 
 class HydroSatReader(BaseReader):
@@ -65,7 +66,7 @@ class HydroSatReader(BaseReader):
     def scan_directory(self, path: str) -> List[str]:
         """扫描目录获取所有 HydroSat 文件"""
         if path is None:
-            raise ValueError(
+            raise ReaderError(
                 "HydroSat 数据路径未配置。\n"
                 "请先下载数据:\n"
                 "  python -m src.readers.hydrosat_reader --download /path/to/output\n"
@@ -75,7 +76,7 @@ class HydroSatReader(BaseReader):
 
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(f"路径不存在: {path}")
+            raise ReaderError(f"路径不存在: {path}")
 
         # 查找所有 txt 文件
         files = []
@@ -114,7 +115,14 @@ class HydroSatReader(BaseReader):
         try:
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return None
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
 
+        try:
             if not lines:
                 return None
 
@@ -171,8 +179,7 @@ class HydroSatReader(BaseReader):
             )
 
         except Exception as e:
-            if self.logger:
-                self.logger.warning(f"解析 HydroSat 文件失败 {filepath}: {e}")
+            self.log('warning', f"解析 HydroSat 文件失败 {filepath}: {e}")
             return None
 
     def _parse_metadata(self, lines: List[str]) -> Dict[str, Any]:
