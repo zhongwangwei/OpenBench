@@ -87,23 +87,26 @@ def main(source: str, config: Optional[str], output: Optional[str],
         logger.info("[DRY RUN] Simulation mode, no file writes")
         return
 
-    # Import here to avoid circular imports (Pipeline will be created in Task 6)
-    try:
-        from .pipeline import Pipeline
+    # Import and run the pipeline
+    from .pipeline import Pipeline
 
-        # For now, use existing pipeline interface
-        # Task 6 will create a new Pipeline class with run_step method
-        if step:
-            logger.info(f"Running step: {step}")
-            # Future: pipeline.run_step(step, sources)
-            logger.warning(f"Step-only mode not yet fully implemented")
-        else:
-            logger.info("Full pipeline execution requires config and dataset files")
-            logger.info("Use: wse --config config/global_paths.yaml for full run")
+    pipeline = Pipeline(cfg)
 
-    except ImportError as e:
-        logger.warning(f"Pipeline not fully implemented: {e}")
-        logger.info("Use --dry-run to test CLI options")
+    if step:
+        logger.info(f"Running step: {step}")
+        result = pipeline.run_step(step, sources)
+    else:
+        logger.info("Running full pipeline")
+        result = pipeline.run(sources)
+
+    if result.success:
+        logger.info("Pipeline completed successfully")
+        logger.info(f"Stations processed: {result.stations_processed}")
+        if result.output_files:
+            logger.info(f"Output files: {', '.join(result.output_files)}")
+    else:
+        logger.error(f"Pipeline failed: {result.error}")
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':
