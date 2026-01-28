@@ -1,0 +1,75 @@
+# WSE Pipeline - 全局配置
+# Global Configuration for Water Surface Elevation Pipeline
+
+# ============================================================
+# 路径配置 (可通过环境变量覆盖)
+# ============================================================
+
+paths:
+  # 数据根目录
+  data_root: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}
+
+  # 输出目录
+  output_dir: ${WSE_OUTPUT_DIR:./output}
+
+  # CaMa-Flood 地图数据 (必需)
+  cama_root: ${WSE_CAMA_ROOT:/Volumes/Data01/2025}
+
+  # EGM 大地水准面数据 (必需)
+  geoid_root: ${WSE_GEOID_ROOT:/Volumes/Data01/AltiMaPpy-data/egm-geoids}
+
+# ============================================================
+# CaMa-Flood 配置
+# ============================================================
+
+cama:
+  resolutions:
+    - glb_01min
+    - glb_03min
+    - glb_05min
+    - glb_06min
+    - glb_15min
+  highres_tag: 1min
+
+# ============================================================
+# EGM 模型配置
+# ============================================================
+
+geoid:
+  egm96_model: egm96-5      # 可选: egm96-5, egm96-15
+  egm2008_model: egm2008-1  # 可选: egm2008-1, egm2008-2_5, egm2008-5
+
+# ============================================================
+# 处理配置
+# ============================================================
+
+processing:
+  calculate_egm: true
+  min_observations: 10
+  check_duplicates: true
+
+# ============================================================
+# 输出配置
+# ============================================================
+
+output:
+  station_list: altimetry_{source}_{date}.txt
+  netcdf: OpenBench_WSE_{source}.nc
+  format: txt
+  include_timeseries: false
+
+# ============================================================
+# 日志配置
+# ============================================================
+
+logging:
+  level: INFO              # DEBUG, INFO, WARNING, ERROR
+  file: null               # 设置路径启用文件日志，如 ./logs/wse.log
+
+# ============================================================
+# 断点续传配置
+# ============================================================
+
+checkpoint:
+  enabled: true
+  dir: ./checkpoints

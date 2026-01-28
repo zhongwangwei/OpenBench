@@ -1,0 +1,37 @@
+# Validation Rules for WSE Pipeline
+# 水面高程数据验证规则
+
+# 坐标验证
+coordinates:
+  lat_min: -90.0
+  lat_max: 90.0
+  lon_min: -180.0
+  lon_max: 180.0
+
+# 数据质量
+quality:
+  min_observations: 10       # 最少观测次数
+  max_missing_ratio: 0.95    # 最大缺失比例
+  min_valid_points: 5        # 最少有效数据点
+
+# 高程验证
+elevation:
+  min_value: -500.0          # 最小高程 (死海约 -430m)
+  max_value: 6000.0          # 最大高程 (考虑高原湖泊)
+  max_uncertainty: 10.0      # 最大不确定度 (m)
+
+# 重复检测
+duplicates:
+  distance_threshold_m: 100  # 距离阈值 (米)
+  coord_tolerance_deg: 0.001 # 坐标容差 (度)
+
+# 时间序列
+time_series:
+  min_time_span_days: 30     # 最短时间跨度 (天)
+  max_gap_days: 365          # 最大数据间隙 (天)
+
+# EGM 验证
+egm:
+  min_value: -110.0          # EGM 最小值 (约在印度洋)
+  max_value: 90.0            # EGM 最大值 (约在新几内亚)
+  max_diff: 20.0             # EGM08 与 EGM96 最大差值

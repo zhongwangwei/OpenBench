@@ -1,0 +1,54 @@
+# HydroSat 数据源配置
+# HydroSat Dataset Configuration
+
+# ============================================================
+# 数据集信息
+# ============================================================
+
+dataset:
+  name: HydroSat_WL
+  source: hydrosat
+  description: HydroSat Water Level data from University of Stuttgart
+
+# ============================================================
+# 凭证配置
+# ============================================================
+# HydroSat 免费下载，无需凭证
+
+credentials: null
+
+# ============================================================
+# 数据路径
+# ============================================================
+
+paths:
+  # 数据存储目录
+  data_dir: /Volumes/Data01/Altimetry/HydroSat/WL_hydrosat
+
+# ============================================================
+# 下载配置
+# ============================================================
+
+download:
+  # 直接下载链接
+  download_url: https://hydrosat.gis.uni-stuttgart.de/data/download/WL-HydroSat.zip
+
+  # 产品页面
+  download_page: https://hydrosat.gis.uni-stuttgart.de/
+
+  # SSL 验证 (HydroSat 服务器证书有问题，默认关闭)
+  verify_ssl: false
+
+# ============================================================
+# 处理配置 (覆盖全局配置)
+# ============================================================
+
+processing:
+  cama_resolutions:
+    - glb_15min
+
+filters:
+  min_observations: 10
+  start_date: null
+  end_date: null
+  bbox: null
