@@ -53,9 +53,15 @@ processing:
 # ============================================================
 
 output:
+  # 站点列表文件名模板
+  # {source}: 数据源名称 (hydroweb, cgls, icesat, hydrosat)
+  # {date}: 日期 (YYYYMMDD)
   station_list: altimetry_{source}_{date}.txt
-  netcdf: OpenBench_WSE_{source}.nc
-  format: txt
+
+  # NetCDF 输出文件名模板 (预留，尚未实现)
+  # netcdf: OpenBench_WSE_{source}.nc
+
+  # 是否输出时间序列数据
   include_timeseries: false
 
 # ============================================================
