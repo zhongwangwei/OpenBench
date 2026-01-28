@@ -118,7 +118,7 @@ class TestSingleSourcePipeline:
         2. Runs the pipeline for a single source
         3. Verifies the step sequence is correct
         """
-        from src.pipeline import Pipeline
+        from src.pipeline import Pipeline, PipelineResult
 
         # Mock the Pipeline's __init__ to avoid initialization side effects
         with patch.object(Pipeline, '__init__', lambda self, config: None):
@@ -138,11 +138,13 @@ class TestSingleSourcePipeline:
             mock_step_handlers['reserved'].run.assert_called_once()
             mock_step_handlers['merge'].run.assert_called_once()
 
-            # Verify results structure
-            assert 'download' in result
-            assert 'validate' in result
-            assert 'cama' in result
-            assert 'merge' in result
+            # Verify result is PipelineResult with correct structure
+            assert isinstance(result, PipelineResult)
+            assert result.success is True
+            assert 'download' in result.step_results
+            assert 'validate' in result.step_results
+            assert 'cama' in result.step_results
+            assert 'merge' in result.step_results
 
     def test_step_sequence_order(self, mock_config):
         """Test that pipeline steps execute in correct order."""
@@ -184,7 +186,7 @@ class TestPipelineWithMockedData:
 
     def test_pipeline_creates_output_on_success(self, temp_output_dir):
         """Test that pipeline creates output files on successful run."""
-        from src.pipeline import Pipeline
+        from src.pipeline import Pipeline, PipelineResult
         from src.core.station import Station, StationList
         from src.steps import Step0Download, Step1Validate, Step2CaMa, Step3Reserved, Step4Merge
 
@@ -216,9 +218,13 @@ class TestPipelineWithMockedData:
             pipeline = Pipeline(config)
             result = pipeline.run(['hydroweb'])
 
+            # Verify result is PipelineResult
+            assert isinstance(result, PipelineResult)
+            assert result.success is True
+
             # Verify merge step returned files
-            assert 'merge' in result
-            assert 'files' in result['merge']
+            assert 'merge' in result.step_results
+            assert 'files' in result.step_results['merge']
 
             # Verify output file was created
             output_files = list(temp_output_dir.glob('*.txt'))
@@ -226,7 +232,7 @@ class TestPipelineWithMockedData:
 
     def test_pipeline_handles_empty_station_list(self, temp_output_dir):
         """Test pipeline behavior with empty station list."""
-        from src.pipeline import Pipeline
+        from src.pipeline import Pipeline, PipelineResult
         from src.core.station import StationList
         from src.steps import Step0Download, Step1Validate, Step2CaMa, Step3Reserved
 
@@ -248,8 +254,11 @@ class TestPipelineWithMockedData:
             result = pipeline.run(['hydroweb'])
 
             # Pipeline should complete without errors
-            assert 'validate' in result
-            assert result['validate']['total'] == 0
+            assert isinstance(result, PipelineResult)
+            assert result.success is True
+            assert 'validate' in result.step_results
+            assert result.step_results['validate']['total'] == 0
+            assert result.stations_processed == 0
 
 
 class TestPipelineCheckpointing:
@@ -355,3 +364,149 @@ class TestCLIIntegration:
             ])
 
             assert result.exit_code == 0, f"Step {step} failed: {result.output}"
+
+
+class TestPipelineExecution:
+    """Test actual pipeline execution via CLI."""
+
+    def test_cli_runs_pipeline_with_mocked_steps(self):
+        """Test CLI actually runs the pipeline with mocked steps."""
+        from src.main import main
+        from src.pipeline import Pipeline, PipelineResult
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a mock result
+            mock_result = PipelineResult(
+                success=True,
+                stations_processed=10,
+                output_files=[str(Path(tmpdir) / 'output.txt')],
+                step_results={'validate': {'total': 10}}
+            )
+
+            with patch.object(Pipeline, 'run', return_value=mock_result) as mock_run:
+                result = runner.invoke(main, [
+                    '--source', 'hydroweb',
+                    '--output', tmpdir,
+                    '--skip-download'
+                ])
+
+                # Pipeline.run should be called
+                mock_run.assert_called_once()
+
+                # Check success message in output
+                assert result.exit_code == 0
+                assert 'completed successfully' in result.output or 'Pipeline' in result.output
+
+    def test_cli_runs_single_step_with_mocked_handler(self):
+        """Test CLI runs a single step correctly."""
+        from src.main import main
+        from src.pipeline import Pipeline, PipelineResult
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_result = PipelineResult(
+                success=True,
+                stations_processed=5,
+                output_files=[],
+                step_results={'validate': {'total': 5}}
+            )
+
+            with patch.object(Pipeline, 'run_step', return_value=mock_result) as mock_run_step:
+                result = runner.invoke(main, [
+                    '--source', 'hydroweb',
+                    '--output', tmpdir,
+                    '--step', 'validate'
+                ])
+
+                # Pipeline.run_step should be called with correct args
+                mock_run_step.assert_called_once()
+                call_args = mock_run_step.call_args
+                assert call_args[0][0] == 'validate'  # step name
+                assert 'hydroweb' in call_args[0][1]  # sources
+
+                assert result.exit_code == 0
+
+    def test_cli_exits_on_pipeline_failure(self):
+        """Test CLI exits with error code on pipeline failure."""
+        from src.main import main
+        from src.pipeline import Pipeline, PipelineResult
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_result = PipelineResult(
+                success=False,
+                stations_processed=0,
+                output_files=[],
+                error="Validation failed: no stations found"
+            )
+
+            with patch.object(Pipeline, 'run', return_value=mock_result):
+                result = runner.invoke(main, [
+                    '--source', 'hydroweb',
+                    '--output', tmpdir
+                ])
+
+                # Should exit with error
+                assert result.exit_code == 1
+                assert 'failed' in result.output.lower() or 'error' in result.output.lower()
+
+    def test_cli_logs_output_files_on_success(self):
+        """Test CLI logs output files on successful completion."""
+        from src.main import main
+        from src.pipeline import Pipeline, PipelineResult
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_file = str(Path(tmpdir) / 'hydroweb_stations.txt')
+            mock_result = PipelineResult(
+                success=True,
+                stations_processed=25,
+                output_files=[output_file],
+                step_results={'merge': {'files': [output_file]}}
+            )
+
+            with patch.object(Pipeline, 'run', return_value=mock_result):
+                result = runner.invoke(main, [
+                    '--source', 'hydroweb',
+                    '--output', tmpdir
+                ])
+
+                assert result.exit_code == 0
+                # Should log stations processed
+                assert '25' in result.output or 'processed' in result.output.lower()
+
+    def test_pipeline_integration_full_flow(self, temp_output_dir, sample_station_list):
+        """Test full pipeline integration flow with mocked step handlers."""
+        from src.pipeline import Pipeline, PipelineResult
+        from src.steps import Step0Download, Step1Validate, Step2CaMa, Step3Reserved, Step4Merge
+
+        config = {
+            'data_root': '/tmp',
+            'output_dir': str(temp_output_dir),
+            'skip_download': True,
+            'resolutions': ['glb_15min'],
+        }
+
+        with patch.object(Step0Download, 'run', return_value={}), \
+             patch.object(Step1Validate, 'run', return_value=sample_station_list), \
+             patch.object(Step2CaMa, 'run', return_value=sample_station_list), \
+             patch.object(Step3Reserved, 'run', return_value=sample_station_list), \
+             patch.object(Step4Merge, 'run', return_value=[str(temp_output_dir / 'output.txt')]):
+
+            pipeline = Pipeline(config)
+            result = pipeline.run(['hydroweb'])
+
+            # Verify PipelineResult
+            assert isinstance(result, PipelineResult)
+            assert result.success is True
+            assert result.stations_processed == 1  # sample_station_list has 1 station
+            assert len(result.output_files) == 1
+            assert 'download' in result.step_results
+            assert 'validate' in result.step_results
+            assert 'cama' in result.step_results
+            assert 'merge' in result.step_results
