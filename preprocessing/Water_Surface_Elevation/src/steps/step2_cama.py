@@ -14,6 +14,8 @@ from ..core.station import Station, StationList
 from ..utils.logger import get_logger
 from ..constants import RESOLUTIONS
 
+logger = get_logger(__name__)
+
 
 @dataclass
 class CamaResult:
@@ -198,7 +200,6 @@ class Step2CaMa:
 
     def __init__(self, config: dict):
         self.config = config
-        self.logger = get_logger(__name__)
 
         # Get CaMa configuration from global_paths or direct config
         cama_config = self.config.get('global_paths', {}).get('cama_data', {})
@@ -220,16 +221,16 @@ class Step2CaMa:
         Returns:
             StationList with CaMa allocation results
         """
-        self.logger.info("[Step 2] CaMa 网格分配...")
+        logger.info("[Step 2] CaMa 网格分配...")
 
         total = len(stations)
         if total == 0:
-            self.logger.warning("没有站点需要分配")
+            logger.warning("没有站点需要分配")
             return stations
 
         # Check if cama_root is configured
         if not self.cama_root:
-            self.logger.warning("cama_root not configured, skipping CaMa allocation")
+            logger.warning("cama_root not configured, skipping CaMa allocation")
             return stations
 
         # Initialize CamaAllocator
@@ -238,10 +239,10 @@ class Step2CaMa:
                 cama_root=self.cama_root,
                 resolutions=self.resolutions,
                 highres_tag=self.highres_tag,
-                logger=self.logger
+                logger=logger
             )
         except Exception as e:
-            self.logger.error(f"初始化 CaMa 分配器失败: {e}")
+            logger.error(f"初始化 CaMa 分配器失败: {e}")
             return stations
 
         # Process each station
@@ -288,20 +289,20 @@ class Step2CaMa:
                     allocated_count += 1
 
             except Exception as e:
-                self.logger.debug(f"分配失败 {station.id}: {e}")
+                logger.debug(f"分配失败 {station.id}: {e}")
 
             # Progress logging
             if (i + 1) % 1000 == 0:
-                self.logger.info(f"  进度: {i + 1}/{total}")
+                logger.info(f"  进度: {i + 1}/{total}")
 
         # Log summary by resolution
-        self.logger.info(f"\n分配统计:")
+        logger.info(f"\n分配统计:")
         for resolution in self.resolutions:
             success_count = sum(
                 1 for s in stations
                 if resolution in s.cama_results and s.cama_results[resolution].get('success', False)
             )
-            self.logger.info(f"  {resolution}: {success_count}/{total} 站点分配成功")
+            logger.info(f"  {resolution}: {success_count}/{total} 站点分配成功")
 
-        self.logger.info(f"\n[Step 2] CaMa 分配完成: {allocated_count}/{total} 站点至少有一个分辨率分配成功")
+        logger.info(f"\n[Step 2] CaMa 分配完成: {allocated_count}/{total} 站点至少有一个分辨率分配成功")
         return stations
