@@ -1,0 +1,63 @@
+# CGLS 数据源配置
+# Copernicus Global Land Service Dataset Configuration
+
+# ============================================================
+# 数据集信息
+# ============================================================
+
+dataset:
+  name: CGLS_River
+  source: cgls
+  description: Copernicus Global Land Service river altimetry data
+
+# ============================================================
+# 凭证配置 (必需)
+# ============================================================
+# 注册 CDSE (Copernicus Data Space Ecosystem):
+#   https://dataspace.copernicus.eu/
+#
+# 或设置环境变量:
+#   export CDSE_USERNAME="your@email.com"
+#   export CDSE_PASSWORD="your-password"
+
+credentials:
+  username: "YOUR_EMAIL@example.com"
+  password: "YOUR_CDSE_PASSWORD"
+
+# ============================================================
+# 数据路径
+# ============================================================
+
+paths:
+  # 数据存储目录
+  data_dir: /Volumes/Data01/Altimetry/CGLS/river
+
+# ============================================================
+# 下载配置
+# ============================================================
+
+download:
+  # 产品页面
+  download_page: https://land.copernicus.eu/en/products/water-bodies/water-level-rivers-near-real-time-v2.0
+
+  # 并行下载线程数
+  num_workers: 4
+
+  # 下载超时 (秒)
+  timeout: 300
+
+# ============================================================
+# 处理配置 (覆盖全局配置)
+# ============================================================
+
+processing:
+  cama_resolutions:
+    - glb_15min
+
+filters:
+  min_observations: 10
+  start_date: null
+  end_date: null
+  bbox: null
+  rivers: null
+  basins: null
