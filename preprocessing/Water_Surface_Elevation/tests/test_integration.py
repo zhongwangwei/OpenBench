@@ -110,22 +110,7 @@ class TestFullPipelineDryRun:
 class TestSingleSourcePipeline:
     """Test pipeline with single source processing."""
 
-    @pytest.fixture
-    def mock_config(self):
-        """Create mock configuration for testing."""
-        return {
-            'data_root': '/tmp/test_data',
-            'output_dir': '/tmp/test_output',
-            'cama_root': '/tmp/cama',
-            'geoid_root': '/tmp/geoid',
-            'skip_download': True,
-            'resolutions': ['glb_15min'],
-            'validation': {
-                'min_observations': 5,
-            },
-        }
-
-    def test_single_source_pipeline(self, mock_config):
+    def test_single_source_pipeline(self, mock_config, sample_station_list, mock_step_handlers, mock_checkpoint):
         """Test pipeline with single data source using mocks.
 
         This test:
@@ -134,66 +119,24 @@ class TestSingleSourcePipeline:
         3. Verifies the step sequence is correct
         """
         from src.pipeline import Pipeline
-        from src.core.station import Station, StationList
 
-        # Track which steps were called and in what order
-        step_calls = []
-
-        # Create mock stations
-        mock_stations = StationList()
-        mock_stations.add(Station(
-            id='TEST001',
-            name='Test Station 1',
-            lon=10.0,
-            lat=50.0,
-            source='hydroweb',
-            elevation=100.0,
-            num_observations=100
-        ))
-
-        # Mock the step handlers
+        # Mock the Pipeline's __init__ to avoid initialization side effects
         with patch.object(Pipeline, '__init__', lambda self, config: None):
             pipeline = Pipeline.__new__(Pipeline)
             pipeline.config = mock_config
             pipeline.steps = ['download', 'validate', 'cama', 'reserved', 'merge']
-
-            # Create mock handlers that track calls
-            mock_download = MagicMock()
-            mock_download.run = MagicMock(return_value={'hydroweb': True})
-
-            mock_validate = MagicMock()
-            mock_validate.run = MagicMock(return_value=mock_stations)
-
-            mock_cama = MagicMock()
-            mock_cama.run = MagicMock(return_value=mock_stations)
-
-            mock_reserved = MagicMock()
-            mock_reserved.run = MagicMock(return_value=mock_stations)
-
-            mock_merge = MagicMock()
-            mock_merge.run = MagicMock(return_value=['/tmp/test_output/hydroweb_stations.txt'])
-
-            pipeline._step_handlers = {
-                'download': mock_download,
-                'validate': mock_validate,
-                'cama': mock_cama,
-                'reserved': mock_reserved,
-                'merge': mock_merge,
-            }
-
-            # Mock checkpoint
-            mock_checkpoint = MagicMock()
+            pipeline._step_handlers = mock_step_handlers
             pipeline.checkpoint = mock_checkpoint
 
             # Run the pipeline
             result = pipeline.run(['hydroweb'])
 
             # Verify step sequence
-            mock_download.run.assert_called_once()
-            mock_validate.run.assert_called_once_with(['hydroweb'])
-            mock_cama.run.assert_called_once()
-            mock_reserved.run.assert_called_once()
-            mock_merge.run.assert_called_once()
+            mock_step_handlers['download'].run.assert_called_once()
+            mock_step_handlers['validate'].run.assert_called_once_with(['hydroweb'])
+            mock_step_handlers['cama'].run.assert_called_once()
+            mock_step_handlers['reserved'].run.assert_called_once()
+            mock_step_handlers['merge'].run.assert_called_once()
 
             # Verify results structure
             assert 'download' in result
@@ -238,12 +181,6 @@ class TestSingleSourcePipeline:
 
 class TestPipelineWithMockedData:
     """Test pipeline with mocked external data sources."""
-
-    @pytest.fixture
-    def temp_output_dir(self):
-        """Create temporary output directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
 
     def test_pipeline_creates_output_on_success(self, temp_output_dir):
         """Test that pipeline creates output files on successful run."""
