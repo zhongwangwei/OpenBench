@@ -17,6 +17,7 @@ from typing import List, Optional, Dict, Any
 
 from .base_reader import BaseReader, create_station_from_reader
 from ..core.station import Station
+from ..exceptions import ReaderError
 
 
 class CGLSReader(BaseReader):
@@ -36,7 +37,17 @@ class CGLSReader(BaseReader):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+        except json.JSONDecodeError as e:
+            self.log('warning', f"JSON parse failed {filepath}: {e}")
+            return None
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return None
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
 
+        try:
             # 解析 GeoJSON 结构
             geometry = data.get('geometry', {})
             properties = data.get('properties', {})
@@ -135,7 +146,17 @@ class CGLSReader(BaseReader):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+        except json.JSONDecodeError as e:
+            self.log('warning', f"JSON parse failed {filepath}: {e}")
+            return timeseries
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return timeseries
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            raise ReaderError(f"Permission denied: {filepath}")
 
+        try:
             observations = data.get('data', [])
             missing_value = data.get('properties', {}).get('missing_value', 9999.999)
 

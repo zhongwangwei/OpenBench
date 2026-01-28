@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..core.station import Station
+from ..exceptions import ReaderError
 
 # Backward compatibility alias - StationMetadata is now Station
 # This allows existing code to continue using StationMetadata while
@@ -184,6 +185,9 @@ class BaseReader(ABC):
                         stations.append(station)
                     else:
                         skipped += 1
+            except ReaderError:
+                # Re-raise critical reader errors
+                raise
             except Exception as e:
                 self.log('warning', f"读取文件失败 {filepath}: {e}")
 
