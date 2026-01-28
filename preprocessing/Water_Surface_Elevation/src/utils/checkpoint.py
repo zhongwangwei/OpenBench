@@ -2,15 +2,22 @@
 """
 Checkpoint System for WSE Pipeline
 断点续传系统
+
+Security: Uses HMAC-signed JSON serialization instead of pickle.
 """
 
 import os
+import json
+import hmac
 import pickle
 import hashlib
+import logging
 from pathlib import Path
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,6 +29,89 @@ class CheckpointData:
     config_hash: str
     results: Dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'step': self.step,
+            'status': self.status,
+            'timestamp': self.timestamp.isoformat(),
+            'config_hash': self.config_hash,
+            'results': self.results,
+            'error_message': self.error_message,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'CheckpointData':
+        """Create from dictionary (JSON deserialization)."""
+        return cls(
+            step=data['step'],
+            status=data['status'],
+            timestamp=datetime.fromisoformat(data['timestamp']),
+            config_hash=data['config_hash'],
+            results=data.get('results', {}),
+            error_message=data.get('error_message'),
+        )
+
+
+class SecureSerializer:
+    """HMAC-signed JSON serializer for secure checkpoint storage."""
+
+    SECRET_KEY: Optional[bytes] = None
+
+    @classmethod
+    def _get_secret(cls) -> bytes:
+        """Get or initialize the secret key for HMAC signing."""
+        if cls.SECRET_KEY is None:
+            cls.SECRET_KEY = os.environ.get(
+                'WSE_CHECKPOINT_KEY', 'default-dev-key'
+            ).encode()
+        return cls.SECRET_KEY
+
+    @classmethod
+    def _sign_data(cls, data: bytes) -> str:
+        """Create HMAC-SHA256 signature for data."""
+        return hmac.new(cls._get_secret(), data, hashlib.sha256).hexdigest()
+
+    @classmethod
+    def _verify_signature(cls, data: bytes, signature: str) -> bool:
+        """Verify HMAC signature using constant-time comparison."""
+        expected = cls._sign_data(data)
+        return hmac.compare_digest(expected, signature)
+
+    @classmethod
+    def serialize(cls, data: Any) -> str:
+        """Serialize data to signed JSON string."""
+        data_json = json.dumps(data, sort_keys=True, default=str)
+        signature = cls._sign_data(data_json.encode())
+        return json.dumps({
+            'data': data_json,
+            'signature': signature,
+        })
+
+    @classmethod
+    def deserialize(cls, content: str) -> Optional[Any]:
+        """Deserialize signed JSON string, verifying signature."""
+        try:
+            parsed = json.loads(content)
+            if 'data' not in parsed or 'signature' not in parsed:
+                logger.warning("Checkpoint missing required fields")
+                return None
+
+            data_str = parsed['data']
+            signature = parsed['signature']
+
+            if not cls._verify_signature(data_str.encode(), signature):
+                logger.warning("Checkpoint signature verification failed")
+                return None
+
+            return json.loads(data_str)
+        except json.JSONDecodeError:
+            logger.warning("Checkpoint contains invalid JSON")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to deserialize checkpoint: {e}")
+            return None
 
 
 class CheckpointManager:
@@ -57,28 +147,78 @@ class CheckpointManager:
         return hashlib.md5(config_str.encode()).hexdigest()[:8]
 
     def _get_checkpoint_file(self, step: str) -> Path:
-        """获取检查点文件路径"""
+        """获取检查点文件路径 (JSON format)"""
+        return self.checkpoint_dir / f"step_{step}.json"
+
+    def _get_legacy_checkpoint_file(self, step: str) -> Path:
+        """获取旧版检查点文件路径 (pickle format)"""
         return self.checkpoint_dir / f"step_{step}.pkl"
+
+    def _migrate_legacy_checkpoint(self, step: str) -> Optional[CheckpointData]:
+        """
+        Migrate legacy pickle checkpoint to signed JSON format.
+
+        Returns:
+            CheckpointData if migration successful, None otherwise
+        """
+        legacy_file = self._get_legacy_checkpoint_file(step)
+        if not legacy_file.exists():
+            return None
+
+        try:
+            logger.warning(
+                f"Loading legacy pickle checkpoint for step '{step}'. "
+                "This format is deprecated and will be converted to signed JSON."
+            )
+            with open(legacy_file, 'rb') as f:
+                data = pickle.load(f)
+
+            # Save in new format
+            json_file = self._get_checkpoint_file(step)
+            content = SecureSerializer.serialize(data.to_dict())
+            with open(json_file, 'w') as f:
+                f.write(content)
+
+            # Backup and remove legacy file
+            backup_file = legacy_file.with_suffix('.pkl.bak')
+            legacy_file.rename(backup_file)
+            logger.info(f"Migrated checkpoint to JSON, backed up pickle to {backup_file}")
+
+            return data
+        except Exception as e:
+            logger.warning(f"Failed to migrate legacy checkpoint: {e}")
+            return None
 
     def _load_all(self):
         """加载所有检查点"""
         for step in self.STEPS:
             filepath = self._get_checkpoint_file(step)
+            data = None
+
+            # Try loading JSON format first
             if filepath.exists():
                 try:
-                    with open(filepath, 'rb') as f:
-                        data = pickle.load(f)
-                        # 验证配置哈希
-                        if data.config_hash == self.config_hash:
-                            self._checkpoints[step] = data
-                except Exception:
-                    pass  # 忽略损坏的检查点
+                    with open(filepath, 'r') as f:
+                        content = f.read()
+                    data_dict = SecureSerializer.deserialize(content)
+                    if data_dict:
+                        data = CheckpointData.from_dict(data_dict)
+                except Exception as e:
+                    logger.warning(f"Failed to load checkpoint for {step}: {e}")
+
+            # Try migrating legacy pickle if JSON not found
+            if data is None:
+                data = self._migrate_legacy_checkpoint(step)
+
+            # Verify config hash and store
+            if data and data.config_hash == self.config_hash:
+                self._checkpoints[step] = data
 
     def save(self, step: str, status: str,
              results: Optional[Dict] = None,
              error_message: Optional[str] = None):
         """
-        保存检查点
+        保存检查点 (Secure JSON format)
 
         Args:
             step: 步骤名称
@@ -97,8 +237,9 @@ class CheckpointManager:
         self._checkpoints[step] = data
 
         filepath = self._get_checkpoint_file(step)
-        with open(filepath, 'wb') as f:
-            pickle.dump(data, f)
+        content = SecureSerializer.serialize(data.to_dict())
+        with open(filepath, 'w') as f:
+            f.write(content)
 
     def load(self, step: str) -> Optional[CheckpointData]:
         """加载指定步骤的检查点"""
@@ -132,9 +273,14 @@ class CheckpointManager:
     def clear(self):
         """清除所有检查点"""
         for step in self.STEPS:
+            # Remove JSON checkpoint
             filepath = self._get_checkpoint_file(step)
             if filepath.exists():
                 filepath.unlink()
+            # Also remove any legacy pickle files
+            legacy_file = self._get_legacy_checkpoint_file(step)
+            if legacy_file.exists():
+                legacy_file.unlink()
         self._checkpoints.clear()
 
     def get_status_summary(self) -> Dict[str, str]:
@@ -150,7 +296,9 @@ class CheckpointManager:
 
 
 class Checkpoint:
-    """Simple checkpoint for Pipeline controller."""
+    """Simple checkpoint for Pipeline controller with secure JSON serialization."""
+
+    SECRET_KEY: Optional[bytes] = None
 
     def __init__(self, output_dir: str):
         """
@@ -163,22 +311,122 @@ class Checkpoint:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._data: Dict[str, Any] = {}
 
-    def save(self, step: str, results: Dict[str, Any]):
-        """Save checkpoint after a step."""
-        self._data[step] = results
-        checkpoint_file = self.output_dir / 'checkpoint.pkl'
-        with open(checkpoint_file, 'wb') as f:
-            pickle.dump(self._data, f)
+    @classmethod
+    def _get_secret(cls) -> bytes:
+        """Get or initialize the secret key for HMAC signing."""
+        if cls.SECRET_KEY is None:
+            cls.SECRET_KEY = os.environ.get(
+                'WSE_CHECKPOINT_KEY', 'default-dev-key'
+            ).encode()
+        return cls.SECRET_KEY
 
-    def load_stations(self) -> Optional[Any]:
-        """Load stations from checkpoint."""
-        checkpoint_file = self.output_dir / 'checkpoint.pkl'
-        if not checkpoint_file.exists():
+    def _sign_data(self, data: bytes) -> str:
+        """Create HMAC-SHA256 signature for data."""
+        return hmac.new(self._get_secret(), data, hashlib.sha256).hexdigest()
+
+    def _verify_signature(self, data: bytes, signature: str) -> bool:
+        """Verify HMAC signature using constant-time comparison."""
+        expected = self._sign_data(data)
+        return hmac.compare_digest(expected, signature)
+
+    def save(self, step: str, results: Dict[str, Any]):
+        """Save checkpoint after a step using signed JSON."""
+        self._data[step] = results
+        checkpoint_file = self.output_dir / 'checkpoint.json'
+
+        # Serialize with HMAC signature
+        data_json = json.dumps(self._data, sort_keys=True, default=str)
+        signature = self._sign_data(data_json.encode())
+        content = json.dumps({
+            'data': data_json,
+            'signature': signature,
+        })
+
+        with open(checkpoint_file, 'w') as f:
+            f.write(content)
+
+    def _load_legacy_pickle(self) -> Optional[Dict[str, Any]]:
+        """
+        Load legacy pickle checkpoint and migrate to JSON.
+
+        Returns:
+            Loaded data if successful, None otherwise
+        """
+        pkl_file = self.output_dir / 'checkpoint.pkl'
+        if not pkl_file.exists():
             return None
 
         try:
-            with open(checkpoint_file, 'rb') as f:
-                self._data = pickle.load(f)
-            return self._data.get('stations')
-        except Exception:
+            logger.warning(
+                "Loading legacy pickle checkpoint. "
+                "This format is deprecated and will be converted to signed JSON."
+            )
+            with open(pkl_file, 'rb') as f:
+                data = pickle.load(f)
+
+            # Save in new JSON format
+            self._data = data
+            json_file = self.output_dir / 'checkpoint.json'
+            data_json = json.dumps(data, sort_keys=True, default=str)
+            signature = self._sign_data(data_json.encode())
+            content = json.dumps({
+                'data': data_json,
+                'signature': signature,
+            })
+            with open(json_file, 'w') as f:
+                f.write(content)
+
+            # Backup and remove legacy file
+            backup_file = pkl_file.with_suffix('.pkl.bak')
+            pkl_file.rename(backup_file)
+            logger.info(f"Migrated checkpoint to JSON, backed up pickle to {backup_file}")
+
+            return data
+        except Exception as e:
+            logger.warning(f"Failed to load legacy pickle checkpoint: {e}")
             return None
+
+    def load_stations(self) -> Optional[Any]:
+        """Load stations from checkpoint with signature verification."""
+        checkpoint_file = self.output_dir / 'checkpoint.json'
+
+        # Try JSON format first
+        if checkpoint_file.exists():
+            try:
+                with open(checkpoint_file, 'r') as f:
+                    content = f.read()
+
+                if not content.strip():
+                    return None
+
+                parsed = json.loads(content)
+
+                # Verify required fields
+                if 'data' not in parsed or 'signature' not in parsed:
+                    logger.warning("Checkpoint missing required fields")
+                    return None
+
+                data_str = parsed['data']
+                signature = parsed['signature']
+
+                # Verify signature
+                if not self._verify_signature(data_str.encode(), signature):
+                    logger.warning("Checkpoint signature verification failed")
+                    return None
+
+                self._data = json.loads(data_str)
+                return self._data.get('stations')
+
+            except json.JSONDecodeError:
+                logger.warning("Checkpoint contains invalid JSON")
+                return None
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint: {e}")
+                return None
+
+        # Fall back to legacy pickle migration
+        data = self._load_legacy_pickle()
+        if data:
+            return data.get('stations')
+
+        return None
