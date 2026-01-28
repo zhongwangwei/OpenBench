@@ -89,7 +89,7 @@ def main(source: str, config: Optional[str], output: Optional[str],
 
     # Import here to avoid circular imports (Pipeline will be created in Task 6)
     try:
-        from .pipeline import WSEPipeline
+        from .pipeline import Pipeline
 
         # For now, use existing pipeline interface
         # Task 6 will create a new Pipeline class with run_step method
