@@ -89,12 +89,18 @@ class HydroSatDownloader(BaseDownloader):
 
     数据源: https://hydrosat.gis.uni-stuttgart.de/
     直接下载，无需认证
+
+    注意: HydroSat 服务器 SSL 证书有问题，默认关闭 SSL 验证
     """
 
     source_name = "HydroSat"
     description = "HydroSat Water Level (University of Stuttgart)"
     requires_auth = False
     download_url = "https://hydrosat.gis.uni-stuttgart.de/data/download/WL-HydroSat.zip"
+
+    def __init__(self, output_dir: str, logger=None, verify_ssl: bool = False):
+        """初始化 HydroSat 下载器，默认关闭 SSL 验证（服务器证书问题）"""
+        super().__init__(output_dir, logger, verify_ssl)
 
     def check_data_exists(self) -> bool:
         data_dir = self.output_dir / "WL_hydrosat"
