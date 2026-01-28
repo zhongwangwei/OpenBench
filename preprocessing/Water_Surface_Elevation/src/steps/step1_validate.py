@@ -10,14 +10,23 @@ Step 1: Validation and EGM Calculation
 4. 计算 EGM08/EGM96 (使用 GeoidCalculator)
 """
 
-import os
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass
 
 from ..readers import get_reader, StationMetadata
 from ..core.geoid_calculator import GeoidCalculator
 from ..core.station import Station, StationList
-from ..utils.logger import ProgressLogger, get_logger
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Default validation rules
+VALIDATION_RULES = {
+    'lon_range': (-180, 180),
+    'lat_range': (-90, 90),
+    'min_observations': 10,
+}
 
 
 @dataclass
@@ -343,18 +352,185 @@ def compute_statistics(stations: List[StationMetadata]) -> Dict[str, Any]:
 
 
 class Step1Validate:
-    """Step 1: Validation class wrapper."""
+    """Step 1: Validate stations and calculate EGM values."""
 
     def __init__(self, config: dict):
+        """
+        Initialize Step1Validate.
+
+        Args:
+            config: Configuration dictionary containing:
+                - data_root: Root path for data sources (default: /Volumes/Data01/Altimetry)
+                - geoid_root: Root path for geoid data (default: /Volumes/Data01/AltiMaPpy-data/egm-geoids)
+                - validation: Validation rules (optional)
+                - global_paths: Path configuration for data sources and geoid data
+        """
         self.config = config
+        self.data_root = Path(config.get('data_root', '/Volumes/Data01/Altimetry'))
+        self.geoid_root = Path(config.get('geoid_root', '/Volumes/Data01/AltiMaPpy-data/egm-geoids'))
+        self.validation = config.get('validation', VALIDATION_RULES)
         self.logger = get_logger(__name__)
 
     def run(self, sources: List[str]) -> StationList:
         """
-        Run validation for specified sources.
+        Run validation for all specified sources.
 
         Args:
             sources: List of source names (e.g., ['hydroweb', 'cgls'])
+
+        Returns:
+            StationList with all valid stations
+        """
+        self.logger.info("[Step 1] 验证数据并计算 EGM...")
+
+        all_stations = StationList()
+        stats = {'total': 0, 'valid': 0, 'invalid_coords': 0, 'invalid_obs': 0}
+
+        # Initialize geoid calculator
+        geoid_calc = self._init_geoid_calculator()
+
+        for source in sources:
+            self.logger.info(f"\n处理 {source.capitalize()}...")
+            source_stations = self._process_source(source, geoid_calc, stats)
+            for station in source_stations:
+                all_stations.add(station)
+
+        self.logger.info(f"\n[Step 1] 验证完成")
+        self.logger.info(f"  总站点: {stats['total']}")
+        self.logger.info(f"  有效站点: {stats['valid']}")
+        self.logger.info(f"  无效站点: {stats['total'] - stats['valid']} "
+                        f"(坐标异常: {stats['invalid_coords']}, 观测不足: {stats['invalid_obs']})")
+
+        return all_stations
+
+    def _init_geoid_calculator(self) -> Optional[GeoidCalculator]:
+        """Initialize GeoidCalculator with configured paths."""
+        # Try to get geoid config from global_paths if available
+        geoid_config = self.config.get('global_paths', {}).get('geoid_data', {})
+        geoid_root = geoid_config.get('root', str(self.geoid_root))
+
+        processing = self.config.get('processing', {})
+        egm96_model = processing.get('egm96_model', geoid_config.get('egm96_model', 'egm96-5'))
+        egm2008_model = processing.get('egm2008_model', geoid_config.get('egm2008_model', 'egm2008-5'))
+
+        try:
+            geoid_calc = GeoidCalculator(
+                data_dir=geoid_root,
+                egm96_model=egm96_model,
+                egm2008_model=egm2008_model
+            )
+
+            if not geoid_calc.is_ready():
+                self.logger.warning("EGM 数据文件未就绪，尝试下载...")
+                geoid_calc.download_data()
+
+            return geoid_calc
+
+        except Exception as e:
+            self.logger.warning(f"无法初始化 GeoidCalculator: {e}")
+            return None
+
+    def _process_source(self, source: str, geoid_calc: Optional[GeoidCalculator],
+                        stats: dict) -> StationList:
+        """
+        Process a single data source.
+
+        Args:
+            source: Source name (e.g., 'hydroweb', 'cgls')
+            geoid_calc: GeoidCalculator instance (or None)
+            stats: Statistics dictionary to update
+
+        Returns:
+            StationList with valid stations from this source
+        """
+        stations = StationList()
+
+        # Get data path for this source
+        data_sources = self.config.get('global_paths', {}).get('data_sources', {})
+        source_path = data_sources.get(source)
+
+        if not source_path:
+            # Fall back to data_root/Source pattern
+            source_path = str(self.data_root / source.capitalize())
+
+        # Get reader for this source
+        try:
+            reader = get_reader(source, logger=self.logger)
+        except Exception as e:
+            self.logger.error(f"无法获取 {source} 读取器: {e}")
+            return stations
+
+        # Read all stations from source
+        try:
+            filters = self.config.get('filters', {})
+            raw_stations = reader.read_all_stations(source_path, filters=filters)
+        except Exception as e:
+            self.logger.error(f"读取 {source} 数据失败: {e}")
+            return stations
+
+        self.logger.info(f"  读取 {len(raw_stations)} 个站点")
+
+        for raw in raw_stations:
+            stats['total'] += 1
+
+            # Create Station object from StationMetadata
+            station = Station(
+                id=raw.id,
+                name=raw.station_name or raw.id,
+                lon=float(raw.lon),
+                lat=float(raw.lat),
+                source=raw.source or source,
+                elevation=float(raw.mean_elevation or 0.0),
+                num_observations=int(raw.num_observations),
+                egm08=raw.egm08,
+                egm96=raw.egm96,
+                metadata={
+                    'river': raw.river,
+                    'basin': raw.basin,
+                    'country': raw.country,
+                    'satellite': raw.satellite,
+                    'start_date': raw.start_date.isoformat() if raw.start_date else None,
+                    'end_date': raw.end_date.isoformat() if raw.end_date else None,
+                    'filepath': raw.filepath,
+                    **raw.extra
+                }
+            )
+
+            # Validate coordinates
+            if not station.is_valid():
+                stats['invalid_coords'] += 1
+                continue
+
+            # Validate observations
+            min_obs = self.validation.get('min_observations', VALIDATION_RULES['min_observations'])
+            if station.num_observations < min_obs:
+                stats['invalid_obs'] += 1
+                continue
+
+            # Calculate EGM values if not already present
+            if geoid_calc and (station.egm08 is None or station.egm96 is None):
+                try:
+                    egm08, egm96 = geoid_calc.get_undulation(station.lat, station.lon)
+                    if station.egm08 is None:
+                        station.egm08 = egm08
+                    if station.egm96 is None:
+                        station.egm96 = egm96
+                except Exception as e:
+                    self.logger.debug(f"计算 EGM 失败 (站点 {station.id}): {e}")
+
+            stats['valid'] += 1
+            stations.add(station)
+
+        return stations
+
+    def run_with_legacy_api(self, sources: List[str]) -> StationList:
+        """
+        Run validation using the legacy run_validation function.
+
+        This method maintains compatibility with the original API.
+
+        Args:
+            sources: List of source names
 
         Returns:
             StationList with validated stations
