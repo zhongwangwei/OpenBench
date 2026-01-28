@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from ..core.cama_allocator import CamaAllocator, StationAllocation
 from ..core.station import Station, StationList
 from ..utils.logger import get_logger
+from ..constants import RESOLUTIONS
 
 
 @dataclass
@@ -192,9 +193,6 @@ def format_allocation_output(stations: List[Station],
     return output
 
 
-RESOLUTIONS = ['glb_01min', 'glb_03min', 'glb_05min', 'glb_06min', 'glb_15min']
-
-
 class Step2CaMa:
     """Step 2: Allocate stations to CaMa-Flood grid cells."""
 
@@ -202,11 +200,12 @@ class Step2CaMa:
         self.config = config
         self.logger = get_logger(__name__)
 
-        # Get CaMa configuration
+        # Get CaMa configuration from global_paths or direct config
         cama_config = self.config.get('global_paths', {}).get('cama_data', {})
         processing = self.config.get('processing', {})
 
-        self.cama_root = cama_config.get('root', '/Volumes/Data01/2025')
+        # cama_root can come from global_paths or direct config
+        self.cama_root = cama_config.get('root') or config.get('cama_root')
         self.resolutions = processing.get('cama_resolutions',
                                           cama_config.get('resolutions', RESOLUTIONS))
         self.highres_tag = cama_config.get('highres_tag', '1min')
@@ -226,6 +225,11 @@ class Step2CaMa:
         total = len(stations)
         if total == 0:
             self.logger.warning("没有站点需要分配")
+            return stations
+
+        # Check if cama_root is configured
+        if not self.cama_root:
+            self.logger.warning("cama_root not configured, skipping CaMa allocation")
             return stations
 
         # Initialize CamaAllocator
