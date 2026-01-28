@@ -435,16 +435,25 @@ class Step1Validate:
 
         Args:
             config: Configuration dictionary containing:
-                - data_root: Root path for data sources (default: /Volumes/Data01/Altimetry)
-                - geoid_root: Root path for geoid data (default: /Volumes/Data01/AltiMaPpy-data/egm-geoids)
+                - data_root: Root path for data sources
+                - geoid_root: Root path for geoid data (optional, EGM calc skipped if not set)
                 - validation: Validation rules (optional)
                 - global_paths: Path configuration for data sources and geoid data
         """
         self.config = config
-        self.data_root = Path(config.get('data_root', '/Volumes/Data01/Altimetry'))
-        self.geoid_root = Path(config.get('geoid_root', '/Volumes/Data01/AltiMaPpy-data/egm-geoids'))
+
+        # Handle data_root - use config value or default
+        data_root = config.get('data_root')
+        if data_root:
+            self.data_root = Path(data_root)
+        else:
+            self.data_root = Path('./data')
+
+        # Handle geoid_root - may be None (EGM calculation will be skipped)
+        geoid_root = config.get('geoid_root')
+        self.geoid_root = Path(geoid_root) if geoid_root else None
+
         self.validation = config.get('validation', VALIDATION_RULES)
-        self.logger = get_logger(__name__)
 
     def run(self, sources: List[str]) -> StationList:
         """
@@ -456,7 +465,7 @@ class Step1Validate:
         Returns:
             StationList with all valid stations
         """
-        self.logger.info("[Step 1] 验证数据并计算 EGM...")
+        logger.info("[Step 1] 验证数据并计算 EGM...")
 
         all_stations = StationList()
         stats = {'total': 0, 'valid': 0, 'invalid_coords': 0, 'invalid_obs': 0}
@@ -465,15 +474,15 @@ class Step1Validate:
         geoid_calc = self._init_geoid_calculator()
 
         for source in sources:
-            self.logger.info(f"\n处理 {source.capitalize()}...")
+            logger.info(f"\n处理 {source.capitalize()}...")
             source_stations = self._process_source(source, geoid_calc, stats)
             for station in source_stations:
                 all_stations.add(station)
 
-        self.logger.info(f"\n[Step 1] 验证完成")
-        self.logger.info(f"  总站点: {stats['total']}")
-        self.logger.info(f"  有效站点: {stats['valid']}")
-        self.logger.info(f"  无效站点: {stats['total'] - stats['valid']} "
+        logger.info(f"\n[Step 1] 验证完成")
+        logger.info(f"  总站点: {stats['total']}")
+        logger.info(f"  有效站点: {stats['valid']}")
+        logger.info(f"  无效站点: {stats['total'] - stats['valid']} "
                         f"(坐标异常: {stats['invalid_coords']}, 观测不足: {stats['invalid_obs']})")
 
         return all_stations
@@ -482,7 +491,16 @@ class Step1Validate:
         """Initialize GeoidCalculator with configured paths."""
         # Try to get geoid config from global_paths if available
         geoid_config = self.config.get('global_paths', {}).get('geoid_data', {})
-        geoid_root = geoid_config.get('root', str(self.geoid_root))
+
+        # Determine geoid root path
+        geoid_root = geoid_config.get('root')
+        if not geoid_root and self.geoid_root:
+            geoid_root = str(self.geoid_root)
+
+        # If no geoid root is configured, skip EGM calculation
+        if not geoid_root:
+            logger.warning("geoid_root not configured, skipping EGM calculations")
+            return None
 
         processing = self.config.get('processing', {})
         egm96_model = processing.get('egm96_model', geoid_config.get('egm96_model', 'egm96-5'))
@@ -496,13 +514,13 @@ class Step1Validate:
             )
 
             if not geoid_calc.is_ready():
-                self.logger.warning("EGM 数据文件未就绪，尝试下载...")
+                logger.warning("EGM 数据文件未就绪，尝试下载...")
                 geoid_calc.download_data()
 
             return geoid_calc
 
         except Exception as e:
-            self.logger.warning(f"无法初始化 GeoidCalculator: {e}")
+            logger.warning(f"无法初始化 GeoidCalculator: {e}")
             return None
 
     def _process_source(self, source: str, geoid_calc: Optional[GeoidCalculator],
@@ -530,9 +548,9 @@ class Step1Validate:
 
         # Get reader for this source
         try:
-            reader = get_reader(source, logger=self.logger)
+            reader = get_reader(source, logger=logger)
         except Exception as e:
-            self.logger.error(f"无法获取 {source} 读取器: {e}")
+            logger.error(f"无法获取 {source} 读取器: {e}")
             return stations
 
         # Read all stations from source
@@ -540,10 +558,10 @@ class Step1Validate:
             filters = self.config.get('filters', {})
             raw_stations = reader.read_all_stations(source_path, filters=filters)
         except Exception as e:
-            self.logger.error(f"读取 {source} 数据失败: {e}")
+            logger.error(f"读取 {source} 数据失败: {e}")
             return stations
 
-        self.logger.info(f"  读取 {len(raw_stations)} 个站点")
+        logger.info(f"  读取 {len(raw_stations)} 个站点")
 
         # Readers now return Station objects directly - no conversion needed
         for station in raw_stations:
@@ -569,7 +587,7 @@ class Step1Validate:
                     if station.egm96 is None:
                         station.egm96 = egm96
                 except Exception as e:
-                    self.logger.debug(f"计算 EGM 失败 (站点 {station.id}): {e}")
+                    logger.debug(f"计算 EGM 失败 (站点 {station.id}): {e}")
 
             stats['valid'] += 1
             stations.add(station)
@@ -594,18 +612,18 @@ class Step1Validate:
             # Create source-specific config
             source_config = {**self.config, 'dataset': {'source': source}}
 
-            self.logger.info(f"验证数据源: {source}")
+            logger.info(f"验证数据源: {source}")
 
             try:
-                result = run_validation(source_config, self.logger)
+                result = run_validation(source_config, logger)
 
                 # Stations are already Station objects - no conversion needed
                 for station in result.stations:
                     station_list.add(station)
 
-                self.logger.info(f"  {source}: {len(result.stations)} 站点验证通过")
+                logger.info(f"  {source}: {len(result.stations)} 站点验证通过")
 
             except Exception as e:
-                self.logger.error(f"验证 {source} 失败: {e}")
+                logger.error(f"验证 {source} 失败: {e}")
 
         return station_list
