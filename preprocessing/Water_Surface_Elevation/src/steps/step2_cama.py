@@ -9,7 +9,6 @@ CaMa-Flood 站点分配
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
-from ..readers import StationMetadata
 from ..core.cama_allocator import CamaAllocator, StationAllocation
 from ..core.station import Station, StationList
 from ..utils.logger import get_logger
@@ -18,12 +17,12 @@ from ..utils.logger import get_logger
 @dataclass
 class CamaResult:
     """CaMa 分配结果"""
-    stations: List[StationMetadata]
+    stations: List[Station]
     allocations: List[StationAllocation]
     stats: Dict[str, Any]
 
 
-def run_cama_allocation(stations: List[StationMetadata],
+def run_cama_allocation(stations: List[Station],
                         config: Dict[str, Any],
                         logger=None) -> CamaResult:
     """
@@ -64,14 +63,14 @@ def run_cama_allocation(stations: List[StationMetadata],
         logger=logger
     )
 
-    # 准备站点数据
+    # 准备站点数据 - Station now uses elevation and metadata dict
     station_data = [
         {
             'id': s.id,
             'lon': s.lon,
             'lat': s.lat,
-            'elevation': s.mean_elevation or 0,
-            'satellite': s.satellite or 'Unknown',
+            'elevation': s.elevation or 0,
+            'satellite': s.metadata.get('satellite', 'Unknown'),
         }
         for s in stations
     ]
@@ -132,14 +131,14 @@ def compute_allocation_stats(allocations: List[StationAllocation],
     return stats
 
 
-def format_allocation_output(stations: List[StationMetadata],
+def format_allocation_output(stations: List[Station],
                              allocations: List[StationAllocation],
                              resolutions: List[str]) -> List[Dict[str, Any]]:
     """
     格式化输出数据
 
     Args:
-        stations: 站点列表
+        stations: Station 对象列表
         allocations: 分配结果列表
         resolutions: 分辨率列表
 
@@ -151,12 +150,12 @@ def format_allocation_output(stations: List[StationMetadata],
     for station, allocation in zip(stations, allocations):
         row = {
             'ID': station.id,
-            'station': station.station_name,
+            'station': station.name,
             'dataname': station.source,
             'lon': station.lon,
             'lat': station.lat,
-            'satellite': station.satellite or 'Unknown',
-            'elevation': station.mean_elevation or -9999,
+            'satellite': station.metadata.get('satellite', 'Unknown'),
+            'elevation': station.elevation or -9999,
         }
 
         # 添加每个分辨率的结果
