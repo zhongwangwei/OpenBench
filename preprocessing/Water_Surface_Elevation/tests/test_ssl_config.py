@@ -11,14 +11,16 @@ class TestSSLConfiguration:
     """Test SSL verification configuration."""
 
     def test_ssl_verification_enabled_by_default(self):
-        """SSL verification should be enabled by default."""
-        from src.readers.downloader import BaseDownloader, HydroSatDownloader
+        """SSL verification should be enabled by default for most downloaders."""
+        from src.readers.downloader import HydroWebDownloader, HydroSatDownloader
 
-        # Create downloader without explicit verify_ssl setting
-        downloader = HydroSatDownloader(output_dir='/tmp/test')
-
-        # Default should be True (secure)
+        # HydroWeb should default to True (secure)
+        downloader = HydroWebDownloader(output_dir='/tmp/test')
         assert downloader.verify_ssl is True
+
+        # HydroSat is special - defaults to False due to server certificate issues
+        hydrosat = HydroSatDownloader(output_dir='/tmp/test')
+        assert hydrosat.verify_ssl is False  # Expected: server has cert issues
 
     def test_ssl_verification_can_be_disabled(self):
         """SSL verification can be explicitly disabled."""
