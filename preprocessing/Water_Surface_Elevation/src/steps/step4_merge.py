@@ -1,223 +1,136 @@
-#!/usr/bin/env python3
-"""
-Step 4: Merge to NetCDF (Interface Only)
-合并到 NetCDF 文件 (仅接口)
-
-当前仅保存为文本格式。
-NetCDF 合并功能预留给未来实现。
-"""
-
-import os
-from datetime import datetime
-from typing import Dict, Any, List, Optional
+"""Step 4: Output merge and file generation."""
 from pathlib import Path
+from typing import List, Dict, Any
+from datetime import datetime
 
-from ..readers import StationMetadata
-from ..steps.step2_cama import CamaResult, format_allocation_output
 from ..core.station import Station, StationList
 from ..utils.logger import get_logger
 
+logger = get_logger(__name__)
 
-def run_merge(cama_result: CamaResult,
-              config: Dict[str, Any],
-              logger=None) -> str:
-    """
-    保存处理结果
-
-    当前实现: 保存为文本文件
-    预留接口: NetCDF 合并
-
-    Args:
-        cama_result: CaMa 分配结果 (来自 step2/step3)
-        config: 配置字典
-        logger: 日志记录器
-
-    Returns:
-        输出文件路径
-    """
-    log = lambda level, msg: logger and getattr(logger, level)(msg)
-
-    # 获取配置
-    output_config = config['global_paths'].get('output', {})
-    processing = config.get('processing', {})
-    dataset_config = config.get('dataset', {})
-
-    output_root = output_config.get('root', './output')
-    output_format = config.get('output', {}).get('format', 'txt')
-
-    # 确保输出目录存在
-    output_dir = Path(output_root)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # 生成输出文件名
-    source = dataset_config.get('source', 'unknown')
-    date_str = datetime.now().strftime('%Y%m%d')
-    filename_template = output_config.get('station_list', 'altimetry_{source}_{date}.txt')
-    filename = filename_template.format(source=source, date=date_str)
-    output_file = output_dir / filename
-
-    # 获取分辨率列表
-    resolutions = processing.get('cama_resolutions', [])
-
-    # 格式化输出数据
-    output_data = format_allocation_output(
-        cama_result.stations,
-        cama_result.allocations,
-        resolutions
-    )
-
-    # 保存文件
-    if output_format in ['txt', 'both']:
-        save_text_file(output_data, output_file, resolutions, logger)
-        log('info', f"已保存文本文件: {output_file}")
-
-    if output_format in ['netcdf', 'both']:
-        nc_file = output_file.with_suffix('.nc')
-        log('warning', f"NetCDF 输出尚未实现，跳过: {nc_file}")
-        # save_netcdf_file(output_data, nc_file, config, logger)
-
-    return str(output_file)
-
-
-def save_text_file(data: List[Dict[str, Any]],
-                   output_file: Path,
-                   resolutions: List[str],
-                   logger=None):
-    """
-    保存为文本文件
-
-    Args:
-        data: 格式化的输出数据
-        output_file: 输出文件路径
-        resolutions: 分辨率列表
-        logger: 日志记录器
-    """
-    if not data:
-        return
-
-    # 构建列名
-    base_columns = ['ID', 'station', 'dataname', 'lon', 'lat', 'satellite', 'elevation']
-
-    res_columns = []
-    for res in resolutions:
-        suffix = res.replace('glb_', '').replace('min', 'min')
-        for col in ['flag', 'kx1', 'ky1', 'kx2', 'ky2', 'dist1', 'dist2',
-                    'rivwth', 'ix', 'iy', 'lon_cama', 'lat_cama']:
-            res_columns.append(f'{col}_{suffix}')
-
-    egm_columns = ['EGM08', 'EGM96']
-
-    all_columns = base_columns + res_columns + egm_columns
-
-    # 写入文件
-    with open(output_file, 'w') as f:
-        # 写入标题行
-        header = ' '.join(f'{col:>15}' for col in all_columns)
-        f.write(header + '\n')
-
-        # 写入数据行
-        for row in data:
-            values = []
-            for col in all_columns:
-                val = row.get(col, -9999)
-                if isinstance(val, float):
-                    values.append(f'{val:15.4f}')
-                elif isinstance(val, int):
-                    values.append(f'{val:15d}')
-                else:
-                    values.append(f'{str(val):>15}')
-            f.write(' '.join(values) + '\n')
-
-
-def save_netcdf_file(data: List[Dict[str, Any]],
-                     output_file: Path,
-                     config: Dict[str, Any],
-                     logger=None):
-    """
-    保存为 NetCDF 文件
-
-    TODO: 未实现
-
-    Args:
-        data: 格式化的输出数据
-        output_file: 输出文件路径
-        config: 配置字典
-        logger: 日志记录器
-    """
-    raise NotImplementedError(
-        "NetCDF 输出功能尚未实现。\n"
-        "当前请使用文本格式输出。"
-    )
-
-
-def merge_to_existing_netcdf(new_data: List[Dict[str, Any]],
-                             existing_file: Path,
-                             config: Dict[str, Any],
-                             logger=None):
-    """
-    合并到已有的 NetCDF 文件
-
-    TODO: 未实现
-
-    Args:
-        new_data: 新数据
-        existing_file: 已有的 NetCDF 文件
-        config: 配置字典
-        logger: 日志记录器
-    """
-    raise NotImplementedError(
-        "NetCDF 合并功能尚未实现。\n"
-        "预留接口供未来实现。"
-    )
+RESOLUTIONS = ['glb_01min', 'glb_03min', 'glb_05min', 'glb_06min', 'glb_15min']
 
 
 class Step4Merge:
-    """Step 4: Merge and output results."""
+    """Step 4: Generate output files."""
 
     def __init__(self, config: dict):
         self.config = config
-        self.logger = get_logger(__name__)
+        self.output_dir = Path(config.get('output_dir', './output'))
+        self.resolutions = config.get('resolutions', RESOLUTIONS)
 
     def run(self, stations: StationList, merge: bool = False) -> List[str]:
-        """
-        Run merge/output step.
+        """Generate output files.
 
         Args:
-            stations: StationList from Step 3
-            merge: Whether to merge with existing files
+            stations: StationList with all processed stations
+            merge: If True, merge all sources into single file
 
         Returns:
             List of output file paths
         """
-        self.logger.info(f"Step 4: 输出 {len(stations)} 站点")
+        logger.info("[Step 4] 生成输出文件...")
 
-        output_config = self.config.get('global_paths', {}).get('output', {})
-        output_root = Path(output_config.get('root', './output'))
-        output_root.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate output filename
-        date_str = datetime.now().strftime('%Y%m%d')
+        if merge:
+            return self._write_merged(stations)
+        else:
+            return self._write_separate(stations)
+
+    def _write_separate(self, stations: StationList) -> List[str]:
+        """Write separate files for each source."""
+        output_files = []
         sources = stations.get_sources()
-        source_str = '_'.join(sorted(sources)) if sources else 'unknown'
-        filename = f"altimetry_{source_str}_{date_str}.txt"
-        output_file = output_root / filename
 
-        # Write output
-        with open(output_file, 'w') as f:
-            # Header
-            f.write("# WSE Pipeline Output\n")
-            f.write(f"# Generated: {datetime.now().isoformat()}\n")
-            f.write(f"# Stations: {len(stations)}\n")
-            f.write("#\n")
-            f.write("ID,name,source,lon,lat,elevation,egm08,egm96\n")
+        for source in sources:
+            source_stations = stations.filter_by_source(source)
+            if len(source_stations) == 0:
+                continue
 
-            # Data
+            filename = f"{source}_stations.txt"
+            filepath = self.output_dir / filename
+
+            self._write_stations(filepath, source_stations, include_source=False)
+            output_files.append(str(filepath))
+            logger.info(f"  写入 {filename}: {len(source_stations)} 站点")
+
+        return output_files
+
+    def _write_merged(self, stations: StationList) -> List[str]:
+        """Write all stations to single file."""
+        filename = "all_stations.txt"
+        filepath = self.output_dir / filename
+
+        self._write_stations(filepath, stations, include_source=True)
+        logger.info(f"  写入 {filename}: {len(stations)} 站点")
+
+        return [str(filepath)]
+
+    def _write_stations(self, filepath: Path, stations: StationList, include_source: bool):
+        """Write stations to file."""
+        # Build header
+        header = ['id', 'name', 'lon', 'lat', 'elevation', 'num_obs', 'EGM08', 'EGM96']
+
+        if include_source:
+            header.insert(0, 'source')
+
+        # Add CaMa columns for each resolution
+        for res in self.resolutions:
+            res_suffix = res.replace('glb_', '')
+            header.extend([
+                f'flag_{res_suffix}',
+                f'ix_{res_suffix}', f'iy_{res_suffix}',
+                f'kx1_{res_suffix}', f'ky1_{res_suffix}',
+                f'kx2_{res_suffix}', f'ky2_{res_suffix}',
+                f'dist1_{res_suffix}', f'dist2_{res_suffix}',
+                f'rivwth_{res_suffix}',
+                f'lon_cama_{res_suffix}', f'lat_cama_{res_suffix}',
+            ])
+
+        with open(filepath, 'w') as f:
+            # Write header
+            f.write('\t'.join(header) + '\n')
+
+            # Write data
             for station in stations:
-                egm08 = station.egm08 if station.egm08 is not None else -9999
-                egm96 = station.egm96 if station.egm96 is not None else -9999
-                f.write(f"{station.id},{station.name},{station.source},"
-                        f"{station.lon:.6f},{station.lat:.6f},"
-                        f"{station.elevation:.2f},{egm08:.4f},{egm96:.4f}\n")
+                row = self._format_station_row(station, include_source)
+                f.write('\t'.join(str(v) for v in row) + '\n')
 
-        self.logger.info(f"输出文件: {output_file}")
-        return [str(output_file)]
+    def _format_station_row(self, station: Station, include_source: bool) -> List[Any]:
+        """Format station data as row."""
+        row = []
+
+        if include_source:
+            row.append(station.source)
+
+        row.extend([
+            station.id,
+            station.name,
+            f"{station.lon:.6f}",
+            f"{station.lat:.6f}",
+            f"{station.elevation:.2f}",
+            station.num_observations,
+            f"{station.egm08:.3f}" if station.egm08 else 'NA',
+            f"{station.egm96:.3f}" if station.egm96 else 'NA',
+        ])
+
+        # Add CaMa results for each resolution
+        for res in self.resolutions:
+            cama = station.cama_results.get(res, {})
+            row.extend([
+                cama.get('flag', 0),
+                cama.get('ix', -1),
+                cama.get('iy', -1),
+                cama.get('kx1', -1),
+                cama.get('ky1', -1),
+                cama.get('kx2', -1),
+                cama.get('ky2', -1),
+                f"{cama.get('dist1', 0):.1f}",
+                f"{cama.get('dist2', 0):.1f}",
+                f"{cama.get('rivwth', 0):.1f}",
+                f"{cama.get('lon_cama', 0):.6f}",
+                f"{cama.get('lat_cama', 0):.6f}",
+            ])
+
+        return row
