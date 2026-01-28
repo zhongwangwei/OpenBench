@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from .base_reader import BaseReader, StationMetadata
+from .base_reader import BaseReader, create_station_from_reader
+from ..core.station import Station
 
 
 class HydroSatReader(BaseReader):
@@ -98,7 +99,7 @@ class HydroSatReader(BaseReader):
 
         return sorted(set(data_files))
 
-    def read_station(self, filepath: str) -> Optional[StationMetadata]:
+    def read_station(self, filepath: str) -> Optional[Station]:
         """
         读取单个 HydroSat 站点文件
 
@@ -106,7 +107,7 @@ class HydroSatReader(BaseReader):
             filepath: 文件路径
 
         Returns:
-            StationMetadata 或 None
+            Station 或 None
         """
         filepath = Path(filepath)
 
@@ -146,7 +147,7 @@ class HydroSatReader(BaseReader):
             if not water_levels:
                 return None
 
-            return StationMetadata(
+            return create_station_from_reader(
                 id=hydrosat_no,
                 station_name=f"{object_name}_{hydrosat_no}",
                 lon=lon,

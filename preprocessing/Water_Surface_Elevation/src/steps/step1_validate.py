@@ -14,10 +14,14 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass
 
-from ..readers import get_reader, StationMetadata
+from ..readers import get_reader
 from ..core.geoid_calculator import GeoidCalculator
 from ..core.station import Station, StationList
 from ..utils.logger import get_logger
+
+# StationMetadata is now an alias for Station
+# Import for backward compatibility in type hints
+StationMetadata = Station
 
 logger = get_logger(__name__)
 
@@ -41,7 +45,7 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """验证结果"""
-    stations: List[StationMetadata]
+    stations: List[Station]
     issues: List[ValidationIssue]
     stats: Dict[str, Any]
 
@@ -110,8 +114,8 @@ def run_validation(config: Dict[str, Any], logger=None) -> ValidationResult:
             valid_stations, config, logger
         )
 
-    # 4. 检测重复站点
-    duplicates = detect_duplicates(
+    # 4. 检测重复站点 (使用优化的 O(n) 算法)
+    duplicates = detect_duplicates_fast(
         valid_stations,
         validation_rules.get('duplicates', {})
     )
@@ -132,13 +136,13 @@ def run_validation(config: Dict[str, Any], logger=None) -> ValidationResult:
     )
 
 
-def validate_station(station: StationMetadata,
+def validate_station(station: Station,
                      rules: Dict[str, Any]) -> List[ValidationIssue]:
     """
     验证单个站点
 
     Args:
-        station: 站点元数据
+        station: Station 对象
         rules: 验证规则
 
     Returns:
@@ -181,30 +185,30 @@ def validate_station(station: StationMetadata,
             station_id=station.id
         ))
 
-    # 高程范围检查
-    if station.mean_elevation is not None:
+    # 高程范围检查 - use elevation field (unified from mean_elevation)
+    if station.elevation is not None and station.elevation != 0.0:
         elev_min = elevation_rules.get('min_value', -500)
         elev_max = elevation_rules.get('max_value', 6000)
 
-        if not (elev_min <= station.mean_elevation <= elev_max):
+        if not (elev_min <= station.elevation <= elev_max):
             issues.append(ValidationIssue(
                 level='warning',
                 code='UNUSUAL_ELEVATION',
-                message=f"高程异常: {station.mean_elevation:.2f}m",
+                message=f"高程异常: {station.elevation:.2f}m",
                 station_id=station.id
             ))
 
     return issues
 
 
-def calculate_egm_values(stations: List[StationMetadata],
+def calculate_egm_values(stations: List[Station],
                          config: Dict[str, Any],
-                         logger=None) -> List[StationMetadata]:
+                         logger=None) -> List[Station]:
     """
     计算所有站点的 EGM08/EGM96 值
 
     Args:
-        stations: 站点列表
+        stations: Station 对象列表
         config: 配置
         logger: 日志记录器
 
@@ -256,20 +260,18 @@ def calculate_egm_values(stations: List[StationMetadata],
     return stations
 
 
-def detect_duplicates(stations: List[StationMetadata],
+def detect_duplicates(stations: List[Station],
                       rules: Dict[str, Any]) -> List[Tuple[str, str, float]]:
     """
-    检测重复站点
+    检测重复站点 (O(n²) 版本，保留用于小数据集或测试对比)
 
     Args:
-        stations: 站点列表
+        stations: Station 对象列表
         rules: 重复检测规则
 
     Returns:
         重复站点对列表 [(id1, id2, distance_m), ...]
     """
-    import math
-
     distance_threshold = rules.get('distance_threshold_m', 100)
     duplicates = []
 
@@ -279,6 +281,78 @@ def detect_duplicates(stations: List[StationMetadata],
             dist = haversine_distance(s1.lat, s1.lon, s2.lat, s2.lon)
             if dist < distance_threshold:
                 duplicates.append((s1.id, s2.id, dist))
+
+    return duplicates
+
+
+def detect_duplicates_fast(stations: List[Station],
+                           rules: Dict[str, Any]) -> List[Tuple[str, str, float]]:
+    """
+    使用网格空间索引检测重复站点 (O(n) 时间复杂度)
+
+    该算法将站点分配到网格单元中，只检查相邻单元内的站点对，
+    从而将 O(n²) 复杂度降低到接近 O(n)。
+
+    Args:
+        stations: Station 对象列表
+        rules: 重复检测规则
+
+    Returns:
+        重复站点对列表 [(id1, id2, distance_m), ...]
+    """
+    from collections import defaultdict
+
+    distance_threshold = rules.get('distance_threshold_m', 100)
+    duplicates = []
+
+    if not stations:
+        return duplicates
+
+    # 网格大小 (度)
+    # 100m 约等于 0.001 度 (在赤道)，使用 0.01 度 (~1km) 作为网格大小
+    # 确保阈值范围内的站点一定在相邻单元内
+    grid_size = max(0.01, distance_threshold / 111000.0 * 2)  # 2x safety margin
+
+    # 构建网格索引
+    grid: Dict[Tuple[int, int], List[Tuple[int, Station]]] = defaultdict(list)
+
+    for i, station in enumerate(stations):
+        cell = (int(station.lat / grid_size), int(station.lon / grid_size))
+        grid[cell].append((i, station))
+
+    # 已检查的站点对，避免重复检查
+    checked_pairs: set = set()
+
+    # 检查每个单元及其邻居
+    for cell, cell_stations in grid.items():
+        # 获取相邻单元 (包括自身，共9个单元)
+        neighbors = [
+            (cell[0] + di, cell[1] + dj)
+            for di in [-1, 0, 1]
+            for dj in [-1, 0, 1]
+        ]
+
+        # 收集所有候选站点
+        candidate_stations = []
+        for neighbor in neighbors:
+            candidate_stations.extend(grid.get(neighbor, []))
+
+        # 只在当前单元的站点和候选站点之间检查
+        for idx1, s1 in cell_stations:
+            for idx2, s2 in candidate_stations:
+                # 避免自比较和重复比较
+                if idx1 >= idx2:
+                    continue
+
+                # 使用排序后的 pair 作为 key 避免重复
+                pair_key = (idx1, idx2)
+                if pair_key in checked_pairs:
+                    continue
+                checked_pairs.add(pair_key)
+
+                dist = haversine_distance(s1.lat, s1.lon, s2.lat, s2.lon)
+                if dist < distance_threshold:
+                    duplicates.append((s1.id, s2.id, dist))
 
     return duplicates
 
@@ -304,7 +378,7 @@ def haversine_distance(lat1: float, lon1: float,
     return R * c
 
 
-def compute_statistics(stations: List[StationMetadata]) -> Dict[str, Any]:
+def compute_statistics(stations: List[Station]) -> Dict[str, Any]:
     """
     计算站点统计信息
     """
@@ -314,7 +388,8 @@ def compute_statistics(stations: List[StationMetadata]) -> Dict[str, Any]:
     lons = [s.lon for s in stations]
     lats = [s.lat for s in stations]
     obs_counts = [s.num_observations for s in stations]
-    elevations = [s.mean_elevation for s in stations if s.mean_elevation is not None]
+    # Use elevation field (unified from mean_elevation)
+    elevations = [s.elevation for s in stations if s.elevation is not None and s.elevation != 0.0]
 
     stats = {
         'total_stations': len(stations),
@@ -470,31 +545,9 @@ class Step1Validate:
 
         self.logger.info(f"  读取 {len(raw_stations)} 个站点")
 
-        for raw in raw_stations:
+        # Readers now return Station objects directly - no conversion needed
+        for station in raw_stations:
             stats['total'] += 1
-
-            # Create Station object from StationMetadata
-            station = Station(
-                id=raw.id,
-                name=raw.station_name or raw.id,
-                lon=float(raw.lon),
-                lat=float(raw.lat),
-                source=raw.source or source,
-                elevation=float(raw.mean_elevation or 0.0),
-                num_observations=int(raw.num_observations),
-                egm08=raw.egm08,
-                egm96=raw.egm96,
-                metadata={
-                    'river': raw.river,
-                    'basin': raw.basin,
-                    'country': raw.country,
-                    'satellite': raw.satellite,
-                    'start_date': raw.start_date.isoformat() if raw.start_date else None,
-                    'end_date': raw.end_date.isoformat() if raw.end_date else None,
-                    'filepath': raw.filepath,
-                    **raw.extra
-                }
-            )
 
             # Validate coordinates
             if not station.is_valid():
@@ -546,19 +599,8 @@ class Step1Validate:
             try:
                 result = run_validation(source_config, self.logger)
 
-                # Convert StationMetadata to Station objects
-                for sm in result.stations:
-                    station = Station(
-                        id=sm.id,
-                        name=sm.station_name or sm.id,
-                        lon=sm.lon,
-                        lat=sm.lat,
-                        source=sm.source,
-                        elevation=sm.mean_elevation or 0.0,
-                        num_observations=sm.num_observations,
-                        egm08=sm.egm08,
-                        egm96=sm.egm96,
-                    )
+                # Stations are already Station objects - no conversion needed
+                for station in result.stations:
                     station_list.add(station)
 
                 self.logger.info(f"  {source}: {len(result.stations)} 站点验证通过")
