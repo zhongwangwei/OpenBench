@@ -153,7 +153,7 @@ class TestConfigLoaderGlobalPaths:
     def test_load_global_paths(self, temp_dir):
         """Test loading global paths configuration."""
         config_dir = temp_dir / "config"
-        global_paths_file = config_dir / "global_paths.yaml"
+        global_paths_file = config_dir / "global.yaml"
         global_paths_file.write_text(yaml.dump({
             'data_sources': {
                 'hydroweb': '/data/hydroweb',
@@ -173,7 +173,7 @@ class TestConfigLoaderGlobalPaths:
     def test_load_global_paths_cached(self, temp_dir):
         """Test that global paths are cached after first load."""
         config_dir = temp_dir / "config"
-        global_paths_file = config_dir / "global_paths.yaml"
+        global_paths_file = config_dir / "global.yaml"
         global_paths_file.write_text(yaml.dump({'key': 'value1'}))
 
         loader = ConfigLoader(base_dir=str(temp_dir))
@@ -252,8 +252,8 @@ class TestConfigLoaderDatasetConfig:
             config_dir = tmpdir / "config"
             config_dir.mkdir()
 
-            # Create global_paths.yaml
-            (config_dir / "global_paths.yaml").write_text(yaml.dump({
+            # Create global.yaml
+            (config_dir / "global.yaml").write_text(yaml.dump({
                 'data_sources': {'hydroweb': '/data/hydroweb'},
                 'output': {'root': 'output', 'logs': 'logs'},
                 'cama_data': {'root': '/cama', 'resolutions': ['glb_15min']},
@@ -322,8 +322,8 @@ class TestConfigLoaderDefaultConfig:
             config_dir = tmpdir / "config"
             config_dir.mkdir()
 
-            # Create global_paths.yaml
-            (config_dir / "global_paths.yaml").write_text(yaml.dump({
+            # Create global.yaml
+            (config_dir / "global.yaml").write_text(yaml.dump({
                 'data_sources': {
                     'hydroweb': '/data/hydroweb',
                     'cgls': '/data/cgls',
@@ -430,8 +430,8 @@ class TestLoadConfigFunction:
             config_dir = tmpdir / "config"
             config_dir.mkdir()
 
-            # Create global_paths.yaml
-            (config_dir / "global_paths.yaml").write_text(yaml.dump({
+            # Create global.yaml
+            (config_dir / "global.yaml").write_text(yaml.dump({
                 'data_sources': {
                     'hydroweb': '/data/hydroweb',
                     'cgls': '/data/cgls',

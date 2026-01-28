@@ -11,7 +11,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.steps.step0_download import Step0Download, DataStatus, COMPLETENESS_RULES
+from src.steps.step0_download import Step0Download, DataStatus, FILE_PATTERNS
 
 
 class TestDataStatusDataclass:
@@ -44,21 +44,20 @@ class TestDataStatusDataclass:
         assert status.is_complete is True
 
 
-class TestCompletenessRules:
-    """Tests for COMPLETENESS_RULES constant."""
+class TestFilePatterns:
+    """Tests for FILE_PATTERNS constant."""
 
     def test_has_all_sources(self):
-        """Test COMPLETENESS_RULES has all expected sources."""
+        """Test FILE_PATTERNS has all expected sources."""
         expected_sources = ['hydrosat', 'hydroweb', 'cgls', 'icesat']
         for source in expected_sources:
-            assert source in COMPLETENESS_RULES
+            assert source in FILE_PATTERNS
 
-    def test_rules_have_required_keys(self):
-        """Test each rule has required keys."""
-        for source, rule in COMPLETENESS_RULES.items():
-            assert 'min_files' in rule
-            assert 'pattern' in rule
-            assert 'subdir' in rule
+    def test_patterns_have_required_keys(self):
+        """Test each pattern has required keys."""
+        for source, pattern in FILE_PATTERNS.items():
+            assert 'pattern' in pattern
+            assert 'subdir' in pattern
 
 
 class TestStep0DownloadInit:
@@ -89,8 +88,8 @@ class TestCheckSourceCompleteness:
 
     def test_counts_files_correctly(self, tmp_path):
         """Test files are counted correctly."""
-        # Create test directory structure for hydrosat
-        data_dir = tmp_path / "WL_hydrosat"
+        # Create test directory for hydrosat (no subdir, files directly in path)
+        data_dir = tmp_path / "hydrosat_data"
         data_dir.mkdir(parents=True)
 
         # Create some .txt files
@@ -98,6 +97,6 @@ class TestCheckSourceCompleteness:
             (data_dir / f"file{i}.txt").write_text("test")
 
         step = Step0Download(config={'data_root': str(tmp_path)})
-        status = step._check_source_completeness('hydrosat', tmp_path)
+        status = step._check_source_completeness('hydrosat', data_dir)
 
         assert status.current_files == 10
