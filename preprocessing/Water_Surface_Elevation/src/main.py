@@ -74,7 +74,7 @@ def _validate_config(cfg: dict) -> List[str]:
 
 @click.command()
 @click.option('--source', '-s', default='all',
-              help='Data source(s): hydroweb,cgls,icesat,hydrosat or "all"')
+              help='Data source(s): hydroweb,cgls,icesat,icesat2,hydrosat or "all"')
 @click.option('--config', '-c', type=click.Path(exists=True),
               help='Config file path')
 @click.option('--output', '-o', type=click.Path(),

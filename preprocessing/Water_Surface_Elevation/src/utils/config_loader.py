@@ -105,7 +105,7 @@ class ConfigLoader:
         validation_rules = self.load_validation_rules()
 
         # 检查数据源是否有效
-        valid_sources = ['hydroweb', 'cgls', 'icesat', 'hydrosat']
+        valid_sources = ['hydroweb', 'cgls', 'icesat', 'icesat2', 'hydrosat']
         if source not in valid_sources:
             raise ValueError(f"无效的数据源: {source}。有效选项: {valid_sources}")
 

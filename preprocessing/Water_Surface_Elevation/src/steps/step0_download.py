@@ -19,14 +19,16 @@ FILE_PATTERNS = {
     'hydrosat': {'pattern': '*.txt', 'subdir': ''},
     'hydroweb': {'pattern': '*.txt', 'subdir': 'hydroweb_river'},
     'cgls':     {'pattern': '*.geojson', 'subdir': ''},
-    'icesat':   {'pattern': '*.txt', 'subdir': ''},
+    'icesat':   {'pattern': '*.txt', 'subdir': ''},      # ICESat-1 GLA14 (2003-2009)
+    'icesat2':  {'pattern': '*.h5', 'subdir': ''},       # ICESat-2 ATL13 (2018-present)
 }
 
 DOWNLOADERS = {
     'hydrosat': HydroSatDownloader,
     'hydroweb': HydroWebDownloader,
     'cgls': CGLSDownloader,
-    'icesat': ICESatDownloader,
+    'icesat': ICESatDownloader,     # ICESat-1 GLA14
+    'icesat2': ICESatDownloader,    # ICESat-2 ATL13 (同一个下载器，不同配置)
 }
 
 @dataclass
@@ -199,12 +201,22 @@ class Step0Download:
 
             try:
                 downloader = downloader_cls(str(output_dir), verify_ssl=verify_ssl)
-                downloader.download(
-                    username=creds.get('username'),
-                    password=creds.get('password'),
-                    api_key=creds.get('api_key'),
-                    num_workers=num_workers,
-                    interactive=False
-                )
+
+                # 构建下载参数
+                download_kwargs = {
+                    'username': creds.get('username'),
+                    'password': creds.get('password'),
+                    'api_key': creds.get('api_key'),
+                    'num_workers': num_workers,
+                    'interactive': False
+                }
+
+                # ICESat/ICESat-2: 传递数据集标识
+                if source in ('icesat', 'icesat2'):
+                    dataset_id = download_config.get('dataset', 'atl13')
+                    download_kwargs['dataset'] = dataset_id
+                    logger.info(f"  数据集: {dataset_id.upper()}")
+
+                downloader.download(**download_kwargs)
             except Exception as e:
                 logger.error(f"下载 {source} 失败: {e}")
