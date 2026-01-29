@@ -2,8 +2,8 @@
 
 **Water Surface Elevation (WSE) 数据处理管道**
 
-版本: 0.1.0
-更新日期: 2026-01-28
+版本: 0.2.0
+更新日期: 2026-01-29
 
 ---
 
@@ -24,11 +24,11 @@
 
 ## 1. 概述
 
-WSE Pipeline 是一个用于处理卫星测高水面高程数据的 Python 工具。它支持多种数据源（HydroWeb、CGLS、ICESat、HydroSat），并将虚拟站点分配到 CaMa-Flood 网格。
+WSE Pipeline 是一个用于处理卫星测高水面高程数据的 Python 工具。它支持多种数据源（HydroWeb、CGLS、ICESat、ICESat-2、HydroSat），并将虚拟站点分配到 CaMa-Flood 网格。
 
 ### 主要功能
 
-- **多数据源支持**: HydroWeb、CGLS、ICESat、HydroSat
+- **多数据源支持**: HydroWeb、CGLS、ICESat (GLA14)、ICESat-2 (ATL13)、HydroSat
 - **5 步处理流程**: 下载 → 验证 → CaMa分配 → 预留 → 合并
 - **5 种 CaMa 分辨率**: glb_01min, glb_03min, glb_05min, glb_06min, glb_15min
 - **自动计算 EGM08/EGM96**: 不依赖数据源元数据
@@ -169,19 +169,35 @@ wse --config config/my_dataset.yaml
 
 ### 4.3 凭证配置
 
-对于需要认证的数据源，创建 `config/credentials.yaml`:
+凭证已整合到各数据源的配置文件中（`config/{source}.yaml`）:
 
+**HydroWeb** (`config/hydroweb.yaml`):
 ```yaml
-hydroweb:
+credentials:
   api_key: "your-api-key"
+```
 
-cgls:
-  client_id: "your-client-id"
-  client_secret: "your-client-secret"
+**CGLS** (`config/cgls.yaml`):
+```yaml
+credentials:
+  username: "your-email@example.com"
+  password: "your-password"
+```
 
-icesat:
+**ICESat / ICESat-2** (`config/icesat.yaml`, `config/icesat2.yaml`):
+```yaml
+credentials:
   username: "earthdata-username"
   password: "earthdata-password"
+```
+
+也可以通过环境变量设置:
+```bash
+export HYDROWEB_API_KEY="your-api-key"
+export CDSE_USERNAME="your-email"
+export CDSE_PASSWORD="your-password"
+export EARTHDATA_USERNAME="your-username"
+export EARTHDATA_PASSWORD="your-password"
 ```
 
 ---
@@ -237,12 +253,13 @@ wse --source icesat --num-workers 4
 
 **数据完整性阈值:**
 
-| 数据源 | 最小文件数 |
-|--------|-----------|
-| HydroSat | 2,000 |
-| HydroWeb | 30,000 |
-| CGLS | 10,000 |
-| ICESat | 15,000 |
+| 数据源 | 最小文件数 | 说明 |
+|--------|-----------|------|
+| HydroSat | 2,000 | Stuttgart 大学 |
+| HydroWeb | 30,000 | Theia/CNES |
+| CGLS | 10,000 | Copernicus |
+| ICESat | 15,000 | ICESat-1 GLA14 (2003-2009) |
+| ICESat-2 | 10,000 | ICESat-2 ATL13 (2018-至今) |
 
 **交互流程:**
 ```
@@ -353,15 +370,37 @@ DATE        HEIGHT    ERROR
 
 **路径:** `$WSE_DATA_ROOT/CGLS/river/`
 
-### 7.3 ICESat
+### 7.3 ICESat-1 GLA14
 
+**卫星:** ICESat-1 (2003-2009, 已退役)
+**产品:** GLAH14 Land Surface Altimetry
 **格式:** 空格分隔文本，无头部
-
 **文件命名:** `lat_lon_xxx.txt` (如 `45.5_10.2_001.txt`)
+**路径:** `/Volumes/Data01/Altimetry/ICESat_GLA14/txt_water/`
+**配置文件:** `config/icesat.yaml`
 
-**路径:** `$WSE_DATA_ROOT/ICESat_GLA14/txt_water/`
+```bash
+wse --source icesat
+```
 
-### 7.4 HydroSat
+### 7.4 ICESat-2 ATL13
+
+**卫星:** ICESat-2 (2018-至今)
+**产品:** ATL13 Inland Water Surface Height
+**格式:** HDF5 (.h5)
+**路径:** `/Volumes/Data01/Altimetry/ICESat2_ATL13/`
+**配置文件:** `config/icesat2.yaml`
+
+```bash
+wse --source icesat2
+```
+
+**同时下载两个 ICESat 数据源:**
+```bash
+wse --source icesat,icesat2
+```
+
+### 7.5 HydroSat
 
 **格式:** 文本文件，头部 + 数据
 
@@ -608,6 +647,7 @@ preprocessing/Water_Surface_Elevation/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 0.2.0 | 2026-01-29 | 添加 ICESat-2 ATL13 支持，整合凭证配置 |
 | 0.1.0 | 2026-01-28 | 初始版本，完成代码审查修复 |
 
 ### C. 许可证
