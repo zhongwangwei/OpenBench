@@ -1,14 +1,14 @@
-# ICESat-1 GLA14 数据源配置
-# ICESat-1 GLAH14 Dataset Configuration (2003-2009, 已退役)
+# ICESat-2 数据源配置
+# ICESat-2 ATL13 Dataset Configuration
 
 # ============================================================
 # 数据集信息
 # ============================================================
 
 dataset:
-  name: ICESat_GLA14
-  source: icesat
-  description: ICESat-1 GLAH14 Land Surface Altimetry (2003-2009)
+  name: ICESat2_ATL13
+  source: icesat2
+  description: ICESat-2 ATL13 Inland Water Surface Height (2018-present)
 
 # ============================================================
 # 凭证配置 (必需)
@@ -30,7 +30,7 @@ credentials:
 
 paths:
   # 数据存储目录
-  data_dir: /Volumes/Data01/Altimetry/ICESat_GLA14/txt_water
+  data_dir: /Volumes/Data01/Altimetry/ICESat2_ATL13
 
 # ============================================================
 # 下载配置
@@ -38,10 +38,10 @@ paths:
 
 download:
   # NSIDC 产品页面
-  download_page: https://nsidc.org/data/gla14/versions/34
+  download_page: https://nsidc.org/data/atl13
 
   # 数据集标识
-  dataset: glah14
+  dataset: atl13
 
   # 并行下载线程数
   num_workers: 4
