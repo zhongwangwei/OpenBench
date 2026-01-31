@@ -32,10 +32,34 @@ class Step4Merge:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        if merge:
+        # Check output format
+        output_config = self.config.get('output', {})
+        output_format = output_config.get('format', 'txt')
+
+        if output_format == 'netcdf':
+            return self._write_netcdf(stations)
+        elif merge:
             return self._write_merged(stations)
         else:
             return self._write_separate(stations)
+
+    def _write_netcdf(self, stations: StationList) -> List[str]:
+        """Write to NetCDF format."""
+        from ..writers.netcdf_writer import NetCDFWriter
+
+        output_config = self.config.get('output', {})
+
+        # Set default output path if not specified
+        if 'netcdf_file' not in output_config:
+            output_config['netcdf_file'] = str(self.output_dir / 'OpenBench_WSE.nc')
+
+        writer = NetCDFWriter(output_config)
+
+        # Get data paths from config
+        data_paths = self.config.get('data_sources', {})
+
+        output_path = writer.write(stations, data_paths)
+        return [str(output_path)]
 
     def _write_separate(self, stations: StationList) -> List[str]:
         """Write separate files for each source."""
