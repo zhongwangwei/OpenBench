@@ -23,7 +23,8 @@ class NetCDFWriter:
         'hydrosat': 5,
     }
 
-    RESOLUTIONS = ['01min', '03min', '05min', '06min', '15min']
+    # Default resolutions - can be overridden via config
+    DEFAULT_RESOLUTIONS = ['03min', '05min', '06min', '15min']
 
     def __init__(self, config: dict):
         """
@@ -47,6 +48,13 @@ class NetCDFWriter:
         # Time range (will be set from config or auto-detected)
         self.time_start = self._parse_date(config.get('time_start', '1995-01-01'))
         self.time_end = self._parse_date(config.get('time_end', '2024-12-31'))
+
+        # Resolutions - extract suffix from glb_XXmin format if present
+        raw_resolutions = config.get('resolutions', self.DEFAULT_RESOLUTIONS)
+        self.resolutions = [
+            r.replace('glb_', '') if r.startswith('glb_') else r
+            for r in raw_resolutions
+        ]
 
         # Readers will be initialized lazily
         self._readers = {}
@@ -78,7 +86,7 @@ class NetCDFWriter:
 
     def _station_passes_filter(self, station: Station) -> bool:
         """Check if station passes upstream area filter."""
-        for res in self.RESOLUTIONS:
+        for res in self.resolutions:
             cama = station.cama_results.get(f'glb_{res}', {})
             flag = cama.get('flag', 0)
             uparea = cama.get('uparea', 0)
@@ -203,7 +211,7 @@ class NetCDFWriter:
             egm96.units = "m"
 
             # CaMa allocation results for each resolution
-            for res in self.RESOLUTIONS:
+            for res in self.resolutions:
                 self._create_cama_variables(ds, res)
 
             # Write station metadata
@@ -245,7 +253,7 @@ class NetCDFWriter:
 
     def _write_cama_results(self, ds, idx: int, station: Station) -> None:
         """Write CaMa results for a station."""
-        for res in self.RESOLUTIONS:
+        for res in self.resolutions:
             cama = station.cama_results.get(f'glb_{res}', {})
 
             ds.variables[f'cama_lat_{res}'][idx] = cama.get('lat_cama', np.nan)
@@ -342,23 +350,37 @@ class NetCDFWriter:
 
     def _find_station_file(self, station: Station, data_dir: str) -> Optional[str]:
         """Try to find the source file for a station."""
+        import re
+
         data_path = Path(data_dir)
+
+        # Sanitize station ID to prevent path traversal
+        # Only allow alphanumeric, underscore, hyphen, and dot
+        station_id = station.id
+        if not re.match(r'^[\w\-\.]+$', station_id):
+            logger.warning(f"Invalid station ID format: {station_id}")
+            return None
+
+        # Reject IDs containing path separators or parent references
+        if '..' in station_id or '/' in station_id or '\\' in station_id:
+            logger.warning(f"Station ID contains invalid characters: {station_id}")
+            return None
 
         # Different naming patterns for each source
         source = station.source
 
         if source == 'hydroweb':
             # HydroWeb: hydroweb_river/R_*.txt
-            pattern = f"**/*{station.id}*.txt"
+            pattern = f"**/*{station_id}*.txt"
         elif source == 'cgls':
             # CGLS: *.geojson
-            pattern = f"**/*{station.id}*.geojson"
+            pattern = f"**/*{station_id}*.geojson"
         elif source in ('icesat', 'icesat2'):
             # ICESat: station ID is usually in filename
-            pattern = f"**/*{station.id}*"
+            pattern = f"**/*{station_id}*"
         elif source == 'hydrosat':
             # HydroSat: WL_hydrosat/*.txt
-            pattern = f"**/*{station.id}*.txt"
+            pattern = f"**/*{station_id}*.txt"
         else:
             return None
 
@@ -395,10 +417,13 @@ class NetCDFWriter:
 
         logger.info(f"时间轴: {self.time_start} 至 {self.time_end} ({len(time_axis)} 天)")
 
-        # 3. Create NetCDF structure
+        # 3. Ensure output directory exists
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 4. Create NetCDF structure
         self._create_netcdf(filtered, time_axis, time_values)
 
-        # 4. Write time series data (open file once, keep open during loop)
+        # 5. Write time series data (open file once, keep open during loop)
         total = len(filtered)
         errors = 0
 
@@ -411,7 +436,9 @@ class NetCDFWriter:
                     # Write to NetCDF
                     if timeseries:
                         self._write_station_timeseries(ds, i, station, timeseries, time_index)
-                except Exception as e:
+                except (KeyboardInterrupt, SystemExit):
+                    raise  # Re-raise critical exceptions
+                except (IOError, OSError, ValueError) as e:
                     errors += 1
                     logger.warning(f"写入站点 {station.id} 失败: {e}")
 
