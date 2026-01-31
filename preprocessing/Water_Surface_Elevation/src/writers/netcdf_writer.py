@@ -253,6 +253,124 @@ class NetCDFWriter:
             ds.variables[f'cama_flag_{res}'][idx] = cama.get('flag', -1)
             ds.variables[f'cama_uparea_{res}'][idx] = cama.get('uparea', np.nan)
 
+    def _write_station_timeseries(self, station_idx: int, station: Station,
+                                  timeseries: List[Dict], time_index: Dict[date, int]) -> None:
+        """
+        Write time series data for a single station.
+
+        Args:
+            station_idx: Station index in NetCDF
+            station: Station object
+            timeseries: List of {datetime, elevation, ...} dicts
+            time_index: Dict mapping date to time axis index
+        """
+        import netCDF4 as nc
+
+        source_code = self.SOURCE_CODES.get(station.source, -1)
+
+        with nc.Dataset(str(self.output_path), 'a') as ds:
+            wse_var = ds.variables['wse']
+            source_var = ds.variables['data_source']
+
+            for obs in timeseries:
+                dt = obs.get('datetime')
+                if dt is None:
+                    continue
+
+                # Convert datetime to date if needed
+                if isinstance(dt, datetime):
+                    dt = dt.date()
+
+                if dt not in time_index:
+                    continue  # Outside time range
+
+                t_idx = time_index[dt]
+                elev = obs.get('elevation')
+
+                if elev is not None:
+                    wse_var[station_idx, t_idx] = elev
+                    source_var[station_idx, t_idx] = source_code
+
+    def _get_reader(self, source: str):
+        """Get or create reader for a data source."""
+        if source not in self._readers:
+            if source == 'hydroweb':
+                from ..readers.hydroweb_reader import HydroWebReader
+                self._readers[source] = HydroWebReader()
+            elif source == 'cgls':
+                from ..readers.cgls_reader import CGLSReader
+                self._readers[source] = CGLSReader()
+            elif source in ('icesat', 'icesat2'):
+                from ..readers.icesat_reader import ICESatReader
+                self._readers[source] = ICESatReader()
+            elif source == 'hydrosat':
+                from ..readers.hydrosat_reader import HydroSatReader
+                self._readers[source] = HydroSatReader()
+            else:
+                return None
+
+        return self._readers.get(source)
+
+    def _read_station_timeseries(self, station: Station, data_paths: dict) -> List[Dict]:
+        """
+        Read time series for a station from source file.
+
+        Args:
+            station: Station object (must have filepath in metadata)
+            data_paths: Dict mapping source names to data directories
+
+        Returns:
+            List of time series observations
+        """
+        reader = self._get_reader(station.source)
+        if reader is None:
+            logger.warning(f"No reader for source: {station.source}")
+            return []
+
+        # Get filepath from metadata or reconstruct
+        filepath = station.metadata.get('filepath')
+        if not filepath:
+            # Try to reconstruct filepath
+            data_dir = data_paths.get(station.source)
+            if not data_dir:
+                logger.warning(f"No data path for source: {station.source}")
+                return []
+            filepath = self._find_station_file(station, data_dir)
+
+        if not filepath or not Path(filepath).exists():
+            logger.warning(f"File not found for station {station.id}")
+            return []
+
+        return reader.read_timeseries(filepath)
+
+    def _find_station_file(self, station: Station, data_dir: str) -> Optional[str]:
+        """Try to find the source file for a station."""
+        data_path = Path(data_dir)
+
+        # Different naming patterns for each source
+        source = station.source
+
+        if source == 'hydroweb':
+            # HydroWeb: hydroweb_river/R_*.txt
+            pattern = f"**/*{station.id}*.txt"
+        elif source == 'cgls':
+            # CGLS: *.geojson
+            pattern = f"**/*{station.id}*.geojson"
+        elif source in ('icesat', 'icesat2'):
+            # ICESat: station ID is usually in filename
+            pattern = f"**/*{station.id}*"
+        elif source == 'hydrosat':
+            # HydroSat: WL_hydrosat/*.txt
+            pattern = f"**/*{station.id}*.txt"
+        else:
+            return None
+
+        matches = list(data_path.glob(pattern))
+        if matches:
+            return str(matches[0])
+
+        return None
+
     def write(self, stations: StationList, data_paths: dict) -> Path:
         """
         Write stations to NetCDF file.
