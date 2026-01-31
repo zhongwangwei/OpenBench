@@ -121,7 +121,6 @@ output:
   time_start: "1995-01-01"
   time_end: "2024-12-31"
   min_uparea: 100.0        # km², 最小上游面积过滤
-  chunk_size: 1000         # 批处理大小
 
   # 站点列表文件名模板 (当 format: txt 时生效)
   # {source}: 数据源名称 (hydroweb, cgls, icesat, hydrosat)

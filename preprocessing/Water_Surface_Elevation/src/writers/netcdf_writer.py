@@ -26,6 +26,9 @@ class NetCDFWriter:
     # Default resolutions - can be overridden via config
     DEFAULT_RESOLUTIONS = ['03min', '05min', '06min', '15min']
 
+    # Progress logging interval (number of stations)
+    PROGRESS_INTERVAL = 100
+
     def __init__(self, config: dict):
         """
         Initialize NetCDF writer.
@@ -35,12 +38,13 @@ class NetCDFWriter:
                 - netcdf_file: Output file path
                 - time_reference: Time reference date (default: 1800-01-01)
                 - min_uparea: Minimum upstream area filter (default: 100.0 km²)
-                - chunk_size: Batch size for processing (default: 1000)
+                - time_start: Start date for time axis (default: 1995-01-01)
+                - time_end: End date for time axis (default: 2024-12-31)
+                - resolutions: List of CaMa resolutions (default: ['03min', '05min', '06min', '15min'])
         """
         self.output_path = Path(config.get('netcdf_file', 'OpenBench_WSE.nc'))
         self.time_ref = config.get('time_reference', '1800-01-01')
         self.min_uparea = config.get('min_uparea', 100.0)
-        self.chunk_size = config.get('chunk_size', 1000)
 
         # Parse time reference
         self.time_ref_date = datetime.strptime(self.time_ref, '%Y-%m-%d').date()
@@ -132,7 +136,7 @@ class NetCDFWriter:
         n_stations = len(stations)
         n_times = len(time_axis)
 
-        logger.info(f"创建 NetCDF: {n_stations} 站点, {n_times} 时间点")
+        logger.info(f"Creating NetCDF: {n_stations} stations, {n_times} time points")
 
         ds = nc.Dataset(str(self.output_path), 'w', format='NETCDF4')
 
@@ -232,7 +236,7 @@ class NetCDFWriter:
         finally:
             ds.close()
 
-        logger.info(f"NetCDF 结构创建完成: {self.output_path}")
+        logger.info(f"NetCDF structure created: {self.output_path}")
 
     def _create_cama_variables(self, ds, res: str) -> None:
         """Create CaMa-related variables for a resolution."""
@@ -403,19 +407,19 @@ class NetCDFWriter:
         """
         import netCDF4 as nc
 
-        logger.info(f"[NetCDF Export] 开始导出到 {self.output_path}")
+        logger.info(f"[NetCDF Export] Starting export to {self.output_path}")
 
         # 1. Filter stations
         filtered = self._filter_stations(stations)
         if not filtered:
-            logger.warning("没有站点通过过滤条件")
+            logger.warning("No stations passed filter criteria")
             return self.output_path
 
         # 2. Build time axis
         time_axis, time_values = self._build_time_axis()
         time_index = {d: i for i, d in enumerate(time_axis)}
 
-        logger.info(f"时间轴: {self.time_start} 至 {self.time_end} ({len(time_axis)} 天)")
+        logger.info(f"Time axis: {self.time_start} to {self.time_end} ({len(time_axis)} days)")
 
         # 3. Ensure output directory exists
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -440,16 +444,16 @@ class NetCDFWriter:
                     raise  # Re-raise critical exceptions
                 except (IOError, OSError, ValueError) as e:
                     errors += 1
-                    logger.warning(f"写入站点 {station.id} 失败: {e}")
+                    logger.warning(f"Failed to write station {station.id}: {e}")
 
                 # Progress
-                if (i + 1) % 100 == 0 or (i + 1) == total:
+                if (i + 1) % self.PROGRESS_INTERVAL == 0 or (i + 1) == total:
                     pct = (i + 1) / total * 100
-                    logger.info(f"进度: {i + 1}/{total} ({pct:.0f}%)")
+                    logger.info(f"Progress: {i + 1}/{total} ({pct:.0f}%)")
 
         if errors > 0:
-            logger.warning(f"[NetCDF Export] 完成，{errors} 个站点写入失败")
+            logger.warning(f"[NetCDF Export] Completed with {errors} station(s) failed")
         else:
-            logger.info(f"[NetCDF Export] 完成: {self.output_path}")
+            logger.info(f"[NetCDF Export] Completed: {self.output_path}")
 
         return self.output_path
