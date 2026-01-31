@@ -382,4 +382,37 @@ class NetCDFWriter:
         Returns:
             Path to output file
         """
-        raise NotImplementedError("NetCDFWriter.write() not yet implemented")
+        logger.info(f"[NetCDF Export] 开始导出到 {self.output_path}")
+
+        # 1. Filter stations
+        filtered = self._filter_stations(stations)
+        if not filtered:
+            logger.warning("没有站点通过过滤条件")
+            return self.output_path
+
+        # 2. Build time axis
+        time_axis, time_values = self._build_time_axis()
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        logger.info(f"时间轴: {self.time_start} 至 {self.time_end} ({len(time_axis)} 天)")
+
+        # 3. Create NetCDF structure
+        self._create_netcdf(filtered, time_axis, time_values)
+
+        # 4. Write time series data in batches
+        total = len(filtered)
+        for i, station in enumerate(filtered):
+            # Read time series
+            timeseries = self._read_station_timeseries(station, data_paths)
+
+            # Write to NetCDF
+            if timeseries:
+                self._write_station_timeseries(i, station, timeseries, time_index)
+
+            # Progress
+            if (i + 1) % 100 == 0 or (i + 1) == total:
+                pct = (i + 1) / total * 100
+                logger.info(f"进度: {i + 1}/{total} ({pct:.0f}%)")
+
+        logger.info(f"[NetCDF Export] 完成: {self.output_path}")
+        return self.output_path
