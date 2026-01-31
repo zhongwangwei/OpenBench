@@ -47,6 +47,43 @@ class NetCDFWriter:
         # Readers will be initialized lazily
         self._readers = {}
 
+    def _filter_stations(self, stations: StationList) -> List[Station]:
+        """
+        Filter stations by upstream area and valid CaMa allocation.
+
+        A station passes if ANY resolution has:
+        - flag > 0 (valid allocation)
+        - uparea > min_uparea
+
+        Args:
+            stations: Input station list
+
+        Returns:
+            List of stations passing the filter
+        """
+        filtered = []
+
+        for station in stations:
+            if self._station_passes_filter(station):
+                filtered.append(station)
+
+        logger.info(f"Filtered stations: {len(filtered)}/{len(stations)} "
+                   f"(min_uparea={self.min_uparea} km2)")
+
+        return filtered
+
+    def _station_passes_filter(self, station: Station) -> bool:
+        """Check if station passes upstream area filter."""
+        for res in self.RESOLUTIONS:
+            cama = station.cama_results.get(f'glb_{res}', {})
+            flag = cama.get('flag', 0)
+            uparea = cama.get('uparea', 0)
+
+            if flag > 0 and uparea > self.min_uparea:
+                return True
+
+        return False
+
     def write(self, stations: StationList, data_paths: dict) -> Path:
         """
         Write stations to NetCDF file.
