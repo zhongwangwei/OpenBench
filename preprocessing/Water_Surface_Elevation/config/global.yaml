@@ -16,20 +16,79 @@ paths:
   cama_root: ${WSE_CAMA_ROOT:/Volumes/Data01/2025}
 
   # EGM 大地水准面数据 (必需)
-  geoid_root: ${WSE_GEOID_ROOT:/Volumes/Data01/AltiMaPpy-data/egm-geoids}
+  geoid_root: ${WSE_GEOID_ROOT:/Volumes/Data01/Altimetry/egm-geoids/}
+
+# ============================================================
+# 数据源路径配置
+# ============================================================
+
+data_sources:
+  hydroweb: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}/HydroWeb
+  cgls: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}/CGLS
+  icesat: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}/ICESat_GLA14/txt_water
+  icesat2: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}/ICESat2_ATL13
+  hydrosat: ${WSE_DATA_ROOT:/Volumes/Data01/Altimetry}/HydroSat
 
 # ============================================================
 # CaMa-Flood 配置
 # ============================================================
 
 cama:
+  # 分辨率列表
   resolutions:
-    - glb_01min
-    - glb_03min
-    - glb_05min
-    - glb_06min
     - glb_15min
+    - glb_06min
+    - glb_05min
+    - glb_03min
   highres_tag: 1min
+
+  # 各分辨率数据路径和网格参数
+  data:
+    glb_15min:
+      path: ${WSE_CAMA_15MIN:/Volumes/Data01/glb_15min_dam}
+      nx: 1440
+      ny: 720
+      gsize: 0.25  # degrees
+    glb_06min:
+      path: ${WSE_CAMA_06MIN:/Volumes/Data01/2025/glb_06min}
+      nx: 3600
+      ny: 1800
+      gsize: 0.1  # degrees
+    glb_05min:
+      path: ${WSE_CAMA_05MIN:/Volumes/Data01/2025/glb_05min}
+      nx: 4320
+      ny: 2160
+      gsize: 0.083333  # degrees (5/60)
+    glb_03min:
+      path: ${WSE_CAMA_03MIN:/Volumes/Data01/2025/glb_03min}
+      nx: 7200
+      ny: 3600
+      gsize: 0.05  # degrees
+
+  # 分配参数
+  allocation:
+    # 河道判定阈值 (上游面积, km²)
+    river_threshold: 10.0
+    # 搜索半径 (MERIT_Hydro 像素数, 100像素 ≈ 9km)
+    search_radius: 100
+
+  # 1min 高分辨率数据配置
+  highres_1min:
+    nx: 21600  # 360 * 60
+    ny: 10800  # 180 * 60
+    resolution: 60  # pixels per degree
+
+# ============================================================
+# MERIT_Hydro 配置 (高分辨率河网数据)
+# ============================================================
+
+merit_hydro:
+  # 数据根目录
+  root: ${WSE_MERIT_ROOT:/Volumes/Data01/MERIT_Hydro}
+  # 瓦片分辨率: 3arcsec (1/1200 度)
+  resolution: 1200  # pixels per degree
+  # 是否启用 MERIT_Hydro 模式进行站点分配
+  enabled: true
 
 # ============================================================
 # EGM 模型配置
@@ -53,15 +112,23 @@ processing:
 # ============================================================
 
 output:
-  # 站点列表文件名模板
+  # 输出格式: txt 或 netcdf
+  format: txt
+
+  # NetCDF 配置 (当 format: netcdf 时生效)
+  netcdf_file: OpenBench_WSE.nc
+  time_reference: "1800-01-01"
+  time_start: "1995-01-01"
+  time_end: "2024-12-31"
+  min_uparea: 100.0        # km², 最小上游面积过滤
+  chunk_size: 1000         # 批处理大小
+
+  # 站点列表文件名模板 (当 format: txt 时生效)
   # {source}: 数据源名称 (hydroweb, cgls, icesat, hydrosat)
   # {date}: 日期 (YYYYMMDD)
   station_list: altimetry_{source}_{date}.txt
 
-  # NetCDF 输出文件名模板 (预留，尚未实现)
-  # netcdf: OpenBench_WSE_{source}.nc
-
-  # 是否输出时间序列数据
+  # 是否输出时间序列数据 (当 format: txt 时生效)
   include_timeseries: false
 
 # ============================================================
