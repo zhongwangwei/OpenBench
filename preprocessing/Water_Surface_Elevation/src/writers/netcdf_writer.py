@@ -44,6 +44,10 @@ class NetCDFWriter:
         # Parse time reference
         self.time_ref_date = datetime.strptime(self.time_ref, '%Y-%m-%d').date()
 
+        # Time range (will be set from config or auto-detected)
+        self.time_start = self._parse_date(config.get('time_start', '1995-01-01'))
+        self.time_end = self._parse_date(config.get('time_end', '2024-12-31'))
+
         # Readers will be initialized lazily
         self._readers = {}
 
@@ -83,6 +87,34 @@ class NetCDFWriter:
                 return True
 
         return False
+
+    def _parse_date(self, date_str: str) -> date:
+        """Parse date string to date object."""
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+
+    def _date_to_days(self, d: date) -> int:
+        """Convert date to days since time reference."""
+        delta = d - self.time_ref_date
+        return delta.days
+
+    def _build_time_axis(self) -> tuple:
+        """
+        Build unified time axis.
+
+        Returns:
+            Tuple of (dates_list, days_values_array)
+        """
+        from datetime import timedelta
+
+        dates = []
+        current = self.time_start
+        while current <= self.time_end:
+            dates.append(current)
+            current += timedelta(days=1)
+
+        days_values = np.array([self._date_to_days(d) for d in dates], dtype=np.int64)
+
+        return dates, days_values
 
     def write(self, stations: StationList, data_paths: dict) -> Path:
         """
