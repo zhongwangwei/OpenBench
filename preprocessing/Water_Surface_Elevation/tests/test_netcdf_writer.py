@@ -1,6 +1,6 @@
 # tests/test_netcdf_writer.py
 import pytest
-from datetime import date
+from datetime import date, datetime
 import numpy as np
 import netCDF4 as nc
 from src.writers.netcdf_writer import NetCDFWriter
@@ -187,3 +187,198 @@ class TestNetCDFWriterTimeseries:
             assert wse[1] == pytest.approx(100.5)
             # Index 3 (Jan 4) should be 101.2
             assert wse[3] == pytest.approx(101.2)
+
+
+class TestNetCDFWriterEdgeCases:
+    """Test edge cases and boundary conditions."""
+
+    def test_multiple_observations_same_day(self, tmp_path):
+        """Last observation on same day should overwrite previous"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        # Setup
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Multiple observations on same day
+        timeseries = [
+            {'datetime': date(2020, 1, 2), 'elevation': 100.0},
+            {'datetime': date(2020, 1, 2), 'elevation': 105.0},  # Same day, different value
+            {'datetime': date(2020, 1, 2), 'elevation': 110.0},  # Last value should win
+        ]
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify last value wins
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            assert wse[1] == pytest.approx(110.0)
+
+    def test_datetime_with_time_component(self, tmp_path):
+        """Datetime with time component should be truncated to date"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Timeseries with datetime objects (not date)
+        timeseries = [
+            {'datetime': datetime(2020, 1, 2, 10, 30, 45), 'elevation': 100.5},
+            {'datetime': datetime(2020, 1, 3, 15, 0, 0), 'elevation': 101.2},
+        ]
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify data was written correctly
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            assert wse[1] == pytest.approx(100.5)  # Jan 2
+            assert wse[2] == pytest.approx(101.2)  # Jan 3
+
+    def test_empty_timeseries(self, tmp_path):
+        """Empty timeseries should leave all values as NaN"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Empty timeseries
+        timeseries = []
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify all values are NaN/masked
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            for i in range(len(wse)):
+                assert np.ma.is_masked(wse[i]) or np.isnan(wse[i])
+
+    def test_observation_outside_time_range(self, tmp_path):
+        """Observations outside time range should be skipped"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Observations with some outside time range
+        timeseries = [
+            {'datetime': date(2019, 12, 31), 'elevation': 99.0},  # Before range
+            {'datetime': date(2020, 1, 2), 'elevation': 100.5},   # In range
+            {'datetime': date(2020, 1, 10), 'elevation': 102.0},  # After range
+        ]
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify only in-range observation is written
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            assert wse[1] == pytest.approx(100.5)  # Jan 2
+            # Other positions should be NaN
+            assert np.ma.is_masked(wse[0]) or np.isnan(wse[0])
+
+    def test_observation_with_none_elevation(self, tmp_path):
+        """Observations with None elevation should be skipped"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Observations with None elevation
+        timeseries = [
+            {'datetime': date(2020, 1, 2), 'elevation': None},
+            {'datetime': date(2020, 1, 3), 'elevation': 101.2},
+        ]
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify None elevation is skipped
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            assert np.ma.is_masked(wse[1]) or np.isnan(wse[1])  # Jan 2 - None
+            assert wse[2] == pytest.approx(101.2)  # Jan 3
+
+    def test_observation_with_none_datetime(self, tmp_path):
+        """Observations with None datetime should be skipped"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf([s1], time_axis, time_values)
+
+        # Observations with None datetime
+        timeseries = [
+            {'datetime': None, 'elevation': 100.0},
+            {'datetime': date(2020, 1, 3), 'elevation': 101.2},
+        ]
+
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify None datetime is skipped, valid one is written
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            assert wse[2] == pytest.approx(101.2)  # Jan 3
