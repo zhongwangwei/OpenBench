@@ -8,6 +8,7 @@ NetCDF export for HydroSat data sources.
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 from src.readers.hydrosat_reader import HydroSatReader
 
 
@@ -87,3 +88,10 @@ class TestHydroSatReaderTimeseries:
 
         assert len(ts) == 1
         assert ts[0]['datetime'] == datetime(2020, 6, 15)
+
+    def test_read_timeseries_permission_error(self):
+        """read_timeseries should return empty list for permission denied"""
+        reader = HydroSatReader()
+        with patch('builtins.open', side_effect=PermissionError("Permission denied")):
+            ts = reader.read_timeseries("/some/path.txt")
+        assert ts == []
