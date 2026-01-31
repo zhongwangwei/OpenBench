@@ -82,11 +82,17 @@ class ICESatReader(BaseReader):
                 files.append(f)
 
         # 递归扫描子目录
-        for subdir in ['GLAH14', 'ATL13', 'glah14', 'atl13']:
+        for subdir in ['GLAH14', 'ATL13', 'glah14', 'atl13', 'icesat', 'icesat2']:
             subpath = path / subdir
             if subpath.exists():
+                # 扫描 HDF5 文件
                 for f in glob.glob(str(subpath / "*.H5")) + glob.glob(str(subpath / "*.h5")):
                     files.append(f)
+                # 扫描文本文件
+                for f in glob.glob(str(subpath / "*.txt")):
+                    filename = Path(f).name
+                    if self.FILENAME_PATTERN.match(filename):
+                        files.append(f)
 
         return sorted(set(files))
 
@@ -112,7 +118,25 @@ class ICESatReader(BaseReader):
 
         except Exception as e:
             self.log('warning', f"读取 ICESat 文件失败 {filepath}: {e}")
+            self._move_to_unreadable(filepath)
             return None
+
+    def _move_to_unreadable(self, filepath: Path):
+        """将无法读取的文件移动到 unreadable 文件夹"""
+        import shutil
+
+        try:
+            # 在同级目录创建 unreadable 文件夹
+            unreadable_dir = filepath.parent / 'unreadable'
+            unreadable_dir.mkdir(exist_ok=True)
+
+            # 移动文件
+            dest = unreadable_dir / filepath.name
+            shutil.move(str(filepath), str(dest))
+            self.log('info', f"已将损坏文件移动到: {dest}")
+
+        except Exception as e:
+            self.log('warning', f"移动文件失败 {filepath}: {e}")
 
     def _read_text_file(self, filepath: Path) -> Optional[Station]:
         """读取文本格式文件"""
@@ -486,6 +510,54 @@ class ICESatReader(BaseReader):
 
         return lat + 2.5, lon + 2.5
 
+    def read_timeseries(self, filepath: str) -> List[Dict[str, Any]]:
+        """
+        读取站点时间序列数据
+
+        Args:
+            filepath: 文件路径
+
+        Returns:
+            时间序列数据列表，每条记录包含:
+            - datetime: 观测时间
+            - elevation: 高程 (m)
+            - uncertainty: 不确定度 (m)，可能为 None
+        """
+        timeseries = []
+        filepath = Path(filepath)
+        filename = filepath.name
+
+        try:
+            # 根据文件类型选择读取方法
+            if self.GLAH14_PATTERN.match(filename):
+                observations = self._read_glah14_observations(filepath)
+            elif self.ATL13_PATTERN.match(filename):
+                observations = self._read_atl13_observations(filepath)
+            elif self.FILENAME_PATTERN.match(filename):
+                observations = self._read_text_observations(filepath)
+            else:
+                self.log('warning', f"未知文件格式: {filename}")
+                return timeseries
+
+            # 转换为标准时间序列格式
+            for obs in observations:
+                # 获取不确定度字段 (ATL13 使用 'error', GLAH14/text 可能没有)
+                uncertainty = obs.get('error')
+                if uncertainty is None:
+                    # 对于 GLAH14，使用默认不确定度
+                    uncertainty = obs.get('uncertainty')
+
+                timeseries.append({
+                    'datetime': obs.get('date'),
+                    'elevation': obs.get('elevation'),
+                    'uncertainty': uncertainty,
+                })
+
+        except Exception as e:
+            self.log('warning', f"读取时间序列失败 {filepath}: {e}")
+
+        return timeseries
+
     def _read_text_observations(self, filepath: Path) -> List[Dict[str, Any]]:
         """读取文本文件中的所有观测"""
         observations = []
@@ -563,6 +635,199 @@ class ICESatReader(BaseReader):
             all_observations.extend(observations)
 
         return all_observations
+
+    def read_all_stations(self,
+                          path: str,
+                          progress_callback=None,
+                          filters=None) -> List[Station]:
+        """
+        读取所有站点 - 对 ATL13 文件使用聚类
+
+        ATL13 文件包含整个轨道的观测数据，需要按地理位置聚类成多个站点，
+        而不是创建一个平均坐标的单一站点。
+
+        Args:
+            path: 数据目录路径
+            progress_callback: 进度回调函数
+            filters: 过滤条件
+
+        Returns:
+            Station 对象列表
+        """
+        files = self.scan_directory(path)
+        total = len(files)
+        self.log('info', f"扫描到 {total} 个文件")
+
+        stations = []
+        skipped = 0
+        failed = 0
+
+        # 计算进度显示间隔
+        progress_interval = max(1, min(total // 10, 50))
+
+        for i, filepath in enumerate(files):
+            filepath = Path(filepath)
+            filename = filepath.name
+
+            # 显示进度
+            if i % progress_interval == 0 or i == total - 1:
+                pct = (i + 1) * 100 // total
+                self.log('info', f"  进度: [{i + 1}/{total}] {pct}%")
+
+            if progress_callback and (i % 100 == 0 or i == total - 1):
+                progress_callback(i + 1, total, f"读取 {filename}")
+
+            try:
+                # ATL13 文件需要聚类处理
+                if self.ATL13_PATTERN.match(filename):
+                    file_stations = self._read_atl13_clustered(filepath, filters)
+                    stations.extend(file_stations)
+                else:
+                    # 其他格式使用原有逻辑
+                    station = self.read_station(str(filepath))
+                    if station:
+                        if self._apply_filters(station, filters):
+                            stations.append(station)
+                        else:
+                            skipped += 1
+            except Exception as e:
+                failed += 1
+                self.log('warning', f"读取文件失败 {filepath}: {e}")
+
+        self.log('info', f"成功读取 {len(stations)} 个站点，跳过 {skipped} 个，失败 {failed} 个")
+        return stations
+
+    def _read_atl13_clustered(self, filepath: Path,
+                               filters=None) -> List[Station]:
+        """
+        读取 ATL13 文件，仅保留大流域河流点（不聚类）
+
+        处理流程:
+        1. 读取所有观测点
+        2. 使用 MERIT_Hydro 检查每个点的上游面积
+        3. 仅保留大流域点 (UPA > 阈值)
+        4. 每个观测点作为独立站点
+
+        Args:
+            filepath: ATL13 文件路径
+            filters: 过滤条件
+
+        Returns:
+            Station 列表
+        """
+        # 初始化 MERIT 读取器（懒加载）
+        if not hasattr(self, '_merit_reader'):
+            self._init_merit_reader()
+
+        if self._merit_reader is None:
+            self.log('warning', "MERIT_Hydro 未加载，无法过滤河流点")
+            return []
+
+        # 河流阈值（从配置读取，默认 10 km²）
+        river_threshold = 10.0
+        if filters:
+            river_threshold = filters.get('river_threshold', 10.0)
+
+        stations = []
+        file_stem = filepath.stem
+
+        # 直接从 HDF5 读取并过滤（避免加载全部观测点到内存）
+        try:
+            import h5py
+        except ImportError:
+            self.log('error', "需要安装 h5py")
+            return []
+
+        with h5py.File(filepath, 'r') as f:
+            for gt in self.ATL13_GROUND_TRACKS:
+                if gt not in f:
+                    continue
+
+                try:
+                    lat = f[f'{gt}/segment_lat'][:]
+                    lon = f[f'{gt}/segment_lon'][:]
+                    elev = f[f'{gt}/ht_water_surf'][:]
+                    time_delta = f[f'{gt}/delta_time'][:]
+
+                    try:
+                        geoid = f[f'{gt}/segment_geoid'][:]
+                    except KeyError:
+                        geoid = np.zeros(len(lat))
+
+                except KeyError:
+                    continue
+
+                # 逐点检查是否为大流域河流
+                for i in range(len(lat)):
+                    if not (np.isfinite(lat[i]) and np.isfinite(lon[i]) and np.isfinite(elev[i])):
+                        continue
+                    if not (-90 <= lat[i] <= 90 and -180 <= lon[i] <= 180):
+                        continue
+
+                    # 检查上游面积
+                    tile = self._merit_reader.load_tile(lon[i], lat[i])
+                    if tile is None:
+                        continue
+
+                    ix, iy, _ = self._merit_reader.lonlat_to_pixel(lon[i], lat[i])
+                    upa = float(tile['upa'][iy, ix])
+
+                    if upa < river_threshold:
+                        continue  # 非大流域点
+
+                    # 创建站点
+                    obs_date = self.ATL13_EPOCH + timedelta(seconds=float(time_delta[i]))
+                    station_id = f"ATL13_{file_stem}_{gt}_{i:06d}"
+
+                    station = create_station_from_reader(
+                        id=station_id,
+                        station_name=f"ATL13_{lat[i]:.4f}_{lon[i]:.4f}",
+                        lon=float(lon[i]),
+                        lat=float(lat[i]),
+                        satellite="ICESat-2",
+                        start_date=obs_date,
+                        end_date=obs_date,
+                        num_observations=1,
+                        mean_elevation=float(elev[i]),
+                        elevation_std=None,
+                        source=self.source_name,
+                        filepath=str(filepath),
+                        extra={
+                            'format': 'ATL13',
+                            'upa': upa,
+                            'geoid': float(geoid[i]),
+                            'ground_track': gt,
+                            'original_file': filepath.name,
+                        }
+                    )
+
+                    stations.append(station)
+
+        return stations
+
+    def _init_merit_reader(self):
+        """初始化 MERIT_Hydro 读取器"""
+        try:
+            from ..core.merit_reader import MeritHydroReader
+
+            # 尝试从配置读取路径，否则使用默认值
+            merit_root = '/Volumes/Data01/MERIT_Hydro'
+            self._merit_reader = MeritHydroReader(merit_root)
+            self.log('info', f"已加载 MERIT_Hydro: {merit_root}")
+        except Exception as e:
+            self.log('warning', f"无法加载 MERIT_Hydro: {e}")
+            self._merit_reader = None
+
+    def _apply_filters(self, station: Station, filters) -> bool:
+        """应用过滤条件"""
+        if not filters:
+            return True
+
+        min_obs = filters.get('min_observations')
+        if min_obs and station.num_observations < min_obs:
+            return False
+
+        return True
 
     def cluster_observations(self,
                              observations: List[Dict],
