@@ -253,43 +253,40 @@ class NetCDFWriter:
             ds.variables[f'cama_flag_{res}'][idx] = cama.get('flag', -1)
             ds.variables[f'cama_uparea_{res}'][idx] = cama.get('uparea', np.nan)
 
-    def _write_station_timeseries(self, station_idx: int, station: Station,
+    def _write_station_timeseries(self, ds, station_idx: int, station: Station,
                                   timeseries: List[Dict], time_index: Dict[date, int]) -> None:
         """
         Write time series data for a single station.
 
         Args:
+            ds: Open NetCDF dataset (in append mode)
             station_idx: Station index in NetCDF
             station: Station object
             timeseries: List of {datetime, elevation, ...} dicts
             time_index: Dict mapping date to time axis index
         """
-        import netCDF4 as nc
-
         source_code = self.SOURCE_CODES.get(station.source, -1)
+        wse_var = ds.variables['wse']
+        source_var = ds.variables['data_source']
 
-        with nc.Dataset(str(self.output_path), 'a') as ds:
-            wse_var = ds.variables['wse']
-            source_var = ds.variables['data_source']
+        for obs in timeseries:
+            dt = obs.get('datetime')
+            if dt is None:
+                continue
 
-            for obs in timeseries:
-                dt = obs.get('datetime')
-                if dt is None:
-                    continue
+            # Convert datetime to date if needed
+            if isinstance(dt, datetime):
+                dt = dt.date()
 
-                # Convert datetime to date if needed
-                if isinstance(dt, datetime):
-                    dt = dt.date()
+            if dt not in time_index:
+                continue  # Outside time range
 
-                if dt not in time_index:
-                    continue  # Outside time range
+            t_idx = time_index[dt]
+            elev = obs.get('elevation')
 
-                t_idx = time_index[dt]
-                elev = obs.get('elevation')
-
-                if elev is not None:
-                    wse_var[station_idx, t_idx] = elev
-                    source_var[station_idx, t_idx] = source_code
+            if elev is not None:
+                wse_var[station_idx, t_idx] = elev
+                source_var[station_idx, t_idx] = source_code
 
     def _get_reader(self, source: str):
         """Get or create reader for a data source."""
@@ -382,6 +379,8 @@ class NetCDFWriter:
         Returns:
             Path to output file
         """
+        import netCDF4 as nc
+
         logger.info(f"[NetCDF Export] 开始导出到 {self.output_path}")
 
         # 1. Filter stations
@@ -399,20 +398,31 @@ class NetCDFWriter:
         # 3. Create NetCDF structure
         self._create_netcdf(filtered, time_axis, time_values)
 
-        # 4. Write time series data in batches
+        # 4. Write time series data (open file once, keep open during loop)
         total = len(filtered)
-        for i, station in enumerate(filtered):
-            # Read time series
-            timeseries = self._read_station_timeseries(station, data_paths)
+        errors = 0
 
-            # Write to NetCDF
-            if timeseries:
-                self._write_station_timeseries(i, station, timeseries, time_index)
+        with nc.Dataset(str(self.output_path), 'a') as ds:
+            for i, station in enumerate(filtered):
+                try:
+                    # Read time series
+                    timeseries = self._read_station_timeseries(station, data_paths)
 
-            # Progress
-            if (i + 1) % 100 == 0 or (i + 1) == total:
-                pct = (i + 1) / total * 100
-                logger.info(f"进度: {i + 1}/{total} ({pct:.0f}%)")
+                    # Write to NetCDF
+                    if timeseries:
+                        self._write_station_timeseries(ds, i, station, timeseries, time_index)
+                except Exception as e:
+                    errors += 1
+                    logger.warning(f"写入站点 {station.id} 失败: {e}")
 
-        logger.info(f"[NetCDF Export] 完成: {self.output_path}")
+                # Progress
+                if (i + 1) % 100 == 0 or (i + 1) == total:
+                    pct = (i + 1) / total * 100
+                    logger.info(f"进度: {i + 1}/{total} ({pct:.0f}%)")
+
+        if errors > 0:
+            logger.warning(f"[NetCDF Export] 完成，{errors} 个站点写入失败")
+        else:
+            logger.info(f"[NetCDF Export] 完成: {self.output_path}")
+
         return self.output_path

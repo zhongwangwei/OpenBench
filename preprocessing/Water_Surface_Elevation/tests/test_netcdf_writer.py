@@ -1,6 +1,7 @@
 # tests/test_netcdf_writer.py
 import pytest
 from datetime import date
+import numpy as np
 import netCDF4 as nc
 from src.writers.netcdf_writer import NetCDFWriter
 from src.core.station import Station, StationList
@@ -137,3 +138,52 @@ class TestNetCDFWriterCreate:
 
             # Check global attributes
             assert 'CF-1.8' in ds.Conventions
+
+
+class TestNetCDFWriterTimeseries:
+    """Test time series writing."""
+
+    def test_write_station_timeseries(self, tmp_path):
+        """Should write time series data to correct positions"""
+        import numpy as np
+
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-05',
+        })
+
+        # Setup
+        stations = StationList()
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb')
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0}}
+        s1.metadata = {'filepath': 'dummy.txt'}
+        stations.add(s1)
+
+        filtered = [s1]
+        time_axis, time_values = writer._build_time_axis()
+        writer._create_netcdf(filtered, time_axis, time_values)
+
+        # Mock timeseries
+        timeseries = [
+            {'datetime': date(2020, 1, 2), 'elevation': 100.5},
+            {'datetime': date(2020, 1, 4), 'elevation': 101.2},
+        ]
+
+        # Build time index
+        time_index = {d: i for i, d in enumerate(time_axis)}
+
+        # Open dataset and write timeseries
+        with nc.Dataset(output_file, 'a') as ds:
+            writer._write_station_timeseries(ds, 0, s1, timeseries, time_index)
+
+        # Verify
+        with nc.Dataset(output_file, 'r') as ds:
+            wse = ds.variables['wse'][0, :]
+            # Index 0 (Jan 1) should be masked/NaN (no data)
+            assert np.ma.is_masked(wse[0]) or np.isnan(wse[0])
+            # Index 1 (Jan 2) should be 100.5
+            assert wse[1] == pytest.approx(100.5)
+            # Index 3 (Jan 4) should be 101.2
+            assert wse[3] == pytest.approx(101.2)
