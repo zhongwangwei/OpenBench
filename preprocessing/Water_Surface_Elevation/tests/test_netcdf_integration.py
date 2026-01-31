@@ -1,10 +1,8 @@
 # tests/test_netcdf_integration.py
 """Integration test for NetCDF output."""
 import pytest
-import tempfile
 from pathlib import Path
 import netCDF4 as nc
-import numpy as np
 
 from src.core.station import Station, StationList
 from src.writers.netcdf_writer import NetCDFWriter
