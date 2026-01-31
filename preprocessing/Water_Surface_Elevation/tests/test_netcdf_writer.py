@@ -1,6 +1,7 @@
 # tests/test_netcdf_writer.py
 import pytest
 from datetime import date
+import netCDF4 as nc
 from src.writers.netcdf_writer import NetCDFWriter
 from src.core.station import Station, StationList
 
@@ -89,3 +90,50 @@ class TestNetCDFWriterTimeAxis:
 
         # 2000-01-01 -> 73048
         assert writer._date_to_days(date(2000, 1, 1)) == 73048
+
+
+class TestNetCDFWriterCreate:
+    """Test NetCDF file creation."""
+
+    def test_create_netcdf_structure(self, tmp_path):
+        """Should create NetCDF with correct dimensions and variables"""
+        output_file = tmp_path / "test.nc"
+        writer = NetCDFWriter({
+            'netcdf_file': str(output_file),
+            'time_start': '2020-01-01',
+            'time_end': '2020-01-10',
+        })
+
+        # Create mock station list
+        stations = StationList()
+        s1 = Station(id='1', name='S1', lon=10.0, lat=20.0, source='hydroweb',
+                    elevation=100.0, num_observations=50)
+        s1.egm08 = 30.0
+        s1.egm96 = 29.5
+        s1.cama_results = {'glb_03min': {'flag': 20, 'uparea': 150.0,
+                          'lon_cama': 10.1, 'lat_cama': 20.1}}
+        stations.add(s1)
+
+        filtered = [s1]
+        time_axis, time_values = writer._build_time_axis()
+
+        writer._create_netcdf(filtered, time_axis, time_values)
+
+        # Verify file structure
+        with nc.Dataset(output_file, 'r') as ds:
+            # Check dimensions
+            assert 'station' in ds.dimensions
+            assert 'time' in ds.dimensions
+            assert len(ds.dimensions['station']) == 1
+            assert len(ds.dimensions['time']) == 10
+
+            # Check variables exist
+            assert 'wse' in ds.variables
+            assert 'lat' in ds.variables
+            assert 'lon' in ds.variables
+            assert 'station_id' in ds.variables
+            assert 'time' in ds.variables
+            assert 'EGM08' in ds.variables
+
+            # Check global attributes
+            assert 'CF-1.8' in ds.Conventions
