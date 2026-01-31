@@ -287,6 +287,41 @@ class HydroSatReader(BaseReader):
         # 返回原始值
         return mission.split(',')[0].strip() if mission else None
 
+    def read_timeseries(self, filepath: str) -> List[Dict[str, Any]]:
+        """
+        读取站点时间序列数据
+
+        Args:
+            filepath: 文件路径
+
+        Returns:
+            时间序列数据列表，每项包含 datetime, elevation, uncertainty
+        """
+        timeseries = []
+
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            self.log('warning', f"File not found: {filepath}")
+            return timeseries
+        except PermissionError:
+            self.log('error', f"Permission denied: {filepath}")
+            return timeseries
+
+        # 复用 _parse_data 方法
+        data = self._parse_data(lines)
+
+        for item in data:
+            if item.get('value') is not None:
+                timeseries.append({
+                    'datetime': item.get('date'),
+                    'elevation': item['value'],
+                    'uncertainty': item.get('error'),
+                })
+
+        return timeseries
+
 
 class HydroSatDownloader:
     """
