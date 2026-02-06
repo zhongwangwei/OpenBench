@@ -1,0 +1,45 @@
+# Dataset priorities for merge (higher = preferred)
+# When stations are within 100m, higher priority wins.
+
+priorities:
+  grdc: 90
+  camels_gb_v2: 85
+  camels_br: 85
+  caravan_core: 80
+  camelsh: 75
+  camels_fr: 75
+  camels_ch: 75
+  camels_dk: 75
+  camels_nz: 75
+  camels_es: 75
+  camels_se: 75
+  camels_fi: 75
+  camels_ind: 75
+  camels_col: 75
+  camels_lux: 75
+  caravan_de: 70
+  caravan_il: 70
+  grdc_caravan: 70
+  gsha: 65
+  gsim: 60
+  robin: 60
+  adhi: 60
+  cabra: 60
+  mlit: 60
+  r_arcticnet: 60
+  grdd: 55
+  grdc_rseg: 55
+  dai_trenberth: 55
+  china_river: 55
+  estreams: 50
+  ca_discharge: 50
+  bull: 50
+  hydroch: 50
+  lamah_ice: 50
+  lamah_ce: 50
+  thousand_mile_eye: 50
+  yellow_river_commission: 50
+
+default_priority: 50
+
+excluded_from_merge: []

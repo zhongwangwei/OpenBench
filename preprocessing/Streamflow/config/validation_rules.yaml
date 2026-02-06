@@ -1,0 +1,13 @@
+# Validation rules for streamflow data
+
+completeness:
+  min_valid_ratio: 0.1
+  min_time_steps: 12
+
+accuracy:
+  max_discharge_m3s: 500000
+  allow_negative: false
+
+spatial:
+  require_wgs84: true
+  duplicate_distance_m: 100
