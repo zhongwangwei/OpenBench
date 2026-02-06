@@ -1,0 +1,30 @@
+dataset:
+  name: CAMELS_DK
+  description: "CAMELS-DK: 304 gauged catchments in Denmark"
+  url: "https://doi.org/10.5194/essd-2024-292"
+  redistributable: true
+
+source:
+  reader: camels_dk
+  path: "${SF_DATA_DOWNLOADS}/CAMELS-DK"
+
+variables:
+  discharge: Qobs
+  time: time
+  station_id: catch_id
+  latitude: catch_outlet_lat
+  longitude: catch_outlet_lon
+  upstream_area: catch_area
+
+units:
+  discharge: "mm/d"
+  area: "m2"
+
+timezone:
+  type: fixed_offset
+  utc_offset: 1.0
+  definition: "CET (UTC+1)"
+
+coordinate_system: "EPSG:25832"
+
+options: {}
