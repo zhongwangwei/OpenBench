@@ -1,0 +1,30 @@
+dataset:
+  name: GRDC
+  description: "Global Runoff Data Centre - daily and monthly discharge"
+  url: "https://portal.grdc.bafg.de/"
+  redistributable: false
+
+source:
+  reader: grdc
+  path: "${SF_DATA_DOWNLOADS}/GRDC"
+
+variables:
+  discharge: runoff_mean
+  time: time
+  station_id: id
+  latitude: geo_y
+  longitude: geo_x
+  upstream_area: area
+
+units:
+  discharge: "m3/s"
+  area: "km2"
+
+timezone:
+  type: fixed_offset
+  utc_offset: 0.0
+  definition: "Per-station UTC offset"
+
+coordinate_system: "WGS84"
+
+options: {}
