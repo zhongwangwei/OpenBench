@@ -1,0 +1,30 @@
+dataset:
+  name: GSHA
+  description: "Global Streamflow Hydrology Archive - monthly mean discharge (~21k stations)"
+  url: ""
+  redistributable: false
+
+source:
+  reader: gsha
+  path: "${SF_DATA_DOWNLOADS}/GSHA"
+
+variables:
+  discharge: mean
+  time: time
+  station_id: station_id
+  latitude: latitude
+  longitude: longitude
+  upstream_area: area
+
+units:
+  discharge: "m3/s"
+  area: "km2"
+
+timezone:
+  type: utc
+  utc_offset: 0.0
+  definition: "UTC (monthly means)"
+
+coordinate_system: "WGS84"
+
+options: {}
