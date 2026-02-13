@@ -12,7 +12,20 @@ general:
   - GRDD
   Sensible_Heat_ref_source:
   - PLUMBER2S
-  - FLUX_PLUMBER2
+  Latent_Heat_ref_source:
+  - PLUMBER2S
+  Ground_Heat_ref_source:
+  - PLUMBER2S
+  Net_Radiation_ref_source:
+  - PLUMBER2S
+  Surface_Upward_LW_Radiation_ref_source:
+  - PLUMBER2S
+  Surface_Upward_SW_Radiation_ref_source:
+  - PLUMBER2S
+  Gross_Primary_Productivity_ref_source:
+  - PLUMBER2S
+  Net_Ecosystem_Exchange_ref_source:
+  - PLUMBER2S
 def_nml:
   GRDC: ./nml/nml-yaml/Ref_variables_definition_station/GRDC.yaml
   GSIM: ./nml/nml-yaml/Ref_variables_definition_station/GSIM.yaml

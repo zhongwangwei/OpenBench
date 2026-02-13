@@ -1219,6 +1219,21 @@ class PreValidator:
                         logging.debug(f"    Found station data file by pattern: {f}")
                         return f
 
+            # Try fulllist CSV to find a sample file
+            fulllist_path = nml[item].get(f'{source}_fulllist', '')
+            if fulllist_path and os.path.exists(fulllist_path):
+                try:
+                    import pandas as pd
+                    stn_df = pd.read_csv(fulllist_path, nrows=1)
+                    dir_col = 'DIR' if 'DIR' in stn_df.columns else 'sim_dir' if 'sim_dir' in stn_df.columns else None
+                    if dir_col and len(stn_df) > 0:
+                        sample = stn_df[dir_col].iloc[0]
+                        if os.path.exists(sample):
+                            logging.debug(f"    Found station data file from fulllist: {sample}")
+                            return sample
+                except Exception as e:
+                    logging.debug(f"    Could not read fulllist {fulllist_path}: {e}")
+
             logging.debug(f"    No station data file found for source: {source}")
             return None
 

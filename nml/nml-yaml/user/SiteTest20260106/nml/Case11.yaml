@@ -1,0 +1,13 @@
+general:
+  model_namelist: ./nml/nml-yaml/Mod_variables_definition/CoLM.yaml
+  timezone: 0.0
+  data_type: stn
+  data_groupby: year
+  fulllist: ./nml/nml-yaml/user/SiteTest20260106/senarios/Case11.csv
+  tim_res: hour
+  grid_res: 1
+  syear: ''
+  eyear: ''
+  prefix: ''
+  suffix: ''
+  root_dir: ./dataset/Simulation/SiteTest20260106/

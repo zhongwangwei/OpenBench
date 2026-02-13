@@ -58,3 +58,17 @@ nml/nml-json/user/Practice/grid_case.json
 /dataset/Simulation
 /docs
 /.worktrees
+
+# Credentials (never commit)
+config/credentials.yaml
+/preprocessing/Streamflow/build
+/preprocessing/Streamflow/docs
+/preprocessing/Streamflow/logs
+/preprocessing/Streamflow_new
+/preprocessing/Water_Surface_Elevation/data
+/preprocessing
+/preprocessing
+/preprocessing
+/preprocessing
+/preprocessing
+/preprocessing

@@ -406,12 +406,9 @@ class GeneralInfoReader(NamelistReader):
                 logging.error("No stations selected. Check filter criteria.")
                 raise ValueError("No stations selected. Check filter criteria.")
 
-            # Use ref_fulllist if set by filter, otherwise use dataset-specific filename
-            if hasattr(self, 'ref_fulllist') and self.ref_fulllist:
-                stn_list_path = self.ref_fulllist
-            else:
-                stn_list_path = f"{self.casedir}/stn_{self.ref_source}_{self.sim_source}_list.txt"
-                self.ref_fulllist = stn_list_path
+            # Always write to a case-specific path to avoid overwriting the original ref CSV
+            stn_list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.csv")
+            self.ref_fulllist = stn_list_path
             self.stn_list.to_csv(stn_list_path, index=False)
             final_count = len(self.stn_list)
             logging.info(f"Station filtering: {initial_count} -> {final_count} stations")
