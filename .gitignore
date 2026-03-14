@@ -14,31 +14,8 @@ script/Evapotranspiration_ref_ET_Xu_etal_2024_ET.nc
 /data
 /output
 /.cursor
-/preprocessing/get_cama_ready/data_for_wse
-/preprocessing/get_cama_ready/logs
 *.pyc
 *.f90
-preprocessing/get_cama_ready/AllocateVS copy 2.py
-preprocessing/get_cama_ready/AllocateVS copy.py
-preprocessing/get_cama_ready/out/altimetry_glb_15min_20250422.txt
-preprocessing/get_cama_ready/out/altimetry_glb_15min_20250423.txt
-preprocessing/get_cama_ready/out/cama_data_s30e010.nc
-preprocessing/get_cama_ready/out/cama_data_s30w050.nc
-preprocessing/get_cama_ready/s01-allocate_VS.sh
-preprocessing/get_cama_ready/out/altimetry_glb_15min_20250424.txt
-preprocessing/get_cama_ready/AllocateVS-ERR.py
-preprocessing/get_cama_ready/allocate_VS
-/preprocessing/get_stn_cama_ready/Water Surface Elevation/bk-unupload
-/preprocessing/get_stn_cama_ready/Water Surface Elevation/data_for_wse/cama_map-bk
-/preprocessing/get_stn_cama_ready/Water Surface Elevation/data_for_wse
-/preprocessing/get_stn_cama_ready/Water Surface Elevation/logs
-/preprocessing/get_stn_cama_ready/Water Surface Elevation/out
-preprocessing/get_stn_cama_ready/Water Surface Elevation/tmp.txt
-/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/data_for_wse
-/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/out
-/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/logs
-/preprocessing/get_stn_cama_ready/Water_Surface_Elevation/bk-unupload
-preprocessing/get_stn_cama_ready/Water_Surface_Elevation/tmp.txt
 CLAUDE.md
 *.log
 
@@ -59,16 +36,3 @@ nml/nml-json/user/Practice/grid_case.json
 /docs
 /.worktrees
 
-# Credentials (never commit)
-config/credentials.yaml
-/preprocessing/Streamflow/build
-/preprocessing/Streamflow/docs
-/preprocessing/Streamflow/logs
-/preprocessing/Streamflow_new
-/preprocessing/Water_Surface_Elevation/data
-/preprocessing
-/preprocessing
-/preprocessing
-/preprocessing
-/preprocessing
-/preprocessing
