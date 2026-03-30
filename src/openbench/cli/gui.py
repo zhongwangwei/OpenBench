@@ -15,4 +15,6 @@ def gui(config, remote):
     except ImportError as e:
         raise click.ClickException(str(e))
 
-    click.echo(f"Not yet implemented. Config: {config}")
+    from openbench.gui.app import launch
+
+    launch(config_path=config)

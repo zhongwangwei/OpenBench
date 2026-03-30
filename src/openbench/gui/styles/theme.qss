@@ -1,0 +1,274 @@
+/* OpenBench Wizard Theme - Modern Flat Design */
+
+/* === Global === */
+QWidget {
+    font-size: 14px;
+    color: #333333;
+    background-color: #f5f5f5;
+}
+
+QMainWindow {
+    background-color: #ffffff;
+}
+
+/* === Buttons === */
+QPushButton {
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 500;
+    min-width: 80px;
+}
+
+QPushButton:hover {
+    background-color: #106ebe;
+}
+
+QPushButton:pressed {
+    background-color: #005a9e;
+}
+
+QPushButton:disabled {
+    background-color: #cccccc;
+    color: #888888;
+}
+
+QPushButton[secondary="true"] {
+    background-color: #ffffff;
+    color: #333333;
+    border: 1px solid #d0d0d0;
+}
+
+QPushButton[secondary="true"]:hover {
+    background-color: #f0f0f0;
+    border-color: #0078d4;
+}
+
+/* === Input Fields === */
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    padding: 8px 12px;
+    min-height: 20px;
+}
+
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border-color: #0078d4;
+    outline: none;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 30px;
+}
+
+QComboBox::down-arrow {
+    width: 12px;
+    height: 12px;
+}
+
+/* === Checkboxes === */
+QCheckBox {
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    border: 2px solid #d0d0d0;
+    background-color: #ffffff;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #e8f5e9;
+    border-color: #27ae60;
+    image: url(CHECKMARK_PATH);
+}
+
+QCheckBox::indicator:hover {
+    border-color: #27ae60;
+}
+
+/* === Group Box === */
+QGroupBox {
+    font-weight: 600;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    background-color: #ffffff;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #555555;
+}
+
+/* === Scroll Area === */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+
+QScrollBar:vertical {
+    background-color: #f0f0f0;
+    width: 10px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #c0c0c0;
+    border-radius: 5px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #a0a0a0;
+}
+
+/* === Tab Widget === */
+QTabWidget::pane {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #ffffff;
+}
+
+QTabBar::tab {
+    background-color: #f0f0f0;
+    border: none;
+    padding: 10px 20px;
+    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+QTabBar::tab:selected {
+    background-color: #ffffff;
+    color: #0078d4;
+    font-weight: 600;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #e8e8e8;
+}
+
+/* === Progress Bar === */
+QProgressBar {
+    border: none;
+    border-radius: 6px;
+    background-color: #e0e0e0;
+    height: 12px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #0078d4;
+    border-radius: 6px;
+}
+
+/* === List Widget === */
+QListWidget {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #ffffff;
+    outline: none;
+}
+
+QListWidget::item {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+QListWidget::item:selected {
+    background-color: #e8f4fc;
+    color: #0078d4;
+}
+
+QListWidget::item:hover:!selected {
+    background-color: #f8f8f8;
+}
+
+/* === Text Edit (for logs) === */
+QTextEdit, QPlainTextEdit {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 8px;
+}
+
+/* === Sidebar Navigation === */
+QListWidget#nav_sidebar {
+    background-color: #2d2d2d;
+    border: none;
+    border-radius: 0;
+    min-width: 220px;
+    max-width: 220px;
+}
+
+QListWidget#nav_sidebar::item {
+    color: #cccccc;
+    padding: 12px 16px;
+    border-bottom: none;
+    border-left: 3px solid transparent;
+}
+
+QListWidget#nav_sidebar::item:selected {
+    background-color: #3d3d3d;
+    color: #ffffff;
+    border-left: 3px solid #0078d4;
+}
+
+QListWidget#nav_sidebar::item:hover:!selected {
+    background-color: #353535;
+}
+
+QListWidget#nav_sidebar::item:disabled {
+    color: #666666;
+}
+
+/* === Labels === */
+QLabel {
+    background-color: transparent;
+}
+
+QLabel[heading="true"] {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333333;
+}
+
+QLabel[subheading="true"] {
+    font-size: 14px;
+    color: #666666;
+}
+
+/* === Splitter === */
+QSplitter::handle {
+    background-color: #e0e0e0;
+}
+
+QSplitter::handle:horizontal {
+    width: 1px;
+}
+
+/* === Dialog === */
+QDialog {
+    background-color: #ffffff;
+}
+
+/* === Tool Tips === */
+QToolTip {
+    background-color: #333333;
+    color: #ffffff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
