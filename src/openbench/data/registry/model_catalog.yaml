@@ -61,9 +61,18 @@ CLM5:
       varunit: W m-2
       compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE'] - ds['FSH'] - ds['EFLX_LH_TOT']
   time_offset:
-    Month: -1 months
-    Day: -1 days
-    Hour: -1 hours
+    Month:
+      default: -1 months
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 months
+    Day:
+      default: -1 days
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 days
+    Hour:
+      default: -1 hours
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 hours
 CoLM2024:
   name: CoLM2024
   description: Common Land Model 2024
@@ -407,16 +416,34 @@ BCC_AVIM:
     Root_Zone_Soil_Moisture: *id014
     Ground_Heat: *id015
   time_offset:
-    Month: -1 months
-    Day: -1 days
-    Hour: -1 hours
+    Month:
+      default: -1 months
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 months
+    Day:
+      default: -1 days
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 days
+    Hour:
+      default: -1 hours
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 hours
 CaMa:
   name: CaMa
   description: CaMa-Flood River Model
   data_type: grid
   tim_res: Day
   time_offset:
-    Month: '0'
-    Day: -1 days
-    Hour: -1 hours
+    Month:
+      default: '0'
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 months
+    Day:
+      default: -1 days
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 days
+    Hour:
+      default: -1 hours
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 hours
   variables: {}
