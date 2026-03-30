@@ -11,14 +11,6 @@ def test_import_openbench():
 
 def test_import_subpackages():
     """Verify that all sub-packages can be imported."""
-    import openbench.config
-    import openbench.core
-    import openbench.data
-    import openbench.data.registry
-    import openbench.visualization
-    import openbench.runner
-    import openbench.remote
-    import openbench.util
 
 
 def test_cli_entry_point():

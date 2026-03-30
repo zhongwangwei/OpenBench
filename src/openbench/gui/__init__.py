@@ -10,6 +10,4 @@ def _check_gui_deps():
     try:
         import PySide6  # noqa: F401
     except ImportError:
-        raise ImportError(
-            "GUI requires PySide6. Install with: pip install 'openbench[gui]'"
-        ) from None
+        raise ImportError("GUI requires PySide6. Install with: pip install 'openbench[gui]'") from None
