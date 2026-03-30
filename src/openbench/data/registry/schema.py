@@ -43,6 +43,8 @@ class VariableMapping:
     max_uparea: Optional[float] = None
     min_uparea: Optional[float] = None
     fallbacks: Optional[list[FallbackVar]] = None  # Fallback variables with unit conversion
+    compute: Optional[str] = None  # Python expression to compute from other vars, e.g., "ds['a'] + ds['b']"
+    filter: Optional[str] = None  # Custom filter module name for complex computations
 
 
 @dataclass

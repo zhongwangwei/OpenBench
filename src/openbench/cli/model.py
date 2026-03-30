@@ -42,27 +42,32 @@ def show(name):
     click.echo(f"Description: {m.description}")
     click.echo(f"Type: {m.data_type}, Resolution: {m.grid_res}°, Time: {m.tim_res}")
     click.echo()
-    click.secho(f"{'Variable':<35} {'File varname':<20} {'Unit':<20} {'Fallback'}", bold=True)
+    click.secho(f"{'Variable':<35} {'Source':<25} {'Unit':<15} {'Notes'}", bold=True)
     click.echo("─" * 100)
     for var_name, mapping in sorted(m.variables.items()):
+        # Determine source type and display
+        raw = m.variables[var_name]
+        # Check for compute/filter (stored in the raw YAML dict, not in VariableMapping)
+        # We need to access the raw data through the catalog
         vn = mapping.varname
         if isinstance(vn, list):
-            vn_str = vn[0]  # Legacy format: first in list
+            vn_str = vn[0]
         else:
             vn_str = str(vn)
 
-        # Show fallbacks
-        fb_str = ""
+        notes_parts = []
         if mapping.fallbacks:
-            fb_parts = []
             for fb in mapping.fallbacks:
-                conv = f" ({fb.convert})" if fb.convert else ""
-                fb_parts.append(f"{fb.varname} [{fb.varunit}]{conv}")
-            fb_str = " → ".join(fb_parts)
-        elif isinstance(vn, list) and len(vn) > 1:
-            fb_str = " → ".join(vn[1:])  # Legacy format
+                conv = f", {fb.convert}" if fb.convert else ""
+                notes_parts.append(f"fallback: {fb.varname} [{fb.varunit}{conv}]")
+        if mapping.compute:
+            expr = mapping.compute if len(mapping.compute) < 40 else mapping.compute[:37] + "..."
+            notes_parts.append(f"compute: {expr}")
+        if mapping.filter:
+            notes_parts.append(f"filter: {mapping.filter}")
+        notes = " | ".join(notes_parts)
 
-        click.echo(f"{var_name:<35} {vn_str:<20} {mapping.varunit:<20} {fb_str}")
+        click.echo(f"{var_name:<35} {vn_str:<25} {mapping.varunit:<15} {notes}")
 
 
 @model.command()

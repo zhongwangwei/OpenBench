@@ -63,8 +63,9 @@ CoLM2024:
       varname: f_etr
       varunit: mm s-1
     Canopy_Interception:
-      varname: f_qintr
+      varname: Canopy_Interception
       varunit: mm s-1
+      compute: ds['f_fevpl'] - ds['f_etr']
     Ground_Evaporation:
       varname: f_fevpg
       varunit: mm s-1
@@ -110,9 +111,11 @@ CoLM2024:
     Surface_Soil_Moisture:
       varname: f_wliq_soisno
       varunit: m3 m-3
+      filter: CoLM
     Root_Zone_Soil_Moisture:
       varname: f_wliq_soisno
       varunit: m3 m-3
+      filter: CoLM
     Snow_Water_Equivalent:
       varname: f_scv
       varunit: mm
@@ -138,6 +141,55 @@ CoLM2024:
       - varname: f_respc
         varunit: mol m-2 s-1
         convert: value * 12.011 - gpp
+    Leaf_Greenness:
+      varname: f_green
+      varunit: m2 m-2
+    Precipitation:
+      varname: Precipitation
+      varunit: mm s-1
+      compute: ds['f_xy_rain'] + ds['f_xy_snow']
+    Surface_Net_SW_Radiation:
+      varname: Surface_Net_SW_Radiation
+      varunit: W m-2
+      compute: ds['f_xy_solarin'] - ds['f_sr']
+    Surface_Net_LW_Radiation:
+      varname: Surface_Net_LW_Radiation
+      varunit: W m-2
+      compute: ds['f_xy_frl'] - ds['f_olrg']
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      compute: (ds['f_us10m']**2 + ds['f_vs10m']**2)**0.5
+    Terrestrial_Water_Storage_Change:
+      varname: Terrestrial_Water_Storage_Change
+      varunit: mm
+      compute: ds['f_wat'].fillna(0) + ds['f_wa'].fillna(0) + ds['f_wdsrf'].fillna(0)
+        + ds['f_wetwat'].fillna(0)
+    Urban_Anthropogenic_Heat_Flux:
+      varname: Urban_Anthropogenic_Heat_Flux
+      varunit: W m-2
+      compute: ds['f_fhac'] + ds['f_fach'] + ds['f_fhah'] + ds['f_fvehc'] + ds['f_fmeta']
+        + ds['f_fwst']
+    Crop_Yield_Corn:
+      varname: Crop_Yield_Corn
+      varunit: t ha-1
+      filter: CoLM
+    Crop_Yield_Maize:
+      varname: Crop_Yield_Maize
+      varunit: t ha-1
+      filter: CoLM
+    Crop_Yield_Soybean:
+      varname: Crop_Yield_Soybean
+      varunit: t ha-1
+      filter: CoLM
+    Crop_Yield_Rice:
+      varname: Crop_Yield_Rice
+      varunit: t ha-1
+      filter: CoLM
+    Crop_Yield_Wheat:
+      varname: Crop_Yield_Wheat
+      varunit: t ha-1
+      filter: CoLM
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
