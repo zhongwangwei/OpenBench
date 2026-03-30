@@ -122,8 +122,9 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 logger.warning("Variable %s not found in reference %s registry entry", var_name, ref_source_name)
                 continue
 
-            # Construct directory: root_dir / sub_dir (if both present)
-            ref_dir = ref_ds.root_dir or ""
+            # Construct directory: data_root / sub_dir or root_dir / sub_dir
+            data_root = cfg.options.data_root or ref_ds.root_dir or ""
+            ref_dir = data_root
             if var_map.sub_dir:
                 ref_dir = os.path.join(ref_dir, var_map.sub_dir) if ref_dir else var_map.sub_dir
 

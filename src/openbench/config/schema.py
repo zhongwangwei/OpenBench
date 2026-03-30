@@ -78,6 +78,7 @@ class OptionsConfig:
     climate_zone_groupby: bool = False
     debug_mode: bool = False
     only_drawing: bool = False
+    data_root: Optional[str] = None  # Root directory for reference datasets
 
 
 @dataclass

@@ -262,4 +262,5 @@ def _build_options(raw: Any) -> OptionsConfig:
         climate_zone_groupby=raw.get("climate_zone_groupby", False),
         debug_mode=raw.get("debug_mode", False),
         only_drawing=raw.get("only_drawing", False),
+        data_root=raw.get("data_root"),
     )

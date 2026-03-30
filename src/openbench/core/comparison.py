@@ -14,10 +14,10 @@ from joblib import Parallel, delayed
 
 from openbench.util.converttype import Convert_Type
 
-from ...visualization import *
-from ..metrics.Mod_Metrics import metrics
-from ..scoring.Mod_Scores import scores
-from ..statistic import statistics_calculate
+from openbench.visualization import *
+from openbench.core.metrics import metrics
+from openbench.core.scores import scores
+from openbench.core.statistics import statistics_calculate
 
 logging.getLogger("xarray").setLevel(logging.WARNING)  # Suppress INFO messages from xarray
 warnings.filterwarnings("ignore", category=RuntimeWarning)  # Suppress numpy runtime warnings

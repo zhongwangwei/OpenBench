@@ -9,8 +9,8 @@ from openbench.util.converttype import Convert_Type
 from openbench.visualization import *
 
 # Check the platform
-from ..metrics.Mod_Metrics import metrics
-from ..scoring.Mod_Scores import scores
+from openbench.core.metrics import metrics
+from openbench.core.scores import scores
 
 
 def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:

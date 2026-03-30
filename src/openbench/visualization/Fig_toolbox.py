@@ -1,7 +1,7 @@
 import math
 import re
 
-import cmaps
+from openbench.visualization import cmaps
 import matplotlib
 import numpy as np
 from matplotlib import colors

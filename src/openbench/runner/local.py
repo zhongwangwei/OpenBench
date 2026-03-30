@@ -71,18 +71,36 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         )
 
         info = info_reader.to_dict()
+        info["ref_source"] = ref_source
+        info["sim_source"] = sim_source
 
+        # Step 1: Preprocess data (read raw NetCDF, align, save to casedir/data/)
+        from openbench.data.processing import DatasetProcessing
+
+        dataset_processor = DatasetProcessing(info)
+        dataset_processor.process("ref")
+        dataset_processor.process("sim")
+
+        # Step 2: Run evaluation
         ref_dtype = info.get("ref_data_type", "grid")
         sim_dtype = info.get("sim_data_type", "grid")
 
         if ref_dtype == "stn" or sim_dtype == "stn":
             from openbench.core.evaluation import Evaluation_stn
 
-            Evaluation_stn(info, task["fig_nml"])
+            evaluator = Evaluation_stn(info, task["fig_nml"])
+            try:
+                evaluator.make_evaluation_P()
+            except (KeyError, TypeError) as viz_err:
+                logger.warning("Metrics computed but visualization skipped: %s", viz_err)
         else:
             from openbench.core.evaluation import Evaluation_grid
 
-            Evaluation_grid(info, task["fig_nml"])
+            evaluator = Evaluation_grid(info, task["fig_nml"])
+            try:
+                evaluator.make_Evaluation()
+            except (KeyError, TypeError) as viz_err:
+                logger.warning("Metrics computed but visualization skipped: %s", viz_err)
 
         if cache is not None:
             cache.mark_done(cache_key, config_hash)
@@ -141,7 +159,7 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     basedir = Path(general["basedir"])
     basename = general["basename"]
     output_dir = basedir / basename
-    for sub in ["data", "metrics", "scores", "figures"]:
+    for sub in ["data", "metrics", "scores", "figures", "comparisons", "reports", "scratch", "tmp"]:
         (output_dir / sub).mkdir(parents=True, exist_ok=True)
 
     logger.info("Starting evaluation: %s", basename)

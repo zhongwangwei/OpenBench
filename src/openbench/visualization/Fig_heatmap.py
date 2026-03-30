@@ -2,7 +2,7 @@ import logging
 import os
 
 # Add the local visualization path for cmaps
-import cmaps
+from openbench.visualization import cmaps
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
