@@ -1,0 +1,55 @@
+# Real data test config — Case01 vs GLEAM/ERA5LAND
+project:
+  name: real-test
+  output_dir: ./test_data/output
+  years: [2004, 2005]
+
+evaluation:
+  variables:
+    - Evapotranspiration
+    - Latent_Heat
+    - Sensible_Heat
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a_LowRes
+  Latent_Heat: ERA5LAND_LowRes
+  Sensible_Heat: ERA5LAND_LowRes
+
+simulation:
+  Case01:
+    model: CoLM2024
+    root_dir: /Volumes/Data01/Simulation/Case01/history
+    data_type: grid
+    grid_res: 0.5
+    tim_res: Month
+    data_groupby: month
+    variables:
+      Evapotranspiration:
+        varname: f_fevpa
+        varunit: "mm day-1"
+        prefix: "Case01_hist_"
+        suffix: ""
+      Latent_Heat:
+        varname: f_lfevpa
+        varunit: "W m-2"
+        prefix: "Case01_hist_"
+        suffix: ""
+      Sensible_Heat:
+        varname: f_fsena
+        varunit: "W m-2"
+        prefix: "Case01_hist_"
+        suffix: ""
+
+metrics: [bias, RMSE, correlation]
+scores: [nBiasScore, nRMSEScore, Overall_Score]
+
+comparison:
+  enabled: false
+  tim_res: Month
+  grid_res: 0.5
+
+options:
+  num_cores: 4
+  unified_mask: true
+  generate_report: false
+  data_root: /Volumes/work/Reference/Grid/LowRes

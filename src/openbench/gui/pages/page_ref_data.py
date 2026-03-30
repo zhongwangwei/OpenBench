@@ -67,6 +67,45 @@ class PageRefData(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
+        # === Data Root + Scan Controls ===
+        from PySide6.QtWidgets import QLineEdit
+
+        scan_group = QGroupBox("Reference Data Root")
+        scan_layout = QHBoxLayout(scan_group)
+
+        self.data_root_input = QLineEdit()
+        self.data_root_input.setPlaceholderText("Reference data root directory (e.g., /Volumes/work/Reference)")
+        # Try to pre-fill from environment or common paths
+        import os
+
+        default_root = os.environ.get("OPENBENCH_DATA_ROOT", "")
+        if not default_root:
+            for p in ["/Volumes/work/Reference", os.path.expanduser("~/data/Reference")]:
+                if os.path.isdir(p):
+                    default_root = p
+                    break
+        self.data_root_input.setText(default_root)
+        scan_layout.addWidget(self.data_root_input, stretch=1)
+
+        self.btn_browse_root = QPushButton("Browse")
+        self.btn_browse_root.clicked.connect(self._browse_data_root)
+        scan_layout.addWidget(self.btn_browse_root)
+
+        self.btn_scan = QPushButton("Scan for Datasets")
+        self.btn_scan.setToolTip("Scan the data root directory for reference datasets and register new ones")
+        self.btn_scan.clicked.connect(self._scan_data_root)
+        scan_layout.addWidget(self.btn_scan)
+
+        self.content_layout.addWidget(scan_group)
+
+        # === Registry Info ===
+        from openbench.data.registry import RegistryManager
+
+        mgr = RegistryManager()
+        ref_count = len(mgr.list_references())
+        self.registry_label = QLabel(f"Registry: {ref_count} datasets available")
+        self.content_layout.addWidget(self.registry_label)
+
         # Container for variable groups
         self.var_container = QWidget()
         self.var_layout = QVBoxLayout(self.var_container)
@@ -170,6 +209,79 @@ class PageRefData(BasePage):
             self.var_layout.addWidget(group, 1)  # stretch factor 1 to expand
 
         # No addStretch() here - let groups expand to fill space
+
+    def _browse_data_root(self):
+        """Browse for reference data root directory."""
+        from PySide6.QtWidgets import QFileDialog
+
+        path = QFileDialog.getExistingDirectory(self, "Select Reference Data Root")
+        if path:
+            self.data_root_input.setText(path)
+
+    def _scan_data_root(self):
+        """Scan the data root for new reference datasets."""
+        data_root = self.data_root_input.text().strip()
+        if not data_root:
+            QMessageBox.warning(self, "No Path", "Please enter or browse for the reference data root directory.")
+            return
+
+        import os
+
+        if not os.path.isdir(data_root):
+            QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
+            return
+
+        try:
+            from openbench.data.registry.scanner import find_new_datasets, register_scanned_dataset
+            from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
+
+            new_groups = find_new_datasets(data_root)
+
+            if not new_groups:
+                QMessageBox.information(self, "Scan Complete", "No new datasets found. All datasets already registered.")
+                return
+
+            dlg = DataDiscoveryDialog(new_groups, parent=self)
+            if dlg.exec():
+                selected = dlg.get_selected()
+                if not selected:
+                    return
+
+                from openbench.data.registry.manager import RegistryManager
+
+                mgr = RegistryManager()
+                registered = 0
+                for base_name, res_name, variant in selected:
+                    existing = mgr.get_reference(variant.name)
+                    existing_dict = None
+                    if existing:
+                        existing_dict = {
+                            "variables": {
+                                vn: {"varname": vm.varname, "varunit": vm.varunit,
+                                     "prefix": vm.prefix, "suffix": vm.suffix}
+                                for vn, vm in existing.variables.items()
+                            }
+                        }
+                    register_scanned_dataset(variant, existing_descriptor=existing_dict)
+                    registered += 1
+
+                # Refresh registry label
+                mgr2 = RegistryManager()
+                self.registry_label.setText(f"Registry: {len(mgr2.list_references())} datasets available")
+
+                # Rebuild variable groups to pick up new registry entries
+                self._rebuild_variable_groups()
+                self.load_from_config()
+
+                QMessageBox.information(
+                    self, "Scan Complete",
+                    f"Registered {registered} new dataset(s).\n"
+                    "They are now available in the dropdown menus below.",
+                )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Scan Failed", f"Error scanning: {e}")
+            logger.exception("Data scan failed")
 
     def _populate_registry_combo(self, combo, var_name):
         """Populate registry combo with available reference datasets for this variable.

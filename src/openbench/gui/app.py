@@ -43,8 +43,7 @@ def launch(config_path=None):
         window._load_config_file(config_path)
     window.show()
 
-    # Auto-discover new reference datasets
-    _auto_discover_datasets(window)
+    # No auto-scan on startup — user triggers scan via Reference Data page button
 
     sys.exit(app.exec())
 

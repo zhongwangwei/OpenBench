@@ -42,6 +42,7 @@ class SimulationEntry:
     data_type: Optional[str] = None
     grid_res: Optional[float] = None
     tim_res: Optional[str] = None
+    data_groupby: Optional[str] = None  # Year, month, day, single
     variables: Optional[dict[str, dict[str, Any]]] = None
 
 

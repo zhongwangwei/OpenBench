@@ -307,7 +307,9 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_data_type"] = data_type
             var_section[f"{prefix}_varname"] = varname
             var_section[f"{prefix}_varunit"] = varunit
-            var_section[f"{prefix}_data_groupby"] = inline_vars.get("data_groupby", "Year")
+            var_section[f"{prefix}_data_groupby"] = (
+                sim_entry.data_groupby or inline_vars.get("data_groupby", "Year")
+            )
             var_section[f"{prefix}_tim_res"] = tim_res
             var_section[f"{prefix}_grid_res"] = grid_res
             var_section[f"{prefix}_syear"] = cfg.project.years[0]
