@@ -107,9 +107,14 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
                         if prefix:
                             entry["prefix"] = prefix
 
-                        # Only include variables if model is unknown
-                        # Known models get variable mappings from the model profile
-                        if model_name == source_name:
+                        # Only include inline variables if model has NO profile in registry
+                        # Known models (CoLM2024, CLM5, etc.) get mappings from profile
+                        from openbench.data.registry.manager import RegistryManager
+
+                        mgr = RegistryManager()
+                        has_profile = mgr.get_model(model_name) is not None
+
+                        if not has_profile:
                             variables = {}
                             for var_key, var_val in sim_def.items():
                                 if var_key != "general" and isinstance(var_val, dict):
