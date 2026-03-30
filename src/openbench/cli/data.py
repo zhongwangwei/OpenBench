@@ -93,15 +93,10 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, vari
     import yaml
     from pathlib import Path
 
-    try:
-        from platformdirs import user_config_dir
+    from openbench.data.registry.manager import get_writable_registry_dir
 
-        user_dir = Path(user_config_dir("openbench"))
-    except ImportError:
-        user_dir = Path.home() / ".openbench"
-
-    catalog_path = user_dir / "reference_catalog.yaml"
-    user_dir.mkdir(parents=True, exist_ok=True)
+    registry_dir = get_writable_registry_dir()
+    catalog_path = registry_dir / "reference_catalog.yaml"
 
     # Check if already in catalog
     existing_catalog = {}

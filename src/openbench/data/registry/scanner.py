@@ -224,13 +224,9 @@ def register_scanned_dataset(
         Path to the catalog file.
     """
     if catalog_path is None:
-        try:
-            from platformdirs import user_config_dir
+        from openbench.data.registry.manager import get_writable_registry_dir
 
-            user_dir = Path(user_config_dir("openbench"))
-        except ImportError:
-            user_dir = Path.home() / ".openbench"
-        catalog_path = user_dir / "reference_catalog.yaml"
+        catalog_path = get_writable_registry_dir() / "reference_catalog.yaml"
 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 

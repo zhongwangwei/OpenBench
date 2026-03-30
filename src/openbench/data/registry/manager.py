@@ -1,21 +1,51 @@
 """RegistryManager: loads and queries reference datasets and model profiles.
 
+All catalogs live in one place: the registry directory inside the package
+(src/openbench/data/registry/). User registrations are written directly
+to the same catalog files when the directory is writable (editable install).
+If the package directory is read-only (pip install), a fallback user
+directory is used.
+
 Loading order (later entries override earlier):
-1. Built-in catalog:  src/openbench/data/registry/reference_catalog.yaml
-2. Built-in individuals: src/openbench/data/registry/references/*.yaml  (legacy)
-3. User catalog:      ~/.openbench/reference_catalog.yaml
-4. User individuals:  ~/.openbench/references/*.yaml
-Same order for model_catalog.yaml / models/*.yaml.
+1. Built-in catalog:  <package>/data/registry/reference_catalog.yaml
+2. Fallback user dir: ~/.openbench/reference_catalog.yaml  (only if exists)
+3. Fallback individuals: ~/.openbench/references/*.yaml    (only if exists)
+Same for model_catalog.yaml / models/*.yaml.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+
+# The single authoritative registry directory (inside the package)
+REGISTRY_DIR = Path(__file__).parent
+
+
+def get_writable_registry_dir() -> Path:
+    """Return the registry directory for writing.
+
+    If the package registry directory is writable, use it directly.
+    Otherwise fall back to a user directory.
+    """
+    if os.access(REGISTRY_DIR, os.W_OK):
+        return REGISTRY_DIR
+
+    # Fallback for read-only installs
+    try:
+        from platformdirs import user_config_dir
+
+        fallback = Path(user_config_dir("openbench"))
+    except ImportError:
+        fallback = Path.home() / ".openbench"
+
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
 
 
 class RegistryManager:
@@ -25,14 +55,13 @@ class RegistryManager:
         self._references: dict[str, ReferenceDataset] = {}
         self._models: dict[str, ModelProfile] = {}
 
-        # Built-in (shipped with package)
-        builtin_dir = Path(__file__).parent
-        self._load_reference_catalog(builtin_dir / "reference_catalog.yaml")
-        self._load_reference_dir(builtin_dir / "references")
-        self._load_model_catalog(builtin_dir / "model_catalog.yaml")
-        self._load_model_dir(builtin_dir / "models")
+        # Primary: package registry directory
+        self._load_reference_catalog(REGISTRY_DIR / "reference_catalog.yaml")
+        self._load_reference_dir(REGISTRY_DIR / "references")
+        self._load_model_catalog(REGISTRY_DIR / "model_catalog.yaml")
+        self._load_model_dir(REGISTRY_DIR / "models")
 
-        # User-defined (override built-in)
+        # Fallback: user directory (only if different from package dir and exists)
         if user_dir is None:
             try:
                 from platformdirs import user_config_dir
@@ -41,7 +70,7 @@ class RegistryManager:
             except ImportError:
                 user_dir = Path.home() / ".openbench"
 
-        if user_dir.exists():
+        if user_dir.exists() and user_dir.resolve() != REGISTRY_DIR.resolve():
             self._load_reference_catalog(user_dir / "reference_catalog.yaml")
             self._load_reference_dir(user_dir / "references")
             self._load_model_catalog(user_dir / "model_catalog.yaml")
