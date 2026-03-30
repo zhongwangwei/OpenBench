@@ -1188,6 +1188,42 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             ds = Convert_Type.convert_nc(ds[varname[0]])
         return ds
 
+    def _try_compute_from_profile(self, model: str, ds, datasource: str):
+        """Try to compute a derived variable using model profile's compute expression.
+
+        Returns computed DataArray, or None if no compute expression applies.
+        """
+        try:
+            from openbench.data.registry import RegistryManager
+
+            mgr = RegistryManager()
+            profile = mgr.get_model(model)
+            if not profile:
+                return None
+
+            item = getattr(self, "item", "")
+            if not item or item not in profile.variables:
+                return None
+
+            var_mapping = profile.variables[item]
+            if not var_mapping.compute:
+                return None
+
+            logging.info(f"Computing {item} from model profile expression")
+            from openbench.data.compute import execute_compute
+
+            result = execute_compute(ds, var_mapping.compute, item)
+
+            # Update info with the computed variable name and unit
+            setattr(self, f"{datasource}_varname", [item])
+            setattr(self, f"{datasource}_varunit", var_mapping.varunit)
+
+            return result
+
+        except Exception as e:
+            logging.debug(f"Compute from profile failed for {model}/{getattr(self, 'item', '?')}: {e}")
+            return None
+
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == "stat":
             # Validate varname list is not empty
@@ -1207,6 +1243,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 model = getattr(self, f"{source}_model")
             except AttributeError:
                 model = source
+            # --- Try compute expression from model profile first ---
+            computed = self._try_compute_from_profile(model, ds, datasource)
+            if computed is not None:
+                return computed
+
+            # --- Fall back to custom filter module ---
             try:
                 logging.info(f"Loading custom variable filter for {model}")
                 from openbench.data.custom import load_custom_module
