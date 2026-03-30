@@ -176,8 +176,10 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     comparison_vars = list(legacy["comparisons"].keys())
     statistic_vars = list(legacy["statistics"].keys())
 
-    # fig_nml placeholder (figure options); the evaluation classes accept it
-    fig_nml: dict[str, Any] = {}
+    # Build figure configuration from bundled figure config files
+    from openbench.config.adapter import build_fig_nml
+
+    fig_nml = build_fig_nml()
 
     # Determine parallelism level
     num_cores: int = 1

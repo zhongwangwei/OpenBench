@@ -76,6 +76,78 @@ def to_legacy_config(cfg: OpenBenchConfig) -> dict[str, Any]:
     }
 
 
+def build_fig_nml() -> dict[str, Any]:
+    """Build the figure namelist from bundled figure config files.
+
+    Reads all figure config YAML files from the package's data/fignml/ directory
+    and organizes them into the structure expected by the evaluation code:
+        fig_nml["make_geo_plot_index"] = {...}   (validation configs, flattened)
+        fig_nml["Comparison"]["Taylor_Diagram"] = {...}
+        fig_nml["Statistic"]["Basic"] = {...}
+
+    Returns:
+        Processed fig_nml dict.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    fignml_dir = Path(__file__).parent.parent / "data" / "fignml"
+    figlib_path = fignml_dir / "figlib.yaml"
+
+    if not figlib_path.exists():
+        logger.warning("figlib.yaml not found at %s, visualization will be skipped", figlib_path)
+        return {}
+
+    with open(figlib_path) as f:
+        figlib = yaml.safe_load(f)
+
+    fig_nml: dict[str, Any] = {}
+
+    # Process validation configs — keys go directly into fig_nml (flattened)
+    for key, rel_path in figlib.get("validation_nml", {}).items():
+        config_name = key.replace("_source", "")
+        filename = Path(rel_path).name
+        config_path = fignml_dir / filename
+        if config_path.exists():
+            with open(config_path) as f:
+                data = yaml.safe_load(f)
+            fig_nml[config_name] = data.get("general", data)
+        else:
+            logger.debug("Figure config not found: %s", config_path)
+
+    # Process comparison configs — nested under fig_nml["Comparison"]
+    comparison = {}
+    for key, rel_path in figlib.get("comparison_nml", {}).items():
+        config_name = key.replace("_source", "")
+        filename = Path(rel_path).name
+        config_path = fignml_dir / filename
+        if config_path.exists():
+            with open(config_path) as f:
+                data = yaml.safe_load(f)
+            comparison[config_name] = data.get("general", data)
+    fig_nml["Comparison"] = comparison
+
+    # Process statistic configs — nested under fig_nml["Statistic"]
+    statistic = {}
+    for key, rel_path in figlib.get("statistic_nml", {}).items():
+        config_name = key.replace("_source", "")
+        filename = Path(rel_path).name
+        config_path = fignml_dir / filename
+        if config_path.exists():
+            with open(config_path) as f:
+                data = yaml.safe_load(f)
+            statistic[config_name] = data.get("general", data)
+    fig_nml["Statistic"] = statistic
+
+    # Keep raw registry sections for UpdateFigNamelist compatibility
+    fig_nml["validation_nml"] = figlib.get("validation_nml", {})
+    fig_nml["comparison_nml"] = figlib.get("comparison_nml", {})
+    fig_nml["statistic_nml"] = figlib.get("statistic_nml", {})
+
+    return fig_nml
+
+
 def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
     """Build legacy ref_nml, sim_nml, and main_nl from new config.
 
