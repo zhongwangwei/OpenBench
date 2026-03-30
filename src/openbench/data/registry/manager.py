@@ -171,6 +171,9 @@ class RegistryManager:
         # Case-insensitive lookup
         key = name.lower()
 
+        # Try alias first
+        key = self.REFERENCE_ALIASES.get(key, key)
+
         # Exact match — always wins
         if key in self._references:
             return self._references[key]
@@ -200,6 +203,7 @@ class RegistryManager:
         """
         variants = {}
         base_key = base_name.lower()
+        base_key = self.REFERENCE_ALIASES.get(base_key, base_key)
 
         for suffix in self.RESOLUTION_SUFFIXES:
             full_key = f"{base_key}{suffix.lower()}"
@@ -216,8 +220,62 @@ class RegistryManager:
     def list_models(self) -> list[ModelProfile]:
         return sorted(self._models.values(), key=lambda m: m.name)
 
+    REFERENCE_ALIASES: dict[str, str] = {
+        "gleam": "gleam_v4.2a",
+        "gleam4": "gleam_v4.2a",
+        "gleam_v4": "gleam_v4.2a",
+        "gleam4.2": "gleam_v4.2a",
+        "fluxcom": "fluxcom_lowres",
+        "fluxcom-x": "fluxcom-x-base_lowres",
+        "fluxcomx": "fluxcom-x-base_lowres",
+        "era5": "era5land_lowres",
+        "era5land": "era5land_lowres",
+        "era5-land": "era5land_lowres",
+        "ceres": "ceres_ebaf_ed4.2_lowres",
+        "clara": "clara_3_lowres",
+        "modis": "modis_lst_lowres",
+        "smap": "smap_l4_lowres",
+        "gpcc": "gpcc_lowres",
+        "grun": "grun_ensemble_lowres",
+        "grdc": "grdc_monthly",
+    }
+
+    # Alias map: alternative names → canonical name (all lowercase)
+    MODEL_ALIASES: dict[str, str] = {
+        "colm": "colm2024",
+        "colm2014": "colm2024",
+        "clm": "clm5",
+        "clm45": "clm5",
+        "clm4.5": "clm5",
+        "cama": "cama",
+        "cama-flood": "cama",
+        "camaflood": "cama",
+        "cama_flood": "cama",
+        "era5": "era5-land",
+        "era5land": "era5-land",
+        "bcc": "bcc_avim",
+        "bccavim": "bcc_avim",
+        "bcc-avim": "bcc_avim",
+        "noah": "gldas",
+        "noah-mp": "gldas",
+        "gldas2": "gldas",
+        "gldas-2.2": "gldas",
+        "smap": "smap_l4",
+        "smapl4": "smap_l4",
+        "smap-l4": "smap_l4",
+    }
+
     def get_model(self, name: str) -> Optional[ModelProfile]:
-        return self._models.get(name.lower())
+        key = name.lower()
+        # Try direct lookup first
+        result = self._models.get(key)
+        if result:
+            return result
+        # Try alias
+        canonical = self.MODEL_ALIASES.get(key)
+        if canonical:
+            return self._models.get(canonical)
+        return None
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         return [ref for ref in self._references.values() if variable in ref.variables]
