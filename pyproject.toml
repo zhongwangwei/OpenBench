@@ -85,6 +85,8 @@ select = ["E", "F", "I", "W"]
 "src/openbench/remote/*.py" = ["E", "F", "W", "I"]
 "src/openbench/runner/remote.py" = ["E", "F", "W", "I"]
 "src/openbench/runner/wizard_runner_reference.py" = ["E", "F", "W", "I"]
+"src/openbench/gui/*.py" = ["E", "F", "W", "I"]
+"src/openbench/gui/**/*.py" = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
