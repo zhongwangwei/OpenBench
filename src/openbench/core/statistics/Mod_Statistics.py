@@ -1,26 +1,20 @@
 # -*- coding: utf-8 -*-
+import logging
+import os
+import re
+import shutil
+import time
+import warnings
+from typing import Any, Dict, List
+
 import numpy as np
 import xarray as xr
-from scipy import stats
 from joblib import Parallel, delayed
-import dask.array as da
-import os
-import glob
-import importlib
-import logging
-from typing import List, Dict, Any, Tuple
 
-import pandas as pd
-import re
-import gc
-from joblib import Parallel, delayed
-import warnings
-from dask.diagnostics import ProgressBar
-import shutil
-from . import *
-from ...data.Mod_DatasetProcessing import BaseDatasetProcessing
 from openbench.util.converttype import Convert_Type
-import time
+
+from ...data.Mod_DatasetProcessing import BaseDatasetProcessing
+from . import *
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -80,7 +74,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             )
             ds = xr.concat(ds_list, dim='time')
         else:
-            logging.info(f"Combining data to one file...")
+            logging.info("Combining data to one file...")
             years = range(syear, eyear + 1)
             ds_list = Parallel(n_jobs=self.num_cores)(
                 delayed(self.process_other_groupby)(dirx, suffix, prefix, varname, varunit, year, year, time_freq)
@@ -186,7 +180,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         return xr.Dataset({'lon': lon_new, 'lat': lat_new})
 
     def remap_interpolate(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
-        from openbench.data.regrid import Grid, Regridder
+        from openbench.data.regrid import Grid
         min_lon = self.main_nml['general']['min_lon']
         min_lat = self.main_nml['general']['min_lat']
         max_lon = self.main_nml['general']['max_lon']
@@ -230,7 +224,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         min_lon = self.main_nml['general']['min_lon']
         min_lat = self.main_nml['general']['min_lat']
         with open(filename, 'w') as f:
-            f.write(f"gridtype = lonlat\n")
+            f.write("gridtype = lonlat\n")
             f.write(f"xsize = {len(new_grid.lon)}\n")
             f.write(f"ysize = {len(new_grid.lat)}\n")
             f.write(f"xfirst = {min_lon + self.compare_grid_res / 2}\n")
@@ -540,7 +534,9 @@ class StatisticsProcessing(BasicProcessing):
             nX = int(statistic_nml[f'{source}_nX'])
             sources = [f'{source}_Y'] + [f'{source}_X{i + 1}' for i in range(nX)]
             output_file = self.run_analysis(source.strip(), sources, statistic_method)
-            from openbench.visualization.Fig_Partial_Least_Squares_Regression import make_Partial_Least_Squares_Regression
+            from openbench.visualization.Fig_Partial_Least_Squares_Regression import (
+                make_Partial_Least_Squares_Regression,
+            )
             make_Partial_Least_Squares_Regression(output_file, statistic_method, [source], self.main_nml['general'],
                                                   statistic_nml, option)
 
@@ -643,9 +639,9 @@ def wait_for_file(file_path, max_wait_time=30, check_interval=1):
                     return True
             except (OSError, IOError):
                 pass
-        
+
         logging.debug(f"Waiting for file: {file_path}")
         time.sleep(check_interval)
-    
+
     logging.error(f"Timeout waiting for file: {file_path}")
     return False

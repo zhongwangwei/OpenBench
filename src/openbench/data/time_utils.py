@@ -1,15 +1,10 @@
 # -*- coding: utf-8 -*-
-import os, glob
-import xarray as xr
-import pandas as pd
-from joblib import Parallel, delayed
-import numpy as np
-import sys
-from dask.diagnostics import ProgressBar
-import warnings
-import pandas as pd
-import re
 import logging
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+
 
 class timelib:
     def __init__(self):
@@ -33,7 +28,7 @@ class timelib:
             'week': 'W',
             'wk': 'W',
             'weekly': 'W',
-            } 
+            }
 
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
         print("Checking time coordinate...")
@@ -66,4 +61,3 @@ class timelib:
             ds = ds.reindex(time=time_index)  # Reindex the dataset with the created time index
 
         return ds
-    

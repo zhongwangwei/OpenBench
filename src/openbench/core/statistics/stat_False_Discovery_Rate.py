@@ -2,6 +2,7 @@
 import numpy as np
 import xarray as xr
 
+
 def stat_False_Discovery_Rate(self, *variables):
     """
     Perform optimized False Discovery Rate (FDR) analysis on multiple xarray datasets.
@@ -25,11 +26,11 @@ def stat_False_Discovery_Rate(self, *variables):
         # Avoid division by zero
         a_count_safe = da.maximum(a_count, 1)
         b_count_safe = da.maximum(b_count, 1)
-        
+
         # Set counts to NaN where they are actually zero
         a_count_safe = da.where(a_count > 0, a_count_safe, np.nan)
         b_count_safe = da.where(b_count > 0, b_count_safe, np.nan)
-        
+
         t = (a_mean - b_mean) / da.sqrt(a_var / a_count_safe + b_var / b_count_safe)
         df = (a_var / a_count_safe + b_var / b_count_safe) ** 2 / (
                 (a_var / a_count_safe) ** 2 / da.maximum(a_count - 1, 1) + (b_var / b_count_safe) ** 2 / da.maximum(b_count - 1, 1)

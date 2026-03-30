@@ -10,11 +10,11 @@ Author: OpenBench Team
 Date: November 2025
 """
 
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 
 def cleanup_pycache(base_dir: str = None, verbose: bool = True) -> Tuple[int, int]:

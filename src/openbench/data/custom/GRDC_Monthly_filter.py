@@ -41,7 +41,7 @@ def get_resolution_suffix(sim_grid_res):
     return '03min'
 
 
-def process_site(station_idx, station_ids, lons, lats, areas, 
+def process_site(station_idx, station_ids, lons, lats, areas,
                  cama_lons, cama_lats, alloc_errs, uparea_obs,
                  streamflow_data, times, info, scratch_dir, area_err_threshold):
     """Extract metadata for a single station and persist its series as NetCDF.
@@ -69,28 +69,28 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
     area = float(areas[station_idx]) if not np.isnan(areas[station_idx]) else -9999.0
-    
+
     # Get CaMA allocation data
     cama_lon = float(cama_lons[station_idx])
     cama_lat = float(cama_lats[station_idx])
     alloc_err = float(alloc_errs[station_idx])
-    
+
     # Skip stations with invalid CaMA allocation (missing values are -9999 or NaN)
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lat < -90:
         return None
-    
+
     # Filter by area allocation error threshold
     if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
         return None
-    
+
     # Get time series data for this station
     streamflow = streamflow_data[station_idx, :]
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~np.isnan(streamflow)
     if not valid_mask.any():
         return None
-    
+
     valid_indices = np.where(valid_mask)[0]
     start_year = pd.to_datetime(times[valid_indices[0]]).year
     end_year = pd.to_datetime(times[valid_indices[-1]]).year
@@ -103,7 +103,7 @@ def process_site(station_idx, station_ids, lons, lats, areas,
             lon < info.min_lon or lon > info.max_lon or
             lat < info.min_lat or lat > info.max_lat):
         return None
-    
+
     # Filter by drainage area if specified
     if hasattr(info, 'min_uparea') and area > 0 and area < info.min_uparea:
         return None
@@ -111,7 +111,7 @@ def process_site(station_idx, station_ids, lons, lats, areas,
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Save streamflow data as 1D time series
     ds_out = xr.Dataset({
         'discharge': (['time'], streamflow)
@@ -149,49 +149,49 @@ def filter_GRDC_Monthly(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
-    
+
     # Check for hourly comparison (not supported)
     if info.compare_tim_res.lower() in ['h', 'hour', '1h']:
         logging.error('GRDC does not support hourly comparison. Use Day or Month.')
         import sys
         sys.exit(1)
-    
+
     # Use monthly file for GRDC_Monthly
     dataset_path = Path(info.ref_dir) / "GRDC_monthly.nc"
-    
+
     if not dataset_path.exists():
         logging.error(f"GRDC dataset not found: {dataset_path}")
         return
 
     logging.info(f"Loading GRDC station metadata from {dataset_path}...")
-    
+
     # Get resolution suffix for CaMA variables
     if not hasattr(info, 'sim_grid_res'):
         logging.error("sim_grid_res is not defined in info object")
         import sys
         sys.exit(1)
-    
+
     res_suffix = get_resolution_suffix(info.sim_grid_res)
     logging.info(f"Using CaMA resolution: {res_suffix} (sim_grid_res={info.sim_grid_res})")
-    
+
     # Get area error threshold from config (default 0.2 = 20%)
     area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
     logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
-    
+
     # Get upstream area filters
-    max_uparea = info.ref_nml.get('Streamflow', {}).get('GRDC_max_uparea', 
+    max_uparea = info.ref_nml.get('Streamflow', {}).get('GRDC_max_uparea',
                  info.ref_nml.get('Streamflow', {}).get('max_uparea', float('inf')))
     min_uparea = info.ref_nml.get('Streamflow', {}).get('GRDC_min_uparea',
                  info.ref_nml.get('Streamflow', {}).get('min_uparea', 0))
     info.min_uparea = min_uparea
     info.max_uparea = max_uparea
-    
+
     # Create scratch directory
     scratch_dir = Path(info.casedir) / "scratch" / f"GRDC_Monthly_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    
+
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
         station_ids = ds_file['GRDC_Num'].values
@@ -200,25 +200,25 @@ def filter_GRDC_Monthly(info, ds=None):
         areas = ds_file['Upstream_Area'].values
         streamflow_data = ds_file['Disch'].values  # (GRDC_Num, Time)
         times = ds_file['Time'].values
-        
+
         # Load CaMA allocation data for the specified resolution
         cama_lon_var = f'cama_lon_{res_suffix}'
         cama_lat_var = f'cama_lat_{res_suffix}'
         alloc_err_var = f'cama_alloc_err_{res_suffix}'
-        
+
         if cama_lon_var not in ds_file:
             logging.error(f"CaMA variable {cama_lon_var} not found in dataset. "
                           f"Available: {list(ds_file.data_vars)}")
             import sys
             sys.exit(1)
-        
+
         cama_lons = ds_file[cama_lon_var].values
         cama_lats = ds_file[cama_lat_var].values
         alloc_errs = ds_file[alloc_err_var].values
-        
+
         n_stations = len(station_ids)
         logging.info(f"Processing {n_stations} stations in parallel...")
-        
+
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
@@ -227,7 +227,7 @@ def filter_GRDC_Monthly(info, ds=None):
                 streamflow_data, times, info, scratch_dir, area_err_threshold
             ) for idx in range(n_stations)
         )
-        
+
         # Filter out None results
         station_rows = [row for row in station_rows if row is not None]
 

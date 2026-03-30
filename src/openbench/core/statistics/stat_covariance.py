@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import numpy as np
 import xarray as xr
+
 
 def stat_covariance(self, data1, data2):
     """

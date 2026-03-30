@@ -1,6 +1,8 @@
+import logging
 import os
 import shutil
-import logging
+
+
 class FileProcessing:
    def __init__(self):
       self.name = 'DatasetPreprocessing'
@@ -9,41 +11,41 @@ class FileProcessing:
       self.date = 'Mar 2023'
       self.author = "Zhongwang Wei / zhongwang007@gmail.com"
       # copy all the dict in info to self
-   
+
    def check_file_exist(self, file_path):
       if not os.path.exists(file_path):
          logging.error(f"File not found: {file_path}")
          raise FileNotFoundError(f"File not found: {file_path}")
-      return 
-   
+      return
+
    def check_dir_exist(self, dir_path):
       if not os.path.exists(dir_path):
          logging.error(f"Directory not found: {dir_path}")
          raise FileNotFoundError(f"Directory not found: {dir_path}")
-      return 
-   
+      return
+
    def create_dir(self, dir_path):
       if not os.path.exists(dir_path):
          os.makedirs(dir_path)
-      return 
-   
+      return
+
    def remove_file(self, file_path):
       if os.path.exists(file_path):
          os.remove(file_path)
-      return 
-   
+      return
+
    def remove_dir(self, dir_path):
       if os.path.exists(dir_path):
          shutil.rmtree(f'{dir_path}', ignore_errors=True)
-      return 
-   
+      return
+
 
    def mk_dir(self,basedir,evaluation_only,comparison_only,comparisons,statistics,scores,metrics):
       self.basedir = basedir
 
       if evaluation_only or comparison_only:
          pass
-      else:      
+      else:
          self.remove_dir (f'{self.basedir}')
          self.create_dir (f'{self.basedir}')
          self.scratch_dir = os.path.join(f'{self.basedir}', 'scratch')

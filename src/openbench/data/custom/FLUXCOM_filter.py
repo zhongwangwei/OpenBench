@@ -1,4 +1,6 @@
 import logging
+
+
 def filter_FLUXCOM(info,ds):   #update info as well
    if info.item == "Net_Radiation":
       try:
@@ -6,7 +8,7 @@ def filter_FLUXCOM(info,ds):   #update info as well
       except:
          logging.error('Surface Net SW Radiation calculation processing ERROR!!!')
       return info, ds['Rn']
-   
+
    if info.item == "Latent_Heat":
       try:
          ds['LE']=ds['LE']
@@ -19,4 +21,3 @@ def filter_FLUXCOM(info,ds):   #update info as well
       except:
          logging.error('Sensible Heat calculation processing ERROR!!!')
       return info, ds['H']
-   

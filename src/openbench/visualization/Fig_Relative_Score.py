@@ -1,24 +1,23 @@
 import logging
-import warnings
-from matplotlib import colors
-from matplotlib import cm
-import matplotlib.pyplot as plt
-import xarray as xr
-import numpy as np
-import math
 import os
-import pandas as pd
-import matplotlib
+import warnings
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import xarray as xr
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
 
 from openbench.util.converttype import Convert_Type
+
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
+from .Fig_toolbox import get_index, tick_length
+
 
 def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, option):
     # Add check for empty or all-NaN array
@@ -246,7 +245,7 @@ def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
     ax.yaxis.set_major_formatter(lat_formatter)
 
     if option['title'] is None:
-        option['title'] = f'Correlation Results'
+        option['title'] = 'Correlation Results'
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
     plt.title(option['title'], fontsize=option['title_size'])

@@ -1,10 +1,12 @@
 import logging
+import os
+import sys
 
-import pandas as pd
 import numpy as np
-import os, sys
+import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
+
 
 def process_station(station, info, min_uparea, max_uparea):
     result = {
@@ -56,23 +58,23 @@ def filter_HydroWeb(info, ds=None):
        if data_vars:
            return info, ds[data_vars[0]]
        return info, ds
-   
+
    # Initialization mode
    if info.compare_tim_res.lower() != "d" :
       logging.error('The compare_res should be "Day" ')
       sys.exit(1)
    # Add logging import if not already imported
    import logging
-   
+
    # Confirm the resolution of info.sim_grid_res
    if not hasattr(info, 'sim_grid_res'):
        logging.error("sim_grid_res is not defined in info object")
        sys.exit(1)
-   
+
    if not isinstance(info.sim_grid_res, (int, float)):
        logging.error(f"sim_grid_res must be a number, got {type(info.sim_grid_res)}")
        sys.exit(1)
-       
+
    valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
    #ask user to input the resolution
    #add the reason for the input
@@ -81,7 +83,7 @@ def filter_HydroWeb(info, ds=None):
    if info.sim_grid_res not in valid_resolutions:
        logging.error(f"sim_grid_res value {info.sim_grid_res} is not in the list of standard resolutions: {valid_resolutions}")
        sys.exit(1)
-   
+
    if info.debug_mode:
        logging.info(f"Using simulation grid resolution: {info.sim_grid_res} degrees")
    if info.sim_grid_res == 0.25:
@@ -103,7 +105,7 @@ def filter_HydroWeb(info, ds=None):
 
    ind = station_list[station_list['Flag']].index
    data_select = station_list.loc[ind]
-    
+
    if info.sim_grid_res == 0.25:
       lat0 = np.arange(89.875, -90, -0.25)
       lon0 = np.arange(-179.875, 180, 0.25)
@@ -130,7 +132,7 @@ def filter_HydroWeb(info, ds=None):
             logging.warning(f"Warning: ID {data_select['ID'].values[iii]} lon is not match")
    logging.info(f"In total: {len(data_select['ID'])} stations are selected")
    if len(data_select['ID']) == 0:
-      logging.error(f"Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
+      logging.error("Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon")
       sys.exit(1)
    info.use_syear = data_select['use_syear'].min()
    info.use_eyear = data_select['use_eyear'].max()
@@ -142,6 +144,6 @@ def filter_HydroWeb(info, ds=None):
    data_select['obs_syear'] = data_select['obs_syear'].astype(int)
    data_select['obs_eyear'] = data_select['obs_eyear'].astype(int)
    data_select['ID'] = data_select['ID'] #.astype(int)
-   
+
    data_select.to_csv(f"{info.casedir}/stn_HydroWeb_{info.sim_source}_list.txt", index=False)
 

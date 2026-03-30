@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+import gc
+import logging
+import os
+
 import numpy as np
 import xarray as xr
 from joblib import Parallel, delayed
-import dask.array as da
-import logging
-import gc
-import os
+
 
 def stat_anova(self, *variables):
     """
@@ -27,8 +28,8 @@ def stat_anova(self, *variables):
 
     try:
         if analysis_type == 'twoway':
-            import statsmodels.formula.api as smf
             import statsmodels.api as sm
+            import statsmodels.formula.api as smf
             from scipy.stats import t
 
         elif analysis_type == 'oneway':
@@ -39,8 +40,6 @@ def stat_anova(self, *variables):
     except ImportError as e:
         logging.error(f"{e.name} is required for this function")
         raise ImportError(f"{e.name} is required for this function")
-    from joblib import Parallel, delayed
-    import gc
 
     # Separate dependent and independent variables
     Y_vars =variables[0]  # [var for var in variables if '_Y' in var.name]

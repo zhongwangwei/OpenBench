@@ -1,5 +1,3 @@
-import math
-import os
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -7,12 +5,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from matplotlib import cm
-from matplotlib import colors
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
+
 from openbench.util.converttype import Convert_Type
-from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
+
+from .Fig_toolbox import get_index
 
 # def get_index(vmin, vmax, colormap):
 #     def get_ticks(vmin, vmax):
@@ -134,7 +132,7 @@ def make_Correlation(file, method_name, main_nml, option):
     ax.yaxis.set_major_formatter(lat_formatter)
 
     if option['title'] is None:
-        option['title'] = f'Correlation Results'
+        option['title'] = 'Correlation Results'
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
     plt.title(option['title'], fontsize=option['title_size'])

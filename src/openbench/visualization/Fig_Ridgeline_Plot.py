@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import rcParams
 from scipy.stats import gaussian_kde
 
+
 def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered,
                                              option):
     if varname != 'nSpatialScore':
@@ -67,11 +68,11 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
             # Plot the KDE
             axes.fill_between(x_range, y_shift, y_range + y_shift, color=MLINES[sim_source]['lineColor'],
                                 alpha=MLINES[sim_source]['alpha'], zorder=n_plots - i)
-            axes.plot(x_range, y_range + y_shift, color="k", 
+            axes.plot(x_range, y_range + y_shift, color="k",
                             alpha=MLINES[sim_source]['alpha'], linewidth=MLINES[sim_source]['linewidth']*1.5, )
 
             # Add labels
-            axes.text(global_min-(global_max-global_min)/100, y_shift, sim_source, 
+            axes.text(global_min-(global_max-global_min)/100, y_shift, sim_source,
                     fontsize=option["fontsize"], fontweight='bold', ha='right', va='center')
             # Calculate and plot median
             median = np.median(data)
@@ -95,11 +96,11 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
         if not option['xlabel']:
             xlabel = varname.replace('_', ' ')
             if varname == 'percent_bias':
-                xlabel = varname.replace('_', ' ') + f' (showing value between [-100,100])'
+                xlabel = varname.replace('_', ' ') + ' (showing value between [-100,100])'
         if not option['title']:
             title = f'{evaluation_item.replace("_", " ")}'
         axes.set_xlabel(xlabel, fontsize=option['xtick'] + 4, weight='bold')
-        axes.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+        axes.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')
         axes.set_title(title, fontsize=option['title_fontsize'], pad=30, weight='bold')
 
         # Remove top and right spines
@@ -125,10 +126,11 @@ def make_scenarios_comparison_Ridgeline_Plot(basedir, evaluation_item, ref_sourc
 
 def generate_lines(data_names, option):
     import itertools
+
     import matplotlib.colors as mcolors
     lines = {}
     # add colors and symbols
-    hex_colors = ['#b1c5e1', '#c2b3d4', '#a7dc8f', '#f09f99', '#be9f98', 
+    hex_colors = ['#b1c5e1', '#c2b3d4', '#a7dc8f', '#f09f99', '#be9f98',
                 '#edbad0', '#dddb97', '#a9dae0', '#f8e9b9', '#7f7f7f','#f4be83',]
     # hex_colors = cm.vivid(np.linspace(0, 1, len(data_names) + 1))
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])

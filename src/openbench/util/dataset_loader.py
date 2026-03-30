@@ -8,13 +8,12 @@ It also provides cached glob operations to avoid repeated directory scans.
 """
 
 import glob as _glob
-import os
 import logging
+import os
 import time
-from typing import Dict, List, Optional, Union, Any
+from typing import Any, Dict, List, Optional, Union
 
 import xarray as xr
-
 
 # =============================================================================
 # Glob Caching

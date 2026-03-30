@@ -70,8 +70,8 @@ def reset_directory(path: str, timeout: float = 60.0, max_retries: int = 5, retr
     # Wait for directory to be stable
     wait_for_directory_stable(path, timeout=timeout)
 
-    import shutil
     import gc
+    import shutil
 
     # Try to remove the directory with retry mechanism
     for attempt in range(max_retries):

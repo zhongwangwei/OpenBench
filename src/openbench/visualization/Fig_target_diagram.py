@@ -10,16 +10,17 @@ import matplotlib.colors as clr
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib import rcParams
-from matplotlib import ticker
+from matplotlib import rcParams, ticker
 from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 
+
 def make_scenarios_comparison_Target_Diagram(basedir, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources, option):
-    import matplotlib.pyplot as plt
-    import matplotlib
-    from matplotlib import rcParams
     import os
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+    from matplotlib import rcParams
 
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -108,7 +109,7 @@ def target_diagram(*args, **kwargs):
 
     # Check for no arguments
     if len(args) == 0: return
-        
+
     # Process arguments (if given)
     ax, Bs, RMSDs, RMSDz = _get_target_diagram_arguments(*args)
 
@@ -132,7 +133,7 @@ def target_diagram(*args, **kwargs):
     elif lowcase == 'colorbar':
         plot_pattern_diagram_colorbar(ax,RMSDs,Bs,RMSDz,option)
     else:
-        raise ValueError('Unrecognized option: ' + 
+        raise ValueError('Unrecognized option: ' +
                         option['markerdisplayed'])
 
 def _display_target_diagram_options():
@@ -141,10 +142,10 @@ def _display_target_diagram_options():
     '''
 
     _disp('General options:')
-    _dispopt("'colormap'","'on'/ 'off' (default): "  + 
+    _dispopt("'colormap'","'on'/ 'off' (default): "  +
         "Switch to map color shading of markers to colormap ('on')\n\t\t"  +
         "or min to max range of RMSDz values ('off').")
-    _dispopt("'overlay'","'on' / 'off' (default): " + 
+    _dispopt("'overlay'","'on' / 'off' (default): " +
             'Switch to overlay current statistics on target diagram. ' +
             '\n\t\tOnly markers will be displayed.')
     _disp("OPTIONS when 'colormap' == 'on'")
@@ -153,23 +154,23 @@ def _display_target_diagram_options():
     _dispopt("'cmap_vmax'","Maximum range of colormap (Default: None)")
     _dispopt("'cmap_vmax'","Minimum range of colormap (Default: None)")
     _disp('')
-    
+
     _disp('Marker options:')
-    _dispopt("'MarkerDisplayed'", 
+    _dispopt("'MarkerDisplayed'",
         "'marker' (default): Experiments are represented by individual symbols\n\t\t" +
-        "'colorBar': Experiments are represented by a color described " + 
+        "'colorBar': Experiments are represented by a color described " +
         'in a colorbar')
-    
+
     _disp("OPTIONS when 'MarkerDisplayed' == 'marker'")
     _dispopt("'markerColor'",'Single color to use for all markers'  +
         ' (Default: None)')
     _dispopt("'markerColors'","Dictionary with two colors as keys ('face', 'edge')" +
-            "or None." + "\n\t\t" + 
-            "If None or 'markerlegend' == 'on' then considers only the value of " + 
+            "or None." + "\n\t\t" +
+            "If None or 'markerlegend' == 'on' then considers only the value of " +
             "'markerColor'. (Default: None)")
     _dispopt("'markerLabel'",'Labels for markers')
     _dispopt("'markerLabelColor'",'Marker label color (Default: black)')
-    _dispopt("'markerLayout'","Matrix layout for markers in legend [nrow, ncolumn]." + "\n\t\t" + 
+    _dispopt("'markerLayout'","Matrix layout for markers in legend [nrow, ncolumn]." + "\n\t\t" +
             "(Default: [15, no. markers/15])'")
     _dispopt("'markerLegend'","'on' / 'off' (default): Use legend for markers'")
 
@@ -179,7 +180,7 @@ def _display_target_diagram_options():
 
     _dispopt("'markerSize'",'Marker size (Default: 10)')
     _dispopt("'markerSymbol'","Marker symbol (Default: '.')")
-    
+
     _disp("OPTIONS when 'MarkerDisplayed' == 'colorbar'")
     _dispopt("'cmapZData'","Data values to use for " +
             'color mapping of markers, e.g. RMSD or BIAS.\n\t\t' +
@@ -188,7 +189,7 @@ def _display_target_diagram_options():
             "or 'EastOutside'")
     _dispopt("'titleColorBar'",'Title of the colorbar.')
     _disp('')
-    
+
     _disp('Axes options:')
     _dispopt("'axismax'",'Maximum for the Bias & uRMSD axis')
     _dispopt("'colFrame'",'Color for the y and x spines')
@@ -201,7 +202,7 @@ def _display_target_diagram_options():
     _dispopt("'ytickLabelPos'",'position of the tick labels ' +
             'along the y-axis (empty by default)')
     _disp('')
-    
+
     _disp('Diagram options:')
     _dispopt("'alpha'","Blending of symbol face color (0.0 transparent through 1.0 opaque)" +
             "\n\t\t" + "(Default: 1.0)")
@@ -218,7 +219,7 @@ def _display_target_diagram_options():
     _dispopt("'circleStyle'",'Line style for circles, e.g. "--" (Default: None)')
     _dispopt("'normalized'","'on' / 'off' (default): normalized target diagram")
     _dispopt("'obsUncertainty'",'Observational Uncertainty (default of 0)')
-    
+
     _disp('Plotting Options from File:')
     _dispopt("'target_options_file'","name of CSV file containing values for optional" +
             " arguments" +
@@ -295,7 +296,7 @@ def _get_target_diagram_arguments(*args):
     else:
         raise ValueError('Must supply 3 or 4 arguments.')
     del nargin
-        
+
     # Check data validity
     Bs = _ensure_np_array_or_die(bs, "Bs")
     RMSDs = _ensure_np_array_or_die(rmsds, "RMSDs")
@@ -323,11 +324,11 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
         prochford@thesymplectic.com
     Hello
     '''
-    
+
     class ScalarFormatterClass(ScalarFormatter):
         def _set_format(self):
             self.format = "%1.1f"
-    
+
     class Labeloffset():
         def __init__(self,  ax, label="", axis="y"):
             self.axis = {"y":ax.yaxis, "x":ax.xaxis}[axis]
@@ -341,7 +342,7 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
         self.axis.offsetText.set_visible(False)
         self.axis.set_label_text(self.label + " ("+ fmt.get_offset()+")" )
         print(fmt.get_offset())
-    
+
     axes_handles = []
     fontFamily = rcParams.get('font.family')
 
@@ -351,7 +352,7 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
     ax.spines['bottom'].set_position('zero')
     ax.spines['right'].set_color('none')
     ax.spines['top'].set_color('none')
-    
+
     # Make axes square
     ax.set_aspect('equal')
 
@@ -360,7 +361,7 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
     ax.set_xticklabels(axes['xlabel'], fontfamily=fontFamily)
     ax.set_yticks(axes['ytick'])
     ax.set_yticklabels(axes['ylabel'], fontfamily=fontFamily)
-    
+
     # Set axes limits
     axislim = [axes['xtick'][0], axes['xtick'][-1], axes['ytick'][0], axes['ytick'][-1]]
     ax.set_xlim(axislim[0:2])
@@ -380,11 +381,11 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
     xlabelh.set_horizontalalignment('left')
     ax.xaxis.set_label_coords(xpos, ypos, transform=ax.transData)
     ax.tick_params(axis='x', direction='in') # have ticks above axis
-    
+
     # Label y-axis
     xpos = 0
     ypos = axes['ytick'][-1] + 2*axes['ytick'][-1]/30
-    if axes['yoffset'] == 'None':        
+    if axes['yoffset'] == 'None':
         ax.set_ylabel('Bias ', fontsize = fontSize, rotation=0)
     else:
         ax.set_ylabel('Bias ' + '(' + axes['yoffset'] + ')', fontsize = fontSize, rotation=0)
@@ -393,12 +394,12 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
     ylabelh.set_horizontalalignment('center')
     ax.yaxis.set_label_coords(xpos, ypos, transform=ax.transData)
     ax.tick_params(axis='y', direction='in') # have ticks on right side of axis
-    
+
     # Set axes line width
     lineWidth = rcParams.get('lines.linewidth')
     ax.spines['left'].set_linewidth(lineWidth)
     ax.spines['bottom'].set_linewidth(lineWidth)
-    
+
     return axes_handles
 
 def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
@@ -443,11 +444,11 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
 
     # Set face color transparency
     alpha = option['alpha']
-    
+
     # Set font and marker size
     fontSize = matplotlib.rcParams.get('font.size') - 2
     markerSize = option['markersize']
-    
+
     # Check enough labels provided if markerlabel provided. Not a problem if labels
     # provided via the markers option.
     numberLabel = len(option['markerlabel'])
@@ -461,7 +462,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         elif isinstance(option['markerlabel'], dict) and numberLabel > 70:
             raise ValueError('Insufficient number of marker labels provided.\n' +
                             'target: No. labels=' + str(numberLabel) + ' > No. markers= 70')
-    
+
     if option['markerlegend'] == 'on':
         # Check that marker labels have been provided
         if option['markerlabel'] == '' and option['markers'] is None:
@@ -475,7 +476,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         if option['markers'] is None:
             # Define default markers (function)
             marker, markercolor = get_default_markers(X, option)
-        
+
             # Plot markers at data points
             labelcolor = []
             markerlabel = []
@@ -493,7 +494,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             # Obtain markers from option['markers']
             labels, labelcolor, marker, markersize, markerfacecolor, markeredgecolor = \
                 get_single_markers(option['markers'])
-        
+
             # Plot markers at data points
             markerlabel = []
             for i, xval in enumerate(X):
@@ -513,7 +514,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     else:
         # Plot markers as dots of a single color with accompanying labels
 
-        
+
         # Plot markers at data points
         limit = option['axismax']
 
@@ -534,7 +535,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                         markerfacecolor=face_color,
                         markeredgecolor=edge_color)
                 labelcolor.append(option['markerlabelcolor'])
-                
+
                 # Check if marker labels provided
                 if type(option['markerlabel']) is list:
                     # Label marker
@@ -593,7 +594,7 @@ def get_single_markers(markers: dict):
     markeredgecolor = []
     markerlabel = []
     markersize = []
-    
+
     # Iterate through keys in dictionary
     for key in markers:
         color = markers[key]['faceColor']
@@ -642,7 +643,7 @@ def get_default_markers(X, option: dict):
     if len(X) > 80:
         _disp('You must introduce new markers to plot more than 70 cases.')
         _disp('The ''marker'' character array need to be extended inside the code.')
-    
+
     if len(X) <= len(kind):
         # Define markers with specified color
         marker = []
@@ -716,14 +717,14 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp =
     '''
 
     if type(markerLabel) is list:
-        
+
         # Check for empty list of plot handles
         if len(hp) == 0:
             raise ValueError('Empty list of plot handles')
         elif len(hp) != len(markerLabel):
             raise ValueError('Number of labels and plot handle do not match: ' +
                             str(len(markerLabel)) + ' != ' + str(len(hp)))
-        
+
         # Add legend using labels provided as list
         if len(markerLabel) <= 6:
             # Put legend in a default location
@@ -763,9 +764,9 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp =
                             numpoints=1, ncol = ncol)
 
     elif type(markerLabel) is dict:
-        
+
         # Add legend using labels provided as dictionary
-            
+
         # Define legend elements
         legend_elements = []
         for key, value in markerLabel.items():
@@ -782,18 +783,18 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp =
             # add padding so legend is not cut off
             plt.tight_layout(pad=1)
     else:
-        raise Exception('markerLabel type is not a list or dictionary: ' + 
+        raise Exception('markerLabel type is not a list or dictionary: ' +
                         str(type(markerLabel)))
-    
+
     # Set color of text in legend
     for i, text in enumerate(leg.get_texts()):
         text.set_color(labelcolor[i])
 
-def _checkKey(dictionary, key): 
-    if key in dictionary.keys(): 
+def _checkKey(dictionary, key):
+    if key in dictionary.keys():
         return True
-    else: 
-        return False 
+    else:
+        return False
 
 def get_from_dict_or_default(options: dict, default_key: str, dict_key: str, key_key: str):
     '''
@@ -833,20 +834,20 @@ def _check_dict_with_keys(variable_name: str, dict_obj: Union[dict, None],
     Check if an argument in the form of dictionary has valid keys.
     :return: None. Raise 'ValueError' if evaluated variable is considered invalid. 
     """
-    
+
     # if variable is None, check if it can be None
     if dict_obj is None:
         if or_none:
             return None
         else:
             raise ValueError('%s cannot be None!' % variable_name)
-    
+
     # check if every key provided is valid
     for key in dict_obj.keys():
         if key not in accepted_keys:
             raise ValueError('Unrecognized option of %s: %s' % (variable_name, key))
         del key
-    
+
     return None
 
 def _circle_color_style(option : dict) -> dict:
@@ -861,7 +862,7 @@ def _circle_color_style(option : dict) -> dict:
     else:
         option['circlecolor'] = option['circlelinespec'][0]
         option['circlestyle'] = option['circlelinespec'][1:]
-    
+
     return option
 
 def is_int(element):
@@ -883,7 +884,7 @@ def is_float(element):
         return True
     except ValueError:
         return False
-    
+
 def is_list_in_string(element):
     '''
     Check if variable is list provided as string 
@@ -1013,7 +1014,7 @@ def _default_options() -> dict:
 
     option['colormap'] = 'on'
     option['equalaxes'] = 'on'
-    
+
     option['labelweight'] = 'bold' # weight of the x/y labels ('light', 'normal', 'bold', ...)
     option['locationcolorbar'] = 'NorthOutside'
 
@@ -1032,11 +1033,11 @@ def _default_options() -> dict:
     option['normalized'] = 'off'
     option['obsuncertainty'] = 0.0
     option['overlay'] = 'off'
-    
+
     option['stylebias'] = '-.'
-        
+
     option['target_options_file'] = ''
-    
+
     option['ticks'] = []
     option['titlecolorbar'] = ''
     option['xticklabelpos'] = []
@@ -1070,14 +1071,14 @@ def _get_options(option, **kwargs) -> dict:
     Created on Sep 17, 2022
     Revised on Sep 17, 2022
     '''
-    
+
     # Check for valid keys and values in dictionary
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
         if optname == 'nonrmsdz':
             raise ValueError('nonrmsdz is an obsolete option. Use cmapzdata instead.')
 
-        if not optname in option:
+        if optname not in option:
             raise ValueError('Unrecognized option: ' + optname)
         else:
             # Replace option value with that from arguments
@@ -1104,7 +1105,7 @@ def _get_options(option, **kwargs) -> dict:
                                     str(optvalue))
             elif optname == 'markerlegend':
                 option['markerlegend'] = check_on_off(option['markerlegend'])
-                
+
             elif optname in {'markercolors'}:
                 accepted_keys = {
                     'markercolors': {'face', 'edge'},
@@ -1124,8 +1125,8 @@ def _get_options(option, **kwargs) -> dict:
             elif optname == 'circlelabelsize':
                 option['circlelabelsize'] = optvalue
 
-        del optname, optvalue   
-    
+        del optname, optvalue
+
     return option
 
 def _read_options(option, **kwargs) -> dict:
@@ -1162,47 +1163,47 @@ def _read_options(option, **kwargs) -> dict:
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
         if optname == 'target_options_file':
-            name = optvalue 
-            break 
+            name = optvalue
+            break
     if not name: return option
-    
+
     # Check if CSV file suffix
     filename, file_extension = os.path.splitext(name)
-    
+
     if file_extension == "":
         filename = name + '.csv'
     elif name.endswith('.csv'):
         filename = name
     else:
         raise Exception("Invalid file type: " + name)
-    
+
     # Check if file exists
     if not os.path.isfile(filename):
         raise Exception("File does not exist: " + filename)
-        
+
     # Load object from CSV file
     objectData = pd.read_csv(filename)
-    
+
     # Parse object for keys and values
     keys = objectData.iloc[:,0]
     values = objectData.iloc[:,1].tolist()
 
-    # Identify keys requiring special consideration   
+    # Identify keys requiring special consideration
     listkey = ['cmapzdata', 'circles']
     tuplekey = []
-    
+
     # Process for options read from CSV file
     for index in range(len(keys)):
-        
+
         # Skip assignment if no value provided in CSV file
         if pd.isna(values[index]):
             continue
-        
+
         # Convert list provided as string
         if is_list_in_string(values[index]):
             # Remove brackets
             values[index] = values[index].replace('[','').replace(']','')
-        
+
         if keys[index] in listkey:
             if pd.isna(values[index]):
                 option[keys[index]]=[]
@@ -1211,7 +1212,7 @@ def _read_options(option, **kwargs) -> dict:
                 split_string = re.split(' |,', values[index])
                 split_string = ' '.join(split_string).split()
                 option[keys[index]] = [float(x) for x in split_string]
-        
+
         elif keys[index] in tuplekey:
             try:
                 option[keys[index]]=eval(values[index])
@@ -1266,7 +1267,7 @@ def check_on_off(value):
         raise ValueError('Invalid value: ' + str(value))
 
     return value
-    
+
 def get_target_diagram_options(**kwargs) -> dict:
     '''
     Get optional arguments for target_diagram function.
@@ -1303,14 +1304,14 @@ def get_target_diagram_options(**kwargs) -> dict:
     # No options requested, so return with only defaults
     if nargin == 0: return option
 
-    # Read the optional arguments for taylor_diagram function from a 
-    # CSV file, if specified. 
+    # Read the optional arguments for taylor_diagram function from a
+    # CSV file, if specified.
     option = _read_options(option, **kwargs)
 
     # Check for valid keys and values in dictionary
     # Allows user to override options specified in CSV file
     option = _get_options(option, **kwargs)
-    
+
     return option
 
 def find_exp(number) -> int:
@@ -1378,8 +1379,8 @@ def get_target_diagram_axes(x,y,option) -> dict:
     if ntest > 0:
         nxticks = np.sum(xtickvals > 0)
         nyticks = np.sum(ytickvals > 0)
-        
-        # Save nxticks and nyticks as function attributes for later 
+
+        # Save nxticks and nyticks as function attributes for later
         # retrieval in function calls
         get_target_diagram_axes.nxticks = nxticks
         get_target_diagram_axes.nyticks = nyticks
@@ -1391,7 +1392,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
             nyticks = get_target_diagram_axes.nyticks
         else:
             raise ValueError('No saved values for nxticks & nyticks.')
-    
+
     # Set default tick increment and maximum axis values
     if foundmax == 0:
         maxx = xtickvals[-1]
@@ -1411,7 +1412,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
     if type(maxx) is float and maxx.is_integer(): maxx = int(round(maxx))
     if type(maxx) is float and maxy.is_integer(): maxy = int(round(maxy))
     minx = -maxx; miny = -maxy
-    
+
     # Determine tick values
     if len(option['ticks']) > 0:
         xtick = option['ticks']
@@ -1427,10 +1428,10 @@ def get_target_diagram_axes(x,y,option) -> dict:
         option['xticklabelpos'] = xtick
     if len(option['yticklabelpos']) == 0:
         option['yticklabelpos'] = ytick
-    
+
     #define x offset
     thexoffset = find_exp(maxx)
-    if use_sci_notation(maxx): 
+    if use_sci_notation(maxx):
         ixsoffset = True
         xsoffset_str = r"$\tx\mathdefault{10^{"+ str(thexoffset) +r"}}\mathdefault{}$"
     else:
@@ -1438,22 +1439,22 @@ def get_target_diagram_axes(x,y,option) -> dict:
         xsoffset_str = 'None'
 
     theyoffset = find_exp(maxy)
-    if use_sci_notation(maxy): 
+    if use_sci_notation(maxy):
         iysoffset = True
         ysoffset_str = r"$\tx\mathdefault{10^{"+str(theyoffset)+r"}}\mathdefault{}$"
     else:
         iysoffset = False
         ysoffset_str = 'None'
-    
+
     # Set tick labels using provided tick label positions
-    xlabel =[]; ylabel = [];
-    
+    xlabel =[]; ylabel = []
+
     # Set x tick labels
     for i in range(len(xtick)):
         index = np.where(option['xticklabelpos'] == xtick[i])
         if len(index) > 0:
             thevalue = xtick[i]
-            if ixsoffset: 
+            if ixsoffset:
                 thevalue = xtick[i] * (10**(-1*thexoffset))
                 label = get_axis_tick_label(thevalue)
                 xlabel.append(label)
@@ -1465,14 +1466,14 @@ def get_target_diagram_axes(x,y,option) -> dict:
 
     # Set tick labels at 0 to blank
     blank_at_zero(xtick,xlabel)
-    
+
     # Set y tick labels
     for i in range(len(ytick)):
         index = np.where(option['yticklabelpos'] == ytick[i])
         if len(index) > 0:
             thevalue = ytick[i]
-            if iysoffset: 
-                thevalue = ytick[i] * (10**(-1*theyoffset)) 
+            if iysoffset:
+                thevalue = ytick[i] * (10**(-1*theyoffset))
                 label = get_axis_tick_label(thevalue)
                 ylabel.append(label)
             else:
@@ -1483,7 +1484,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
 
     # Set tick labels at 0 to blank
     blank_at_zero(ytick,ylabel)
-    
+
     # Store output variables in data structure
     axes = {}
     axes['xtick'] = xtick
@@ -1492,7 +1493,7 @@ def get_target_diagram_axes(x,y,option) -> dict:
     axes['ylabel'] = ylabel
     axes['xoffset'] = xsoffset_str
     axes['yoffset'] = ysoffset_str
-    
+
     return axes
 
 def get_axis_tick_label(value):
@@ -1520,7 +1521,7 @@ def get_axis_tick_label(value):
     number_digits = 0
     if not use_sci_notation(value):
         label = str(value)
-        
+
         # Get substring after period
         trailing = label.partition('.')[2]
         number_sigfig = 0
@@ -1538,7 +1539,7 @@ def get_axis_tick_label(value):
                     before = trailing[number_digits]
                     number_sigfig = number_digits - 1
                 number_digits+=1
-    
+
         if number_digits == len(trailing): number_sigfig = number_digits
 
         # Round up the number to desired significant figures
@@ -1644,7 +1645,7 @@ def overlay_target_diagram_circles(ax: matplotlib.axes.Axes, option: dict) -> No
             circles = np.asarray(option['circles'])
             index = np.where(circles <= option['axismax'])
             circles = [option['circles'][i] for i in index[0]]
-    
+
     # 2 - secondary circles
     for c in circles:
         rho = c * unit
@@ -1722,7 +1723,7 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
                     cmap=option['cmap'], vmin=option['cmap_vmin'],
                     vmax=option['cmap_vmax'])
     hp.set_facecolor(hp.get_edgecolor())
-    
+
     # Set parameters for color bar location
     location = option['locationcolorbar'].lower()
     xscale= 1.0
@@ -1741,18 +1742,18 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
             cxscale = 6*fontSize/10
             labelpad = -30
     else:
-        raise ValueError('Invalid color bar location: ' + option['locationcolorbar']);
-    
+        raise ValueError('Invalid color bar location: ' + option['locationcolorbar'])
+
     # Add color bar to plot
     if option['colormap'] == 'on':
-        # map color shading of markers to colormap 
+        # map color shading of markers to colormap
         hc = plt.colorbar(hp,orientation = orientation, aspect = aspect,
                         fraction = fraction, pad=0.06, ax = ax)
 
         # Limit number of ticks on color bar to reasonable number
         if orientation == 'horizontal':
             _setColorBarTicks(hc,5,20)
-        
+
     elif option['colormap'] == 'off':
         # map color shading of markers to min to max range of Z values
         if len(Z) > 1:
@@ -1760,13 +1761,13 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
             hc = ax.colorbar(hp,orientation = orientation, aspect = aspect,
                             fraction = fraction, pad=0.06, ticks=[min(Z), max(Z)],
                             ax = ax)
-            
+
             # Label just min/max range
             hc.set_ticklabels(['Min.', 'Max.'])
     else:
-        raise ValueError('Invalid option for option.colormap: ' + 
-                        option['colormap']);
-    
+        raise ValueError('Invalid option for option.colormap: ' +
+                        option['colormap'])
+
     if orientation == 'horizontal':
         location = _getColorBarLocation(hc, option, xscale = xscale,
                                     yscale = 7.5, cxscale = cxscale)
@@ -1785,7 +1786,7 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
         if orientation == 'horizontal':
             hc.set_label(option['titlecolorbar'],fontsize=fontSize)
         else:
-            hc.set_label(option['titlecolorbar'],fontsize=fontSize, 
+            hc.set_label(option['titlecolorbar'],fontsize=fontSize,
                         labelpad=labelpad, y=1.05, rotation=0)
     else:
         hc.set_label(hc,'Color Scale',fontsize=fontSize)
@@ -1868,8 +1869,8 @@ def _setColorBarTicks(hc,numBins,lenTick):
         # Limit number of ticks on color bar to numBins-1
         hc.locator = ticker.MaxNLocator(nbins=numBins, prune = 'both')
         hc.update_ticks()
-        
-        # Check number of characters in tick labels is 
+
+        # Check number of characters in tick labels is
         # acceptable, otherwise reduce number of bins
         locs = str(hc.get_ticks())
         locs = locs[1:-1].split()
@@ -1884,6 +1885,7 @@ def _disp(text):
 
 def generate_markers(data_names, option):
     import itertools
+
     import matplotlib.colors as mcolors
     markers = {}
 

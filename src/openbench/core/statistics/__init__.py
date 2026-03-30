@@ -31,22 +31,22 @@ Examples:
 """
 
 from .base import statistics_calculate
-from .stat_correlation import stat_correlation
-from .stat_standard_deviation import stat_standard_deviation
-from .stat_z_score import stat_z_score
-from .stat_Basic import stat_mean, stat_median, stat_max, stat_min, stat_sum
-from .stat_covariance import stat_covariance
+from .stat_anova import stat_anova
 from .stat_autocorrelation import stat_autocorrelation
+from .stat_Basic import stat_max, stat_mean, stat_median, stat_min, stat_sum
+from .stat_correlation import stat_correlation
+from .stat_covariance import stat_covariance
 from .stat_diff import stat_diff
-from .stat_resample import stat_resample
-from .stat_rolling import stat_rolling
+from .stat_False_Discovery_Rate import stat_False_Discovery_Rate
 from .stat_functional_response import stat_functional_response
 from .stat_hellinger_distance import stat_hellinger_distance
-from .stat_three_cornered_hat import stat_three_cornered_hat
-from .stat_partial_least_squares_regression import stat_partial_least_squares_regression
 from .stat_mann_kendall_trend_test import stat_mann_kendall_trend_test
-from .stat_False_Discovery_Rate import stat_False_Discovery_Rate
-from .stat_anova import stat_anova
+from .stat_partial_least_squares_regression import stat_partial_least_squares_regression
+from .stat_resample import stat_resample
+from .stat_rolling import stat_rolling
+from .stat_standard_deviation import stat_standard_deviation
+from .stat_three_cornered_hat import stat_three_cornered_hat
+from .stat_z_score import stat_z_score
 
 # Attach all statistical functions to the main calculator class
 statistics_calculate.stat_correlation = stat_correlation

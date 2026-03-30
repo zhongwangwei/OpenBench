@@ -5,19 +5,16 @@ Report Generation Module for OpenBench
 Generates comprehensive HTML and PDF evaluation reports with tables, figures, and detailed analysis
 """
 
+import glob
 import os
-import json
+import shutil
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 import pandas as pd
 import xarray as xr
-from datetime import datetime
-from typing import Dict, List, Optional, Union, Any
-from pathlib import Path
-import base64
-from io import BytesIO
-import numpy as np
 from jinja2 import Template
-import glob
-import shutil
 
 # Import PDF generation libraries
 try:
@@ -34,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     """Generate comprehensive evaluation reports in HTML and PDF formats"""
-    
+
     def __init__(self, config: Dict[str, Any], output_dir: str):
         """
         Initialize the report generator
@@ -50,33 +47,33 @@ class ReportGenerator:
         self.scores_dir = os.path.join(output_dir, "scores")
         self.comparisons_dir = os.path.join(output_dir, "comparisons")
         self.data_dir = os.path.join(output_dir, "data")
-        
+
         # Create reports directory if it doesn't exist
         os.makedirs(self.report_dir, exist_ok=True)
-        
+
         # Report metadata - only include enabled evaluation items
         enabled_items = []
         if isinstance(config.get("evaluation_items"), dict):
             enabled_items = [item for item, enabled in config["evaluation_items"].items() if enabled]
         elif isinstance(config.get("evaluation_items"), list):
             enabled_items = config["evaluation_items"]
-        
+
         # Get enabled metrics and scores from configuration
         self.enabled_metrics = [metric for metric, enabled in config.get("metrics", {}).items() if enabled]
         self.enabled_scores = [score for score, enabled in config.get("scores", {}).items() if enabled]
-        
+
         # Get enabled comparisons from configuration
         self.enabled_comparisons = [comp for comp, enabled in config.get("comparisons", {}).items() if enabled]
-        
+
         self.metadata = {
             "title": "OpenBench Evaluation Report",
             "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "config_file": config.get("config_file", "N/A"),
             "evaluation_items": enabled_items
         }
-        
+
         logger.info(f"Report generator initialized with output directory: {self.report_dir}")
-    
+
     def generate_report(self, report_name: str = "evaluation_report") -> Dict[str, str]:
         """
         Generate both HTML and PDF reports
@@ -88,39 +85,39 @@ class ReportGenerator:
             Dictionary with paths to generated reports
         """
         logger.info("Starting report generation...")
-        
+
         # Collect all data
         report_data = self._collect_report_data()
-        
+
         # Copy all relevant figures to report directory first
         self._copy_figures_to_report_dir()
-        
+
         # Verify figure paths before generating reports
         self._verify_figure_paths(report_data)
-        
+
         # Generate HTML report
         html_path = self._generate_html_report(report_data, report_name)
-        
+
         # Generate PDF report (after figures are copied)
         pdf_path = self._generate_pdf_report(html_path, report_name)
-        
-        logger.info(f"Report generation completed successfully")
+
+        logger.info("Report generation completed successfully")
         logger.info(f"HTML report: {html_path}")
         if pdf_path:
             logger.info(f"PDF report: {pdf_path}")
-        
+
         result = {
             "html": html_path
         }
         if pdf_path:
             result["pdf"] = pdf_path
-        
+
         return result
-    
+
     def _collect_report_data(self) -> Dict[str, Any]:
         """Collect all data needed for the report"""
         logger.info("Collecting report data...")
-        
+
         report_data = {
             "metadata": self.metadata,
             "evaluation_items": {},
@@ -128,7 +125,7 @@ class ReportGenerator:
             "comparisons": {},
             "climate_zone_analysis": {}
         }
-        
+
         # Collect data for each evaluation item
         for item in self.metadata["evaluation_items"]:
             logger.info(f"Collecting data for {item}")
@@ -138,7 +135,7 @@ class ReportGenerator:
                 "figures": self._collect_figures(item),
                 "statistics": self._collect_statistics(item)
             }
-            
+
             # Debug logging
             logger.info(f"Collected data for {item}:")
             logger.info(f"  - Figures: {list(item_data['figures'].keys())}")
@@ -146,28 +143,28 @@ class ReportGenerator:
             for fig_type, figs in item_data['figures'].items():
                 if figs:
                     logger.info(f"    {fig_type}: {len(figs)} figures")
-            
+
             report_data["evaluation_items"][item] = item_data
-        
+
         # Collect comparison data
         report_data["comparisons"] = self._collect_comparison_data()
-        
+
         # Collect overall summary
         report_data["overall_summary"] = self._generate_overall_summary(report_data)
-        
+
         # Collect groupby analysis summary
         report_data["groupby_summary"] = self._generate_groupby_analysis_summary(report_data)
-        
+
         return report_data
-    
+
     def _collect_metrics_data(self, item: str) -> Dict[str, Any]:
         """Collect metrics data for a specific evaluation item"""
         metrics_data = {}
-        
+
         # Look for CSV files with evaluation results
         csv_pattern = os.path.join(self.metrics_dir, f"{item}_*_evaluations.csv")
         csv_files = glob.glob(csv_pattern)
-        
+
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
             try:
@@ -178,7 +175,7 @@ class ReportGenerator:
                 }
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
-        
+
         # Generate comprehensive grid vs grid statistics from NetCDF files
         grid_grid_stats = self._generate_grid_vs_grid_stats(item)
         grid_grid_pairs = set()
@@ -188,11 +185,11 @@ class ReportGenerator:
             for key in grid_grid_stats.keys():
                 if "vs" in key:
                     grid_grid_pairs.add(key)
-        
+
         # Look for individual NetCDF files with spatial metrics
         nc_pattern = os.path.join(self.metrics_dir, f"{item}_*.nc")
         nc_files = glob.glob(nc_pattern)
-        
+
         for nc_file in nc_files:
             if "_evaluations" not in nc_file:  # Skip CSV-related files
                 # Skip NetCDF files that are already covered by comprehensive grid vs grid stats
@@ -206,11 +203,11 @@ class ReportGenerator:
                             main_var = ds[data_vars[0]]
                             # Extract comprehensive statistics
                             valid_data = main_var.values[~np.isnan(main_var.values)]
-                            
+
                             if len(valid_data) > 0:
                                 # Try to extract comparison pair from filename first, then fallback to config
                                 comparison_pair = self._extract_comparison_pair(key)
-                                
+
                                 # If we can extract ref and sim sources from filename, try to get better name from config
                                 if "ref_" in key and "sim_" in key:
                                     try:
@@ -218,7 +215,7 @@ class ReportGenerator:
                                         parts = key.split('_')
                                         ref_source = None
                                         sim_source = None
-                                        
+
                                         for i, part in enumerate(parts):
                                             if part == "ref" and i + 1 < len(parts):
                                                 ref_parts = []
@@ -227,7 +224,7 @@ class ReportGenerator:
                                                     ref_parts.append(parts[j])
                                                     j += 1
                                                 ref_source = "_".join(ref_parts)
-                                                
+
                                             elif part == "sim" and i + 1 < len(parts):
                                                 sim_parts = []
                                                 j = i + 1
@@ -236,12 +233,12 @@ class ReportGenerator:
                                                     j += 1
                                                 sim_source = "_".join(sim_parts)
                                                 break
-                                        
+
                                         if ref_source and sim_source:
                                             comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
                                     except Exception as e:
                                         logger.warning(f"Error extracting sources from filename {key}: {e}")
-                                
+
                                 metrics_data[key] = {
                                     "global_mean": float(np.mean(valid_data)),
                                     "global_std": float(np.std(valid_data)),
@@ -261,17 +258,17 @@ class ReportGenerator:
                             logger.warning(f"No data variables found in {nc_file}")
                 except Exception as e:
                     logger.warning(f"Error reading {nc_file}: {e}")
-        
+
         return metrics_data
-    
+
     def _collect_scores_data(self, item: str) -> Dict[str, Any]:
         """Collect scores data for a specific evaluation item"""
         scores_data = {}
-        
+
         # Similar to metrics collection
         csv_pattern = os.path.join(self.scores_dir, f"{item}_*_evaluations.csv")
         csv_files = glob.glob(csv_pattern)
-        
+
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
             try:
@@ -282,13 +279,13 @@ class ReportGenerator:
                 }
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
-        
+
         # Note: Individual NetCDF files in scores directory are not processed separately
         # as they are already included in the comprehensive grid vs grid statistics
         # generated by _generate_grid_vs_grid_stats in the metrics collection
-        
+
         return scores_data
-    
+
     def _collect_figures(self, item: str) -> Dict[str, List[str]]:
         """Collect all figures related to an evaluation item"""
         figures = {
@@ -299,22 +296,22 @@ class ReportGenerator:
             "pft_groupby": [],
             "climate_zone_groupby": []
         }
-        
+
         # Metrics figures
         metrics_pattern = os.path.join(self.metrics_dir, f"{item}_*.jpg")
         figures["metrics"] = [os.path.basename(f) for f in glob.glob(metrics_pattern)]
-        
+
         # Scores figures
         scores_pattern = os.path.join(self.scores_dir, f"{item}_*.jpg")
         figures["scores"] = [os.path.basename(f) for f in glob.glob(scores_pattern)]
-        
+
         # Comparison figures (from various subdirectories)
         comparison_dirs = ["Taylor_Diagram", "Target_Diagram", "Whisker_Plot",
                           "Ridgeline_Plot", "Kernel_Density_Estimate", "Parallel_Coordinates",
                           "HeatMap", "RadarMap", "Relative_Score", "Diff_Plot",
                           "Single_Model_Performance_Index", "Correlation", "Functional_Response",
                           "Standard_Deviation", "Mann_Kendall_Trend_Test", "Portrait_Plot_seasonal"]
-        
+
         for comp_dir in comparison_dirs:
             # HeatMap and RadarMap show aggregate data across all items, not per-item
             # They use naming patterns like scenarios_{score}_comparison_heatmap.jpg
@@ -324,7 +321,7 @@ class ReportGenerator:
                 comp_path = os.path.join(self.comparisons_dir, comp_dir, f"*{item}*.jpg")
             comp_files = glob.glob(comp_path)
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
-        
+
         # IGBP groupby figures - now primarily in comparisons directory
         igbp_files = []
         # Check comparisons directory as the primary location
@@ -340,17 +337,17 @@ class ReportGenerator:
             # Also check the root directory
             root_files = glob.glob(os.path.join(igbp_comp_dir, f"*{item}*.jpg"))
             igbp_files.extend(root_files)
-        
+
         # Format paths relative to the base directory
         figures["igbp_groupby"] = []
         for f in igbp_files:
             if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["igbp_groupby"].append(f"comparisons/{rel_path}")
-        
+
         if figures["igbp_groupby"]:
             logger.info(f"Found IGBP groupby figures: {figures['igbp_groupby']}")
-        
+
         # PFT groupby figures - now primarily in comparisons directory
         pft_files = []
         # Check comparisons directory as the primary location
@@ -366,18 +363,18 @@ class ReportGenerator:
             # Also check the root directory
             root_files = glob.glob(os.path.join(pft_comp_dir, f"*{item}*.jpg"))
             pft_files.extend(root_files)
-        
+
         # Format paths relative to the base directory
         figures["pft_groupby"] = []
         for f in pft_files:
             if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["pft_groupby"].append(f"comparisons/{rel_path}")
-        
+
         if figures["pft_groupby"]:
             logger.info(f"Found PFT groupby figures: {figures['pft_groupby']}")
-        
-        # Climate zone groupby figures - now primarily in comparisons directory  
+
+        # Climate zone groupby figures - now primarily in comparisons directory
         climate_files = []
         # Check comparisons directory as the primary location - note the directory might be CZ_groupby
         for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
@@ -393,65 +390,65 @@ class ReportGenerator:
                 # Also check the root directory
                 root_files = glob.glob(os.path.join(cz_comp_dir, f"*{item}*.jpg"))
                 climate_files.extend(root_files)
-        
+
         # Format paths relative to the base directory
         figures["climate_zone_groupby"] = []
         for f in climate_files:
             if self.comparisons_dir in f:
                 rel_path = os.path.relpath(f, self.comparisons_dir)
                 figures["climate_zone_groupby"].append(f"comparisons/{rel_path}")
-        
+
         if figures["climate_zone_groupby"]:
             logger.info(f"Found Climate zone groupby figures: {figures['climate_zone_groupby']}")
-        
+
         return figures
-    
+
     def _collect_statistics(self, item: str) -> Dict[str, Any]:
         """Collect statistical analysis results"""
         stats = {}
-        
+
         # Check for statistical outputs in comparisons directory
         stat_dirs = ["Mean", "Median", "Min", "Max", "Standard_Deviation", "Mann_Kendall_Trend_Test"]
-        
+
         for stat_dir in stat_dirs:
             stat_path = os.path.join(self.comparisons_dir, stat_dir, f"{item}_*.nc")
             stat_files = glob.glob(stat_path)
-            
+
             if stat_files:
                 stats[stat_dir] = [os.path.basename(f) for f in stat_files]
-        
+
         # Collect groupby statistics
         groupby_stats = self._collect_groupby_statistics(item)
         if groupby_stats:
             stats.update(groupby_stats)
-        
+
         return stats
-    
+
     def _collect_groupby_statistics(self, item: str) -> Dict[str, Any]:
         """Collect groupby statistics for IGBP, PFT, and Climate zone"""
         groupby_stats = {}
-        
+
         # Define groupby types and their corresponding directories
         groupby_types = {
             "IGBP_groupby": ["IGBP_groupby"],
-            "PFT_groupby": ["PFT_groupby"], 
+            "PFT_groupby": ["PFT_groupby"],
             "Climate_zone_groupby": ["Climate_zone_groupby", "CZ_groupby"]
         }
-        
+
         for groupby_name, groupby_dirs in groupby_types.items():
             # Check in metrics, scores, and comparisons directories
             csv_files = []
             nc_files = []
             txt_files = []
-            
+
             for groupby_dir in groupby_dirs:
                 for base_dir in [self.metrics_dir, self.scores_dir, self.comparisons_dir]:
                     groupby_path = os.path.join(base_dir, groupby_dir)
                     if not os.path.exists(groupby_path):
                         continue
-                    
+
                     logger.info(f"Checking groupby directory: {groupby_path}")
-                    
+
                     # Look in subdirectories for txt files with statistics
                     for subdir in glob.glob(os.path.join(groupby_path, "*/")):
                         # Look for metrics.txt files
@@ -462,7 +459,7 @@ class ReportGenerator:
                         for pattern in txt_patterns:
                             found_txt = glob.glob(pattern)
                             txt_files.extend(found_txt)
-                    
+
                     # Check for CSV files with statistics (try multiple patterns)
                     csv_patterns = [
                         os.path.join(groupby_path, f"*{item}*_statistics.csv"),
@@ -470,26 +467,26 @@ class ReportGenerator:
                         os.path.join(groupby_path, f"{item}_*.csv"),
                         os.path.join(groupby_path, "*.csv")
                     ]
-                    
+
                     for pattern in csv_patterns:
                         found_files = glob.glob(pattern)
                         if found_files:
                             csv_files.extend(found_files)
                             logger.info(f"Found CSV files with pattern {pattern}: {found_files}")
-                    
+
                     # Also check for NetCDF files with spatial statistics
                     nc_patterns = [
                         os.path.join(groupby_path, f"*{item}*.nc"),
                         os.path.join(groupby_path, f"{item}_*.nc"),
                         os.path.join(groupby_path, "*.nc")
                     ]
-                    
+
                     for pattern in nc_patterns:
                         found_files = glob.glob(pattern)
                         if found_files:
                             nc_files.extend(found_files)
                             logger.info(f"Found NC files with pattern {pattern}: {found_files}")
-            
+
             # Process txt files if found
             if txt_files:
                 stats_data = []
@@ -505,13 +502,13 @@ class ReportGenerator:
                         })
                     except Exception as e:
                         logger.warning(f"Error reading {txt_file}: {e}")
-                
+
                 if stats_data:
                     groupby_stats[groupby_name] = {
                         "statistics": stats_data,
                         "description": self._get_groupby_description(groupby_name)
                     }
-            
+
             # Process CSV files if found
             elif csv_files:
                 stats_data = []
@@ -525,7 +522,7 @@ class ReportGenerator:
                         })
                     except Exception as e:
                         logger.warning(f"Error reading {csv_file}: {e}")
-                
+
                 if stats_data:
                     if groupby_name not in groupby_stats:
                         groupby_stats[groupby_name] = {
@@ -534,7 +531,7 @@ class ReportGenerator:
                         }
                     else:
                         groupby_stats[groupby_name]["statistics"].extend(stats_data)
-            
+
             # Add spatial files info if found
             if nc_files:
                 if groupby_name not in groupby_stats:
@@ -542,18 +539,18 @@ class ReportGenerator:
                         "statistics": [],
                         "description": self._get_groupby_description(groupby_name)
                     }
-                
+
                 groupby_stats[groupby_name]["spatial_files"] = [os.path.basename(f) for f in nc_files]
-        
+
         return groupby_stats
-    
+
     def _generate_groupby_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Generate summary statistics for groupby dataframe"""
         summary = {}
-        
+
         # Identify numeric columns for statistics
         numeric_cols = df.select_dtypes(include=[np.number]).columns
-        
+
         for col in numeric_cols:
             if not df[col].isna().all():
                 summary[col] = {
@@ -564,17 +561,17 @@ class ReportGenerator:
                     "median": float(df[col].median()),
                     "count": int(df[col].count())
                 }
-        
+
         # Try to extract group information - check various possible column names
-        group_columns = ['Group', 'group', 'IGBP', 'igbp', 'PFT', 'pft', 'Climate_Zone', 'climate_zone', 
+        group_columns = ['Group', 'group', 'IGBP', 'igbp', 'PFT', 'pft', 'Climate_Zone', 'climate_zone',
                          'Zone', 'zone', 'Type', 'type', 'Class', 'class', 'Category', 'category']
-        
+
         for col in group_columns:
             if col in df.columns:
                 summary['groups'] = df[col].unique().tolist()
                 summary['group_count'] = len(summary['groups'])
                 summary['group_column'] = col
-                
+
                 # Add performance ranking if metrics are available
                 if len(numeric_cols) > 0:
                     # Find the best and worst performing groups
@@ -583,9 +580,9 @@ class ReportGenerator:
                     summary['worst_performing_groups'] = group_performance.head(3).index.tolist()
                     summary['best_performing_groups'] = group_performance.tail(3).index.tolist()
                 break
-        
+
         return summary
-    
+
     def _extract_groups_from_txt(self, content: str) -> List[str]:
         """Extract group names from txt file content"""
         groups = []
@@ -600,7 +597,7 @@ class ReportGenerator:
                     if 'IGBP_' in part or 'PFT_' in part or 'CZ_' in part:
                         groups.append(part)
         return list(set(groups))  # Return unique groups
-    
+
     def _get_groupby_description(self, groupby_name: str) -> str:
         """Get description for groupby analysis type"""
         descriptions = {
@@ -609,16 +606,16 @@ class ReportGenerator:
             "Climate_zone_groupby": "Analysis grouped by Köppen-Geiger climate zones. This classification divides the global land surface based on temperature and precipitation patterns, enabling evaluation of model performance under different climatic conditions from tropical to polar regions."
         }
         return descriptions.get(groupby_name, f"{groupby_name} analysis")
-    
+
     def _collect_comparison_data(self) -> Dict[str, Any]:
         """Collect overall comparison data based on enabled comparisons"""
         comparison_data = {}
-        
+
         # Check if comparison is enabled in general settings
         if not self.config.get("general", {}).get("comparison", True):
             logger.info("Comparison is disabled in configuration, skipping comparison data collection")
             return comparison_data
-        
+
         # Define mapping between comparison types and their files/figures
         comparison_mappings = {
             "HeatMap": {
@@ -637,7 +634,7 @@ class ReportGenerator:
                 "data_key": "radar"
             }
         }
-        
+
         # Collect data only for enabled comparisons
         figures = {}
         for comp_type, mapping in comparison_mappings.items():
@@ -649,24 +646,24 @@ class ReportGenerator:
                         comparison_data[mapping["data_key"]] = df.to_dict(orient='records')
                     except Exception as e:
                         logger.warning(f"Error reading {mapping['data_file']}: {e}")
-                
+
                 # Collect figure
                 figure_path = self._find_figure(self.comparisons_dir, comp_type, mapping["figure_pattern"])
                 if figure_path:
                     figures[mapping["data_key"]] = figure_path
-        
+
         if figures:
             comparison_data["figures"] = figures
-        
+
         return comparison_data
-    
+
     def _generate_metrics_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Generate summary statistics for metrics dataframe"""
         summary = {}
-        
+
         # Identify numeric columns
         numeric_cols = df.select_dtypes(include=[np.number]).columns
-        
+
         for col in numeric_cols:
             if col not in ['sim_lon', 'sim_lat', 'ref_lon', 'ref_lat', 'sim_syear', 'sim_eyear', 'ref_syear', 'ref_eyear']:
                 summary[col] = {
@@ -676,14 +673,14 @@ class ReportGenerator:
                     "max": float(df[col].max()) if not df[col].isna().all() else None,
                     "count": int(df[col].count())
                 }
-        
+
         return summary
-    
+
     def _generate_scores_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Generate summary statistics for scores dataframe"""
         # Similar to metrics summary
         return self._generate_metrics_summary(df)
-    
+
     def _generate_overall_summary(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate overall summary of the evaluation"""
         summary = {
@@ -691,7 +688,7 @@ class ReportGenerator:
             "items": list(report_data["evaluation_items"].keys()),
             "overall_scores": {}
         }
-        
+
         # Calculate average scores across all items
         for item, item_data in report_data["evaluation_items"].items():
             for score_key, score_data in item_data.get("scores", {}).items():
@@ -709,13 +706,13 @@ class ReportGenerator:
                                 if score_mean is not None:
                                     summary["overall_scores"][f"{item}_{score_key}"] = score_mean
                                 break
-        
+
         # Calculate grand average if scores exist
         if summary["overall_scores"]:
             summary["grand_average"] = np.mean(list(summary["overall_scores"].values()))
-        
+
         return summary
-    
+
     def _generate_groupby_analysis_summary(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate summary of all groupby analyses across evaluation items"""
         summary = {
@@ -727,24 +724,24 @@ class ReportGenerator:
             "climate_zone_items": [],
             "total_groupby_analyses": 0
         }
-        
+
         # Check each evaluation item for groupby analyses
         for item, item_data in report_data.get("evaluation_items", {}).items():
             if item_data.get("figures", {}).get("igbp_groupby") or item_data.get("statistics", {}).get("IGBP_groupby"):
                 summary["has_igbp"] = True
                 summary["igbp_items"].append(item)
                 summary["total_groupby_analyses"] += 1
-                
+
             if item_data.get("figures", {}).get("pft_groupby") or item_data.get("statistics", {}).get("PFT_groupby"):
                 summary["has_pft"] = True
                 summary["pft_items"].append(item)
                 summary["total_groupby_analyses"] += 1
-                
+
             if item_data.get("figures", {}).get("climate_zone_groupby") or item_data.get("statistics", {}).get("Climate_zone_groupby"):
                 summary["has_climate_zone"] = True
                 summary["climate_zone_items"].append(item)
                 summary["total_groupby_analyses"] += 1
-        
+
         # Generate summary messages
         if summary["has_igbp"]:
             summary["igbp_message"] = f"IGBP land cover analysis performed for: {', '.join(summary['igbp_items'])}"
@@ -752,36 +749,36 @@ class ReportGenerator:
             summary["pft_message"] = f"PFT analysis performed for: {', '.join(summary['pft_items'])}"
         if summary["has_climate_zone"]:
             summary["climate_zone_message"] = f"Climate zone analysis performed for: {', '.join(summary['climate_zone_items'])}"
-        
+
         return summary
-    
+
     def _extract_metric_type(self, filename: str) -> str:
         """Extract metric type from filename based on enabled metrics"""
         # Check enabled metrics first
         for metric in self.enabled_metrics:
             if metric in filename:
                 return metric
-        
+
         # Check enabled scores
         for score in self.enabled_scores:
             if score in filename:
                 return score
-        
+
         return "Unknown"
-    
+
     def _is_metric_or_score(self, text: str) -> bool:
         """Check if text is a metric or score name"""
         return text in self.enabled_metrics or text in self.enabled_scores
-    
+
     def _extract_comparison_pair(self, filename: str) -> str:
         """Extract comparison pair from filename (reference vs simulation)"""
         # Extract reference and simulation sources from filename
         # Format: ItemName_ref_RefSource_sim_SimSource_Metric
         parts = filename.split('_')
-        
+
         ref_source = "Unknown"
         sim_source = "Unknown"
-        
+
         for i, part in enumerate(parts):
             if part == "ref" and i + 1 < len(parts):
                 # Find continuous reference name (may contain underscores)
@@ -791,7 +788,7 @@ class ReportGenerator:
                     ref_parts.append(parts[j])
                     j += 1
                 ref_source = "_".join(ref_parts)
-                
+
             elif part == "sim" and i + 1 < len(parts):
                 # Find continuous simulation name (may contain underscores)
                 sim_parts = []
@@ -801,22 +798,22 @@ class ReportGenerator:
                     j += 1
                 sim_source = "_".join(sim_parts)
                 break
-        
+
         return f"{ref_source} vs {sim_source}"
-    
+
     def _get_comparison_pair_from_config(self, item: str, ref_source: str, sim_source: str) -> str:
         """Get comparison pair from configuration instead of filename parsing"""
         try:
             # Get display names from configuration if available
             ref_display_name = self._get_source_display_name(item, ref_source, 'ref')
             sim_display_name = self._get_source_display_name(item, sim_source, 'sim')
-            
+
             return f"{ref_display_name} vs {sim_display_name}"
-            
+
         except Exception as e:
             logger.warning(f"Error getting comparison pair from config for {item}: {e}")
             return f"{ref_source} vs {sim_source}"
-    
+
     def _get_source_display_name(self, item: str, source: str, source_type: str) -> str:
         """Get display name for a source from configuration"""
         try:
@@ -826,31 +823,31 @@ class ReportGenerator:
                 display_key = f"{source}_display_name"
                 if display_key in self.config[config_key][item]:
                     return self.config[config_key][item][display_key]
-                
+
                 # Try to get from varname as display name
                 varname_key = f"{source}_varname"
                 if varname_key in self.config[config_key][item]:
                     return self.config[config_key][item][varname_key]
-            
+
             # If no display name found, return the source name
             return source
-            
+
         except Exception as e:
             logger.warning(f"Error getting display name for {source}: {e}")
             return source
-    
+
     def _generate_grid_vs_grid_stats(self, item: str) -> Dict[str, Any]:
         """Generate comprehensive grid vs grid statistics like station case format"""
         grid_stats = {}
-        
+
         # Get reference and simulation sources from configuration
         ref_sources = self._get_reference_sources(item)
         sim_sources = self._get_simulation_sources(item)
-        
+
         # Log what we found for debugging
         logger.info(f"Found reference sources for {item}: {ref_sources}")
         logger.info(f"Found simulation sources for {item}: {sim_sources}")
-        
+
         # If no sources found from config, try to infer from existing files
         if not ref_sources or not sim_sources:
             logger.info(f"Attempting to infer sources from existing files for {item}")
@@ -860,17 +857,17 @@ class ReportGenerator:
             if not sim_sources:
                 sim_sources = inferred_sim_sources
             logger.info(f"After inference - ref_sources: {ref_sources}, sim_sources: {sim_sources}")
-        
+
         # Generate all possible comparison pairs
         comparison_pairs = []
         for ref_source in ref_sources:
             for sim_source in sim_sources:
                 comparison_pairs.append((ref_source, sim_source))
-        
+
         for ref_source, sim_source in comparison_pairs:
             # Look for this comparison pair
             base_pattern = f"{item}_ref_{ref_source}_sim_{sim_source}_"
-            
+
             # Get year information from data files
             syear = self._get_year_info(item, ref_source, sim_source, 'syear')
             eyear = self._get_year_info(item, ref_source, sim_source, 'eyear')
@@ -885,20 +882,20 @@ class ReportGenerator:
                 pair_data["use_eyear"] = {"values": [eyear], "mean": float(eyear), "std": 0.0, "min": float(eyear), "max": float(eyear), "median": float(eyear), "coverage": 100.0}
             else:
                 pair_data["use_eyear"] = {"values": [np.nan], "mean": np.nan, "std": np.nan, "min": np.nan, "max": np.nan, "median": np.nan, "coverage": 0.0}
-            
+
             # Search for metrics in metrics directory
             metrics_files = glob.glob(os.path.join(self.metrics_dir, f"{base_pattern}*.nc"))
             scores_files = glob.glob(os.path.join(self.scores_dir, f"{base_pattern}*.nc"))
-            
+
             all_files = metrics_files + scores_files
-            
+
             if not all_files:
                 continue  # No files for this comparison pair
-            
+
             # Process each metric/score file
             for nc_file in all_files:
                 metric_name = self._extract_metric_type(os.path.basename(nc_file))
-                
+
                 try:
                     with xr.open_dataset(nc_file) as ds:
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
@@ -909,7 +906,7 @@ class ReportGenerator:
                             total_points = len(values)
                             valid_points = len(valid_data)
                             coverage = (valid_points / total_points * 100) if total_points > 0 else 0.0
-                            
+
                             if len(valid_data) > 0:
                                 pair_data[metric_name] = {
                                     "values": valid_data.tolist(),
@@ -920,16 +917,16 @@ class ReportGenerator:
                                     "median": float(np.median(valid_data)),
                                     "coverage": float(coverage)
                                 }
-                            
+
                 except Exception as e:
                     self.logger.warning(f"Error reading {nc_file}: {e}")
-            
+
             # Try to estimate correlation if not present but other metrics are available
             # Check if 'correlation' is an enabled metric
             if "correlation" in self.enabled_metrics and "correlation" not in pair_data:
                 # Simple heuristic estimation based on available metrics
                 estimated_corr = 0.5  # Default moderate correlation
-                
+
                 # Check for KGESS if it's enabled
                 if "KGESS" in self.enabled_metrics and "KGESS" in pair_data:
                     kgess_mean = pair_data["KGESS"]["mean"]
@@ -949,7 +946,7 @@ class ReportGenerator:
                     if rmse_mean > 0:
                         # Arbitrary conversion - needs domain knowledge
                         estimated_corr = max(0.0, min(1.0, 1.0 / (1.0 + rmse_mean)))
-                
+
                 pair_data["correlation"] = {
                     "values": [estimated_corr],
                     "mean": estimated_corr,
@@ -959,50 +956,50 @@ class ReportGenerator:
                     "median": estimated_corr,
                     "coverage": 100.0
                 }
-            
+
             if len(pair_data) > 2:  # More than just the year entries
                 # Calculate average data coverage across all metrics
-                coverages = [metric_info.get('coverage', 0.0) for metric_info in pair_data.values() 
+                coverages = [metric_info.get('coverage', 0.0) for metric_info in pair_data.values()
                            if isinstance(metric_info, dict) and 'coverage' in metric_info]
                 avg_coverage = np.mean(coverages) if coverages else 100.0
-                
+
                 # Get comparison pair from configuration
                 comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
                 pair_key = comparison_pair
-                
+
                 grid_stats[pair_key] = {
                     "comparison_pair": comparison_pair,
                     "station_format": True,  # Flag to use station-like display
                     "metrics": pair_data,
                     "data_coverage": float(avg_coverage)
                 }
-                
+
                 logger.info(f"Generated comprehensive stats for {comparison_pair}")
-        
+
         return grid_stats
-    
+
     def _infer_sources_from_files(self, item: str) -> tuple[List[str], List[str]]:
         """Infer reference and simulation sources from existing files"""
         ref_sources = set()
         sim_sources = set()
-        
+
         # Search in metrics and scores directories
         search_dirs = [self.metrics_dir, self.scores_dir]
-        
+
         for search_dir in search_dirs:
             if os.path.exists(search_dir):
                 # Look for files matching the pattern: item_ref_*_sim_*
                 pattern = os.path.join(search_dir, f"{item}_ref_*_sim_*.nc")
                 files = glob.glob(pattern)
-                
+
                 for file_path in files:
                     filename = os.path.basename(file_path)
                     parts = filename.split('_')
-                    
+
                     # Extract ref and sim sources
                     ref_source = None
                     sim_source = None
-                    
+
                     for i, part in enumerate(parts):
                         if part == "ref" and i + 1 < len(parts):
                             # Find continuous reference name
@@ -1012,7 +1009,7 @@ class ReportGenerator:
                                 ref_parts.append(parts[j])
                                 j += 1
                             ref_source = "_".join(ref_parts)
-                            
+
                         elif part == "sim" and i + 1 < len(parts):
                             # Find continuous simulation name
                             sim_parts = []
@@ -1022,19 +1019,19 @@ class ReportGenerator:
                                 j += 1
                             sim_source = "_".join(sim_parts)
                             break
-                    
+
                     if ref_source:
                         ref_sources.add(ref_source)
                     if sim_source:
                         sim_sources.add(sim_source)
-        
+
         return list(ref_sources), list(sim_sources)
-    
+
     def _get_reference_sources(self, item: str) -> List[str]:
         """Get reference sources for an evaluation item from general configuration"""
         try:
             ref_sources = []
-            
+
             # Get from general reference configuration
             if 'ref_nml' in self.config and 'general' in self.config['ref_nml']:
                 # Look for the specific evaluation item in general section
@@ -1047,19 +1044,19 @@ class ReportGenerator:
                     elif isinstance(value, str):
                         # Single reference source
                         ref_sources.append(value.strip())
-            
+
             logger.info(f"Found reference sources for {item}: {ref_sources}")
             return ref_sources
-            
+
         except Exception as e:
             logger.warning(f"Error getting reference sources for {item}: {e}")
             return []
-    
+
     def _get_simulation_sources(self, item: str) -> List[str]:
         """Get simulation sources for an evaluation item from general configuration"""
         try:
             sim_sources = []
-            
+
             # Get from general simulation configuration
             if 'sim_nml' in self.config and 'general' in self.config['sim_nml']:
                 # Look for Case_lib which contains simulation sources
@@ -1070,14 +1067,14 @@ class ReportGenerator:
                         sim_sources.extend(sources)
                     elif isinstance(value, str):
                         sim_sources.append(value.strip())
-            
+
             logger.info(f"Found simulation sources for {item}: {sim_sources}")
             return sim_sources
-            
+
         except Exception as e:
             logger.warning(f"Error getting simulation sources for {item}: {e}")
             return []
-    
+
     def _get_year_info(self, item: str, ref_source: str, sim_source: str, year_type: str) -> Optional[int]:
         """Get year information directly from NetCDF data files"""
         years_found = []
@@ -1110,7 +1107,7 @@ class ReportGenerator:
                 return min(years_found)  # use_eyear = min of all end years
 
         return None  # Return None if no year info found
-    
+
     def _find_figure(self, base_dir: str, subdir: str, pattern: str) -> Optional[str]:
         """Find a figure matching the pattern"""
         search_path = os.path.join(base_dir, subdir, pattern)
@@ -1118,18 +1115,18 @@ class ReportGenerator:
         if files:
             return f"{subdir}/{os.path.basename(files[0])}"
         return None
-    
+
     def _copy_figures_to_report_dir(self):
         """Copy all referenced figures to the report directory"""
         logger.info("Copying figures to report directory...")
-        
+
         # Create figures subdirectory in reports
         figures_dir = os.path.join(self.report_dir, "figures")
         os.makedirs(figures_dir, exist_ok=True)
-        
+
         # Track copied files for debugging
         copied_count = 0
-        
+
         # Copy metrics figures (including groupby subdirectories)
         if os.path.exists(self.metrics_dir):
             for root, dirs, files in os.walk(self.metrics_dir):
@@ -1142,7 +1139,7 @@ class ReportGenerator:
                         shutil.copy2(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied metrics figure: {rel_path}")
-        
+
         # Copy scores figures (including groupby subdirectories)
         if os.path.exists(self.scores_dir):
             for root, dirs, files in os.walk(self.scores_dir):
@@ -1155,7 +1152,7 @@ class ReportGenerator:
                         shutil.copy2(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied scores figure: {rel_path}")
-        
+
         # Copy comparison figures
         if os.path.exists(self.comparisons_dir):
             for root, dirs, files in os.walk(self.comparisons_dir):
@@ -1168,20 +1165,20 @@ class ReportGenerator:
                         shutil.copy2(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied comparison figure: {rel_path}")
-        
+
         logger.info(f"Copied {copied_count} figures to report directory")
-    
+
     def _verify_figure_paths(self, report_data: Dict[str, Any]):
         """Verify that all referenced figures exist in the report directory"""
         logger.info("Verifying figure paths...")
         figures_dir = os.path.join(self.report_dir, "figures")
         missing_figures = []
         total_figures = 0
-        
+
         # Check figures for each evaluation item
         for item, item_data in report_data.get("evaluation_items", {}).items():
             figures = item_data.get("figures", {})
-            
+
             # Check all figure types
             for fig_type, fig_list in figures.items():
                 for fig_path in fig_list:
@@ -1198,11 +1195,11 @@ class ReportGenerator:
                         expected_path = os.path.join(figures_dir, fig_path)
                     else:
                         expected_path = os.path.join(figures_dir, fig_path)
-                    
+
                     if not os.path.exists(expected_path):
                         missing_figures.append(f"{item}/{fig_type}: {fig_path} -> {expected_path}")
                         logger.warning(f"Missing figure: {expected_path}")
-        
+
         # Check comparison figures
         comparisons = report_data.get("comparisons", {})
         if "figures" in comparisons:
@@ -1212,7 +1209,7 @@ class ReportGenerator:
                 if not os.path.exists(expected_path):
                     missing_figures.append(f"comparison/{fig_key}: {fig_path} -> {expected_path}")
                     logger.warning(f"Missing comparison figure: {expected_path}")
-        
+
         if missing_figures:
             logger.warning(f"Found {len(missing_figures)} missing figures out of {total_figures} total figures:")
             for missing in missing_figures[:10]:  # Show first 10
@@ -1221,11 +1218,11 @@ class ReportGenerator:
                 logger.warning(f"  ... and {len(missing_figures) - 10} more")
         else:
             logger.info(f"All {total_figures} figures verified successfully")
-    
+
     def _generate_html_report(self, report_data: Dict[str, Any], report_name: str) -> str:
         """Generate HTML report from collected data"""
         logger.info("Generating HTML report...")
-        
+
         # HTML template
         html_template = Template('''<!DOCTYPE html>
 <html lang="en">
@@ -1719,17 +1716,17 @@ class ReportGenerator:
     </div>
 </body>
 </html>''')
-        
+
         # Render HTML
         html_content = html_template.render(**report_data)
-        
+
         # Save HTML file
         html_path = os.path.join(self.report_dir, f"{report_name}.html")
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
+
         return html_path
-    
+
     def _generate_pdf_report(self, html_path: str, report_name: str) -> Optional[str]:
         """
         Generate PDF report from HTML file using xhtml2pdf
@@ -1745,27 +1742,27 @@ class ReportGenerator:
             logger.warning("PDF generation not available. Please install xhtml2pdf.")
             logger.warning("Run: pip install xhtml2pdf")
             return None
-        
+
         try:
             logger.info("Generating PDF report using xhtml2pdf...")
             pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
-            
+
             # Read the HTML file
             with open(html_path, 'r', encoding='utf-8') as f:
                 html_content = f.read()
-            
+
             # Modify HTML content for better PDF generation
             # Convert relative image paths to absolute paths
             import re
-            
+
             # Replace relative image paths with absolute paths
             def replace_img_src(match):
                 src = match.group(1)
-                
+
                 # Skip if already an absolute path or URL
                 if src.startswith(('http://', 'https://', 'file://', '/')):
                     return match.group(0)
-                
+
                 # Handle paths that start with 'figures/'
                 if src.startswith('figures/'):
                     abs_path = os.path.join(self.report_dir, src)
@@ -1776,7 +1773,7 @@ class ReportGenerator:
                     else:
                         logger.warning(f"Image file not found: {abs_path}")
                         return f'src="file://{abs_path}"'  # Keep file:// prefix even if not found
-                
+
                 # Handle other relative paths
                 elif not src.startswith('./'):
                     # If it's a relative path without ./, try to resolve it relative to report dir
@@ -1785,16 +1782,16 @@ class ReportGenerator:
                     if os.path.exists(potential_path):
                         logger.debug(f"Converting relative path: {src} -> {potential_path}")
                         return f'src="file://{potential_path}"'
-                
+
                 return match.group(0)
-            
+
             html_content = re.sub(r'src="([^"]+)"', replace_img_src, html_content)
-            
+
             # Debug: log some sample conversions
             sample_matches = re.findall(r'src="([^"]*figures[^"]*)"', html_content)
             if sample_matches:
                 logger.debug(f"Sample converted image paths: {sample_matches[:5]}")  # Show first 5
-            
+
             # Add PDF-specific CSS
             pdf_css = """
             <style type="text/css" media="print">
@@ -1844,30 +1841,30 @@ class ReportGenerator:
                 }
             </style>
             """
-            
+
             # Insert PDF CSS into HTML head
             html_content = html_content.replace('</head>', pdf_css + '</head>')
-            
+
             # Generate PDF
             with open(pdf_path, 'wb') as pdf_file:
                 result = pisa.CreatePDF(
-                    html_content, 
+                    html_content,
                     dest=pdf_file,
                     encoding='utf-8',
                     link_callback=self._link_callback
                 )
-                
+
                 if result.err:
                     logger.error(f"PDF generation had errors: {result.err}")
                     return None
-            
+
             logger.info(f"PDF report generated successfully: {pdf_path}")
             return pdf_path
-            
+
         except Exception as e:
             logger.error(f"Error generating PDF report: {e}")
             return None
-    
+
     def _link_callback(self, uri, rel):
         """
         Callback function to handle local file links in PDF generation
@@ -1881,7 +1878,7 @@ class ReportGenerator:
             else:
                 logger.warning(f"Link callback file not found: {path}")
                 return path  # Return path anyway, let PDF generator handle it
-        
+
         # Handle relative paths directly
         elif uri.startswith('figures/'):
             abs_path = os.path.join(self.report_dir, uri)
@@ -1892,7 +1889,7 @@ class ReportGenerator:
             else:
                 logger.warning(f"Link callback could not find relative path: {uri} -> {abs_path}")
                 return abs_path
-        
+
         # Handle other relative paths (like ./output/...)
         elif uri.startswith('./') and 'figures' in uri:
             # Extract the figures part
@@ -1906,5 +1903,5 @@ class ReportGenerator:
                 else:
                     logger.warning(f"Link callback could not find complex relative path: {uri} -> {abs_path}")
                     return abs_path
-        
+
         return uri

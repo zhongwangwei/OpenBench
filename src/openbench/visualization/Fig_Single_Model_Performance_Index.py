@@ -1,15 +1,17 @@
 import logging
 import math
 import os
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as st
 from matplotlib import rcParams
-from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
+
 from openbench.util.converttype import Convert_Type
+
 
 def _read_comparison_file(file):
     """
@@ -70,7 +72,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     fig, axs = plt.subplots(n_items, 1, figsize=(option['x_wise'], option['y_wise']/3*n_items), sharey=True, squeeze=False)  # sharey=True,
     # MCOLORS = generate_colors(evaluation_items)
 
-    fig.subplots_adjust(left=0., right=1, 
+    fig.subplots_adjust(left=0., right=1,
                     bottom=0, top=0.82, hspace=option["hspace"], wspace=option["wspace"])
 
     # Calculate overall min and max I² values for consistent x-axis range
@@ -183,16 +185,16 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             for k, value in enumerate(I2_values):
                 legend_elements = []
                 for j, ref_source in enumerate(ref_sources):
-                
+
                     MCOLORS = generate_colors(k,j)
-                    # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"], 
+                    # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"],
                     #                 linewidth=1.5, edgecolor='black', label=''))
-                    legend_elements.append(Line2D([0], [0], marker='o', 
-                              color=MCOLORS["selected_color"]["Color"], 
-                              linestyle='None', 
-                              markersize=24, 
-                              markeredgecolor='None', 
-                              markerfacecolor=MCOLORS["selected_color"]["Color"], 
+                    legend_elements.append(Line2D([0], [0], marker='o',
+                              color=MCOLORS["selected_color"]["Color"],
+                              linestyle='None',
+                              markersize=24,
+                              markeredgecolor='None',
+                              markerfacecolor=MCOLORS["selected_color"]["Color"],
                               label=''))
                     if k==0:
                         fig.text(0.04, -0.06-j*0.07, f"ref{str(j+1)}", va='center',
@@ -207,9 +209,9 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
                     frameon=False,
                     title=f'sim{str(k+1)}',
                     fontsize=option['fontsize'],
-                    handlelength=2, 
+                    handlelength=2,
                     handleheight=2,
-                    handletextpad=0.5,  
+                    handletextpad=0.5,
                     labelspacing= 0.5
                 )
                 fig.text(0.701, -0.06-k*0.07, f"sim{str(k+1)}: {labels[k]}", va='center',
@@ -218,39 +220,39 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             legend_elements = []
             for j, ref_source in enumerate(ref_sources):
                 MCOLORS = generate_colors(k+1,j)
-                # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"], 
+                # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"],
                 #                     linewidth=1.5, edgecolor='black', label=''))
-                legend_elements.append(Line2D([0], [0], marker='s', 
-                              color=MCOLORS["selected_color"]["Color"], 
-                              linestyle='None', 
-                              markersize=24, 
-                              markeredgecolor='None', 
-                              markerfacecolor=MCOLORS["selected_color"]["Color"], 
+                legend_elements.append(Line2D([0], [0], marker='s',
+                              color=MCOLORS["selected_color"]["Color"],
+                              linestyle='None',
+                              markersize=24,
+                              markeredgecolor='None',
+                              markerfacecolor=MCOLORS["selected_color"]["Color"],
                               label=''))
             fig.legend(
                 handles=legend_elements,
                 bbox_to_anchor=(0.125+k*0.07+0.07, 0.045),
                 frameon=False,
-                title=f'mean',
+                title='mean',
                 fontsize=option['fontsize'],
-                handlelength=2, 
+                handlelength=2,
                 handleheight=2,
-                handletextpad=0.5,  
+                handletextpad=0.5,
                 labelspacing= 0.5
             )
 
-    legend_elements = [Line2D([0], [0], marker='o', color='#bfbfbf', 
+    legend_elements = [Line2D([0], [0], marker='o', color='#bfbfbf',
             label="$\\text{         point size} \\propto \\sigma_{\\text{CI}}$\n    (larger size indicates\n  greater variability across\nsimulations for a reference)",
             linestyle='None', markersize=20*len(ref_sources), markeredgecolor='None', markerfacecolor='#bfbfbf')]
     fig.legend(
         handles=legend_elements,
         bbox_to_anchor=(0.67, 0.015*len(ref_sources)),
         frameon=False,
-        title=f'',
+        title='',
         fontsize=option['fontsize'],
-        handlelength=2, 
+        handlelength=2,
         handleheight=2,
-        handletextpad=0.5,  
+        handletextpad=0.5,
         labelspacing= 0.5,
     )
 
@@ -280,24 +282,24 @@ def generate_colors(color_index, list_index,  name="selected_color"):
     colors4 = ['#673e54', '#8d5573', '#b36c92', '#d983b1', '#ff99c9']
     colors5 = ['#b6a772', '#dcca89', '#fff09e', '#fff69e', '#fffc9e']
     colorslist = [colors1, colors2, colors3, colors4, colors5]
-    
+
     # Validate inputs
     if not isinstance(list_index, int) or list_index < 0 or list_index >= len(colorslist):
         raise ValueError(f"list_index must be an integer between 0 and {len(colorslist)-1}")
-    
+
     selected_colors = colorslist[list_index]
-    
+
     if not isinstance(color_index, int) or color_index < 0 or color_index >= len(selected_colors):
         raise ValueError(f"color_index must be an integer between 0 and {len(selected_colors)-1}")
-    
+
     # Select the color
     selected_color = selected_colors[color_index]
-    
+
     # Create the output dictionary
     gcolors = {
         name: {
             "Color": selected_color
         }
     }
-    
+
     return gcolors

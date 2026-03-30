@@ -1,14 +1,10 @@
-import os
-import re
-import shutil
-import sys
-import warnings
-import logging
 import gc
 import importlib
+import logging
+import os
+import sys
+import warnings
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -23,12 +19,7 @@ except ImportError:
 
 # Import parallel engine
 try:
-    from openbench.util.parallel import (
-    get_parallel_engine,
-    parallel_map,
-    parallel_decorator,
-    ParallelEngine
-)
+    from openbench.util.parallel import ParallelEngine, get_parallel_engine, parallel_decorator, parallel_map
     _HAS_PARALLEL_ENGINE = True
 except ImportError:
     _HAS_PARALLEL_ENGINE = False
@@ -52,10 +43,11 @@ except ImportError:
     )
 
 # Check the platform
+from openbench.util.converttype import Convert_Type
+from openbench.visualization import *
+
 from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
-from openbench.visualization import *
-from openbench.util.converttype import Convert_Type
 
 # Import climatology processor
 try:
@@ -70,12 +62,12 @@ except ImportError:
 # Import modular evaluation engine
 try:
     from .Mod_EvaluationEngine import (
-    ModularEvaluationEngine, 
-    GridEvaluationEngine, 
-    StationEvaluationEngine,
-    create_evaluation_engine,
-    evaluate_datasets
-)
+        GridEvaluationEngine,
+        ModularEvaluationEngine,
+        StationEvaluationEngine,
+        create_evaluation_engine,
+        evaluate_datasets,
+    )
     _HAS_MODULAR_ENGINE = True
 except ImportError:
     _HAS_MODULAR_ENGINE = False
@@ -89,11 +81,7 @@ except ImportError:
 
 # Import output manager
 try:
-    from openbench.util.output import (
-    ModularOutputManager,
-    create_output_manager,
-    save_evaluation_results
-)
+    from openbench.util.output import ModularOutputManager, create_output_manager, save_evaluation_results
     _HAS_OUTPUT_MANAGER = True
 except ImportError:
     _HAS_OUTPUT_MANAGER = False
@@ -136,7 +124,7 @@ class Evaluation_grid(metrics, scores):
             logging.debug("Modular grid evaluation engine initialized")
         else:
             self.modular_engine = None
-        
+
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
@@ -158,7 +146,7 @@ class Evaluation_grid(metrics, scores):
             pb = getattr(self, metric)(s, o)
             pb = pb.squeeze()
             pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
-            
+
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
                 filename = f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}'
@@ -174,7 +162,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'metrics', 
+                output_path = os.path.join(self.casedir, 'metrics',
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -187,7 +175,7 @@ class Evaluation_grid(metrics, scores):
             pb = getattr(self, score)(s, o)
             pb = pb.squeeze()
             pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
-            
+
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
                 filename = f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}'
@@ -203,7 +191,7 @@ class Evaluation_grid(metrics, scores):
                 )
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'scores', 
+                output_path = os.path.join(self.casedir, 'scores',
                                          f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
@@ -365,7 +353,7 @@ class Evaluation_stn(metrics, scores):
             logging.debug("Modular station evaluation engine initialized")
         else:
             self.modular_engine = None
-        
+
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(
@@ -523,7 +511,7 @@ class Evaluation_stn(metrics, scores):
                 station_list[f'{metric}'] = [-9999.0] * len(station_list['ID'])
             for score in self.scores:
                 station_list[f'{score}'] = [-9999.0] * len(station_list['ID'])
-            
+
             for iik in range(len(station_list['ID'])):
                 sim_ds = None
                 ref_ds = None
@@ -610,9 +598,9 @@ class Evaluation_stn(metrics, scores):
 
             logging.info('Comparison dataset prepared!')
             logging.info("=======================================")
-            
+
             station_list = Convert_Type.convert_Frame(station_list)
-            
+
             # Save metrics and scores using output manager if available
             if self.output_manager:
                 # Save metrics
@@ -625,10 +613,10 @@ class Evaluation_stn(metrics, scores):
                     'sim_source': self.sim_source
                 }
                 self.output_manager.save_data(
-                    station_list, 'metrics', metrics_filename, 'csv', 
+                    station_list, 'metrics', metrics_filename, 'csv',
                     metrics_metadata, [f'stn_{self.ref_source}_{self.sim_source}']
                 )
-                
+
                 # Save scores
                 scores_filename = f'{self.ref_varname}_{self.sim_varname}_scores'
                 scores_metadata = {
@@ -639,7 +627,7 @@ class Evaluation_stn(metrics, scores):
                     'sim_source': self.sim_source
                 }
                 self.output_manager.save_data(
-                    station_list, 'scores', scores_filename, 'csv', 
+                    station_list, 'scores', scores_filename, 'csv',
                     scores_metadata, [f'stn_{self.ref_source}_{self.sim_source}']
                 )
             else:
@@ -650,7 +638,7 @@ class Evaluation_stn(metrics, scores):
                 metrics_path = os.path.join(metrics_dir, f'{self.ref_varname}_{self.sim_varname}_metrics.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 station_list.to_csv(metrics_path, index=False)
-                
+
                 # Save scores
                 scores_dir = os.path.join(self.casedir, 'scores', f'stn_{self.ref_source}_{self.sim_source}')
                 os.makedirs(scores_dir, exist_ok=True)
@@ -790,15 +778,15 @@ class Evaluation_stn(metrics, scores):
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
             station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
-            
+
             # Use enhanced parallel engine if available
             if _HAS_PARALLEL_ENGINE:
                 logging.info("Using enhanced parallel engine for station evaluation")
-                
+
                 # Create partial function with station_list
                 from functools import partial
                 eval_func = partial(self.make_evaluation_parallel, station_list)
-                
+
                 # Process stations in parallel
                 results = parallel_map(
                     eval_func,
@@ -810,14 +798,14 @@ class Evaluation_stn(metrics, scores):
                 # Fallback to joblib
                 results = Parallel(n_jobs=-1)(
                     delayed(self.make_evaluation_parallel)(station_list, iik) for iik in range(len(station_list['ID'])))
-            
+
             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
             logging.info('Evaluation finished')
             logging.info("=======================================")
 
             station_list = Convert_Type.convert_Frame(station_list)
-            
+
             # Save metrics and scores using output manager if available
             if self.output_manager:
                 # Save scores
@@ -831,7 +819,7 @@ class Evaluation_stn(metrics, scores):
                 self.output_manager.save_data(
                     station_list, 'scores', scores_filename, 'csv', scores_metadata
                 )
-                
+
                 # Save metrics
                 metrics_filename = f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations'
                 metrics_metadata = {
@@ -851,14 +839,14 @@ class Evaluation_stn(metrics, scores):
                 logging.info(f"Saving scores to {scores_path}")
                 os.makedirs(os.path.dirname(scores_path), exist_ok=True)
                 station_list.to_csv(scores_path, index=False)
-                
+
                 # Save metrics
                 metrics_path = os.path.join(self.casedir, 'metrics',
                                           f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
                 logging.info(f"Saving metrics to {metrics_path}")
                 os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
                 station_list.to_csv(metrics_path, index=False)
-            
+
             make_plot_index_stn(self)
 
         finally:

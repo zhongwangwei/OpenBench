@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+import warnings
+
 import numpy as np
 import xarray as xr
 from joblib import Parallel, delayed
-import gc
-import warnings
+
 warnings.simplefilter(action='ignore', category=UserWarning)
 
 def stat_partial_least_squares_regression(self, *variables):
@@ -21,7 +22,7 @@ def stat_partial_least_squares_regression(self, *variables):
     """
     try:
         from sklearn.cross_decomposition import PLSRegression
-        from sklearn.model_selection import cross_val_score, TimeSeriesSplit
+        from sklearn.model_selection import TimeSeriesSplit, cross_val_score
     except ImportError:
         logging.error("scikit-learn is required for this function")
         raise ImportError("scikit-learn is required for this function")

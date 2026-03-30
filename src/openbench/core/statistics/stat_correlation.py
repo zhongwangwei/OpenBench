@@ -1,5 +1,7 @@
-import xarray as xr
 import logging
+
+import xarray as xr
+
 
 def stat_correlation(self, data1, data2):
     """
@@ -18,7 +20,7 @@ def stat_correlation(self, data1, data2):
         data2 = list(data2.data_vars.values())[0]
 
     if isinstance(data1, xr.DataArray) and isinstance(data2, xr.DataArray):
-        return xr.corr(data1, data2, dim="time").to_dataset(name=f"Correlation")
+        return xr.corr(data1, data2, dim="time").to_dataset(name="Correlation")
     else:
         logging.error("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
         raise TypeError("Input must be either two xarray Datasets with single variables or two xarray DataArrays")

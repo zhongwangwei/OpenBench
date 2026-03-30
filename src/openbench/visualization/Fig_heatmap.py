@@ -1,15 +1,13 @@
-import os
 import logging
+import os
 
+# Add the local visualization path for cmaps
+import cmaps
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
-from openbench.util.converttype import Convert_Type
 
-# Add the local visualization path for cmaps
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap
 
 def _read_comparison_file(file):
     """
@@ -79,7 +77,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
         option['x_wise'] = max(3, option['x_wise'])
     if option['y_wise'] < 3:
         option['y_wise'] = max(3, option['y_wise'])
-        
+
     # Adjust font sizes for small datasets
     if len(df.index) <= 2 or len(df.columns) <= 2:
         option['fontsize'] = min(option['fontsize'], 16)
@@ -141,7 +139,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     if not option['colorbar_position_set']:
         if option["colorbar_position"] == 'vertical':
             if len(df.index) < 6:
-                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height]) 
+                cbar_ax = fig.add_axes([right + max_tick_width + 0.05, bottom, 0.03, height])
             else:
                 cbar_ax = fig.add_axes([right + max_tick_width +0.01 , bottom, 0.03, height])
         else:
@@ -149,12 +147,12 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
             xticks = ax.get_xticklabels()
             max_xtick_height = 0
             for xtick in xticks:
-                bbox = xtick.get_window_extent() 
-                bbox_transformed = bbox.transformed(fig.transFigure.inverted())  
+                bbox = xtick.get_window_extent()
+                bbox_transformed = bbox.transformed(fig.transFigure.inverted())
                 max_xtick_height = max(max_xtick_height, bbox_transformed.height)
             if xlabel is not None:
-                bbox = xlabel.get_window_extent()  
-                bbox_transformed = bbox.transformed(fig.transFigure.inverted()) 
+                bbox = xlabel.get_window_extent()
+                bbox_transformed = bbox.transformed(fig.transFigure.inverted())
                 x_height = bbox_transformed.height
                 if len(df.columns) < 6:
                     cbar_ax = fig.add_axes([left, bottom - max_xtick_height - x_height - 0.1, width, 0.02])

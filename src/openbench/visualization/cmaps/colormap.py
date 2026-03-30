@@ -3,6 +3,7 @@
 import numpy as np
 from matplotlib import colors
 
+
 class Colormap(colors.ListedColormap):
     def __init__(self, c, name='from_list', n=None):
         '''Initialization'''
@@ -18,11 +19,11 @@ class Colormap(colors.ListedColormap):
 
     def __getitem__(self, item):
         return Colormap(self._colors[item], name='sliced_' + self._name)
-    
+
         # adding two objects
     def __add__(self, o):
         return Colormap(np.vstack([self.colors, o.colors]), self.name+'_' +o.name)
-    
+
     def interp(self, lutsize:int):
         '''
         different from resampled of the new version of matplotlib (we interp colors here)
@@ -30,10 +31,10 @@ class Colormap(colors.ListedColormap):
         r, g, b = self._colors[:, 0], self._colors[:, 1], self._colors[:, 2]
         x_n = np.linspace(0., 1., lutsize)
         x_o = np.linspace(0., 1., self._N)
-        
-        colors_new = np.hstack([np.interp(x_n, x_o, _).reshape(-1, 1) for _ in [r, g, b]]) 
+
+        colors_new = np.hstack([np.interp(x_n, x_o, _).reshape(-1, 1) for _ in [r, g, b]])
         return Colormap(colors_new, name='interp_' + self._name)
-    
+
 
     def to_seg(self, N=None):
         if N is None:

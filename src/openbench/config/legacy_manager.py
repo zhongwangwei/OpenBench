@@ -10,12 +10,12 @@ Version: 2.0
 Date: July 2025
 """
 
-import os
 import json
-import yaml
 import logging
-from typing import Dict, Any, Optional, Union, List
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import yaml
 
 # Import the existing Fortran NML reader
 try:
@@ -42,7 +42,7 @@ except ImportError:
             self.file_path = file_path
             self.context = context or {}
             super().__init__(self.format_message())
-        
+
         def format_message(self) -> str:
             msg = f"Configuration Error: {self.message}"
             if self.file_path:
@@ -59,13 +59,13 @@ class ConfigManager:
     This class provides a centralized way to load, validate, manage, and generate
     configuration files across the OpenBench system.
     """
-    
+
     def __init__(self):
         """Initialize the ConfigManager."""
         self.name = 'ConfigManager'
         self.version = '2.0'
         self.author = "OpenBench Contributors"
-        
+
         # File format loaders
         self._loaders = {
             '.json': self._load_json,
@@ -73,13 +73,13 @@ class ConfigManager:
             '.yml': self._load_yaml,
             '.nml': self._load_nml
         }
-        
+
         # Cache for loaded configurations
         self._config_cache = {}
-        
+
         # Setup logging
         self.logger = logging.getLogger(__name__)
-        
+
     def load_config(self, config_path: Union[str, Path], use_cache: bool = True, validate: bool = True) -> Dict[str, Any]:
         """
         Load configuration from file with automatic format detection and validation.
@@ -97,26 +97,26 @@ class ConfigManager:
         """
         config_path = Path(config_path).resolve()
         config_str = str(config_path)
-        
+
         # Check cache first
         if use_cache and config_str in self._config_cache:
             self.logger.debug(f"Using cached configuration for {config_path}")
             return self._config_cache[config_str]
-        
+
         # Validate file exists
         if not config_path.exists():
             raise ConfigurationError(
-                f"Configuration file not found", 
+                "Configuration file not found",
                 context={'file_path': config_str}
             )
-        
+
         # Detect file format
         file_format = self._detect_format(config_path)
-        
+
         # Warn about deprecated formats
         if file_format == '.nml':
             self.logger.warning(
-                f"\n" + "="*80 + "\n"
+                "\n" + "="*80 + "\n"
                 f"⚠️  DEPRECATION WARNING: Fortran NML format (.nml) is deprecated!\n"
                 f"    The Fortran NML format is no longer being updated.\n"
                 f"    Please switch to YAML format (.yaml) for configuration files.\n"
@@ -124,39 +124,39 @@ class ConfigManager:
             )
         elif file_format == '.json':
             self.logger.warning(
-                f"\n" + "="*80 + "\n"
+                "\n" + "="*80 + "\n"
                 f"⚠️  DEPRECATION WARNING: JSON format (.json) is deprecated!\n"
                 f"    The JSON format is no longer being updated.\n"
                 f"    Please switch to YAML format (.yaml) for configuration files.\n"
                 f"    File: {config_path}\n" + "="*80
             )
-        
+
         try:
             # Load configuration
             loader = self._loaders.get(file_format)
             if not loader:
                 raise ConfigurationError(f"Unsupported file format: {file_format}", config_str)
-            
+
             config = loader(config_path)
-            
+
             # Validate configuration consistency
             if validate:
                 warnings = self._validate_config_consistency(config)
                 if warnings:
                     self.logger.warning(f"Configuration validation warnings for {config_path}: {'; '.join(warnings)}")
-            
+
             # Cache the configuration
             if use_cache:
                 self._config_cache[config_str] = config
-            
+
             self.logger.info(f"Successfully loaded configuration from {config_path}")
             return config
-            
+
         except Exception as e:
             if isinstance(e, ConfigurationError):
                 raise
             raise ConfigurationError(f"Failed to load configuration: {str(e)}", config_str)
-    
+
     def _detect_format(self, config_path: Path) -> str:
         """
         Detect configuration file format based on extension.
@@ -168,14 +168,14 @@ class ConfigManager:
             File format extension (e.g., '.json', '.yaml', '.nml')
         """
         suffix = config_path.suffix.lower()
-        
+
         if suffix in self._loaders:
             return suffix
-        
+
         # Default to .nml for backward compatibility
         self.logger.warning(f"Unknown file extension {suffix}, defaulting to Fortran namelist format")
         return '.nml'
-    
+
     def _load_json(self, config_path: Path) -> Dict[str, Any]:
         """Load JSON configuration file."""
         try:
@@ -185,7 +185,7 @@ class ConfigManager:
             raise ConfigurationError(f"Invalid JSON format: {str(e)}", str(config_path))
         except Exception as e:
             raise ConfigurationError(f"Failed to read JSON file: {str(e)}", str(config_path))
-    
+
     def _load_yaml(self, config_path: Path) -> Dict[str, Any]:
         """Load YAML configuration file."""
         try:
@@ -195,19 +195,19 @@ class ConfigManager:
             raise ConfigurationError(f"Invalid YAML format: {str(e)}", str(config_path))
         except Exception as e:
             raise ConfigurationError(f"Failed to read YAML file: {str(e)}", str(config_path))
-    
+
     def _load_nml(self, config_path: Path) -> Dict[str, Any]:
         """Load Fortran namelist configuration file."""
         if FortranNMLReader is None:
             raise ConfigurationError("Fortran NML reader not available", str(config_path))
-        
+
         try:
             reader = FortranNMLReader()
             # Use the existing method from the original NamelistReader
             return reader.read(str(config_path))
         except Exception as e:
             raise ConfigurationError(f"Failed to read Fortran NML file: {str(e)}", str(config_path))
-    
+
     def _validate_config_consistency(self, config: Dict[str, Any]) -> List[str]:
         """
         Validate configuration consistency and return warnings instead of raising exceptions.
@@ -219,12 +219,12 @@ class ConfigManager:
             List of validation warning messages
         """
         warnings = []
-        
+
         # Basic structure validation
         if not isinstance(config, dict):
             warnings.append("Configuration must be a dictionary")
             return warnings
-        
+
         # Check general section
         general = config.get('general', {})
         if general:
@@ -234,7 +234,7 @@ class ConfigManager:
             if start_year and end_year:
                 if end_year < start_year:
                     warnings.append(f"end_year ({end_year}) should be >= start_year ({start_year})")
-            
+
             # Only drawing validation
             only_drawing = general.get('only_drawing', False)
             if only_drawing:
@@ -242,23 +242,23 @@ class ConfigManager:
                 comparisons = config.get('comparisons', {})
                 if not any(comparisons.values()) if comparisons else True:
                     warnings.append("only_drawing is enabled but no comparison plots are enabled")
-        
+
         # Check evaluation items
         eval_items = config.get('evaluation_items', {})
         if eval_items and isinstance(eval_items, dict):
             enabled_items = [k for k, v in eval_items.items() if v]
             if not enabled_items:
                 warnings.append("No evaluation items are enabled")
-        
+
         # Check metrics
         metrics = config.get('metrics', {})
         if metrics and isinstance(metrics, dict):
             enabled_metrics = [k for k, v in metrics.items() if v]
             if not enabled_metrics:
                 warnings.append("No metrics are enabled")
-        
+
         return warnings
-    
+
     def validate_config(self, config: Dict[str, Any], required_sections: Optional[List[str]] = None) -> bool:
         """
         Validate configuration structure.
@@ -275,14 +275,14 @@ class ConfigManager:
         """
         if not isinstance(config, dict):
             raise ConfigurationError("Configuration must be a dictionary")
-        
+
         if required_sections:
             missing_sections = [section for section in required_sections if section not in config]
             if missing_sections:
                 raise ConfigurationError(f"Missing required configuration sections: {missing_sections}")
-        
+
         return True
-    
+
     def get_config_value(self, config: Dict[str, Any], key_path: str, default: Any = None) -> Any:
         """
         Get configuration value using dot notation (e.g., 'general.basename').
@@ -297,14 +297,14 @@ class ConfigManager:
         """
         keys = key_path.split('.')
         value = config
-        
+
         try:
             for key in keys:
                 value = value[key]
             return value
         except (KeyError, TypeError):
             return default
-    
+
     def merge_configs(self, *configs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Merge multiple configuration dictionaries.
@@ -316,20 +316,20 @@ class ConfigManager:
             Merged configuration dictionary
         """
         merged = {}
-        
+
         for config in configs:
             if not isinstance(config, dict):
                 continue
-            
+
             for key, value in config.items():
                 if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
                     # Recursively merge nested dictionaries
                     merged[key] = self.merge_configs(merged[key], value)
                 else:
                     merged[key] = value
-        
+
         return merged
-    
+
     def create_basic_config(self) -> Dict[str, Any]:
         """
         Create a basic configuration template.
@@ -381,7 +381,7 @@ class ConfigManager:
             },
             "statistics": {}
         }
-    
+
     def create_advanced_config(self) -> Dict[str, Any]:
         """
         Create an advanced configuration template.
@@ -390,7 +390,7 @@ class ConfigManager:
             Advanced configuration dictionary
         """
         basic = self.create_basic_config()
-        
+
         # Enable more evaluation items
         basic["evaluation_items"].update({
             "Gross_Primary_Productivity": True,
@@ -398,7 +398,7 @@ class ConfigManager:
             "Soil_Moisture": True,
             "Snow_Water_Equivalent": True
         })
-        
+
         # Enable more metrics
         basic["metrics"].update({
             "NSE": True,
@@ -407,7 +407,7 @@ class ConfigManager:
             "ubRMSE": True,
             "index_agreement": True
         })
-        
+
         # Enable comparisons
         basic["comparisons"].update({
             "HeatMap": True,
@@ -416,21 +416,21 @@ class ConfigManager:
             "Kernel_Density_Estimate": True,
             "Single_Model_Performance_Index": True
         })
-        
+
         # Enable statistics
         basic["statistics"] = {
             "Mean": True,
             "Standard_Deviation": True,
             "Correlation": True
         }
-        
+
         # More processing cores for advanced config
         basic["general"]["num_cores"] = 8
         basic["general"]["comparison"] = True
         basic["general"]["statistics"] = True
-        
+
         return basic
-    
+
     def create_debug_config(self) -> Dict[str, Any]:
         """
         Create a debug configuration template.
@@ -467,7 +467,7 @@ class ConfigManager:
             "comparisons": {},
             "statistics": {}
         }
-    
+
     def create_config_template(self, template_type: str = 'basic') -> Dict[str, Any]:
         """
         Create configuration template based on type.
@@ -486,12 +486,12 @@ class ConfigManager:
             'advanced': self.create_advanced_config,
             'debug': self.create_debug_config
         }
-        
+
         if template_type not in templates:
             raise ConfigurationError(f"Unknown template type: {template_type}. Available: {list(templates.keys())}")
-        
+
         return templates[template_type]()
-    
+
     def save_config(self, config: Dict[str, Any], output_path: Union[str, Path], format_type: Optional[str] = None) -> None:
         """
         Save configuration to file.
@@ -505,16 +505,16 @@ class ConfigManager:
             ConfigurationError: If saving fails
         """
         output_path = Path(output_path)
-        
+
         # Determine format
         if format_type:
             file_format = f".{format_type.lower()}"
         else:
             file_format = output_path.suffix.lower()
-        
+
         # Create directory if it doesn't exist
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         try:
             if file_format == '.json':
                 self._save_json(config, output_path)
@@ -522,22 +522,22 @@ class ConfigManager:
                 self._save_yaml(config, output_path)
             else:
                 raise ConfigurationError(f"Unsupported save format: {file_format}")
-            
+
             self.logger.info(f"Configuration saved to: {output_path}")
-            
+
         except Exception as e:
             raise ConfigurationError(f"Failed to save configuration: {str(e)}")
-    
+
     def _save_json(self, config: Dict[str, Any], output_path: Path) -> None:
         """Save configuration as JSON."""
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-    
+
     def _save_yaml(self, config: Dict[str, Any], output_path: Path) -> None:
         """Save configuration as YAML."""
         with open(output_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
-    
+
     def get_config_schema(self) -> Dict[str, Any]:
         """
         Get configuration schema description.
@@ -583,12 +583,12 @@ class ConfigManager:
                 "examples": ["Mean", "Standard_Deviation", "Correlation"]
             }
         }
-    
+
     def clear_cache(self) -> None:
         """Clear configuration cache."""
         self._config_cache.clear()
         self.logger.debug("Configuration cache cleared")
-    
+
     def list_supported_formats(self) -> List[str]:
         """Return list of supported configuration file formats."""
         return list(self._loaders.keys())

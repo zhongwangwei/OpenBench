@@ -1,7 +1,9 @@
+import logging
+import re
+
 import numpy as np
 import pandas as pd
-import re
-import logging
+
 try:
     from openbench.config.legacy_readers import NamelistReader
 except ImportError:
@@ -11,11 +13,11 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
    if match:
       # normalize time values
       num_value, time_unit = match.groups()
-      num_value = int(num_value) if num_value else 1   
+      num_value = int(num_value) if num_value else 1
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m','me', 'month', 'mon']:
          # Handle river-related variables for monthly data
-         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
+         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst',
                          'rivdph', 'rivvel', 'fldout', 'fldsto', 'flddph', 'fldfrc',
                          'fldare', 'sfcelv', 'totout', 'totsto', 'storge', 'pthflw',
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
@@ -31,7 +33,7 @@ def adjust_time_CoLM(info, ds,syear,eyear,tim_res):
          ds['time'] = pd.DatetimeIndex(ds['time'].values)# - pd.DateOffset(days=1)
 
             # Handle river-related variables for monthly data
-         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst', 
+         if info.item in ['outflw', 'rivout', 'rivsto', 'rivout_inst', 'rivsto_inst',
                          'rivdph', 'rivvel', 'fldout', 'fldsto', 'flddph', 'fldfrc',
                          'fldare', 'sfcelv', 'totout', 'totsto', 'storge', 'pthflw',
                          'pthout', 'gdwsto', 'gwsto', 'gwout', 'maxsto', 'maxflw',
@@ -137,7 +139,7 @@ def filter_CoLM(info, ds=None):   #update info as well
                                     (ds['f_cropprodc_rainfed_trop_corn'].fillna(0)*ds['area_rainfed_trop_corn'].fillna(0)) +
                                     (ds['f_cropprodc_irrigated_trop_corn'].fillna(0)*ds['area_irrigated_trop_corn'].fillna(0)))*
                                     (10**6)*2.5*(10**(-6))/total_area*(3600.*24.*365.))/100.
-      except Exception as e:
+      except Exception:
          logging.error("Missing variables:")
          missing_vars = []
          required_vars = [
@@ -265,7 +267,7 @@ def filter_CoLM(info, ds=None):   #update info as well
          logging.error(f"Surface Precipitation calculation processing ERROR: {e}")
          return info, None
       return info, ds['Precipitation']
-      
+
 
    if info.item == "Surface_Net_SW_Radiation":
       try:
@@ -275,7 +277,7 @@ def filter_CoLM(info, ds=None):   #update info as well
       except:
          logging.error('Surface Net SW Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Net_SW_Radiation']
-   
+
    if info.item == "Surface_Net_LW_Radiation":
       try:
          ds['Surface_Net_LW_Radiation']=ds['f_xy_frl']-ds['f_olrg']
@@ -284,7 +286,7 @@ def filter_CoLM(info, ds=None):   #update info as well
       except:
          logging.error('Surface Net LW Radiation calculation processing ERROR!!!')
       return info, ds['Surface_Net_LW_Radiation']
-   
+
    if info.item == "Surface_Soil_Moisture":
       try:
             # Use method='nearest' to select the nearest value in the 'soil' index
@@ -294,7 +296,7 @@ def filter_CoLM(info, ds=None):   #update info as well
             except:
                ds['f_wliq_soisno']= (ds['f_wliq_soisno'].isel(soil_snow_lev=5) +
                                      ds['f_wliq_soisno'].isel(soil_snow_lev=6))/0.0626/1000.0
-      
+
             info.sim_varname = ['f_wliq_soisno']
             info.sim_varunit = 'unitless'
 
@@ -302,7 +304,7 @@ def filter_CoLM(info, ds=None):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['f_wliq_soisno']
-   
+
 
    if info.item == "Root_Zone_Soil_Moisture":
       try:
@@ -325,7 +327,7 @@ def filter_CoLM(info, ds=None):   #update info as well
                                     ds['f_wliq_soisno'].isel(soil_snow_lev=10)+
                                     ds['f_wliq_soisno'].isel(soil_snow_lev=11)+
                                     ds['f_wliq_soisno'].isel(soil_snow_lev=12)*0.31
-                                          )/1000.0               
+                                          )/1000.0
             info.sim_varname = ['f_wliq_soisno']
             info.sim_varunit = 'unitless'
       except Exception as e:
@@ -334,7 +336,7 @@ def filter_CoLM(info, ds=None):   #update info as well
       return info, ds['f_wliq_soisno']
    if info.item == "Surface_Albedo":
       try:
-            ds['Surface_Albedo']= ds['f_sr'] /  ds['f_xy_solarin'] 
+            ds['Surface_Albedo']= ds['f_sr'] /  ds['f_xy_solarin']
 
             info.sim_varname = ['Surface_Albedo']
             info.sim_varunit = 'unitless'

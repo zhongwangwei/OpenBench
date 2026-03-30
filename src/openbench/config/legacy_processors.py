@@ -10,13 +10,11 @@ Version: 2.0
 Date: July 2025
 """
 
-import os
-import logging
-import re
-import json
-import yaml
 import importlib
-from typing import Dict, Any, List, Tuple, Union
+import logging
+import os
+import re
+from typing import Any, Dict, Tuple
 
 # Heavy dependencies for data processing
 try:
@@ -31,8 +29,8 @@ except ImportError:
     logging.warning("Data processing libraries (numpy, pandas, xarray, joblib) not available")
 
 try:
-    from .legacy_readers import NamelistReader
     from .legacy_manager import ConfigurationError
+    from .legacy_readers import NamelistReader
 except ImportError:
     from legacy_readers import NamelistReader
 
@@ -170,7 +168,7 @@ class GeneralInfoReader(NamelistReader):
             if nml[item][f'{source}_data_type'] == 'stn':
                 try:
                     setattr(self, f'{source_type}_fulllist', str(nml[item][f'{source}_fulllist']))
-                except (KeyError, TypeError) as e:
+                except (KeyError, TypeError):
                     try:
                         setattr(self, f'{source_type}_fulllist', str(nml['general'][f'{source}_fulllist']))
                     except (KeyError, TypeError) as e2:
@@ -246,7 +244,7 @@ class GeneralInfoReader(NamelistReader):
                 if ref_td != sim_td:
                     # Only show warning once
                     if not GeneralInfoReader._time_resolution_warning_shown:
-                        logging.warning(f"Time resolution mismatch may cause alignment issues")
+                        logging.warning("Time resolution mismatch may cause alignment issues")
                         GeneralInfoReader._time_resolution_warning_shown = True
             except (ValueError, AttributeError, TypeError) as e:
                 logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq} ({e})")
@@ -418,7 +416,7 @@ class GeneralInfoReader(NamelistReader):
         try:
             custom_module = importlib.import_module(f"openbench.data.custom.{self.ref_source}_filter")
             return getattr(custom_module, f"filter_{self.ref_source}")
-        except (ImportError, AttributeError) as e:
+        except (ImportError, AttributeError):
             # Only show warning once per ref_source
             if self.ref_source not in GeneralInfoReader._custom_filter_warnings_shown:
                 logging.warning(f"Custom filter for {self.ref_source} not available. Using default filter.")

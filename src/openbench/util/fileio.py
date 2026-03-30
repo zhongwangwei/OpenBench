@@ -10,20 +10,16 @@ Version: 1.0
 Date: January 2025
 """
 
-import os
 import logging
+import os
 import time
-from typing import Optional, Union, Any, Dict
+from typing import Optional, Union
+
 import xarray as xr
-import numpy as np
 
 # Import exception handling
 try:
-    from openbench.util.exceptions import (
-        FileSystemError,
-        DataProcessingError,
-        ValidationError
-    )
+    from openbench.util.exceptions import DataProcessingError, FileSystemError, ValidationError
 except ImportError:
     # Fallback if exceptions module not available
     class FileSystemError(Exception):
@@ -202,7 +198,7 @@ def safe_open_netcdf(file_path: str,
     if variable_name:
         try:
             return _extract_variable(ds, variable_name, file_path)
-        except Exception as e:
+        except Exception:
             # Close dataset on error
             if hasattr(ds, 'close'):
                 ds.close()

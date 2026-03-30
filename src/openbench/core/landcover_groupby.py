@@ -1,21 +1,16 @@
+import logging
 import os
 import re
-import shutil
-import sys
-import warnings
-import logging
-import matplotlib
-import matplotlib.pyplot as plt
+
 import numpy as np
-import pandas as pd
 import xarray as xr
-from joblib import Parallel, delayed
+
+from openbench.util.converttype import Convert_Type
+from openbench.visualization import *
 
 # Check the platform
 from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
-from openbench.util.converttype import Convert_Type
-from openbench.visualization import *
 
 
 def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
@@ -56,7 +51,7 @@ class LC_groupby(metrics, scores):
         else:
             match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
             if not match:
-                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
                 raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
             value, unit = match.groups()
             if not value:
@@ -77,7 +72,7 @@ class LC_groupby(metrics, scores):
             ny = int(180. / self.compare_grid_res)
             grid_info = f'{self.casedir}/comparisons/IGBP_groupby/grid_info.txt'
             with open(grid_info, 'w') as f:
-                f.write(f"gridtype = lonlat\n")
+                f.write("gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
                 f.write(f"ysize    =  {ny}\n")
                 f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
@@ -92,7 +87,7 @@ class LC_groupby(metrics, scores):
             self.IGBP_dir = IGBPtype_remap
 
         def _IGBP_class_remap(self):
-            from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+            from openbench.data.regrid import Grid, create_regridding_dataset
             ds = _open_dataset_safe(
                 "./dataset/IGBP.nc",
                 chunks={"lat": 2000, "lon": 2000},
@@ -158,7 +153,7 @@ class LC_groupby(metrics, scores):
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._igbp_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                logging.warning("warning: station data is not supported for IGBP class comparison")
                                 self._igbp_station_warning_shown = True
                             continue  # Skip processing for station data
                         else:
@@ -344,7 +339,7 @@ class LC_groupby(metrics, scores):
             grid_info = f'{self.casedir}/comparisons/PFT_groupby/PFT_info.txt'
 
             with open(grid_info, 'w') as f:
-                f.write(f"gridtype = lonlat\n")
+                f.write("gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
                 f.write(f"ysize    =  {ny}\n")
                 f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
@@ -362,7 +357,7 @@ class LC_groupby(metrics, scores):
             """
             Compare the PFT class of the model output data and the reference data using xarray
             """
-            from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+            from openbench.data.regrid import Grid, create_regridding_dataset
             ds = _open_dataset_safe("./dataset/PFT.nc", chunks={"lat": 2000, "lon": 2000})
             ds = ds["PFT"]
             ds = ds.sortby(["lat", "lon"])
@@ -423,7 +418,7 @@ class LC_groupby(metrics, scores):
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._pft_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                logging.warning("warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                             continue  # Skip processing for station data
                         else:

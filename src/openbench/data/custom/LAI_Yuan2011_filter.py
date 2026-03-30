@@ -52,7 +52,7 @@ def filter_LAI_Yuan2011(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     compare_res = str(info.compare_tim_res).lower()
     is_daily = compare_res in {"1d", "day", "daily", "d"}

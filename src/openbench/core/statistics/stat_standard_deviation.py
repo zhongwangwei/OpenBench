@@ -1,5 +1,6 @@
 import xarray as xr
 
+
 def stat_standard_deviation(self, data):
     """
     Calculate the standard deviation of the input data.

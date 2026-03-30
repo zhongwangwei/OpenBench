@@ -1,15 +1,17 @@
-import os
 import logging
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
 from matplotlib import rcParams
-from matplotlib.patches import Patch
 from matplotlib.font_manager import FontProperties
+from matplotlib.patches import Patch
 
 from openbench.util.converttype import Convert_Type
-from .Fig_toolbox import get_index, convert_unit, get_colormap
+
+from .Fig_toolbox import get_index
+
 
 def _read_comparison_file(file):
     """

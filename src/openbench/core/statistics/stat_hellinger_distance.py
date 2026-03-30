@@ -1,6 +1,6 @@
-import xarray as xr
-import logging
+
 import numpy as np
+import xarray as xr
 
 
 def stat_hellinger_distance(self, v, u):

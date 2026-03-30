@@ -13,6 +13,7 @@ import gc
 import logging
 import os
 import shutil
+
 import numpy as np
 import xarray as xr
 
@@ -166,7 +167,7 @@ def cleanup_memory(verbose=True):
             stats['memory_freed'] = stats['memory_before'] - stats['memory_after']
 
             if verbose and hasattr(logging, 'info'):
-                logging.info(f"Memory cleanup completed:")
+                logging.info("Memory cleanup completed:")
                 logging.info(f"  - Memory before: {stats['memory_before']:.1f} MB")
                 logging.info(f"  - Memory after: {stats['memory_after']:.1f} MB")
                 logging.info(f"  - Objects collected: {stats['objects_collected']}")
@@ -176,10 +177,10 @@ def cleanup_memory(verbose=True):
                     logging.info(f"  - Memory usage: {abs(stats['memory_freed']):.1f} MB (may have increased due to logging)")
         else:
             if verbose and hasattr(logging, 'info'):
-                logging.info(f"Memory cleanup completed (psutil not available for detailed monitoring)")
-                logging.info(f"  - Garbage collection performed")
+                logging.info("Memory cleanup completed (psutil not available for detailed monitoring)")
+                logging.info("  - Garbage collection performed")
                 logging.info(f"  - Objects collected: {stats['objects_collected']}")
-                logging.info(f"  - Cache clearing attempted")
+                logging.info("  - Cache clearing attempted")
 
     except Exception as e:
         if hasattr(logging, 'warning'):

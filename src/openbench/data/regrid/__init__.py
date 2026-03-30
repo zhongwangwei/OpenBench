@@ -1,7 +1,8 @@
 from . import methods
 from .regrid import Regridder
+from .regrid_cdo import regridder_cdo
 from .utils import Grid, create_regridding_dataset
-from .regrid_cdo import regridder_cdo 
+
 __all__ = [
     "Grid",
     "Regridder",

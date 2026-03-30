@@ -1,5 +1,4 @@
 import math
-import os
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -7,14 +6,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from matplotlib import cm
-from matplotlib import colors
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
+
 from openbench.util.converttype import Convert_Type
 
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap, tick_length
+from .Fig_toolbox import get_index, tick_length
+
 
 def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, significant, main_nml, option):
     font = {'family': option['font']}
@@ -81,7 +79,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
         ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
-    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')
     ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
     ax.set_adjustable('datalim')
     ax.set_aspect('equal', adjustable='box')
@@ -106,7 +104,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
                 ax.text(-130,-40,option['colorbar_label'],fontsize=16, weight='bold', ha='center' ,va='bottom')
             else:
                 cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height/3])
-                ax.text(-160+7*tick_length(np.median(mticks)),-40,option['colorbar_label'],fontsize=16, weight='bold', ha='left' ,va='center')                
+                ax.text(-160+7*tick_length(np.median(mticks)),-40,option['colorbar_label'],fontsize=16, weight='bold', ha='left' ,va='center')
         else:
             if option['colorbar_position'] == 'horizontal':
                 if len(option['xticklabel']) == 0:

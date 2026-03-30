@@ -12,18 +12,18 @@ def process_site(station_idx, dataset, info):
     # Get coordinates for this station
     lon = float(dataset['lon'].isel(data=station_idx).values)
     lat = float(dataset['lat'].isel(data=station_idx).values)
-    
+
     # Use index as station ID since no explicit station_id variable
     station_id = f"FCH4_{station_idx:04d}"
-    
+
     # Get time series data for this station
     fch4 = dataset['FCH4'].isel(data=station_idx)
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~fch4.isnull()
     if not valid_mask.any():
         return None
-    
+
     valid_times = dataset['time'].where(valid_mask, drop=True)
     start_year = pd.to_datetime(valid_times.values[0]).year
     end_year = pd.to_datetime(valid_times.values[-1]).year
@@ -40,7 +40,7 @@ def process_site(station_idx, dataset, info):
     scratch_dir = Path(info.casedir) / "scratch" / f"CH4_FluxnetANN_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Save FCH4 data - isel already removes the data dimension
     # so we just need to squeeze any remaining singleton dimensions
     fch4_data = fch4.squeeze(drop=True)
@@ -79,7 +79,7 @@ def filter_CH4_FluxnetANN(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     dataset_path = Path(info.ref_dir) / "FCH4_F_ANN_monthly_wetland_tier1.nc"
 

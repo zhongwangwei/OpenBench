@@ -1,16 +1,9 @@
 import glob
-import importlib
 import logging
 import os
-import re
-import shutil
-from typing import List, Dict, Any, Tuple, Union
 import sys
-import numpy as np
-import pandas as pd
-import xarray as xr
-from dask.diagnostics import ProgressBar
-from joblib import Parallel, delayed
+from typing import List, Tuple, Union
+
 try:
     from openbench.config import GeneralInfoReader
 except ImportError:
@@ -141,7 +134,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
     file_checker = FileChecker()
     try:
         logging.info("**************************************************")
-        logging.info(f"\033[1;32mStart checking required nml files\033[0m")
+        logging.info("\033[1;32mStart checking required nml files\033[0m")
         # Required namelist files
         required_files = [
             main_nl["general"]["reference_nml"],
@@ -208,7 +201,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
                             logging.error(f"Error: Reference source '{source}' not found in ref_nml['def_nml']")
                             logging.error(f"       Evaluation item: {evaluation_item}")
                             logging.error(f"       Available sources in def_nml: {list(ref_nml.get('def_nml', {}).keys())}")
-                            logging.error(f"       Check your configuration file for typos!")
+                            logging.error("       Check your configuration file for typos!")
                             logging.error("**************************************************")
                             sys.exit(1)
 
@@ -227,7 +220,7 @@ def check_required_nml(main_nl, sim_nml=None, ref_nml=None, evaluation_items=Non
                             logging.error(f"Error: Simulation source '{source}' not found in sim_nml['def_nml']")
                             logging.error(f"       Evaluation item: {evaluation_item}")
                             logging.error(f"       Available sources in def_nml: {list(sim_nml.get('def_nml', {}).keys())}")
-                            logging.error(f"       Check your configuration file for typos!")
+                            logging.error("       Check your configuration file for typos!")
                             logging.error("**************************************************")
                             sys.exit(1)
 
@@ -336,9 +329,9 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
                 logging.info(f"Reference data groupby '{general_info['ref_data_groupby']}' - file checking skipped in preprocessing.")
 
         elif general_info['ref_data_type'] == 'stn':
-            logging.info(f"Reference data type is station - station file checking skipped in preprocessing.")
+            logging.info("Reference data type is station - station file checking skipped in preprocessing.")
         else:
-            logging.error(f"The reference data type is not supported!")
+            logging.error("The reference data type is not supported!")
             sys.exit(1)
 
         if general_info['sim_data_type'] == 'grid':
@@ -365,9 +358,9 @@ def files_check(main_nl, sim_nml, ref_nml, metric_vars, score_vars, comparison_v
             else:
                 logging.info(f"Simulation data groupby '{general_info['sim_data_groupby']}' - file checking skipped in preprocessing.")
         elif general_info['sim_data_type'] == 'stn':
-            logging.info(f"Simulation data type is station - station file checking skipped in preprocessing.")
+            logging.info("Simulation data type is station - station file checking skipped in preprocessing.")
         else:
-            logging.error(f"The simulation data type is not supported!")
+            logging.error("The simulation data type is not supported!")
             sys.exit(1)
 
         logging.info("Done")

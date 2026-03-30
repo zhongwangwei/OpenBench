@@ -1,5 +1,4 @@
 import math
-import os
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -7,11 +6,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from matplotlib import cm
-from matplotlib import colors
-from matplotlib import rcParams
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
+from matplotlib import cm, colors, rcParams
+
 from openbench.util.converttype import Convert_Type
+
 
 def get_index(vmin, vmax, colormap):
     def get_ticks(vmin, vmax):

@@ -10,12 +10,12 @@ Version: 2.0
 Date: July 2025
 """
 
-import os
-import re
 import json
-import yaml
 import logging
-from typing import Dict, Any, Union
+import os
+from typing import Any, Dict, Union
+
+import yaml
 
 try:
     from .legacy_manager import ConfigurationError
@@ -31,14 +31,14 @@ class NamelistReader:
     This class provides the core file reading functionality that was originally
     in Mod_Namelist.py, but optimized and integrated with the new config system.
     """
-    
+
     def __init__(self):
         """Initialize the NamelistReader."""
         self.name = 'NamelistReader'
         self.version = '2.0'
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.extended_by = "OpenBench Contributors"
-    
+
     @staticmethod
     def strtobool(val: str) -> int:
         """
@@ -61,7 +61,7 @@ class NamelistReader:
         else:
             logging.error(f"Invalid truth value: {val}")
             raise ValueError(f"Invalid truth value: {val}")
-    
+
     @staticmethod
     def select_variables(namelist: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -74,7 +74,7 @@ class NamelistReader:
             Dict[str, Any]: A dictionary containing only the truthy values.
         """
         return {k: v for k, v in namelist.items() if v}
-    
+
     def _detect_file_format(self, file_path: str) -> str:
         """
         Detect the format of the configuration file based on its extension.
@@ -87,10 +87,10 @@ class NamelistReader:
         """
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
-        
+
         if ext == '.nml':
             logging.warning(
-                f"\n" + "="*80 + "\n"
+                "\n" + "="*80 + "\n"
                 f"⚠️  DEPRECATION WARNING: Fortran NML format (.nml) is deprecated!\n"
                 f"    The Fortran NML format is no longer being updated.\n"
                 f"    Please switch to YAML format (.yaml) for configuration files.\n"
@@ -101,7 +101,7 @@ class NamelistReader:
             return 'yaml'
         elif ext == '.json':
             logging.warning(
-                f"\n" + "="*80 + "\n"
+                "\n" + "="*80 + "\n"
                 f"⚠️  DEPRECATION WARNING: JSON format (.json) is deprecated!\n"
                 f"    The JSON format is no longer being updated.\n"
                 f"    Please switch to YAML format (.yaml) for configuration files.\n"
@@ -112,7 +112,7 @@ class NamelistReader:
             # Default to nml for backward compatibility
             logging.warning(f"Unknown file extension: {ext}, defaulting to Fortran namelist format")
             return 'nml'
-    
+
     def _parse_value(self, key: str, value: str) -> Union[bool, int, float, list, str]:
         """
         Parse a string value into its appropriate type.
@@ -137,7 +137,7 @@ class NamelistReader:
             return [v.strip() for v in value.split(',')]
         else:
             return value
-    
+
     def _read_nml(self, file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Read a Fortran namelist format file.
@@ -150,7 +150,7 @@ class NamelistReader:
         """
         namelist = {}
         current_dict = None
-        
+
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -170,9 +170,9 @@ class NamelistReader:
                     if '#' in value:
                         value = value.split('#')[0].strip()
                     current_dict[key] = self._parse_value(key, value)
-        
+
         return namelist
-    
+
     def _read_yaml(self, file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Read a YAML format file.
@@ -190,7 +190,7 @@ class NamelistReader:
             raise ConfigurationError(f"Failed to parse YAML file {file_path}: {e}")
         except Exception as e:
             raise ConfigurationError(f"Failed to read YAML file {file_path}: {e}")
-    
+
     def _read_json(self, file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Read a JSON format file.
@@ -208,7 +208,7 @@ class NamelistReader:
             raise ConfigurationError(f"Failed to parse JSON file {file_path}: {e}")
         except Exception as e:
             raise ConfigurationError(f"Failed to read JSON file {file_path}: {e}")
-    
+
     def read_namelist(self, file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Read a namelist file in any supported format and return its contents.
@@ -224,11 +224,11 @@ class NamelistReader:
         """
         if not os.path.exists(file_path):
             raise ConfigurationError(f"Configuration file not found: {file_path}")
-        
+
         # Direct reading without using ConfigManager to avoid recursion
         try:
             file_format = self._detect_file_format(file_path)
-            
+
             if file_format == 'nml':
                 return self._read_nml(file_path)
             elif file_format == 'yaml':
@@ -237,10 +237,10 @@ class NamelistReader:
                 return self._read_json(file_path)
             else:
                 raise ConfigurationError(f"Unsupported file format: {file_format}")
-                
+
         except Exception as e:
             raise ConfigurationError(f"Failed to read configuration file {file_path}: {e}")
-    
+
     def read(self, file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Alias for read_namelist for backward compatibility.

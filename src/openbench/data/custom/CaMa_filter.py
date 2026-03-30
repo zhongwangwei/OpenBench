@@ -1,14 +1,16 @@
-import numpy as np
-import pandas as pd
+import logging
 import re
-import  logging
+
+import pandas as pd
+
+
 def adjust_time_CaMa(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
       # normalize time values
       num_value, time_unit = match.groups()
-      num_value = int(num_value) if num_value else 1 
-      try: 
+      num_value = int(num_value) if num_value else 1
+      try:
          ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:%M:%S'))
       except:
          logging.info('time format error')

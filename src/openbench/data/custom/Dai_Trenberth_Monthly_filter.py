@@ -14,19 +14,19 @@ def process_site(station_idx, dataset, info):
     lon = float(dataset['lon'].isel(station=station_idx).values)
     lat = float(dataset['lat'].isel(station=station_idx).values)
     area = float(dataset['area_stn'].isel(station=station_idx).values)
-    
+
     # Skip stations with missing area
     if pd.isna(area) or area < 0:
         return None
-    
+
     # Get time series data for this station (FLOW is monthly discharge)
     streamflow = dataset['FLOW'].isel(station=station_idx)
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~np.isnan(streamflow.values) & (streamflow.values != -999)
     if not valid_mask.any():
         return None
-    
+
     # Parse time from YYYYMM format
     time_vals = dataset['time'].values
     valid_time_vals = time_vals[valid_mask]
@@ -41,7 +41,7 @@ def process_site(station_idx, dataset, info):
             lon < info.min_lon or lon > info.max_lon or
             lat < info.min_lat or lat > info.max_lat):
         return None
-    
+
     # Filter by drainage area if specified
     if hasattr(info, 'min_uparea') and area < info.min_uparea:
         return None
@@ -51,7 +51,7 @@ def process_site(station_idx, dataset, info):
     scratch_dir = Path(info.casedir) / "scratch" / f"Dai_Trenberth_Monthly_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Convert YYYYMM time to proper datetime and save (handle float values by converting to int first)
     time_dates = pd.to_datetime([str(int(t)) for t in time_vals], format='%Y%m')
     ds_out = xr.Dataset({
@@ -88,7 +88,7 @@ def filter_Dai_Trenberth_Monthly(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     dataset_path = Path(info.ref_dir) / "coastal-stns-Vol-monthly.updated-May2019.nc"
 

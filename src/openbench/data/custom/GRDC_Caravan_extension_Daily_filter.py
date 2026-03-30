@@ -39,32 +39,32 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
     area = float(areas[station_idx]) if not np.isnan(areas[station_idx]) else -9999.0
-    
+
     # Get CaMA allocation data
     cama_lon = float(cama_lons[station_idx])
     cama_lat = float(cama_lats[station_idx])
     alloc_err = float(alloc_errs[station_idx])
-    
+
     # Skip stations with invalid CaMA allocation
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lat < -90:
         return None
-    
+
     # Filter by area allocation error threshold
     if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
         return None
-    
+
     # Skip stations with missing coordinates
     if np.isnan(lon) or np.isnan(lat):
         return None
-    
+
     # Get time series data for this station
     streamflow = streamflow_data[station_idx, :]
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~np.isnan(streamflow)
     if not valid_mask.any():
         return None
-    
+
     valid_indices = np.where(valid_mask)[0]
     start_year = pd.to_datetime(times[valid_indices[0]]).year
     end_year = pd.to_datetime(times[valid_indices[-1]]).year
@@ -77,24 +77,24 @@ def process_site(station_idx, station_ids, lons, lats, areas,
             lon < getattr(info, 'min_lon', -180) or lon > getattr(info, 'max_lon', 180) or
             lat < getattr(info, 'min_lat', -90) or lat > getattr(info, 'max_lat', 90)):
         return None
-    
+
     # Filter by drainage area if specified
     min_uparea = getattr(info, 'min_uparea', 0)
     max_uparea = getattr(info, 'max_uparea', 1e12)
-    
+
     if hasattr(info, 'min_uparea') and area > 0 and area < min_uparea:
         return None
     if hasattr(info, 'max_uparea') and area > 0 and area > max_uparea:
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Save streamflow data as 1D time series
     ds_out = xr.Dataset({
         'streamflow': (['time'], streamflow)
     }, coords={'time': times})
     ds_out.to_netcdf(file_path)
-    
+
     return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
 
 
@@ -111,16 +111,16 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     dataset_path = Path(info.ref_dir) / "GRDC_Caravan_extension_daily.nc"
-    
+
     if not dataset_path.exists():
         logging.error(f"Dataset not found: {dataset_path}")
         return
-    
+
     logging.info(f"Loading GRDC Caravan Extension metadata from {dataset_path}...")
-    
+
     # Get resolution suffix for CaMA variables
     if hasattr(info, 'sim_grid_res'):
         res_suffix = get_resolution_suffix(info.sim_grid_res)
@@ -128,15 +128,15 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
     else:
         res_suffix = '03min'
         logging.warning("sim_grid_res not defined, using default 03min resolution")
-    
+
     # Get area error threshold from config (default 0.2 = 20%)
     area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
     logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
-    
+
     # Create scratch directory
     scratch_dir = Path(info.casedir) / "scratch" / f"GRDC_Caravan_extension_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    
+
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
         station_ids = ds_file['station'].values
@@ -145,12 +145,12 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
         areas = ds_file['area'].values
         streamflow_data = ds_file['streamflow'].values  # (station, time)
         times = ds_file['time'].values
-        
+
         # Load CaMA allocation data
         cama_lon_var = f'cama_lon_{res_suffix}'
         cama_lat_var = f'cama_lat_{res_suffix}'
         alloc_err_var = f'cama_alloc_err_{res_suffix}'
-        
+
         if cama_lon_var in ds_file:
             cama_lons = ds_file[cama_lon_var].values
             cama_lats = ds_file[cama_lat_var].values
@@ -160,10 +160,10 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
             cama_lons = lons.copy()
             cama_lats = lats.copy()
             alloc_errs = np.zeros_like(lons)
-        
+
         n_stations = len(station_ids)
         logging.info(f"Processing {n_stations} stations in parallel...")
-        
+
         # Parallel processing
         num_cores = getattr(info, 'num_cores', -1)
         station_rows = Parallel(n_jobs=num_cores, verbose=1)(
@@ -173,10 +173,10 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
                 streamflow_data, times, info, scratch_dir, area_err_threshold
             ) for idx in range(n_stations)
         )
-        
+
         # Filter out None results
         station_rows = [row for row in station_rows if row is not None]
-        
+
         if not station_rows:
             logging.error("No stations satisfy the selection criteria.")
             return
@@ -185,12 +185,12 @@ def filter_GRDC_Caravan_extension_Daily(info, ds=None):
         station_rows,
         columns=['ID', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear', 'ref_dir']
     )
-    
+
     info.use_syear = int(df['use_syear'].min())
     info.use_eyear = int(df['use_eyear'].max())
     info.ref_fulllist = f"{info.casedir}/stn_GRDC_Caravan_extension_{getattr(info, 'sim_source', 'unknown')}_list.txt"
     info.stn_list = df.copy()
-    
+
     df.to_csv(info.ref_fulllist, index=False)
     logging.info(f'Station list saved: {len(df)} stations')
     return

@@ -1,11 +1,11 @@
-import re
-import numpy as np
-import matplotlib
-from matplotlib import cm
-from matplotlib import colors
-import os
-import cmaps
 import math
+import re
+
+import cmaps
+import matplotlib
+import numpy as np
+from matplotlib import colors
+
 
 def process_unit(ref_unit,sim_unit,metric):
     all_metrics_units = {
@@ -186,13 +186,13 @@ def convert_unit(input_str):
 #     score_list = ['BiasScore', 'RMSEScore', 'PhaseScore', 'IavScore', 'SpatialScore', 'Overall_Score', 'The_Ideal_Point_score']
 #     list5 = ['correlation','ubcorrelation','ubcorrelation_R2','rSpearman','kappa_coeff']
 #     list6 = ['md','ve','rfactor']
-    
+
 #     # 计算基础刻度
 #     colorbar_ticks = get_ticks(vmin, vmax)
 #     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
 #     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
 #     mticks = [round(tick, 2) if isinstance(tick, float) and len(str(tick).split('.')[1]) > 2 else tick for tick in mticks]
-    
+
 #     # 根据变量类型调整刻度范围
 #     if (varname in list1) and (vmin <0 and vmax > 0):
 #         max_abs = max(abs(vmin), abs(vmax))
@@ -209,7 +209,7 @@ def convert_unit(input_str):
 #             mticks = np.linspace(-max_num, max_num, 5)
 #         else:
 #             mticks = np.linspace(mticks[0],mticks[0]+4*colorbar_ticks,5)
-    
+
 #     # 确保mticks不为空且有足够的范围
 #     if len(mticks) == 0:
 #         mticks = [vmin, vmax]
@@ -217,15 +217,15 @@ def convert_unit(input_str):
 #         # 处理单一值情况
 #         n = (vmax - vmin) / 10.0 if vmax != vmin else 0.1
 #         mticks = [mticks[0] - n, mticks[0], mticks[0] + n]
-    
+
 #     # 固定使用cmp_b2r颜色映射
 #     cmap = get_colormap('cmp_b2r')
-    
+
 #     # 设置边界和标准化
 #     new_ticks = mticks[1]-mticks[0]
 #     bnd = mticks
 #     norm = colors.Normalize(vmin=mticks[0], vmax=mticks[-1])
-    
+
 #     # 确定扩展方式
 #     if vmin <= mticks[0] and vmax >= mticks[-1]:
 #         extend = 'both'
@@ -235,7 +235,7 @@ def convert_unit(input_str):
 #         extend = 'max'
 #     else:
 #         extend = 'neither'
-    
+
 #     return cmap, mticks, norm, bnd, extend
 
 def get_colormap(cmap_name):
@@ -284,7 +284,7 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
     score_list = ['BiasScore', 'RMSEScore', 'PhaseScore', 'IavScore', 'SpatialScore', 'Overall_Score', 'The_Ideal_Point_score']
     list5 = ['correlation','ubcorrelation','ubcorrelation_R2','rSpearman','kappa_coeff']
     list6 = ['md','ve','rfactor',]
-        
+
     # Calculate ticks
     colorbar_ticks = get_ticks(vmin, vmax)
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
@@ -334,7 +334,7 @@ def get_index(vmin, vmax, colormap='Spectral', varname=''):
     #     cmap = get_colormap('cmocean_ice')
     # elif (mticks[0] >= 0):
     #     cmap = get_colormap('cmocean_amp')
-    
+
     # bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
     bnd = mticks
     # norm = colors.BoundaryNorm(bnd, cmap.N)
@@ -360,7 +360,7 @@ def tick_length(num):
     int: The length of a number
     """
     num_str = str(num)
-    
+
     if '.' not in num_str:
         length = len(num_str)
     else:
@@ -369,7 +369,7 @@ def tick_length(num):
         point_part = 0.5
         # decimal_part = decimal_part.rstrip('0')
         length = len(decimal_part) + len(integer_part) + point_part
-    
+
     return length
 
 def get_least_significant_digit(num):

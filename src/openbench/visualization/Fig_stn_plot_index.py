@@ -1,21 +1,16 @@
-import warnings
-from matplotlib import colors
-from matplotlib import cm
-import matplotlib.pyplot as plt
-import xarray as xr
-import numpy as np
-import math
-import os
-import pandas as pd
-import matplotlib
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
+
 from openbench.util.converttype import Convert_Type
 
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
+from .Fig_toolbox import get_index
+
 
 def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # read the data
@@ -82,7 +77,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         cs = ax.scatter(stn_lon, stn_lat, s=option['markersize'], c=metric, cmap=cmap, vmin=mticks[0], vmax=mticks[-1],
                         marker=option['marker'], linewidths=0.5,
                         edgecolors='black', alpha=0.9, zorder=10)
-        
+
         for spine in ax.spines.values():
             spine.set_linewidth(option['line_width'])
 
@@ -109,7 +104,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
             ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
             ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
             ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
-        ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+        ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')
         ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
         ax.set_adjustable('datalim')
         ax.set_aspect('equal', adjustable='box')

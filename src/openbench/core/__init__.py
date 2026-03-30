@@ -23,11 +23,11 @@ from .scores import scores
 try:
     from .evaluation import Evaluation_grid, Evaluation_stn
     from .evaluation_engine import (
-        ModularEvaluationEngine,
         GridEvaluationEngine,
+        ModularEvaluationEngine,
         StationEvaluationEngine,
         create_evaluation_engine,
-        evaluate_datasets
+        evaluate_datasets,
     )
     _HAS_EVALUATION = True
 except ImportError:
@@ -44,9 +44,9 @@ except ImportError:
 
 # Import comparison classes
 try:
+    from .climatezone_groupby import CZ_groupby
     from .comparison import ComparisonProcessing
     from .landcover_groupby import LC_groupby
-    from .climatezone_groupby import CZ_groupby
     _HAS_COMPARISON = True
 except ImportError:
     _HAS_COMPARISON = False

@@ -4,11 +4,11 @@ Climatology processing module for OpenBench
 Handles climatological mean evaluations with different time dimensions
 """
 
-import numpy as np
-import xarray as xr
-import pandas as pd
 import logging
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
+
+import pandas as pd
+import xarray as xr
 
 
 class ClimatologyProcessor:

@@ -73,6 +73,16 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 
+[tool.ruff.lint.per-file-ignores]
+# Migrated legacy code — relax lint rules to avoid massive churn
+"src/openbench/util/*.py" = ["E", "F", "W", "I"]
+"src/openbench/data/*.py" = ["E", "F", "W", "I"]
+"src/openbench/data/**/*.py" = ["E", "F", "W", "I"]
+"src/openbench/core/*.py" = ["E", "F", "W", "I"]
+"src/openbench/core/**/*.py" = ["E", "F", "W", "I"]
+"src/openbench/visualization/*.py" = ["E", "F", "W", "I"]
+"src/openbench/config/legacy_*.py" = ["E", "F", "W", "I"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

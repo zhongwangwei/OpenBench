@@ -1,13 +1,12 @@
+import functools
+import gc
 import glob
 import importlib
 import logging
 import os
 import re
-import shutil
-import gc
 import time
-import functools
-from typing import List, Dict, Any, Tuple, Callable, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 # Import cached glob for performance
 try:
@@ -40,12 +39,13 @@ try:
 except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
-from .unit import UnitProcessing
 from openbench.util.converttype import Convert_Type
+
+from .unit import UnitProcessing
 
 # Import interfaces
 try:
-    from openbench.util.interfaces import IDataProcessor, IDataLoader, BaseProcessor, ProcessingPipeline
+    from openbench.util.interfaces import BaseProcessor, IDataLoader, IDataProcessor, ProcessingPipeline
 
     _HAS_INTERFACES = True
 except ImportError:
@@ -58,11 +58,11 @@ except ImportError:
 # Import data pipeline
 try:
     from openbench.data.pipeline import (
-        create_standard_pipeline,
-        process_dataset,
+        CoordinateProcessor,
         DataPipelineBuilder,
         DataValidationProcessor,
-        CoordinateProcessor
+        create_standard_pipeline,
+        process_dataset,
     )
 
     _HAS_PIPELINE = True
@@ -83,9 +83,9 @@ try:
         DataProcessingError,
         FileSystemError,
         error_handler,
+        log_performance_warning,
         safe_execute,
         validate_file_exists,
-        log_performance_warning
     )
 
     _HAS_EXCEPTIONS = True
@@ -131,7 +131,7 @@ except ImportError:
 
 # Import caching system (required for data processing)
 try:
-    from openbench.data.cache import get_cache_manager, cached, DataCache
+    from openbench.data.cache import DataCache, cached, get_cache_manager
 
     _HAS_CACHE = True
 except ImportError:
@@ -858,11 +858,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             try:
                 ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                  coords={'time': time_index, 'lat': lat, 'lon': lon})
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                      coords={'time': time_index, 'lon': lon, 'lat': lat})
-                except (ValueError, TypeError) as e2:
+                except (ValueError, TypeError):
                     ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                      coords={'lat': lat, 'lon': lon, 'time': time_index})
             ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -871,7 +871,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if not hasattr(ds['time'], 'dt'):
             try:
                 ds['time'] = pd.to_datetime(ds['time'])
-            except (ValueError, TypeError, AttributeError) as e:
+            except (ValueError, TypeError, AttributeError):
                 lon = ds.lon.values
                 lat = ds.lat.values
                 data = ds.values
@@ -879,11 +879,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 try:
                     ds1 = xr.Dataset({f'{ds.name}': (['time', 'lat', 'lon'], data)},
                                      coords={'time': time_index, 'lat': lat, 'lon': lon})
-                except (ValueError, TypeError) as e:
+                except (ValueError, TypeError):
                     try:
                         ds1 = xr.Dataset({f'{ds.name}': (['time', 'lon', 'lat'], data)},
                                          coords={'time': time_index, 'lon': lon, 'lat': lat})
-                    except (ValueError, TypeError) as e2:
+                    except (ValueError, TypeError):
                         ds1 = xr.Dataset({f'{ds.name}': (['lat', 'lon', 'time'], data)},
                                          coords={'lat': lat, 'lon': lon, 'time': time_index})
                     ds1 = ds1.transpose('time', 'lat', 'lon')
@@ -900,13 +900,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         ds = ds.sortby('time')
         try:
             return ds.transpose('time', 'lat', 'lon')[f'{ds.name}']
-        except (ValueError, KeyError) as e:
+        except (ValueError, KeyError):
             try:
                 return ds.transpose('time', 'lat', 'lon')
-            except (ValueError, KeyError) as e2:
+            except (ValueError, KeyError):
                 try:
                     return ds.transpose('time', 'lon', 'lat')
-                except (ValueError, KeyError) as e3:
+                except (ValueError, KeyError):
                     return ds.squeeze()
 
     @performance_monitor
@@ -1114,7 +1114,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     pass
             time_values = time_var
 
-            # Create a complete time series based on the specified time frequency and range 
+            # Create a complete time series based on the specified time frequency and range
             # Compare the actual time with the complete time series to find the missing time
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0 and len(missing_times) < len(time_var):
@@ -1150,7 +1150,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             try:
                 ds = xr.open_dataset(VarFile)  # .squeeze()
-            except (ValueError, OSError) as e:
+            except (ValueError, OSError):
                 ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
@@ -1162,7 +1162,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         try:
             ds = self.apply_custom_filter(datasource, ds, varname)
             ds = Convert_Type.convert_nc(ds)
-        except Exception as e:
+        except Exception:
             # Check if varname list is empty
             if not varname or len(varname) == 0:
                 logging.error("Variable name list is empty")
@@ -1237,7 +1237,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         if tim_res_lower in ['climatology-year', 'climatology-month']:
             logging.debug(f"resample_data: Climatology mode detected ({tim_res}), returning data unchanged")
             return dfx1
-            
+
         match = re.match(r'(\d+)\s*([a-zA-Z]+)', tim_res)
         if not match:
             logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
@@ -1257,7 +1257,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             logging.error(f"Unsupported time unit: {unit}")
             raise ValueError(f"Unsupported time unit: {unit}")
 
-        # Build frequency string 
+        # Build frequency string
         freq_str = f'{value}{freq}'
         time_index = pd.date_range(start=f'{startx}-01-01T00:00:00', end=f'{endx}-12-31T59:59:59', freq=freq_str)
         ds = xr.Dataset({'data': ('time', np.nan * np.ones(len(time_index)))}, coords={'time': time_index})
@@ -1509,7 +1509,7 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     import importlib
                     custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
                     custom_filter = getattr(custom_module, f"filter_{model}")
-                    
+
                     # Call custom filter with dataset
                     logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
                     updated_self, filtered_data = custom_filter(self, stn_data)
@@ -1776,7 +1776,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor
     def process_non_yearly_files(self, data_params: Dict[str, Any]) -> None:
-        logging.debug(f"Combining data to yearly files...")
+        logging.debug("Combining data to yearly files...")
         years = range(self.minyear, self.maxyear + 1)
         Parallel(n_jobs=self.num_cores)(
             delayed(self.check_all)(data_params['data_dir'], year, year,
@@ -1982,7 +1982,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor(silent_on_error=True)
     def remap_interpolate(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
-        from openbench.data.regrid import Grid, Regridder
+        from openbench.data.regrid import Grid
         grid = Grid(
             north=self.max_lat - self.compare_grid_res / 2,
             south=self.min_lat + self.compare_grid_res / 2,
@@ -2008,9 +2008,9 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     @performance_monitor(silent_on_error=True)
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
+        import os
         import subprocess
         import tempfile
-        import os
 
         # Prepare data - ensure proper coordinate attributes
         data_prepared = data.copy()
@@ -2072,7 +2072,7 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         with open(filename, 'w') as f:
-            f.write(f"gridtype = lonlat\n")
+            f.write("gridtype = lonlat\n")
             f.write(f"xsize = {len(new_grid.lon)}\n")
             f.write(f"ysize = {len(new_grid.lat)}\n")
             f.write(f"xfirst = {self.min_lon + self.compare_grid_res / 2}\n")

@@ -1,6 +1,6 @@
+import logging
 import math
 import os
-import logging
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from matplotlib import rcParams
+
 from openbench.util.converttype import Convert_Type
+
 
 def _read_metrics_file(file):
     """

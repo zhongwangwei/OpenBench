@@ -9,8 +9,8 @@ import matplotlib.colors as clr
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib import rcParams
-from matplotlib import ticker
+from matplotlib import rcParams, ticker
+
 
 def make_scenarios_comparison_Taylor_Diagram(basedir, evaluation_item, STDs, RMSs, cors, ref_source, sim_sources, option):
     font = {'family': 'DejaVu Sans'}
@@ -145,7 +145,7 @@ def taylor_diagram(*args, **kwargs):
 
         del axes_handles
 
-    # Plot data points. Note that only rho[1:N] and theta[1:N] are 
+    # Plot data points. Note that only rho[1:N] and theta[1:N] are
     # plotted.
     X = np.multiply(rho[1:], np.cos(theta[1:]))
     Y = np.multiply(rho[1:], np.sin(theta[1:]))
@@ -508,11 +508,11 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
             cxscale = 6 * fontSize / 10
             labelpad = -30
     else:
-        raise ValueError('Invalid color bar location: ' + option['locationcolorbar']);
+        raise ValueError('Invalid color bar location: ' + option['locationcolorbar'])
 
     # Add color bar to plot
     if option['colormap'] == 'on':
-        # map color shading of markers to colormap 
+        # map color shading of markers to colormap
         hc = plt.colorbar(hp, orientation=orientation, aspect=aspect,
                           fraction=fraction, pad=0.06, ax=ax)
 
@@ -532,7 +532,7 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z,
             hc.set_ticklabels(['Min.', 'Max.'])
     else:
         raise ValueError('Invalid option for option.colormap: ' +
-                         option['colormap']);
+                         option['colormap'])
 
     if orientation == 'horizontal':
         location = _getColorBarLocation(hc, option, xscale=xscale,
@@ -636,7 +636,7 @@ def _setColorBarTicks(hc, numBins, lenTick):
         hc.locator = ticker.MaxNLocator(nbins=numBins, prune='both')
         hc.update_ticks()
 
-        # Check number of characters in tick labels is 
+        # Check number of characters in tick labels is
         # acceptable, otherwise reduce number of bins
         locs = str(hc.get_ticks())
         locs = locs[1:-1].split()
@@ -728,7 +728,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                 # Skip if X or Y contains NaN
                 if np.isnan(X[i]) or np.isnan(Y[i]):
                     continue
-                    
+
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markerSize,
                                 markerfacecolor=markercolor[i],
@@ -749,7 +749,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                 # Skip if X or Y contains NaN
                 if np.isnan(X[i]) or np.isnan(Y[i]):
                     continue
-                    
+
                 if abs(X[i]) <= limit and abs(Y[i]) <= limit:
                     h = ax.plot(X[i], Y[i], marker[i], markersize=markersize[i],
                                 markerfacecolor=markerfacecolor[i],
@@ -781,7 +781,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             # Skip if X or Y contains NaN
             if np.isnan(X[i]) or np.isnan(Y[i]):
                 continue
-                
+
             xval, yval = X[i], Y[i]
             if abs(xval) <= limit and abs(yval) <= limit:
                 # Plot marker
@@ -1478,7 +1478,7 @@ def _get_options(option: dict, **kwargs) -> dict:
         if optname == 'nonrmsdz':
             raise ValueError('nonrmsdz is an obsolete option. Use cmapzdata instead.')
 
-        if not optname in option:
+        if optname not in option:
             raise ValueError('Unrecognized option: ' + optname)
         else:
             # Replace option value with that from arguments
@@ -1627,7 +1627,7 @@ def _read_options(option: dict, **kwargs) -> dict:
     keys = objectData.iloc[:, 0]
     values = objectData.iloc[:, 1].tolist()
 
-    # Identify keys requiring special consideration   
+    # Identify keys requiring special consideration
     listkey = ['cmapzdata', 'rincrms', 'rincstd', 'tickcor', 'tickrms', 'tickstd']
     tuplekey = ['colcor', 'colrms', 'colstd']
 
@@ -1740,8 +1740,8 @@ def _get_taylor_diagram_options(*args, **kwargs) -> dict:
         if not os.path.isfile(filename):
             raise Exception("File does not exist: " + filename)
 
-        # Read the optional arguments for taylor_diagram function from a 
-        # CSV file, if specified. 
+        # Read the optional arguments for taylor_diagram function from a
+        # CSV file, if specified.
         option = _read_options(option, **kwargs)
 
     # Check for valid keys and values in dictionary
@@ -1803,7 +1803,7 @@ def _get_taylor_diagram_axes(ax, rho, option) -> dict:
     ticks = sum(xt >= 0)
 
     # Check radial limits and ticks
-    axes['rmin'] = 0;
+    axes['rmin'] = 0
     if option['axismax'] == 0.0:
         axes['rmax'] = xt[-1]
         option['axismax'] = axes['rmax']
@@ -2160,7 +2160,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
 
         if option['titlerms'] == 'on':
             lab = option['labelrms']
-            pos1 = option['titlermsdangle'];
+            pos1 = option['titlermsdangle']
             DA = 10
             c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
             if option['tickrms'][0] > 0:
@@ -2174,7 +2174,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
                 DA = 2 * DA
                 c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
 
-            # Write label in a circular arc               
+            # Write label in a circular arc
             for ii, ith in enumerate(c):
                 xtextpos = axes['dx'] + dd * np.cos(ith * np.pi / 180)
                 ytextpos = dd * np.sin(ith * np.pi / 180)
@@ -2202,8 +2202,8 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
         if option['titlecor'] == 'on':
             color = _get_from_dict_or_default(
                 option, 'colcor', 'colscor', 'title')
-            pos1 = 90;
-            DA = 25;
+            pos1 = 90
+            DA = 25
             lab = 'Correlation Coefficient'
             c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
             dd = 1.1 * axes['rmax']
@@ -2224,7 +2224,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
 
         if option['titlerms'] == 'on':
             lab = option['labelrms']
-            pos1 = option['titlermsdangle'];
+            pos1 = option['titlermsdangle']
             DA = 10
             c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
             if option['tickrms'][0] > 0:
@@ -2270,7 +2270,7 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) \
         xtick = np.sort(xtick)
 
         # Set x tick labels
-        xlabel = [];
+        xlabel = []
         for i in range(len(xtick)):
             if xtick[i] == 0:
                 label = '0'
@@ -2360,7 +2360,7 @@ def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD,
         ax.plot(obsSTD, yobsSTD, option['markerobs'], color=option['colobs'],
                 markersize=option['markersizeobs'], markerfacecolor=option['colobs'],
                 markeredgecolor=option['colobs'],
-                linewidth=1.0, clip_on=False);
+                linewidth=1.0, clip_on=False)
 
     if option['titleobs'] != '':
         # Put label below the marker
@@ -2494,6 +2494,7 @@ def check_on_off(value):
 
 def generate_markers(data_names, option):
     import itertools
+
     import matplotlib.colors as mcolors
     markers = {}
     # add colors and symbols

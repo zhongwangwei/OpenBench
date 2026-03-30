@@ -12,22 +12,22 @@ def process_site(station_idx, dataset, info, varname):
     station_id = str(dataset['station'].isel(station=station_idx).values)
     lon = float(dataset['lon'].isel(station=station_idx).values)
     lat = float(dataset['lat'].isel(station=station_idx).values)
-    
+
     # Skip stations with missing coordinates
     if pd.isna(lon) or pd.isna(lat):
         return None
-    
+
     # Get time series data for this station and variable
     if varname not in dataset:
         return None
-    
+
     data_var = dataset[varname].isel(station=station_idx)
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~data_var.isnull()
     if not valid_mask.any():
         return None
-    
+
     valid_times = dataset['time'].where(valid_mask, drop=True)
     start_year = pd.to_datetime(valid_times.values[0]).year
     end_year = pd.to_datetime(valid_times.values[-1]).year
@@ -44,7 +44,7 @@ def process_site(station_idx, dataset, info, varname):
     scratch_dir = Path(info.casedir) / "scratch" / f"GEBA_{varname}_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Save data
     data_out = data_var.squeeze(drop=True)
     ds_out = xr.Dataset({
@@ -72,7 +72,7 @@ def filter_GEBA(info, ds=None):
     """
     # Get the variable name from info
     varname = getattr(info, 'varname', 'Rn')
-    
+
     # If ds is provided, we're in data filtering mode
     if ds is not None:
         if varname in ds:
@@ -83,7 +83,7 @@ def filter_GEBA(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     dataset_path = Path(info.ref_dir) / "GEBA_monthly.nc"
 
@@ -94,7 +94,7 @@ def filter_GEBA(info, ds=None):
     with xr.open_dataset(dataset_path) as ds_file:
         station_rows = []
         num_stations = ds_file.dims['station']
-        
+
         for idx in range(num_stations):
             result = process_site(idx, ds_file, info, varname)
             if result:

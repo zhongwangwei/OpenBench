@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+import gc
+
 import numpy as np
 import xarray as xr
-import gc
 from scipy import stats
+
 
 def stat_mann_kendall_trend_test(self, data):
     """

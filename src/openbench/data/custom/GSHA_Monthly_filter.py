@@ -39,32 +39,32 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
     area = float(areas[station_idx]) if not np.isnan(areas[station_idx]) else -9999.0
-    
+
     # Get CaMA allocation data
     cama_lon = float(cama_lons[station_idx])
     cama_lat = float(cama_lats[station_idx])
     alloc_err = float(alloc_errs[station_idx])
-    
+
     # Skip stations with invalid CaMA allocation
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lat < -90:
         return None
-    
+
     # Filter by area allocation error threshold
     if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
         return None
-    
+
     # Skip stations with missing area
     if np.isnan(area) or area < 0:
         return None
-    
+
     # Get time series data for this station
     streamflow = streamflow_data[station_idx, :]
-    
+
     # Find valid time range (non-missing data)
     valid_mask = ~np.isnan(streamflow)
     if not valid_mask.any():
         return None
-    
+
     valid_indices = np.where(valid_mask)[0]
     start_year = pd.to_datetime(times[valid_indices[0]]).year
     end_year = pd.to_datetime(times[valid_indices[-1]]).year
@@ -77,7 +77,7 @@ def process_site(station_idx, station_ids, lons, lats, areas,
             lon < info.min_lon or lon > info.max_lon or
             lat < info.min_lat or lat > info.max_lat):
         return None
-    
+
     # Filter by drainage area if specified
     if hasattr(info, 'min_uparea') and area < info.min_uparea:
         return None
@@ -85,7 +85,7 @@ def process_site(station_idx, station_ids, lons, lats, areas,
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     # Save streamflow data as 1D time series
     ds_out = xr.Dataset({
         'discharge': (['time'], streamflow)
@@ -109,7 +109,7 @@ def filter_GSHA_Monthly(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Initialization mode: generate station list
     dataset_path = Path(info.ref_dir) / "GSHA_monthly.nc"
 
@@ -118,7 +118,7 @@ def filter_GSHA_Monthly(info, ds=None):
         return
 
     logging.info(f"Loading GSHA station metadata from {dataset_path}...")
-    
+
     # Get resolution suffix for CaMA variables
     if hasattr(info, 'sim_grid_res'):
         res_suffix = get_resolution_suffix(info.sim_grid_res)
@@ -126,15 +126,15 @@ def filter_GSHA_Monthly(info, ds=None):
     else:
         res_suffix = '03min'
         logging.warning("sim_grid_res not defined, using default 03min resolution")
-    
+
     # Get area error threshold from config (default 0.2 = 20%)
     area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
     logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
-    
+
     # Create scratch directory
     scratch_dir = Path(info.casedir) / "scratch" / f"GSHA_Monthly_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    
+
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
         station_ids = ds_file['station_id'].values
@@ -143,12 +143,12 @@ def filter_GSHA_Monthly(info, ds=None):
         areas = ds_file['area'].values
         streamflow_data = ds_file['mean'].values  # (station, time)
         times = ds_file['time'].values
-        
+
         # Load CaMA allocation data
         cama_lon_var = f'cama_lon_{res_suffix}'
         cama_lat_var = f'cama_lat_{res_suffix}'
         alloc_err_var = f'cama_alloc_err_{res_suffix}'
-        
+
         if cama_lon_var in ds_file:
             cama_lons = ds_file[cama_lon_var].values
             cama_lats = ds_file[cama_lat_var].values
@@ -158,10 +158,10 @@ def filter_GSHA_Monthly(info, ds=None):
             cama_lons = lons.copy()
             cama_lats = lats.copy()
             alloc_errs = np.zeros_like(lons)
-        
+
         n_stations = len(station_ids)
         logging.info(f"Processing {n_stations} stations in parallel...")
-        
+
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
@@ -170,7 +170,7 @@ def filter_GSHA_Monthly(info, ds=None):
                 streamflow_data, times, info, scratch_dir, area_err_threshold
             ) for idx in range(n_stations)
         )
-        
+
         # Filter out None results
         station_rows = [row for row in station_rows if row is not None]
 

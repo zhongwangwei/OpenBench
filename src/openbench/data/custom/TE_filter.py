@@ -1,6 +1,8 @@
-import re
-import pandas as pd
 import logging
+import re
+
+import pandas as pd
+
 
 def adjust_time_TE(info, ds, syear, eyear, tim_res):
     match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)

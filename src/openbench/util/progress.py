@@ -10,11 +10,11 @@ Version: 1.0
 Date: January 2025
 """
 
-import time
 import logging
 import threading
-from typing import Optional, Callable
+import time
 from functools import wraps
+from typing import Callable, Optional
 
 
 class ProgressMonitor:

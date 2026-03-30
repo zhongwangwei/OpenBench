@@ -3,11 +3,11 @@
 import os
 import re
 from glob import glob
-from packaging import version
 
 import matplotlib
 import matplotlib.cm
 import numpy as np
+from packaging import version
 
 from ._version import __version__
 from .colormap import Colormap
@@ -26,7 +26,7 @@ if version.parse(matplotlib.__version__) >= version.parse('3.7'):
 else:
     get_cmap = matplotlib.cm.get_cmap
     register_cmap = matplotlib.cm.register_cmap
-    
+
 
 class Cmaps(object):
     """colormaps"""

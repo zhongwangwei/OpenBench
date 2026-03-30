@@ -1,5 +1,3 @@
-import numpy as np
-import xarray as xr
 
 
 def stat_mean(self, data):

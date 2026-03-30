@@ -10,20 +10,19 @@ Version: 1.0
 Date: July 2025
 """
 
-import os
-import sys
+import atexit
+import functools
 import json
 import logging
 import logging.handlers
-from typing import Dict, Any, Optional, List, Union, Callable
+import queue
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
-import traceback
-import functools
-import time
-import threading
-import queue
-import atexit
+from typing import Any, Dict, Optional, Union
 
 # Import dependencies
 try:
@@ -46,7 +45,7 @@ except ImportError:
 
 class StructuredFormatter(logging.Formatter):
     """Formatter that outputs structured JSON logs."""
-    
+
     def __init__(self, include_extra_fields: bool = True):
         """
         Initialize structured formatter.
@@ -56,7 +55,7 @@ class StructuredFormatter(logging.Formatter):
         """
         super().__init__()
         self.include_extra_fields = include_extra_fields
-        
+
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as structured JSON."""
         # Base log structure
@@ -69,7 +68,7 @@ class StructuredFormatter(logging.Formatter):
             'function': record.funcName,
             'line': record.lineno
         }
-        
+
         # Add exception info if present
         if record.exc_info:
             log_data['exception'] = {
@@ -77,7 +76,7 @@ class StructuredFormatter(logging.Formatter):
                 'message': str(record.exc_info[1]),
                 'traceback': traceback.format_exception(*record.exc_info)
             }
-        
+
         # Add extra fields if enabled
         if self.include_extra_fields:
             # Standard fields to exclude
@@ -87,31 +86,31 @@ class StructuredFormatter(logging.Formatter):
                 'funcName', 'lineno', 'exc_info', 'exc_text', 'stack_info',
                 'thread', 'threadName', 'processName', 'process'
             }
-            
+
             # Add any extra fields
             extra_fields = {
-                k: v for k, v in record.__dict__.items() 
+                k: v for k, v in record.__dict__.items()
                 if k not in exclude_fields
             }
             if extra_fields:
                 log_data['extra'] = extra_fields
-        
+
         return json.dumps(log_data, default=str)
 
 
 class PerformanceFilter(logging.Filter):
     """Filter that adds performance metrics to log records."""
-    
+
     def __init__(self):
         """Initialize performance filter."""
         super().__init__()
         self.start_time = time.time()
-    
+
     def filter(self, record: logging.LogRecord) -> bool:
         """Add performance metrics to record."""
         # Add timing information
         record.elapsed_time = time.time() - self.start_time
-        
+
         # Add memory usage if available
         if _HAS_PSUTIL:
             try:
@@ -124,13 +123,13 @@ class PerformanceFilter(logging.Filter):
         else:
             record.memory_mb = 0
             record.cpu_percent = 0
-        
+
         return True
 
 
 class AsyncHandler(logging.Handler):
     """Asynchronous logging handler for improved performance."""
-    
+
     def __init__(self, handler: logging.Handler, queue_size: int = 10000):
         """
         Initialize async handler.
@@ -144,10 +143,10 @@ class AsyncHandler(logging.Handler):
         self.queue = queue.Queue(maxsize=queue_size)
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
-        
+
         # Register cleanup
         atexit.register(self.close)
-    
+
     def _worker(self):
         """Worker thread for processing log records."""
         while True:
@@ -161,7 +160,7 @@ class AsyncHandler(logging.Handler):
             except Exception:
                 # Ignore errors in worker thread
                 pass
-    
+
     def emit(self, record: logging.LogRecord):
         """Queue record for asynchronous processing."""
         try:
@@ -169,7 +168,7 @@ class AsyncHandler(logging.Handler):
         except queue.Full:
             # If queue is full, fall back to synchronous handling
             self.handler.emit(record)
-    
+
     def close(self):
         """Close the handler and wait for queue to empty."""
         self.queue.put(None)  # Signal shutdown
@@ -180,7 +179,7 @@ class AsyncHandler(logging.Handler):
 
 class LoggingManager:
     """Centralized logging management system."""
-    
+
     def __init__(self, base_dir: str = "./logs", app_name: str = "OpenBench"):
         """
         Initialize logging manager.
@@ -192,7 +191,7 @@ class LoggingManager:
         self.base_dir = Path(base_dir)
         self.app_name = app_name
         self.base_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Configuration
         self.config = {
             'console_enabled': True,
@@ -205,41 +204,41 @@ class LoggingManager:
             'backup_count': 5,
             'log_level': logging.INFO
         }
-        
+
         # Handlers registry
         self.handlers = {}
-        
+
         # Loggers registry
         self.loggers = {}
-        
+
         # Initialize root logger
         self._setup_root_logger()
-    
+
     def _setup_root_logger(self):
         """Set up the root logger with default configuration."""
         root_logger = logging.getLogger()
         root_logger.setLevel(self.config['log_level'])
-        
+
         # Remove existing handlers
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-        
+
         # Add configured handlers
         if self.config['console_enabled']:
             self.add_console_handler()
-        
+
         if self.config['file_enabled']:
             self.add_file_handler()
-    
+
     def add_console_handler(
-        self, 
+        self,
         level: Optional[int] = None,
         formatter: Optional[logging.Formatter] = None
     ) -> logging.Handler:
         """Add console handler to root logger."""
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level or self.config['log_level'])
-        
+
         if formatter is None:
             if self.config['structured_enabled']:
                 formatter = StructuredFormatter()
@@ -247,22 +246,22 @@ class LoggingManager:
                 formatter = logging.Formatter(
                     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
                 )
-        
+
         handler.setFormatter(formatter)
-        
+
         # Add performance filter if enabled
         if self.config['performance_tracking']:
             handler.addFilter(PerformanceFilter())
-        
+
         # Wrap in async handler if enabled
         if self.config['async_enabled']:
             handler = AsyncHandler(handler)
-        
+
         logging.getLogger().addHandler(handler)
         self.handlers['console'] = handler
-        
+
         return handler
-    
+
     def add_file_handler(
         self,
         filename: Optional[str] = None,
@@ -275,7 +274,7 @@ class LoggingManager:
             filename = self.base_dir / f"{self.app_name}_{timestamp}.log"
         else:
             filename = self.base_dir / filename
-        
+
         # Create handler with rotation
         if self.config['rotation_enabled']:
             handler = logging.handlers.RotatingFileHandler(
@@ -285,9 +284,9 @@ class LoggingManager:
             )
         else:
             handler = logging.FileHandler(filename)
-        
+
         handler.setLevel(level or self.config['log_level'])
-        
+
         if formatter is None:
             if self.config['structured_enabled']:
                 formatter = StructuredFormatter()
@@ -295,25 +294,25 @@ class LoggingManager:
                 formatter = logging.Formatter(
                     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
                 )
-        
+
         handler.setFormatter(formatter)
-        
+
         # Add performance filter if enabled
         if self.config['performance_tracking']:
             handler.addFilter(PerformanceFilter())
-        
+
         # Wrap in async handler if enabled
         if self.config['async_enabled']:
             handler = AsyncHandler(handler)
-        
+
         logging.getLogger().addHandler(handler)
         self.handlers['file'] = handler
-        
+
         return handler
-    
+
     def get_logger(
-        self, 
-        name: str, 
+        self,
+        name: str,
         level: Optional[int] = None
     ) -> logging.Logger:
         """
@@ -328,14 +327,14 @@ class LoggingManager:
         """
         if name in self.loggers:
             return self.loggers[name]
-        
+
         logger = logging.getLogger(name)
         if level is not None:
             logger.setLevel(level)
-        
+
         self.loggers[name] = logger
         return logger
-    
+
     def set_level(self, level: Union[int, str], logger_name: Optional[str] = None):
         """
         Set logging level.
@@ -346,25 +345,25 @@ class LoggingManager:
         """
         if isinstance(level, str):
             level = getattr(logging, level.upper())
-        
+
         if logger_name:
             logging.getLogger(logger_name).setLevel(level)
         else:
             logging.getLogger().setLevel(level)
             self.config['log_level'] = level
-    
+
     def enable_structured_logging(self):
         """Enable structured JSON logging."""
         self.config['structured_enabled'] = True
-        
+
         # Update existing handlers
         for handler in logging.getLogger().handlers:
             handler.setFormatter(StructuredFormatter())
-    
+
     def enable_async_logging(self):
         """Enable asynchronous logging."""
         self.config['async_enabled'] = True
-        
+
         # Wrap existing handlers
         root_logger = logging.getLogger()
         for i, handler in enumerate(root_logger.handlers[:]):
@@ -372,7 +371,7 @@ class LoggingManager:
                 async_handler = AsyncHandler(handler)
                 root_logger.removeHandler(handler)
                 root_logger.addHandler(async_handler)
-    
+
     def add_context(self, **kwargs):
         """
         Add context information to all log messages.
@@ -385,11 +384,11 @@ class LoggingManager:
                 for key, value in kwargs.items():
                     setattr(record, key, value)
                 return True
-        
+
         # Add to all handlers
         for handler in logging.getLogger().handlers:
             handler.addFilter(ContextFilter())
-    
+
     def log_performance(
         self,
         operation: str,
@@ -407,21 +406,21 @@ class LoggingManager:
             details: Additional details
         """
         logger = self.get_logger('performance')
-        
+
         log_data = {
             'operation': operation,
             'duration_seconds': duration,
             'success': success
         }
-        
+
         if details:
             log_data.update(details)
-        
+
         if success:
             logger.info(f"Performance: {operation}", extra=log_data)
         else:
             logger.warning(f"Performance (failed): {operation}", extra=log_data)
-    
+
     def cleanup_old_logs(self, days: int = 30):
         """
         Clean up log files older than specified days.
@@ -430,7 +429,7 @@ class LoggingManager:
             days: Number of days to keep logs
         """
         cutoff_date = datetime.now() - timedelta(days=days)
-        
+
         for log_file in self.base_dir.glob(f"{self.app_name}_*.log*"):
             try:
                 file_time = datetime.fromtimestamp(log_file.stat().st_mtime)
@@ -439,7 +438,7 @@ class LoggingManager:
                     logging.info(f"Deleted old log file: {log_file}")
             except Exception as e:
                 logging.error(f"Error deleting log file {log_file}: {e}")
-    
+
     def get_summary(self) -> Dict[str, Any]:
         """Get summary of logging configuration."""
         return {
@@ -467,10 +466,10 @@ def get_logging_manager(base_dir: Optional[str] = None) -> LoggingManager:
         LoggingManager instance
     """
     global _logging_manager
-    
+
     if _logging_manager is None:
         _logging_manager = LoggingManager(base_dir or "./logs")
-    
+
     return _logging_manager
 
 
@@ -488,23 +487,23 @@ def performance_logged(operation: Optional[str] = None):
             start_time = time.time()
             success = True
             result = None
-            
+
             try:
                 result = func(*args, **kwargs)
                 return result
-            except Exception as e:
+            except Exception:
                 success = False
                 raise
             finally:
                 duration = time.time() - start_time
                 manager = get_logging_manager()
                 manager.log_performance(
-                    op_name, 
-                    duration, 
+                    op_name,
+                    duration,
                     success,
                     {'args_count': len(args), 'kwargs_count': len(kwargs)}
                 )
-        
+
         return wrapper
     return decorator
 
@@ -532,27 +531,27 @@ def setup_logging(
         Configured LoggingManager instance
     """
     manager = get_logging_manager(base_dir)
-    
+
     # Update configuration
     manager.config['console_enabled'] = console
     manager.config['file_enabled'] = file
     manager.config['structured_enabled'] = structured
     manager.config['async_enabled'] = async_mode
-    
+
     # Set level
     if isinstance(level, str):
         level = getattr(logging, level.upper())
     manager.set_level(level)
-    
+
     # Reinitialize with new config
     manager._setup_root_logger()
-    
+
     if structured:
         manager.enable_structured_logging()
-    
+
     if async_mode:
         manager.enable_async_logging()
-    
+
     return manager
 
 
@@ -565,10 +564,10 @@ def configure_library_logging():
     logging.getLogger('dask').setLevel(logging.WARNING)
     logging.getLogger('numba').setLevel(logging.WARNING)
     logging.getLogger('fsspec').setLevel(logging.WARNING)
-    
+
     # Configure specific formatters for libraries if needed
     lib_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-    
+
     for lib_logger_name in ['matplotlib', 'xarray', 'dask']:
         lib_logger = logging.getLogger(lib_logger_name)
         if lib_logger.handlers:

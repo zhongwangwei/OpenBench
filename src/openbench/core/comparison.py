@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
+import gc
 import glob
+import logging
 import os
 import re
 import sys
-import logging
-import gc
 import warnings
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.util.converttype import Convert_Type
+
+from ...visualization import *
 from ..metrics.Mod_Metrics import metrics
 from ..scoring.Mod_Scores import scores
 from ..statistic import statistics_calculate
-from openbench.util.converttype import Convert_Type
-from ...visualization import *
 
 logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
 warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
@@ -52,7 +54,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.compare_grid_res = self.main_nml['general']['compare_grid_res']
         self.compare_tim_res = self.main_nml['general'].get('compare_tim_res', '1').lower()
         self.casedir = os.path.join(self.main_nml['general']['basedir'], self.main_nml['general']['basename'])
-        
+
         # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ['climatology-year', 'climatology-month']:
             logging.info(f"ComparisonProcessing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion")
@@ -61,7 +63,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # adjust the time frequency
             match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
             if not match:
-                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
                 raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
 
             value, unit = match.groups()
@@ -94,7 +96,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                 grid_info = os.path.join(self.casedir, 'comparisons', 'IGBP_groupby', 'grid_info.txt')
                 os.makedirs(os.path.dirname(grid_info), exist_ok=True)
                 with open(grid_info, 'w') as f:
-                    f.write(f"gridtype = lonlat\n")
+                    f.write("gridtype = lonlat\n")
                     f.write(f"xsize    =  {nx} \n")
                     f.write(f"ysize    =  {ny}\n")
                     f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
@@ -113,7 +115,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
         def _IGBP_class_remap(self):
             try:
-                from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+                from openbench.data.regrid import Grid, create_regridding_dataset
                 # Use package-relative path for IGBP data
                 package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                 igbp_path = os.path.join(package_dir, "data", "IGBP.nc")
@@ -183,7 +185,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                                 if ref_data_type == 'stn' or sim_data_type == 'stn':
                                     if not self._igbp_station_warning_shown:
-                                        logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                        logging.warning("warning: station data is not supported for IGBP class comparison")
                                         self._igbp_station_warning_shown = True
                                     pass
                                 else:
@@ -312,7 +314,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             grid_info = f'{self.casedir}/comparisons/PFT_groupby/PFT_info.txt'
 
             with open(grid_info, 'w') as f:
-                f.write(f"gridtype = lonlat\n")
+                f.write("gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
                 f.write(f"ysize    =  {ny}\n")
                 f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
@@ -331,7 +333,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             """
             Compare the PFT class of the model output data and the reference data using xarray
             """
-            from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+            from openbench.data.regrid import Grid, create_regridding_dataset
             # Use package-relative path for PFT data
             package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             pft_path = os.path.join(package_dir, "dataset", "PFT.nc")
@@ -394,7 +396,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._pft_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                logging.warning("warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
@@ -1495,22 +1497,22 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     try:
                                                         if hasattr(self, score):
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_DJF, o_DJF,
-                                                                              vkey=f'_DJF')
+                                                                              vkey='_DJF')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_MAM, o_MAM,
-                                                                              vkey=f'_MAM')
+                                                                              vkey='_MAM')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_JJA, o_JJA,
-                                                                              vkey=f'_JJA')
+                                                                              vkey='_JJA')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
 
                                                             k = process_score(basedir, evaluation_item, ref_source, sim_source, score, s_SON, o_SON,
-                                                                              vkey=f'_SON')
+                                                                              vkey='_SON')
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
                                                         else:

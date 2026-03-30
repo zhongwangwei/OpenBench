@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib import rcParams
 from scipy.stats import gaussian_kde
 
+
 def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, ref_source, sim_sources, varname,
                                                       datasets_filtered, option):
     if varname != 'nSpatialScore':
@@ -26,10 +27,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
         # create a figure and axis
         fig = plt.figure(figsize=(option['x_wise'], option['y_wise']))
-        ax = fig.add_subplot(111) 
+        ax = fig.add_subplot(111)
 
         for spine in ax.spines.values():
-            spine.set_linewidth(option['line_width'])  
+            spine.set_linewidth(option['line_width'])
 
         # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
@@ -114,10 +115,11 @@ def make_scenarios_comparison_Kernel_Density_Estimate(basedir, evaluation_item, 
 
 def generate_lines(data_names, option):
     import itertools
+
     import matplotlib.colors as mcolors
     lines = {}
     # add colors and symbols
-    hex_colors = ['#468cc8', '#90278c', '#b48abc', '#f9931d', '#fcdf15', 
+    hex_colors = ['#468cc8', '#90278c', '#b48abc', '#f9931d', '#fcdf15',
                 '#d02030', '#252162', '#a9dae0', '#e57f99', '#019d88','#afb2b3',]
     # hex_colors = cm.Set3(np.linspace(0, 1, len(data_names) + 1))
     colors = itertools.cycle([mcolors.rgb2hex(color) for color in hex_colors])

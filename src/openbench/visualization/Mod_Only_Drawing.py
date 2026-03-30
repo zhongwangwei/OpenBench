@@ -1,24 +1,20 @@
+import gc
+import logging
 import os
 import re
-import shutil
 import warnings
-import logging
-import gc
-import glob
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
-from joblib import Parallel, delayed
 
 # Check the platform
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
-from . import *
 from openbench.util.converttype import Convert_Type
+
+from . import *
 
 # Configure logging
 logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
@@ -97,7 +93,7 @@ class LC_groupby_only_drawing(metrics, scores):
         else:
             match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
             if not match:
-                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
                 raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
             value, unit = match.groups()
             if not value:
@@ -106,7 +102,7 @@ class LC_groupby_only_drawing(metrics, scores):
                 value = int(value)  # Convert the numerical value to an integer
         self.metrics = metrics
         self.scores = scores
-    
+
     def scenarios_IGBP_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         def _scenarios_IGBP_groupby(basedir, scores, metrics, sim_nml, ref_nml, evaluation_items):
             # read the simulation source and reference source
@@ -123,7 +119,7 @@ class LC_groupby_only_drawing(metrics, scores):
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._igbp_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                logging.warning("warning: station data is not supported for IGBP class comparison")
                                 self._igbp_station_warning_shown = True
                             pass
                         else:
@@ -181,7 +177,7 @@ class LC_groupby_only_drawing(metrics, scores):
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._pft_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                logging.warning("warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
@@ -245,7 +241,7 @@ class CZ_groupby_only_drawing(metrics, scores):
         else:
             match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
             if not match:
-                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
                 raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
             value, unit = match.groups()
             if not value:
@@ -268,7 +264,7 @@ class CZ_groupby_only_drawing(metrics, scores):
             grid_info = f'{self.casedir}/comparisons/CZ_groupby/CZ_info.txt'
 
             with open(grid_info, 'w') as f:
-                f.write(f"gridtype = lonlat\n")
+                f.write("gridtype = lonlat\n")
                 f.write(f"xsize    =  {nx} \n")
                 f.write(f"ysize    =  {ny}\n")
                 f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
@@ -286,7 +282,7 @@ class CZ_groupby_only_drawing(metrics, scores):
             """
             Compare the Climate zone class of the model output data and the reference data using xarray
             """
-            from openbench.data.regrid import Grid, create_regridding_dataset, Regridder
+            from openbench.data.regrid import Grid, create_regridding_dataset
             ds = xr.open_dataset("./dataset/Climate_zone.nc", chunks={"lat": 2000, "lon": 2000})
             ds = ds["climate_zone"]
             ds = ds.sortby(["lat", "lon"])
@@ -361,7 +357,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                         sim_varname = sim_nml[f'{evaluation_item}'][f'{sim_source}_varname']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for Climate zone class comparison")
+                                logging.warning("warning: station data is not supported for Climate zone class comparison")
                                 self._station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'CZ_groupby',
@@ -389,7 +385,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                         metric_file = f'{self.casedir}/metrics/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc'
                                         if not os.path.exists(metric_file):
                                             logging.error(f"File not found in only_drawing mode: {metric_file}")
-                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                             continue
                                         ds = xr.open_dataset(metric_file)
                                         ds = Convert_Type.convert_nc(ds)
@@ -448,7 +444,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                         score_file = f'{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc'
                                         if not os.path.exists(score_file):
                                             logging.error(f"File not found in only_drawing mode: {score_file}")
-                                            logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                            logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                             continue
                                         ds = xr.open_dataset(score_file)
                                         ds = Convert_Type.convert_nc(ds)
@@ -464,7 +460,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                             ref_data_file = f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
                                             if not os.path.exists(ref_data_file):
                                                 logging.error(f"File not found in only_drawing mode: {ref_data_file}")
-                                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                 continue
                                             o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
@@ -501,7 +497,7 @@ class CZ_groupby_only_drawing(metrics, scores):
                                                 ref_data_file = f'{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc'
                                                 if not os.path.exists(ref_data_file):
                                                     logging.error(f"File not found in only_drawing mode: {ref_data_file}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 o = xr.open_dataset(ref_data_file)[f'{ref_varname}']
 
@@ -578,7 +574,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         else:
             match = re.match(r'(\d*)\s*([a-zA-Z]+)', self.compare_tim_res)
             if not match:
-                logging.error(f"Invalid time resolution format. Use '3month', '6hr', etc.")
+                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
                 raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
 
             value, unit = match.groups()
@@ -620,7 +616,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                                 if ref_data_type == 'stn' or sim_data_type == 'stn':
                                     if not self._igbp_station_warning_shown:
-                                        logging.warning(f"warning: station data is not supported for IGBP class comparison")
+                                        logging.warning("warning: station data is not supported for IGBP class comparison")
                                         self._igbp_station_warning_shown = True
                                     pass
                                 else:
@@ -666,7 +662,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         sim_data_type = sim_nml[f'{evaluation_item}'][f'{sim_source}_data_type']
                         if ref_data_type == 'stn' or sim_data_type == 'stn':
                             if not self._pft_station_warning_shown:
-                                logging.warning(f"warning: station data is not supported for PFT class comparison")
+                                logging.warning("warning: station data is not supported for PFT class comparison")
                                 self._pft_station_warning_shown = True
                         else:
                             dir_path = os.path.join(f'{basedir}', 'comparisons', 'PFT_groupby',
@@ -725,7 +721,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                     output_file_path = output_file_path_txt
                                 else:
                                     logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                    logging.error("Please run the comparison first (set only_drawing=False) to generate required data files.")
                                     continue
                             stds = np.zeros(len(sim_sources) + 1)
                             cors = np.zeros(len(sim_sources) + 1)
@@ -747,7 +743,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     gc.collect()  # Clean up memory after processing each evaluation item
         finally:
             gc.collect()  # Final cleanup for the entire method
-    
+
     def scenarios_Target_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
             dir_path = os.path.join(casedir, 'comparisons', 'Target_Diagram')
@@ -773,7 +769,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                     output_file_path = output_file_path_txt
                                 else:
                                     logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                                    logging.error("Please run the comparison first (set only_drawing=False) to generate required data files.")
                                     continue
                             biases = np.zeros(len(sim_sources))
                             rmses = np.zeros(len(sim_sources))
@@ -796,7 +792,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     gc.collect()  # Clean up memory after processing each evaluation item
         finally:
             gc.collect()  # Final cleanup for the entire method
-    
+
     def scenarios_Kernel_Density_Estimate_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
             dir_path = os.path.join(basedir, 'comparisons', 'Kernel_Density_Estimate')
@@ -839,7 +835,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
@@ -889,7 +885,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
@@ -935,7 +931,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     output_file_path = output_file_path_txt
                 else:
                     logging.error(f"File not found in only_drawing mode: {output_file_path}")
-                    logging.error(f"Please run the comparison first (set only_drawing=False) to generate required data files.")
+                    logging.error("Please run the comparison first (set only_drawing=False) to generate required data files.")
                     return
             df = pd.read_csv(output_file_path, sep='\t', header=0)
             df = df.dropna(axis=1, how='any')
@@ -1007,7 +1003,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=',', header=0)
@@ -1018,7 +1014,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
@@ -1060,7 +1056,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=',', header=0)
@@ -1070,7 +1066,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                                          f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
                                                 if not os.path.exists(file_path):
                                                     logging.error(f"File not found in only_drawing mode: {file_path}")
-                                                    logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                                    logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                                     continue
                                                 ds = xr.open_dataset(file_path)
                                                 ds = Convert_Type.convert_nc(ds)
@@ -1120,14 +1116,14 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                         make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source,
                                                                                 scores, 'stn', self.main_nml['general'], option)
                                     except:
-                                        logging.info(f"No files found")
+                                        logging.info("No files found")
                                 else:
                                     try:
 
                                         make_scenarios_comparison_Relative_Score(dir_path, evaluation_item, ref_source, sim_source, scores, 'grid',
                                                                                 self.main_nml['general'], option)
                                     except:
-                                        logging.info(f"No files found")
+                                        logging.info("No files found")
                             finally:
                                 gc.collect()  # Clean up memory after processing each simulation source
                 finally:
@@ -1180,7 +1176,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                             if not os.path.exists(file_path):
                                 logging.error(f"File not found in only_drawing mode: {file_path}")
-                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                 continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
@@ -1191,7 +1187,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc")
                             if not os.path.exists(file_path):
                                 logging.error(f"File not found in only_drawing mode: {file_path}")
-                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                 continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
@@ -1230,7 +1226,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                      f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv")
                             if not os.path.exists(file_path):
                                 logging.error(f"File not found in only_drawing mode: {file_path}")
-                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                 continue
                             # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=',', header=0)
@@ -1240,7 +1236,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                      f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc")
                             if not os.path.exists(file_path):
                                 logging.error(f"File not found in only_drawing mode: {file_path}")
-                                logging.error(f"Please run the evaluation first (set only_drawing=False) to generate required data files.")
+                                logging.error("Please run the evaluation first (set only_drawing=False) to generate required data files.")
                                 continue
                             ds = xr.open_dataset(file_path)
                             ds = Convert_Type.convert_nc(ds)
@@ -1259,7 +1255,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def to_dict(self):
         return self.__dict__
-    
+
     coordinate_map = {
         'longitude': 'lon', 'long': 'lon', 'lon_cama': 'lon', 'lon0': 'lon', 'x': 'lon', 'lon_ucat': 'lon',
         'latitude': 'lat', 'lat_cama': 'lat', 'lat0': 'lat', 'y': 'lat', 'lat_ucat': 'lat',

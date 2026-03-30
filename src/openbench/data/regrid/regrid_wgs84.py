@@ -1,5 +1,6 @@
-import xarray as xr
 import numpy as np
+import xarray as xr
+
 
 def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
     from scipy.interpolate import griddata
@@ -22,11 +23,11 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
         regridded_data = []
         for time_idx in range(data.time.size):
             orig_values = data.isel(time=time_idx).values
-            
+
             # Flatten orig_values and create a mask for valid (non-NaN) values
             orig_values_flat = orig_values.ravel()
             mask = np.isfinite(orig_values_flat)
-            
+
             regridded = griddata(
                 (orig_lon_flat[mask], orig_lat_flat[mask]),
                 orig_values_flat[mask],
@@ -34,9 +35,9 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
                 method='linear',  # You can change this to 'nearest' or 'cubic'
                 fill_value=np.nan
             )
-            
+
             regridded_data.append(regridded)
-        
+
         new_data_vars[var_name] = (('time', 'lat', 'lon'), np.array(regridded_data))
 
     # Step 4: Create a new dataset with regridded data

@@ -13,16 +13,12 @@ Version: 1.0
 Date: November 2025
 """
 
-import os
-import sys
 import logging
-import xarray as xr
-import numpy as np
-from typing import Dict, Any, List, Tuple, Union, Optional
-from pathlib import Path
-import warnings
+import os
 import re
-import importlib.util
+from typing import Any, Dict, List, Optional, Tuple
+
+import xarray as xr
 
 
 class ValidationError(Exception):
@@ -506,10 +502,11 @@ class PreValidator:
             set: Set of known unit strings (lowercase)
         """
         try:
-            from openbench.data.Lib_Unit import UnitProcessing
             # We need to extract units from the conversion_factors in convert_unit method
             # Since it's defined in the method, we'll create a temporary instance and extract from source
             import inspect
+
+            from openbench.data.Lib_Unit import UnitProcessing
             source = inspect.getsource(UnitProcessing.convert_unit)
 
             # Parse conversion_factors dictionary from source
@@ -617,7 +614,7 @@ class PreValidator:
             # Compare data types
             if ref_info['data_type'] != sim_info['data_type']:
                 logging.info(f"  ℹ️  Different data types: reference={ref_info['data_type']}, simulation={sim_info['data_type']}")
-                logging.info(f"     This is acceptable - OpenBench can handle mixed grid/station data")
+                logging.info("     This is acceptable - OpenBench can handle mixed grid/station data")
 
             # If both are grid data, check spatial compatibility
             if ref_info['data_type'] == 'grid' and sim_info['data_type'] == 'grid':
@@ -627,14 +624,14 @@ class PreValidator:
 
                     # Different dimensions is OK - OpenBench will regrid
                     if ref_info['dimensions'] != sim_info['dimensions']:
-                        logging.info(f"  ℹ️  Dimensions differ - automatic regridding will be performed")
+                        logging.info("  ℹ️  Dimensions differ - automatic regridding will be performed")
 
             logging.info("  ✓ Dimension compatibility check passed")
 
         except Exception as e:
             # Dimension check is informational - don't fail if data can't be loaded yet
             logging.warning(f"  ⚠️  Could not fully validate dimensions: {str(e)}")
-            logging.warning(f"     This is non-critical - dimensions will be checked during processing")
+            logging.warning("     This is non-critical - dimensions will be checked during processing")
 
     def _get_time_resolution_rank(self, tim_res: str) -> Tuple[int, str]:
         """
@@ -785,7 +782,7 @@ class PreValidator:
                 "📝 To fix this issue, choose ONE of the following:",
                 "",
                 "   Option 1: Change compare_tim_res to match the coarsest reference data",
-                f"            Example: compare_tim_res: Month",
+                "            Example: compare_tim_res: Month",
                 "",
                 "   Option 2: Use a different reference dataset with finer resolution",
                 "            Example: Use GRDC (daily) instead of GRDD (monthly)",
@@ -983,7 +980,7 @@ class PreValidator:
                 result['available'] = True
                 logging.info(f"    ✓ Custom filter available for {source}")
             else:
-                result['reason'] = f"Variable name is empty and no custom filter found"
+                result['reason'] = "Variable name is empty and no custom filter found"
             return result
 
         # Try to find and check a sample data file
@@ -1003,7 +1000,7 @@ class PreValidator:
                             ds = xr.open_dataset(sample_file, decode_times=False)
                         else:
                             raise
-                    
+
                     with ds:
                         if varname in ds:
                             result['available'] = True
@@ -1026,19 +1023,19 @@ class PreValidator:
                     filter_available = self._check_custom_filter(item, source, nml, source_type)
                     if filter_available:
                         result['available'] = True
-                        logging.info(f"    ✓ Custom filter available (couldn't verify from file)")
+                        logging.info("    ✓ Custom filter available (couldn't verify from file)")
                     else:
                         result['reason'] = f"Could not verify variable in data file: {str(e)}"
                     return result
             else:
                 # No sample file found, must have custom filter
-                logging.info(f"    No sample data file found, checking custom filter...")
+                logging.info("    No sample data file found, checking custom filter...")
                 filter_available = self._check_custom_filter(item, source, nml, source_type)
                 if filter_available:
                     result['available'] = True
-                    logging.info(f"    ✓ Custom filter available")
+                    logging.info("    ✓ Custom filter available")
                 else:
-                    result['reason'] = f"No sample data file found and no custom filter available"
+                    result['reason'] = "No sample data file found and no custom filter available"
                 return result
         except Exception as e:
             logging.warning(f"    Error checking variable availability: {str(e)}")
@@ -1046,7 +1043,7 @@ class PreValidator:
             filter_available = self._check_custom_filter(item, source, nml, source_type)
             if filter_available:
                 result['available'] = True
-                logging.info(f"    ✓ Custom filter available (as fallback)")
+                logging.info("    ✓ Custom filter available (as fallback)")
             else:
                 result['reason'] = f"Error during validation: {str(e)}"
             return result

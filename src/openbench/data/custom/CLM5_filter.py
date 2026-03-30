@@ -1,20 +1,22 @@
-import numpy as np
-import pandas as pd
-import re
 import logging
+import re
+
+import pandas as pd
+
+
 def adjust_time_CLM5(info, ds,syear,eyear,tim_res):
    match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res)
    if match:
       # normalize time values
       num_value, time_unit = match.groups()
-      num_value = int(num_value) if num_value else 1   
+      num_value = int(num_value) if num_value else 1
       ds['time'] = pd.to_datetime(ds['time'].dt.strftime('%Y-%m-%dT%H:30:00'))
       if time_unit.lower() in ['m','me', 'month', 'mon']:
          logging.info('Adjusting time values for monthly CLM5 output...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(months=1)
       elif time_unit.lower() in ['d', 'day', '1d', '1day']:
          logging.info('Adjusting time values for daily CLM5 output...')
-         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)  
+         ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(days=1)
       elif time_unit.lower() in ['h', 'hour', '1h', '1hour']:
          logging.info('Adjusting time values for yearly CLM5 output ...')
          ds['time'] = pd.DatetimeIndex(ds['time'].values) - pd.DateOffset(hours=1)
@@ -41,7 +43,7 @@ def filter_CLM5(info, ds):   #update info as well
       except Exception as e:
          logging.error(f'Surface Net LW Radiation calculation processing ERROR: {e}')
       return info, ds['FIRA']
-   
+
    if info.item == "Surface_Soil_Moisture":
       try:
             ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
@@ -52,7 +54,7 @@ def filter_CLM5(info, ds):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
-   
+
    if info.item == "Root_Zone_Soil_Moisture":
       try:
             ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
@@ -71,7 +73,7 @@ def filter_CLM5(info, ds):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
-   
+
    if info.item == "Root_Zone_Soil_Temperature":
       try:
             ds['SOILLIQ']= (ds['SOILLIQ'].isel(levsoi=0) +
@@ -90,7 +92,7 @@ def filter_CLM5(info, ds):   #update info as well
          logging.error(f"Surface soil moisture calculation processing ERROR: {e}")
          return info, None
       return info, ds['SOILLIQ']
-   
+
    if info.item == "Ground_Heat":
       try:
             ds['Ground_Heat']=  ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']-ds['FSH']-ds['EFLX_LH_TOT']
@@ -102,10 +104,10 @@ def filter_CLM5(info, ds):   #update info as well
          return info, None
       return info, ds['Ground_Heat']
 
-   
+
    if info.item == "Albedo":
       try:
-            ds['Albedo']= ds['FSR'] /  ds['FSDS'] 
+            ds['Albedo']= ds['FSR'] /  ds['FSDS']
 
             info.sim_varname = 'Albedo'
             info.sim_varunit = 'unitless'

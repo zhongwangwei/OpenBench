@@ -115,7 +115,7 @@ class UnitProcessing:
 				'g c m-2': lambda x: x / 1000,
 			},
 		}
-		
+
 		# Build case-insensitive lookup dictionary (cached at module level)
 		# This converts O(n) iteration to O(1) dictionary lookup
 		# Use thread-safe initialization with double-checked locking
@@ -141,21 +141,21 @@ class UnitProcessing:
 					# Atomic assignment after cache is fully built
 					_UNIT_LOOKUP_CACHE = temp_cache
 					logging.info(f'Unit lookup cache initialized with {len(_UNIT_LOOKUP_CACHE)} entries')
-		
+
 		logging.info(f'Converting {input_unit} to base unit...')
-		
+
 		# Normalize input unit to lowercase for comparison
 		input_key = input_unit.lower().strip()
-		
+
 		# O(1) dictionary lookup - much faster than O(n) iteration
 		if input_key in _UNIT_LOOKUP_CACHE:
 			base_unit, conv_func = _UNIT_LOOKUP_CACHE[input_key]
-			
+
 			# If no conversion needed (input is already a base unit)
 			if conv_func is None:
 				logging.info(f'No conversion needed for {input_unit} -> {base_unit}')
 				return data, base_unit
-			
+
 			# Apply conversion
 			if data is None:
 				logging.info(f'Unit mapping found (case-insensitive): {input_unit} -> {base_unit}')
@@ -164,7 +164,7 @@ class UnitProcessing:
 				converted_data = conv_func(data)
 				logging.info(f'Successfully converted (case-insensitive): {input_unit} -> {base_unit}')
 				return converted_data, base_unit
-		
+
 		# If no conversion is found
 		logging.warning(f'No conversion found for {input_unit} (case-insensitive search). Using original data and unit.')
 		return data, input_unit

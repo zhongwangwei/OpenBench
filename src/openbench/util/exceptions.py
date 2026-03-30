@@ -10,19 +10,18 @@ Version: 1.0
 Date: July 2025
 """
 
-import logging
-import traceback
 import functools
-from typing import Any, Dict, Optional, Callable, Union
+import logging
 from datetime import datetime
+from typing import Any, Callable, Dict, Optional
 
 
 class OpenBenchException(Exception):
     """Base exception class for all OpenBench-specific errors."""
-    
+
     def __init__(
-        self, 
-        message: str, 
+        self,
+        message: str,
         context: Optional[Dict[str, Any]] = None,
         original_error: Optional[Exception] = None,
         error_code: Optional[str] = None
@@ -41,25 +40,25 @@ class OpenBenchException(Exception):
         self.original_error = original_error
         self.error_code = error_code
         self.timestamp = datetime.now()
-        
+
         super().__init__(self.format_message())
-    
+
     def format_message(self) -> str:
         """Format the complete error message."""
         msg = f"OpenBench Error: {self.message}"
-        
+
         if self.error_code:
             msg = f"[{self.error_code}] {msg}"
-        
+
         if self.context:
             context_str = ", ".join([f"{k}={v}" for k, v in self.context.items()])
             msg += f" (Context: {context_str})"
-        
+
         if self.original_error:
             msg += f" (Original: {type(self.original_error).__name__}: {self.original_error})"
-        
+
         return msg
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for logging/serialization."""
         return {
@@ -74,56 +73,56 @@ class OpenBenchException(Exception):
 
 class DataProcessingError(OpenBenchException):
     """Exception for data processing and manipulation errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="DATA_PROC", **kwargs)
 
 
 class ConfigurationError(OpenBenchException):
     """Exception for configuration-related errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="CONFIG", **kwargs)
 
 
 class EvaluationError(OpenBenchException):
     """Exception for evaluation process errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="EVAL", **kwargs)
 
 
 class FileSystemError(OpenBenchException):
     """Exception for file system operations."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="FILESYSTEM", **kwargs)
 
 
 class ValidationError(OpenBenchException):
     """Exception for data validation errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="VALIDATION", **kwargs)
 
 
 class MetricsError(OpenBenchException):
     """Exception for metrics calculation errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="METRICS", **kwargs)
 
 
 class VisualizationError(OpenBenchException):
     """Exception for visualization and plotting errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="VISUALIZATION", **kwargs)
 
 
 class ResourceError(OpenBenchException):
     """Exception for resource allocation and management errors."""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(message, error_code="RESOURCE", **kwargs)
 
@@ -155,7 +154,7 @@ def error_handler(
                 # Check if we should catch this specific error type
                 if error_types and not isinstance(e, error_types):
                     raise
-                
+
                 # Create context information
                 context = {
                     'function': func.__name__,
@@ -163,10 +162,10 @@ def error_handler(
                     'args_count': len(args),
                     'kwargs_keys': list(kwargs.keys())
                 }
-                
+
                 # Log the error
                 logger = logging.getLogger(func.__module__)
-                
+
                 if isinstance(e, OpenBenchException):
                     # Log OpenBench exceptions with full context
                     logger.log(log_level, f"Error in {func.__name__}: {e.format_message()}")
@@ -178,7 +177,7 @@ def error_handler(
                         original_error=e
                     )
                     logger.log(log_level, wrapped_error.format_message())
-                
+
                 if reraise:
                     if isinstance(e, OpenBenchException):
                         raise
@@ -191,7 +190,7 @@ def error_handler(
                         ) from e
                 else:
                     return return_value
-        
+
         return wrapper
     return decorator
 
@@ -225,7 +224,7 @@ def safe_execute(
             logger = logging.getLogger(__name__)
             message = error_message or f"Error executing {func.__name__}"
             logger.error(f"{message}: {str(e)}")
-        
+
         return default_return
 
 
@@ -241,11 +240,11 @@ def validate_file_exists(file_path: str, error_message: Optional[str] = None) ->
         FileSystemError: If file does not exist
     """
     import os
-    
+
     if not os.path.exists(file_path):
         message = error_message or f"File not found: {file_path}"
         raise FileSystemError(message, context={'file_path': file_path})
-    
+
     if not os.path.isfile(file_path):
         message = error_message or f"Path exists but is not a file: {file_path}"
         raise FileSystemError(message, context={'file_path': file_path})
@@ -264,18 +263,18 @@ def validate_directory_exists(dir_path: str, create: bool = False, error_message
         FileSystemError: If directory validation fails
     """
     import os
-    
+
     if not os.path.exists(dir_path):
         if create:
             try:
                 os.makedirs(dir_path, exist_ok=True)
             except Exception as e:
-                raise FileSystemError(f"Failed to create directory: {dir_path}", 
+                raise FileSystemError(f"Failed to create directory: {dir_path}",
                                     context={'dir_path': dir_path}, original_error=e)
         else:
             message = error_message or f"Directory not found: {dir_path}"
             raise FileSystemError(message, context={'dir_path': dir_path})
-    
+
     if not os.path.isdir(dir_path):
         message = error_message or f"Path exists but is not a directory: {dir_path}"
         raise FileSystemError(message, context={'dir_path': dir_path})
@@ -294,7 +293,7 @@ def validate_required_keys(data: Dict[str, Any], required_keys: list, context_na
         ValidationError: If required keys are missing
     """
     missing_keys = [key for key in required_keys if key not in data]
-    
+
     if missing_keys:
         raise ValidationError(
             f"Missing required keys in {context_name}: {missing_keys}",
@@ -319,7 +318,7 @@ def log_performance_warning(func_name: str, execution_time: float, threshold: fl
 # Context manager for error handling
 class ErrorContext:
     """Context manager for scoped error handling."""
-    
+
     def __init__(self, operation_name: str, reraise: bool = True):
         """
         Initialize error context.
@@ -331,20 +330,20 @@ class ErrorContext:
         self.operation_name = operation_name
         self.reraise = reraise
         self.logger = logging.getLogger(__name__)
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
             if isinstance(exc_val, OpenBenchException):
                 self.logger.error(f"Error in {self.operation_name}: {exc_val.format_message()}")
             else:
                 self.logger.error(f"Unexpected error in {self.operation_name}: {str(exc_val)}")
-            
+
             if not self.reraise:
                 return True  # Suppress the exception
-        
+
         return False  # Let the exception propagate
 
 
@@ -356,17 +355,17 @@ OpenBenchError = OpenBenchException
 def setup_global_error_handler():
     """Setup global exception handler for uncaught exceptions."""
     import sys
-    
+
     def handle_exception(exc_type, exc_value, exc_traceback):
         if issubclass(exc_type, KeyboardInterrupt):
             # Don't handle keyboard interrupts
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        
+
         logger = logging.getLogger('openbench.global')
         logger.critical(
             "Uncaught exception",
             exc_info=(exc_type, exc_value, exc_traceback)
         )
-    
+
     sys.excepthook = handle_exception

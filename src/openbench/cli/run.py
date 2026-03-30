@@ -45,7 +45,7 @@ def run(config, dry_run, cores, variables, remote):
     click.secho(f"Running evaluation: {cfg.project.name}", bold=True)
     results = run_evaluation(cfg)
 
-    click.secho(f"\n✓ Evaluation complete", fg="green", bold=True)
+    click.secho("\n✓ Evaluation complete", fg="green", bold=True)
     click.echo(f"  Output: {results['output_dir']}")
     click.echo(f"  Variables: {len(results['variables'])}")
     click.echo(f"  Simulations: {len(results['simulations'])}")

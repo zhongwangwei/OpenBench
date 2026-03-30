@@ -9,7 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
+
 from openbench.util.converttype import Convert_Type
+
 
 def _read_comparison_file(file):
     """

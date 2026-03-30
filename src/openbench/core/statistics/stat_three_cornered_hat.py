@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import xarray as xr
-from joblib import Parallel, delayed
-import dask.array as da
 
 
 def stat_three_cornered_hat(self, *variables):
@@ -17,8 +15,9 @@ def stat_three_cornered_hat(self, *variables):
         xarray.Dataset: Dataset containing uncertainty and relative uncertainty
     """
     try:
-        from scipy import optimize
         import gc
+
+        from scipy import optimize
     except ImportError as e:
         logging.error(f"Required package not found: {e}")
         raise ImportError(f"Required package not found: {e}")
@@ -72,7 +71,7 @@ def stat_three_cornered_hat(self, *variables):
                 # Use inv_S_sub for dot product with u
                 R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, inv_S_sub), u.T))
             except np.linalg.LinAlgError:
-                print(f"DEBUG: cal_uct returning NaN - LinAlgError during initial R calculation")
+                print("DEBUG: cal_uct returning NaN - LinAlgError during initial R calculation")
                 return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
             x0 = R[:, N - 1]
@@ -115,7 +114,7 @@ def stat_three_cornered_hat(self, *variables):
                 r_uct = uct / mean_abs_safe * 100
 
                 return uct, r_uct
-            except Exception as e:
+            except Exception:
                 # Optionally re-raise or log traceback here for more detail
                 import traceback
                 traceback.print_exc()

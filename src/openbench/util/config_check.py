@@ -8,12 +8,12 @@ Author: OpenBench Development Team
 Date: November 2025
 """
 
-import os
-import sys
-import platform
 import logging
+import os
+import platform
+import sys
 from pathlib import Path
-from typing import Dict, List, Set, Any, Optional
+from typing import Any, Dict, Optional
 
 
 def get_platform_colors() -> Dict[str, str]:
@@ -280,9 +280,9 @@ def perform_early_validation(config_file_path: Optional[str] = None) -> str:
             print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file path required{colors['reset']}")
             print(f"\n{colors['bold']}Usage:{colors['reset']} python openbench.py <config_file_path>")
             print(f"\n{colors['bold']}Examples:{colors['reset']}")
-            print(f"  python openbench.py nml/nml-json/main-Debug.json")
-            print(f"  python openbench.py nml/nml-yaml/main-Debug.yaml")
-            print(f"  python openbench.py nml/nml-Fortran/main-Debug.nml")
+            print("  python openbench.py nml/nml-json/main-Debug.json")
+            print("  python openbench.py nml/nml-yaml/main-Debug.yaml")
+            print("  python openbench.py nml/nml-Fortran/main-Debug.nml")
             sys.exit(1)
         config_file_path = sys.argv[1]
 

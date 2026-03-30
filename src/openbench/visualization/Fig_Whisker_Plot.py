@@ -1,9 +1,11 @@
+import logging
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import rcParams
 from matplotlib.lines import Line2D
-import logging
+
 
 def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered, option):
     font = {'family': option['font']}
@@ -28,7 +30,7 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
 
     for spine in ax.spines.values():
         spine.set_linewidth(option['line_width'])
-        
+
     def colors(color):
         hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$'
         import re
@@ -110,9 +112,9 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
     if option['vert']:
         plt.xticks(rotation=option['x_rotation'], ha=option['ha'])
 
-        ax.xaxis.set_ticks_position('both') 
+        ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
-        ax.tick_params(axis='x', color="k", width=1.5, length=4,which='major')  
+        ax.tick_params(axis='x', color="k", width=1.5, length=4,which='major')
         ax.tick_params(axis='y', color="k", width=1.5, length=4,which='major')
 
         # Add labels and title
@@ -164,12 +166,12 @@ def make_scenarios_comparison_Whisker_Plot(basedir, evaluation_item, ref_source,
         Line2D([0], [0], linestyle='--', color=option["meanpropscolor"], label='Mean')
     ]
     plt.legend(handles=legend_elements, loc='best',frameon=False,
-                handlelength=1.75, 
+                handlelength=1.75,
                 handleheight=1,
-                handletextpad=0.5,  
+                handletextpad=0.5,
                 labelspacing= 0.6,
                 prop={ "size":12})
-    
+
     output_file_path = f"{basedir}/Whisker_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
     plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
     plt.close()  # Close the figure to free up memory

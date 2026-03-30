@@ -54,7 +54,7 @@ def filter_ResOpsUS(info, ds=None):
         if data_vars:
             return info, ds[data_vars[0]]
         return info, ds
-    
+
     # Initialization mode: load and filter station metadata
     station_list_path = _resolve_station_list(info)
     info.ref_fulllist = str(station_list_path)

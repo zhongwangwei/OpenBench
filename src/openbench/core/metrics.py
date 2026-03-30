@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import numpy as np
-import sys
-import xarray as xr
 import logging
+
+import numpy as np
+import xarray as xr
 
 # Import CacheSystem - CacheSystem is mandatory for metrics calculation
 try:
@@ -27,7 +27,7 @@ class metrics:
         self.release = '0.2'
         self.date = 'March 2024'
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
-        
+
         # Suppress numpy warnings
         np.seterr(all='ignore')
 
@@ -53,7 +53,7 @@ class metrics:
         # Remove NaN values
         mask = np.isfinite(s) & np.isfinite(o)
         return s.where(mask), o.where(mask)
-    
+
     def percent_bias(self, s, o):
         """
         Calculate Percent Bias.
@@ -83,7 +83,7 @@ class metrics:
         """
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
-        
+
         # Calculate absolute percent bias
         apb = 100.0 * abs((s - o).sum(dim='time')) / o.sum(dim='time')
         return apb
@@ -101,11 +101,11 @@ class metrics:
         """
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
-        
+
         # Calculate RMSE
         rmse = np.sqrt(((s - o) ** 2).mean(dim='time'))
         return rmse
-    
+
     def ubRMSE(self, s, o):
         """
         Calculate Unbiased Root Mean Squared Error (ubRMSE).
@@ -119,11 +119,11 @@ class metrics:
         """
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
-        
+
         # Calculate unbiased RMSE
         ubrmse = np.sqrt((((s - s.mean(dim='time')) - (o - o.mean(dim='time'))) ** 2).mean(dim='time'))
         return ubrmse
- 
+
     def CRMSD(self, s, o=None):
         """
         Calculate Centered Root Mean Square Difference (CRMSD).
@@ -138,10 +138,10 @@ class metrics:
         # If observed data is not provided, use the mean of simulated data as reference
         if o is None:
             o = s.mean(dim="time")
-        
+
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
-        
+
         # Calculate standard deviations
         std_s = s.std(dim="time")
         std_o = o.std(dim="time")
@@ -152,7 +152,7 @@ class metrics:
         # Apply the CRMSD formula
         crmsd = np.sqrt(std_s**2 + std_o**2 - 2 * std_s * std_o * correlations)
         return crmsd
-    
+
     def mean_absolute_error(self,s,o):
         """
         Mean Absolute Error
@@ -193,7 +193,7 @@ class metrics:
         tmp1=((o-o.mean(dim='time'))**2).sum(dim='time')
         tmp2=-N*(((s-o)**2).sum(dim='time'))
         var=np.exp(tmp2/tmp1)
-        return var 
+        return var
 
     def correlation(self,s,o):
         """
@@ -205,7 +205,7 @@ class metrics:
             correlation: correlation coefficient
         """
         corr=xr.corr(s,o,dim=['time'])
-      
+
         return corr
 
     def correlation_R2(self,s,o):
@@ -219,7 +219,7 @@ class metrics:
         """
 
         return xr.corr(s,o,dim=['time'])**2
-    
+
     def NSE(self,s,o):
         """
         Nash Sutcliffe efficiency coefficient
@@ -234,7 +234,7 @@ class metrics:
         _tmp2=((s-o)**2).sum(dim='time')
         var = xr.where(_tmp1 != 0, 1 - _tmp2 / _tmp1, np.nan)
         return var
-    
+
     def KGE(self,s,o):
         """
         Kling-Gupta Efficiency
@@ -397,7 +397,7 @@ class metrics:
         s,o = self.rm_mean(s,o)
         var = self.correlation_R2(s,o)
         return var
-    
+
     def rm_mean(self,s,o):
         t1 = s - min(s.min(dim='time'),o.min(dim='time'))
         t2 = o - min(s.min(dim='time'),o.min(dim='time'))
@@ -445,7 +445,7 @@ class metrics:
             return xr.where(o_range == 0, np.nan, s_range / o_range - 1.0)
 
         return (s.max(dim='time')-s.min(dim='time'))/ o_range -1.0 #(np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
-   
+
     def rSD(self,s,o):
         #Ratio of standard deviations
         #also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
@@ -522,7 +522,7 @@ class metrics:
             return {"APFB_value": apfb_per_year.mean(), "APFB_per_year": apfb_per_year}
         else:
             return apfb_per_year.mean()
-        
+
     def br2(self, data_array, obs_array, na_rm=True, use_abs=False, fun=None, epsilon_type="none", epsilon_value=None):
         """
         Calculates the br2 metric (R-squared multiplied by regression slope) along the time dimension.
@@ -688,8 +688,8 @@ class metrics:
         return dr
 
     def smpi(self,s,o, n_bootstrap=100):
-        #Calculate the Single Model Performance Index (SMPI) 
-        
+        #Calculate the Single Model Performance Index (SMPI)
+
         # Calculate observational variance
         obs_var = o.var(dim='time')
         # Calculate squared differences
@@ -714,7 +714,7 @@ class metrics:
             bootstrap_indices = np.random.choice(n_times, size=n_times, replace=True)
             bootstrap_sample = normalized_diff_values[bootstrap_indices]
             bootstrap_smpi.append(np.mean(bootstrap_sample))
-        
+
         bootstrap_smpi = np.array(bootstrap_smpi)
         smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
 

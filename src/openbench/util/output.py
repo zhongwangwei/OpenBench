@@ -10,21 +10,22 @@ Version: 1.0
 Date: July 2025
 """
 
-import os
 import json
 import logging
+import os
 import shutil
-from typing import Dict, Any, List, Optional, Union, Callable
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from pathlib import Path
-import xarray as xr
-import pandas as pd
+from typing import Any, Dict, List, Optional
+
 import numpy as np
+import pandas as pd
+import xarray as xr
 
 # Import dependencies
 try:
-    from openbench.util.interfaces import IOutputManager, IOutputFormatter, BaseComponent
-    from openbench.util.exceptions import OutputError, FileSystemError, error_handler, ValidationError
+    from openbench.util.exceptions import FileSystemError, OutputError, ValidationError, error_handler
+    from openbench.util.interfaces import BaseComponent, IOutputFormatter, IOutputManager
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
@@ -42,7 +43,7 @@ except ImportError:
 
 class OutputFormatter(IOutputFormatter if _HAS_DEPENDENCIES else object):
     """Base class for output formatters."""
-    
+
     def __init__(self, name: str, extension: str, description: str = ""):
         """
         Initialize output formatter.
@@ -55,24 +56,24 @@ class OutputFormatter(IOutputFormatter if _HAS_DEPENDENCIES else object):
         self.name = name
         self.extension = extension
         self.description = description
-    
+
     def get_name(self) -> str:
         """Get formatter name."""
         return self.name
-    
+
     def get_extension(self) -> str:
         """Get file extension."""
         return self.extension
-    
+
     def get_description(self) -> str:
         """Get formatter description."""
         return self.description
-    
+
     @abstractmethod
     def format_data(self, data: Any, output_path: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Format and save data."""
         pass
-    
+
     def validate_data(self, data: Any) -> bool:
         """Validate data for formatting."""
         return data is not None
@@ -80,19 +81,19 @@ class OutputFormatter(IOutputFormatter if _HAS_DEPENDENCIES else object):
 
 class NetCDFFormatter(OutputFormatter):
     """NetCDF output formatter."""
-    
+
     def __init__(self):
         super().__init__("netcdf", ".nc", "NetCDF format for scientific data")
-    
+
     @error_handler(reraise=True)
     def format_data(self, data: Any, output_path: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Format data as NetCDF."""
         if not self.validate_data(data):
             raise ValidationError("Invalid data for NetCDF formatting")
-        
+
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
+
         if isinstance(data, xr.DataArray):
             # Add metadata attributes
             if metadata:
@@ -105,9 +106,9 @@ class NetCDFFormatter(OutputFormatter):
             data.to_netcdf(output_path)
         else:
             raise ValidationError(f"NetCDF formatter requires xarray DataArray or Dataset, got {type(data)}")
-        
+
         logging.info(f"Saved NetCDF file: {output_path}")
-    
+
     def validate_data(self, data: Any) -> bool:
         """Validate data for NetCDF formatting."""
         return isinstance(data, (xr.DataArray, xr.Dataset))
@@ -115,19 +116,19 @@ class NetCDFFormatter(OutputFormatter):
 
 class CSVFormatter(OutputFormatter):
     """CSV output formatter."""
-    
+
     def __init__(self):
         super().__init__("csv", ".csv", "Comma-separated values format")
-    
+
     @error_handler(reraise=True)
     def format_data(self, data: Any, output_path: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Format data as CSV."""
         if not self.validate_data(data):
             raise ValidationError("Invalid data for CSV formatting")
-        
+
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
+
         if isinstance(data, pd.DataFrame):
             data.to_csv(output_path, index=False)
         elif isinstance(data, dict):
@@ -140,9 +141,9 @@ class CSVFormatter(OutputFormatter):
             df.to_csv(output_path, index=False)
         else:
             raise ValidationError(f"CSV formatter requires DataFrame, dict, or list of dicts, got {type(data)}")
-        
+
         logging.info(f"Saved CSV file: {output_path}")
-    
+
     def validate_data(self, data: Any) -> bool:
         """Validate data for CSV formatting."""
         return isinstance(data, (pd.DataFrame, dict, list))
@@ -150,19 +151,19 @@ class CSVFormatter(OutputFormatter):
 
 class JSONFormatter(OutputFormatter):
     """JSON output formatter."""
-    
+
     def __init__(self):
         super().__init__("json", ".json", "JavaScript Object Notation format")
-    
+
     @error_handler(reraise=True)
     def format_data(self, data: Any, output_path: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Format data as JSON."""
         if not self.validate_data(data):
             raise ValidationError("Invalid data for JSON formatting")
-        
+
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
+
         # Convert numpy types to native Python types for JSON serialization
         def convert_numpy(obj):
             if isinstance(obj, np.ndarray):
@@ -178,7 +179,7 @@ class JSONFormatter(OutputFormatter):
             elif isinstance(obj, list):
                 return [convert_numpy(item) for item in obj]
             return obj
-        
+
         # Prepare data for JSON serialization
         if isinstance(data, dict):
             json_data = convert_numpy(data)
@@ -189,12 +190,12 @@ class JSONFormatter(OutputFormatter):
                 'data': convert_numpy(data),
                 'metadata': convert_numpy(metadata) if metadata else {}
             }
-        
+
         with open(output_path, 'w') as f:
             json.dump(json_data, f, indent=2, default=str)
-        
+
         logging.info(f"Saved JSON file: {output_path}")
-    
+
     def validate_data(self, data: Any) -> bool:
         """Validate data for JSON formatting."""
         # JSON can handle most basic Python types
@@ -203,7 +204,7 @@ class JSONFormatter(OutputFormatter):
 
 class OutputStructure:
     """Class to define output directory structure."""
-    
+
     def __init__(self, base_dir: str):
         """
         Initialize output structure.
@@ -221,13 +222,13 @@ class OutputStructure:
             'comparisons': self.base_dir / 'comparisons',
             'reports': self.base_dir / 'reports',
         }
-    
+
     def create_structure(self) -> None:
         """Create output directory structure."""
         for category, path in self.structure.items():
             path.mkdir(parents=True, exist_ok=True)
             logging.debug(f"Created directory: {path}")
-    
+
     def get_path(self, category: str, *subdirs: str) -> Path:
         """
         Get path for a specific category.
@@ -241,13 +242,13 @@ class OutputStructure:
         """
         if category not in self.structure:
             raise ValueError(f"Unknown output category: {category}")
-        
+
         path = self.structure[category]
         for subdir in subdirs:
             path = path / subdir
-        
+
         return path
-    
+
     def cleanup_category(self, category: str) -> None:
         """Clean up files in a specific category."""
         if category in self.structure:
@@ -260,7 +261,7 @@ class OutputStructure:
 
 class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
     """Modular output management system."""
-    
+
     def __init__(self, base_dir: str, name: str = "ModularOutputManager"):
         """
         Initialize output manager.
@@ -274,19 +275,19 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         else:
             self.name = name
             self._formatters_registry = {}
-        
+
         self.base_dir = base_dir
         self.structure = OutputStructure(base_dir)
         self.structure.create_structure()
-        
+
         # Register default formatters
         self._register_default_formatters()
-        
+
         # Configuration
         self.auto_create_dirs = True
         self.overwrite_existing = True
         self.backup_existing = False
-    
+
     def _register_default_formatters(self):
         """Register default output formatters."""
         default_formatters = [
@@ -294,19 +295,19 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             CSVFormatter(),
             JSONFormatter()
         ]
-        
+
         for formatter in default_formatters:
             self.register_formatter(formatter)
-    
+
     def register_formatter(self, formatter: IOutputFormatter) -> None:
         """Register an output formatter."""
         if _HAS_DEPENDENCIES:
             super().register_formatter(formatter)
         else:
             self._formatters_registry[formatter.get_name()] = formatter
-        
+
         logging.debug(f"Registered formatter: {formatter.get_name()}")
-    
+
     def unregister_formatter(self, formatter_name: str) -> bool:
         """Unregister an output formatter."""
         if formatter_name in self._formatters_registry:
@@ -314,26 +315,26 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             logging.debug(f"Unregistered formatter: {formatter_name}")
             return True
         return False
-    
+
     def get_supported_formats(self) -> List[str]:
         """Get list of supported output formats."""
         if _HAS_DEPENDENCIES:
             return super().get_supported_formats()
         else:
             return list(self._formatters_registry.keys())
-    
+
     def get_formatter_info(self, formatter_name: str) -> Dict[str, str]:
         """Get information about a specific formatter."""
         if formatter_name not in self._formatters_registry:
             raise ValueError(f"Formatter '{formatter_name}' not found")
-        
+
         formatter = self._formatters_registry[formatter_name]
         return {
             'name': formatter.get_name(),
             'extension': formatter.get_extension(),
             'description': formatter.get_description()
         }
-    
+
     @error_handler(reraise=True)
     def save_data(
         self,
@@ -363,21 +364,21 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         # Determine format
         if format_type == 'auto':
             format_type = self._auto_detect_format(data)
-        
+
         if format_type not in self._formatters_registry:
             raise ValueError(f"Unsupported format: {format_type}")
-        
+
         formatter = self._formatters_registry[format_type]
-        
+
         # Build output path
         subdirs_list = subdirs or []
         output_dir = self.structure.get_path(category, *subdirs_list)
-        
+
         if self.auto_create_dirs:
             output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         output_path = output_dir / f"{filename}{formatter.get_extension()}"
-        
+
         # Handle existing files
         if output_path.exists() and not self.overwrite_existing:
             if self.backup_existing:
@@ -386,12 +387,12 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
                 logging.info(f"Backed up existing file to: {backup_path}")
             else:
                 raise FileSystemError(f"File already exists: {output_path}")
-        
+
         # Save data
         formatter.format_data(data, str(output_path), metadata)
-        
+
         return str(output_path)
-    
+
     def _auto_detect_format(self, data: Any) -> str:
         """Auto-detect appropriate format for data."""
         if isinstance(data, (xr.DataArray, xr.Dataset)):
@@ -403,7 +404,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         else:
             # Default to JSON for other types
             return 'json'
-    
+
     @error_handler(reraise=True)
     def save_metrics(
         self,
@@ -429,7 +430,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             Path to saved file
         """
         filename = f"{item}_ref_{ref_source}_sim_{sim_source}_metrics"
-        
+
         metadata = {
             'type': 'metrics',
             'item': item,
@@ -437,7 +438,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             'simulation_source': sim_source,
             'creation_time': pd.Timestamp.now().isoformat()
         }
-        
+
         return self.save_data(
             metrics_data,
             'metrics',
@@ -446,7 +447,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             metadata,
             **kwargs
         )
-    
+
     @error_handler(reraise=True)
     def save_scores(
         self,
@@ -472,7 +473,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             Path to saved file
         """
         filename = f"{item}_ref_{ref_source}_sim_{sim_source}_scores"
-        
+
         metadata = {
             'type': 'scores',
             'item': item,
@@ -480,7 +481,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             'simulation_source': sim_source,
             'creation_time': pd.Timestamp.now().isoformat()
         }
-        
+
         return self.save_data(
             scores_data,
             'scores',
@@ -489,7 +490,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             metadata,
             **kwargs
         )
-    
+
     @error_handler(reraise=True)
     def save_comparison(
         self,
@@ -515,7 +516,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             'comparison_name': comparison_name,
             'creation_time': pd.Timestamp.now().isoformat()
         }
-        
+
         return self.save_data(
             comparison_data,
             'comparisons',
@@ -524,7 +525,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             metadata,
             **kwargs
         )
-    
+
     def list_outputs(self, category: Optional[str] = None) -> Dict[str, List[str]]:
         """
         List all output files.
@@ -536,9 +537,9 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             Dictionary of category -> list of files
         """
         results = {}
-        
+
         categories = [category] if category else self.structure.structure.keys()
-        
+
         for cat in categories:
             if cat in self.structure.structure:
                 cat_path = self.structure.structure[cat]
@@ -547,9 +548,9 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
                     results[cat] = sorted(files)
                 else:
                     results[cat] = []
-        
+
         return results
-    
+
     def cleanup_outputs(self, category: Optional[str] = None) -> None:
         """
         Clean up output files.
@@ -562,7 +563,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         else:
             for cat in self.structure.structure.keys():
                 self.structure.cleanup_category(cat)
-    
+
     def get_summary(self) -> Dict[str, Any]:
         """Get summary of output manager state."""
         summary = {
@@ -575,13 +576,13 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
                 'backup_existing': self.backup_existing
             }
         }
-        
+
         # Add file counts
         file_counts = {}
         for category, files in self.list_outputs().items():
             file_counts[category] = len(files)
         summary['file_counts'] = file_counts
-        
+
         return summary
 
 
@@ -598,12 +599,12 @@ def create_output_manager(base_dir: str, **config) -> ModularOutputManager:
         Output manager instance
     """
     manager = ModularOutputManager(base_dir)
-    
+
     # Apply configuration
     for key, value in config.items():
         if hasattr(manager, key):
             setattr(manager, key, value)
-    
+
     return manager
 
 

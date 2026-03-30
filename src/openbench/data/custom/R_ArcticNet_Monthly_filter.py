@@ -36,26 +36,26 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     lon = float(lons[station_idx])
     lat = float(lats[station_idx])
     area = float(areas[station_idx]) if not np.isnan(areas[station_idx]) else -9999.0
-    
+
     cama_lon = float(cama_lons[station_idx])
     cama_lat = float(cama_lats[station_idx])
     alloc_err = float(alloc_errs[station_idx])
-    
+
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lat < -90:
         return None
-    
+
     if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
         return None
-    
+
     if np.isnan(lon) or np.isnan(lat):
         return None
-    
+
     discharge = discharge_data[station_idx, :]
-    
+
     valid_mask = ~np.isnan(discharge)
     if not valid_mask.any():
         return None
-    
+
     valid_indices = np.where(valid_mask)[0]
     start_year = pd.to_datetime(times[valid_indices[0]]).year
     end_year = pd.to_datetime(times[valid_indices[-1]]).year
@@ -69,12 +69,12 @@ def process_site(station_idx, station_ids, lons, lats, areas,
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
-    
+
     ds_out = xr.Dataset({
         'discharge': (['time'], discharge)
     }, coords={'time': times})
     ds_out.to_netcdf(file_path)
-    
+
     return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
 
 
@@ -90,26 +90,26 @@ def filter_R_ArcticNet_Monthly(info, ds=None):
             if data_vars:
                 return info, ds[data_vars[0]]
             return info, ds
-    
+
     # Use monthly file for R_ArcticNet_Monthly
     dataset_path = Path(info.ref_dir) / "R-ArcticNet_monthly.nc"
-    
+
     if not dataset_path.exists():
         logging.error(f"Dataset not found: {dataset_path}")
         return
-    
+
     logging.info(f"Loading R-ArcticNet metadata from {dataset_path}...")
-    
+
     if hasattr(info, 'sim_grid_res'):
         res_suffix = get_resolution_suffix(info.sim_grid_res)
     else:
         res_suffix = '03min'
-    
+
     area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
-    
+
     scratch_dir = Path(info.casedir) / "scratch" / f"R_ArcticNet_Monthly_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    
+
     with xr.open_dataset(dataset_path) as ds_file:
         station_ids = ds_file['Station_ID'].values
         lons = ds_file['Lon'].values
@@ -117,7 +117,7 @@ def filter_R_ArcticNet_Monthly(info, ds=None):
         areas = ds_file['Upstream_Area'].values
         discharge_data = ds_file['Disch'].values if 'Disch' in ds_file else ds_file['Mean_Disch'].values
         times = ds_file['Time'].values
-        
+
         cama_lon_var = f'cama_lon_{res_suffix}'
         if cama_lon_var in ds_file:
             cama_lons = ds_file[cama_lon_var].values
@@ -127,10 +127,10 @@ def filter_R_ArcticNet_Monthly(info, ds=None):
             cama_lons = lons.copy()
             cama_lats = lats.copy()
             alloc_errs = np.zeros_like(lons)
-        
+
         n_stations = len(station_ids)
         logging.info(f"Processing {n_stations} stations...")
-        
+
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
                 idx, station_ids, lons, lats, areas,
@@ -138,7 +138,7 @@ def filter_R_ArcticNet_Monthly(info, ds=None):
                 discharge_data, times, info, scratch_dir, area_err_threshold
             ) for idx in range(n_stations)
         )
-        
+
         station_rows = [row for row in station_rows if row is not None]
 
     if not station_rows:

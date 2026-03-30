@@ -1,25 +1,22 @@
-import itertools
-import math
-import matplotlib
-import matplotlib.pylab as pylab
-import matplotlib.pyplot as plt
-from matplotlib import colors
-from matplotlib import cm
-import numpy as np
-import pandas as pd
-from matplotlib import rcParams
 import logging
-# Plot settings
-import xarray as xr
+import math
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-from openbench.util.converttype import Convert_Type
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+# Plot settings
+import xarray as xr
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
 
-import os
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
+from openbench.util.converttype import Convert_Type
+
+from .Fig_toolbox import get_index, process_unit
+
 
 def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     font = {'family': option['font']}
@@ -116,7 +113,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
-    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')
     ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
     ax.set_adjustable('datalim')
     ax.set_aspect('equal', adjustable='box')
@@ -224,8 +221,8 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         ax.set_extent([option['min_lon'], option['max_lon'], option['min_lat'], option['max_lat']], crs=ccrs.PlateCarree())
         ax.set_xticks(np.arange(option['max_lon'], option['min_lon'], -60)[:0:-1], crs=ccrs.PlateCarree())
         ax.set_yticks(np.arange(option['max_lat'], option['min_lat'], -30)[:0:-1], crs=ccrs.PlateCarree())
-    
-    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')  
+
+    ax.tick_params(axis='x', color="#969696", width=1.5, length=4,which='major')
     ax.tick_params(axis='y', color="#969696", width=1.5, length=4,which='major')
     ax.set_adjustable('datalim')
     ax.set_aspect('equal', adjustable='box')

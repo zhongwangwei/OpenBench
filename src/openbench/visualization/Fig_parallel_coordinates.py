@@ -1,16 +1,20 @@
 import itertools
+import logging
 import os
 import sys
-import logging
+
 import matplotlib
 import matplotlib.pylab as pylab
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
+
 # import seaborn as sns
 from matplotlib.cbook import flatten
+
 from openbench.util.converttype import Convert_Type
+
 
 def _read_comparison_file(file):
     """

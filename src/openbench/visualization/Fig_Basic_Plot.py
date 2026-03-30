@@ -1,14 +1,11 @@
-import warnings
-from matplotlib import colors
-from matplotlib import cm
-import matplotlib.pyplot as plt
-import xarray as xr
-import numpy as np
-import math
-import os
-import pandas as pd
-import matplotlib
 import logging
+import warnings
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 # Try to import cftime for datetime conversion
 try:
@@ -17,9 +14,11 @@ try:
     _HAS_CFTIME = True
 except ImportError:
     _HAS_CFTIME = False
-from openbench.util.converttype import Convert_Type
-from .Fig_toolbox import convert_unit
 from openbench.data.unit import UnitProcessing
+from openbench.util.converttype import Convert_Type
+
+from .Fig_toolbox import convert_unit
+
 
 def convert_cftime_to_pandas(data_array):
     """
@@ -61,8 +60,8 @@ def convert_cftime_to_pandas(data_array):
 
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 
-import cmaps
-from .Fig_toolbox import get_index, convert_unit, get_colormap, process_unit, tick_length
+from .Fig_toolbox import get_index, process_unit
+
 
 def determine_display_unit(self):
     """
@@ -77,7 +76,7 @@ def determine_display_unit(self):
         # Special case: For evapotranspiration, standardize to mm day-1
         if 'evapotranspiration' in self.item.lower():
             display_unit = convert_unit('mm day-1')
-            logging.info(f'Using standardized unit for evapotranspiration: mm day-1')
+            logging.info('Using standardized unit for evapotranspiration: mm day-1')
         elif ref_unit == sim_unit or not sim_unit:
             # If units are the same or sim unit is missing, use ref unit
             display_unit = convert_unit(ref_unit)
@@ -150,7 +149,7 @@ def make_plot_index_grid(self):
         if score == 'nSpatialScore':
             print(f'skipping global map plotting for score: {score} (constant globally)')
             continue
-            
+
         option = self.fig_nml['make_geo_plot_index']
         print(f'plotting score: {score}')
         option['colorbar_label'] = score.replace('_', '\n')
@@ -163,12 +162,11 @@ def make_plot_index_grid(self):
 
 def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     # Plot settings
-    import numpy as np
-    import xarray as xr
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-
+    import numpy as np
+    import xarray as xr
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
 
     font = {'family': option['font']}
@@ -302,9 +300,9 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml['plot_stn']
-    from pylab import rcParams
     import matplotlib
     import matplotlib.pyplot as plt
+    from pylab import rcParams
     ### Plot settings
 
     # font = {'family': 'Times-Roman'}
@@ -385,12 +383,12 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     plt.close(fig)
 
 def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mticks, option):
-    from pylab import rcParams
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
     import matplotlib
     import matplotlib.pyplot as plt
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
+    from pylab import rcParams
     ### Plot settings
     font = {'family': option['font']}
     matplotlib.rc('font', **font)
@@ -570,7 +568,7 @@ def make_plot_index_stn(self):
         if score == 'nSpatialScore':
             print(f'skipping station map plotting for score: {score} (constant globally)')
             continue
-            
+
         option = self.fig_nml['make_stn_plot_index']
         print(f'plotting score: {score}')
         option['colorbar_label'] = score.replace('_', '\n')
@@ -604,12 +602,11 @@ def make_plot_index_stn(self):
 
 def make_Basic(file, method_name, data_sources, main_nml,
                option):
-    import numpy as np
-    import xarray as xr
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-
+    import numpy as np
+    import xarray as xr
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
     # filename_parts = [method_name] + data_sources
     # filename = "_".join(filename_parts) + "_output"
@@ -701,7 +698,7 @@ def make_Basic(file, method_name, data_sources, main_nml,
     ax.yaxis.set_major_formatter(lat_formatter)
 
     if option['title'] is None:
-        option['title'] = f'Correlation Results'
+        option['title'] = 'Correlation Results'
     ax.set_xlabel(option['xticklabel'], fontsize=option['xtick'] + 1, labelpad=20)
     ax.set_ylabel(option['yticklabel'], fontsize=option['ytick'] + 1, labelpad=40)
     plt.title(option['title'], fontsize=option['title_size'])
