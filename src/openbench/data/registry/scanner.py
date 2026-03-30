@@ -247,12 +247,14 @@ def register_scanned_dataset(
         res_info = RESOLUTION_MAP.get(scanned.resolution, {})
         descriptor["grid_res"] = res_info.get("typical_grid_res", 0.25)
 
-    # Build variables section — use existing descriptor if available
+    # Build variables section
+    # Priority: existing_descriptor > NC file inspection > directory name fallback
     variables = {}
     for var_name, sub_dir in scanned.variables.items():
-        var_entry = {"varname": var_name, "varunit": "", "sub_dir": sub_dir}
+        var_entry: dict[str, Any] = {"varname": var_name, "varunit": "", "sub_dir": sub_dir}
 
-        # Merge from existing descriptor if available
+        # 1. Try existing descriptor (hand-curated, most reliable)
+        merged_from_existing = False
         if existing_descriptor:
             existing_vars = existing_descriptor.get("variables", {})
             if var_name in existing_vars:
@@ -263,6 +265,24 @@ def register_scanned_dataset(
                     var_entry["prefix"] = ev["prefix"]
                 if ev.get("suffix"):
                     var_entry["suffix"] = ev["suffix"]
+                merged_from_existing = True
+
+        # 2. If no existing descriptor, inspect NC file for varname/unit/prefix/suffix
+        if not merged_from_existing:
+            dataset_path = Path(scanned.root_dir) / sub_dir
+            if dataset_path.is_dir():
+                nc_info = _inspect_nc_file(dataset_path)
+                if nc_info.get("varname"):
+                    var_entry["varname"] = nc_info["varname"]
+                if nc_info.get("varunit"):
+                    var_entry["varunit"] = nc_info["varunit"]
+                if nc_info.get("prefix"):
+                    var_entry["prefix"] = nc_info["prefix"]
+                if nc_info.get("suffix"):
+                    var_entry["suffix"] = nc_info["suffix"]
+                # Update year range if detected
+                if nc_info.get("syear"):
+                    descriptor["years"] = [nc_info["syear"], nc_info.get("eyear", nc_info["syear"])]
 
         variables[var_name] = var_entry
 
@@ -376,3 +396,79 @@ def _detect_tim_res(dataset_dir: Path) -> str:
         return "Hour"
 
     return "Month"  # Default assumption
+
+
+def _inspect_nc_file(dataset_dir: Path) -> dict:
+    """Inspect a NetCDF file to extract variable name, unit, prefix, suffix.
+
+    Opens the first .nc file in the directory, finds the primary data
+    variable (skips time_bnds, lat, lon, etc.), and extracts metadata.
+    Also parses the filename to detect prefix and suffix patterns.
+
+    Returns:
+        {"varname": str, "varunit": str, "prefix": str, "suffix": str}
+        or empty dict if inspection fails.
+    """
+    nc_files = sorted(dataset_dir.glob("*.nc"))
+    if not nc_files:
+        return {}
+
+    result = {}
+
+    # Extract varname and unit from NC contents
+    try:
+        import xarray as xr
+
+        ds = xr.open_dataset(nc_files[0], engine="netcdf4")
+
+        # Filter out auxiliary variables
+        skip_vars = {
+            "time_bnds", "time_bounds", "lat_bnds", "lon_bnds",
+            "lat_bounds", "lon_bounds", "crs", "spatial_ref",
+        }
+        data_vars = [v for v in ds.data_vars if v not in skip_vars and len(ds[v].dims) >= 2]
+
+        if data_vars:
+            varname = data_vars[0]
+            da = ds[varname]
+            varunit = da.attrs.get("units", da.attrs.get("unit", ""))
+            # Normalize unit format
+            varunit = str(varunit).replace(".", " ").strip() if varunit else ""
+            result["varname"] = varname
+            result["varunit"] = varunit
+
+        ds.close()
+    except Exception:
+        pass
+
+    # Extract prefix and suffix from filename pattern
+    # Pattern: <prefix><year><suffix>.nc
+    # E.g., "E_2004_GLEAM_v4.2a.nc" → prefix="E_", suffix="_GLEAM_v4.2a"
+    import re
+
+    fname = nc_files[0].stem  # Without .nc
+    # Try to find a 4-digit year in the filename
+    year_match = re.search(r"(\d{4})", fname)
+    if year_match:
+        year_str = year_match.group(1)
+        idx = fname.index(year_str)
+        prefix = fname[:idx]
+        suffix = fname[idx + len(year_str):]
+        result["prefix"] = prefix
+        result["suffix"] = suffix
+    else:
+        result["prefix"] = ""
+        result["suffix"] = ""
+
+    # Detect year range from all filenames
+    years = []
+    for f in nc_files:
+        for m in re.finditer(r"(\d{4})", f.stem):
+            y = int(m.group(1))
+            if 1900 <= y <= 2100:
+                years.append(y)
+    if years:
+        result["syear"] = min(years)
+        result["eyear"] = max(years)
+
+    return result
