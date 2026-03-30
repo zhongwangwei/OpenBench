@@ -44,17 +44,29 @@ def _include_constructor(loader: _IncludeLoader, node: yaml.Node) -> Any:
         # Glob pattern: !include sim/*.yaml
         import glob
 
+        matches = sorted(glob.glob(str(target)))
+        if not matches:
+            raise ConfigError(f"!include pattern '{path_str}' matched no files (resolved to {target})")
+
         result = {}
-        for match in sorted(glob.glob(str(target))):
-            with open(match) as f:
-                data = yaml.safe_load(f)
-                if isinstance(data, dict):
-                    result.update(data)
+        for match in matches:
+            try:
+                with open(match) as f:
+                    data = yaml.safe_load(f)
+                    if isinstance(data, dict):
+                        result.update(data)
+            except Exception as e:
+                raise ConfigError(f"!include failed to read '{match}': {e}") from e
         return result
     else:
         # Single file: !include ref.yaml
-        with open(target) as f:
-            return yaml.safe_load(f)
+        if not target.exists():
+            raise ConfigError(f"!include file not found: '{path_str}' (resolved to {target})")
+        try:
+            with open(target) as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            raise ConfigError(f"!include failed to read '{target}': {e}") from e
 
 
 _IncludeLoader.add_constructor("!include", _include_constructor)
@@ -262,5 +274,6 @@ def _build_options(raw: Any) -> OptionsConfig:
         climate_zone_groupby=raw.get("climate_zone_groupby", False),
         debug_mode=raw.get("debug_mode", False),
         only_drawing=raw.get("only_drawing", False),
+        force=raw.get("force", False),
         data_root=raw.get("data_root"),
     )

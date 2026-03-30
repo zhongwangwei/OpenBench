@@ -265,6 +265,26 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
                 "status": "error",
             })
 
+    logger.info("Evaluation phase: %d succeeded, %d failed", len(evaluated), len(errors))
+
+    # ─── Phase 2: Comparison ───
+    if cfg.comparison.enabled and comparison_vars and evaluated:
+        logger.info("Starting comparison phase: %s", comparison_vars)
+        _run_comparison(main_nl, sim_nml, ref_nml, legacy, comparison_vars, fig_nml, output_dir)
+
+    # ─── Phase 2b: Groupby (IGBP / PFT / Climate Zone) ───
+    if evaluated:
+        _run_groupby(cfg, main_nl, sim_nml, ref_nml, legacy, fig_nml, output_dir)
+
+    # ─── Phase 3: Statistics ───
+    if cfg.statistics.enabled and statistic_vars:
+        logger.info("Starting statistics phase: %s", statistic_vars)
+        _run_statistics(main_nl, statistic_vars, fig_nml)
+
+    # ─── Phase 4: Report ───
+    if cfg.options.generate_report:
+        _run_report(main_nl, legacy, ref_nml, sim_nml, output_dir)
+
     results: dict[str, Any] = {
         "status": "success" if not errors else "partial",
         "basename": basename,
@@ -276,5 +296,186 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
         "errors": errors,
     }
 
-    logger.info("Evaluation complete: %d succeeded, %d failed", len(evaluated), len(errors))
+    logger.info("All phases complete: %d evaluated, %d errors", len(evaluated), len(errors))
     return results
+
+
+# ─── Post-evaluation phases ───
+
+
+def _run_comparison(main_nl, sim_nml, ref_nml, legacy, comparison_vars, fig_nml, output_dir):
+    """Run comparison visualizations (Taylor diagrams, heat maps, etc.)."""
+    import gc
+
+    try:
+        from openbench.core.comparison import ComparisonProcessing
+
+        basedir = str(output_dir)
+        evaluation_items = list(legacy["evaluation_items"].keys())
+        score_vars = list(legacy["scores"].keys())
+        metric_vars = list(legacy["metrics"].keys())
+
+        ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
+
+        comparison_fig = fig_nml.get("Comparison", {})
+
+        for cvar in comparison_vars:
+            logger.info("Running %s comparison...", cvar)
+            if cvar in ("Mean", "Median", "Max", "Min", "Sum"):
+                method_name = "scenarios_Basic_comparison"
+            else:
+                method_name = f"scenarios_{cvar}_comparison"
+
+            fig_opts = comparison_fig.get(cvar, {})
+
+            if hasattr(ch, method_name):
+                try:
+                    getattr(ch, method_name)(
+                        basedir, sim_nml, ref_nml, evaluation_items,
+                        score_vars, metric_vars, fig_opts,
+                    )
+                    logger.info("Completed %s comparison", cvar)
+                except Exception:
+                    logger.exception("Failed %s comparison", cvar)
+            else:
+                logger.warning("Comparison method %s not found, skipping", method_name)
+
+            gc.collect()
+
+    except ImportError:
+        logger.warning("ComparisonProcessing not available, skipping comparison phase")
+    except Exception:
+        logger.exception("Comparison phase failed")
+
+
+def _run_groupby(cfg, main_nl, sim_nml, ref_nml, legacy, fig_nml, output_dir):
+    """Run land cover and climate zone groupby analysis."""
+    import gc
+
+    basedir = str(output_dir)
+    evaluation_items = list(legacy["evaluation_items"].keys())
+    score_vars = list(legacy["scores"].keys())
+    metric_vars = list(legacy["metrics"].keys())
+    validation_fig = fig_nml.get("IGBP_groupby", fig_nml.get("Validation", {}))
+
+    if cfg.options.IGBP_groupby:
+        try:
+            from openbench.core.landcover_groupby import LC_groupby
+
+            logger.info("Running IGBP land cover groupby...")
+            lc = LC_groupby(main_nl, score_vars, metric_vars)
+            lc.scenarios_IGBP_groupby_comparison(
+                basedir, sim_nml, ref_nml, evaluation_items,
+                score_vars, metric_vars, validation_fig,
+            )
+            gc.collect()
+            logger.info("IGBP groupby complete")
+        except Exception:
+            logger.exception("IGBP groupby failed")
+
+    if cfg.options.PFT_groupby:
+        try:
+            from openbench.core.landcover_groupby import LC_groupby
+
+            logger.info("Running PFT groupby...")
+            lc = LC_groupby(main_nl, score_vars, metric_vars)
+            lc.scenarios_PFT_groupby_comparison(
+                basedir, sim_nml, ref_nml, evaluation_items,
+                score_vars, metric_vars, validation_fig,
+            )
+            gc.collect()
+            logger.info("PFT groupby complete")
+        except Exception:
+            logger.exception("PFT groupby failed")
+
+    if cfg.options.climate_zone_groupby:
+        try:
+            from openbench.core.climatezone_groupby import CZ_groupby
+
+            logger.info("Running climate zone groupby...")
+            cz = CZ_groupby(main_nl, score_vars, metric_vars)
+            cz_fig = fig_nml.get("Climate_zone_groupby", validation_fig)
+            cz.scenarios_CZ_groupby_comparison(
+                basedir, sim_nml, ref_nml, evaluation_items,
+                score_vars, metric_vars, cz_fig,
+            )
+            gc.collect()
+            logger.info("Climate zone groupby complete")
+        except Exception:
+            logger.exception("Climate zone groupby failed")
+
+
+def _run_statistics(main_nl, statistic_vars, fig_nml):
+    """Run statistical analysis."""
+    import gc
+    import os
+
+    try:
+        from openbench.core.statistics.Mod_Statistics import StatisticsProcessing
+
+        basedir = os.path.join(main_nl["general"]["basedir"], main_nl["general"]["basename"])
+        stats_dir = os.path.join(basedir, "statistics")
+        os.makedirs(stats_dir, exist_ok=True)
+
+        stats_handler = StatisticsProcessing(
+            main_nl, {},  # stats_nml placeholder
+            stats_dir,
+            num_cores=main_nl["general"].get("num_cores", 1),
+        )
+
+        statistic_fig = fig_nml.get("Statistic", {})
+
+        for statistic in statistic_vars:
+            logger.info("Running %s analysis...", statistic)
+            if statistic in ("Mean", "Median", "Max", "Min", "Sum"):
+                method_name = "scenarios_Basic_analysis"
+            else:
+                method_name = f"scenarios_{statistic}_analysis"
+
+            if hasattr(stats_handler, method_name):
+                try:
+                    stat_fig = statistic_fig.get(statistic, {})
+                    getattr(stats_handler, method_name)(statistic, {}, stat_fig)
+                    logger.info("Completed %s analysis", statistic)
+                except Exception:
+                    logger.exception("Failed %s analysis", statistic)
+            else:
+                logger.warning("Statistics method %s not found, skipping", method_name)
+
+            gc.collect()
+
+    except ImportError:
+        logger.warning("StatisticsProcessing not available, skipping statistics phase")
+    except Exception:
+        logger.exception("Statistics phase failed")
+
+
+def _run_report(main_nl, legacy, ref_nml, sim_nml, output_dir):
+    """Generate evaluation report."""
+    try:
+        from openbench.util.report import ReportGenerator
+
+        report_config = {
+            "evaluation_items": list(legacy["evaluation_items"].keys()),
+            "metrics": legacy.get("metrics", {}),
+            "scores": legacy.get("scores", {}),
+            "comparisons": legacy.get("comparisons", {}),
+            "statistics": legacy.get("statistics", {}),
+            "general": legacy.get("general", {}),
+            "ref_nml": dict(ref_nml) if ref_nml else {},
+            "sim_nml": dict(sim_nml) if sim_nml else {},
+        }
+
+        report_gen = ReportGenerator(report_config, str(output_dir))
+        report_paths = report_gen.generate_report()
+
+        if report_paths:
+            for fmt, path in report_paths.items():
+                logger.info("Report generated: %s → %s", fmt, path)
+        else:
+            logger.info("Report generation completed")
+
+    except ImportError:
+        logger.warning("ReportGenerator not available, skipping report generation")
+    except Exception:
+        logger.exception("Report generation failed")

@@ -52,11 +52,19 @@ def launch(config_path=None):
 def _auto_discover_datasets(window):
     """Scan for new reference datasets and prompt user to register them."""
     # Check common data locations
-    data_roots = [
-        "/Volumes/work/Reference",
+    data_roots = []
+
+    # Check environment variable first
+    env_root = os.environ.get("OPENBENCH_DATA_ROOT")
+    if env_root:
+        data_roots.append(env_root)
+
+    # Common locations
+    data_roots.extend([
         os.path.expanduser("~/data/Reference"),
         os.path.expanduser("~/Reference"),
-    ]
+        "/Volumes/work/Reference",
+    ])
 
     # Also check config for data_root
     try:

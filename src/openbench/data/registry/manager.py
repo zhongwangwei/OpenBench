@@ -15,6 +15,7 @@ Same for model_catalog.yaml / models/*.yaml.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,8 @@ from typing import Optional
 import yaml
 
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+
+logger = logging.getLogger(__name__)
 
 # The single authoritative registry directory (inside the package)
 REGISTRY_DIR = Path(__file__).parent
@@ -88,10 +91,10 @@ class RegistryManager:
             for name, data in catalog.items():
                 try:
                     self._references[name] = _build_reference(data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.warning("Failed to load reference '%s' from %s: %s", name, path.name, e)
+        except Exception as e:
+            logger.warning("Failed to read reference catalog %s: %s", path, e)
 
     def _load_reference_dir(self, directory: Path) -> None:
         """Load references from individual YAML files in a directory."""
@@ -103,8 +106,8 @@ class RegistryManager:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
                     self._references[data["name"]] = _build_reference(data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load reference from %s: %s", path.name, e)
 
     def _load_model_catalog(self, path: Path) -> None:
         """Load all models from a single catalog YAML file."""
@@ -116,10 +119,10 @@ class RegistryManager:
             for name, data in catalog.items():
                 try:
                     self._models[name] = _build_model(data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.warning("Failed to load model '%s' from %s: %s", name, path.name, e)
+        except Exception as e:
+            logger.warning("Failed to read model catalog %s: %s", path, e)
 
     def _load_model_dir(self, directory: Path) -> None:
         """Load models from individual YAML files in a directory."""
@@ -131,8 +134,8 @@ class RegistryManager:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
                     self._models[data["name"]] = _build_model(data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load model from %s: %s", path.name, e)
 
     # --- Resolution suffixes ---
     RESOLUTION_SUFFIXES = ("_LowRes", "_MidRes", "_HigRes")
