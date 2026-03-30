@@ -8,6 +8,8 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Tuple, Union
 
+logger = logging.getLogger(__name__)
+
 # Import cached glob for performance
 try:
     from openbench.util.dataset_loader import cached_glob
@@ -223,7 +225,8 @@ def performance_monitor(func: Callable = None, *, silent_on_error: bool = False)
                     try:
                         end_mem = process.memory_info().rss / 1024 / 1024 / 1024
                         memory_used = end_mem - start_mem
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("Failed to read end memory usage: %s", e)
                         memory_used = 0
                 else:
                     memory_used = 0
@@ -319,16 +322,16 @@ def _get_macos_cpu_freq():
             if result.returncode == 0 and result.stdout.strip().isdigit():
                 # Convert Hz to MHz
                 return float(result.stdout.strip()) / 1000000
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("sysctl hw.cpufrequency_max failed: %s", e)
 
         # Try alternative sysctl commands for Apple Silicon
         try:
             result = subprocess.run(["sysctl", "-n", "hw.cpufrequency"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout.strip().isdigit():
                 return float(result.stdout.strip()) / 1000000
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("sysctl hw.cpufrequency failed: %s", e)
 
         # For Intel Macs or fallback, try system_profiler
         result = subprocess.run(["system_profiler", "SPHardwareDataType"], capture_output=True, text=True, timeout=5)
@@ -353,7 +356,8 @@ def _get_macos_cpu_freq():
                         return 4400  # M4 estimated max frequency
 
         return 0
-    except Exception:
+    except Exception as e:
+        logger.debug("macOS CPU frequency detection failed: %s", e)
         return 0
 
 
@@ -366,7 +370,8 @@ def _get_linux_cpu_freq():
                 if line.startswith("cpu MHz"):
                     return float(line.split(":")[1].strip())
         return 0
-    except Exception:
+    except Exception as e:
+        logger.debug("Linux CPU frequency detection failed: %s", e)
         return 0
 
 
@@ -386,7 +391,8 @@ def _get_windows_cpu_freq():
                     if freq.isdigit():
                         return float(freq)  # Already in MHz
         return 0
-    except Exception:
+    except Exception as e:
+        logger.debug("Windows CPU frequency detection failed: %s", e)
         return 0
 
 
@@ -955,8 +961,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     _, index_unique = np.unique(ds["time"], return_index=True)
                     ds = ds.isel(time=np.sort(index_unique))
                     time_var = ds.time
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to remove duplicate monthly timestamps: %s", e)
                 # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"
@@ -1008,8 +1014,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     _, index_unique = np.unique(ds["time"], return_index=True)
                     ds = ds.isel(time=np.sort(index_unique))
                     time_var = ds.time
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to remove duplicate daily timestamps: %s", e)
                 # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"
@@ -1060,8 +1066,8 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     _, index_unique = np.unique(ds["time"], return_index=True)
                     ds = ds.isel(time=np.sort(index_unique))
                     time_var = ds.time
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to remove duplicate hourly timestamps: %s", e)
                 # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"

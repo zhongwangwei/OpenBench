@@ -1,5 +1,6 @@
 """Test that all CLI commands are registered and show help."""
 
+import click
 from click.testing import CliRunner
 
 from openbench.cli.main import cli
@@ -75,7 +76,9 @@ def test_gui_help():
 
 
 def test_all_commands_registered():
-    """Verify all expected commands are in the CLI group."""
-    command_names = set(cli.commands.keys())
+    """Verify all expected commands are accessible via the CLI group."""
+    # Use list_commands() for LazyGroup compatibility
+    ctx = click.Context(cli)
+    command_names = set(cli.list_commands(ctx))
     expected = {"run", "check", "data", "model", "migrate", "init", "gui", "version"}
     assert expected == command_names, f"Missing: {expected - command_names}, Extra: {command_names - expected}"

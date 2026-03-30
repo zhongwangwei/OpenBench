@@ -1,11 +1,44 @@
-"""OpenBench CLI entry point."""
+"""OpenBench CLI entry point.
+
+Uses lazy command loading to avoid importing all submodules at startup.
+"""
+
+import importlib
 
 import click
 
 from openbench import __version__
 
 
-@click.group()
+class LazyGroup(click.Group):
+    """Click group that lazily loads subcommands on first use."""
+
+    COMMAND_MAP = {
+        "run": "openbench.cli.run:run",
+        "check": "openbench.cli.check:check",
+        "data": "openbench.cli.data:data",
+        "model": "openbench.cli.model:model",
+        "migrate": "openbench.cli.migrate:migrate",
+        "init": "openbench.cli.init_cmd:init_cmd",
+        "gui": "openbench.cli.gui:gui",
+    }
+
+    def list_commands(self, ctx):
+        return ["run", "check", "init", "data", "model", "migrate", "gui", "version"]
+
+    def get_command(self, ctx, cmd_name):
+        if cmd_name == "version":
+            return version
+
+        if cmd_name in self.COMMAND_MAP:
+            module_path, attr = self.COMMAND_MAP[cmd_name].rsplit(":", 1)
+            mod = importlib.import_module(module_path)
+            return getattr(mod, attr)
+
+        return None
+
+
+@click.group(cls=LazyGroup)
 @click.version_option(version=__version__, prog_name="openbench")
 def cli():
     """OpenBench: Land Surface Model Benchmarking System."""
@@ -15,21 +48,3 @@ def cli():
 def version():
     """Show version information."""
     click.echo(f"openbench {__version__}")
-
-
-# Register sub-commands
-from openbench.cli.check import check  # noqa: E402
-from openbench.cli.data import data  # noqa: E402
-from openbench.cli.gui import gui  # noqa: E402
-from openbench.cli.init_cmd import init_cmd  # noqa: E402
-from openbench.cli.migrate import migrate  # noqa: E402
-from openbench.cli.model import model  # noqa: E402
-from openbench.cli.run import run  # noqa: E402
-
-cli.add_command(run)
-cli.add_command(check)
-cli.add_command(data)
-cli.add_command(model)
-cli.add_command(migrate)
-cli.add_command(init_cmd)
-cli.add_command(gui)

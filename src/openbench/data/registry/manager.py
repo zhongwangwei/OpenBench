@@ -285,17 +285,41 @@ def _build_reference(data: dict) -> ReferenceDataset:
             min_uparea=var_data.get("min_uparea"),
         )
 
+    # Validate required fields
+    name = data.get("name")
+    if not name:
+        raise ValueError("Reference dataset missing 'name' field")
+    data_type = data.get("data_type")
+    if not data_type:
+        raise ValueError(f"Reference '{name}' missing 'data_type' field")
+    tim_res = data.get("tim_res")
+    if not tim_res:
+        raise ValueError(f"Reference '{name}' missing 'tim_res' field")
+
+    # Validate grid_res
+    grid_res = data.get("grid_res")
+    if grid_res is not None:
+        grid_res = float(grid_res)
+        if grid_res <= 0:
+            logger.warning("Reference '%s' has invalid grid_res=%s, ignoring", name, grid_res)
+            grid_res = None
+
+    # Validate years
+    years = data.get("years", [])
+    if years and len(years) >= 2 and years[0] > years[1]:
+        logger.warning("Reference '%s' has start year > end year: %s", name, years)
+
     return ReferenceDataset(
-        name=data["name"],
+        name=name,
         description=data.get("description", ""),
         category=data.get("category", ""),
-        data_type=data["data_type"],
-        tim_res=data["tim_res"],
+        data_type=data_type,
+        tim_res=tim_res,
         data_groupby=data.get("data_groupby", "Year"),
         timezone=data.get("timezone", 0),
-        years=data.get("years", []),
+        years=years,
         variables=variables,
-        grid_res=data.get("grid_res"),
+        grid_res=grid_res,
         fulllist=data.get("fulllist"),
         root_dir=data.get("root_dir"),
     )
