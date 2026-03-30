@@ -40,7 +40,7 @@ def launch(config_path=None):
 
     window = MainWindow()
     if config_path:
-        window.load_config_file(config_path)
+        window._load_config_file(config_path)
     window.show()
 
     sys.exit(app.exec())
