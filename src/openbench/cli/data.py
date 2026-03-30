@@ -93,8 +93,8 @@ def optimize(name):
         click.secho("xarray is required for optimization.", fg="red")
         raise SystemExit(1)
 
-    from pathlib import Path
     import glob
+    from pathlib import Path
 
     root = Path(ref.root_dir)
     if not root.exists():
@@ -133,7 +133,7 @@ def optimize(name):
             for dp, _, fns in os.walk(zarr_dir)
             for f in fns
         )
-        click.secho(f"✓ Converted to zarr", fg="green")
+        click.secho("✓ Converted to zarr", fg="green")
         click.echo(f"  NetCDF: {nc_size / 1e9:.1f} GB")
         click.echo(f"  Zarr:   {zarr_size / 1e9:.1f} GB")
     except Exception as e:

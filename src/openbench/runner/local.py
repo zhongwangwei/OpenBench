@@ -235,9 +235,15 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
 
     for res in raw_results:
         if res["status"] == "success":
-            evaluated.append({"variable": res["variable"], "sim": res["sim"], "ref": res["ref"], "status": "success", "skipped": res.get("skipped", False)})
+            evaluated.append({
+                "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
+                "status": "success", "skipped": res.get("skipped", False),
+            })
         else:
-            errors.append({"variable": res["variable"], "sim": res["sim"], "ref": res["ref"], "status": "error"})
+            errors.append({
+                "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
+                "status": "error",
+            })
 
     results: dict[str, Any] = {
         "status": "success" if not errors else "partial",
