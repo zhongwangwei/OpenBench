@@ -276,43 +276,59 @@ def register_scanned_dataset(
     return out_path
 
 
+# Frequency hierarchy: higher rank = higher frequency
+# When a higher-frequency variant exists, lower-frequency variants are disabled.
+_TIM_RES_RANK = {
+    "year": 0, "yearly": 0, "y": 0,
+    "month": 1, "monthly": 1, "m": 1, "mon": 1,
+    "8day": 2, "8daily": 2, "week": 2, "weekly": 2, "w": 2,
+    "day": 3, "daily": 3, "d": 3,
+    "6hour": 4, "6h": 4, "6hourly": 4,
+    "3hour": 5, "3h": 5, "3hourly": 5,
+    "hour": 6, "hourly": 6, "h": 6,
+}
+
+
+def _tim_res_rank(tim_res: str) -> int:
+    """Return the frequency rank for a time resolution string."""
+    return _TIM_RES_RANK.get(tim_res.lower().strip(), -1) if tim_res else -1
+
+
 def get_compatible_resolutions(
     group: DatasetGroup,
     required_tim_res: Optional[str] = None,
 ) -> list[str]:
     """Get resolutions compatible with a time resolution constraint.
 
-    Rule: if daily data is available, monthly is not allowed.
+    Rule: only the highest-frequency variant (and equal) are allowed.
+    If hourly data exists, daily and monthly are disabled.
+    If daily data exists, monthly is disabled. Etc.
 
     Args:
         group: DatasetGroup with resolution variants.
-        required_tim_res: Required time resolution (e.g., "Day", "Month").
+        required_tim_res: Optional hint (unused currently, kept for API compat).
 
     Returns:
         List of compatible resolution names.
     """
-    if not required_tim_res:
+    if not group.variants:
+        return []
+
+    # Find the highest frequency rank among all variants
+    max_rank = max(
+        (_tim_res_rank(v.tim_res) for v in group.variants.values()),
+        default=-1,
+    )
+
+    if max_rank <= 0:
+        # No frequency info or only yearly — allow all
         return group.available_resolutions
 
     compatible = []
-    has_daily = any(
-        v.tim_res in ("Day", "day", "daily", "D")
-        for v in group.variants.values()
-    )
-
     for res_name, variant in group.variants.items():
-        vtim = variant.tim_res.lower() if variant.tim_res else ""
-
-        if required_tim_res.lower() in ("day", "d", "daily"):
-            # Daily requested: only allow daily or higher frequency
-            if vtim in ("day", "d", "daily", "hour", "h", "hourly", "3h", "6h"):
-                compatible.append(res_name)
-        elif required_tim_res.lower() in ("month", "m", "monthly"):
-            # Monthly requested: allow monthly, but NOT if daily exists for same dataset
-            if has_daily:
-                continue  # Skip monthly when daily is available
-            compatible.append(res_name)
-        else:
+        rank = _tim_res_rank(variant.tim_res)
+        if rank >= max_rank:
+            # Same or higher frequency → compatible
             compatible.append(res_name)
 
     return compatible

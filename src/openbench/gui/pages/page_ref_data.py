@@ -326,20 +326,21 @@ class PageRefData(BasePage):
         if not variants:
             return None
 
-        # Check time resolution constraints
-        # Rule: if daily data is available, monthly is not allowed
-        has_daily = any(
-            getattr(v, "tim_res", "").lower() in ("day", "daily", "d")
-            for v in variants.values()
+        # Check time resolution constraints using frequency hierarchy
+        # Rule: only the highest-frequency variant is allowed
+        from openbench.data.registry.scanner import _tim_res_rank
+
+        max_rank = max(
+            (_tim_res_rank(getattr(v, "tim_res", "")) for v in variants.values()),
+            default=-1,
         )
         compatible = None
-        if has_daily:
-            compatible = []
-            for res_label, ref in variants.items():
-                tim = getattr(ref, "tim_res", "").lower()
-                if tim in ("day", "daily", "d", "hour", "hourly", "h"):
-                    compatible.append(res_label)
-                # Monthly not compatible when daily exists
+        if max_rank > 0:
+            compatible = [
+                res_label
+                for res_label, ref in variants.items()
+                if _tim_res_rank(getattr(ref, "tim_res", "")) >= max_rank
+            ]
 
         from openbench.gui.dialogs.data_discovery import ResolutionPickerDialog
 
