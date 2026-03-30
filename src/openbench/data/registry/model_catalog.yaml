@@ -255,6 +255,10 @@ CoLM2024:
       default: '0'
       ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 days
+    Hour:
+      default: '0'
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 hours
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
