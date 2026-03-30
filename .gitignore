@@ -32,3 +32,6 @@ cache/
 .ruff_cache/
 htmlcov/
 .coverage
+
+OpenBench-wei/
+openbench-wizard/
