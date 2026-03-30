@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
     QDialog,
+    QComboBox,
 )
 from PySide6.QtCore import Qt
 
@@ -120,11 +121,30 @@ class PageRefData(BasePage):
             self._source_lists[var_name] = source_list
             group_layout.addWidget(source_list, 1)  # stretch factor 1 to expand
 
-            # Buttons
+            # Buttons row 1: Registry quick-add
+            registry_layout = QHBoxLayout()
+
+            registry_combo = QComboBox()
+            registry_combo.setMinimumWidth(250)
+            registry_combo.setProperty("var_name", var_name)
+            self._populate_registry_combo(registry_combo, var_name)
+            registry_layout.addWidget(registry_combo, stretch=1)
+
+            btn_add_registry = QPushButton("+ Add from Registry")
+            btn_add_registry.setProperty("secondary", True)
+            btn_add_registry.setToolTip("Add a known reference dataset from the built-in registry")
+            btn_add_registry.clicked.connect(
+                lambda checked, v=var_name, c=registry_combo: self._add_from_registry(v, c)
+            )
+            registry_layout.addWidget(btn_add_registry)
+            group_layout.addLayout(registry_layout)
+
+            # Buttons row 2: Manual add/edit/remove
             btn_layout = QHBoxLayout()
 
-            btn_add = QPushButton("+ Add Source")
+            btn_add = QPushButton("+ Add Custom")
             btn_add.setProperty("secondary", True)
+            btn_add.setToolTip("Manually configure a custom data source")
             btn_add.clicked.connect(lambda checked, v=var_name: self._add_source(v))
             btn_layout.addWidget(btn_add)
 
@@ -150,6 +170,103 @@ class PageRefData(BasePage):
             self.var_layout.addWidget(group, 1)  # stretch factor 1 to expand
 
         # No addStretch() here - let groups expand to fill space
+
+    def _populate_registry_combo(self, combo, var_name):
+        """Populate registry combo with available reference datasets for this variable."""
+        combo.clear()
+        combo.addItem("-- Select from Registry --", None)
+
+        try:
+            from openbench.data.registry import RegistryManager
+
+            mgr = RegistryManager()
+            # Show datasets that have this variable
+            refs_with_var = mgr.references_for_variable(var_name)
+            if refs_with_var:
+                for ref in sorted(refs_with_var, key=lambda r: r.name):
+                    label = f"{ref.name}  ({ref.data_type}, {ref.tim_res}, {ref.grid_res or 'stn'})"
+                    combo.addItem(label, ref.name)
+
+            # Also show all other datasets under a separator
+            all_refs = mgr.list_references()
+            other_refs = [r for r in all_refs if r not in refs_with_var]
+            if other_refs and refs_with_var:
+                combo.insertSeparator(combo.count())
+                combo.addItem("── Other datasets ──", None)
+            for ref in sorted(other_refs, key=lambda r: r.name):
+                label = f"{ref.name}  ({ref.data_type}, {ref.category})"
+                combo.addItem(label, ref.name)
+        except ImportError:
+            combo.addItem("(Registry not available)", None)
+
+    def _add_from_registry(self, var_name: str, combo):
+        """Add a reference source from the registry with pre-filled config."""
+        source_name = combo.currentData()
+        if not source_name:
+            return
+
+        # Check for duplicate
+        if var_name in self._source_configs and source_name in self._source_configs[var_name]:
+            QMessageBox.information(self, "Duplicate", f"'{source_name}' is already added for this variable.")
+            return
+
+        try:
+            from openbench.data.registry import RegistryManager
+
+            mgr = RegistryManager()
+            ref = mgr.get_reference(source_name)
+            if ref is None:
+                QMessageBox.warning(self, "Not Found", f"Dataset '{source_name}' not found in registry.")
+                return
+
+            # Build source_data from registry descriptor
+            var_mapping = ref.variables.get(var_name, None)
+
+            general = {
+                "root_dir": ref.root_dir or "",
+                "data_type": ref.data_type,
+                "tim_res": ref.tim_res,
+                "data_groupby": ref.data_groupby,
+                "timezone": ref.timezone,
+                "syear": ref.years[0] if ref.years else "",
+                "eyear": ref.years[1] if len(ref.years) > 1 else "",
+            }
+            if ref.grid_res is not None:
+                general["grid_res"] = ref.grid_res
+            if ref.fulllist:
+                general["fulllist"] = ref.fulllist
+
+            source_data = {"general": general}
+
+            if var_mapping:
+                source_data["varname"] = var_mapping.varname
+                source_data["varunit"] = var_mapping.varunit
+                source_data["prefix"] = var_mapping.prefix
+                source_data["suffix"] = var_mapping.suffix
+                if var_mapping.sub_dir:
+                    source_data["sub_dir"] = var_mapping.sub_dir
+                    # If root_dir is empty but sub_dir exists, hint the user
+                    if not general["root_dir"]:
+                        general["root_dir"] = ""  # User needs to set data_root
+
+            if var_name not in self._source_configs:
+                self._source_configs[var_name] = {}
+            self._source_configs[var_name][source_name] = source_data
+            self._update_source_list(var_name)
+            self.save_to_config()
+
+            # Show info if root_dir is empty
+            if not general.get("root_dir"):
+                QMessageBox.information(
+                    self,
+                    "Set Data Path",
+                    f"'{source_name}' added from registry.\n\n"
+                    f"Please edit it to set the data root directory\n"
+                    f"(where the reference data files are located).",
+                )
+
+        except ImportError:
+            QMessageBox.warning(self, "Error", "Registry module not available.")
 
     def _add_source(self, var_name: str):
         """Add new data source for variable."""
