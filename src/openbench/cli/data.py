@@ -276,7 +276,11 @@ def scan(ref_root, auto):
     mgr = RegistryManager()
     registered = 0
     for variant in to_register:
-        existing = mgr.get_reference(variant.name)
+        # Look for existing metadata: try exact name, then base name (without suffix)
+        existing = mgr.get_reference(variant.name) or mgr.get_reference(variant.registry_name)
+        if not existing:
+            # Try base name (e.g., GLEAM_v4.2a from old built-in entries)
+            existing = mgr.get_reference(variant.name)
         existing_dict = None
         if existing:
             existing_dict = {

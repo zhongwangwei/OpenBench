@@ -133,7 +133,7 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
                             )
 
                         scanned = groups[dataset_name].variants[res_name]
-                        scanned.variables[var_name] = str(var_dir.relative_to(category_dir.parent))
+                        scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
                         scanned.file_count += nc_count
 
     # Scan station data: Station/<category>/<variable>/<dataset>/
@@ -165,7 +165,7 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
                         )
 
                     scanned = groups[dataset_name].variants["Station"]
-                    scanned.variables[var_name] = str(var_dir.relative_to(category_dir.parent))
+                    scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
                     scanned.file_count += nc_count
 
     return sorted(groups.values(), key=lambda g: g.base_name)

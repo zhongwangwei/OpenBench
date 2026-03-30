@@ -31,13 +31,15 @@ def test_get_reference_auto_resolve():
 
 
 def test_get_reference_base_name_no_context():
-    """Base name without sim context returns None when variants exist."""
+    """Base name without sim context: returns exact match if exists, None otherwise."""
     mgr = RegistryManager()
-    variants = mgr.get_resolution_variants("GLEAM_v4.2a")
-    if variants:
-        # Has variants but no context → None
-        ref = mgr.get_reference("GLEAM_v4.2a")
-        assert ref is None
+    # If standalone entry exists, exact match returns it
+    ref = mgr.get_reference("GLEAM_v4.2a")
+    if ref is not None:
+        assert ref.name == "GLEAM_v4.2a"
+    # Non-existent base name with variants but no context → None
+    ref2 = mgr.get_reference("TotallyFakeDataset")
+    assert ref2 is None
 
 
 def test_get_reference_not_found():

@@ -1274,9 +1274,1298 @@ globsnow_v3:
       prefix: globsnow_v3_swe_monthly_lonlat_0.25deg
       sub_dir: Snow_Water_Equivalent/globsnow_v3
   grid_res: 0.25
+Daily:
+  name: Daily
+  description: Daily reference dataset (Station)
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Station
+  variables:
+    StreamFlow:
+      varname: StreamFlow
+      varunit: ''
+      sub_dir: Water/StreamFlow/Daily
+Hourly:
+  name: Hourly
+  description: Hourly reference dataset (Station)
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Station
+  variables:
+    StreamFlow:
+      varname: StreamFlow
+      varunit: ''
+      sub_dir: Water/StreamFlow/Hourly
+Monthly:
+  name: Monthly
+  description: Monthly reference dataset (Station)
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Station
+  variables:
+    StreamFlow:
+      varname: StreamFlow
+      varunit: ''
+      sub_dir: Water/StreamFlow/Monthly
+dataset:
+  name: dataset
+  description: dataset reference dataset (Station)
+  category: Other
+  data_type: stn
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Station
+  variables:
+    FLUXNET_PLUMBER2:
+      varname: FLUXNET_PLUMBER2
+      varunit: ''
+      sub_dir: Composite/FLUXNET_PLUMBER2/dataset
+    PLUMBER2S:
+      varname: PLUMBER2S
+      varunit: ''
+      sub_dir: Composite/PLUMBER2S/dataset
+AH4GUC_LowRes:
+  name: AH4GUC_LowRes
+  description: AH4GUC reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/AH4GUC
+CARE_LowRes:
+  name: CARE_LowRes
+  description: CARE reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Downward_LW_Radiation/CARE
+CERES_EBAF_Ed4.2_LowRes:
+  name: CERES_EBAF_Ed4.2_LowRes
+  description: CERES_EBAF_Ed4.2 reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Net_Radiation:
+      varname: sfc_net_tot_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Net_Radiation/CERES_EBAF_Ed4.2
+    Surface_Downward_LW_Radiation:
+      varname: sfc_lw_down_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_LW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Downward_SW_Radiation:
+      varname: sfc_sw_down_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_SW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Net_LW_Radiation:
+      varname: sfc_net_lw_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Net_LW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Net_SW_Radiation:
+      varname: sfc_net_sw_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Net_SW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Upward_LW_Radiation:
+      varname: sfc_lw_up_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Upward_LW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Upward_SW_Radiation:
+      varname: sfc_sw_up_all_mon
+      varunit: W m-2
+      sub_dir: Heat/Surface_Upward_SW_Radiation/CERES_EBAF_Ed4.2
+CLARA_3_LowRes:
+  name: CLARA_3_LowRes
+  description: CLARA_3 reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: W m-2
+      sub_dir: Heat/Net_Radiation/CLARA_3
+      prefix: Rnmm
+    Surface_Albedo:
+      varname: blue_sky_albedo_all_mean
+      varunit: 1
+      sub_dir: Heat/Surface_Albedo/CLARA_3
+      prefix: SALmm
+    Surface_Downward_LW_Radiation:
+      varname: SDL
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_LW_Radiation/CLARA_3
+      prefix: SDLmm
+    Surface_Downward_SW_Radiation:
+      varname: SIS
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_SW_Radiation/CLARA_3
+      prefix: SISmm
+    Surface_Net_LW_Radiation:
+      varname: SNL
+      varunit: W m-2
+      sub_dir: Heat/Surface_Net_LW_Radiation/CLARA_3
+      prefix: SNLmm
+    Surface_Net_SW_Radiation:
+      varname: SNS
+      varunit: W m-2
+      sub_dir: Heat/Surface_Net_SW_Radiation/CLARA_3
+      prefix: SNSmm
+    Surface_Upward_LW_Radiation:
+      varname: SUL
+      varunit: W m-2
+      sub_dir: Heat/Surface_Upward_LW_Radiation/CLARA_3
+      prefix: SULmm
+    Surface_Upward_SW_Radiation:
+      varname: SUS
+      varunit: W m-2
+      sub_dir: Heat/Surface_Upward_SW_Radiation/CLARA_3
+      prefix: SUSmm
+CLASS_LowRes:
+  name: CLASS_LowRes
+  description: CLASS reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Ground_Heat:
+      varname: hfdsl
+      varunit: W m-2
+      sub_dir: Heat/Ground_Heat/CLASS
+CRU4.02_LowRes:
+  name: CRU4.02_LowRes
+  description: CRU4.02 reference dataset (LowRes)
+  category: Meteorology
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Surface_Relative_Humidity:
+      varname: rhums
+      varunit: percent
+      sub_dir: Meteo/Surface_Relative_Humidity/CRU4.02
+      prefix: rhums
+CRU_TS_4.08_LowRes:
+  name: CRU_TS_4.08_LowRes
+  description: CRU_TS_4.08 reference dataset (LowRes)
+  category: Meteorology
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Cloud_Cover:
+      varname: cld
+      varunit: percent
+      sub_dir: Meteo/Cloud_Cover/CRU_TS_4.08
+      prefix: cld
+    Diurnal_Max_Temperature:
+      varname: tmx
+      varunit: degC
+      sub_dir: Meteo/Diurnal_Max_Temperature/CRU_TS_4.08
+      prefix: tmx
+    Diurnal_Min_Temperature:
+      varname: tmn
+      varunit: degC
+      sub_dir: Meteo/Diurnal_Min_Temperature/CRU_TS_4.08
+      prefix: tmn
+    Ground_Frost_Frequency:
+      varname: frs
+      varunit: days
+      sub_dir: Meteo/Ground_Frost_Frequency/CRU_TS_4.08
+      prefix: frs
+    Surface_Air_Temperature:
+      varname: tmp
+      varunit: degC
+      sub_dir: Meteo/Surface_Air_Temperature/CRU_TS_4.08
+      prefix: tmp
+Carbon_LowRes:
+  name: Carbon_LowRes
+  description: Carbon reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    FLUXCOM:
+      varname: FLUXCOM
+      varunit: ''
+      sub_dir: Composite/FLUXCOM/Carbon
+E_LowRes:
+  name: E_LowRes
+  description: E reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    GLEAM_v4.2:
+      varname: GLEAM_v4.2
+      varunit: ''
+      sub_dir: Composite/GLEAM_v4.2/E
+ERA5LAND_LowRes:
+  name: ERA5LAND_LowRes
+  description: ERA5LAND reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Latent_Heat:
+      varname: slhf
+      varunit: W m-2
+      sub_dir: Heat/Latent_Heat/ERA5LAND
+      prefix: ERA5LAND_
+      suffix: _monmean_surface_latent_heat_flux_1D_0p25
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: ''
+      sub_dir: Heat/Net_Radiation/ERA5LAND
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: ''
+      sub_dir: Heat/Sensible_Heat/ERA5LAND
+    Surface_Albedo:
+      varname: Surface_Albedo
+      varunit: ''
+      sub_dir: Heat/Surface_Albedo/ERA5LAND
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Downward_LW_Radiation/ERA5LAND
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Downward_SW_Radiation/ERA5LAND
+    Surface_Net_LW_Radiation:
+      varname: Surface_Net_LW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Net_LW_Radiation/ERA5LAND
+    Surface_Net_SW_Radiation:
+      varname: Surface_Net_SW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Net_SW_Radiation/ERA5LAND
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Upward_LW_Radiation/ERA5LAND
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Upward_SW_Radiation/ERA5LAND
+    Diurnal_Max_Temperature:
+      varname: Diurnal_Max_Temperature
+      varunit: ''
+      sub_dir: Meteo/Diurnal_Max_Temperature/ERA5LAND
+    Diurnal_Min_Temperature:
+      varname: Diurnal_Min_Temperature
+      varunit: ''
+      sub_dir: Meteo/Diurnal_Min_Temperature/ERA5LAND
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: ''
+      sub_dir: Meteo/Surface_Air_Temperature/ERA5LAND
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: ''
+      sub_dir: Meteo/Surface_Pressure/ERA5LAND
+    Surface_Specific_Humidity:
+      varname: Q
+      varunit: kg kg-1
+      sub_dir: Meteo/Surface_Specific_Humidity/ERA5LAND
+      prefix: ERA5LAND_
+      suffix: _Q_monmean_0p25
+    Surface_Wind_Speed_U10:
+      varname: Surface_Wind_Speed_U10
+      varunit: ''
+      sub_dir: Meteo/Surface_Wind_Speed_U10/ERA5LAND
+    Surface_Wind_Speed_V10:
+      varname: Surface_Wind_Speed_V10
+      varunit: ''
+      sub_dir: Meteo/Surface_Wind_Speed_V10/ERA5LAND
+    Precipitation:
+      varname: Precipitation
+      varunit: ''
+      sub_dir: Water/Precipitation/ERA5LAND
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: ''
+      sub_dir: Water/Surface_Soil_Moisture/ERA5LAND
+    Total_Runoff:
+      varname: Total_Runoff
+      varunit: ''
+      sub_dir: Water/Total_Runoff/ERA5LAND
+ESACCI-BIOMASS-L4_LowRes:
+  name: ESACCI-BIOMASS-L4_LowRes
+  description: ESACCI-BIOMASS-L4 reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Biomass:
+      varname: agb
+      varunit: Mg ha-1
+      sub_dir: Bio/Biomass/ESACCI-BIOMASS-L4
+      prefix: ESACCI-BIOMASS-L4-AGB-MERGED-0p25deg-fv6.0
+ESACCI-L4_FIRE-BA-MODIS_LowRes:
+  name: ESACCI-L4_FIRE-BA-MODIS_LowRes
+  description: ESACCI-L4_FIRE-BA-MODIS reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Burned_Area:
+      varname: burned_area
+      varunit: ha
+      sub_dir: Bio/Burned_Area/ESACCI-L4_FIRE-BA-MODIS
+      prefix: ESACCI-L4_FIRE-BA-MODIS-fv5.1_
+ETMonitor_LowRes:
+  name: ETMonitor_LowRes
+  description: ETMonitor reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/ETMonitor
+ET_Xu_etal_2025_LowRes:
+  name: ET_Xu_etal_2025_LowRes
+  description: ET_Xu_etal_2025 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Evapotranspiration:
+      varname: Evapotranspiration
+      varunit: ''
+      sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025
+Eb_LowRes:
+  name: Eb_LowRes
+  description: Eb reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    GLEAM_v4.2:
+      varname: GLEAM_v4.2
+      varunit: ''
+      sub_dir: Composite/GLEAM_v4.2/Eb
+Ec_LowRes:
+  name: Ec_LowRes
+  description: Ec reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    GLEAM_v4.2:
+      varname: GLEAM_v4.2
+      varunit: ''
+      sub_dir: Composite/GLEAM_v4.2/Ec
+Ei_LowRes:
+  name: Ei_LowRes
+  description: Ei reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    GLEAM_v4.2:
+      varname: GLEAM_v4.2
+      varunit: ''
+      sub_dir: Composite/GLEAM_v4.2/Ei
+Energy_LowRes:
+  name: Energy_LowRes
+  description: Energy reference dataset (LowRes)
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    FLUXCOM:
+      varname: FLUXCOM
+      varunit: ''
+      sub_dir: Composite/FLUXCOM/Energy
+FLUXCOM_LowRes:
+  name: FLUXCOM_LowRes
+  description: FLUXCOM reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Latent_Heat:
+      varname: le
+      varunit: W m-2
+      sub_dir: Heat/Latent_Heat/FLUXCOM
+      prefix: le
+FLUXCOM-X-BASE_LowRes:
+  name: FLUXCOM-X-BASE_LowRes
+  description: FLUXCOM-X-BASE reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Gross_Primary_Productivity/FLUXCOM-X-BASE
+      prefix: GPP_
+      suffix: _050_monthly
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Net_Ecosystem_Exchange/FLUXCOM-X-BASE
+      prefix: NEE_
+      suffix: _050_monthly
+    Evapotranspiration:
+      varname: Evapotranspiration
+      varunit: ''
+      sub_dir: Water/Evapotranspiration/FLUXCOM-X-BASE
+    Transpiration:
+      varname: Transpiration
+      varunit: ''
+      sub_dir: Water/Transpiration/FLUXCOM-X-BASE
+GCOS_LowRes:
+  name: GCOS_LowRes
+  description: GCOS reference dataset (LowRes)
+  category: Meteorology
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Lake_Surface_Water_Temperature:
+      varname: lake_surface_water_temperature
+      varunit: K
+      sub_dir: Meteo/Lake_Surface_Water_Temperature/GCOS
+      prefix: LAKES-L3S-LSWT-
+      suffix: _monmean
+GGMSEUD_LowRes:
+  name: GGMSEUD_LowRes
+  description: GGMSEUD reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Crop:
+      varname: Crop
+      varunit: ''
+      sub_dir: Anth/Crop/GGMSEUD
+GIEMS_MC_LowRes:
+  name: GIEMS_MC_LowRes
+  description: GIEMS_MC reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Inundation_Area:
+      varname: Inundation_Area
+      varunit: ''
+      sub_dir: Water/Inundation_Area/GIEMS_MC
+    Inundation_Fraction:
+      varname: Inundation_Fraction
+      varunit: ''
+      sub_dir: Water/Inundation_Fraction/GIEMS_MC
+GIEMS_v2_LowRes:
+  name: GIEMS_v2_LowRes
+  description: GIEMS_v2 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Inundation_Area:
+      varname: Inundation_Area
+      varunit: ''
+      sub_dir: Water/Inundation_Area/GIEMS_v2
+    Inundation_Fraction:
+      varname: Inundation_Fraction
+      varunit: ''
+      sub_dir: Water/Inundation_Fraction/GIEMS_v2
+GIMMS_LAI4g_LowRes:
+  name: GIMMS_LAI4g_LowRes
+  description: GIMMS_LAI4g reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Leaf_Area_Index:
+      varname: Leaf_Area_Index
+      varunit: ''
+      sub_dir: Bio/Leaf_Area_Index/GIMMS_LAI4g
+GIWUED_LowRes:
+  name: GIWUED_LowRes
+  description: GIWUED reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Crop:
+      varname: Crop
+      varunit: ''
+      sub_dir: Anth/Crop/GIWUED
+GLASS_LowRes:
+  name: GLASS_LowRes
+  description: GLASS reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Net_Primary_Production:
+      varname: NPP
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Net_Primary_Production/GLASS
+      prefix: GLASS_NPP_
+      suffix: _monmean_0p25deg
+GLDAS-2.2_LowRes:
+  name: GLDAS-2.2_LowRes
+  description: GLDAS-2.2 reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Ground_Heat:
+      varname: Qg_tavg
+      varunit: W m-2
+      sub_dir: Heat/Ground_Heat/GLDAS-2.2
+      prefix: GLDAS_CLSM025_DA1_D.G_monmean
 GLEAM_v4.2a_LowRes:
   name: GLEAM_v4.2a_LowRes
-  description: GLEAM v4.2a Low Resolution
+  description: GLEAM_v4.2a reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Sensible_Heat:
+      varname: H
+      varunit: W m-2
+      sub_dir: Heat/Sensible_Heat/GLEAM_v4.2a
+      prefix: H_
+      suffix: _GLEAM_v4.2a
+    Bare_Soil_Evaporation:
+      varname: Eb
+      varunit: mm day-1
+      sub_dir: Water/Bare_Soil_Evaporation/GLEAM_v4.2a
+      prefix: Eb_
+      suffix: _GLEAM_v4.2a
+    Canopy_Interception:
+      varname: Ei
+      varunit: mm day-1
+      sub_dir: Water/Canopy_Interception/GLEAM_v4.2a
+      prefix: Ei_
+      suffix: _GLEAM_v4.2a
+    Evapotranspiration:
+      varname: E
+      varunit: mm day-1
+      sub_dir: Water/Evapotranspiration/GLEAM_v4.2a
+      prefix: E_
+      suffix: _GLEAM_v4.2a
+    Open_Water_Evaporation:
+      varname: Ew
+      varunit: mm day-1
+      sub_dir: Water/Open_Water_Evaporation/GLEAM_v4.2a
+      prefix: Ew_
+      suffix: _GLEAM_v4.2a
+    Root_Zone_Soil_Moisture:
+      varname: SMrz
+      varunit: m3 m-3
+      sub_dir: Water/Root_Zone_Soil_Moisture/GLEAM_v4.2a
+      prefix: SMrz_
+      suffix: _GLEAM_v4.2a
+    Surface_Soil_Moisture:
+      varname: SMs
+      varunit: m3 m-3
+      sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.2a
+      prefix: SMs_
+      suffix: _GLEAM_v4.2a
+    Transpiration:
+      varname: Transpiration
+      varunit: ''
+      sub_dir: Water/Transpiration/GLEAM_v4.2a
+GPCPv3.2_LowRes:
+  name: GPCPv3.2_LowRes
+  description: GPCPv3.2 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Precipitation:
+      varname: sat_gauge_precip
+      varunit: mm day-1
+      sub_dir: Water/Precipitation/GPCPv3.2
+      prefix: GPCPMON_L3_
+      suffix: _V3.2
+GRADES_LowRes:
+  name: GRADES_LowRes
+  description: GRADES reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Total_Runoff:
+      varname: Total_Runoff
+      varunit: ''
+      sub_dir: Water/Total_Runoff/GRADES
+GRAiCE_LowRes:
+  name: GRAiCE_LowRes
+  description: GRAiCE reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Terrestrial_Water_Storage_Change:
+      varname: twsc
+      varunit: cm
+      sub_dir: Water/Terrestrial_Water_Storage_Change/GRAiCE
+      prefix: GRAiCE_twsc_ensmean
+GRFR_LowRes:
+  name: GRFR_LowRes
+  description: GRFR reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Total_Runoff:
+      varname: Total_Runoff
+      varunit: ''
+      sub_dir: Water/Total_Runoff/GRFR
+GRUN_ENSEMBLE_LowRes:
+  name: GRUN_ENSEMBLE_LowRes
+  description: GRUN_ENSEMBLE reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Total_Runoff:
+      varname: Runoff
+      varunit: mm day-1
+      sub_dir: Water/Total_Runoff/GRUN_ENSEMBLE
+      prefix: G-RUN_ENSEMBLE_MMM
+GloFlux_LowRes:
+  name: GloFlux_LowRes
+  description: GloFlux reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Ecosystem_Respiration:
+      varname: reco
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Ecosystem_Respiration/GloFlux
+      prefix: GloFlux_RECO_0p25
+    Gross_Primary_Productivity:
+      varname: gpp
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Gross_Primary_Productivity/GloFlux
+      prefix: GloFlux_GPP_0p25
+    Net_Ecosystem_Exchange:
+      varname: nee
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Net_Ecosystem_Exchange/GloFlux
+      prefix: GloFlux_NEE_0p25
+HOMTS_LowRes:
+  name: HOMTS_LowRes
+  description: HOMTS reference dataset (LowRes)
+  category: Meteorology
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Surface_Soil_Temperature:
+      varname: TS
+      varunit: degC
+      sub_dir: Meteo/Surface_Soil_Temperature/HOMTS
+      prefix: HOM_TS0cm_mon_0p5_1960_2017
+HSWUD_MidRes:
+  name: HSWUD_MidRes
+  description: HSWUD reference dataset (MidRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/MidRes
+  grid_res: 0.25
+  variables:
+    Water_Use:
+      varname: Water_Use
+      varunit: ''
+      sub_dir: Anth/Water_Use/HSWUD
+IMERG_v7_LowRes:
+  name: IMERG_v7_LowRes
+  description: IMERG_v7 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: ''
+      sub_dir: Water/Precipitation/IMERG_v7
+MCD43A3_LowRes:
+  name: MCD43A3_LowRes
+  description: MCD43A3 reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/MCD43A3
+MODIS_LST_LowRes:
+  name: MODIS_LST_LowRes
+  description: MODIS_LST reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/MODIS_LST
+MODIS_MOD10CM_LowRes:
+  name: MODIS_MOD10CM_LowRes
+  description: MODIS_MOD10CM reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Snow_Cover_Extent:
+      varname: Snow_Cover_Monthly_CMG
+      varunit: percent
+      sub_dir: Water/Snow_Cover_Extent/MODIS_MOD10CM
+      prefix: MOD10CM_merged_0p25d
+MSWEP_V280_LowRes:
+  name: MSWEP_V280_LowRes
+  description: MSWEP_V280 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: ''
+      sub_dir: Water/Precipitation/MSWEP_V280
+MSWX_LowRes:
+  name: MSWX_LowRes
+  description: MSWX reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: ''
+      sub_dir: Water/Precipitation/MSWX
+MSWX_0p25_LowRes:
+  name: MSWX_0p25_LowRes
+  description: MSWX_0p25 reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: ''
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
+    Diurnal_Max_Temperature:
+      varname: Diurnal_Max_Temperature
+      varunit: ''
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
+    Diurnal_Min_Temperature:
+      varname: Diurnal_Min_Temperature
+      varunit: ''
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: ''
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: ''
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: ''
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
+SMAPL3_LowRes:
+  name: SMAPL3_LowRes
+  description: SMAPL3 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_0_5
+      varunit: m3 m-3
+      sub_dir: Water/Surface_Soil_Moisture/SMAPL3
+      prefix: SMAPL3_05deg_monthly_2016_2020
+SMAP_L4_LowRes:
+  name: SMAP_L4_LowRes
+  description: SMAP_L4 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Snow_Depth:
+      varname: snow_depth
+      varunit: m
+      sub_dir: Water/Snow_Depth/SMAP_L4
+      prefix: SMAP_L4_snow_depth
+SWAMPS_v3.2_LowRes:
+  name: SWAMPS_v3.2_LowRes
+  description: SWAMPS_v3.2 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Inundation_Fraction:
+      varname: Inundation_Fraction
+      varunit: ''
+      sub_dir: Water/Inundation_Fraction/SWAMPS_v3.2
+TEMP_Zhang_etal_2022_LowRes:
+  name: TEMP_Zhang_etal_2022_LowRes
+  description: TEMP_Zhang_etal_2022 reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/TEMP_Zhang_etal_2022
+TRIMS_LowRes:
+  name: TRIMS_LowRes
+  description: TRIMS reference dataset (LowRes)
+  category: Urban
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Urban:
+      varname: Urban
+      varunit: ''
+      sub_dir: Anth/Urban/TRIMS
+Transpiration_Li_etal2024_LowRes:
+  name: Transpiration_Li_etal2024_LowRes
+  description: Transpiration_Li_etal2024 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Transpiration:
+      varname: Transpiration
+      varunit: ''
+      sub_dir: Water/Transpiration/Transpiration_Li_etal2024
+UpCH4_LowRes:
+  name: UpCH4_LowRes
+  description: UpCH4 reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      varname: mean_ch4
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Wetland_Methane_Emission/UpCH4
+      prefix: upch4_v04_m1_TgCH4month_Aw
+globsnow_v3_LowRes:
+  name: globsnow_v3_LowRes
+  description: globsnow_v3 reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  root_dir: /Volumes/work/Reference/Grid/LowRes
+  grid_res: 0.5
+  variables:
+    Snow_Water_Equivalent:
+      varname: swe
+      varunit: mm
+      sub_dir: Water/Snow_Water_Equivalent/globsnow_v3
+      prefix: globsnow_v3_swe_monthly_lonlat_0.25deg
+GLEAM_v4.2a:
+  name: GLEAM_v4.2a
+  description: GLEAM_v4.2a reference dataset
   category: Water
   data_type: grid
   tim_res: Month
