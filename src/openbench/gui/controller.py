@@ -26,27 +26,37 @@ class WizardController(QObject):
     ALL_PAGES = [
         "runtime",
         "general",
-        "variables",       # merged: evaluation_items + ref_data
-        "simulation",      # renamed from sim_data
-        "options",         # merged: metrics + scores + comparisons + statistics
+        "evaluation_items",
+        "metrics",
+        "scores",
+        "comparisons",
+        "statistics",
+        "ref_data",
+        "sim_data",
         "preview",
         "run_monitor",
     ]
 
     # Page display names
     PAGE_NAMES = {
-        "runtime": "Environment",
-        "general": "Project",
-        "variables": "Variables & References",
-        "simulation": "Simulation Data",
-        "options": "Options",
+        "runtime": "Runtime Environment",
+        "general": "General",
+        "evaluation_items": "Evaluation Items",
+        "metrics": "Metrics",
+        "scores": "Scores",
+        "comparisons": "Comparisons",
+        "statistics": "Statistics",
+        "ref_data": "Reference Data",
+        "sim_data": "Simulation Data",
         "preview": "Preview & Export",
         "run_monitor": "Run & Monitor",
     }
 
-    # No conditional pages in the new layout — comparisons/statistics
-    # toggles are now inside PageOptions
-    CONDITIONAL_PAGES = {}
+    # Conditional pages and their toggle keys
+    CONDITIONAL_PAGES = {
+        "comparisons": "comparison",
+        "statistics": "statistics",
+    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
