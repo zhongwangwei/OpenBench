@@ -134,13 +134,59 @@ class RegistryManager:
             except Exception:
                 pass
 
+    # --- Resolution suffixes ---
+    RESOLUTION_SUFFIXES = ("_LowRes", "_MidRes", "_HigRes")
+
     # --- Queries ---
 
     def list_references(self) -> list[ReferenceDataset]:
         return sorted(self._references.values(), key=lambda r: r.name)
 
     def get_reference(self, name: str) -> Optional[ReferenceDataset]:
-        return self._references.get(name)
+        """Get a reference dataset by exact name or base name.
+
+        If exact name matches (e.g., 'GLEAM_v4.2a_MidRes'), return it.
+        If base name matches (e.g., 'GLEAM_v4.2a'), auto-resolve to
+        the highest-frequency variant available.
+        """
+        # Exact match
+        if name in self._references:
+            return self._references[name]
+
+        # Base name match — find all resolution variants
+        variants = self.get_resolution_variants(name)
+        if not variants:
+            return None
+
+        # Auto-resolve: pick highest frequency
+        from openbench.data.registry.scanner import _tim_res_rank
+
+        best = max(variants.values(), key=lambda r: _tim_res_rank(r.tim_res))
+        return best
+
+    def get_resolution_variants(self, base_name: str) -> dict[str, ReferenceDataset]:
+        """Find all resolution variants of a dataset.
+
+        Args:
+            base_name: Base dataset name without resolution suffix (e.g., 'GLEAM_v4.2a')
+
+        Returns:
+            Dict mapping resolution label to ReferenceDataset.
+            E.g., {'LowRes': ..., 'MidRes': ..., 'HigRes': ...}
+        """
+        variants = {}
+
+        for suffix in self.RESOLUTION_SUFFIXES:
+            full_name = f"{base_name}{suffix}"
+            if full_name in self._references:
+                label = suffix[1:]  # Strip leading underscore
+                variants[label] = self._references[full_name]
+
+        # Also check if base_name itself is a standalone entry (no resolution suffix)
+        if base_name in self._references and not variants:
+            variants["default"] = self._references[base_name]
+
+        return variants
 
     def list_models(self) -> list[ModelProfile]:
         return sorted(self._models.values(), key=lambda m: m.name)

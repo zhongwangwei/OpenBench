@@ -170,10 +170,50 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, vari
 @data.command()
 @click.argument("name")
 def show(name):
-    """Show details of a registered dataset."""
+    """Show details of a dataset. Supports base name to show all resolutions.
+
+    Examples:
+        openbench data show GLEAM_v4.2a          # shows all resolutions
+        openbench data show GLEAM_v4.2a_LowRes   # shows specific one
+    """
     from openbench.data.registry import RegistryManager
 
     mgr = RegistryManager()
+
+    # Check for resolution variants first
+    variants = mgr.get_resolution_variants(name)
+
+    if variants and len(variants) > 1:
+        # Multi-resolution: show summary of all variants
+        click.secho(f"{name}", bold=True)
+        click.echo(f"Available at {len(variants)} resolution(s):\n")
+
+        from openbench.data.registry.scanner import _tim_res_rank
+
+        best_rank = max(_tim_res_rank(r.tim_res) for r in variants.values())
+
+        for res_label, ref in sorted(variants.items()):
+            rank = _tim_res_rank(ref.tim_res)
+            is_best = rank >= best_rank
+            marker = " ← auto-selected (highest frequency)" if is_best else ""
+            status = click.style(f"[{res_label}]", bold=is_best)
+
+            click.echo(f"  {status} {ref.name}")
+            click.echo(f"    Type: {ref.data_type}, Grid: {ref.grid_res or 'N/A'}°, Time: {ref.tim_res}{marker}")
+            years = f"{ref.years[0]}-{ref.years[1]}" if ref.years else "N/A"
+            click.echo(f"    Years: {years}, Variables: {len(ref.variables)}")
+            if ref.root_dir:
+                click.echo(f"    Path: {ref.root_dir}")
+            click.echo()
+
+        click.echo("In openbench.yaml, use either:")
+        click.echo(f"  reference:")
+        click.echo(f"    Evapotranspiration: {name}            # auto-select best resolution")
+        for res_label, ref in sorted(variants.items()):
+            click.echo(f"    Evapotranspiration: {ref.name}   # force {res_label}")
+        return
+
+    # Single dataset (exact match or auto-resolved)
     ref = mgr.get_reference(name)
     if ref is None:
         click.secho(f"Dataset not found: {name}", fg="red")
