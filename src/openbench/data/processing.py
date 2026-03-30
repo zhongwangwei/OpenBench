@@ -1138,19 +1138,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             model = getattr(self, f"{source}_model")
         except AttributeError:
             model = source
+        # Standard time normalization (applies to all models)
         try:
-            from openbench.data.custom import load_custom_module
-            custom_module = load_custom_module(model)
-            if custom_module:
-                custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}", None)
-                if custom_time_adjustment:
-                    ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
-                else:
-                    logging.debug(f"No custom time adjustment found for {model}. Using original time values.")
-            else:
-                logging.debug(f"No custom filter module found for {model}. Using original time values.")
+            import pandas as pd
+
+            ds["time"] = pd.to_datetime(ds["time"].dt.strftime("%Y-%m-%dT%H:30:00"))
         except Exception:
-            logging.debug(f"No custom time adjustment found for {model}. Using original time values.")
+            logging.debug("Time normalization skipped for %s", model)
         return ds
 
     def select_var(
@@ -1243,37 +1237,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 model = getattr(self, f"{source}_model")
             except AttributeError:
                 model = source
-            # --- Try compute expression from model profile first ---
+            # --- Compute from model profile YAML expression ---
             computed = self._try_compute_from_profile(model, ds, datasource)
             if computed is not None:
                 return computed
 
-            # --- Fall back to custom filter module ---
-            try:
-                logging.info(f"Loading custom variable filter for {model}")
-                from openbench.data.custom import load_custom_module
-                custom_module = load_custom_module(model)
-                if not custom_module:
-                    raise ImportError(f"No custom filter for {model}")
-                custom_filter = getattr(custom_module, f"filter_{model}")
-                self, ds_or_da = custom_filter(self, ds)
+            # --- Direct extraction: variable exists in dataset ---
+            current_varname = getattr(self, f"{datasource}_varname")
+            var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+            if var_to_extract in ds:
+                return ds[var_to_extract]
 
-                # If filter returned a Dataset, extract the variable; if DataArray, use directly
-                if isinstance(ds_or_da, xr.Dataset):
-                    current_varname = getattr(self, f"{datasource}_varname")
-                    var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
-                    if var_to_extract in ds_or_da:
-                        return ds_or_da[var_to_extract]
-                    else:
-                        raise KeyError(f"Variable {var_to_extract} not found in filtered dataset")
-                else:
-                    return ds_or_da
-            except AttributeError:
-                # Only show warning once per model using module-level tracking
-                if model not in _MODULE_CUSTOM_FILTER_WARNINGS:
-                    logging.warning(f"Custom filter function for {model} not found.")
-                    _MODULE_CUSTOM_FILTER_WARNINGS.add(model)
-                raise
+            raise KeyError(f"Variable '{var_to_extract}' not found in dataset and no compute expression defined")
         return ds
 
     @performance_monitor
@@ -1618,41 +1593,16 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     model = getattr(self, f"{source}_model")
                 except AttributeError:
                     model = source
-                try:
-                    from openbench.data.custom import load_custom_module
-
-                    custom_module = load_custom_module(model)
-                    if not custom_module:
-                        raise ImportError(f"No custom filter for {model}")
-                    custom_filter = getattr(custom_module, f"filter_{model}")
-
-                    # Call custom filter with dataset
-                    logging.info(f"Variable '{current_var_list[0]}' not found, trying custom filter for {model}")
-                    updated_self, filtered_data = custom_filter(self, stn_data)
-
-                    # If custom filter handled it, use the updated info and data
-                    if updated_self is not None and filtered_data is not None:
-                        # Update varname based on what the filter set (ensure copy)
-                        if datasource == "ref":
-                            new_var_attr = self.ref_varname
-                        else:
-                            new_var_attr = self.sim_varname
-                        current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
-                        logging.info(f"Custom filter updated variable to: {current_var_list[0]}")
-                        ds = filtered_data
-                    else:
-                        # Custom filter didn't handle this case, raise error
-                        available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                        logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
-                        logging.error(f"Available variables: {available_vars}")
-                        raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
-                except (ImportError, AttributeError):
-                    # No custom filter available, raise original error
+                # Try compute expression from model profile
+                computed = self._try_compute_from_profile(model, stn_data, datasource)
+                if computed is not None:
+                    current_var_list = [getattr(self, "item", current_var_list[0])]
+                    ds = computed
+                else:
                     available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                    logging.error(f"Variable '{current_var_list[0]}' not found in the station data.")
-                    logging.error(f"Available variables: {available_vars}")
-                    logging.error(f"No custom filter available for {model}")
-                    raise ValueError(f"Variable '{current_var_list[0]}' not found in the station data.")
+                    logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
+                    logging.error(f"Available: {available_vars}")
+                    raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
                 ds = stn_data[current_var_list[0]]
 
