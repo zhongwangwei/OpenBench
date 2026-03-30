@@ -29,6 +29,16 @@ def check(config):
     mgr = RegistryManager()
     has_errors = False
 
+    # Derive simulation resolution for auto-resolve context
+    sim_tim_res = None
+    sim_grid_res = None
+    for entry in cfg.simulation.values():
+        if entry.tim_res:
+            sim_tim_res = entry.tim_res
+        if entry.grid_res:
+            sim_grid_res = entry.grid_res
+        break  # Use first simulation entry as reference
+
     for var, source in cfg.reference.items():
         ref = mgr.get_reference(source)
         if ref is not None:
@@ -37,11 +47,29 @@ def check(config):
             # Check if it's a base name with resolution variants
             variants = mgr.get_resolution_variants(source)
             if variants:
-                click.secho(f"  ✗ {var} → {source}", fg="red")
-                click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
-                for label, v in sorted(variants.items()):
-                    click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
-                has_errors = True
+                # Try auto-resolve using simulation context
+                resolved = mgr.get_reference(
+                    source, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res
+                )
+                if resolved:
+                    reason_parts = []
+                    if sim_tim_res:
+                        reason_parts.append(f"sim tim_res={sim_tim_res}")
+                    if sim_grid_res:
+                        reason_parts.append(f"sim grid_res={sim_grid_res}°")
+                    reason = f" (matched to {', '.join(reason_parts)})" if reason_parts else ""
+
+                    click.secho(
+                        f"  ✓ {var} → {source} → auto-resolved to {resolved.name}"
+                        f" ({resolved.data_type}, {resolved.tim_res}, {resolved.grid_res}°){reason}",
+                        fg="cyan",
+                    )
+                else:
+                    click.secho(f"  ✗ {var} → {source}", fg="red")
+                    click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
+                    for label, v in sorted(variants.items()):
+                        click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
+                    has_errors = True
             else:
                 click.secho(f"  ⚠ {var} → {source} (not in registry, will use inline config)", fg="yellow")
 

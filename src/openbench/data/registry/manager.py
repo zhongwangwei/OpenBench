@@ -142,16 +142,41 @@ class RegistryManager:
     def list_references(self) -> list[ReferenceDataset]:
         return sorted(self._references.values(), key=lambda r: r.name)
 
-    def get_reference(self, name: str) -> Optional[ReferenceDataset]:
-        """Get a reference dataset by exact name.
+    def get_reference(
+        self,
+        name: str,
+        sim_tim_res: Optional[str] = None,
+        sim_grid_res: Optional[float] = None,
+    ) -> Optional[ReferenceDataset]:
+        """Get a reference dataset by name, with optional auto-resolve.
 
-        Use the full name including resolution suffix:
-            'GLEAM_v4.2a_LowRes', 'GLEAM_v4.2a_MidRes'
+        Exact name (e.g., 'GLEAM_v4.2a_LowRes') always returns directly.
 
-        Base name without suffix (e.g., 'GLEAM_v4.2a') only works if
-        there is an exact entry with that name (no resolution variants).
+        Base name (e.g., 'GLEAM_v4.2a') with resolution variants:
+          - If sim_tim_res/sim_grid_res provided: picks the best match
+          - Otherwise: returns None (use get_resolution_variants to see options)
+
+        Auto-resolve rules:
+          1. Time: ref frequency must be >= simulation frequency
+          2. Space: prefer closest grid_res to simulation
+          3. Tie-break: prefer lowest sufficient frequency (avoid waste)
         """
-        return self._references.get(name)
+        # Exact match — always wins
+        if name in self._references:
+            return self._references[name]
+
+        # Base name — try auto-resolve if sim resolution is provided
+        variants = self.get_resolution_variants(name)
+        if not variants:
+            return None
+
+        if sim_tim_res is None and sim_grid_res is None:
+            # No simulation context — can't auto-resolve
+            return None
+
+        return _auto_resolve_variant(
+            variants, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res
+        )
 
     def get_resolution_variants(self, base_name: str) -> dict[str, ReferenceDataset]:
         """Find all resolution variants of a dataset.
@@ -185,6 +210,61 @@ class RegistryManager:
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         return [ref for ref in self._references.values() if variable in ref.variables]
+
+
+def _auto_resolve_variant(
+    variants: dict[str, ReferenceDataset],
+    sim_tim_res: Optional[str] = None,
+    sim_grid_res: Optional[float] = None,
+) -> Optional[ReferenceDataset]:
+    """Pick the best reference variant matching simulation resolution.
+
+    Rules:
+      1. Time frequency must be >= simulation (ref can be same or higher, not lower)
+      2. Among valid time matches, prefer closest spatial resolution to simulation
+      3. Tie-break on spatial: prefer lowest sufficient time frequency (avoid waste)
+
+    Examples:
+      sim=Month/0.5° → prefer ref Month/0.5° over Day/0.1°
+      sim=Day/0.5°   → must use ref Day or higher; prefer Day/0.5° over Hour/0.1°
+      sim=Month/0.1° → prefer ref Month/0.1° (or closest available)
+    """
+    from openbench.data.registry.scanner import _tim_res_rank
+
+    sim_rank = _tim_res_rank(sim_tim_res) if sim_tim_res else -1
+
+    # Step 1: filter to refs with sufficient time frequency
+    candidates = []
+    for label, ref in variants.items():
+        ref_rank = _tim_res_rank(ref.tim_res)
+        if sim_rank >= 0 and ref_rank < sim_rank:
+            continue  # Too low frequency — skip
+        candidates.append((label, ref, ref_rank))
+
+    if not candidates:
+        # No variant has sufficient time frequency — fall back to all
+        candidates = [(l, r, _tim_res_rank(r.tim_res)) for l, r in variants.items()]
+
+    if not candidates:
+        return None
+
+    # Step 2: score by spatial closeness + time waste penalty
+    def _score(item):
+        label, ref, ref_rank = item
+        # Spatial distance: how far is ref.grid_res from sim.grid_res
+        ref_grid = ref.grid_res or 0.25
+        sim_grid = sim_grid_res or 0.25
+        spatial_diff = abs(ref_grid - sim_grid)
+
+        # Time waste: higher frequency than needed is wasteful
+        # Lower penalty = better
+        time_excess = max(0, ref_rank - sim_rank) if sim_rank >= 0 else 0
+
+        # Combined: spatial closeness is primary, time waste is secondary
+        return (spatial_diff, time_excess)
+
+    candidates.sort(key=_score)
+    return candidates[0][1]
 
 
 def _build_reference(data: dict) -> ReferenceDataset:
