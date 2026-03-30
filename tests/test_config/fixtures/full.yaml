@@ -1,0 +1,46 @@
+project:
+  name: test-full
+  output_dir: ./output
+  years: [2000, 2020]
+  min_year_threshold: 5
+  lat_range: [-60, 90]
+  lon_range: [-180, 180]
+
+evaluation:
+  variables:
+    - Evapotranspiration
+    - GPP
+    - Latent_Heat
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+  GPP: FLUXCOM
+  Latent_Heat: FLUXCOM
+
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data/CoLM2024
+
+  CLM5:
+    model: CLM5
+    root_dir: /data/CLM5
+    variables:
+      GPP:
+        varname: FPSN
+
+metrics: [bias, RMSE, correlation]
+scores: [nBiasScore, nRMSEScore]
+
+comparison:
+  enabled: true
+
+statistics:
+  enabled: true
+  items: [Z_Score, ANOVA]
+
+options:
+  num_cores: 16
+  time_alignment: per_pair
+  unified_mask: true
+  debug_mode: false

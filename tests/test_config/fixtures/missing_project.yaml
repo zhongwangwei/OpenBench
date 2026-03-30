@@ -1,0 +1,10 @@
+evaluation:
+  variables: [GPP]
+
+reference:
+  GPP: FLUXCOM
+
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data

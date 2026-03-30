@@ -1,0 +1,31 @@
+project:
+  name: test-defaults
+  output_dir: ./output
+  years: [2004, 2010]
+
+evaluation:
+  variables: [Evapotranspiration]
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+
+simulation:
+  _defaults:
+    data_type: grid
+    grid_res: 0.5
+    tim_res: Month
+
+  CoLM2014:
+    model: CoLM2014
+    root_dir: /data/CoLM2014
+
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data/CoLM2024
+
+  CLM5:
+    model: CLM5
+    root_dir: /data/CLM5
+    variables:
+      Evapotranspiration:
+        varname: QFLX_EVAP_TOT

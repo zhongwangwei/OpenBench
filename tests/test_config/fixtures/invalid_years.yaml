@@ -1,0 +1,15 @@
+project:
+  name: bad
+  output_dir: ./output
+  years: [2020, 2010]
+
+evaluation:
+  variables: [GPP]
+
+reference:
+  GPP: FLUXCOM
+
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data

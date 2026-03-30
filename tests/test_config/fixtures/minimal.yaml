@@ -1,0 +1,16 @@
+project:
+  name: test-minimal
+  output_dir: ./output
+  years: [2004, 2010]
+
+evaluation:
+  variables:
+    - Evapotranspiration
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data/CoLM2024
