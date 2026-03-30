@@ -74,11 +74,15 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         info["ref_source"] = ref_source
         info["sim_source"] = sim_source
 
-        # Step 1: Preprocess data (read raw NetCDF, align, save to casedir/data/)
+        # Step 1: Preprocess simulation data
+        # NOTE: ref preprocessing is done separately before parallel dispatch
+        # to avoid race conditions (multiple tasks writing same ref file).
+        # Only preprocess sim here.
         from openbench.data.processing import DatasetProcessing
 
         dataset_processor = DatasetProcessing(info)
-        dataset_processor.process("ref")
+        if not task.get("ref_preprocessed"):
+            dataset_processor.process("ref")
         dataset_processor.process("sim")
 
         # Step 2: Run evaluation
@@ -235,6 +239,47 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
                 }
             )
             logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
+
+    # ─── Pre-process reference data serially (avoid race condition) ───
+    # Each (variable, ref_source) combination only needs ref preprocessing once.
+    # We do this before parallel dispatch so tasks can skip it.
+    preprocessed_refs: set[str] = set()
+    for task in tasks:
+        ref_key = f"{task['var_name']}__{task['ref_source']}"
+        if ref_key in preprocessed_refs:
+            task["ref_preprocessed"] = True
+            continue
+
+        logger.info("Preprocessing ref data: %s (%s)", task["var_name"], task["ref_source"])
+        try:
+            from openbench.config.legacy_processors import GeneralInfoReader
+            from openbench.data.processing import DatasetProcessing
+
+            info_reader = GeneralInfoReader(
+                main_nl=task["main_nl"],
+                sim_nml=task["sim_nml"],
+                ref_nml=task["ref_nml"],
+                metric_vars=task["metric_vars"],
+                score_vars=task["score_vars"],
+                comparison_vars=task["comparison_vars"],
+                statistic_vars=task["statistic_vars"],
+                item=task["var_name"],
+                sim_source=task["sim_source"],
+                ref_source=task["ref_source"],
+            )
+            info = info_reader.to_dict()
+            DatasetProcessing(info).process("ref")
+            preprocessed_refs.add(ref_key)
+            task["ref_preprocessed"] = True
+        except Exception:
+            logger.exception("Failed to preprocess ref for %s", ref_key)
+            # Don't set ref_preprocessed — let _evaluate_single try again
+
+    # Mark all tasks with same ref as preprocessed
+    for task in tasks:
+        ref_key = f"{task['var_name']}__{task['ref_source']}"
+        if ref_key in preprocessed_refs:
+            task["ref_preprocessed"] = True
 
     # Execute tasks: parallel when num_cores > 1, else sequential
     raw_results: list[dict[str, Any]]
