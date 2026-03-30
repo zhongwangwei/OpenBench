@@ -132,20 +132,34 @@ class PageGeneral(BasePage):
         self.grid_res_spin.setSuffix("°")
         st_layout.addWidget(self.grid_res_spin, 4, 3)
 
+        # Time alignment strategy
+        st_layout.addWidget(QLabel("Time Alignment:"), 5, 0)
+        self.time_alignment_combo = NoScrollComboBox()
+        self.time_alignment_combo.addItem("intersection — All models' common time range", "intersection")
+        self.time_alignment_combo.addItem("per_pair — Each sim-ref pair uses its own overlap", "per_pair")
+        self.time_alignment_combo.addItem("strict — All data must cover config years exactly", "strict")
+        self.time_alignment_combo.setToolTip(
+            "How to handle different time periods across simulations:\n\n"
+            "intersection: Use only the common time range across ALL models (strictest, ensures comparability)\n"
+            "per_pair: Each simulation-reference pair uses its own time overlap (maximizes data use)\n"
+            "strict: All data must fully cover the configured year range (error if any gaps)"
+        )
+        st_layout.addWidget(self.time_alignment_combo, 5, 1, 1, 3)
+
         # Timezone
-        st_layout.addWidget(QLabel("Timezone:"), 5, 0)
+        st_layout.addWidget(QLabel("Timezone:"), 6, 0)
         self.timezone_spin = NoScrollDoubleSpinBox()
         self.timezone_spin.setRange(-12.0, 14.0)
         self.timezone_spin.setValue(0.0)
         self.timezone_spin.setSingleStep(0.5)
-        st_layout.addWidget(self.timezone_spin, 5, 1)
+        st_layout.addWidget(self.timezone_spin, 6, 1)
 
         # Weight
-        st_layout.addWidget(QLabel("Weight:"), 5, 2)
+        st_layout.addWidget(QLabel("Weight:"), 6, 2)
         self.weight_combo = NoScrollComboBox()
         self.weight_combo.addItems(["None", "area", "mass"])
         self.weight_combo.setToolTip("Weight method for spatial averaging (None, area-weighted, or mass-weighted)")
-        st_layout.addWidget(self.weight_combo, 5, 3)
+        st_layout.addWidget(self.weight_combo, 6, 3)
 
         self.content_layout.addWidget(st_group)
 
@@ -526,6 +540,13 @@ class PageGeneral(BasePage):
         self.grid_res_spin.setValue(general.get("compare_grid_res", 2.0))
         self.timezone_spin.setValue(general.get("compare_tzone", 0.0))
 
+        # Time alignment
+        time_align = general.get("time_alignment", "intersection")
+        for i in range(self.time_alignment_combo.count()):
+            if self.time_alignment_combo.itemData(i) == time_align:
+                self.time_alignment_combo.setCurrentIndex(i)
+                break
+
         self.cb_evaluation.setChecked(general.get("evaluation", True))
         self.cb_comparison.setChecked(general.get("comparison", True))
         self.cb_statistics.setChecked(general.get("statistics", False))
@@ -589,6 +610,7 @@ class PageGeneral(BasePage):
             "compare_tim_res": self.tim_res_combo.currentText(),
             "compare_grid_res": self.grid_res_spin.value(),
             "compare_tzone": self.timezone_spin.value(),
+            "time_alignment": self.time_alignment_combo.currentData() or "intersection",
             "evaluation": self.cb_evaluation.isChecked(),
             "comparison": self.cb_comparison.isChecked(),
             "statistics": self.cb_statistics.isChecked(),
