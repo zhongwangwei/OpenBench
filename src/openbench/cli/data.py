@@ -100,11 +100,15 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, vari
     except ImportError:
         user_dir = Path.home() / ".openbench"
 
-    out_dir = user_dir / "references"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{name}.yaml"
+    catalog_path = user_dir / "reference_catalog.yaml"
+    user_dir.mkdir(parents=True, exist_ok=True)
 
-    if out_path.exists():
+    # Check if already in catalog
+    existing_catalog = {}
+    if catalog_path.exists():
+        with open(catalog_path) as f:
+            existing_catalog = yaml.safe_load(f) or {}
+    if name in existing_catalog:
         if not click.confirm(f"'{name}' already registered. Overwrite?"):
             return
 
@@ -158,10 +162,11 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, vari
     if grid_res is not None:
         descriptor["grid_res"] = grid_res
 
-    with open(out_path, "w") as f:
-        yaml.dump(descriptor, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    existing_catalog[name] = descriptor
+    with open(catalog_path, "w") as f:
+        yaml.dump(existing_catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-    click.secho(f"✓ Registered '{name}' to {out_path}", fg="green")
+    click.secho(f"✓ Registered '{name}' to {catalog_path}", fg="green")
     click.echo(f"  Variables: {', '.join(variables.keys())}")
     click.echo(f"  Data: {root_dir}")
     click.echo(f"\nVerify: openbench data list --variable {list(variables.keys())[0]}")

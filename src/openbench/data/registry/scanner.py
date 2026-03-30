@@ -206,30 +206,33 @@ def find_new_datasets(
 
 def register_scanned_dataset(
     scanned: ScannedDataset,
-    output_dir: Optional[Path] = None,
+    catalog_path: Optional[Path] = None,
     existing_descriptor: Optional[dict] = None,
 ) -> Path:
-    """Write a registry descriptor YAML for a scanned dataset.
+    """Register a scanned dataset into the user catalog.
+
+    Appends to the user's reference_catalog.yaml (single file, not individual files).
 
     Args:
         scanned: The scanned dataset to register.
-        output_dir: Directory to write the descriptor.
-            Defaults to ~/.openbench/references/.
+        catalog_path: Path to the catalog YAML file.
+            Defaults to ~/.openbench/reference_catalog.yaml.
         existing_descriptor: Optional existing descriptor to merge with
             (preserves hand-edited fields like varname, varunit).
 
     Returns:
-        Path to the written YAML file.
+        Path to the catalog file.
     """
-    if output_dir is None:
+    if catalog_path is None:
         try:
             from platformdirs import user_config_dir
 
-            output_dir = Path(user_config_dir("openbench")) / "references"
+            user_dir = Path(user_config_dir("openbench"))
         except ImportError:
-            output_dir = Path.home() / ".openbench" / "references"
+            user_dir = Path.home() / ".openbench"
+        catalog_path = user_dir / "reference_catalog.yaml"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Build descriptor
     descriptor = {
@@ -269,11 +272,21 @@ def register_scanned_dataset(
 
     descriptor["variables"] = variables
 
-    out_path = output_dir / f"{scanned.registry_name}.yaml"
-    with open(out_path, "w") as f:
-        yaml.dump(descriptor, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    # Load existing catalog, append, write back
+    catalog = {}
+    if catalog_path.exists():
+        try:
+            with open(catalog_path) as f:
+                catalog = yaml.safe_load(f) or {}
+        except Exception:
+            catalog = {}
 
-    return out_path
+    catalog[scanned.registry_name] = descriptor
+
+    with open(catalog_path, "w") as f:
+        yaml.dump(catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    return catalog_path
 
 
 # Frequency hierarchy: higher rank = higher frequency

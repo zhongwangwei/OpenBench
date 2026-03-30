@@ -1,0 +1,1337 @@
+AH4GUC:
+  name: AH4GUC
+  description: AH4GUC reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2010
+  - 2010
+  variables:
+    Urban_Anthropogenic_Heat_Flux:
+      varname: AHE
+      varunit: W m-2
+      prefix: AH4GUC_2010_monmean_settime
+      sub_dir: Urban/AH4GUC
+  grid_res: 0.25
+BRSC_Monthly:
+  name: BRSC_Monthly
+  description: BRSC_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 2000
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+Beck_2017_Daily:
+  name: Beck_2017_Daily
+  description: Beck_2017_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1950
+  - 2016
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+CAMELSH_Hourly:
+  name: CAMELSH_Hourly
+  description: CAMELSH_Hourly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1980
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+CERES_EBAF_Ed4.2:
+  name: CERES_EBAF_Ed4.2
+  description: CERES_EBAF_Ed4.2 reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2000
+  - 2024
+  variables:
+    Net_Radiation:
+      varname: sfc_net_tot_all_mon
+      varunit: W m-2
+      sub_dir: Net_Radiation/CERES_EBAF_Ed4.2
+    Surface_Upward_SW_Radiation:
+      varname: sfc_sw_up_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Upward_SW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Upward_LW_Radiation:
+      varname: sfc_lw_up_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Upward_LW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Net_SW_Radiation:
+      varname: sfc_net_sw_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Net_SW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Net_LW_Radiation:
+      varname: sfc_net_lw_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Net_LW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Downward_SW_Radiation:
+      varname: sfc_sw_down_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Downward_SW_Radiation/CERES_EBAF_Ed4.2
+    Surface_Downward_LW_Radiation:
+      varname: sfc_lw_down_all_mon
+      varunit: W m-2
+      sub_dir: Surface_Downward_LW_Radiation/CERES_EBAF_Ed4.2
+  grid_res: 0.25
+CH4_FluxnetANN:
+  name: CH4_FluxnetANN
+  description: CH4_FluxnetANN reference dataset
+  category: Other
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1850
+  - 2020
+  variables:
+    FCH4:
+      varname: FCH4
+      varunit: g C m-2 d-1
+CLARA_3:
+  name: CLARA_3
+  description: CLARA_3 reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1979
+  - 2023
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: W m-2
+      prefix: Rnmm
+      sub_dir: Net_Radiation/CLARA_3
+    Surface_Upward_SW_Radiation:
+      varname: SUS
+      varunit: W m-2
+      prefix: SUSmm
+      sub_dir: Surface_Upward_SW_Radiation/CLARA_3
+    Surface_Upward_LW_Radiation:
+      varname: SUL
+      varunit: W m-2
+      prefix: SULmm
+      sub_dir: Surface_Upward_LW_Radiation/CLARA_3
+    Surface_Net_SW_Radiation:
+      varname: SNS
+      varunit: W m-2
+      prefix: SNSmm
+      sub_dir: Surface_Net_SW_Radiation/CLARA_3
+    Surface_Net_LW_Radiation:
+      varname: SNL
+      varunit: W m-2
+      prefix: SNLmm
+      sub_dir: Surface_Net_LW_Radiation/CLARA_3
+    Surface_Albedo:
+      varname: blue_sky_albedo_all_mean
+      varunit: 1
+      prefix: SALmm
+      sub_dir: Surface_Albedo/CLARA_3
+    Surface_Downward_SW_Radiation:
+      varname: SIS
+      varunit: W m-2
+      prefix: SISmm
+      sub_dir: Surface_Downward_SW_Radiation/CLARA_3
+    Surface_Downward_LW_Radiation:
+      varname: SDL
+      varunit: W m-2
+      prefix: SDLmm
+      sub_dir: Surface_Downward_LW_Radiation/CLARA_3
+  grid_res: 0.25
+CLASS:
+  name: CLASS
+  description: CLASS reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2003
+  - 2009
+  variables:
+    Ground_Heat:
+      varname: hfdsl
+      varunit: W m-2
+      sub_dir: Ground_Heat/CLASS
+  grid_res: 0.25
+CRU4.02:
+  name: CRU4.02
+  description: CRU4.02 reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1979
+  - 2016
+  variables:
+    Surface_Relative_Humidity:
+      varname: rhums
+      varunit: percent
+      prefix: rhums
+      sub_dir: Surface_Relative_Humidity/CRU4.02
+  grid_res: 0.25
+CRU_TS_4.08:
+  name: CRU_TS_4.08
+  description: CRU_TS_4.08 reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1901
+  - 2023
+  variables:
+    Surface_Air_Temperature:
+      varname: tmp
+      varunit: degC
+      prefix: tmp
+      sub_dir: Surface_Air_Temperature/CRU_TS_4.08
+    Diurnal_Max_Temperature:
+      varname: tmx
+      varunit: degC
+      prefix: tmx
+      sub_dir: Diurnal_Max_Temperature/CRU_TS_4.08
+    Diurnal_Min_Temperature:
+      varname: tmn
+      varunit: degC
+      prefix: tmn
+      sub_dir: Diurnal_Min_Temperature/CRU_TS_4.08
+    Cloud_Cover:
+      varname: cld
+      varunit: percent
+      prefix: cld
+      sub_dir: Cloud_Cover/CRU_TS_4.08
+    Ground_Frost_Frequency:
+      varname: frs
+      varunit: days
+      prefix: frs
+      sub_dir: Ground_Frost_Frequency/CRU_TS_4.08
+  grid_res: 0.25
+CRU_TS_4.08_LowRes_Precipitation:
+  name: CRU_TS_4.08_LowRes_Precipitation
+  description: CRU_TS_4.08_LowRes_Precipitation reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1901
+  - 2023
+  variables:
+    Precipitation:
+      varname: pre
+      varunit: mm day-1
+      prefix: cru_ts4.08.1901.2023.
+      suffix: .dat
+      sub_dir: Precipitation/CRU_TS_4.08
+  grid_res: 0.25
+Caravan_Daily:
+  name: Caravan_Daily
+  description: Caravan_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1950
+  - 2023
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+Dai_Trenberth_Monthly:
+  name: Dai_Trenberth_Monthly
+  description: Dai_Trenberth_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+ERA5LAND:
+  name: ERA5LAND
+  description: ERA5LAND reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  variables:
+    Latent_Heat:
+      varname: slhf
+      varunit: W m-2
+      prefix: ERA5LAND_
+      suffix: _monmean_surface_latent_heat_flux_1D_0p25
+      sub_dir: Heat/Latent_Heat/ERA5LAND
+    Surface_Specific_Humidity:
+      varname: Q
+      varunit: kg kg-1
+      prefix: ERA5LAND_
+      suffix: _Q_monmean_0p25
+      sub_dir: Meteo/Surface_Specific_Humidity/ERA5LAND
+    Surface_Wind_Speed:
+      varname: ws
+      varunit: m s-1
+      prefix: ERA5LAND_
+      suffix: _ws_monmean_0p25
+      sub_dir: Meteo/Surface_Wind_Speed/ERA5LAND
+  grid_res: 0.25
+ESACCI-BIOMASS-L4:
+  name: ESACCI-BIOMASS-L4
+  description: ESACCI-BIOMASS-L4 reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Year
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2010
+  - 2020
+  variables:
+    Biomass:
+      varname: agb
+      varunit: Mg ha-1
+      prefix: ESACCI-BIOMASS-L4-AGB-MERGED-0p25deg-fv6.0
+      sub_dir: Biomass/ESACCI-BIOMASS-L4
+  grid_res: 0.25
+ESACCI-L4_FIRE-BA-MODIS:
+  name: ESACCI-L4_FIRE-BA-MODIS
+  description: ESACCI-L4_FIRE-BA-MODIS reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 2001
+  - 2020
+  variables:
+    Burned_Area:
+      varname: burned_area
+      varunit: ha
+      prefix: ESACCI-L4_FIRE-BA-MODIS-fv5.1_
+      sub_dir: Burned_Area/ESACCI-L4_FIRE-BA-MODIS
+  grid_res: 0.25
+ETMonitor:
+  name: ETMonitor
+  description: ETMonitor reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2001
+  - 2019
+  variables:
+    Urban_Latent_Heat_Flux:
+      varname: LE
+      varunit: W m-2
+      prefix: 2001-2019_LE_0.5
+      sub_dir: Urban/ETMonitor
+  grid_res: 0.25
+FLUXCOM-X-BASE:
+  name: FLUXCOM-X-BASE
+  description: FLUXCOM-X-BASE reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 2001
+  - 2021
+  variables:
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: gC m-2 day-1
+      prefix: GPP_
+      suffix: _050_monthly
+      sub_dir: Gross_Primary_Productivity/FLUXCOM-X-BASE
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: gC m-2 day-1
+      prefix: NEE_
+      suffix: _050_monthly
+      sub_dir: Net_Ecosystem_Exchange/FLUXCOM-X-BASE
+  grid_res: 0.5
+FLUXCOM:
+  name: FLUXCOM
+  description: FLUXCOM reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1980
+  - 2014
+  variables:
+    Latent_Heat:
+      varname: le
+      varunit: W m-2
+      prefix: le
+      sub_dir: Latent_Heat/FLUXCOM
+  grid_res: 0.25
+FLUX_PLUMBER2:
+  name: FLUX_PLUMBER2
+  description: FLUX_PLUMBER2 reference dataset
+  category: Energy
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - ''
+  - ''
+  variables:
+    Sensible_Heat:
+      varname: Qh_cor
+      varunit: w m-2
+    Latent_Heat:
+      varname: Qle_cor
+      varunit: w m-2
+    Ground_Heat:
+      varname: Qg
+      varunit: w m-2
+    Net_Radiation:
+      varname: Rnet
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: SWup
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: LWup
+      varunit: w m-2
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: mumolCO2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: mumolCO2 m-2 s-1
+  fulllist: ./dataset/Reference/Station/Composite/FLUXNET_PLUMBER2/list/FLUXNET_PLUMBER2.csv
+GCOS:
+  name: GCOS
+  description: GCOS reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1995
+  - 2023
+  variables:
+    Lake_Surface_Water_Temperature:
+      varname: lake_surface_water_temperature
+      varunit: K
+      prefix: LAKES-L3S-LSWT-
+      suffix: _monmean
+      sub_dir: Lake_Surface_Water_Temperature/GCOS
+  grid_res: 0.25
+GEBA:
+  name: GEBA
+  description: GEBA reference dataset
+  category: Energy
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1954
+  - 2022
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: W m-2
+    Longwave_Incoming_Radiation:
+      varname: LWin
+      varunit: W m-2
+    Latent_Heat_Flux:
+      varname: LE
+      varunit: W m-2
+    Sensible_Heat_Flux:
+      varname: H
+      varunit: W m-2
+GGMSEUD:
+  name: GGMSEUD
+  description: GGMSEUD reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1971
+  - 2010
+  variables:
+    Total_Irrigation_Amount:
+      varname: withd_irr
+      varunit: mm month-1
+      prefix: withd_irr_pcrglobwb_resharped
+      sub_dir: Crop/GGMSEUD
+  grid_res: 0.25
+GIEMS-MC:
+  name: GIEMS-MC
+  description: GIEMS-MC reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1992
+  - 2020
+  variables:
+    Inundation_Fraction:
+      varname: total_water_fraction
+      varunit: m
+      prefix: GIEMS-MC_water_fraction_map_setrange
+      sub_dir: Inundation_Fraction/GIEMS_MC/
+    Inundation_Area:
+      varname: water_surface_area
+      varunit: m
+      prefix: GIEMS-MC_water_area_map_setrange
+      sub_dir: Inundation_Area/GIEMS_MC/
+  grid_res: 0.25
+GIWUED:
+  name: GIWUED
+  description: GIWUED reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 2011
+  - 2018
+  variables:
+    Total_Irrigation_Amount:
+      varname: IWUens
+      varunit: mm month-1
+      prefix: IWU.ens.Y
+      sub_dir: Crop/GIWUED
+  grid_res: 0.25
+GLASS:
+  name: GLASS
+  description: GLASS reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1981
+  - 2018
+  variables:
+    Net_Primary_Production:
+      varname: NPP
+      varunit: gC m-2 day-1
+      prefix: GLASS_NPP_
+      suffix: _monmean_0p25deg
+      sub_dir: Net_Primary_Production/GLASS
+  grid_res: 0.25
+GLDAS-2.2:
+  name: GLDAS-2.2
+  description: GLDAS-2.2 reference dataset
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2003
+  - 2025
+  variables:
+    Ground_Heat:
+      varname: Qg_tavg
+      varunit: W m-2
+      prefix: GLDAS_CLSM025_DA1_D.G_monmean
+      sub_dir: Ground_Heat/GLDAS-2.2
+  grid_res: 0.25
+GLEAM_v4.2a:
+  name: GLEAM_v4.2a
+  description: GLEAM_v4.2a reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2023
+  variables:
+    Evapotranspiration:
+      varname: E
+      varunit: mm day-1
+      prefix: E_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Evapotranspiration/GLEAM_v4.2a
+    Canopy_Interception:
+      varname: Ei
+      varunit: mm day-1
+      prefix: Ei_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Canopy_Interception/GLEAM_v4.2a
+    Canopy_Transpiration:
+      varname: Et
+      varunit: mm day-1
+      prefix: Et_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Transpiration/GLEAM_v4.2a
+    Bare_Soil_Evaporation:
+      varname: Eb
+      varunit: mm day-1
+      prefix: Eb_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Bare_Soil_Evaporation/GLEAM_v4.2a
+    Open_Water_Evaporation:
+      varname: Ew
+      varunit: mm day-1
+      prefix: Ew_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Open_Water_Evaporation/GLEAM4.2a
+    Root_Zone_Soil_Moisture:
+      varname: SMrz
+      varunit: m3 m-3
+      prefix: SMrz_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Root_Zone_Soil_Moisture/GLEAM_v4.2a
+    Surface_Soil_Moisture:
+      varname: SMs
+      varunit: m3 m-3
+      prefix: SMs_
+      suffix: _GLEAM_v4.2a
+      sub_dir: Surface_Soil_Moisture/GLEAM_v4.2a
+    Sensible_Heat:
+      varname: H
+      varunit: W m-2
+      prefix: H_
+      suffix: _GLEAM_v4.2a
+      sub_dir: ../Heat/Sensible_Heat/GLEAM_v4.2a
+  grid_res: 0.25
+GPCC:
+  name: GPCC
+  description: GPCC reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1971
+  - 2020
+  variables:
+    Precipitation:
+      varname: precip
+      varunit: mm day-1
+      prefix: precip.mon.total.0.25x0.25.v2022_mm_day
+      sub_dir: Precipitation/GPCC
+  grid_res: 0.25
+GPCPv3.2:
+  name: GPCPv3.2
+  description: GPCPv3.2 reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Month
+  timezone: 0
+  years:
+  - 1983
+  - 2022
+  variables:
+    Precipitation:
+      varname: sat_gauge_precip
+      varunit: mm day-1
+      prefix: GPCPMON_L3_
+      suffix: _V3.2
+      sub_dir: Precipitation/GPCPv3.2
+  grid_res: 0.25
+GRAiCE:
+  name: GRAiCE
+  description: GRAiCE reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1985
+  - 2021
+  variables:
+    Terrestrial_Water_Storage_Change:
+      varname: twsc
+      varunit: cm
+      prefix: GRAiCE_twsc_ensmean
+      sub_dir: Terrestrial_Water_Storage_Change/GRAiCE
+  grid_res: 0.25
+GRDC_Caravan_extension_Daily:
+  name: GRDC_Caravan_extension_Daily
+  description: GRDC_Caravan_extension_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1950
+  - 2023
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+GRDC_Monthly:
+  name: GRDC_Monthly
+  description: GRDC_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2024
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+      max_uparea: 50000000000.0
+      min_uparea: 1000.0
+GRDC_RESG_Monthly:
+  name: GRDC_RESG_Monthly
+  description: GRDC_RESG_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+GRDC_daily:
+  name: GRDC_daily
+  description: GRDC_daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+      max_uparea: 50000000000.0
+      min_uparea: 1000.0
+GRDD_Monthly:
+  name: GRDD_Monthly
+  description: GRDD_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+GRFR:
+  name: GRFR
+  description: GRFR reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1980
+  - 2022
+  variables:
+    Runoff:
+      varname: ro
+      varunit: mm day-1
+      prefix: RUNOFF_
+      sub_dir: Total_Runoff/GRFR
+  grid_res: 0.25
+GRUN_ENSEMBLE:
+  name: GRUN_ENSEMBLE
+  description: GRUN_ENSEMBLE reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1902
+  - 2019
+  variables:
+    Total_Runoff:
+      varname: Runoff
+      varunit: mm day-1
+      prefix: G-RUN_ENSEMBLE_MMM
+      sub_dir: Total_Runoff/GRUN_ENSEMBLE
+  grid_res: 0.25
+GSHA_Monthly:
+  name: GSHA_Monthly
+  description: GSHA_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+GSIM_Monthly:
+  name: GSIM_Monthly
+  description: GSIM_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+GloFlux:
+  name: GloFlux
+  description: GloFlux reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1997
+  - 2020
+  variables:
+    Gross_Primary_Productivity:
+      varname: gpp
+      varunit: gC m-2 day-1
+      prefix: GloFlux_GPP_0p25
+      sub_dir: Gross_Primary_Productivity/GloFlux
+    Net_Ecosystem_Exchange:
+      varname: nee
+      varunit: gC m-2 day-1
+      prefix: GloFlux_NEE_0p25
+      sub_dir: Net_Ecosystem_Exchange/GloFlux
+    Ecosystem_Respiration:
+      varname: reco
+      varunit: gC m-2 day-1
+      prefix: GloFlux_RECO_0p25
+      sub_dir: Ecosystem_Respiration/GloFlux
+  grid_res: 0.25
+HOMTS:
+  name: HOMTS
+  description: HOMTS reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1960
+  - 2017
+  variables:
+    Surface_Soil_Temperature:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS0cm_mon_0p5_1960_2017
+      sub_dir: Surface_Soil_Temperature/HOMTS
+  grid_res: 0.25
+Hubei_Hydro_Daily:
+  name: Hubei_Hydro_Daily
+  description: Hubei_Hydro_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 2000
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+LAI_Yuan2011:
+  name: LAI_Yuan2011
+  description: LAI_Yuan2011 reference dataset
+  category: Carbon
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Leaf_Area_Index:
+      varname: lai
+      varunit: unitless
+LGS_Reco:
+  name: LGS_Reco
+  description: LGS_Reco reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 1982
+  - 2018
+  variables:
+    Ecosystem_Respiration:
+      varname: Reco
+      varunit: gC m-2 day-1
+      prefix: LGS_Reco_
+      sub_dir: Ecosystem_Respiration/LGS_Reco/0p25deg
+  grid_res: 0.25
+Linetal2023:
+  name: Linetal2023
+  description: Linetal2023 reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: 8Day
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 2000
+  - 2022
+  variables:
+    Leaf_Area_Index:
+      varname: lai
+      varunit: m2 m-2
+      prefix: lai_8-day_
+      suffix: _0p25
+      sub_dir: Leaf_Area_Index/Linetal2023/0p25deg_8daily
+  grid_res: 0.25
+MCD43A3:
+  name: MCD43A3
+  description: MCD43A3 reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2010
+  - 2010
+  variables:
+    Urban_Albedo:
+      varname: Albedo_wsa
+      varunit: 1
+      prefix: Urban_MCD43A3_2010_settime
+      sub_dir: Urban/MCD43A3
+  grid_res: 0.25
+MODIS_LST:
+  name: MODIS_LST
+  description: MODIS_LST reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2003
+  - 2020
+  variables:
+    Urban_Surface_Temperature:
+      varname: LST_D
+      varunit: degC
+      prefix: MODIS_LST_2003-2020
+      sub_dir: Urban/MODIS_LST
+  grid_res: 0.25
+MODIS_MOD10CM:
+  name: MODIS_MOD10CM
+  description: MODIS_MOD10CM reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2000
+  - 2024
+  variables:
+    Snow_Cover_Extent:
+      varname: Snow_Cover_Monthly_CMG
+      varunit: percent
+      prefix: MOD10CM_merged_0p25d
+      sub_dir: Snow_Cover_Extent/MODIS_MOD10CM
+  grid_res: 0.25
+OpenBench_Streamflow_Daily:
+  name: OpenBench_Streamflow_Daily
+  description: OpenBench_Streamflow_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1800
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+OpenBench_Streamflow_Hourly:
+  name: OpenBench_Streamflow_Hourly
+  description: OpenBench_Streamflow_Hourly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1980
+  - 2024
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+OpenBench_Streamflow_Monthly:
+  name: OpenBench_Streamflow_Monthly
+  description: OpenBench_Streamflow_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1800
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+PLUMBER2S:
+  name: PLUMBER2S
+  description: PLUMBER2S reference dataset
+  category: Energy
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - ''
+  - ''
+  variables:
+    Sensible_Heat:
+      varname: Qh_cor
+      varunit: w m-2
+    Latent_Heat:
+      varname: Qle_cor
+      varunit: w m-2
+    Ground_Heat:
+      varname: Qg
+      varunit: w m-2
+    Net_Radiation:
+      varname: Rnet
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: SWup
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: LWup
+      varunit: w m-2
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: mumolCO2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: mumolCO2 m-2 s-1
+  fulllist: ./dataset/Reference/Station/Composite/PLUMBER2S/list/LIST_PLUMBER2S.csv
+R_ArcticNet_Daily:
+  name: R_ArcticNet_Daily
+  description: R_ArcticNet_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+R_ArcticNet_Monthly:
+  name: R_ArcticNet_Monthly
+  description: R_ArcticNet_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+ResOpsUS:
+  name: ResOpsUS
+  description: ResOpsUS reference dataset
+  category: Other
+  data_type: stn
+  tim_res: day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 1900
+  - 2020
+  variables:
+    Dam_Inflow:
+      varname: inflow
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname: outflow
+      varunit: m3 s-1
+    Dam_Water_Storage:
+      varname: storage
+      varunit: million cubic meters
+    Dam_Water_Elevation:
+      varname: elevation
+      varunit: m
+SMAPL3:
+  name: SMAPL3
+  description: SMAPL3 reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2016
+  - 2020
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_0_5
+      varunit: m3 m-3
+      prefix: SMAPL3_05deg_monthly_2016_2020
+      sub_dir: Surface_Soil_Moisture/SMAPL3
+  grid_res: 0.25
+SMAP_L4:
+  name: SMAP_L4
+  description: SMAP_L4 reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2016
+  - 2024
+  variables:
+    Snow_Depth:
+      varname: snow_depth
+      varunit: m
+      prefix: SMAP_L4_snow_depth
+      sub_dir: Snow_Depth/SMAP_L4
+  grid_res: 0.25
+TEMP_Zhang_etal_2022:
+  name: TEMP_Zhang_etal_2022
+  description: TEMP_Zhang_etal_2022 reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2003
+  - 2020
+  variables:
+    Urban_Air_Temperature_Max:
+      varname: TMAX
+      varunit: K
+      prefix: Urban_TEMP_Zhang_2003-2020
+      sub_dir: Urban/TEMP_Zhang_etal_2022
+    Urban_Air_Temperature_Min:
+      varname: TMIN
+      varunit: K
+      prefix: Urban_TEMP_Zhang_2003-2020
+      sub_dir: Urban/TEMP_Zhang_etal_2022
+  grid_res: 0.25
+TRIMS:
+  name: TRIMS
+  description: TRIMS reference dataset
+  category: Other
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2000
+  - 2020
+  variables:
+    Urban_Surface_Temperature:
+      varname: LST_N
+      varunit: K
+      prefix: TRIMS_LST_2000-2020
+      sub_dir: Urban/TRIMS
+  grid_res: 0.25
+Transpiration_GLEAM_hybird:
+  name: Transpiration_GLEAM_hybird
+  description: Transpiration_GLEAM_hybird reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - ''
+  - ''
+  variables:
+    Canopy_Transpiration:
+      varname: et
+      varunit: mm day-1
+  fulllist: ./dataset/Reference/Station/Water/Transpiration/GLEAM_Hybird/list/Transpiration_GLEAM_hybird.csv
+UpCH4:
+  name: UpCH4
+  description: UpCH4 reference dataset
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 2001
+  - 2018
+  variables:
+    Wetland_Methane_Emission:
+      varname: mean_ch4
+      varunit: gC m-2 day-1
+      prefix: upch4_v04_m1_TgCH4month_Aw
+      sub_dir: Wetland_Methane_Emission/UpCH4
+  grid_res: 0.25
+Xu_et_al2025_stn:
+  name: Xu_et_al2025_stn
+  description: Xu_et_al2025_stn reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - ''
+  - ''
+  variables:
+    Evapotranspiration:
+      varname: et
+      varunit: mm day-1
+  fulllist: ./dataset/Reference/Station/Water/Evapotranspiration/Xu_et_al2025/list/Xu_et_al2025.csv
+YCZ_Bulletin_Monthly:
+  name: YCZ_Bulletin_Monthly
+  description: YCZ_Bulletin_Monthly reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 2016
+  - 2024
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+YRC_Daily:
+  name: YRC_Daily
+  description: YRC_Daily reference dataset
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0.0
+  years:
+  - 2002
+  - 2024
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+globsnow_v3:
+  name: globsnow_v3
+  description: globsnow_v3 reference dataset
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  years:
+  - 1980
+  - 2020
+  variables:
+    Snow_Water_Equivalent:
+      varname: swe
+      varunit: mm
+      prefix: globsnow_v3_swe_monthly_lonlat_0.25deg
+      sub_dir: Snow_Water_Equivalent/globsnow_v3
+  grid_res: 0.25
