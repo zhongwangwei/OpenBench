@@ -90,7 +90,8 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
-                    self._references[name] = _build_reference(data)
+                    ref = _build_reference(data)
+                    self._references[name.lower()] = ref
                 except Exception as e:
                     logger.warning("Failed to load reference '%s' from %s: %s", name, path.name, e)
         except Exception as e:
@@ -105,7 +106,8 @@ class RegistryManager:
                 with open(path) as f:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
-                    self._references[data["name"]] = _build_reference(data)
+                    ref = _build_reference(data)
+                    self._references[data["name"].lower()] = ref
             except Exception as e:
                 logger.warning("Failed to load reference from %s: %s", path.name, e)
 
@@ -118,7 +120,8 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
-                    self._models[name] = _build_model(data)
+                    m = _build_model(data)
+                    self._models[name.lower()] = m
                 except Exception as e:
                     logger.warning("Failed to load model '%s' from %s: %s", name, path.name, e)
         except Exception as e:
@@ -133,7 +136,8 @@ class RegistryManager:
                 with open(path) as f:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
-                    self._models[data["name"]] = _build_model(data)
+                    m = _build_model(data)
+                    self._models[data["name"].lower()] = m
             except Exception as e:
                 logger.warning("Failed to load model from %s: %s", path.name, e)
 
@@ -164,9 +168,12 @@ class RegistryManager:
           2. Space: prefer closest grid_res to simulation
           3. Tie-break: prefer lowest sufficient frequency (avoid waste)
         """
+        # Case-insensitive lookup
+        key = name.lower()
+
         # Exact match — always wins
-        if name in self._references:
-            return self._references[name]
+        if key in self._references:
+            return self._references[key]
 
         # Base name — try auto-resolve if sim resolution is provided
         variants = self.get_resolution_variants(name)
@@ -192,16 +199,17 @@ class RegistryManager:
             E.g., {'LowRes': ..., 'MidRes': ..., 'HigRes': ...}
         """
         variants = {}
+        base_key = base_name.lower()
 
         for suffix in self.RESOLUTION_SUFFIXES:
-            full_name = f"{base_name}{suffix}"
-            if full_name in self._references:
+            full_key = f"{base_key}{suffix.lower()}"
+            if full_key in self._references:
                 label = suffix[1:]  # Strip leading underscore
-                variants[label] = self._references[full_name]
+                variants[label] = self._references[full_key]
 
         # Also check if base_name itself is a standalone entry (no resolution suffix)
-        if base_name in self._references and not variants:
-            variants["default"] = self._references[base_name]
+        if base_key in self._references and not variants:
+            variants["default"] = self._references[base_key]
 
         return variants
 
@@ -209,7 +217,7 @@ class RegistryManager:
         return sorted(self._models.values(), key=lambda m: m.name)
 
     def get_model(self, name: str) -> Optional[ModelProfile]:
-        return self._models.get(name)
+        return self._models.get(name.lower())
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         return [ref for ref in self._references.values() if variable in ref.variables]
