@@ -73,22 +73,36 @@ def path(name):
 
 @data.command()
 @click.argument("name")
-@click.option("--root-dir", required=True, help="Root directory containing data files.")
+@click.option("--root-dir", default=None, help="Root directory containing data files (required for new).")
 @click.option("--data-type", type=click.Choice(["grid", "stn"]), default="grid", help="Data type.")
 @click.option("--tim-res", type=click.Choice(["Month", "Day", "Hour", "Year"]), default="Month")
 @click.option("--grid-res", type=float, default=None, help="Grid resolution in degrees.")
 @click.option("--category", default="Other", help="Category: Water, Carbon, Energy, etc.")
 @click.option("--years", nargs=2, type=int, default=None, help="Start and end year.")
-@click.option("--variable", "-v", multiple=True, help="Variable: 'VarName:ncname:unit' (repeatable).")
-def register(name, root_dir, data_type, tim_res, grid_res, category, years, variable):
-    """Register a new reference dataset into the local registry.
+@click.option("-v", "--variable", multiple=True,
+              help="'VarName:ncname:unit' (repeatable). Overwrites if exists.")
+@click.option("-f", "--fallback", multiple=True,
+              help="'VarName:fallback_name:fallback_unit:conversion' (repeatable).")
+def register(name, root_dir, data_type, tim_res, grid_res, category, years, variable, fallback):
+    """Register or update a reference dataset in the registry.
 
-    Example:
+    Creates a new entry or updates an existing one. Variables are overwritten
+    by default when names match.
+
+    \b
+    Examples:
         openbench data register MyData --root-dir /data/myref \\
             --data-type grid --grid-res 0.5 --tim-res Month \\
             --years 2000 2020 --category Water \\
-            -v "Evapotranspiration:ET:mm day-1" \\
-            -v "Runoff:RNOF:mm day-1"
+            -v "Evapotranspiration:ET:mm day-1"
+
+        # With fallback + conversion
+        openbench data register ERA5 --root-dir /data/era5 \\
+            -v "Latent_Heat:slhf:W m-2" \\
+            -f "Latent_Heat:surface_latent_heat_flux:J m-2:value / 3600"
+
+        # Update existing: add a variable
+        openbench data register MyData -v "Runoff:RNOF:mm day-1"
     """
     import yaml
     from pathlib import Path
@@ -98,73 +112,116 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, vari
     registry_dir = get_writable_registry_dir()
     catalog_path = registry_dir / "reference_catalog.yaml"
 
-    # Check if already in catalog
     existing_catalog = {}
     if catalog_path.exists():
         with open(catalog_path) as f:
             existing_catalog = yaml.safe_load(f) or {}
-    if name in existing_catalog:
-        if not click.confirm(f"'{name}' already registered. Overwrite?"):
-            return
 
-    # Parse variable mappings
-    variables = {}
+    existing = existing_catalog.get(name, {})
+    is_new = name not in existing_catalog
+
+    # Parse primary variables
+    new_vars = {}
     for v in variable:
         parts = v.split(":")
         if len(parts) < 2:
-            click.secho(f"Invalid variable format: '{v}'. Use 'VarName:ncname:unit'", fg="red")
+            click.secho(f"Invalid format: '{v}'. Use 'VarName:ncname:unit'", fg="red")
             raise SystemExit(1)
         var_name = parts[0].strip()
         nc_name = parts[1].strip()
         unit = parts[2].strip() if len(parts) > 2 else ""
-        variables[var_name] = {"varname": nc_name, "varunit": unit}
+        new_vars[var_name] = {"varname": nc_name, "varunit": unit}
 
-    if not variables:
-        # Interactive variable entry
+    # Parse fallbacks
+    for fb_def in fallback:
+        parts = fb_def.split(":")
+        if len(parts) < 3:
+            click.secho(f"Invalid fallback: '{fb_def}'. Use 'VarName:fb_name:fb_unit[:conversion]'", fg="red")
+            raise SystemExit(1)
+        var_name = parts[0].strip()
+        fb_entry = {"varname": parts[1].strip(), "varunit": parts[2].strip()}
+        if len(parts) > 3:
+            fb_entry["convert"] = parts[3].strip()
+
+        target = new_vars.get(var_name) or existing.get("variables", {}).get(var_name)
+        if target is None:
+            click.secho(f"Warning: fallback for '{var_name}' but no primary defined. Use -v first.", fg="yellow")
+            continue
+        if var_name not in new_vars:
+            new_vars[var_name] = dict(target)
+        if "fallbacks" not in new_vars[var_name]:
+            new_vars[var_name]["fallbacks"] = []
+        new_vars[var_name]["fallbacks"].append(fb_entry)
+
+    # Require root_dir for new entries
+    if is_new and not root_dir:
+        click.secho("Error: --root-dir is required for new datasets.", fg="red")
+        raise SystemExit(1)
+
+    if not variable and not fallback and is_new:
         click.echo("\nAdd variables (empty name to finish):")
         while True:
             var_name = click.prompt("  Standard variable name (e.g., Evapotranspiration)", default="")
             if not var_name:
                 break
-            nc_name = click.prompt(f"  Variable name in NetCDF file", default=var_name)
-            unit = click.prompt(f"  Unit", default="")
-            prefix = click.prompt(f"  File prefix", default="")
-            suffix = click.prompt(f"  File suffix", default="")
+            nc_name = click.prompt("  Variable name in NetCDF file", default=var_name)
+            unit = click.prompt("  Unit", default="")
+            prefix = click.prompt("  File prefix", default="")
+            suffix = click.prompt("  File suffix", default="")
             entry = {"varname": nc_name, "varunit": unit}
             if prefix:
                 entry["prefix"] = prefix
             if suffix:
                 entry["suffix"] = suffix
-            variables[var_name] = entry
+            new_vars[var_name] = entry
 
-    if not variables:
+    if not new_vars and is_new:
         click.secho("No variables defined. Registration cancelled.", fg="yellow")
         return
 
-    # Build descriptor
-    descriptor = {
-        "name": name,
-        "description": f"{name} reference dataset",
-        "category": category,
-        "data_type": data_type,
-        "tim_res": tim_res,
-        "data_groupby": "Year",
-        "timezone": 0,
-        "years": list(years) if years else [2000, 2020],
-        "variables": variables,
-        "root_dir": root_dir,
-    }
+    # Build/update descriptor
+    descriptor = existing.copy()
+    descriptor["name"] = name
+    if is_new or root_dir:
+        descriptor["root_dir"] = root_dir
+    if is_new:
+        descriptor.setdefault("description", f"{name} reference dataset")
+        descriptor.setdefault("category", category)
+        descriptor.setdefault("data_type", data_type)
+        descriptor.setdefault("tim_res", tim_res)
+        descriptor.setdefault("data_groupby", "Year")
+        descriptor.setdefault("timezone", 0)
+        descriptor.setdefault("years", list(years) if years else [2000, 2020])
+    else:
+        if category != "Other":
+            descriptor["category"] = category
+        if years:
+            descriptor["years"] = list(years)
+
     if grid_res is not None:
         descriptor["grid_res"] = grid_res
+
+    # Merge variables (overwrite existing)
+    merged_vars = descriptor.get("variables", {})
+    updated = [k for k in new_vars if k in merged_vars]
+    added = [k for k in new_vars if k not in merged_vars]
+    merged_vars.update(new_vars)
+    descriptor["variables"] = merged_vars
 
     existing_catalog[name] = descriptor
     with open(catalog_path, "w") as f:
         yaml.dump(existing_catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-    click.secho(f"✓ Registered '{name}' to {catalog_path}", fg="green")
-    click.echo(f"  Variables: {', '.join(variables.keys())}")
-    click.echo(f"  Data: {root_dir}")
-    click.echo(f"\nVerify: openbench data list --variable {list(variables.keys())[0]}")
+    if is_new:
+        click.secho(f"✓ Created '{name}' ({len(merged_vars)} variables)", fg="green")
+    else:
+        parts = []
+        if added:
+            parts.append(f"{len(added)} added")
+        if updated:
+            parts.append(f"{len(updated)} updated")
+        click.secho(f"✓ Updated '{name}': {', '.join(parts)} ({len(merged_vars)} total)", fg="green")
+    click.echo(f"Verify: openbench data show {name}")
 
 
 @data.command()
@@ -227,10 +284,18 @@ def show(name):
     if ref.root_dir:
         click.echo(f"Path: {ref.root_dir}")
     click.echo()
-    click.secho(f"{'Variable':<35} {'NetCDF name':<20} {'Unit'}", bold=True)
-    click.echo("─" * 70)
+    click.secho(f"{'Variable':<35} {'NetCDF name':<20} {'Unit':<20} {'Fallback'}", bold=True)
+    click.echo("─" * 100)
     for var_name, mapping in sorted(ref.variables.items()):
-        click.echo(f"{var_name:<35} {mapping.varname:<20} {mapping.varunit}")
+        vn = mapping.varname if isinstance(mapping.varname, str) else mapping.varname[0]
+        fb_str = ""
+        if mapping.fallbacks:
+            fb_parts = []
+            for fb in mapping.fallbacks:
+                conv = f" ({fb.convert})" if fb.convert else ""
+                fb_parts.append(f"{fb.varname} [{fb.varunit}]{conv}")
+            fb_str = " → ".join(fb_parts)
+        click.echo(f"{var_name:<35} {vn:<20} {mapping.varunit:<20} {fb_str}")
 
 
 @data.command()
