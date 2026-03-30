@@ -134,6 +134,97 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: str) -> None:
+    """Apply unified mask: set ref to NaN wherever sim is NaN.
+
+    This ensures evaluation metrics only cover grid cells where BOTH
+    reference and simulation have valid data. Called for each sim source,
+    so the mask accumulates — if any sim has NaN at a point, the ref
+    gets NaN there too, ensuring consistent spatial coverage across
+    all model comparisons.
+
+    Only applies to grid data (station data is skipped).
+    """
+    import os
+
+    import numpy as np
+
+    casedir = info["casedir"]
+    ref_varname = info.get("ref_varname", "")
+    sim_varname = info.get("sim_varname", "")
+
+    ref_path = os.path.join(casedir, "data", f"{var_name}_ref_{ref_source}_{ref_varname}.nc")
+    sim_path = os.path.join(casedir, "data", f"{var_name}_sim_{sim_source}_{sim_varname}.nc")
+
+    ref_path = os.path.abspath(ref_path)
+    sim_path = os.path.abspath(sim_path)
+
+    if not os.path.exists(ref_path) or not os.path.exists(sim_path):
+        logger.debug("Unified mask skipped: ref or sim file not found")
+        return
+
+    ref_ds = None
+    sim_ds = None
+    try:
+        import xarray as xr
+
+        ref_ds = xr.open_dataset(ref_path)
+        sim_ds = xr.open_dataset(sim_path)
+
+        o = ref_ds[ref_varname]
+        s = sim_ds[sim_varname]
+
+        # Convert types if needed
+        try:
+            from openbench.util.converttype import Convert_Type
+
+            o = Convert_Type.convert_nc(o)
+            s = Convert_Type.convert_nc(s)
+        except ImportError:
+            pass
+
+        # Align time dimension
+        if len(s["time"]) == len(o["time"]):
+            s["time"] = o["time"]
+        else:
+            logger.warning(
+                "Unified mask: time mismatch for %s (ref=%d, sim=%d), skipping",
+                var_name, len(o["time"]), len(s["time"]),
+            )
+            return
+
+        # Apply mask: NaN where either is NaN
+        mask = np.isnan(s.values) | np.isnan(o.values)
+        o_data = o.load()
+        o_data.values[mask] = np.nan
+
+        # Close datasets before writing
+        ref_ds.close()
+        ref_ds = None
+        sim_ds.close()
+        sim_ds = None
+
+        # Write masked ref back
+        o_data.to_netcdf(ref_path)
+        logger.debug("Unified mask applied: %s (sim=%s)", var_name, sim_source)
+
+        del o, s, mask, o_data
+
+    except Exception:
+        logger.exception("Unified mask failed for %s (sim=%s)", var_name, sim_source)
+    finally:
+        if ref_ds is not None:
+            try:
+                ref_ds.close()
+            except Exception:
+                pass
+        if sim_ds is not None:
+            try:
+                sim_ds.close()
+            except Exception:
+                pass
+
+
 def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     """Run evaluation from a validated config.
 
@@ -240,21 +331,25 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
             )
             logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
 
-    # ─── Pre-process reference data serially (avoid race condition) ───
-    # Each (variable, ref_source) combination only needs ref preprocessing once.
-    # We do this before parallel dispatch so tasks can skip it.
+    # ─── Pre-process data serially (avoid race condition + apply unified mask) ───
+    # For each variable:
+    #   1. Preprocess ref data once
+    #   2. For each sim: preprocess sim
+    #   3. If unified_mask: apply cumulative NaN mask from each sim onto ref
+    # This MUST be serial because unified_mask modifies the ref file in place.
+    unified_mask = general.get("unified_mask", True)
+
+    from openbench.config.legacy_processors import GeneralInfoReader
+    from openbench.data.processing import DatasetProcessing
+
     preprocessed_refs: set[str] = set()
     for task in tasks:
-        ref_key = f"{task['var_name']}__{task['ref_source']}"
-        if ref_key in preprocessed_refs:
-            task["ref_preprocessed"] = True
-            continue
+        var_name = task["var_name"]
+        ref_source = task["ref_source"]
+        sim_source = task["sim_source"]
+        ref_key = f"{var_name}__{ref_source}"
 
-        logger.info("Preprocessing ref data: %s (%s)", task["var_name"], task["ref_source"])
         try:
-            from openbench.config.legacy_processors import GeneralInfoReader
-            from openbench.data.processing import DatasetProcessing
-
             info_reader = GeneralInfoReader(
                 main_nl=task["main_nl"],
                 sim_nml=task["sim_nml"],
@@ -263,23 +358,39 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
                 score_vars=task["score_vars"],
                 comparison_vars=task["comparison_vars"],
                 statistic_vars=task["statistic_vars"],
-                item=task["var_name"],
-                sim_source=task["sim_source"],
-                ref_source=task["ref_source"],
+                item=var_name,
+                sim_source=sim_source,
+                ref_source=ref_source,
             )
             info = info_reader.to_dict()
-            DatasetProcessing(info).process("ref")
-            preprocessed_refs.add(ref_key)
-            task["ref_preprocessed"] = True
-        except Exception:
-            logger.exception("Failed to preprocess ref for %s", ref_key)
-            # Don't set ref_preprocessed — let _evaluate_single try again
+            info["ref_source"] = ref_source
+            info["sim_source"] = sim_source
 
-    # Mark all tasks with same ref as preprocessed
-    for task in tasks:
-        ref_key = f"{task['var_name']}__{task['ref_source']}"
-        if ref_key in preprocessed_refs:
+            processor = DatasetProcessing(info)
+
+            # Preprocess ref once per (variable, ref_source)
+            if ref_key not in preprocessed_refs:
+                logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
+                processor.process("ref")
+                preprocessed_refs.add(ref_key)
+
+            # Preprocess sim for each task
+            logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
+            processor.process("sim")
+
+            # Apply unified mask: mask ref NaN where sim is NaN (grid only)
+            if unified_mask:
+                ref_dtype = info.get("ref_data_type", "grid")
+                sim_dtype = info.get("sim_data_type", "grid")
+                if ref_dtype != "stn" and sim_dtype != "stn":
+                    _apply_unified_mask(info, var_name, ref_source, sim_source)
+
             task["ref_preprocessed"] = True
+
+        except Exception:
+            logger.exception(
+                "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
+            )
 
     # Execute tasks: parallel when num_cores > 1, else sequential
     raw_results: list[dict[str, Any]]
