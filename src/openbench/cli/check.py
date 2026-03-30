@@ -24,8 +24,26 @@ def check(config):
     )
 
     click.secho(f"\nReference data ({len(cfg.reference)} sources):", bold=True)
+    from openbench.data.registry import RegistryManager
+
+    mgr = RegistryManager()
+    has_errors = False
+
     for var, source in cfg.reference.items():
-        click.secho(f"  ✓ {var} → {source}", fg="green")
+        ref = mgr.get_reference(source)
+        if ref is not None:
+            click.secho(f"  ✓ {var} → {source} ({ref.data_type}, {ref.tim_res})", fg="green")
+        else:
+            # Check if it's a base name with resolution variants
+            variants = mgr.get_resolution_variants(source)
+            if variants:
+                click.secho(f"  ✗ {var} → {source}", fg="red")
+                click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
+                for label, v in sorted(variants.items()):
+                    click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
+                has_errors = True
+            else:
+                click.secho(f"  ⚠ {var} → {source} (not in registry, will use inline config)", fg="yellow")
 
     click.secho(f"\nSimulation data ({len(cfg.simulation)} models):", bold=True)
     for label, entry in cfg.simulation.items():
@@ -41,5 +59,9 @@ def check(config):
     click.secho(f"  Unified mask: {cfg.options.unified_mask}")
     click.secho(f"  Comparison: {cfg.comparison.enabled}")
     click.secho(f"  Statistics: {cfg.statistics.enabled}")
+
+    if has_errors:
+        click.secho("\n✗ Config has errors. Please fix and re-check.", fg="red", bold=True)
+        raise SystemExit(1)
 
     click.secho("\n✓ Config valid. Ready to run.", fg="green", bold=True)

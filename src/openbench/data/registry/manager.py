@@ -143,26 +143,15 @@ class RegistryManager:
         return sorted(self._references.values(), key=lambda r: r.name)
 
     def get_reference(self, name: str) -> Optional[ReferenceDataset]:
-        """Get a reference dataset by exact name or base name.
+        """Get a reference dataset by exact name.
 
-        If exact name matches (e.g., 'GLEAM_v4.2a_MidRes'), return it.
-        If base name matches (e.g., 'GLEAM_v4.2a'), auto-resolve to
-        the highest-frequency variant available.
+        Use the full name including resolution suffix:
+            'GLEAM_v4.2a_LowRes', 'GLEAM_v4.2a_MidRes'
+
+        Base name without suffix (e.g., 'GLEAM_v4.2a') only works if
+        there is an exact entry with that name (no resolution variants).
         """
-        # Exact match
-        if name in self._references:
-            return self._references[name]
-
-        # Base name match — find all resolution variants
-        variants = self.get_resolution_variants(name)
-        if not variants:
-            return None
-
-        # Auto-resolve: pick highest frequency
-        from openbench.data.registry.scanner import _tim_res_rank
-
-        best = max(variants.values(), key=lambda r: _tim_res_rank(r.tim_res))
-        return best
+        return self._references.get(name)
 
     def get_resolution_variants(self, base_name: str) -> dict[str, ReferenceDataset]:
         """Find all resolution variants of a dataset.
