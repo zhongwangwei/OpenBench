@@ -1,0 +1,42 @@
+name: CLM5
+description: "Community Land Model version 5"
+data_type: grid
+grid_res: 1.25
+tim_res: Month
+variables:
+  Evapotranspiration:
+    varname: QFLX_EVAP_TOT
+    varunit: "mm day-1"
+  Latent_Heat:
+    varname: EFLX_LH_TOT
+    varunit: "W m-2"
+  Sensible_Heat:
+    varname: FSH
+    varunit: "W m-2"
+  Gross_Primary_Productivity:
+    varname: GPP
+    varunit: "gC m-2 s-1"
+  Net_Ecosystem_Exchange:
+    varname: NEE
+    varunit: "gC m-2 s-1"
+  Net_Radiation:
+    varname: FSA
+    varunit: "W m-2"
+  Total_Runoff:
+    varname: QRUNOFF
+    varunit: "mm day-1"
+  Surface_Soil_Moisture:
+    varname: SOILWATER_10CM
+    varunit: "kg m-2"
+  Surface_Soil_Temperature:
+    varname: TSOI_10CM
+    varunit: "K"
+  Snow_Water_Equivalent:
+    varname: H2OSNO
+    varunit: "mm"
+  Leaf_Area_Index:
+    varname: TLAI
+    varunit: "m2 m-2"
+  Surface_Albedo:
+    varname: ASA
+    varunit: "-"
