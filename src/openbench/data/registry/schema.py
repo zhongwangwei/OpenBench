@@ -12,6 +12,8 @@ class VariableMapping:
 
     varname can be a string or a list of strings (fallback chain).
     E.g., varname=["f_gpp", "f_assim"] means try f_gpp first, fall back to f_assim.
+    When a fallback is used, the custom filter handles any unit conversion
+    (e.g., f_assim in mol m-2 s-1 → f_gpp in g m-2 s-1).
     """
 
     varname: Union[str, list[str]]

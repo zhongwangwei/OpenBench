@@ -1139,14 +1139,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         except AttributeError:
             model = source
         try:
-            custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
-            custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}")
-            ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
-        except (ImportError, AttributeError):
-            # This is expected behavior - not all models need custom time adjustments
-            # Log at debug level to avoid noise
+            from openbench.data.custom import load_custom_module
+            custom_module = load_custom_module(model)
+            if custom_module:
+                custom_time_adjustment = getattr(custom_module, f"adjust_time_{model}", None)
+                if custom_time_adjustment:
+                    ds = custom_time_adjustment(self, ds, syear, eyear, tim_res)
+                else:
+                    logging.debug(f"No custom time adjustment found for {model}. Using original time values.")
+            else:
+                logging.debug(f"No custom filter module found for {model}. Using original time values.")
+        except Exception:
             logging.debug(f"No custom time adjustment found for {model}. Using original time values.")
-            pass
         return ds
 
     def select_var(
@@ -1205,7 +1209,10 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 model = source
             try:
                 logging.info(f"Loading custom variable filter for {model}")
-                custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                from openbench.data.custom import load_custom_module
+                custom_module = load_custom_module(model)
+                if not custom_module:
+                    raise ImportError(f"No custom filter for {model}")
                 custom_filter = getattr(custom_module, f"filter_{model}")
                 self, ds_or_da = custom_filter(self, ds)
 
@@ -1570,9 +1577,11 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                 except AttributeError:
                     model = source
                 try:
-                    import importlib
+                    from openbench.data.custom import load_custom_module
 
-                    custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
+                    custom_module = load_custom_module(model)
+                    if not custom_module:
+                        raise ImportError(f"No custom filter for {model}")
                     custom_filter = getattr(custom_module, f"filter_{model}")
 
                     # Call custom filter with dataset

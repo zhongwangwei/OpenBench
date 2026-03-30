@@ -61,8 +61,8 @@ def show(name):
 @click.option("--description", default=None)
 @click.option("-v", "--variable", multiple=True,
               help="Variable: 'StdName:ncname:unit' or 'StdName:name1,name2:unit' for fallback. Repeatable.")
-@click.option("--overwrite", is_flag=True, help="Overwrite existing variables (default: append only).")
-def register(name, data_type, grid_res, tim_res, description, variable, overwrite):
+@click.option("--append-only", is_flag=True, help="Only add new variables, skip existing ones.")
+def register(name, data_type, grid_res, tim_res, description, variable, append_only):
     """Register or update a model profile.
 
     Creates a new profile or updates an existing one.
@@ -75,11 +75,11 @@ def register(name, data_type, grid_res, tim_res, description, variable, overwrit
         -v "Evapotranspiration:ET:mm day-1" \\
         -v "GPP:gpp,assim:gC m-2 s-1"
 
-      # Add a variable to existing model
+      # Add or update a variable
       openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
 
-      # Fix a variable (overwrite)
-      openbench model register CoLM2024 --overwrite -v "GPP:f_gpp,f_assim:mol m-2 s-1"
+      # Only add new, don't touch existing
+      openbench model register CoLM2024 --append-only -v "GPP:f_gpp:g m-2 s-1"
     """
     from pathlib import Path
 
@@ -159,23 +159,21 @@ def register(name, data_type, grid_res, tim_res, description, variable, overwrit
                 varname = nc_name
             new_vars[std_name] = {"varname": varname, "varunit": unit}
 
-    # Merge variables
-    if overwrite:
-        # Overwrite: new vars replace existing
-        merged_vars = {**existing_vars, **new_vars}
-        action = "overwritten"
-    else:
-        # Append: only add new, don't touch existing
-        merged_vars = {**existing_vars}
-        added = []
-        skipped = []
-        for k, v in new_vars.items():
-            if k in merged_vars:
-                skipped.append(k)
-            else:
-                merged_vars[k] = v
-                added.append(k)
-        action = "appended"
+    # Merge variables — default: overwrite existing; --append-only: skip existing
+    updated_keys = []
+    added_keys = []
+    skipped_keys = []
+
+    merged_vars = dict(existing_vars)
+    for k, v in new_vars.items():
+        if k in merged_vars:
+            if append_only:
+                skipped_keys.append(k)
+                continue
+            updated_keys.append(k)
+        else:
+            added_keys.append(k)
+        merged_vars[k] = v
 
     profile["variables"] = merged_vars
 
@@ -188,24 +186,14 @@ def register(name, data_type, grid_res, tim_res, description, variable, overwrit
     if is_new:
         click.secho(f"✓ Created model profile '{name}' ({len(merged_vars)} variables)", fg="green")
     else:
-        if overwrite:
-            updated = [k for k in new_vars if k in existing_vars]
-            added_new = [k for k in new_vars if k not in existing_vars]
-            parts = []
-            if updated:
-                parts.append(f"{len(updated)} overwritten")
-            if added_new:
-                parts.append(f"{len(added_new)} added")
-            click.secho(f"✓ Updated '{name}': {', '.join(parts)} ({len(merged_vars)} total)", fg="green")
-        else:
-            parts = []
-            if added:
-                parts.append(f"{len(added)} added: {', '.join(added)}")
-            if skipped:
-                parts.append(f"{len(skipped)} skipped (already exist): {', '.join(skipped)}")
-            click.secho(f"✓ Updated '{name}': {', '.join(parts)} ({len(merged_vars)} total)", fg="green")
-            if skipped:
-                click.echo("  Use --overwrite to replace existing variables")
+        parts = []
+        if added_keys:
+            parts.append(f"{len(added_keys)} added")
+        if updated_keys:
+            parts.append(f"{len(updated_keys)} updated")
+        if skipped_keys:
+            parts.append(f"{len(skipped_keys)} skipped (use without --append-only to update)")
+        click.secho(f"✓ Updated '{name}': {', '.join(parts)} ({len(merged_vars)} total)", fg="green")
 
     click.echo(f"Verify: openbench model show {name}")
 
