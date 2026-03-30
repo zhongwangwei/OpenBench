@@ -331,66 +331,89 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
             )
             logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
 
-    # ─── Pre-process data serially (avoid race condition + apply unified mask) ───
-    # For each variable:
-    #   1. Preprocess ref data once
-    #   2. For each sim: preprocess sim
-    #   3. If unified_mask: apply cumulative NaN mask from each sim onto ref
-    # This MUST be serial because unified_mask modifies the ref file in place.
+    # ─── Pre-process data: parallel across variables, serial within each variable ───
+    #
+    # Strategy: group tasks by variable, preprocess each variable's tasks in parallel.
+    # Within each variable: ref once → for each sim: sim + unified_mask (serial, mask accumulates).
+    # Different variables write to different files → safe to parallelize.
     unified_mask = general.get("unified_mask", True)
 
-    from openbench.config.legacy_processors import GeneralInfoReader
-    from openbench.data.processing import DatasetProcessing
+    # Group tasks by variable
+    from collections import defaultdict
 
-    preprocessed_refs: set[str] = set()
+    var_tasks: dict[str, list[dict]] = defaultdict(list)
     for task in tasks:
-        var_name = task["var_name"]
-        ref_source = task["ref_source"]
-        sim_source = task["sim_source"]
-        ref_key = f"{var_name}__{ref_source}"
+        var_tasks[task["var_name"]].append(task)
 
+    def _preprocess_variable(var_name: str, vtasks: list[dict]) -> None:
+        """Preprocess all tasks for one variable (serial within variable)."""
+        from openbench.config.legacy_processors import GeneralInfoReader
+        from openbench.data.processing import DatasetProcessing
+
+        ref_done = False
+        for task in vtasks:
+            ref_source = task["ref_source"]
+            sim_source = task["sim_source"]
+            try:
+                info_reader = GeneralInfoReader(
+                    main_nl=task["main_nl"],
+                    sim_nml=task["sim_nml"],
+                    ref_nml=task["ref_nml"],
+                    metric_vars=task["metric_vars"],
+                    score_vars=task["score_vars"],
+                    comparison_vars=task["comparison_vars"],
+                    statistic_vars=task["statistic_vars"],
+                    item=var_name,
+                    sim_source=sim_source,
+                    ref_source=ref_source,
+                )
+                info = info_reader.to_dict()
+                info["ref_source"] = ref_source
+                info["sim_source"] = sim_source
+
+                processor = DatasetProcessing(info)
+
+                # Ref: once per variable
+                if not ref_done:
+                    logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
+                    processor.process("ref")
+                    ref_done = True
+
+                # Sim: each task
+                logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
+                processor.process("sim")
+
+                # Unified mask: serial accumulation
+                if unified_mask:
+                    ref_dtype = info.get("ref_data_type", "grid")
+                    sim_dtype = info.get("sim_data_type", "grid")
+                    if ref_dtype != "stn" and sim_dtype != "stn":
+                        _apply_unified_mask(info, var_name, ref_source, sim_source)
+
+                task["ref_preprocessed"] = True
+
+            except Exception:
+                logger.exception(
+                    "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
+                )
+
+    # Dispatch: parallel across variables when num_cores > 1
+    var_names = list(var_tasks.keys())
+    if num_cores > 1 and len(var_names) > 1:
         try:
-            info_reader = GeneralInfoReader(
-                main_nl=task["main_nl"],
-                sim_nml=task["sim_nml"],
-                ref_nml=task["ref_nml"],
-                metric_vars=task["metric_vars"],
-                score_vars=task["score_vars"],
-                comparison_vars=task["comparison_vars"],
-                statistic_vars=task["statistic_vars"],
-                item=var_name,
-                sim_source=sim_source,
-                ref_source=ref_source,
+            from joblib import Parallel, delayed
+
+            logger.info("Preprocessing %d variables in parallel (n_jobs=%d)", len(var_names), num_cores)
+            Parallel(n_jobs=min(num_cores, len(var_names)))(
+                delayed(_preprocess_variable)(vn, var_tasks[vn]) for vn in var_names
             )
-            info = info_reader.to_dict()
-            info["ref_source"] = ref_source
-            info["sim_source"] = sim_source
-
-            processor = DatasetProcessing(info)
-
-            # Preprocess ref once per (variable, ref_source)
-            if ref_key not in preprocessed_refs:
-                logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
-                processor.process("ref")
-                preprocessed_refs.add(ref_key)
-
-            # Preprocess sim for each task
-            logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
-            processor.process("sim")
-
-            # Apply unified mask: mask ref NaN where sim is NaN (grid only)
-            if unified_mask:
-                ref_dtype = info.get("ref_data_type", "grid")
-                sim_dtype = info.get("sim_data_type", "grid")
-                if ref_dtype != "stn" and sim_dtype != "stn":
-                    _apply_unified_mask(info, var_name, ref_source, sim_source)
-
-            task["ref_preprocessed"] = True
-
         except Exception:
-            logger.exception(
-                "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
-            )
+            logger.warning("Parallel preprocessing failed, falling back to sequential", exc_info=True)
+            for vn in var_names:
+                _preprocess_variable(vn, var_tasks[vn])
+    else:
+        for vn in var_names:
+            _preprocess_variable(vn, var_tasks[vn])
 
     # Execute tasks: parallel when num_cores > 1, else sequential
     raw_results: list[dict[str, Any]]
