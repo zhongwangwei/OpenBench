@@ -40,13 +40,9 @@ from openbench.gui.path_utils import (
 from openbench.gui.pages import (
     PageRuntime,
     PageGeneral,
-    PageEvaluation,
-    PageMetrics,
-    PageScores,
-    PageComparisons,
-    PageStatistics,
-    PageRefData,
+    PageVariables,
     PageSimData,
+    PageOptions,
     PagePreview,
     PageRunMonitor,
 )
@@ -59,7 +55,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenBench NML Wizard")
+        self.setWindowTitle("OpenBench")
         self.setMinimumSize(1200, 800)
 
         # Initialize controller
@@ -221,13 +217,9 @@ class MainWindow(QMainWindow):
         page_classes = {
             "runtime": PageRuntime,
             "general": PageGeneral,
-            "evaluation_items": PageEvaluation,
-            "metrics": PageMetrics,
-            "scores": PageScores,
-            "comparisons": PageComparisons,
-            "statistics": PageStatistics,
-            "ref_data": PageRefData,
-            "sim_data": PageSimData,
+            "variables": PageVariables,
+            "simulation": PageSimData,  # reuse PageSimData with new page ID
+            "options": PageOptions,
             "preview": PagePreview,
             "run_monitor": PageRunMonitor,
         }
