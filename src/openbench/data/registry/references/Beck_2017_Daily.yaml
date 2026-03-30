@@ -1,0 +1,14 @@
+name: Beck_2017_Daily
+description: Beck_2017_Daily reference dataset
+category: Water
+data_type: stn
+tim_res: Day
+data_groupby: single
+timezone: 0.0
+years:
+- 1950
+- 2016
+variables:
+  Streamflow:
+    varname: streamflow
+    varunit: m3 s-1

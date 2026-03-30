@@ -1,0 +1,17 @@
+name: MCD43A3
+description: MCD43A3 reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 2010
+- 2010
+variables:
+  Urban_Albedo:
+    varname: Albedo_wsa
+    varunit: 1
+    prefix: Urban_MCD43A3_2010_settime
+    sub_dir: Urban/MCD43A3
+grid_res: 0.25

@@ -1,0 +1,18 @@
+name: GCOS
+description: GCOS reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 1995
+- 2023
+variables:
+  Lake_Surface_Water_Temperature:
+    varname: lake_surface_water_temperature
+    varunit: K
+    prefix: LAKES-L3S-LSWT-
+    suffix: _monmean
+    sub_dir: Lake_Surface_Water_Temperature/GCOS
+grid_res: 0.25

@@ -1,0 +1,30 @@
+name: ERA5LAND
+description: ERA5LAND reference dataset
+category: Energy
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 1980
+- 2023
+variables:
+  Latent_Heat:
+    varname: slhf
+    varunit: W m-2
+    prefix: ERA5LAND_
+    suffix: _monmean_surface_latent_heat_flux_1D_0p25
+    sub_dir: Heat/Latent_Heat/ERA5LAND
+  Surface_Specific_Humidity:
+    varname: Q
+    varunit: kg kg-1
+    prefix: ERA5LAND_
+    suffix: _Q_monmean_0p25
+    sub_dir: Meteo/Surface_Specific_Humidity/ERA5LAND
+  Surface_Wind_Speed:
+    varname: ws
+    varunit: m s-1
+    prefix: ERA5LAND_
+    suffix: _ws_monmean_0p25
+    sub_dir: Meteo/Surface_Wind_Speed/ERA5LAND
+grid_res: 0.25

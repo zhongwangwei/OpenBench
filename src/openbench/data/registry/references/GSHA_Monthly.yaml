@@ -1,0 +1,14 @@
+name: GSHA_Monthly
+description: GSHA_Monthly reference dataset
+category: Water
+data_type: stn
+tim_res: Month
+data_groupby: single
+timezone: 0.0
+years:
+- 1900
+- 2020
+variables:
+  Streamflow:
+    varname: discharge
+    varunit: m3 s-1

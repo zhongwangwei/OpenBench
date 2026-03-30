@@ -1,0 +1,52 @@
+name: CLARA_3
+description: CLARA_3 reference dataset
+category: Energy
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 1979
+- 2023
+variables:
+  Net_Radiation:
+    varname: Rn
+    varunit: W m-2
+    prefix: Rnmm
+    sub_dir: Net_Radiation/CLARA_3
+  Surface_Upward_SW_Radiation:
+    varname: SUS
+    varunit: W m-2
+    prefix: SUSmm
+    sub_dir: Surface_Upward_SW_Radiation/CLARA_3
+  Surface_Upward_LW_Radiation:
+    varname: SUL
+    varunit: W m-2
+    prefix: SULmm
+    sub_dir: Surface_Upward_LW_Radiation/CLARA_3
+  Surface_Net_SW_Radiation:
+    varname: SNS
+    varunit: W m-2
+    prefix: SNSmm
+    sub_dir: Surface_Net_SW_Radiation/CLARA_3
+  Surface_Net_LW_Radiation:
+    varname: SNL
+    varunit: W m-2
+    prefix: SNLmm
+    sub_dir: Surface_Net_LW_Radiation/CLARA_3
+  Surface_Albedo:
+    varname: blue_sky_albedo_all_mean
+    varunit: 1
+    prefix: SALmm
+    sub_dir: Surface_Albedo/CLARA_3
+  Surface_Downward_SW_Radiation:
+    varname: SIS
+    varunit: W m-2
+    prefix: SISmm
+    sub_dir: Surface_Downward_SW_Radiation/CLARA_3
+  Surface_Downward_LW_Radiation:
+    varname: SDL
+    varunit: W m-2
+    prefix: SDLmm
+    sub_dir: Surface_Downward_LW_Radiation/CLARA_3
+grid_res: 0.25

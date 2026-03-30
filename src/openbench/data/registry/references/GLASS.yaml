@@ -1,0 +1,18 @@
+name: GLASS
+description: GLASS reference dataset
+category: Carbon
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 1981
+- 2018
+variables:
+  Net_Primary_Production:
+    varname: NPP
+    varunit: gC m-2 day-1
+    prefix: GLASS_NPP_
+    suffix: _monmean_0p25deg
+    sub_dir: Net_Primary_Production/GLASS
+grid_res: 0.25

@@ -1,0 +1,17 @@
+name: GRUN_ENSEMBLE
+description: GRUN_ENSEMBLE reference dataset
+category: Water
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 1902
+- 2019
+variables:
+  Total_Runoff:
+    varname: Runoff
+    varunit: mm day-1
+    prefix: G-RUN_ENSEMBLE_MMM
+    sub_dir: Total_Runoff/GRUN_ENSEMBLE
+grid_res: 0.25

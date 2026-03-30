@@ -1,0 +1,17 @@
+name: TRIMS
+description: TRIMS reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 2000
+- 2020
+variables:
+  Urban_Surface_Temperature:
+    varname: LST_N
+    varunit: K
+    prefix: TRIMS_LST_2000-2020
+    sub_dir: Urban/TRIMS
+grid_res: 0.25

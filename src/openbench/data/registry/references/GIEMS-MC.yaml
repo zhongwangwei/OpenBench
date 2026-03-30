@@ -1,0 +1,22 @@
+name: GIEMS-MC
+description: GIEMS-MC reference dataset
+category: Water
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 1992
+- 2020
+variables:
+  Inundation_Fraction:
+    varname: total_water_fraction
+    varunit: m
+    prefix: GIEMS-MC_water_fraction_map_setrange
+    sub_dir: Inundation_Fraction/GIEMS_MC/
+  Inundation_Area:
+    varname: water_surface_area
+    varunit: m
+    prefix: GIEMS-MC_water_area_map_setrange
+    sub_dir: Inundation_Area/GIEMS_MC/
+grid_res: 0.25

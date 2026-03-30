@@ -1,0 +1,17 @@
+name: GRFR
+description: GRFR reference dataset
+category: Water
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 1980
+- 2022
+variables:
+  Runoff:
+    varname: ro
+    varunit: mm day-1
+    prefix: RUNOFF_
+    sub_dir: Total_Runoff/GRFR
+grid_res: 0.25

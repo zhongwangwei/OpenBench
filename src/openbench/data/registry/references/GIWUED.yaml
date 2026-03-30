@@ -1,0 +1,17 @@
+name: GIWUED
+description: GIWUED reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Year
+timezone: 0
+years:
+- 2011
+- 2018
+variables:
+  Total_Irrigation_Amount:
+    varname: IWUens
+    varunit: mm month-1
+    prefix: IWU.ens.Y
+    sub_dir: Crop/GIWUED
+grid_res: 0.25

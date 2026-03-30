@@ -1,0 +1,17 @@
+name: MODIS_MOD10CM
+description: MODIS_MOD10CM reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 2000
+- 2024
+variables:
+  Snow_Cover_Extent:
+    varname: Snow_Cover_Monthly_CMG
+    varunit: percent
+    prefix: MOD10CM_merged_0p25d
+    sub_dir: Snow_Cover_Extent/MODIS_MOD10CM
+grid_res: 0.25

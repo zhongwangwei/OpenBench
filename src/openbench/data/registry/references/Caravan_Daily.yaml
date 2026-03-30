@@ -1,0 +1,14 @@
+name: Caravan_Daily
+description: Caravan_Daily reference dataset
+category: Water
+data_type: stn
+tim_res: Day
+data_groupby: single
+timezone: 0.0
+years:
+- 1950
+- 2023
+variables:
+  Streamflow:
+    varname: streamflow
+    varunit: m3 s-1

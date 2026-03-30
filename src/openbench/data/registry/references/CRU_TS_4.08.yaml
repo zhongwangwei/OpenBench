@@ -1,0 +1,37 @@
+name: CRU_TS_4.08
+description: CRU_TS_4.08 reference dataset
+category: Other
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 1901
+- 2023
+variables:
+  Surface_Air_Temperature:
+    varname: tmp
+    varunit: degC
+    prefix: tmp
+    sub_dir: Surface_Air_Temperature/CRU_TS_4.08
+  Diurnal_Max_Temperature:
+    varname: tmx
+    varunit: degC
+    prefix: tmx
+    sub_dir: Diurnal_Max_Temperature/CRU_TS_4.08
+  Diurnal_Min_Temperature:
+    varname: tmn
+    varunit: degC
+    prefix: tmn
+    sub_dir: Diurnal_Min_Temperature/CRU_TS_4.08
+  Cloud_Cover:
+    varname: cld
+    varunit: percent
+    prefix: cld
+    sub_dir: Cloud_Cover/CRU_TS_4.08
+  Ground_Frost_Frequency:
+    varname: frs
+    varunit: days
+    prefix: frs
+    sub_dir: Ground_Frost_Frequency/CRU_TS_4.08
+grid_res: 0.25

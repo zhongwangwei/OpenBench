@@ -1,0 +1,15 @@
+name: Transpiration_GLEAM_hybird
+description: Transpiration_GLEAM_hybird reference dataset
+category: Water
+data_type: stn
+tim_res: Day
+data_groupby: single
+timezone: 0.0
+years:
+- ''
+- ''
+variables:
+  Canopy_Transpiration:
+    varname: et
+    varunit: mm day-1
+fulllist: ./dataset/Reference/Station/Water/Transpiration/GLEAM_Hybird/list/Transpiration_GLEAM_hybird.csv

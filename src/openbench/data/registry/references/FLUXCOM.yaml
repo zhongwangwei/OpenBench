@@ -1,0 +1,17 @@
+name: FLUXCOM
+description: FLUXCOM reference dataset
+category: Energy
+data_type: grid
+tim_res: Month
+data_groupby: Single
+timezone: 0
+years:
+- 1980
+- 2014
+variables:
+  Latent_Heat:
+    varname: le
+    varunit: W m-2
+    prefix: le
+    sub_dir: Latent_Heat/FLUXCOM
+grid_res: 0.25
