@@ -1,0 +1,9 @@
+{
+    "general": {
+        "Evapotranspiration_sim_source": ["CoLM2024"],
+        "Latent_Heat_sim_source": ["CoLM2024"]
+    },
+    "def_nml": {
+        "CoLM2024": "./tests/test_config/fixtures/old_json/sim_def/case1.json"
+    }
+}

@@ -1,0 +1,10 @@
+{
+    "general": {
+        "Evapotranspiration_ref_source": "GLEAM_v4.2a",
+        "Latent_Heat_ref_source": "FLUXCOM"
+    },
+    "def_nml": {
+        "GLEAM_v4.2a": "./tests/test_config/fixtures/old_json/ref_def/GLEAM.json",
+        "FLUXCOM": "./tests/test_config/fixtures/old_json/ref_def/GLEAM.json"
+    }
+}

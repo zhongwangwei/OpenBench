@@ -1,0 +1,19 @@
+{
+    "general": {
+        "root_dir": "./dataset/Reference/Grid",
+        "data_type": "grid",
+        "syear": 1980,
+        "eyear": 2023,
+        "tim_res": "Month",
+        "grid_res": 0.25,
+        "timezone": 0,
+        "data_groupby": "Year"
+    },
+    "Evapotranspiration": {
+        "sub_dir": "Water/Evapotranspiration/GLEAM",
+        "varname": "E",
+        "varunit": "mm day-1",
+        "prefix": "E_",
+        "suffix": "_GLEAM"
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "general": {
+        "root_dir": "/data/CoLM2024/output",
+        "data_type": "grid",
+        "syear": 2004,
+        "eyear": 2010,
+        "tim_res": "Month",
+        "grid_res": 0.5,
+        "timezone": 0,
+        "data_groupby": "Year"
+    },
+    "Evapotranspiration": {
+        "varname": "ET",
+        "varunit": "mm day-1",
+        "prefix": "",
+        "suffix": ""
+    },
+    "Latent_Heat": {
+        "varname": "Qle",
+        "varunit": "W m-2",
+        "prefix": "",
+        "suffix": ""
+    }
+}

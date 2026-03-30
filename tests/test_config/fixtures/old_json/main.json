@@ -1,0 +1,44 @@
+{
+    "general": {
+        "basename": "test-migrate",
+        "basedir": "./output",
+        "syear": 2004,
+        "eyear": 2010,
+        "min_year": 3,
+        "min_lon": -180,
+        "max_lon": 180,
+        "min_lat": -90,
+        "max_lat": 90,
+        "reference_nml": "./tests/test_config/fixtures/old_json/ref.json",
+        "simulation_nml": "./tests/test_config/fixtures/old_json/sim.json",
+        "num_cores": 8,
+        "evaluation": true,
+        "comparison": true,
+        "statistics": false,
+        "IGBP_groupby": false,
+        "PFT_groupby": false,
+        "Climate_zone_groupby": false,
+        "unified_mask": true,
+        "generate_report": true
+    },
+    "evaluation_items": {
+        "Evapotranspiration": true,
+        "GPP": false,
+        "Latent_Heat": true
+    },
+    "metrics": {
+        "bias": true,
+        "RMSE": true,
+        "correlation": true,
+        "percent_bias": false
+    },
+    "scores": {
+        "nBiasScore": true,
+        "nRMSEScore": true,
+        "Overall_Score": false
+    },
+    "comparisons": {
+        "Taylor_Diagram": true,
+        "HeatMap": false
+    }
+}
