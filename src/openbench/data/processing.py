@@ -1138,7 +1138,20 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             model = getattr(self, f"{source}_model")
         except AttributeError:
             model = source
-        # Standard time normalization (applies to all models)
+        # Try model-specific time adjustment from filter (user dir → built-in)
+        try:
+            from openbench.data.custom import load_filter
+
+            filter_module = load_filter(model)
+            if filter_module:
+                adjust_func = getattr(filter_module, f"adjust_time_{model}", None)
+                if adjust_func:
+                    ds = adjust_func(self, ds, syear, eyear, tim_res)
+                    return ds
+        except Exception:
+            pass
+
+        # Standard time normalization (fallback for models without custom adjustment)
         try:
             import pandas as pd
 
@@ -1237,18 +1250,38 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 model = getattr(self, f"{source}_model")
             except AttributeError:
                 model = source
-            # --- Compute from model profile YAML expression ---
+            # Priority 1: compute expression from model profile YAML
             computed = self._try_compute_from_profile(model, ds, datasource)
             if computed is not None:
                 return computed
 
-            # --- Direct extraction: variable exists in dataset ---
+            # Priority 2: filter module (user ~/.openbench/custom/ → built-in)
+            try:
+                from openbench.data.custom import load_filter
+
+                filter_module = load_filter(model)
+                if filter_module:
+                    filter_func = getattr(filter_module, f"filter_{model}", None)
+                    if filter_func:
+                        logging.info(f"Applying filter for {model}")
+                        self, ds_or_da = filter_func(self, ds)
+                        if isinstance(ds_or_da, xr.Dataset):
+                            current_varname = getattr(self, f"{datasource}_varname")
+                            var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                            if var_to_extract in ds_or_da:
+                                return ds_or_da[var_to_extract]
+                        elif ds_or_da is not None:
+                            return ds_or_da
+            except Exception as e:
+                logging.debug(f"Filter failed for {model}: {e}")
+
+            # Priority 3: direct extraction
             current_varname = getattr(self, f"{datasource}_varname")
             var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
             if var_to_extract in ds:
                 return ds[var_to_extract]
 
-            raise KeyError(f"Variable '{var_to_extract}' not found in dataset and no compute expression defined")
+            raise KeyError(f"Variable '{var_to_extract}' not found in dataset")
         return ds
 
     @performance_monitor
@@ -1593,36 +1626,34 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     model = getattr(self, f"{source}_model")
                 except AttributeError:
                     model = source
-                # Try station filter for reference datasets (handles CaMA allocation etc.)
-                try:
-                    from openbench.data.custom import load_station_filter
+                # Same priority: compute → filter → direct
+                # Priority 1: compute
+                computed = self._try_compute_from_profile(model, stn_data, datasource)
+                if computed is not None:
+                    current_var_list = [getattr(self, "item", current_var_list[0])]
+                    ds = computed
+                else:
+                    # Priority 2: filter (station filters handle CaMA allocation etc.)
+                    try:
+                        from openbench.data.custom import load_filter
 
-                    stn_module = load_station_filter(model)
-                    if stn_module:
-                        filter_func = getattr(stn_module, f"filter_{model}", None)
-                        if filter_func:
-                            logging.info(f"Applying station filter for {model}")
-                            updated_self, filtered_data = filter_func(self, stn_data)
-                            if updated_self is not None and filtered_data is not None:
-                                if datasource == "ref":
-                                    new_var_attr = self.ref_varname
+                        stn_module = load_filter(model)
+                        if stn_module:
+                            filter_func = getattr(stn_module, f"filter_{model}", None)
+                            if filter_func:
+                                logging.info(f"Applying station filter for {model}")
+                                updated_self, filtered_data = filter_func(self, stn_data)
+                                if updated_self is not None and filtered_data is not None:
+                                    new_var_attr = getattr(self, f"{datasource}_varname")
+                                    current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                                    ds = filtered_data
                                 else:
-                                    new_var_attr = self.sim_varname
-                                current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
-                                ds = filtered_data
+                                    raise ValueError(f"Station filter returned None for {model}")
                             else:
-                                raise ValueError(f"Station filter returned None for {model}")
+                                raise ImportError(f"No filter function for {model}")
                         else:
-                            raise ImportError(f"No filter function for {model}")
-                    else:
-                        raise ImportError(f"No station filter for {model}")
-                except (ImportError, AttributeError):
-                    # No station filter — try compute expression
-                    computed = self._try_compute_from_profile(model, stn_data, datasource)
-                    if computed is not None:
-                        current_var_list = [getattr(self, "item", current_var_list[0])]
-                        ds = computed
-                    else:
+                            raise ImportError(f"No station filter for {model}")
+                    except (ImportError, AttributeError, ValueError):
                         available_vars = list(stn_data.data_vars) + list(stn_data.coords)
                         logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
                         raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
