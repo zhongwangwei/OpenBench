@@ -7,6 +7,7 @@ and the migrated core engine.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -134,7 +135,7 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: str) -> None:
+def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: str, ref_override: str | None = None) -> None:
     """Apply unified mask: set ref to NaN wherever sim is NaN.
 
     This ensures evaluation metrics only cover grid cells where BOTH
@@ -153,7 +154,10 @@ def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: 
     ref_varname = info.get("ref_varname", "")
     sim_varname = info.get("sim_varname", "")
 
-    ref_path = os.path.join(casedir, "data", f"{var_name}_ref_{ref_source}_{ref_varname}.nc")
+    if ref_override:
+        ref_path = ref_override
+    else:
+        ref_path = os.path.join(casedir, "data", f"{var_name}_ref_{ref_source}_{ref_varname}.nc")
     sim_path = os.path.join(casedir, "data", f"{var_name}_sim_{sim_source}_{sim_varname}.nc")
 
     ref_path = os.path.abspath(ref_path)
@@ -345,12 +349,22 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     for task in tasks:
         var_tasks[task["var_name"]].append(task)
 
+    time_alignment = cfg.options.time_alignment  # "intersection", "per_pair", "strict"
+
     def _preprocess_variable(var_name: str, vtasks: list[dict]) -> None:
-        """Preprocess all tasks for one variable (serial within variable)."""
+        """Preprocess all tasks for one variable (serial within variable).
+
+        For intersection/strict: ref processed once, unified_mask accumulates across sims.
+        For per_pair: each sim gets its own ref copy (no mask cross-contamination).
+        """
+        import shutil
+
         from openbench.config.legacy_processors import GeneralInfoReader
         from openbench.data.processing import DatasetProcessing
 
         ref_done = False
+        ref_file_path = None  # Track the original ref file for per_pair copies
+
         for task in vtasks:
             ref_source = task["ref_source"]
             sim_source = task["sim_source"]
@@ -378,17 +392,34 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
                     logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
                     processor.process("ref")
                     ref_done = True
+                    # Remember the ref file path for per_pair mode
+                    ref_varname = info.get("ref_varname", "")
+                    ref_file_path = os.path.join(
+                        info["casedir"], "data",
+                        f"{var_name}_ref_{ref_source}_{ref_varname}.nc",
+                    )
 
                 # Sim: each task
                 logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
                 processor.process("sim")
 
-                # Unified mask: serial accumulation
+                # Unified mask
                 if unified_mask:
                     ref_dtype = info.get("ref_data_type", "grid")
                     sim_dtype = info.get("sim_data_type", "grid")
                     if ref_dtype != "stn" and sim_dtype != "stn":
-                        _apply_unified_mask(info, var_name, ref_source, sim_source)
+                        if time_alignment == "per_pair" and ref_file_path:
+                            # per_pair: each sim gets its own ref copy
+                            # so one sim's NaN doesn't contaminate another's ref
+                            import shutil
+
+                            per_sim_ref = ref_file_path.replace(".nc", f"__{sim_source}.nc")
+                            shutil.copy2(ref_file_path, per_sim_ref)
+                            _apply_unified_mask(info, var_name, ref_source, sim_source, ref_override=per_sim_ref)
+                            task["ref_file_override"] = per_sim_ref
+                        else:
+                            # intersection/strict: accumulate mask on shared ref (correct)
+                            _apply_unified_mask(info, var_name, ref_source, sim_source)
 
                 task["ref_preprocessed"] = True
 
