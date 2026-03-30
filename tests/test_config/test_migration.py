@@ -16,7 +16,7 @@ def test_migrate_json_config():
     with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False, mode="w") as f:
         output_path = Path(f.name)
 
-    result = migrate_config(FIXTURES / "old_json" / "main.json", output_path)
+    migrate_config(FIXTURES / "old_json" / "main.json", output_path)
 
     assert output_path.exists()
     with open(output_path) as f:

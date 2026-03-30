@@ -250,9 +250,7 @@ def _build_options(raw: Any) -> OptionsConfig:
 
     time_alignment = raw.get("time_alignment", "intersection")
     if time_alignment not in VALID_TIME_ALIGNMENTS:
-        raise ConfigError(
-            f"options.time_alignment must be one of {VALID_TIME_ALIGNMENTS}, got '{time_alignment}'"
-        )
+        raise ConfigError(f"options.time_alignment must be one of {VALID_TIME_ALIGNMENTS}, got '{time_alignment}'")
 
     return OptionsConfig(
         num_cores=raw.get("num_cores"),

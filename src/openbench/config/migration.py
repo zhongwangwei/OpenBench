@@ -199,9 +199,7 @@ def _read_old_config(path: Path) -> dict:
                 nml = f90nml.read(path)
                 return dict(nml)
             except ImportError:
-                raise ImportError(
-                    "Migrating Fortran NML files requires f90nml: pip install f90nml"
-                )
+                raise ImportError("Migrating Fortran NML files requires f90nml: pip install f90nml")
         else:
             raise ValueError(f"Unsupported config format: {suffix}")
 
