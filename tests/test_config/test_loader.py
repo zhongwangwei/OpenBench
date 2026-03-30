@@ -14,7 +14,7 @@ def test_load_minimal():
     assert cfg.project.name == "test-minimal"
     assert cfg.project.years == [2004, 2010]
     assert cfg.evaluation.variables == ["Evapotranspiration"]
-    assert cfg.reference["Evapotranspiration"] == "GLEAM_v4.2a"
+    assert cfg.reference["Evapotranspiration"] == "GLEAM_v4.2a_LowRes"
     assert "CoLM2024" in cfg.simulation
     assert cfg.simulation["CoLM2024"].model == "CoLM2024"
     # Defaults applied

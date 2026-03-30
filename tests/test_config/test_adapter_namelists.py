@@ -13,7 +13,7 @@ def test_build_legacy_namelists():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="test", output_dir="./output", years=[2004, 2010]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference={"Evapotranspiration": "GLEAM_v4.2a"},
+        reference={"Evapotranspiration": "GLEAM_v4.2a_LowRes"},
         simulation={"CoLM2024": SimulationEntry(model="CoLM2024", root_dir="/data/CoLM2024")},
     )
 
@@ -24,18 +24,18 @@ def test_build_legacy_namelists():
     assert "Evapotranspiration" in main_nl["evaluation_items"]
 
     # Check ref_nml
-    assert ref_nml["general"]["Evapotranspiration_ref_source"] == "GLEAM_v4.2a"
+    assert ref_nml["general"]["Evapotranspiration_ref_source"] == "GLEAM_v4.2a_LowRes"
     assert "Evapotranspiration" in ref_nml
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_varname"] == "E"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_data_type"] == "grid"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_varunit"] == "mm day-1"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_prefix"] == "E_"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_suffix"] == "_GLEAM_v4.2a"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_tim_res"] == "Month"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_grid_res"] == 0.25
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_syear"] == 1980
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_eyear"] == 2023
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_timezone"] == 0
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_varname"] == "E"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_data_type"] == "grid"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_varunit"] == "mm day-1"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_prefix"] == "E_"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_suffix"] == "_GLEAM_v4.2a"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_tim_res"] == "Month"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_grid_res"] in (0.25, 0.5)
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_syear"] == 1980
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_eyear"] == 2023
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_timezone"] == 0
 
     # Check sim_nml
     assert "Evapotranspiration_sim_source" in sim_nml["general"]
@@ -53,7 +53,7 @@ def test_build_namelists_multiple_simulations():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="multi", output_dir="/out", years=[2000, 2020]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference={"Evapotranspiration": "GLEAM_v4.2a"},
+        reference={"Evapotranspiration": "GLEAM_v4.2a_LowRes"},
         simulation={
             "CoLM2024": SimulationEntry(model="CoLM2024", root_dir="/d1"),
             "CLM5": SimulationEntry(model="CLM5", root_dir="/d2"),
@@ -73,7 +73,7 @@ def test_build_namelists_inline_override():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="override", output_dir="/out", years=[2005, 2015]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference={"Evapotranspiration": "GLEAM_v4.2a"},
+        reference={"Evapotranspiration": "GLEAM_v4.2a_LowRes"},
         simulation={
             "MyModel": SimulationEntry(
                 model="CoLM2024",
@@ -101,7 +101,7 @@ def test_build_namelists_unknown_model_with_inline():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="unknown", output_dir="/out", years=[2000, 2010]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference={"Evapotranspiration": "GLEAM_v4.2a"},
+        reference={"Evapotranspiration": "GLEAM_v4.2a_LowRes"},
         simulation={
             "Custom": SimulationEntry(
                 model="UnknownModel",

@@ -8,7 +8,7 @@ evaluation:
     - Evapotranspiration
 
 reference:
-  Evapotranspiration: GLEAM_v4.2a
+  Evapotranspiration: GLEAM_v4.2a_LowRes
 
 simulation:
   CoLM2024:
