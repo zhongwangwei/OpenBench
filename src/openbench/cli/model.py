@@ -42,15 +42,27 @@ def show(name):
     click.echo(f"Description: {m.description}")
     click.echo(f"Type: {m.data_type}, Resolution: {m.grid_res}°, Time: {m.tim_res}")
     click.echo()
-    click.secho(f"{'Variable':<35} {'File varname':<30} {'Unit'}", bold=True)
-    click.echo("─" * 80)
+    click.secho(f"{'Variable':<35} {'File varname':<20} {'Unit':<20} {'Fallback'}", bold=True)
+    click.echo("─" * 100)
     for var_name, mapping in sorted(m.variables.items()):
         vn = mapping.varname
         if isinstance(vn, list):
-            vn_str = " → ".join(vn)
+            vn_str = vn[0]  # Legacy format: first in list
         else:
             vn_str = str(vn)
-        click.echo(f"{var_name:<35} {vn_str:<30} {mapping.varunit}")
+
+        # Show fallbacks
+        fb_str = ""
+        if mapping.fallbacks:
+            fb_parts = []
+            for fb in mapping.fallbacks:
+                conv = f" ({fb.convert})" if fb.convert else ""
+                fb_parts.append(f"{fb.varname} [{fb.varunit}]{conv}")
+            fb_str = " → ".join(fb_parts)
+        elif isinstance(vn, list) and len(vn) > 1:
+            fb_str = " → ".join(vn[1:])  # Legacy format
+
+        click.echo(f"{var_name:<35} {vn_str:<20} {mapping.varunit:<20} {fb_str}")
 
 
 @model.command()
@@ -60,26 +72,26 @@ def show(name):
 @click.option("--tim-res", type=click.Choice(["Month", "Day", "Hour", "Year"]), default=None)
 @click.option("--description", default=None)
 @click.option("-v", "--variable", multiple=True,
-              help="Variable: 'StdName:ncname:unit' or 'StdName:name1,name2:unit' for fallback. Repeatable.")
+              help="'StdName:ncname:unit' (repeatable). Overwrites if exists.")
+@click.option("-f", "--fallback", multiple=True,
+              help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
 @click.option("--append-only", is_flag=True, help="Only add new variables, skip existing ones.")
-def register(name, data_type, grid_res, tim_res, description, variable, append_only):
+def register(name, data_type, grid_res, tim_res, description, variable, fallback, append_only):
     """Register or update a model profile.
-
-    Creates a new profile or updates an existing one.
-    Variables are appended by default; use --overwrite to replace existing.
 
     \b
     Examples:
       # Create new model
-      openbench model register MyModel --data-type grid --grid-res 0.5 --tim-res Month \\
-        -v "Evapotranspiration:ET:mm day-1" \\
-        -v "GPP:gpp,assim:gC m-2 s-1"
+      openbench model register MyModel --data-type grid --grid-res 0.5 \\
+        -v "Evapotranspiration:ET:mm day-1"
 
-      # Add or update a variable
+      # Add primary + fallback with conversion
+      openbench model register CoLM2024 \\
+        -v "Gross_Primary_Productivity:f_gpp:g m-2 s-1" \\
+        -f "Gross_Primary_Productivity:f_assim:mol m-2 s-1:value * 12.011"
+
+      # Just add a simple variable
       openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
-
-      # Only add new, don't touch existing
-      openbench model register CoLM2024 --append-only -v "GPP:f_gpp:g m-2 s-1"
     """
     from pathlib import Path
 
@@ -123,7 +135,7 @@ def register(name, data_type, grid_res, tim_res, description, variable, append_o
     elif "tim_res" not in profile:
         profile["tim_res"] = "Month"
 
-    # Parse and merge variables
+    # Parse primary variables
     existing_vars = profile.get("variables", {})
     new_vars = {}
     for v in variable:
@@ -133,16 +145,41 @@ def register(name, data_type, grid_res, tim_res, description, variable, append_o
             raise SystemExit(1)
 
         std_name = parts[0].strip()
-        nc_names = parts[1].strip()
+        nc_name = parts[1].strip()
         unit = parts[2].strip() if len(parts) > 2 else ""
 
-        # Support fallback: "f_gpp,f_assim" → ["f_gpp", "f_assim"]
-        if "," in nc_names:
-            varname = [n.strip() for n in nc_names.split(",")]
-        else:
-            varname = nc_names
+        new_vars[std_name] = {"varname": nc_name, "varunit": unit}
 
-        new_vars[std_name] = {"varname": varname, "varunit": unit}
+    # Parse fallback definitions → attach to corresponding variable
+    for fb_def in fallback:
+        parts = fb_def.split(":")
+        if len(parts) < 3:
+            click.secho(f"Invalid fallback: '{fb_def}'. Use 'StdName:fallback_name:fallback_unit[:conversion]'", fg="red")
+            raise SystemExit(1)
+
+        std_name = parts[0].strip()
+        fb_name = parts[1].strip()
+        fb_unit = parts[2].strip()
+        fb_convert = parts[3].strip() if len(parts) > 3 else ""
+
+        fb_entry = {"varname": fb_name, "varunit": fb_unit}
+        if fb_convert:
+            fb_entry["convert"] = fb_convert
+
+        # Attach to the variable (create if not in new_vars, merge with existing)
+        if std_name in new_vars:
+            if "fallbacks" not in new_vars[std_name]:
+                new_vars[std_name]["fallbacks"] = []
+            new_vars[std_name]["fallbacks"].append(fb_entry)
+        elif std_name in existing_vars:
+            # Fallback for existing variable that's not being updated
+            if std_name not in new_vars:
+                new_vars[std_name] = dict(existing_vars[std_name])
+            if "fallbacks" not in new_vars[std_name]:
+                new_vars[std_name]["fallbacks"] = []
+            new_vars[std_name]["fallbacks"].append(fb_entry)
+        else:
+            click.secho(f"Warning: fallback for '{std_name}' but no primary variable defined. Use -v first.", fg="yellow")
 
     if not variable and is_new:
         # Interactive variable entry

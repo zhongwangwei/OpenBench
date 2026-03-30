@@ -7,16 +7,34 @@ from typing import Optional, Union
 
 
 @dataclass
+class FallbackVar:
+    """A fallback variable with its own unit and conversion expression."""
+
+    varname: str
+    varunit: str = ""
+    convert: str = ""  # Python expression, e.g., "value * 12.011"
+
+
+@dataclass
 class VariableMapping:
     """How a variable is stored in a dataset or model output.
 
-    varname can be a string or a list of strings (fallback chain).
-    E.g., varname=["f_gpp", "f_assim"] means try f_gpp first, fall back to f_assim.
-    When a fallback is used, the custom filter handles any unit conversion
-    (e.g., f_assim in mol m-2 s-1 → f_gpp in g m-2 s-1).
+    Primary variable: varname + varunit.
+    Optional fallbacks: list of FallbackVar, tried in order when primary is missing.
+    Each fallback has its own unit and a conversion expression to convert
+    to the primary unit.
+
+    Example in YAML:
+        Gross_Primary_Productivity:
+          varname: f_gpp
+          varunit: "g m-2 s-1"
+          fallbacks:
+            - varname: f_assim
+              varunit: "mol m-2 s-1"
+              convert: "value * 12.011"
     """
 
-    varname: Union[str, list[str]]
+    varname: Union[str, list[str]]  # str for primary, list[str] for legacy fallback format
     varunit: str
     prefix: str = ""
     suffix: str = ""
@@ -24,6 +42,7 @@ class VariableMapping:
     fulllist: Optional[str] = None
     max_uparea: Optional[float] = None
     min_uparea: Optional[float] = None
+    fallbacks: Optional[list[FallbackVar]] = None  # Fallback variables with unit conversion
 
 
 @dataclass

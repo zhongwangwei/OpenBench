@@ -15,30 +15,53 @@ from openbench.config.schema import OpenBenchConfig
 logger = logging.getLogger(__name__)
 
 
-def _resolve_varname(varname, root_dir: str | None = None) -> str:
-    """Resolve a variable name, handling fallback chains.
+def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str]:
+    """Resolve a variable name from profile, handling fallbacks.
 
-    If varname is a list like ["f_gpp", "f_assim"], check the first NC file
-    in root_dir to find which variable actually exists. Returns the first match.
-    If varname is a plain string, return it directly.
+    Checks the data files to determine which variable actually exists.
+    Handles both legacy format (varname as list) and new format (fallbacks field).
+
+    Args:
+        profile_var: A VariableMapping object or raw varname (str/list).
+        root_dir: Path to simulation data directory to check actual files.
+
+    Returns:
+        (resolved_varname, resolved_varunit) tuple.
     """
-    if isinstance(varname, str):
-        return varname
+    # Extract primary varname and fallbacks from profile_var
+    if hasattr(profile_var, "varname"):
+        # It's a VariableMapping object
+        primary = profile_var.varname
+        primary_unit = profile_var.varunit
+        fallbacks = profile_var.fallbacks or []
+    elif isinstance(profile_var, str):
+        return profile_var, ""
+    elif isinstance(profile_var, list):
+        # Legacy list format
+        primary = profile_var[0] if profile_var else ""
+        primary_unit = ""
+        fallbacks = []
+    else:
+        return str(profile_var), ""
 
-    if not isinstance(varname, list) or not varname:
-        return str(varname)
+    # Normalize primary: if list (legacy), first element is primary
+    if isinstance(primary, list):
+        all_names = primary
+        primary = all_names[0]
+    else:
+        all_names = [primary] + [fb.varname for fb in fallbacks]
 
-    # If no root_dir to check, return first option
-    if not root_dir:
-        return varname[0]
+    # If no root_dir, return primary
+    if not root_dir or not all_names:
+        return primary, primary_unit
 
-    # Try to find which varname exists in the data files
+    # Check data files to find which variable exists
     import glob
     from pathlib import Path
 
     nc_files = sorted(glob.glob(str(Path(root_dir) / "*.nc")))
     if not nc_files:
-        return varname[0]
+        return primary, primary_unit
 
     try:
         import xarray as xr
@@ -47,16 +70,34 @@ def _resolve_varname(varname, root_dir: str | None = None) -> str:
         available = set(ds.data_vars)
         ds.close()
 
-        for vn in varname:
-            if vn in available:
-                logger.info("Resolved varname fallback: %s → %s (from %s)", varname, vn, Path(nc_files[0]).name)
-                return vn
+        # Try primary first
+        if primary in available:
+            return primary, primary_unit
 
-        logger.warning("None of %s found in %s, using first: %s", varname, Path(nc_files[0]).name, varname[0])
+        # Try each fallback
+        for fb in fallbacks:
+            if fb.varname in available:
+                logger.info(
+                    "Varname fallback: %s not found → using %s (%s, convert: %s)",
+                    primary, fb.varname, fb.varunit, fb.convert or "none",
+                )
+                # Return fallback's own unit (conversion happens in custom filter)
+                return fb.varname, fb.varunit or primary_unit
+
+        # Legacy list fallback (no unit info)
+        if isinstance(profile_var, list if not hasattr(profile_var, "varname") else type(None)):
+            pass
+        elif hasattr(profile_var, "varname") and isinstance(profile_var.varname, list):
+            for vn in profile_var.varname[1:]:
+                if vn in available:
+                    logger.info("Varname fallback (legacy): %s → %s", primary, vn)
+                    return vn, primary_unit
+
+        logger.warning("None of %s found in data, using primary: %s", all_names, primary)
     except Exception:
         pass
 
-    return varname[0]
+    return primary, primary_unit
 
 
 def to_legacy_config(cfg: OpenBenchConfig) -> dict[str, Any]:
@@ -318,9 +359,14 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
 
             if model_profile and var_name in model_profile.variables:
                 profile_var = model_profile.variables[var_name]
-                raw_varname = inline_vars.get("varname", profile_var.varname)
-                varname = _resolve_varname(raw_varname, sim_entry.root_dir)
-                varunit = inline_vars.get("varunit", profile_var.varunit)
+                if "varname" in inline_vars:
+                    # Inline override — no fallback resolution
+                    varname = inline_vars["varname"]
+                    varunit = inline_vars.get("varunit", profile_var.varunit)
+                else:
+                    # Resolve from profile with fallback chain
+                    varname, varunit = _resolve_varname(profile_var, sim_entry.root_dir)
+                    varunit = inline_vars.get("varunit", varunit)
                 var_prefix = inline_vars.get("prefix", entry_prefix or profile_var.prefix)
                 var_suffix = inline_vars.get("suffix", entry_suffix or profile_var.suffix)
             elif inline_vars:

@@ -22,7 +22,7 @@ from typing import Optional
 
 import yaml
 
-from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+from openbench.data.registry.schema import FallbackVar, ModelProfile, ReferenceDataset, VariableMapping
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +270,21 @@ def _auto_resolve_variant(
     return candidates[0][1]
 
 
+def _parse_fallbacks(raw_list: list | None) -> list[FallbackVar] | None:
+    """Parse fallback variable definitions from YAML."""
+    if not raw_list:
+        return None
+    return [
+        FallbackVar(
+            varname=fb["varname"],
+            varunit=fb.get("varunit", ""),
+            convert=fb.get("convert", ""),
+        )
+        for fb in raw_list
+        if isinstance(fb, dict) and "varname" in fb
+    ]
+
+
 def _build_reference(data: dict) -> ReferenceDataset:
     """Build a ReferenceDataset from a raw dict."""
     variables = {}
@@ -283,6 +298,7 @@ def _build_reference(data: dict) -> ReferenceDataset:
             fulllist=var_data.get("fulllist"),
             max_uparea=var_data.get("max_uparea"),
             min_uparea=var_data.get("min_uparea"),
+            fallbacks=_parse_fallbacks(var_data.get("fallbacks")),
         )
 
     # Validate required fields
@@ -335,6 +351,7 @@ def _build_model(data: dict) -> ModelProfile:
             prefix=var_data.get("prefix", ""),
             suffix=var_data.get("suffix", ""),
             sub_dir=var_data.get("sub_dir"),
+            fallbacks=_parse_fallbacks(var_data.get("fallbacks")),
         )
 
     return ModelProfile(

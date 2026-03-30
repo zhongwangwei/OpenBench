@@ -50,10 +50,12 @@ CoLM2024:
   data_groupby: month
   variables:
     Gross_Primary_Productivity:
-      varname:
-      - f_gpp
-      - f_assim
-      varunit: mol m-2 s-1
+      varname: f_gpp
+      varunit: g m-2 s-1
+      fallbacks:
+      - varname: f_assim
+        varunit: mol m-2 s-1
+        convert: value * 12.011
     Evapotranspiration:
       varname: f_fevpa
       varunit: mm s-1
@@ -129,6 +131,13 @@ CoLM2024:
     Veg_Cover_In_Fraction:
       varname: f_sigf
       varunit: m2 m-2
+    Net_Ecosystem_Exchange:
+      varname: f_nee
+      varunit: g m-2 s-1
+      fallbacks:
+      - varname: f_respc
+        varunit: mol m-2 s-1
+        convert: value * 12.011 - gpp
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
