@@ -63,8 +63,6 @@ def show(name):
         if mapping.compute:
             expr = mapping.compute if len(mapping.compute) < 40 else mapping.compute[:37] + "..."
             notes_parts.append(f"compute: {expr}")
-        if mapping.filter:
-            notes_parts.append(f"filter: {mapping.filter}")
         notes = " | ".join(notes_parts)
 
         click.echo(f"{var_name:<35} {vn_str:<25} {mapping.varunit:<15} {notes}")

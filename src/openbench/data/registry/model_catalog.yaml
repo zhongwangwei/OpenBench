@@ -100,8 +100,9 @@ CoLM2024:
       varname: f_xy_frl
       varunit: W m-2
     Surface_Albedo:
-      varname: f_alb
+      varname: Surface_Albedo
       varunit: '-'
+      compute: ds['f_sr'] / ds['f_xy_solarin']
     Leaf_Area_Index:
       varname: f_lai
       varunit: m2 m-2
@@ -109,13 +110,18 @@ CoLM2024:
       varname: f_t_grnd
       varunit: K
     Surface_Soil_Moisture:
-      varname: f_wliq_soisno
+      varname: Surface_Soil_Moisture
       varunit: m3 m-3
-      filter: CoLM
+      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6))
+        / 0.0626 / 1000.0
     Root_Zone_Soil_Moisture:
-      varname: f_wliq_soisno
+      varname: Root_Zone_Soil_Moisture
       varunit: m3 m-3
-      filter: CoLM
+      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6)
+        + ds['f_wliq_soisno'].isel(soilsnow=7) + ds['f_wliq_soisno'].isel(soilsnow=8)
+        + ds['f_wliq_soisno'].isel(soilsnow=9) + ds['f_wliq_soisno'].isel(soilsnow=10)
+        + ds['f_wliq_soisno'].isel(soilsnow=11) + ds['f_wliq_soisno'].isel(soilsnow=12)
+        * 0.31) / 1000.0
     Snow_Water_Equivalent:
       varname: f_scv
       varunit: mm
@@ -173,23 +179,50 @@ CoLM2024:
     Crop_Yield_Corn:
       varname: Crop_Yield_Corn
       varunit: t ha-1
-      filter: CoLM
+      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0)
+        + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0);
+        ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0)
+        + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0)
+        + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0)
+        + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0))
+        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
     Crop_Yield_Maize:
       varname: Crop_Yield_Maize
       varunit: t ha-1
-      filter: CoLM
+      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0)
+        + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0);
+        ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0)
+        + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0)
+        + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0)
+        + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0))
+        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
     Crop_Yield_Soybean:
       varname: Crop_Yield_Soybean
       varunit: t ha-1
-      filter: CoLM
+      compute: total_area = ds['area_rainfed_temp_soybean'].fillna(0) + ds['area_irrigated_temp_soybean'].fillna(0)
+        + ds['area_rainfed_trop_soybean'].fillna(0) + ds['area_irrigated_trop_soybean'].fillna(0);
+        ((ds['f_cropprodc_rainfed_temp_soybean'].fillna(0) * ds['area_rainfed_temp_soybean'].fillna(0)
+        + ds['f_cropprodc_irrigated_temp_soybean'].fillna(0) * ds['area_irrigated_temp_soybean'].fillna(0)
+        + ds['f_cropprodc_rainfed_trop_soybean'].fillna(0) * ds['area_rainfed_trop_soybean'].fillna(0)
+        + ds['f_cropprodc_irrigated_trop_soybean'].fillna(0) * ds['area_irrigated_trop_soybean'].fillna(0))
+        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
     Crop_Yield_Rice:
       varname: Crop_Yield_Rice
       varunit: t ha-1
-      filter: CoLM
+      compute: total_area = ds['area_rainfed_rice'].fillna(0) + ds['area_irrigated_rice'].fillna(0);
+        ((ds['f_cropprodc_rainfed_rice'].fillna(0) * ds['area_rainfed_rice'].fillna(0)
+        + ds['f_cropprodc_irrigated_rice'].fillna(0) * ds['area_irrigated_rice'].fillna(0))
+        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
     Crop_Yield_Wheat:
       varname: Crop_Yield_Wheat
       varunit: t ha-1
-      filter: CoLM
+      compute: total_area = ds['area_rainfed_spwheat'].fillna(0) + ds['area_irrigated_spwheat'].fillna(0)
+        + ds['area_rainfed_wtwheat'].fillna(0) + ds['area_irrigated_wtwheat'].fillna(0);
+        ((ds['f_cropprodc_rainfed_spwheat'].fillna(0) * ds['area_rainfed_spwheat'].fillna(0)
+        + ds['f_cropprodc_irrigated_spwheat'].fillna(0) * ds['area_irrigated_spwheat'].fillna(0)
+        + ds['f_cropprodc_rainfed_wtwheat'].fillna(0) * ds['area_rainfed_wtwheat'].fillna(0)
+        + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0))
+        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
