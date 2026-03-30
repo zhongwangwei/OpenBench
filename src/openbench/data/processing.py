@@ -1181,11 +1181,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             mgr = RegistryManager()
             profile = mgr.get_model(model)
             if profile and profile.time_offset:
-                # Determine which offset to use based on tim_res
                 match = re.match(r"(\d*)\s*([a-zA-Z]+)", tim_res)
                 if match:
                     _, time_unit = match.groups()
-                    # Map tim_res to offset key
                     key_map = {
                         "m": "Month", "me": "Month", "month": "Month", "mon": "Month",
                         "d": "Day", "day": "Day",
@@ -1193,13 +1191,30 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                         "y": "Year", "year": "Year",
                     }
                     offset_key = key_map.get(time_unit.lower(), "")
-                    offset_str = profile.time_offset.get(offset_key, "0")
+                    offset_value = profile.time_offset.get(offset_key, "0")
+
+                    # Resolve offset — can be a simple string or a per-variable dict
+                    if isinstance(offset_value, dict):
+                        # Per-variable offset: {"default": "0", "Streamflow,Dam_Inflow,...": "-15 days"}
+                        item = getattr(self, "item", "")
+                        offset_str = offset_value.get("default", "0")
+                        for var_list_str, var_offset in offset_value.items():
+                            if var_list_str == "default":
+                                continue
+                            if item in [v.strip() for v in var_list_str.split(",")]:
+                                offset_str = var_offset
+                                break
+                    else:
+                        offset_str = str(offset_value)
 
                     if offset_str and offset_str != "0":
                         offset = _parse_time_offset(offset_str)
                         if offset:
                             ds["time"] = pd.DatetimeIndex(ds["time"].values) + offset
-                            logging.debug("Applied time offset %s for %s (%s)", offset_str, model, offset_key)
+                            logging.debug(
+                                "Applied time offset %s for %s/%s (%s)",
+                                offset_str, model, getattr(self, "item", "?"), offset_key,
+                            )
         except Exception as e:
             logging.debug("Time offset skipped for %s: %s", model, e)
 

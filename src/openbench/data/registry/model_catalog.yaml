@@ -5,46 +5,65 @@ CLM5:
   grid_res: 1.25
   tim_res: Month
   variables:
-    Evapotranspiration:
+    Evapotranspiration: &id001
       varname: QFLX_EVAP_TOT
       varunit: mm day-1
-    Latent_Heat:
+    Latent_Heat: &id002
       varname: EFLX_LH_TOT
       varunit: W m-2
-    Sensible_Heat:
+    Sensible_Heat: &id003
       varname: FSH
       varunit: W m-2
-    Gross_Primary_Productivity:
+    Gross_Primary_Productivity: &id004
       varname: GPP
       varunit: gC m-2 s-1
-    Net_Ecosystem_Exchange:
+    Net_Ecosystem_Exchange: &id005
       varname: NEE
       varunit: gC m-2 s-1
-    Net_Radiation:
+    Net_Radiation: &id006
       varname: Net_Radiation
       varunit: W m-2
       compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
-    Total_Runoff:
+    Total_Runoff: &id007
       varname: QRUNOFF
       varunit: mm day-1
-    Surface_Soil_Moisture:
-      varname: SOILWATER_10CM
-      varunit: kg m-2
-    Surface_Soil_Temperature:
+    Surface_Soil_Moisture: &id008
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06
+        / 1000.0
+    Surface_Soil_Temperature: &id009
       varname: TSOI_10CM
       varunit: K
-    Snow_Water_Equivalent:
+    Snow_Water_Equivalent: &id010
       varname: H2OSNO
       varunit: mm
-    Leaf_Area_Index:
+    Leaf_Area_Index: &id011
       varname: TLAI
       varunit: m2 m-2
-    Surface_Albedo:
-      varname: ASA
+    Surface_Albedo: &id012
+      varname: Surface_Albedo
       varunit: '-'
+      compute: ds['FSR'] / ds['FSDS']
+    Surface_Net_LW_Radiation: &id013
+      varname: FIRA
+      varunit: W m-2
+      compute: -ds['FIRA']
+    Root_Zone_Soil_Moisture: &id014
+      varname: Root_Zone_Soil_Moisture
+      varunit: m3 m-3
+      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1) + ds['SOILLIQ'].isel(levsoi=2)
+        + ds['SOILLIQ'].isel(levsoi=3) + ds['SOILLIQ'].isel(levsoi=4) + ds['SOILLIQ'].isel(levsoi=5)
+        + ds['SOILLIQ'].isel(levsoi=6) + ds['SOILLIQ'].isel(levsoi=7) + ds['SOILLIQ'].isel(levsoi=8)
+        * 0.29) / 1000.0
+    Ground_Heat: &id015
+      varname: Ground_Heat
+      varunit: W m-2
+      compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE'] - ds['FSH'] - ds['EFLX_LH_TOT']
   time_offset:
     Month: -1 months
     Day: -1 days
+    Hour: -1 hours
 CoLM2024:
   name: CoLM2024
   description: Common Land Model 2024
@@ -228,9 +247,14 @@ CoLM2024:
         + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0))
         * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
   time_offset:
-    Month: -15 days
-    Day: '0'
-    Hour: '0'
+    Month:
+      default: '0'
+      Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Inundation_Fraction,Inundation_Area,River_Water_Level: -15
+        days
+    Day:
+      default: '0'
+      Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Inundation_Fraction,Inundation_Area,River_Water_Level: -1
+        days
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
@@ -363,10 +387,32 @@ BCC_AVIM:
   data_type: grid
   tim_res: Month
   variables:
-    Net_Radiation:
-      varname: Net_Radiation
-      varunit: W m-2
-      compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
+    Evapotranspiration: *id001
+    Latent_Heat: *id002
+    Sensible_Heat: *id003
+    Gross_Primary_Productivity: *id004
+    Net_Ecosystem_Exchange: *id005
+    Net_Radiation: *id006
+    Total_Runoff: *id007
+    Surface_Soil_Moisture: *id008
+    Surface_Soil_Temperature: *id009
+    Snow_Water_Equivalent: *id010
+    Leaf_Area_Index: *id011
+    Surface_Albedo: *id012
+    Surface_Net_LW_Radiation: *id013
+    Root_Zone_Soil_Moisture: *id014
+    Ground_Heat: *id015
   time_offset:
     Month: -1 months
     Day: -1 days
+    Hour: -1 hours
+CaMa:
+  name: CaMa
+  description: CaMa-Flood River Model
+  data_type: grid
+  tim_res: Day
+  time_offset:
+    Month: '0'
+    Day: -1 days
+    Hour: -1 hours
+  variables: {}
