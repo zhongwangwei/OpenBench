@@ -7,7 +7,6 @@ and the migrated core engine.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -103,18 +102,12 @@ def run_evaluation(cfg: OpenBenchConfig) -> dict[str, Any]:
 
                     Evaluation_grid(info, fig_nml)
 
-                evaluated.append(
-                    {"variable": var_name, "sim": sim_source, "ref": ref_source, "status": "success"}
-                )
+                evaluated.append({"variable": var_name, "sim": sim_source, "ref": ref_source, "status": "success"})
                 logger.info("Completed %s: sim=%s ref=%s", var_name, sim_source, ref_source)
 
             except Exception:
-                logger.exception(
-                    "Evaluation failed for %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
-                )
-                errors.append(
-                    {"variable": var_name, "sim": sim_source, "ref": ref_source, "status": "error"}
-                )
+                logger.exception("Evaluation failed for %s (sim=%s, ref=%s)", var_name, sim_source, ref_source)
+                errors.append({"variable": var_name, "sim": sim_source, "ref": ref_source, "status": "error"})
 
     results: dict[str, Any] = {
         "status": "success" if not errors else "partial",
@@ -127,7 +120,5 @@ def run_evaluation(cfg: OpenBenchConfig) -> dict[str, Any]:
         "errors": errors,
     }
 
-    logger.info(
-        "Evaluation complete: %d succeeded, %d failed", len(evaluated), len(errors)
-    )
+    logger.info("Evaluation complete: %d succeeded, %d failed", len(evaluated), len(errors))
     return results
