@@ -249,12 +249,12 @@ CoLM2024:
   time_offset:
     Month:
       default: '0'
-      Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Inundation_Fraction,Inundation_Area,River_Water_Level: -15
-        days
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 months
     Day:
       default: '0'
-      Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Inundation_Fraction,Inundation_Area,River_Water_Level: -1
-        days
+      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      : -1 days
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
