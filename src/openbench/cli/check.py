@@ -29,15 +29,20 @@ def check(config):
     mgr = RegistryManager()
     has_errors = False
 
-    # Derive simulation resolution for auto-resolve context
-    sim_tim_res = None
-    sim_grid_res = None
-    for entry in cfg.simulation.values():
-        if entry.tim_res:
-            sim_tim_res = entry.tim_res
-        if entry.grid_res:
-            sim_grid_res = entry.grid_res
-        break  # Use first simulation entry as reference
+    # Derive target resolution for auto-resolve:
+    # User-specified comparison resolution → simulation resolution as fallback
+    target_tim_res = cfg.comparison.tim_res
+    target_grid_res = cfg.comparison.grid_res
+    if not target_tim_res:
+        for entry in cfg.simulation.values():
+            if entry.tim_res:
+                target_tim_res = entry.tim_res
+                break
+    if not target_grid_res:
+        for entry in cfg.simulation.values():
+            if entry.grid_res:
+                target_grid_res = entry.grid_res
+                break
 
     for var, source in cfg.reference.items():
         ref = mgr.get_reference(source)
@@ -49,14 +54,14 @@ def check(config):
             if variants:
                 # Try auto-resolve using simulation context
                 resolved = mgr.get_reference(
-                    source, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res
+                    source, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res
                 )
                 if resolved:
                     reason_parts = []
-                    if sim_tim_res:
-                        reason_parts.append(f"sim tim_res={sim_tim_res}")
-                    if sim_grid_res:
-                        reason_parts.append(f"sim grid_res={sim_grid_res}°")
+                    if target_tim_res:
+                        reason_parts.append(f"target tim_res={target_tim_res}")
+                    if target_grid_res:
+                        reason_parts.append(f"target grid_res={target_grid_res}°")
                     reason = f" (matched to {', '.join(reason_parts)})" if reason_parts else ""
 
                     click.secho(

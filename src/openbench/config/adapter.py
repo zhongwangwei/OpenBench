@@ -182,16 +182,22 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             logger.warning("No reference source configured for variable %s, skipping", var_name)
             continue
 
-        # Derive simulation resolution for auto-resolve
-        sim_tim_res = None
-        sim_grid_res = None
-        for entry in cfg.simulation.values():
-            sim_tim_res = entry.tim_res or sim_tim_res
-            sim_grid_res = entry.grid_res or sim_grid_res
-            break
+        # Derive target resolution for auto-resolve:
+        # Use user-specified comparison resolution (both ref and sim will be regridded to this)
+        # Fallback to simulation resolution if comparison not specified
+        target_tim_res = cfg.comparison.tim_res
+        target_grid_res = cfg.comparison.grid_res
+        if not target_tim_res:
+            for entry in cfg.simulation.values():
+                target_tim_res = entry.tim_res or target_tim_res
+                break
+        if not target_grid_res:
+            for entry in cfg.simulation.values():
+                target_grid_res = entry.grid_res or target_grid_res
+                break
 
         ref_ds = registry.get_reference(
-            ref_source_name, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res
+            ref_source_name, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res
         )
 
         # Update source name to resolved name (may differ from base name)
