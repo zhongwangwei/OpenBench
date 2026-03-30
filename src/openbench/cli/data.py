@@ -75,4 +75,67 @@ def path(name):
 @click.argument("name")
 def optimize(name):
     """Convert dataset to zarr for faster reads."""
-    click.echo(f"Not yet implemented. Dataset: {name}")
+    from openbench.data.registry import RegistryManager
+
+    mgr = RegistryManager()
+    ref = mgr.get_reference(name)
+    if ref is None:
+        click.secho(f"Dataset not found: {name}", fg="red")
+        raise SystemExit(1)
+
+    if not ref.root_dir:
+        click.secho(f"No local path configured for {name}. Download it first.", fg="red")
+        raise SystemExit(1)
+
+    try:
+        import xarray as xr
+    except ImportError:
+        click.secho("xarray is required for optimization.", fg="red")
+        raise SystemExit(1)
+
+    from pathlib import Path
+    import glob
+
+    root = Path(ref.root_dir)
+    if not root.exists():
+        click.secho(f"Data directory not found: {root}", fg="red")
+        raise SystemExit(1)
+
+    zarr_dir = root.parent / f"{root.name}.zarr"
+    if zarr_dir.exists():
+        click.echo(f"Zarr store already exists: {zarr_dir}")
+        if not click.confirm("Overwrite?"):
+            return
+
+    # Find all NetCDF files
+    nc_files = sorted(glob.glob(str(root / "**" / "*.nc"), recursive=True))
+    nc_files += sorted(glob.glob(str(root / "**" / "*.nc4"), recursive=True))
+
+    if not nc_files:
+        click.secho(f"No NetCDF files found in {root}", fg="yellow")
+        return
+
+    click.echo(f"Found {len(nc_files)} NetCDF files")
+    click.echo(f"Converting to zarr: {zarr_dir}")
+
+    try:
+        # Open all files as a single dataset and save as zarr
+        ds = xr.open_mfdataset(nc_files, combine="by_coords", engine="netcdf4")
+        ds.to_zarr(str(zarr_dir), mode="w")
+        ds.close()
+
+        # Report size comparison
+        import os
+
+        nc_size = sum(os.path.getsize(f) for f in nc_files)
+        zarr_size = sum(
+            os.path.getsize(os.path.join(dp, f))
+            for dp, _, fns in os.walk(zarr_dir)
+            for f in fns
+        )
+        click.secho(f"✓ Converted to zarr", fg="green")
+        click.echo(f"  NetCDF: {nc_size / 1e9:.1f} GB")
+        click.echo(f"  Zarr:   {zarr_size / 1e9:.1f} GB")
+    except Exception as e:
+        click.secho(f"Conversion failed: {e}", fg="red")
+        raise SystemExit(1)
