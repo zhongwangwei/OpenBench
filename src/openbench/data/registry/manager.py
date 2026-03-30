@@ -31,6 +31,7 @@ class RegistryManager:
         if user_dir is None:
             try:
                 from platformdirs import user_config_dir
+
                 user_dir = Path(user_config_dir("openbench"))
             except ImportError:
                 user_dir = Path.home() / ".openbench"

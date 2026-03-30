@@ -33,7 +33,10 @@ def test_reference_dataset():
         years=[1980, 2023],
         variables={
             "Evapotranspiration": VariableMapping(
-                varname="E", varunit="mm day-1", prefix="E_", suffix="_GLEAM_v4.2a",
+                varname="E",
+                varunit="mm day-1",
+                prefix="E_",
+                suffix="_GLEAM_v4.2a",
                 sub_dir="Evapotranspiration/GLEAM_v4.2a",
             ),
         },

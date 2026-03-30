@@ -63,7 +63,9 @@ def convert_old_reference(
         yaml.dump(new_descriptor, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
 
-def batch_convert_references(source_dir: Path, output_dir: Path, category_map: Optional[dict[str, str]] = None) -> list[str]:
+def batch_convert_references(
+    source_dir: Path, output_dir: Path, category_map: Optional[dict[str, str]] = None
+) -> list[str]:
     """Convert all old-format reference definitions in a directory."""
     if category_map is None:
         category_map = {}
@@ -90,25 +92,52 @@ def _guess_category(path: Path) -> str:
     variables = [k for k in data.keys() if k != "general"]
 
     water_vars = {
-        "Evapotranspiration", "Runoff", "Total_Runoff", "Streamflow",
-        "Soil_Moisture", "Surface_Soil_Moisture", "Root_Zone_Soil_Moisture",
-        "Snow_Depth", "Snow_Water_Equivalent", "Precipitation",
-        "Canopy_Interception", "Canopy_Transpiration", "Bare_Soil_Evaporation",
-        "Terrestrial_Water_Storage_Change", "Water_Table_Depth",
-        "Groundwater_Recharge_Rate", "Inundation_Fraction", "Inundation_Area",
-        "Depth_Of_Surface_Water", "Open_Water_Evaporation",
+        "Evapotranspiration",
+        "Runoff",
+        "Total_Runoff",
+        "Streamflow",
+        "Soil_Moisture",
+        "Surface_Soil_Moisture",
+        "Root_Zone_Soil_Moisture",
+        "Snow_Depth",
+        "Snow_Water_Equivalent",
+        "Precipitation",
+        "Canopy_Interception",
+        "Canopy_Transpiration",
+        "Bare_Soil_Evaporation",
+        "Terrestrial_Water_Storage_Change",
+        "Water_Table_Depth",
+        "Groundwater_Recharge_Rate",
+        "Inundation_Fraction",
+        "Inundation_Area",
+        "Depth_Of_Surface_Water",
+        "Open_Water_Evaporation",
     }
     carbon_vars = {
-        "Gross_Primary_Productivity", "Net_Ecosystem_Exchange",
-        "Ecosystem_Respiration", "Biomass", "Leaf_Area_Index",
-        "Soil_Carbon", "Net_Primary_Production", "Veg_Cover_In_Fraction",
-        "Burned_Area", "Methane", "Wetland_Methane_Emission", "Leaf_Greenness",
+        "Gross_Primary_Productivity",
+        "Net_Ecosystem_Exchange",
+        "Ecosystem_Respiration",
+        "Biomass",
+        "Leaf_Area_Index",
+        "Soil_Carbon",
+        "Net_Primary_Production",
+        "Veg_Cover_In_Fraction",
+        "Burned_Area",
+        "Methane",
+        "Wetland_Methane_Emission",
+        "Leaf_Greenness",
     }
     energy_vars = {
-        "Latent_Heat", "Sensible_Heat", "Net_Radiation", "Ground_Heat",
-        "Surface_Upward_SW_Radiation", "Surface_Upward_LW_Radiation",
-        "Surface_Net_SW_Radiation", "Surface_Net_LW_Radiation",
-        "Surface_Downward_SW_Radiation", "Surface_Downward_LW_Radiation",
+        "Latent_Heat",
+        "Sensible_Heat",
+        "Net_Radiation",
+        "Ground_Heat",
+        "Surface_Upward_SW_Radiation",
+        "Surface_Upward_LW_Radiation",
+        "Surface_Net_SW_Radiation",
+        "Surface_Net_LW_Radiation",
+        "Surface_Downward_SW_Radiation",
+        "Surface_Downward_LW_Radiation",
         "Surface_Albedo",
     }
 
