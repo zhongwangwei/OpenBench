@@ -180,22 +180,13 @@ class PageRefData(BasePage):
             from openbench.data.registry import RegistryManager
 
             mgr = RegistryManager()
-            # Show datasets that have this variable
             refs_with_var = mgr.references_for_variable(var_name)
             if refs_with_var:
                 for ref in sorted(refs_with_var, key=lambda r: r.name):
                     label = f"{ref.name}  ({ref.data_type}, {ref.tim_res}, {ref.grid_res or 'stn'})"
                     combo.addItem(label, ref.name)
-
-            # Also show all other datasets under a separator
-            all_refs = mgr.list_references()
-            other_refs = [r for r in all_refs if r not in refs_with_var]
-            if other_refs and refs_with_var:
-                combo.insertSeparator(combo.count())
-                combo.addItem("── Other datasets ──", None)
-            for ref in sorted(other_refs, key=lambda r: r.name):
-                label = f"{ref.name}  ({ref.data_type}, {ref.category})"
-                combo.addItem(label, ref.name)
+            else:
+                combo.addItem("(No registry datasets for this variable)", None)
         except ImportError:
             combo.addItem("(Registry not available)", None)
 
