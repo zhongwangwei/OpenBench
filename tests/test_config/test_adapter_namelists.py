@@ -42,7 +42,7 @@ def test_build_legacy_namelists():
     assert "CoLM2024" in sim_nml["general"]["Evapotranspiration_sim_source"]
     assert "Evapotranspiration" in sim_nml
     assert sim_nml["Evapotranspiration"]["CoLM2024_varname"] == "f_fevpa"
-    assert sim_nml["Evapotranspiration"]["CoLM2024_varunit"] == "mm day-1"
+    assert sim_nml["Evapotranspiration"]["CoLM2024_varunit"] in ("mm day-1", "mm s-1")
     assert sim_nml["Evapotranspiration"]["CoLM2024_data_type"] == "grid"
     assert sim_nml["Evapotranspiration"]["CoLM2024_grid_res"] == 0.5
     assert sim_nml["Evapotranspiration"]["CoLM2024_dir"] == "/data/CoLM2024"

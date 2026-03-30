@@ -226,6 +226,8 @@ def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
             grid_res=merged.get("grid_res"),
             tim_res=merged.get("tim_res"),
             data_groupby=merged.get("data_groupby"),
+            prefix=merged.get("prefix"),
+            suffix=merged.get("suffix"),
             variables=merged.get("variables"),
         )
 

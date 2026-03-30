@@ -47,37 +47,85 @@ CoLM2024:
   data_type: grid
   grid_res: 0.5
   tim_res: Month
+  data_groupby: month
   variables:
+    Gross_Primary_Productivity:
+      varname:
+      - f_gpp
+      - f_assim
+      varunit: mol m-2 s-1
     Evapotranspiration:
       varname: f_fevpa
-      varunit: mm day-1
+      varunit: mm s-1
+    Canopy_Transpiration:
+      varname: f_etr
+      varunit: mm s-1
+    Canopy_Interception:
+      varname: f_qintr
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: f_fevpg
+      varunit: mm s-1
+    Soil_Evaporation:
+      varname: f_fevpg
+      varunit: mm s-1
+    Total_Runoff:
+      varname: f_rnof
+      varunit: mm s-1
     Latent_Heat:
       varname: f_lfevpa
       varunit: W m-2
     Sensible_Heat:
       varname: f_fsena
       varunit: W m-2
-    Gross_Primary_Productivity:
-      varname: f_assim
-      varunit: mol m-2 s-1
     Net_Radiation:
-      varname: f_srnet
+      varname: f_rnet
       varunit: W m-2
     Ground_Heat:
-      varname: f_grnd_flux
+      varname: f_fgrnd
       varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: f_sr
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: f_olrg
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: f_xy_solarin
+      varunit: W m-2
+    Surface_Downward_LW_Radiation:
+      varname: f_xy_frl
+      varunit: W m-2
+    Surface_Albedo:
+      varname: f_alb
+      varunit: '-'
+    Leaf_Area_Index:
+      varname: f_lai
+      varunit: m2 m-2
     Surface_Soil_Temperature:
       varname: f_t_grnd
       varunit: K
     Surface_Soil_Moisture:
-      varname: f_h2osoi
+      varname: f_wliq_soisno
       varunit: m3 m-3
-    Total_Runoff:
-      varname: f_rnof
-      varunit: mm day-1
-    Surface_Albedo:
-      varname: f_alb
-      varunit: '-'
+    Root_Zone_Soil_Moisture:
+      varname: f_wliq_soisno
+      varunit: m3 m-3
+    Snow_Water_Equivalent:
+      varname: f_scv
+      varunit: mm
+    Snow_Depth:
+      varname: f_snowdp
+      varunit: m
+    Ecosystem_Respiration:
+      varname: f_respc
+      varunit: mol m-2 s-1
+    Water_Table_Depth:
+      varname: f_zwt
+      varunit: m
+    Surface_Air_Temperature:
+      varname: f_tref
+      varunit: K
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis

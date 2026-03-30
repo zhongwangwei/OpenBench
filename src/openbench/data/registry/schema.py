@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 
 @dataclass
 class VariableMapping:
-    """How a variable is stored in a dataset or model output."""
+    """How a variable is stored in a dataset or model output.
 
-    varname: str
+    varname can be a string or a list of strings (fallback chain).
+    E.g., varname=["f_gpp", "f_assim"] means try f_gpp first, fall back to f_assim.
+    """
+
+    varname: Union[str, list[str]]
     varunit: str
     prefix: str = ""
     suffix: str = ""

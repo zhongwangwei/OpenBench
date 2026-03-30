@@ -43,6 +43,8 @@ class SimulationEntry:
     grid_res: Optional[float] = None
     tim_res: Optional[str] = None
     data_groupby: Optional[str] = None  # Year, month, day, single
+    prefix: Optional[str] = None  # File name prefix (e.g., "Case01_hist_")
+    suffix: Optional[str] = None  # File name suffix
     variables: Optional[dict[str, dict[str, Any]]] = None
 
 

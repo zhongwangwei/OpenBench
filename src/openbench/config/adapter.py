@@ -15,6 +15,50 @@ from openbench.config.schema import OpenBenchConfig
 logger = logging.getLogger(__name__)
 
 
+def _resolve_varname(varname, root_dir: str | None = None) -> str:
+    """Resolve a variable name, handling fallback chains.
+
+    If varname is a list like ["f_gpp", "f_assim"], check the first NC file
+    in root_dir to find which variable actually exists. Returns the first match.
+    If varname is a plain string, return it directly.
+    """
+    if isinstance(varname, str):
+        return varname
+
+    if not isinstance(varname, list) or not varname:
+        return str(varname)
+
+    # If no root_dir to check, return first option
+    if not root_dir:
+        return varname[0]
+
+    # Try to find which varname exists in the data files
+    import glob
+    from pathlib import Path
+
+    nc_files = sorted(glob.glob(str(Path(root_dir) / "*.nc")))
+    if not nc_files:
+        return varname[0]
+
+    try:
+        import xarray as xr
+
+        ds = xr.open_dataset(nc_files[0])
+        available = set(ds.data_vars)
+        ds.close()
+
+        for vn in varname:
+            if vn in available:
+                logger.info("Resolved varname fallback: %s → %s (from %s)", varname, vn, Path(nc_files[0]).name)
+                return vn
+
+        logger.warning("None of %s found in %s, using first: %s", varname, Path(nc_files[0]).name, varname[0])
+    except Exception:
+        pass
+
+    return varname[0]
+
+
 def to_legacy_config(cfg: OpenBenchConfig) -> dict[str, Any]:
     """Convert OpenBenchConfig to the legacy dict format."""
     general = {
@@ -268,17 +312,22 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             # Determine variable mapping: inline overrides > model profile > fallback
             inline_vars = (sim_entry.variables or {}).get(var_name, {})
 
+            # Entry-level prefix/suffix (shared across all variables for this sim)
+            entry_prefix = sim_entry.prefix or ""
+            entry_suffix = sim_entry.suffix or ""
+
             if model_profile and var_name in model_profile.variables:
                 profile_var = model_profile.variables[var_name]
-                varname = inline_vars.get("varname", profile_var.varname)
+                raw_varname = inline_vars.get("varname", profile_var.varname)
+                varname = _resolve_varname(raw_varname, sim_entry.root_dir)
                 varunit = inline_vars.get("varunit", profile_var.varunit)
-                var_prefix = inline_vars.get("prefix", profile_var.prefix)
-                var_suffix = inline_vars.get("suffix", profile_var.suffix)
+                var_prefix = inline_vars.get("prefix", entry_prefix or profile_var.prefix)
+                var_suffix = inline_vars.get("suffix", entry_suffix or profile_var.suffix)
             elif inline_vars:
                 varname = inline_vars.get("varname", var_name)
                 varunit = inline_vars.get("varunit", "")
-                var_prefix = inline_vars.get("prefix", "")
-                var_suffix = inline_vars.get("suffix", "")
+                var_prefix = inline_vars.get("prefix", entry_prefix)
+                var_suffix = inline_vars.get("suffix", entry_suffix)
             else:
                 logger.warning(
                     "No variable mapping for %s in model %s (label %s); using variable name as varname",
@@ -288,8 +337,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 )
                 varname = var_name
                 varunit = ""
-                var_prefix = ""
-                var_suffix = ""
+                var_prefix = entry_prefix
+                var_suffix = entry_suffix
 
             # Data type / resolution: inline override > sim_entry override > model profile > defaults
             data_type = sim_entry.data_type or (model_profile.data_type if model_profile else "grid")

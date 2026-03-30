@@ -82,14 +82,19 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
                         files_read += 1
 
                         sim_general_def = sim_def.get("general", {})
-                        variables = {}
-                        for var_key, var_val in sim_def.items():
-                            if var_key != "general" and isinstance(var_val, dict):
-                                variables[var_key] = var_val
+
+                        # Detect model from model_namelist path
+                        model_name = _detect_model(sim_general_def.get("model_namelist", ""))
+
+                        root_dir = sim_general_def.get("root_dir", sim_general_def.get("dir", ""))
+                        prefix = sim_general_def.get("prefix", "")
+
+                        # Derive a clean label from root_dir or prefix
+                        label = _derive_case_label(source_name, root_dir, prefix)
 
                         entry: dict[str, Any] = {
-                            "model": source_name,
-                            "root_dir": sim_general_def.get("root_dir", sim_general_def.get("dir", "")),
+                            "model": model_name,
+                            "root_dir": root_dir,
                         }
                         if sim_general_def.get("data_type"):
                             entry["data_type"] = sim_general_def["data_type"]
@@ -97,10 +102,22 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
                             entry["grid_res"] = sim_general_def["grid_res"]
                         if sim_general_def.get("tim_res"):
                             entry["tim_res"] = sim_general_def["tim_res"]
-                        if variables:
-                            entry["variables"] = variables
+                        if sim_general_def.get("data_groupby"):
+                            entry["data_groupby"] = sim_general_def["data_groupby"]
+                        if prefix:
+                            entry["prefix"] = prefix
 
-                        sim_entries[source_name] = entry
+                        # Only include variables if model is unknown
+                        # Known models get variable mappings from the model profile
+                        if model_name == source_name:
+                            variables = {}
+                            for var_key, var_val in sim_def.items():
+                                if var_key != "general" and isinstance(var_val, dict):
+                                    variables[var_key] = var_val
+                            if variables:
+                                entry["variables"] = variables
+
+                        sim_entries[label] = entry
 
     # Build new config
     eval_items = main.get("evaluation_items", {})
@@ -128,7 +145,7 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
             "variables": enabled_variables,
         },
         "reference": filtered_ref,
-        "simulation": sim_entries if sim_entries else {"default": {"model": "unknown", "root_dir": "."}},
+        "simulation": _build_simulation_section(sim_entries),
     }
 
     if enabled_metrics:
@@ -182,6 +199,99 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
         "metrics": enabled_metrics,
         "scores": enabled_scores,
     }
+
+
+def _build_simulation_section(sim_entries: dict[str, Any]) -> dict[str, Any]:
+    """Build simulation section, extracting _defaults for shared fields.
+
+    If all entries share the same model/data_type/grid_res/tim_res/data_groupby,
+    extract them into _defaults to avoid repetition.
+    """
+    if not sim_entries:
+        return {"default": {"model": "unknown", "root_dir": "."}}
+
+    if len(sim_entries) < 2:
+        return sim_entries
+
+    # Find common fields across all entries
+    common_keys = ["model", "data_type", "grid_res", "tim_res", "data_groupby"]
+    defaults: dict[str, Any] = {}
+
+    first = next(iter(sim_entries.values()))
+    for key in common_keys:
+        val = first.get(key)
+        if val is not None and all(e.get(key) == val for e in sim_entries.values()):
+            defaults[key] = val
+
+    if not defaults:
+        return sim_entries
+
+    # Build section with _defaults
+    result: dict[str, Any] = {"_defaults": defaults}
+    for label, entry in sim_entries.items():
+        cleaned = {}
+        for k, v in entry.items():
+            if k in defaults and defaults[k] == v:
+                continue  # Skip fields covered by _defaults
+            cleaned[k] = v
+        result[label] = cleaned
+
+    return result
+
+
+def _detect_model(model_namelist_path: str) -> str:
+    """Detect the model name from model_namelist path.
+
+    Examples:
+        './nml/Mod_variables_definition/CoLM.nml' → 'CoLM2024'
+        './nml/nml-yaml/Mod_variables_definition/CoLM.yaml' → 'CoLM2024'
+        './nml/Mod_variables_definition/LS3MIP.nml' → 'LS3MIP'
+    """
+    if not model_namelist_path:
+        return "unknown"
+
+    name = Path(model_namelist_path).stem.lower()
+
+    # Map known model definition filenames to registry model names
+    model_map = {
+        "colm": "CoLM2024",
+        "clm": "CLM5",
+        "clm5": "CLM5",
+        "noah": "NOAH",
+        "era5land": "ERA5-Land",
+        "era5-land": "ERA5-Land",
+        "gldas": "GLDAS",
+    }
+
+    return model_map.get(name, name)
+
+
+def _derive_case_label(source_name: str, root_dir: str, prefix: str) -> str:
+    """Derive a clean case label from path/prefix info.
+
+    Examples:
+        root_dir='./dataset/Simulation/Case01/history/', prefix='Case01_hist_' → 'Case01'
+        root_dir='./dataset/Simulation/trajectory2/01/history/', prefix='01_case_hist_' → 'Case01'
+        source_name='01_case' → 'Case01'
+    """
+    import re
+
+    # Try to extract CaseXX from root_dir
+    match = re.search(r"(Case\d+)", root_dir)
+    if match:
+        return match.group(1)
+
+    # Try to extract from prefix: "01_case_hist_" → Case01
+    match = re.search(r"(\d+)_case", prefix)
+    if match:
+        return f"Case{match.group(1).zfill(2)}"
+
+    # Try to extract from source_name: "01_case" → Case01
+    match = re.search(r"(\d+)_case", source_name)
+    if match:
+        return f"Case{match.group(1).zfill(2)}"
+
+    return source_name
 
 
 def _read_old_config(path: Path) -> dict:

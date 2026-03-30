@@ -44,7 +44,12 @@ def show(name):
     click.secho(f"{'Variable':<35} {'File varname':<20} {'Unit'}", bold=True)
     click.echo("─" * 70)
     for var_name, mapping in sorted(m.variables.items()):
-        click.echo(f"{var_name:<35} {mapping.varname:<20} {mapping.varunit}")
+        vn = mapping.varname
+        if isinstance(vn, list):
+            vn_str = " → ".join(vn)  # Show fallback chain
+        else:
+            vn_str = str(vn)
+        click.echo(f"{var_name:<35} {vn_str:<30} {mapping.varunit}")
 
 
 @model.command()
