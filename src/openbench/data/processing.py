@@ -1593,16 +1593,39 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     model = getattr(self, f"{source}_model")
                 except AttributeError:
                     model = source
-                # Try compute expression from model profile
-                computed = self._try_compute_from_profile(model, stn_data, datasource)
-                if computed is not None:
-                    current_var_list = [getattr(self, "item", current_var_list[0])]
-                    ds = computed
-                else:
-                    available_vars = list(stn_data.data_vars) + list(stn_data.coords)
-                    logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
-                    logging.error(f"Available: {available_vars}")
-                    raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
+                # Try station filter for reference datasets (handles CaMA allocation etc.)
+                try:
+                    from openbench.data.custom import load_station_filter
+
+                    stn_module = load_station_filter(model)
+                    if stn_module:
+                        filter_func = getattr(stn_module, f"filter_{model}", None)
+                        if filter_func:
+                            logging.info(f"Applying station filter for {model}")
+                            updated_self, filtered_data = filter_func(self, stn_data)
+                            if updated_self is not None and filtered_data is not None:
+                                if datasource == "ref":
+                                    new_var_attr = self.ref_varname
+                                else:
+                                    new_var_attr = self.sim_varname
+                                current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                                ds = filtered_data
+                            else:
+                                raise ValueError(f"Station filter returned None for {model}")
+                        else:
+                            raise ImportError(f"No filter function for {model}")
+                    else:
+                        raise ImportError(f"No station filter for {model}")
+                except (ImportError, AttributeError):
+                    # No station filter — try compute expression
+                    computed = self._try_compute_from_profile(model, stn_data, datasource)
+                    if computed is not None:
+                        current_var_list = [getattr(self, "item", current_var_list[0])]
+                        ds = computed
+                    else:
+                        available_vars = list(stn_data.data_vars) + list(stn_data.coords)
+                        logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
+                        raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
                 ds = stn_data[current_var_list[0]]
 

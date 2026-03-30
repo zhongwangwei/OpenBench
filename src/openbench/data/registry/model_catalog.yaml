@@ -21,8 +21,9 @@ CLM5:
       varname: NEE
       varunit: gC m-2 s-1
     Net_Radiation:
-      varname: FSA
+      varname: Net_Radiation
       varunit: W m-2
+      compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
     Total_Runoff:
       varname: QRUNOFF
       varunit: mm day-1
@@ -266,3 +267,96 @@ ERA5-Land:
     Surface_Air_Temperature:
       varname: t2m
       varunit: K
+GLDAS:
+  name: GLDAS
+  description: GLDAS-2.2 Noah Model
+  data_type: grid
+  grid_res: 0.25
+  tim_res: 3Hour
+  variables:
+    Latent_Heat:
+      varname: Qle_tavg
+      varunit: W m-2
+    Sensible_Heat:
+      varname: Qh_tavg
+      varunit: W m-2
+    Ground_Heat:
+      varname: Qg_tavg
+      varunit: W m-2
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      compute: ds['Swnet_tavg'] + ds['Lwnet_tavg']
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      compute: ds['SWdown_f_tavg'] - ds['Swnet_tavg']
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      compute: ds['LWdown_f_tavg'] - ds['Lwnet_tavg']
+    Total_Runoff:
+      varname: Total_Runoff
+      varunit: mm 3hour-1
+      compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
+    Surface_Soil_Moisture:
+      varname: SoilMoi00_10cm_inst
+      varunit: kg m-2
+    Surface_Soil_Temperature:
+      varname: SoilTMP0_10cm_inst
+      varunit: K
+    Snow_Water_Equivalent:
+      varname: SWE_inst
+      varunit: kg m-2
+    Evapotranspiration:
+      varname: Evap_tavg
+      varunit: kg m-2 s-1
+SMAP_L4:
+  name: SMAP_L4
+  description: SMAP Level 4 Soil Moisture
+  data_type: grid
+  grid_res: 0.09
+  tim_res: Day
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_surface
+      varunit: m3 m-3
+    Root_Zone_Soil_Moisture:
+      varname: sm_rootzone
+      varunit: m3 m-3
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      compute: ds['net_downward_longwave_flux'] + ds['net_downward_shortwave_flux']
+FLUXCOM:
+  name: FLUXCOM
+  description: FLUXCOM Carbon and Energy Fluxes
+  data_type: grid
+  grid_res: 0.5
+  tim_res: Month
+  variables:
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: g C m-2 day-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: g C m-2 day-1
+    Latent_Heat:
+      varname: LE
+      varunit: MJ m-2 day-1
+    Sensible_Heat:
+      varname: H
+      varunit: MJ m-2 day-1
+    Net_Radiation:
+      varname: Rn
+      varunit: MJ m-2 day-1
+BCC_AVIM:
+  name: BCC_AVIM
+  description: BCC-AVIM Land Surface Model
+  data_type: grid
+  tim_res: Month
+  variables:
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
