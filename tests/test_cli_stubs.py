@@ -55,8 +55,13 @@ def test_model_show_help():
     assert result.exit_code == 0
 
 
-def test_model_create_help():
-    result = runner.invoke(cli, ["model", "create", "--help"])
+def test_model_register_help():
+    result = runner.invoke(cli, ["model", "register", "--help"])
+    assert result.exit_code == 0
+
+
+def test_model_remove_var_help():
+    result = runner.invoke(cli, ["model", "remove-var", "--help"])
     assert result.exit_code == 0
 
 

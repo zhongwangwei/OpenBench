@@ -126,6 +126,9 @@ CoLM2024:
     Surface_Air_Temperature:
       varname: f_tref
       varunit: K
+    Veg_Cover_In_Fraction:
+      varname: f_sigf
+      varunit: m2 m-2
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
