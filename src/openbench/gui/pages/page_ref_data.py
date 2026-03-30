@@ -172,7 +172,11 @@ class PageRefData(BasePage):
         # No addStretch() here - let groups expand to fill space
 
     def _populate_registry_combo(self, combo, var_name):
-        """Populate registry combo with available reference datasets for this variable."""
+        """Populate registry combo with available reference datasets for this variable.
+
+        Datasets with multiple resolutions are grouped: selecting one opens
+        a resolution picker dialog.
+        """
         combo.clear()
         combo.addItem("-- Select from Registry --", None)
 
@@ -182,9 +186,37 @@ class PageRefData(BasePage):
             mgr = RegistryManager()
             refs_with_var = mgr.references_for_variable(var_name)
             if refs_with_var:
-                for ref in sorted(refs_with_var, key=lambda r: r.name):
-                    label = f"{ref.name}  ({ref.data_type}, {ref.tim_res}, {ref.grid_res or 'stn'})"
-                    combo.addItem(label, ref.name)
+                # Group by base name (strip _LowRes/_MidRes/_HigRes suffix)
+                groups = {}
+                for ref in refs_with_var:
+                    base = ref.name
+                    for suffix in ("_LowRes", "_MidRes", "_HigRes"):
+                        if base.endswith(suffix):
+                            base = base[: -len(suffix)]
+                            break
+                    if base not in groups:
+                        groups[base] = []
+                    groups[base].append(ref)
+
+                for base_name in sorted(groups.keys()):
+                    variants = groups[base_name]
+                    if len(variants) == 1:
+                        ref = variants[0]
+                        label = f"{ref.name}  ({ref.data_type}, {ref.tim_res}, {ref.grid_res or 'stn'})"
+                        combo.addItem(label, ref.name)
+                    else:
+                        # Multiple resolutions available — show as group
+                        res_labels = []
+                        for v in sorted(variants, key=lambda r: r.name):
+                            for s in ("_LowRes", "_MidRes", "_HigRes"):
+                                if v.name.endswith(s):
+                                    res_labels.append(s[1:])
+                                    break
+                            else:
+                                res_labels.append(v.data_type)
+                        label = f"{base_name}  ({' / '.join(res_labels)})"
+                        # Store the list of variant names for resolution picker
+                        combo.addItem(label, {"group": base_name, "variants": [v.name for v in variants]})
             else:
                 combo.addItem("(No registry datasets for this variable)", None)
         except ImportError:
@@ -192,9 +224,17 @@ class PageRefData(BasePage):
 
     def _add_from_registry(self, var_name: str, combo):
         """Add a reference source from the registry with pre-filled config."""
-        source_name = combo.currentData()
-        if not source_name:
+        combo_data = combo.currentData()
+        if not combo_data:
             return
+
+        # Handle multi-resolution group: open resolution picker
+        if isinstance(combo_data, dict) and "group" in combo_data:
+            source_name = self._pick_resolution(combo_data, var_name)
+            if not source_name:
+                return
+        else:
+            source_name = combo_data
 
         # Check for duplicate
         if var_name in self._source_configs and source_name in self._source_configs[var_name]:
@@ -258,6 +298,62 @@ class PageRefData(BasePage):
 
         except ImportError:
             QMessageBox.warning(self, "Error", "Registry module not available.")
+
+    def _pick_resolution(self, group_data, var_name):
+        """Open resolution picker dialog for a multi-resolution dataset.
+
+        Returns selected source_name or None if cancelled.
+        """
+        from openbench.data.registry import RegistryManager
+
+        mgr = RegistryManager()
+        base_name = group_data["group"]
+        variant_names = group_data["variants"]
+
+        # Build variants dict for the dialog
+        variants = {}
+        for vname in variant_names:
+            ref = mgr.get_reference(vname)
+            if ref:
+                for suffix in ("_LowRes", "_MidRes", "_HigRes"):
+                    if vname.endswith(suffix):
+                        res_label = suffix[1:]
+                        break
+                else:
+                    res_label = vname
+                variants[res_label] = ref
+
+        if not variants:
+            return None
+
+        # Check time resolution constraints
+        # Rule: if daily data is available, monthly is not allowed
+        has_daily = any(
+            getattr(v, "tim_res", "").lower() in ("day", "daily", "d")
+            for v in variants.values()
+        )
+        compatible = None
+        if has_daily:
+            compatible = []
+            for res_label, ref in variants.items():
+                tim = getattr(ref, "tim_res", "").lower()
+                if tim in ("day", "daily", "d", "hour", "hourly", "h"):
+                    compatible.append(res_label)
+                # Monthly not compatible when daily exists
+
+        from openbench.gui.dialogs.data_discovery import ResolutionPickerDialog
+
+        dlg = ResolutionPickerDialog(base_name, variants, compatible=compatible, parent=self)
+        if dlg.exec():
+            res = dlg.selected_resolution()
+            if res:
+                # Map back to full registry name
+                for vname in variant_names:
+                    if vname.endswith(f"_{res}"):
+                        return vname
+                # Fallback: return first variant matching
+                return variant_names[0]
+        return None
 
     def _add_source(self, var_name: str):
         """Add new data source for variable."""

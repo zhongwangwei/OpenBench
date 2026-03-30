@@ -194,6 +194,68 @@ def show(name):
 
 
 @data.command()
+@click.argument("ref_root", type=click.Path(exists=True))
+@click.option("--auto", is_flag=True, help="Register all found datasets without prompting.")
+def scan(ref_root, auto):
+    """Scan a directory for reference datasets and register new ones.
+
+    REF_ROOT is the reference data root (e.g., /Volumes/work/Reference).
+    Expected structure: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
+
+    Example:
+        openbench data scan /Volumes/work/Reference
+    """
+    from openbench.data.registry.scanner import find_new_datasets, register_scanned_dataset
+
+    click.echo(f"Scanning {ref_root}...")
+    new_groups = find_new_datasets(ref_root)
+
+    if not new_groups:
+        click.secho("No new datasets found.", fg="yellow")
+        return
+
+    click.secho(f"Found {len(new_groups)} new dataset(s):", bold=True)
+    click.echo()
+
+    to_register = []
+    for group in new_groups:
+        for res_name, variant in sorted(group.variants.items()):
+            label = f"  {variant.registry_name:<35} {variant.data_type:<5} {variant.category:<10} {len(variant.variables)} vars, {variant.file_count} files"
+            click.echo(label)
+            to_register.append(variant)
+
+    click.echo()
+
+    if not auto:
+        if not click.confirm(f"Register {len(to_register)} dataset(s)?"):
+            return
+
+    # Try to find existing descriptors for merging
+    from openbench.data.registry.manager import RegistryManager
+
+    mgr = RegistryManager()
+    registered = 0
+    for variant in to_register:
+        existing = mgr.get_reference(variant.name)
+        existing_dict = None
+        if existing:
+            existing_dict = {
+                "variables": {
+                    vn: {"varname": vm.varname, "varunit": vm.varunit,
+                         "prefix": vm.prefix, "suffix": vm.suffix}
+                    for vn, vm in existing.variables.items()
+                }
+            }
+        path = register_scanned_dataset(variant, existing_descriptor=existing_dict)
+        click.secho(f"  ✓ {variant.registry_name}", fg="green")
+        registered += 1
+
+    click.echo()
+    click.secho(f"Registered {registered} dataset(s).", fg="green", bold=True)
+    click.echo("Verify: openbench data list")
+
+
+@data.command()
 @click.argument("name")
 def optimize(name):
     """Convert dataset to zarr for faster reads."""
