@@ -66,7 +66,12 @@ class ReferenceDataset:
 
 @dataclass
 class ModelProfile:
-    """Descriptor for a simulation model's variable mappings."""
+    """Descriptor for a simulation model's variable mappings.
+
+    time_offset: per-resolution time shift applied to timestamps.
+        Example: {"Month": "-15 days", "Day": "-1 days"}
+        Supports: "N days", "N months", "N hours"
+    """
 
     name: str
     description: str
@@ -74,3 +79,4 @@ class ModelProfile:
     grid_res: Optional[float] = None
     tim_res: str = "Month"
     variables: dict[str, VariableMapping] = field(default_factory=dict)
+    time_offset: Optional[dict[str, str]] = None  # {"Month": "-15 days", "Day": "0"}

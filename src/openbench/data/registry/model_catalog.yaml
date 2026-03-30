@@ -42,6 +42,9 @@ CLM5:
     Surface_Albedo:
       varname: ASA
       varunit: '-'
+  time_offset:
+    Month: -1 months
+    Day: -1 days
 CoLM2024:
   name: CoLM2024
   description: Common Land Model 2024
@@ -224,6 +227,10 @@ CoLM2024:
         + ds['f_cropprodc_rainfed_wtwheat'].fillna(0) * ds['area_rainfed_wtwheat'].fillna(0)
         + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0))
         * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+  time_offset:
+    Month: -15 days
+    Day: '0'
+    Hour: '0'
 ERA5-Land:
   name: ERA5-Land
   description: ECMWF ERA5-Land Reanalysis
@@ -360,3 +367,6 @@ BCC_AVIM:
       varname: Net_Radiation
       varunit: W m-2
       compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
+  time_offset:
+    Month: -1 months
+    Day: -1 days

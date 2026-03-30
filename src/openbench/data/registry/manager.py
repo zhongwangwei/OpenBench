@@ -362,4 +362,5 @@ def _build_model(data: dict) -> ModelProfile:
         grid_res=data.get("grid_res"),
         tim_res=data.get("tim_res", "Month"),
         variables=variables,
+        time_offset=data.get("time_offset"),
     )

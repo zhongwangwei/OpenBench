@@ -29,6 +29,31 @@ except ImportError:
 # Module-level set to track custom filter warnings
 _MODULE_CUSTOM_FILTER_WARNINGS = set()
 
+
+def _parse_time_offset(offset_str: str):
+    """Parse a time offset string like '-15 days', '-1 months', '3 hours'.
+
+    Returns a pandas DateOffset, or None if parsing fails.
+    """
+    import re
+
+    import pandas as pd
+
+    match = re.match(r"([+-]?\d+)\s*(day|days|month|months|hour|hours)", offset_str.strip())
+    if not match:
+        return None
+
+    value = int(match.group(1))
+    unit = match.group(2).lower()
+
+    if unit.startswith("day"):
+        return pd.DateOffset(days=value)
+    elif unit.startswith("month"):
+        return pd.DateOffset(months=value)
+    elif unit.startswith("hour"):
+        return pd.DateOffset(hours=value)
+    return None
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -1138,26 +1163,46 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             model = getattr(self, f"{source}_model")
         except AttributeError:
             model = source
-        # Try model-specific time adjustment from filter (user dir → built-in)
+        # Universal time adjustment from model profile YAML
+        import re
+
+        import pandas as pd
+
+        # Step 1: normalize timestamp format
         try:
-            from openbench.data.custom import load_filter
-
-            filter_module = load_filter(model)
-            if filter_module:
-                adjust_func = getattr(filter_module, f"adjust_time_{model}", None)
-                if adjust_func:
-                    ds = adjust_func(self, ds, syear, eyear, tim_res)
-                    return ds
-        except Exception:
-            pass
-
-        # Standard time normalization (fallback for models without custom adjustment)
-        try:
-            import pandas as pd
-
             ds["time"] = pd.to_datetime(ds["time"].dt.strftime("%Y-%m-%dT%H:30:00"))
         except Exception:
             logging.debug("Time normalization skipped for %s", model)
+
+        # Step 2: apply model-specific time offset from profile
+        try:
+            from openbench.data.registry import RegistryManager
+
+            mgr = RegistryManager()
+            profile = mgr.get_model(model)
+            if profile and profile.time_offset:
+                # Determine which offset to use based on tim_res
+                match = re.match(r"(\d*)\s*([a-zA-Z]+)", tim_res)
+                if match:
+                    _, time_unit = match.groups()
+                    # Map tim_res to offset key
+                    key_map = {
+                        "m": "Month", "me": "Month", "month": "Month", "mon": "Month",
+                        "d": "Day", "day": "Day",
+                        "h": "Hour", "hour": "Hour",
+                        "y": "Year", "year": "Year",
+                    }
+                    offset_key = key_map.get(time_unit.lower(), "")
+                    offset_str = profile.time_offset.get(offset_key, "0")
+
+                    if offset_str and offset_str != "0":
+                        offset = _parse_time_offset(offset_str)
+                        if offset:
+                            ds["time"] = pd.DatetimeIndex(ds["time"].values) + offset
+                            logging.debug("Applied time offset %s for %s (%s)", offset_str, model, offset_key)
+        except Exception as e:
+            logging.debug("Time offset skipped for %s: %s", model, e)
+
         return ds
 
     def select_var(
