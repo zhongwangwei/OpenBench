@@ -53,9 +53,7 @@ def restore_properties(
         result[coord].attrs = target_ds[coord].attrs
 
         # Replace zeros outside of original data grid with NaNs
-        covered = (target_ds[coord] <= original_data[coord].max()) & (
-            target_ds[coord] >= original_data[coord].min()
-        )
+        covered = (target_ds[coord] <= original_data[coord].max()) & (target_ds[coord] >= original_data[coord].min())
         if (~covered).any():
             if fill_value is None:
                 if np.issubdtype(result.dtype, np.integer):

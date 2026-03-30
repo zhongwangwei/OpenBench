@@ -15,7 +15,7 @@ def stat_z_score(self, data):
         data = list(data.data_vars.values())[0]
 
     # Check if 'time' dimension exists
-    if 'time' not in data.dims:
+    if "time" not in data.dims:
         raise ValueError("Input data must have a 'time' dimension")
 
     # Calculate mean and std with skipna=True for consistency with other methods
@@ -36,15 +36,15 @@ def stat_z_score(self, data):
         z_score = z_score.where(~std_mask)
 
     # Add appropriate metadata
-    if hasattr(data, 'name') and data.name is not None:
+    if hasattr(data, "name") and data.name is not None:
         z_score.name = f"{data.name}_zscore"
     else:
         z_score.name = "zscore"
 
     # Copy attributes from original data and add z-score specific ones
     z_score.attrs.update(data.attrs)
-    z_score.attrs['long_name'] = 'Z-score (standardized anomaly)'
-    z_score.attrs['description'] = 'Standardized anomaly: (data - mean) / standard deviation'
-    z_score.attrs['units'] = 'unitless'  # Z-scores are dimensionless
+    z_score.attrs["long_name"] = "Z-score (standardized anomaly)"
+    z_score.attrs["description"] = "Standardized anomaly: (data - mean) / standard deviation"
+    z_score.attrs["units"] = "unitless"  # Z-scores are dimensionless
 
     return z_score

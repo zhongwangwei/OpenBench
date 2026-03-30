@@ -8,10 +8,20 @@ import os
 import yaml
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QListWidget, QListWidgetItem, QStackedWidget,
-    QPushButton, QLabel, QFrame, QMessageBox,
-    QFileDialog, QSplitter, QDialog
+    QMainWindow,
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QListWidget,
+    QListWidgetItem,
+    QStackedWidget,
+    QPushButton,
+    QLabel,
+    QFrame,
+    QMessageBox,
+    QFileDialog,
+    QSplitter,
+    QDialog,
 )
 from PySide6.QtCore import Qt, QSize
 
@@ -21,13 +31,24 @@ from openbench.gui.widgets.sync_status import SyncStatusWidget
 from openbench.remote.storage import ProjectStorage, LocalStorage, RemoteStorage
 from openbench.remote.sync import SyncStatus
 from openbench.gui.path_utils import (
-    get_openbench_root, to_absolute_path, convert_paths_in_dict,
-    validate_paths_in_dict, normalize_path_separators
+    get_openbench_root,
+    to_absolute_path,
+    convert_paths_in_dict,
+    validate_paths_in_dict,
+    normalize_path_separators,
 )
 from openbench.gui.pages import (
-    PageRuntime, PageGeneral, PageEvaluation, PageMetrics, PageScores,
-    PageComparisons, PageStatistics, PageRefData, PageSimData,
-    PagePreview, PageRunMonitor
+    PageRuntime,
+    PageGeneral,
+    PageEvaluation,
+    PageMetrics,
+    PageScores,
+    PageComparisons,
+    PageStatistics,
+    PageRefData,
+    PageSimData,
+    PagePreview,
+    PageRunMonitor,
 )
 
 logger = logging.getLogger(__name__)
@@ -218,9 +239,7 @@ class MainWindow(QMainWindow):
 
         # Connect preview page run signal to monitor page
         if "preview" in self.pages and "run_monitor" in self.pages:
-            self.pages["preview"].run_requested.connect(
-                self.pages["run_monitor"].start_run
-            )
+            self.pages["preview"].run_requested.connect(self.pages["run_monitor"].start_run)
 
     def _connect_signals(self):
         """Connect signals to slots."""
@@ -301,7 +320,7 @@ class MainWindow(QMainWindow):
 
             # Validate current page before navigating away
             current_page = self.pages.get(self.controller.current_page)
-            if current_page and callable(getattr(current_page, 'validate', None)):
+            if current_page and callable(getattr(current_page, "validate", None)):
                 if not current_page.validate():
                     # Validation failed - restore sidebar selection to current page
                     self._restore_nav_selection()
@@ -326,7 +345,7 @@ class MainWindow(QMainWindow):
     def _save_current_page(self, trigger_sync: bool = True):
         """Save the current page's data to config."""
         current_page = self.pages.get(self.controller.current_page)
-        if current_page and hasattr(current_page, 'save_to_config'):
+        if current_page and hasattr(current_page, "save_to_config"):
             # Temporarily disable auto sync if requested
             if not trigger_sync:
                 old_auto_sync = self.controller.auto_sync_enabled
@@ -353,7 +372,7 @@ class MainWindow(QMainWindow):
         """Handle Next button click."""
         # Validate current page before proceeding
         current_page = self.pages.get(self.controller.current_page)
-        if current_page and callable(getattr(current_page, 'validate', None)):
+        if current_page and callable(getattr(current_page, "validate", None)):
             if not current_page.validate():
                 return
 
@@ -371,7 +390,7 @@ class MainWindow(QMainWindow):
                 "Exit",
                 "Are you sure you want to exit the wizard?",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
                 self.close()
@@ -391,10 +410,7 @@ class MainWindow(QMainWindow):
             # Use OpenBench root as default directory
             start_dir = self._get_local_openbench_path()
             file_path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Load Configuration",
-                start_dir,
-                "YAML Files (*.yaml *.yml);;All Files (*)"
+                self, "Load Configuration", start_dir, "YAML Files (*.yaml *.yml);;All Files (*)"
             )
         if file_path:
             self._load_config_file(file_path)
@@ -409,11 +425,9 @@ class MainWindow(QMainWindow):
 
         # Try from runtime settings file
         try:
-            settings_path = os.path.join(
-                os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml"
-            )
+            settings_path = os.path.join(os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml")
             if os.path.exists(settings_path):
-                with open(settings_path, 'r', encoding='utf-8') as f:
+                with open(settings_path, "r", encoding="utf-8") as f:
                     settings = yaml.safe_load(f) or {}
                     saved_path = settings.get("local_openbench_path", "")
                     if saved_path and os.path.isdir(saved_path):
@@ -428,9 +442,9 @@ class MainWindow(QMainWindow):
 
     def _get_remote_ssh_manager(self):
         """Get SSH manager from the runtime page."""
-        if 'runtime' in self.pages:
-            runtime_page = self.pages['runtime']
-            if hasattr(runtime_page, 'remote_config_widget'):
+        if "runtime" in self.pages:
+            runtime_page = self.pages["runtime"]
+            if hasattr(runtime_page, "remote_config_widget"):
                 return runtime_page.remote_config_widget.get_ssh_manager()
         return None
 
@@ -439,8 +453,7 @@ class MainWindow(QMainWindow):
         ssh_manager = self._get_remote_ssh_manager()
         if not ssh_manager or not ssh_manager.is_connected:
             QMessageBox.warning(
-                self, "Not Connected",
-                "Please connect to the remote server first in the Runtime Environment page."
+                self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
             return ""
 
@@ -472,7 +485,7 @@ class MainWindow(QMainWindow):
         selected_path = [None]
 
         def on_path_selected(path):
-            if path.endswith('.yaml') or path.endswith('.yml'):
+            if path.endswith(".yaml") or path.endswith(".yml"):
                 selected_path[0] = path
                 dialog.accept()
             else:
@@ -493,11 +506,11 @@ class MainWindow(QMainWindow):
                 loaded_config = self._load_remote_yaml_file(file_path)
                 if loaded_config is None:
                     return
-                config_dir = file_path.rsplit('/', 1)[0] if '/' in file_path else ""
-                base_dir = config_dir.rsplit('/', 1)[0] if '/' in config_dir else ""
+                config_dir = file_path.rsplit("/", 1)[0] if "/" in file_path else ""
+                base_dir = config_dir.rsplit("/", 1)[0] if "/" in config_dir else ""
                 project_root = self._find_remote_project_root(config_dir)
             else:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     loaded_config = yaml.safe_load(f) or {}
                 config_dir = os.path.dirname(os.path.abspath(file_path))
                 base_dir = os.path.dirname(config_dir)
@@ -544,42 +557,25 @@ class MainWindow(QMainWindow):
             for page_id, page in self.pages.items():
                 if is_remote and page_id == "runtime":
                     continue  # Don't refresh runtime page in remote mode
-                if hasattr(page, 'load_from_config'):
+                if hasattr(page, "load_from_config"):
                     page.load_from_config()
 
             QMessageBox.information(
-                self,
-                "Configuration Loaded",
-                f"Successfully loaded configuration from:\n{file_path}"
+                self, "Configuration Loaded", f"Successfully loaded configuration from:\n{file_path}"
             )
 
         except FileNotFoundError:
-            QMessageBox.critical(
-                self,
-                "File Not Found",
-                f"Configuration file not found:\n{file_path}"
-            )
+            QMessageBox.critical(self, "File Not Found", f"Configuration file not found:\n{file_path}")
         except PermissionError:
-            QMessageBox.critical(
-                self,
-                "Permission Denied",
-                f"Cannot read file (permission denied):\n{file_path}"
-            )
+            QMessageBox.critical(self, "Permission Denied", f"Cannot read file (permission denied):\n{file_path}")
         except yaml.YAMLError as e:
             QMessageBox.critical(
-                self,
-                "YAML Parse Error",
-                f"Invalid YAML format in file:\n{file_path}\n\nDetails: {str(e)}"
+                self, "YAML Parse Error", f"Invalid YAML format in file:\n{file_path}\n\nDetails: {str(e)}"
             )
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Load Error",
-                f"Failed to load configuration:\n{file_path}\n\nError: {str(e)}"
-            )
+            QMessageBox.critical(self, "Load Error", f"Failed to load configuration:\n{file_path}\n\nError: {str(e)}")
 
-    def _load_main_config(self, loaded_config: dict, new_config: dict,
-                          config_dir: str, base_dir: str):
+    def _load_main_config(self, loaded_config: dict, new_config: dict, config_dir: str, base_dir: str):
         """Load a main config file and its referenced ref/sim configs."""
         general = loaded_config.get("general", {})
         project_root = self.controller.project_root
@@ -613,7 +609,7 @@ class MainWindow(QMainWindow):
                 ref_full_path = self._resolve_path(ref_nml_path, config_dir, base_dir)
                 if ref_full_path and os.path.exists(ref_full_path):
                     try:
-                        with open(ref_full_path, 'r', encoding='utf-8') as f:
+                        with open(ref_full_path, "r", encoding="utf-8") as f:
                             ref_config = yaml.safe_load(f) or {}
                         # Convert all paths in ref_config to absolute
                         ref_config = convert_paths_in_dict(ref_config, project_root)
@@ -634,7 +630,7 @@ class MainWindow(QMainWindow):
                 sim_full_path = self._resolve_path(sim_nml_path, config_dir, base_dir)
                 if sim_full_path and os.path.exists(sim_full_path):
                     try:
-                        with open(sim_full_path, 'r', encoding='utf-8') as f:
+                        with open(sim_full_path, "r", encoding="utf-8") as f:
                             sim_config = yaml.safe_load(f) or {}
                         # Convert all paths in sim_config to absolute
                         sim_config = convert_paths_in_dict(sim_config, project_root)
@@ -696,27 +692,23 @@ class MainWindow(QMainWindow):
             return path
 
         # If absolute, check if exists and return
-        if path.startswith('/'):
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"test -e '{path}' && echo 'exists'", timeout=10
-            )
-            if exit_code == 0 and 'exists' in stdout:
+        if path.startswith("/"):
+            stdout, stderr, exit_code = ssh_manager.execute(f"test -e '{path}' && echo 'exists'", timeout=10)
+            if exit_code == 0 and "exists" in stdout:
                 return path
             return path
 
         # Helper to check if path exists on remote
         def remote_exists(check_path):
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"test -e '{check_path}' && echo 'exists'", timeout=10
-            )
-            return exit_code == 0 and 'exists' in stdout
+            stdout, stderr, exit_code = ssh_manager.execute(f"test -e '{check_path}' && echo 'exists'", timeout=10)
+            return exit_code == 0 and "exists" in stdout
 
         # Try relative to base_dir first (for paths like ./nml/nml-yaml/...)
         if path.startswith("./"):
             relative_path = path[2:]
 
             # Try from project root
-            project_root = base_dir.rsplit('/', 1)[0] if '/' in base_dir else base_dir
+            project_root = base_dir.rsplit("/", 1)[0] if "/" in base_dir else base_dir
             full_path = f"{project_root}/{relative_path}"
             if remote_exists(full_path):
                 return full_path
@@ -765,8 +757,7 @@ class MainWindow(QMainWindow):
         current = start_dir
         for _ in range(10):  # Max 10 levels up
             # Check if this looks like OpenBench root
-            if os.path.exists(os.path.join(current, "openbench")) or \
-               os.path.exists(os.path.join(current, "nml")):
+            if os.path.exists(os.path.join(current, "openbench")) or os.path.exists(os.path.join(current, "nml")):
                 return current
             parent = os.path.dirname(current)
             if parent == current:  # Reached filesystem root
@@ -778,28 +769,17 @@ class MainWindow(QMainWindow):
         """Load YAML content from a remote file via SSH."""
         ssh_manager = self._get_remote_ssh_manager()
         if not ssh_manager or not ssh_manager.is_connected:
-            QMessageBox.warning(
-                self, "Not Connected",
-                "Cannot load remote file: SSH connection not available."
-            )
+            QMessageBox.warning(self, "Not Connected", "Cannot load remote file: SSH connection not available.")
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"cat '{file_path}'", timeout=30
-            )
+            stdout, stderr, exit_code = ssh_manager.execute(f"cat '{file_path}'", timeout=30)
             if exit_code != 0:
-                QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to read remote file:\n{file_path}\n\nError: {stderr}"
-                )
+                QMessageBox.critical(self, "Error", f"Failed to read remote file:\n{file_path}\n\nError: {stderr}")
                 return None
             return yaml.safe_load(stdout) or {}
         except Exception as e:
-            QMessageBox.critical(
-                self, "Error",
-                f"Failed to load remote YAML file:\n{file_path}\n\nError: {str(e)}"
-            )
+            QMessageBox.critical(self, "Error", f"Failed to load remote YAML file:\n{file_path}\n\nError: {str(e)}")
             return None
 
     def _find_remote_project_root(self, start_dir: str) -> str:
@@ -812,14 +792,13 @@ class MainWindow(QMainWindow):
         for _ in range(10):  # Max 10 levels up
             # Check if this looks like OpenBench root
             stdout, stderr, exit_code = ssh_manager.execute(
-                f"ls -d '{current}/openbench' '{current}/nml' 2>/dev/null | head -1",
-                timeout=10
+                f"ls -d '{current}/openbench' '{current}/nml' 2>/dev/null | head -1", timeout=10
             )
             if exit_code == 0 and stdout.strip():
                 return current
 
             # Go up one directory
-            parent = current.rsplit('/', 1)[0] if '/' in current else ""
+            parent = current.rsplit("/", 1)[0] if "/" in current else ""
             if not parent or parent == current:
                 break
             current = parent
@@ -852,13 +831,9 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Path Not Found", msg)
 
         if path_type == "file":
-            new_path, _ = QFileDialog.getOpenFileName(
-                self, f"Select {description}", "", "All Files (*)"
-            )
+            new_path, _ = QFileDialog.getOpenFileName(self, f"Select {description}", "", "All Files (*)")
         else:
-            new_path = QFileDialog.getExistingDirectory(
-                self, f"Select {description}"
-            )
+            new_path = QFileDialog.getExistingDirectory(self, f"Select {description}")
         return new_path or ""
 
     def _validate_loaded_paths(self, config: dict):
@@ -888,7 +863,7 @@ class MainWindow(QMainWindow):
             "New Configuration",
             "Create a new configuration? Any unsaved changes will be lost.",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             self.controller.reset()
@@ -941,7 +916,7 @@ class MainWindow(QMainWindow):
         """
         # Stop and cleanup old sync engine if exists (from previous remote mode)
         old_storage = self.controller.storage
-        if old_storage and hasattr(old_storage, '_sync_engine'):
+        if old_storage and hasattr(old_storage, "_sync_engine"):
             sync_engine = old_storage._sync_engine
             if sync_engine:
                 # Clear the callback first to prevent crashes
@@ -980,6 +955,7 @@ class MainWindow(QMainWindow):
         # with QueuedConnection to safely update UI in the main thread
         # Use a weak reference to avoid crashes when widget is deleted
         import weakref
+
         widget_ref = weakref.ref(self._sync_status)
         main_window_ref = weakref.ref(self)
 
@@ -1080,7 +1056,7 @@ class MainWindow(QMainWindow):
 
                 # Refresh all pages
                 for page_id, page in self.pages.items():
-                    if hasattr(page, 'load_from_config'):
+                    if hasattr(page, "load_from_config"):
                         page.load_from_config()
 
                 logger.info(f"Loaded project config: {config_path}")

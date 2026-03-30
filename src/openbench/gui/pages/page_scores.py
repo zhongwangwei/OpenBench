@@ -8,13 +8,8 @@ from openbench.gui.widgets import CheckboxGroup
 
 
 SCORES_ITEMS = {
-    "ILAMB Scoring System": [
-        "nBiasScore", "nRMSEScore", "nPhaseScore", "nIavScore",
-        "nSpatialScore", "Overall_Score"
-    ],
-    "Other": [
-        "The_Ideal_Point_score"
-    ],
+    "ILAMB Scoring System": ["nBiasScore", "nRMSEScore", "nPhaseScore", "nIavScore", "nSpatialScore", "Overall_Score"],
+    "Other": ["The_Ideal_Point_score"],
 }
 
 
@@ -57,10 +52,7 @@ class PageScores(BasePage):
         combined = self.controller.get_combined_metrics_scores_selection()
 
         error = FieldValidator.selection_required(
-            combined,
-            "metrics_scores",
-            "Please select at least one metric or score",
-            page_id=self.PAGE_ID
+            combined, "metrics_scores", "Please select at least one metric or score", page_id=self.PAGE_ID
         )
 
         if error:

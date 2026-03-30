@@ -83,10 +83,7 @@ def conservative_regrid(
 
     # Make sure the regridding coordinates are sorted
     # Exclude time dimension from regridding coordinates
-    coord_names = [
-        coord for coord in target_ds.coords
-        if coord in data.coords and coord != time_dim
-    ]
+    coord_names = [coord for coord in target_ds.coords if coord in data.coords and coord != time_dim]
     target_ds_sorted = xr.Dataset(coords=target_ds.coords)
     for coord_name in coord_names:
         target_ds_sorted = utils.ensure_monotonic(target_ds_sorted, coord_name)
@@ -129,17 +126,13 @@ def conservative_regrid_dataset(
     weights = {}
     covered = {}
     for coord in coords:
-        covered[coord] = (coords[coord] <= data[coord].max()) & (
-            coords[coord] >= data[coord].min()
-        )
+        covered[coord] = (coords[coord] <= data[coord].max()) & (coords[coord] >= data[coord].min())
 
         target_coords = coords[coord].to_numpy()
         source_coords = data[coord].to_numpy()
         nd_weights = get_weights(source_coords, target_coords)
 
-        da_weights = utils.create_dot_dataarray(
-            nd_weights, str(coord), target_coords, source_coords
-        )
+        da_weights = utils.create_dot_dataarray(nd_weights, str(coord), target_coords, source_coords)
         # Modify weights to correct for latitude distortion
         if coord == latitude_coord:
             da_weights = apply_spherical_correction(da_weights, latitude_coord)
@@ -198,13 +191,9 @@ def apply_weights(
     weight_arrays = list(weights.values())
 
     if skipna:
-        valid_frac = xr.dot(
-            da.notnull(), *weight_arrays, dim=list(weights.keys()), optimize=True
-        )
+        valid_frac = xr.dot(da.notnull(), *weight_arrays, dim=list(weights.keys()), optimize=True)
 
-    da_regrid: xr.DataArray = xr.dot(
-        da.fillna(0), *weight_arrays, dim=list(weights.keys()), optimize=True
-    )
+    da_regrid: xr.DataArray = xr.dot(da.fillna(0), *weight_arrays, dim=list(weights.keys()), optimize=True)
 
     if skipna:
         da_regrid /= valid_frac
@@ -242,9 +231,7 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray) -> np.ndar
     return utils.normalize_overlap(overlap)
 
 
-def apply_spherical_correction(
-    dot_array: xr.DataArray, latitude_coord: Hashable
-) -> xr.DataArray:
+def apply_spherical_correction(dot_array: xr.DataArray, latitude_coord: Hashable) -> xr.DataArray:
     """Apply a sperical earth correction on the prepared dot product weights."""
     da = dot_array.copy()
     latitude_res = np.median(np.diff(dot_array[latitude_coord].to_numpy(), 1))

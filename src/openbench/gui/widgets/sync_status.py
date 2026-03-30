@@ -18,10 +18,10 @@ class SyncStatusWidget(QWidget):
     status_update_requested = Signal(object, int)  # (SyncStatus, pending_count)
 
     STATUS_COLORS = {
-        SyncStatus.SYNCED: "#27ae60",   # Green
+        SyncStatus.SYNCED: "#27ae60",  # Green
         SyncStatus.PENDING: "#f39c12",  # Yellow/Orange
         SyncStatus.SYNCING: "#3498db",  # Blue
-        SyncStatus.ERROR: "#e74c3c",    # Red
+        SyncStatus.ERROR: "#e74c3c",  # Red
     }
 
     STATUS_TEXT = {
@@ -44,10 +44,7 @@ class SyncStatusWidget(QWidget):
 
         # Connect thread-safe signal to set_status with queued connection
         # This ensures updates from background threads are executed in main thread
-        self.status_update_requested.connect(
-            self._on_status_update_requested,
-            Qt.QueuedConnection
-        )
+        self.status_update_requested.connect(self._on_status_update_requested, Qt.QueuedConnection)
 
     def _on_status_update_requested(self, status, pending_count):
         """Handle thread-safe status update request."""
@@ -160,7 +157,7 @@ class SyncStatusWidget(QWidget):
         Call this method before deleteLater() to ensure proper cleanup.
         """
         # Stop animation timer
-        if hasattr(self, '_animation_timer') and self._animation_timer:
+        if hasattr(self, "_animation_timer") and self._animation_timer:
             self._animation_timer.stop()
             self._animation_timer.timeout.disconnect()
 
@@ -184,7 +181,7 @@ class SyncStatusWidget(QWidget):
     def __del__(self):
         """Destructor - ensure timer is stopped."""
         try:
-            if hasattr(self, '_animation_timer') and self._animation_timer:
+            if hasattr(self, "_animation_timer") and self._animation_timer:
                 self._animation_timer.stop()
         except RuntimeError:
             # Timer may already be deleted by Qt

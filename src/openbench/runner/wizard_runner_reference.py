@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, Signal, QThread
 
 class RunnerStatus(Enum):
     """Runner status enum."""
+
     IDLE = "idle"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -27,6 +28,7 @@ class RunnerStatus(Enum):
 @dataclass
 class RunnerProgress:
     """Progress information."""
+
     status: RunnerStatus
     progress: float  # 0-100
     current_task: str
@@ -39,9 +41,9 @@ class EvaluationRunner(QThread):
     """Thread for running OpenBench evaluation."""
 
     # Progress calculation constants
-    PROGRESS_INIT = 5       # Reserve 5% for initialization
-    PROGRESS_WORK = 90      # 90% for actual work (5% to 95%)
-    PROGRESS_MAX = 95       # Cap at 95% until completion confirmed
+    PROGRESS_INIT = 5  # Reserve 5% for initialization
+    PROGRESS_WORK = 90  # 90% for actual work (5% to 95%)
+    PROGRESS_MAX = 95  # Cap at 95% until completion confirmed
     PROGRESS_INCREMENT = 0.5  # Slow increment when no task info available
 
     progress_updated = Signal(object)  # RunnerProgress
@@ -97,12 +99,7 @@ class EvaluationRunner(QThread):
         """Run the evaluation."""
         try:
             self._emit_progress(
-                RunnerStatus.RUNNING,
-                0,
-                "Initializing",
-                "",
-                "Starting",
-                "Starting OpenBench evaluation..."
+                RunnerStatus.RUNNING, 0, "Initializing", "", "Starting", "Starting OpenBench evaluation..."
             )
             self.log_message.emit("Starting OpenBench evaluation...")
 
@@ -137,11 +134,7 @@ class EvaluationRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return
 
-            cmd = [
-                python_exe,
-                openbench_path,
-                self.config_path
-            ]
+            cmd = [python_exe, openbench_path, self.config_path]
 
             self.log_message.emit(f"Running: {' '.join(cmd)}")
 
@@ -155,14 +148,21 @@ class EvaluationRunner(QThread):
             # Start process with clean environment (avoid PyInstaller conflicts)
             env = os.environ.copy()
             # Remove PyInstaller-specific environment variables that can cause conflicts
-            for var in ['LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH', 'DYLD_FALLBACK_LIBRARY_PATH',
-                        '_MEIPASS', '_MEIPASS2', 'TCL_LIBRARY', 'TK_LIBRARY']:
+            for var in [
+                "LD_LIBRARY_PATH",
+                "DYLD_LIBRARY_PATH",
+                "DYLD_FALLBACK_LIBRARY_PATH",
+                "_MEIPASS",
+                "_MEIPASS2",
+                "TCL_LIBRARY",
+                "TK_LIBRARY",
+            ]:
                 env.pop(var, None)
 
             # Force UTF-8 encoding for Python subprocess (fixes Unicode errors on Windows)
-            env['PYTHONIOENCODING'] = 'utf-8'
+            env["PYTHONIOENCODING"] = "utf-8"
             # Disable output buffering to ensure real-time log display
-            env['PYTHONUNBUFFERED'] = '1'
+            env["PYTHONUNBUFFERED"] = "1"
 
             self._process = subprocess.Popen(
                 cmd,
@@ -172,8 +172,8 @@ class EvaluationRunner(QThread):
                 bufsize=1,
                 cwd=project_root,
                 env=env,
-                encoding='utf-8',
-                errors='replace'  # Replace unencodable characters instead of raising error
+                encoding="utf-8",
+                errors="replace",  # Replace unencodable characters instead of raising error
             )
 
             # Read output in real-time
@@ -192,10 +192,7 @@ class EvaluationRunner(QThread):
                 if stop_requested:
                     # Kill the process and all children
                     self._kill_process_tree()
-                    self._emit_progress(
-                        RunnerStatus.STOPPED, progress,
-                        "Stopped", "", "", "Evaluation stopped by user"
-                    )
+                    self._emit_progress(RunnerStatus.STOPPED, progress, "Stopped", "", "", "Evaluation stopped by user")
                     self.finished_signal.emit(False, "Stopped by user")
                     return
 
@@ -214,18 +211,13 @@ class EvaluationRunner(QThread):
                     # Parse progress from log
                     progress, var, stage = self._parse_progress(line, progress)
                     self._emit_progress(
-                        RunnerStatus.RUNNING,
-                        progress,
-                        f"{var} - {stage}" if var else "Processing",
-                        var,
-                        stage,
-                        line
+                        RunnerStatus.RUNNING, progress, f"{var} - {stage}" if var else "Processing", var, stage, line
                     )
 
             # Read any remaining buffered output after process terminates
             remaining_output = self._process.stdout.read()
             if remaining_output:
-                for line in remaining_output.strip().split('\n'):
+                for line in remaining_output.strip().split("\n"):
                     line = line.strip()
                     if line:
                         self.log_message.emit(line)
@@ -236,22 +228,17 @@ class EvaluationRunner(QThread):
 
             if return_code == 0:
                 self._emit_progress(
-                    RunnerStatus.COMPLETED, 100,
-                    "Complete", "", "", "Evaluation completed successfully"
+                    RunnerStatus.COMPLETED, 100, "Complete", "", "", "Evaluation completed successfully"
                 )
                 self.finished_signal.emit(True, "Evaluation completed successfully")
             else:
                 self._emit_progress(
-                    RunnerStatus.FAILED, progress,
-                    "Failed", "", "", f"Process exited with code {return_code}"
+                    RunnerStatus.FAILED, progress, "Failed", "", "", f"Process exited with code {return_code}"
                 )
                 self.finished_signal.emit(False, f"Process exited with code {return_code}")
 
         except Exception as e:
-            self._emit_progress(
-                RunnerStatus.FAILED, 0,
-                "Error", "", "", str(e)
-            )
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", str(e))
             self.finished_signal.emit(False, str(e))
 
     def _find_python_interpreter(self) -> Optional[str]:
@@ -262,7 +249,7 @@ class EvaluationRunner(QThread):
         """
         import shutil
 
-        is_windows = sys.platform == 'win32'
+        is_windows = sys.platform == "win32"
 
         # PRIORITY 0: Use user-configured Python path (from General settings)
         if self.python_path and os.path.exists(self.python_path):
@@ -270,40 +257,40 @@ class EvaluationRunner(QThread):
             return self.python_path
 
         # Check if sys.executable is a real Python interpreter (not bundled app)
-        if sys.executable and 'python' in sys.executable.lower():
+        if sys.executable and "python" in sys.executable.lower():
             # Verify it's not the bundled executable
-            if os.path.basename(sys.executable).lower() not in ('openbench_wizard.exe', 'openbench_wizard'):
+            if os.path.basename(sys.executable).lower() not in ("openbench_wizard.exe", "openbench_wizard"):
                 self.log_message.emit(f"Using Python: {sys.executable}")
                 return sys.executable
 
         # PRIORITY 1: Check active conda environment (CONDA_PREFIX)
-        conda_prefix = os.environ.get('CONDA_PREFIX')
+        conda_prefix = os.environ.get("CONDA_PREFIX")
         if conda_prefix:
             if is_windows:
-                conda_python = os.path.join(conda_prefix, 'python.exe')
+                conda_python = os.path.join(conda_prefix, "python.exe")
             else:
-                conda_python = os.path.join(conda_prefix, 'bin', 'python')
+                conda_python = os.path.join(conda_prefix, "bin", "python")
             if os.path.exists(conda_python):
                 self.log_message.emit(f"Using Python (conda): {conda_python}")
                 return conda_python
 
         # PRIORITY 2: Check common conda/miniforge locations BEFORE system Python
-        user_home = os.path.expanduser('~')
+        user_home = os.path.expanduser("~")
         if is_windows:
             conda_paths = [
-                os.path.join(user_home, 'anaconda3', 'python.exe'),
-                os.path.join(user_home, 'miniconda3', 'python.exe'),
-                os.path.join(user_home, 'miniforge3', 'python.exe'),
-                os.path.join(user_home, 'Anaconda3', 'python.exe'),
-                os.path.join(user_home, 'Miniconda3', 'python.exe'),
+                os.path.join(user_home, "anaconda3", "python.exe"),
+                os.path.join(user_home, "miniconda3", "python.exe"),
+                os.path.join(user_home, "miniforge3", "python.exe"),
+                os.path.join(user_home, "Anaconda3", "python.exe"),
+                os.path.join(user_home, "Miniconda3", "python.exe"),
             ]
         else:
             conda_paths = [
-                os.path.join(user_home, 'miniforge3', 'bin', 'python'),
-                os.path.join(user_home, 'miniconda3', 'bin', 'python'),
-                os.path.join(user_home, 'anaconda3', 'bin', 'python'),
-                '/opt/homebrew/bin/python3',
-                '/usr/local/bin/python3',
+                os.path.join(user_home, "miniforge3", "bin", "python"),
+                os.path.join(user_home, "miniconda3", "bin", "python"),
+                os.path.join(user_home, "anaconda3", "bin", "python"),
+                "/opt/homebrew/bin/python3",
+                "/usr/local/bin/python3",
             ]
 
         for path in conda_paths:
@@ -313,15 +300,15 @@ class EvaluationRunner(QThread):
 
         # PRIORITY 3: Check PATH (skip system Python /usr/bin/python3)
         if is_windows:
-            python_names = ['python', 'python3', 'py']
+            python_names = ["python", "python3", "py"]
         else:
-            python_names = ['python3', 'python', 'python3.11', 'python3.10', 'python3.12']
+            python_names = ["python3", "python", "python3.11", "python3.10", "python3.12"]
 
         for name in python_names:
             path = shutil.which(name)
             if path:
                 # Skip system Python on macOS/Linux (usually missing packages)
-                if path == '/usr/bin/python3' or path == '/usr/bin/python':
+                if path == "/usr/bin/python3" or path == "/usr/bin/python":
                     continue
                 self.log_message.emit(f"Using Python: {path}")
                 return path
@@ -329,12 +316,12 @@ class EvaluationRunner(QThread):
         # PRIORITY 4: Windows standard Python installations only
         if is_windows:
             common_paths = [
-                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python311', 'python.exe'),
-                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python310', 'python.exe'),
-                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Python', 'Python312', 'python.exe'),
-                r'C:\Python311\python.exe',
-                r'C:\Python310\python.exe',
-                r'C:\Python312\python.exe',
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python", "Python311", "python.exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python", "Python310", "python.exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python", "Python312", "python.exe"),
+                r"C:\Python311\python.exe",
+                r"C:\Python310\python.exe",
+                r"C:\Python312\python.exe",
             ]
 
             for path in common_paths:
@@ -407,7 +394,7 @@ class EvaluationRunner(QThread):
         """Save OpenBench directory path for future use."""
         try:
             config_file = self._get_config_file_path()
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 f.write(path)
         except Exception as e:
             self.log_message.emit(f"Warning: Could not save OpenBench path: {e}")
@@ -417,7 +404,7 @@ class EvaluationRunner(QThread):
         try:
             config_file = self._get_config_file_path()
             if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     path = f.read().strip()
                     if os.path.exists(path):
                         return path
@@ -441,7 +428,7 @@ class EvaluationRunner(QThread):
                     if len(parts) > 1:
                         remaining = parts[1].strip()
                         if remaining:
-                            var_name = remaining.split()[0].strip('.:,')
+                            var_name = remaining.split()[0].strip(".:,")
                             if var_name and len(var_name) > 2:
                                 self._current_variable = var_name
                                 var = var_name
@@ -452,9 +439,9 @@ class EvaluationRunner(QThread):
         if "ref_source" in line_lower or "reference" in line_lower or " ref:" in line_lower or "- ref:" in line_lower:
             # Try to extract ref source from patterns like "- ref: SOURCE_NAME"
             if " ref:" in line or "- ref:" in line:
-                match = re.search(r'[-\s]ref:\s*(\S+)', line)
+                match = re.search(r"[-\s]ref:\s*(\S+)", line)
                 if match:
-                    self._current_ref = match.group(1).strip(',:')
+                    self._current_ref = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -462,9 +449,9 @@ class EvaluationRunner(QThread):
         if "sim_source" in line_lower or "simulation" in line_lower or " sim:" in line_lower or "- sim:" in line_lower:
             # Try to extract sim source from patterns like "- sim: SOURCE_NAME"
             if " sim:" in line or "- sim:" in line:
-                match = re.search(r'[-\s]sim:\s*(\S+)', line)
+                match = re.search(r"[-\s]sim:\s*(\S+)", line)
                 if match:
-                    self._current_sim = match.group(1).strip(',:')
+                    self._current_sim = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -480,7 +467,7 @@ class EvaluationRunner(QThread):
             # Pattern: "Done running X comparison" completes a comparison
             if "done running" in line_lower and "comparison" in line_lower:
                 # Extract comparison name from "Done running X comparison"
-                match = re.search(r'done running\s+(\w+)\s+comparison', line_lower)
+                match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
                 if match:
                     comp_name = match.group(1)
                     if comp_name not in self._completed_comparison_tasks:
@@ -502,7 +489,9 @@ class EvaluationRunner(QThread):
         # Groupby task completion
         # Patterns: "IGBP groupby completed", "PFT analysis done"
         for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-            if groupby_type in line_lower and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
+            if groupby_type in line_lower and (
+                "completed" in line_lower or "finished" in line_lower or "done" in line_lower
+            ):
                 task_key = (self._current_variable, groupby_type)
                 if task_key not in self._completed_groupby_tasks:
                     self._completed_groupby_tasks.add(task_key)
@@ -520,16 +509,18 @@ class EvaluationRunner(QThread):
         if self._total_tasks > 0:
             # Count completed tasks from all categories
             total_completed = (
-                len(self._completed_eval_tasks) +
-                len(self._completed_groupby_tasks) +
-                len(self._completed_comparison_tasks)
+                len(self._completed_eval_tasks)
+                + len(self._completed_groupby_tasks)
+                + len(self._completed_comparison_tasks)
             )
             # Use max(1, ...) for extra safety against division by zero
             task_progress = (total_completed / max(1, self._total_tasks)) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + task_progress, self.PROGRESS_MAX)
         elif self._num_comparisons > 0 and len(self._completed_comparison_tasks) > 0:
             # Fallback for comparison phase
-            comparison_progress = (len(self._completed_comparison_tasks) / max(1, self._num_comparisons)) * self.PROGRESS_WORK
+            comparison_progress = (
+                len(self._completed_comparison_tasks) / max(1, self._num_comparisons)
+            ) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + comparison_progress, self.PROGRESS_MAX)
         elif self._num_variables > 0:
             # Fallback to simple variable counting
@@ -562,7 +553,7 @@ class EvaluationRunner(QThread):
         num_comparisons: int,
         do_evaluation: bool = True,
         do_comparison: bool = False,
-        do_statistics: bool = False
+        do_statistics: bool = False,
     ):
         """
         Set detailed task counts for accurate progress calculation.
@@ -623,24 +614,18 @@ class EvaluationRunner(QThread):
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
 
-    def _emit_progress(
-        self,
-        status: RunnerStatus,
-        progress: float,
-        task: str,
-        variable: str,
-        stage: str,
-        message: str
-    ):
+    def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
         """Emit progress signal."""
-        self.progress_updated.emit(RunnerProgress(
-            status=status,
-            progress=progress,
-            current_task=task,
-            current_variable=variable,
-            current_stage=stage,
-            message=message
-        ))
+        self.progress_updated.emit(
+            RunnerProgress(
+                status=status,
+                progress=progress,
+                current_task=task,
+                current_variable=variable,
+                current_stage=stage,
+                message=message,
+            )
+        )
 
     def _kill_process_tree(self):
         """Kill the process and all its children."""
@@ -650,6 +635,7 @@ class EvaluationRunner(QThread):
         try:
             # Try to kill child processes first (more thorough termination)
             import psutil
+
             try:
                 parent = psutil.Process(self._process.pid)
                 children = parent.children(recursive=True)

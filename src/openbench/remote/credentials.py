@@ -55,7 +55,7 @@ class CredentialManager:
 
         if os.path.exists(self._salt_path):
             try:
-                with open(self._salt_path, 'rb') as f:
+                with open(self._salt_path, "rb") as f:
                     salt = f.read()
                 if len(salt) == self.SALT_SIZE:
                     return salt
@@ -68,7 +68,7 @@ class CredentialManager:
         salt = os.urandom(self.SALT_SIZE)
 
         try:
-            with open(self._salt_path, 'wb') as f:
+            with open(self._salt_path, "wb") as f:
                 f.write(salt)
             # Set restrictive permissions (Unix only)
             try:
@@ -113,6 +113,7 @@ class CredentialManager:
             Machine identifier string
         """
         import uuid
+
         # Use MAC address + username as identifier
         mac = uuid.getnode()
         user = getpass.getuser()
@@ -128,7 +129,7 @@ class CredentialManager:
             return {"servers": {}}
 
         try:
-            with open(self._credentials_path, 'r') as f:
+            with open(self._credentials_path, "r") as f:
                 return json.load(f)
         except Exception:
             return {"servers": {}}
@@ -140,7 +141,7 @@ class CredentialManager:
             data: Credentials dictionary
         """
         os.makedirs(self._config_dir, exist_ok=True)
-        with open(self._credentials_path, 'w') as f:
+        with open(self._credentials_path, "w") as f:
             json.dump(data, f, indent=2)
         # Set file permissions to 600 (user only)
         os.chmod(self._credentials_path, 0o600)
@@ -152,7 +153,7 @@ class CredentialManager:
         password: Optional[str] = None,
         key_file: Optional[str] = None,
         jump_node: Optional[str] = None,
-        jump_auth: str = "none"
+        jump_auth: str = "none",
     ) -> None:
         """Save credential for a host.
 
@@ -175,7 +176,7 @@ class CredentialManager:
             "password": encrypted_password,
             "key_file": key_file,
             "jump_node": jump_node,
-            "jump_auth": jump_auth
+            "jump_auth": jump_auth,
         }
 
         self._save_credentials(data)

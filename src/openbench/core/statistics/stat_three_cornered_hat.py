@@ -67,7 +67,7 @@ def stat_three_cornered_hat(self, *variables):
 
             try:
                 inv_S = np.linalg.inv(S)
-                inv_S_sub = inv_S[:N - 1, :N - 1]  # Submatrix for calculations involving u
+                inv_S_sub = inv_S[: N - 1, : N - 1]  # Submatrix for calculations involving u
                 # Use inv_S_sub for dot product with u
                 R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, inv_S_sub), u.T))
             except np.linalg.LinAlgError:
@@ -79,13 +79,16 @@ def stat_three_cornered_hat(self, *variables):
 
             # Set up constraint
             # Use inv_S_sub in the constraint lambda function as well
-            cons = {'type': 'ineq', 'fun': lambda r: (r[-1] - np.dot(
-                np.dot(r[:-1] - r[-1] * u, inv_S_sub),
-                (r[:-1] - r[-1] * u).T)) / Denominator}
+            cons = {
+                "type": "ineq",
+                "fun": lambda r: (
+                    (r[-1] - np.dot(np.dot(r[:-1] - r[-1] * u, inv_S_sub), (r[:-1] - r[-1] * u).T)) / Denominator
+                ),
+            }
 
             # Perform optimization with error handling
             try:
-                x = optimize.minimize(my_fun, x0, method='COBYLA', tol=2e-10, constraints=cons)
+                x = optimize.minimize(my_fun, x0, method="COBYLA", tol=2e-10, constraints=cons)
                 if not x.success:
                     return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
 
@@ -117,6 +120,7 @@ def stat_three_cornered_hat(self, *variables):
             except Exception:
                 # Optionally re-raise or log traceback here for more detail
                 import traceback
+
                 traceback.print_exc()
                 return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
         except Exception as e:
@@ -136,9 +140,9 @@ def stat_three_cornered_hat(self, *variables):
                 data_arrays.append(var)
 
         # Combine all variables into a single array
-        combined_data = xr.concat(data_arrays, dim='variable')
+        combined_data = xr.concat(data_arrays, dim="variable")
         # save the combined_data
-        combined_data.to_netcdf('combined_data.nc')
+        combined_data.to_netcdf("combined_data.nc")
         # Get dimensions for processing
         lats = combined_data.lat.values
         lons = combined_data.lon.values
@@ -147,8 +151,8 @@ def stat_three_cornered_hat(self, *variables):
         # Initialize output arrays with NaN values - WITHOUT time dimension
         empty_template = xr.DataArray(
             np.full((num_variables, len(lats), len(lons)), np.nan),
-            dims=('variable', 'lat', 'lon'),
-            coords={'variable': range(num_variables), 'lat': lats, 'lon': lons}
+            dims=("variable", "lat", "lon"),
+            coords={"variable": range(num_variables), "lat": lats, "lon": lons},
         )
         uct = empty_template.copy()
         r_uct = empty_template.copy()
@@ -178,12 +182,10 @@ def stat_three_cornered_hat(self, *variables):
             # Split lats into chunks for parallel processing
             n_jobs = min(os.cpu_count(), 8)  # Limit to avoid excessive memory use
             chunk_size = max(1, len(lats) // (n_jobs * 2))
-            lat_chunks = [lats[i:i + chunk_size] for i in range(0, len(lats), chunk_size)]
+            lat_chunks = [lats[i : i + chunk_size] for i in range(0, len(lats), chunk_size)]
 
             # Process chunks in parallel
-            all_results = Parallel(n_jobs=n_jobs)(
-                delayed(process_chunk)(chunk) for chunk in lat_chunks
-            )
+            all_results = Parallel(n_jobs=n_jobs)(delayed(process_chunk)(chunk) for chunk in lat_chunks)
 
             # Combine results
             for chunk_results in all_results:
@@ -219,20 +221,19 @@ def stat_three_cornered_hat(self, *variables):
                     gc.collect()
 
         # Create output dataset
-        ds = xr.Dataset({
-            'uncertainty': uct,
-            'relative_uncertainty': r_uct
-        })
+        ds = xr.Dataset({"uncertainty": uct, "relative_uncertainty": r_uct})
 
         # Add metadata
-        ds['uncertainty'].attrs['long_name'] = 'Uncertainty from Three-Cornered Hat method'
-        ds['uncertainty'].attrs['units'] = 'Same as input variables'
-        ds['uncertainty'].attrs['description'] = 'Absolute uncertainty estimated using the Three-Cornered Hat method'
-        ds['relative_uncertainty'].attrs['long_name'] = 'Relative uncertainty from Three-Cornered Hat method'
-        ds['relative_uncertainty'].attrs['units'] = '%'
-        ds['relative_uncertainty'].attrs['description'] = 'Relative uncertainty (%) estimated using the Three-Cornered Hat method'
-        ds.attrs['method'] = 'Three-Cornered Hat'
-        ds.attrs['n_datasets'] = len(variables)
+        ds["uncertainty"].attrs["long_name"] = "Uncertainty from Three-Cornered Hat method"
+        ds["uncertainty"].attrs["units"] = "Same as input variables"
+        ds["uncertainty"].attrs["description"] = "Absolute uncertainty estimated using the Three-Cornered Hat method"
+        ds["relative_uncertainty"].attrs["long_name"] = "Relative uncertainty from Three-Cornered Hat method"
+        ds["relative_uncertainty"].attrs["units"] = "%"
+        ds["relative_uncertainty"].attrs["description"] = (
+            "Relative uncertainty (%) estimated using the Three-Cornered Hat method"
+        )
+        ds.attrs["method"] = "Three-Cornered Hat"
+        ds.attrs["n_datasets"] = len(variables)
 
         return ds
 

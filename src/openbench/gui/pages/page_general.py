@@ -8,14 +8,19 @@ import os
 import sys
 
 from PySide6.QtWidgets import (
-    QFormLayout, QLineEdit,
-    QCheckBox, QGroupBox, QHBoxLayout,
-    QGridLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout,
-    QDialog
+    QFormLayout,
+    QLineEdit,
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QDialog,
 )
-from openbench.gui.widgets.no_scroll_widgets import (
-    NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
-)
+from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import PathSelector
@@ -256,6 +261,7 @@ class PageGeneral(BasePage):
         """Handle output directory browse - uses remote browser if in remote mode."""
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -265,12 +271,10 @@ class PageGeneral(BasePage):
             # Use local file dialog with OpenBench root as default
             from PySide6.QtWidgets import QFileDialog
             from openbench.gui.widgets.path_selector import get_default_browse_path
+
             start_dir = self.basedir_input.path() or get_default_browse_path()
             path = QFileDialog.getExistingDirectory(
-                self,
-                "Select Output Directory",
-                start_dir,
-                QFileDialog.ShowDirsOnly
+                self, "Select Output Directory", start_dir, QFileDialog.ShowDirsOnly
             )
             if path:
                 self.basedir_input.set_path(path)
@@ -281,8 +285,7 @@ class PageGeneral(BasePage):
         ssh_manager = self._get_remote_ssh_manager()
         if not ssh_manager:
             QMessageBox.warning(
-                self, "Not Connected",
-                "Please connect to the remote server first in the Runtime Environment page."
+                self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
             return
 
@@ -313,9 +316,9 @@ class PageGeneral(BasePage):
         """Get SSH manager from the runtime page."""
         # Access the main window to get the runtime page
         main_window = self.window()
-        if hasattr(main_window, 'pages') and 'runtime' in main_window.pages:
-            runtime_page = main_window.pages['runtime']
-            if hasattr(runtime_page, 'remote_config_widget'):
+        if hasattr(main_window, "pages") and "runtime" in main_window.pages:
+            runtime_page = main_window.pages["runtime"]
+            if hasattr(runtime_page, "remote_config_widget"):
                 return runtime_page.remote_config_widget.get_ssh_manager()
         return None
 
@@ -347,22 +350,44 @@ class PageGeneral(BasePage):
 
         # Validate filesystem-safe characters
         # Allow letters, numbers, underscores, hyphens, and dots
-        if not re.match(r'^[a-zA-Z0-9_.-]+$', basename):
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", basename):
             QMessageBox.warning(
-                self, "Invalid Name",
+                self,
+                "Invalid Name",
                 "Project name can only contain:\n"
                 "• Letters (a-z, A-Z)\n"
                 "• Numbers (0-9)\n"
                 "• Underscores (_)\n"
                 "• Hyphens (-)\n"
-                "• Dots (.)"
+                "• Dots (.)",
             )
             return
 
         # Check for reserved names on Windows
-        reserved_names = {'CON', 'PRN', 'AUX', 'NUL',
-                         'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
-                         'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'}
+        reserved_names = {
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            "COM1",
+            "COM2",
+            "COM3",
+            "COM4",
+            "COM5",
+            "COM6",
+            "COM7",
+            "COM8",
+            "COM9",
+            "LPT1",
+            "LPT2",
+            "LPT3",
+            "LPT4",
+            "LPT5",
+            "LPT6",
+            "LPT7",
+            "LPT8",
+            "LPT9",
+        }
         if basename.upper() in reserved_names:
             QMessageBox.warning(self, "Invalid Name", f"'{basename}' is a reserved system name.")
             return
@@ -381,6 +406,7 @@ class PageGeneral(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -396,11 +422,7 @@ class PageGeneral(BasePage):
                 # Trigger namelist sync
                 self.controller.sync_namelists()
 
-                QMessageBox.information(
-                    self,
-                    "Project Created",
-                    f"Project folder created:\n{output_dir}"
-                )
+                QMessageBox.information(self, "Project Created", f"Project folder created:\n{output_dir}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to create project folder:\n{str(e)}")
 
@@ -409,8 +431,7 @@ class PageGeneral(BasePage):
         ssh_manager = self._get_remote_ssh_manager()
         if not ssh_manager:
             QMessageBox.warning(
-                self, "Not Connected",
-                "Please connect to the remote server first in the Runtime Environment page."
+                self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
             return
 
@@ -421,14 +442,11 @@ class PageGeneral(BasePage):
 
             if exit_code == 0:
                 QMessageBox.information(
-                    self,
-                    "Project Created",
-                    f"Project folder created on remote server:\n{output_dir}"
+                    self, "Project Created", f"Project folder created on remote server:\n{output_dir}"
                 )
             else:
                 QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to create project folder on remote server:\n{stderr or stdout}"
+                    self, "Error", f"Failed to create project folder on remote server:\n{stderr or stdout}"
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create project folder:\n{str(e)}")
@@ -451,6 +469,7 @@ class PageGeneral(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -464,14 +483,14 @@ class PageGeneral(BasePage):
                     basedir = f"{remote_openbench.rstrip('/')}/output"
                 else:
                     basedir = "./output"
-            elif not basedir.startswith('/'):
+            elif not basedir.startswith("/"):
                 # Convert relative path to absolute using remote root
                 if basedir.startswith("./"):
                     basedir = basedir[2:]
                 if remote_openbench:
                     basedir = f"{remote_openbench.rstrip('/')}/{basedir}"
             # Normalize slashes for remote paths
-            basedir = basedir.replace('\\', '/')
+            basedir = basedir.replace("\\", "/")
         else:
             # Local mode: use local OpenBench root
             openbench_root = self._get_openbench_root()
@@ -626,7 +645,7 @@ class PageGeneral(BasePage):
             "basename",
             "Project name is required",
             page_id=self.PAGE_ID,
-            widget=self.basename_input
+            widget=self.basename_input,
         )
         if error:
             errors.append(error)
@@ -637,7 +656,7 @@ class PageGeneral(BasePage):
             "basedir",
             "Output directory is required",
             page_id=self.PAGE_ID,
-            widget=self.basedir_input
+            widget=self.basedir_input,
         )
         if error:
             errors.append(error)
@@ -649,7 +668,7 @@ class PageGeneral(BasePage):
             "year_range",
             "Start year cannot be greater than end year",
             page_id=self.PAGE_ID,
-            widget=self.syear_spin
+            widget=self.syear_spin,
         )
         if error:
             errors.append(error)
@@ -657,22 +676,24 @@ class PageGeneral(BasePage):
         # Latitude range validation
         error = FieldValidator.number_range(
             self.min_lat_spin.value(),
-            -90.0, 90.0,
+            -90.0,
+            90.0,
             "min_lat",
             "Minimum latitude is invalid (must be -90 to 90)",
             page_id=self.PAGE_ID,
-            widget=self.min_lat_spin
+            widget=self.min_lat_spin,
         )
         if error:
             errors.append(error)
 
         error = FieldValidator.number_range(
             self.max_lat_spin.value(),
-            -90.0, 90.0,
+            -90.0,
+            90.0,
             "max_lat",
             "Maximum latitude is invalid (must be -90 to 90)",
             page_id=self.PAGE_ID,
-            widget=self.max_lat_spin
+            widget=self.max_lat_spin,
         )
         if error:
             errors.append(error)
@@ -683,7 +704,7 @@ class PageGeneral(BasePage):
             "lat_range",
             "Minimum latitude cannot be greater than maximum latitude",
             page_id=self.PAGE_ID,
-            widget=self.min_lat_spin
+            widget=self.min_lat_spin,
         )
         if error:
             errors.append(error)
@@ -691,22 +712,24 @@ class PageGeneral(BasePage):
         # Longitude range validation
         error = FieldValidator.number_range(
             self.min_lon_spin.value(),
-            -180.0, 180.0,
+            -180.0,
+            180.0,
             "min_lon",
             "Minimum longitude is invalid (must be -180 to 180)",
             page_id=self.PAGE_ID,
-            widget=self.min_lon_spin
+            widget=self.min_lon_spin,
         )
         if error:
             errors.append(error)
 
         error = FieldValidator.number_range(
             self.max_lon_spin.value(),
-            -180.0, 180.0,
+            -180.0,
+            180.0,
             "max_lon",
             "Maximum longitude is invalid (must be -180 to 180)",
             page_id=self.PAGE_ID,
-            widget=self.max_lon_spin
+            widget=self.max_lon_spin,
         )
         if error:
             errors.append(error)
@@ -717,7 +740,7 @@ class PageGeneral(BasePage):
             "lon_range",
             "Minimum longitude cannot be greater than maximum longitude",
             page_id=self.PAGE_ID,
-            widget=self.min_lon_spin
+            widget=self.min_lon_spin,
         )
         if error:
             errors.append(error)

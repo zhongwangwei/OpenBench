@@ -10,9 +10,16 @@ import shutil
 import yaml
 
 from PySide6.QtWidgets import (
-    QHBoxLayout, QFormLayout, QLabel,
-    QGroupBox, QRadioButton, QButtonGroup,
-    QPushButton, QFileDialog, QMessageBox, QLineEdit
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QGroupBox,
+    QRadioButton,
+    QButtonGroup,
+    QPushButton,
+    QFileDialog,
+    QMessageBox,
+    QLineEdit,
 )
 
 from openbench.gui.pages.base_page import BasePage
@@ -241,8 +248,9 @@ class PageRuntime(BasePage):
     def _switch_to_local_storage(self):
         """Switch to local storage mode."""
         from openbench.gui.path_utils import get_openbench_root
+
         main_window = self._get_main_window()
-        if main_window and hasattr(main_window, 'setup_local_storage'):
+        if main_window and hasattr(main_window, "setup_local_storage"):
             # Use local OpenBench path if configured, otherwise fall back to auto-detect
             project_dir = self.local_openbench_input.text().strip()
             if not project_dir or not os.path.isdir(project_dir):
@@ -253,7 +261,7 @@ class PageRuntime(BasePage):
     def _switch_to_remote_storage(self):
         """Switch to remote storage mode."""
         main_window = self._get_main_window()
-        if main_window and hasattr(main_window, 'setup_remote_storage'):
+        if main_window and hasattr(main_window, "setup_remote_storage"):
             ssh_manager = self.remote_config_widget.get_ssh_manager()
             remote_config = self.remote_config_widget.get_config()
             # Use openbench_path as the remote project directory
@@ -271,7 +279,7 @@ class PageRuntime(BasePage):
         """Get the main window instance."""
         # Use Qt's window() method to get the top-level window
         window = self.window()
-        if window and window.__class__.__name__ == 'MainWindow':
+        if window and window.__class__.__name__ == "MainWindow":
             return window
         return None
 
@@ -287,45 +295,45 @@ class PageRuntime(BasePage):
     def _detect_python(self):
         """Auto-detect available Python interpreters."""
         detected = []
-        is_windows = sys.platform == 'win32'
-        user_home = os.path.expanduser('~')
+        is_windows = sys.platform == "win32"
+        user_home = os.path.expanduser("~")
 
         # PRIORITY 1: Check active conda environment (CONDA_PREFIX)
-        conda_prefix = os.environ.get('CONDA_PREFIX')
+        conda_prefix = os.environ.get("CONDA_PREFIX")
         if conda_prefix:
             if is_windows:
-                conda_python = os.path.join(conda_prefix, 'python.exe')
+                conda_python = os.path.join(conda_prefix, "python.exe")
             else:
-                conda_python = os.path.join(conda_prefix, 'bin', 'python')
+                conda_python = os.path.join(conda_prefix, "bin", "python")
             if os.path.exists(conda_python):
                 detected.append(f"{conda_python} (active conda)")
 
         # PRIORITY 2: Check common conda/miniforge locations
         if is_windows:
             conda_paths = [
-                (os.path.join(user_home, 'anaconda3', 'python.exe'), 'anaconda3'),
-                (os.path.join(user_home, 'miniconda3', 'python.exe'), 'miniconda3'),
-                (os.path.join(user_home, 'miniforge3', 'python.exe'), 'miniforge3'),
+                (os.path.join(user_home, "anaconda3", "python.exe"), "anaconda3"),
+                (os.path.join(user_home, "miniconda3", "python.exe"), "miniconda3"),
+                (os.path.join(user_home, "miniforge3", "python.exe"), "miniforge3"),
             ]
         else:
             conda_paths = [
-                (os.path.join(user_home, 'miniforge3', 'bin', 'python'), 'miniforge3'),
-                (os.path.join(user_home, 'miniconda3', 'bin', 'python'), 'miniconda3'),
-                (os.path.join(user_home, 'anaconda3', 'bin', 'python'), 'anaconda3'),
-                ('/opt/homebrew/bin/python3', 'homebrew'),
-                ('/usr/local/bin/python3', 'local'),
+                (os.path.join(user_home, "miniforge3", "bin", "python"), "miniforge3"),
+                (os.path.join(user_home, "miniconda3", "bin", "python"), "miniconda3"),
+                (os.path.join(user_home, "anaconda3", "bin", "python"), "anaconda3"),
+                ("/opt/homebrew/bin/python3", "homebrew"),
+                ("/usr/local/bin/python3", "local"),
             ]
 
         for path, label in conda_paths:
-            if os.path.exists(path) and path not in [d.split(' ')[0] for d in detected]:
+            if os.path.exists(path) and path not in [d.split(" ")[0] for d in detected]:
                 detected.append(f"{path} ({label})")
 
         # PRIORITY 3: Check PATH
-        python_names = ['python3', 'python'] if not is_windows else ['python', 'python3']
+        python_names = ["python3", "python"] if not is_windows else ["python", "python3"]
         for name in python_names:
             path = shutil.which(name)
-            if path and path not in [d.split(' ')[0] for d in detected]:
-                if path == '/usr/bin/python3':
+            if path and path not in [d.split(" ")[0] for d in detected]:
+                if path == "/usr/bin/python3":
                     detected.append(f"{path} (system)")
                 else:
                     detected.append(f"{path} (PATH)")
@@ -353,17 +361,12 @@ class PageRuntime(BasePage):
         """Open file dialog to select Python interpreter."""
         from PySide6.QtWidgets import QFileDialog
 
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             filter_str = "Python (python.exe);;All Files (*)"
         else:
             filter_str = "All Files (*)"
 
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Python Interpreter",
-            os.path.expanduser("~"),
-            filter_str
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Select Python Interpreter", os.path.expanduser("~"), filter_str)
 
         if path:
             self.python_combo.setCurrentText(path)
@@ -373,15 +376,11 @@ class PageRuntime(BasePage):
         current_path = self.local_openbench_input.text().strip()
         start_dir = current_path if current_path and os.path.isdir(current_path) else os.path.expanduser("~")
 
-        path = QFileDialog.getExistingDirectory(
-            self,
-            "Select OpenBench Installation Directory",
-            start_dir
-        )
+        path = QFileDialog.getExistingDirectory(self, "Select OpenBench Installation Directory", start_dir)
 
         if path:
             # Verify it's a valid OpenBench installation
-            script_path = os.path.join(path, 'openbench', 'openbench.py')
+            script_path = os.path.join(path, "openbench", "openbench.py")
             if os.path.exists(script_path):
                 self.local_openbench_input.setText(path)
             else:
@@ -392,7 +391,7 @@ class PageRuntime(BasePage):
                     f"Selected: {path}\n\n"
                     "Use this path anyway?",
                     QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
+                    QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:
                     self.local_openbench_input.setText(path)
@@ -400,8 +399,15 @@ class PageRuntime(BasePage):
     def _install_openbench(self):
         """Install OpenBench from GitHub."""
         from PySide6.QtWidgets import (
-            QDialog, QVBoxLayout, QHBoxLayout, QTextEdit,
-            QPushButton, QLabel, QRadioButton, QButtonGroup, QApplication
+            QDialog,
+            QVBoxLayout,
+            QHBoxLayout,
+            QTextEdit,
+            QPushButton,
+            QLabel,
+            QRadioButton,
+            QButtonGroup,
+            QApplication,
         )
         import subprocess
 
@@ -416,12 +422,13 @@ class PageRuntime(BasePage):
         git_path = shutil.which("git")
         if not git_path:
             QMessageBox.critical(
-                self, "Git Not Found",
+                self,
+                "Git Not Found",
                 "Git is not installed or not in PATH.\n\n"
                 "Please install Git first:\n"
                 "• macOS: brew install git\n"
                 "• Ubuntu: sudo apt install git\n"
-                "• Windows: https://git-scm.com/download/win"
+                "• Windows: https://git-scm.com/download/win",
             )
             return
 
@@ -433,19 +440,19 @@ class PageRuntime(BasePage):
                 reply = QMessageBox.question(
                     self,
                     "OpenBench Already Exists",
-                    f"OpenBench already exists at:\n{install_path}\n\n"
-                    "Would you like to update it (git pull)?",
+                    f"OpenBench already exists at:\n{install_path}\n\nWould you like to update it (git pull)?",
                     QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
+                    QMessageBox.Yes,
                 )
                 if reply != QMessageBox.Yes:
                     return
                 is_update = True
             else:
                 QMessageBox.warning(
-                    self, "Directory Exists",
+                    self,
+                    "Directory Exists",
                     f"Directory already exists but is not a Git repository:\n{install_path}\n\n"
-                    "Please choose a different path or remove the existing directory."
+                    "Please choose a different path or remove the existing directory.",
                 )
                 return
 
@@ -525,13 +532,7 @@ class PageRuntime(BasePage):
             QApplication.processEvents()
 
             # Run git command
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
             for line in process.stdout:
                 output_text.append(line.rstrip())
@@ -562,7 +563,7 @@ class PageRuntime(BasePage):
         import subprocess
         import json
 
-        current_python = self.python_combo.currentText().split(' ')[0]
+        current_python = self.python_combo.currentText().split(" ")[0]
         envs = self._get_conda_envs(current_python)
 
         current_env = self.conda_combo.currentText()
@@ -592,28 +593,28 @@ class PageRuntime(BasePage):
 
         # Determine conda base path from Python path
         python_dir = os.path.dirname(python_path)
-        if sys.platform == 'win32':
-            if 'envs' in python_dir:
-                conda_base = python_dir.split('envs')[0].rstrip(os.sep)
+        if sys.platform == "win32":
+            if "envs" in python_dir:
+                conda_base = python_dir.split("envs")[0].rstrip(os.sep)
             else:
                 conda_base = python_dir
-            conda_exe = os.path.join(conda_base, 'Scripts', 'conda.exe')
+            conda_exe = os.path.join(conda_base, "Scripts", "conda.exe")
             if not os.path.exists(conda_exe):
-                conda_exe = os.path.join(conda_base, 'condabin', 'conda.bat')
+                conda_exe = os.path.join(conda_base, "condabin", "conda.bat")
         else:
-            if 'envs' in python_dir:
-                conda_base = python_dir.split('envs')[0].rstrip(os.sep)
+            if "envs" in python_dir:
+                conda_base = python_dir.split("envs")[0].rstrip(os.sep)
             else:
                 conda_base = os.path.dirname(python_dir)
-            conda_exe = os.path.join(conda_base, 'bin', 'conda')
+            conda_exe = os.path.join(conda_base, "bin", "conda")
 
         if not os.path.exists(conda_exe):
-            user_home = os.path.expanduser('~')
-            for base in ['miniforge3', 'miniconda3', 'anaconda3']:
-                if sys.platform == 'win32':
-                    test_exe = os.path.join(user_home, base, 'Scripts', 'conda.exe')
+            user_home = os.path.expanduser("~")
+            for base in ["miniforge3", "miniconda3", "anaconda3"]:
+                if sys.platform == "win32":
+                    test_exe = os.path.join(user_home, base, "Scripts", "conda.exe")
                 else:
-                    test_exe = os.path.join(user_home, base, 'bin', 'conda')
+                    test_exe = os.path.join(user_home, base, "bin", "conda")
                 if os.path.exists(test_exe):
                     conda_exe = test_exe
                     conda_base = os.path.join(user_home, base)
@@ -623,18 +624,13 @@ class PageRuntime(BasePage):
             return envs
 
         try:
-            result = subprocess.run(
-                [conda_exe, 'env', 'list', '--json'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            result = subprocess.run([conda_exe, "env", "list", "--json"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 data = json.loads(result.stdout)
-                for env_path in data.get('envs', []):
+                for env_path in data.get("envs", []):
                     env_name = os.path.basename(env_path)
                     if env_name == conda_base.split(os.sep)[-1]:
-                        env_name = 'base'
+                        env_name = "base"
                     envs.append((env_name, env_path))
         except Exception:
             pass
@@ -709,7 +705,7 @@ class PageRuntime(BasePage):
         general["num_cores"] = self.num_cores_spin.value()
 
         # Save Python path, conda env, and OpenBench path for local mode
-        general["python_path"] = self.python_combo.currentText().split(' ')[0]
+        general["python_path"] = self.python_combo.currentText().split(" ")[0]
         general["conda_env"] = self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else ""
         general["local_openbench_path"] = self.local_openbench_input.text().strip()
 
@@ -724,13 +720,13 @@ class PageRuntime(BasePage):
             # Check if remote server is configured
             if not self.remote_config_widget.is_connected():
                 from PySide6.QtWidgets import QMessageBox
+
                 reply = QMessageBox.question(
                     self,
                     "Not Connected",
-                    "You haven't connected to the remote server yet.\n\n"
-                    "Do you want to continue anyway?",
+                    "You haven't connected to the remote server yet.\n\nDo you want to continue anyway?",
                     QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
+                    QMessageBox.No,
                 )
                 return reply == QMessageBox.Yes
         return True
@@ -748,10 +744,7 @@ class PageRuntime(BasePage):
         default_path = get_default_runtime_settings_path()
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Runtime Settings",
-            default_path,
-            "YAML Files (*.yaml *.yml);;All Files (*)"
+            self, "Save Runtime Settings", default_path, "YAML Files (*.yaml *.yml);;All Files (*)"
         )
 
         if not file_path:
@@ -759,18 +752,12 @@ class PageRuntime(BasePage):
 
         try:
             settings = self._collect_runtime_settings()
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 yaml.dump(settings, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
-            QMessageBox.information(
-                self, "Settings Saved",
-                f"Runtime settings saved to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Settings Saved", f"Runtime settings saved to:\n{file_path}")
         except Exception as e:
-            QMessageBox.critical(
-                self, "Save Error",
-                f"Failed to save settings:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Save Error", f"Failed to save settings:\n{str(e)}")
 
     def _load_runtime_settings(self):
         """Load runtime settings from a file."""
@@ -778,37 +765,28 @@ class PageRuntime(BasePage):
         start_dir = os.path.dirname(default_path) if os.path.exists(default_path) else os.path.expanduser("~")
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Runtime Settings",
-            start_dir,
-            "YAML Files (*.yaml *.yml);;All Files (*)"
+            self, "Load Runtime Settings", start_dir, "YAML Files (*.yaml *.yml);;All Files (*)"
         )
 
         if not file_path:
             return
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 settings = yaml.safe_load(f) or {}
 
             self._apply_runtime_settings(settings)
 
-            QMessageBox.information(
-                self, "Settings Loaded",
-                f"Runtime settings loaded from:\n{file_path}"
-            )
+            QMessageBox.information(self, "Settings Loaded", f"Runtime settings loaded from:\n{file_path}")
         except Exception as e:
-            QMessageBox.critical(
-                self, "Load Error",
-                f"Failed to load settings:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Load Error", f"Failed to load settings:\n{str(e)}")
 
     def _collect_runtime_settings(self) -> dict:
         """Collect current runtime settings into a dictionary."""
         settings = {
             "execution_mode": "local" if self.radio_local.isChecked() else "remote",
             "num_cores": self.num_cores_spin.value(),
-            "python_path": self.python_combo.currentText().split(' ')[0],
+            "python_path": self.python_combo.currentText().split(" ")[0],
             "conda_env": self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else "",
             "local_openbench_path": self.local_openbench_input.text().strip(),
         }
@@ -872,7 +850,7 @@ class PageRuntime(BasePage):
         default_path = get_default_runtime_settings_path()
         if os.path.exists(default_path):
             try:
-                with open(default_path, 'r', encoding='utf-8') as f:
+                with open(default_path, "r", encoding="utf-8") as f:
                     settings = yaml.safe_load(f) or {}
 
                 # Clean up cross-platform paths that won't work on current system
@@ -918,7 +896,7 @@ class PageRuntime(BasePage):
         try:
             default_path = get_default_runtime_settings_path()
             settings = self._collect_runtime_settings()
-            with open(default_path, 'w', encoding='utf-8') as f:
+            with open(default_path, "w", encoding="utf-8") as f:
                 yaml.dump(settings, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
         except Exception:
             pass  # Silently ignore errors on auto-save
@@ -933,7 +911,7 @@ class PageRuntime(BasePage):
             "or when you want to start fresh.\n\n"
             "Continue?",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
 
         if reply != QMessageBox.Yes:
@@ -961,14 +939,9 @@ class PageRuntime(BasePage):
             QMessageBox.information(
                 self,
                 "Settings Reset",
-                "Cached settings have been cleared.\n\n"
-                f"Cache location: {os.path.dirname(default_path)}"
+                f"Cached settings have been cleared.\n\nCache location: {os.path.dirname(default_path)}",
             )
 
         except Exception as e:
             logger.error(f"Failed to reset settings: {e}")
-            QMessageBox.warning(
-                self,
-                "Reset Failed",
-                f"Failed to reset settings: {e}"
-            )
+            QMessageBox.warning(self, "Reset Failed", f"Failed to reset settings: {e}")

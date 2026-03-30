@@ -264,9 +264,7 @@ class Regridder:
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
         ds_formatted = format_for_regrid(self._obj, ds_target_grid, stats=True)
 
-        return flox_reduce.statistic_reduce(
-            ds_formatted, ds_target_grid, time_dim, method, skipna, fill_value
-        )
+        return flox_reduce.statistic_reduce(ds_formatted, ds_target_grid, time_dim, method, skipna, fill_value)
 
 
 @overload

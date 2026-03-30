@@ -70,7 +70,7 @@ class WizardConfigManager:
             return self._get_default_config()
 
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             if config is None:
@@ -103,15 +103,8 @@ class WizardConfigManager:
 
         config_path = self.get_config_path(output_dir)
 
-        with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                config,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
     def exists(self, output_dir: str) -> bool:
         """
@@ -154,19 +147,19 @@ class WizardConfigManager:
                 "mode": "local",  # "local" or "remote"
             },
             "remote": {
-                "host": "",                    # user@host[:port] format
-                "auth_type": "password",       # "password" or "key"
-                "key_file": "",                # Path to SSH key file
-                "use_jump": False,             # Whether to use jump/compute node
-                "jump_node": "",               # Jump/compute node name
-                "jump_auth": "none",           # "none" (internal trust) or "password"
-                "python_path": "",             # Python interpreter path on remote
-                "conda_env": "",               # Conda environment name
-                "openbench_path": "",          # OpenBench installation path on remote
+                "host": "",  # user@host[:port] format
+                "auth_type": "password",  # "password" or "key"
+                "key_file": "",  # Path to SSH key file
+                "use_jump": False,  # Whether to use jump/compute node
+                "jump_node": "",  # Jump/compute node name
+                "jump_auth": "none",  # "none" (internal trust) or "password"
+                "python_path": "",  # Python interpreter path on remote
+                "conda_env": "",  # Conda environment name
+                "openbench_path": "",  # OpenBench installation path on remote
             },
             "ui": {
-                "last_tab": 0,                 # Last selected tab index
-                "window_geometry": None,       # Window position and size
+                "last_tab": 0,  # Last selected tab index
+                "window_geometry": None,  # Window position and size
             },
         }
 

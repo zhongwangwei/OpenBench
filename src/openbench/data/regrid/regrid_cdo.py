@@ -6,32 +6,33 @@ from openbench.util.converttype import Convert_Type
 
 
 class regridder_cdo:
-   def __init__(self, info):
-      self.name = 'regridder_cdo'
-      self.version = '0.1'
-      self.release = '0.1'
-      self.date = 'Mar 2023'
-      self.author = "Zhongwang Wei"
+    def __init__(self, info):
+        self.name = "regridder_cdo"
+        self.version = "0.1"
+        self.release = "0.1"
+        self.date = "Mar 2023"
+        self.author = "Zhongwang Wei"
 
-   def largest_area_fraction_remap_cdo(self,input_file, output_file, target_grid):
-      """Performs largest area fraction remapping on a netCDF file.
+    def largest_area_fraction_remap_cdo(self, input_file, output_file, target_grid):
+        """Performs largest area fraction remapping on a netCDF file.
 
-      Args:
-         input_file (str): Path to the input netCDF file.
-         output_file (str): Path to save the remapped netCDF file.
-         target_grid (str): Path to the target grid file (or grid description).
-      """
+        Args:
+           input_file (str): Path to the input netCDF file.
+           output_file (str): Path to save the remapped netCDF file.
+           target_grid (str): Path to the target grid file (or grid description).
+        """
 
-      # Use subprocess to execute CDO command
-      cmd = f"cdo remaplaf,{target_grid} {input_file} {output_file}"
-      subprocess.run(cmd, shell=True, check=True)
+        # Use subprocess to execute CDO command
+        cmd = f"cdo remaplaf,{target_grid} {input_file} {output_file}"
+        subprocess.run(cmd, shell=True, check=True)
 
-      # Load remapped data with xarray and properly close file handle
-      with xr.open_dataset(output_file) as remapped_data:
-          loaded_data = remapped_data.load()
+        # Load remapped data with xarray and properly close file handle
+        with xr.open_dataset(output_file) as remapped_data:
+            loaded_data = remapped_data.load()
 
-      return Convert_Type.convert_nc(loaded_data)
-   '''
+        return Convert_Type.convert_nc(loaded_data)
+
+    '''
    def remaplaf_with_3D_parallel(
       source_data, source_lon, source_lat, target_lon, target_lat, n_jobs=-1
       ):
@@ -172,6 +173,7 @@ class regridder_cdo:
    
    return remapped_data
    '''
-   def to_dict(self):
 
-      return self.__dict__
+    def to_dict(self):
+
+        return self.__dict__

@@ -9,21 +9,23 @@ from openbench.gui.widgets import CheckboxGroup
 
 COMPARISON_ITEMS = {
     "Diagrams": [
-        "Taylor_Diagram", "Target_Diagram", "Whisker_Plot",
-        "Parallel_Coordinates", "Portrait_Plot_seasonal",
-        "Ridgeline_Plot"
+        "Taylor_Diagram",
+        "Target_Diagram",
+        "Whisker_Plot",
+        "Parallel_Coordinates",
+        "Portrait_Plot_seasonal",
+        "Ridgeline_Plot",
     ],
-    "Plots": [
-        "HeatMap", "Kernel_Density_Estimate", "Diff_Plot", "RadarMap"
-    ],
+    "Plots": ["HeatMap", "Kernel_Density_Estimate", "Diff_Plot", "RadarMap"],
     "Statistics": [
-        "Single_Model_Performance_Index", "Relative_Score",
-        "Mann_Kendall_Trend_Test", "Correlation", "Standard_Deviation",
-        "Functional_Response"
+        "Single_Model_Performance_Index",
+        "Relative_Score",
+        "Mann_Kendall_Trend_Test",
+        "Correlation",
+        "Standard_Deviation",
+        "Functional_Response",
     ],
-    "Aggregation": [
-        "Mean", "Median", "Min", "Max", "Sum"
-    ],
+    "Aggregation": ["Mean", "Median", "Min", "Max", "Sum"],
 }
 
 

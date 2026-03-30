@@ -33,7 +33,7 @@ class ConfigManager:
             FileNotFoundError: If file doesn't exist
             yaml.YAMLError: If YAML parsing fails
         """
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
         self._last_dir = os.path.dirname(path)
         return config or {}
@@ -51,19 +51,16 @@ class ConfigManager:
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
 
-        with open(path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                config,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
-    def generate_main_nml(self, config: Dict[str, Any], openbench_root: Optional[str] = None,
-                          output_dir: Optional[str] = None,
-                          remote_openbench_path: Optional[str] = None) -> str:
+    def generate_main_nml(
+        self,
+        config: Dict[str, Any],
+        openbench_root: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        remote_openbench_path: Optional[str] = None,
+    ) -> str:
         """
         Generate main NML YAML content.
 
@@ -88,12 +85,12 @@ class ConfigManager:
         # Use provided output_dir, or compute from config
         if output_dir is None:
             basedir = general.get("basedir", "")
-            if basedir and (os.path.isabs(basedir) or basedir.startswith('/')):
+            if basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
                 # Normalize path to handle trailing slashes and multiple separators
                 if is_remote:
                     # Use forward slashes for remote paths
-                    normalized_basedir = basedir.rstrip('/').replace('\\', '/')
-                    basedir_basename = normalized_basedir.split('/')[-1]
+                    normalized_basedir = basedir.rstrip("/").replace("\\", "/")
+                    basedir_basename = normalized_basedir.split("/")[-1]
                     if basedir_basename == basename:
                         output_dir = normalized_basedir
                     else:
@@ -113,7 +110,7 @@ class ConfigManager:
         # Generate absolute paths - ref and sim are in nml folder
         if is_remote:
             # Use forward slashes for remote paths
-            output_dir = output_dir.replace('\\', '/')
+            output_dir = output_dir.replace("\\", "/")
             nml_dir = f"{output_dir.rstrip('/')}/nml"
             ref_nml_path = f"{nml_dir}/ref-{basename}.yaml"
             sim_nml_path = f"{nml_dir}/sim-{basename}.yaml"
@@ -126,7 +123,7 @@ class ConfigManager:
         # NOT in the project output directory - find them reliably
         if is_remote and remote_openbench_path:
             # Use remote OpenBench path with forward slashes
-            remote_ob = remote_openbench_path.rstrip('/').replace('\\', '/')
+            remote_ob = remote_openbench_path.rstrip("/").replace("\\", "/")
             stats_nml_path = f"{remote_ob}/nml/nml-yaml/stats.yaml"
             figure_nml_path = f"{remote_ob}/nml/nml-yaml/figlib.yaml"
         else:
@@ -142,7 +139,7 @@ class ConfigManager:
         # For OpenBench, basedir should be the PARENT directory, not including basename
         # Because OpenBench computes output path as: basedir/basename
         if is_remote:
-            parent_dir = '/'.join(output_dir.rstrip('/').split('/')[:-1])
+            parent_dir = "/".join(output_dir.rstrip("/").split("/")[:-1])
         else:
             parent_dir = os.path.dirname(output_dir.rstrip(os.sep))
 
@@ -192,16 +189,11 @@ class ConfigManager:
         # Statistics
         main_config["statistics"] = config.get("statistics", {})
 
-        return yaml.dump(
-            main_config,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
+        return yaml.dump(main_config, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
-    def generate_ref_nml(self, config: Dict[str, Any], openbench_root: Optional[str] = None,
-                         output_dir: Optional[str] = None) -> str:
+    def generate_ref_nml(
+        self, config: Dict[str, Any], openbench_root: Optional[str] = None, output_dir: Optional[str] = None
+    ) -> str:
         """
         Generate reference NML YAML content.
 
@@ -243,16 +235,11 @@ class ConfigManager:
                 for source_name in def_nml:
                     def_nml[source_name] = os.path.join(nml_dir, f"{source_name}.yaml")
 
-        return yaml.dump(
-            ref_data,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
+        return yaml.dump(ref_data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
-    def generate_sim_nml(self, config: Dict[str, Any], openbench_root: Optional[str] = None,
-                         output_dir: Optional[str] = None) -> str:
+    def generate_sim_nml(
+        self, config: Dict[str, Any], openbench_root: Optional[str] = None, output_dir: Optional[str] = None
+    ) -> str:
         """
         Generate simulation NML YAML content.
 
@@ -294,13 +281,7 @@ class ConfigManager:
                 for source_name in def_nml:
                     def_nml[source_name] = os.path.join(nml_dir, f"{source_name}.yaml")
 
-        return yaml.dump(
-            sim_data,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
+        return yaml.dump(sim_data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
     def validate(self, config: Dict[str, Any]) -> List[str]:
         """
@@ -356,7 +337,7 @@ class ConfigManager:
         config: Dict[str, Any],
         output_dir: str,
         basename: Optional[str] = None,
-        openbench_root: Optional[str] = None
+        openbench_root: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Export all NML files to directory.
@@ -385,21 +366,21 @@ class ConfigManager:
         # Main NML - goes in nml folder
         main_path = os.path.join(nml_dir, f"main-{basename}.yaml")
         main_content = self.generate_main_nml(config, openbench_root, output_dir)
-        with open(main_path, 'w', encoding='utf-8') as f:
+        with open(main_path, "w", encoding="utf-8") as f:
             f.write(main_content)
         files["main"] = main_path
 
         # Ref NML - goes in nml folder
         ref_path = os.path.join(nml_dir, f"ref-{basename}.yaml")
         ref_content = self.generate_ref_nml(config, openbench_root, output_dir)
-        with open(ref_path, 'w', encoding='utf-8') as f:
+        with open(ref_path, "w", encoding="utf-8") as f:
             f.write(ref_content)
         files["ref"] = ref_path
 
         # Sim NML - goes in nml folder
         sim_path = os.path.join(nml_dir, f"sim-{basename}.yaml")
         sim_content = self.generate_sim_nml(config, openbench_root, output_dir)
-        with open(sim_path, 'w', encoding='utf-8') as f:
+        with open(sim_path, "w", encoding="utf-8") as f:
             f.write(sim_content)
         files["sim"] = sim_path
 
@@ -409,10 +390,7 @@ class ConfigManager:
         return files
 
     def sync_namelists(
-        self,
-        config: Dict[str, Any],
-        output_dir: str,
-        openbench_root: Optional[str] = None
+        self, config: Dict[str, Any], output_dir: str, openbench_root: Optional[str] = None
     ) -> Dict[str, str]:
         """
         Sync namelists to output directory's nml/ subdirectory.
@@ -446,8 +424,7 @@ class ConfigManager:
         sim_def_nml = sim_data.get("def_nml", {})
         sim_source_configs = sim_data.get("source_configs", {})  # Get edited configs
         sim_copied, sim_model_files = self._copy_data_namelists(
-            sim_def_nml, sim_nml_dir, selected_items, openbench_root, "sim",
-            sim_source_configs
+            sim_def_nml, sim_nml_dir, selected_items, openbench_root, "sim", sim_source_configs
         )
         copied_files.update(sim_copied)
 
@@ -456,8 +433,9 @@ class ConfigManager:
 
         # Debug logging
         import tempfile
+
         debug_log = os.path.join(tempfile.gettempdir(), "openbench_wizard_debug.log")
-        with open(debug_log, 'a') as f:
+        with open(debug_log, "a") as f:
             f.write(f"\n=== Local mode: Copy model files ===\n")
             f.write(f"sim_model_files: {sim_model_files}\n")
             f.write(f"sim_models_dir: {sim_models_dir}\n")
@@ -466,15 +444,17 @@ class ConfigManager:
             if model_path:
                 # Try to find the actual file (handle .nml -> .yaml conversion)
                 actual_path = self._resolve_model_path(model_path)
-                with open(debug_log, 'a') as f:
-                    f.write(f"model_path={model_path}, actual_path={actual_path}, exists={os.path.exists(actual_path) if actual_path else False}\n")
+                with open(debug_log, "a") as f:
+                    f.write(
+                        f"model_path={model_path}, actual_path={actual_path}, exists={os.path.exists(actual_path) if actual_path else False}\n"
+                    )
                 if actual_path and os.path.exists(actual_path):
                     # Always use .yaml extension for output
                     model_name = os.path.splitext(os.path.basename(actual_path))[0] + ".yaml"
                     dest_path = os.path.join(sim_models_dir, model_name)
                     self._copy_model_definition(actual_path, dest_path, selected_items)
                     copied_files[f"model_{model_name}"] = dest_path
-                    with open(debug_log, 'a') as f:
+                    with open(debug_log, "a") as f:
                         f.write(f"  copied to {dest_path}\n")
 
         # Process reference data namelists
@@ -482,8 +462,7 @@ class ConfigManager:
         ref_def_nml = ref_data.get("def_nml", {})
         ref_source_configs = ref_data.get("source_configs", {})  # Get edited configs
         ref_copied, _ = self._copy_data_namelists(
-            ref_def_nml, ref_nml_dir, selected_items, openbench_root, "ref",
-            ref_source_configs
+            ref_def_nml, ref_nml_dir, selected_items, openbench_root, "ref", ref_source_configs
         )
         copied_files.update(ref_copied)
 
@@ -499,7 +478,7 @@ class ConfigManager:
         selected_items: List[str],
         openbench_root: str,
         data_type: str,
-        source_configs: Optional[Dict[str, Any]] = None
+        source_configs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, str], Set[str]]:
         """
         Copy data source namelists with filtering.
@@ -587,9 +566,7 @@ class ConfigManager:
                 continue
 
             # Copy with filtering
-            model_path = self._copy_namelist_filtered(
-                src_path, dest_path, selected_items, openbench_root
-            )
+            model_path = self._copy_namelist_filtered(src_path, dest_path, selected_items, openbench_root)
             copied_files[source_name] = dest_path
 
             if model_path:
@@ -598,11 +575,7 @@ class ConfigManager:
         return copied_files, model_files
 
     def _write_source_config(
-        self,
-        source_data: Dict[str, Any],
-        dest_path: str,
-        selected_items: List[str],
-        openbench_root: str
+        self, source_data: Dict[str, Any], dest_path: str, selected_items: List[str], openbench_root: str
     ) -> Optional[str]:
         """
         Write edited source configuration to a namelist file.
@@ -667,15 +640,8 @@ class ConfigManager:
 
         # Write the file
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        with open(dest_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                filtered,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(dest_path, "w", encoding="utf-8") as f:
+            yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
         return model_path
 
@@ -685,7 +651,7 @@ class ConfigManager:
         dest_path: str,
         selected_items: List[str],
         openbench_root: str,
-        data_type: str
+        data_type: str,
     ) -> Optional[str]:
         """
         Write organized source configuration to a namelist file.
@@ -705,9 +671,7 @@ class ConfigManager:
         """
         # Handle legacy format
         if "_legacy" in organized_data:
-            return self._write_source_config(
-                organized_data["_legacy"], dest_path, selected_items, openbench_root
-            )
+            return self._write_source_config(organized_data["_legacy"], dest_path, selected_items, openbench_root)
 
         filtered = {}
         model_path = None
@@ -735,10 +699,7 @@ class ConfigManager:
             general.pop("per_var_time_range", None)
 
             # Check if any variable has per_var_time_range enabled
-            any_per_var = any(
-                organized_data.get(item, {}).get("per_var_time_range", False)
-                for item in selected_items
-            )
+            any_per_var = any(organized_data.get(item, {}).get("per_var_time_range", False) for item in selected_items)
 
             # If any variable uses per-variable time range, remove from general
             if any_per_var:
@@ -765,24 +726,13 @@ class ConfigManager:
 
         # Write the file
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        with open(dest_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                filtered,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(dest_path, "w", encoding="utf-8") as f:
+            yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
         return model_path
 
     def _copy_namelist_filtered(
-        self,
-        src_path: str,
-        dest_path: str,
-        selected_items: List[str],
-        openbench_root: str
+        self, src_path: str, dest_path: str, selected_items: List[str], openbench_root: str
     ) -> Optional[str]:
         """
         Copy a namelist file with smart filtering.
@@ -800,7 +750,7 @@ class ConfigManager:
             Model definition path if found, None otherwise
         """
         try:
-            with open(src_path, 'r', encoding='utf-8') as f:
+            with open(src_path, "r", encoding="utf-8") as f:
                 content = yaml.safe_load(f) or {}
         except Exception:
             return None
@@ -842,24 +792,12 @@ class ConfigManager:
 
         # Write filtered content
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        with open(dest_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                filtered,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(dest_path, "w", encoding="utf-8") as f:
+            yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
         return model_path
 
-    def _copy_model_definition(
-        self,
-        src_path: str,
-        dest_path: str,
-        selected_items: List[str]
-    ):
+    def _copy_model_definition(self, src_path: str, dest_path: str, selected_items: List[str]):
         """
         Copy a model definition file with filtering.
 
@@ -871,7 +809,7 @@ class ConfigManager:
             selected_items: List of selected evaluation items
         """
         try:
-            with open(src_path, 'r', encoding='utf-8') as f:
+            with open(src_path, "r", encoding="utf-8") as f:
                 content = yaml.safe_load(f) or {}
         except Exception:
             return
@@ -894,15 +832,8 @@ class ConfigManager:
 
         # Write filtered content
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        with open(dest_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                filtered,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+        with open(dest_path, "w", encoding="utf-8") as f:
+            yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
     def _resolve_model_path(self, model_path: str) -> Optional[str]:
         """

@@ -6,16 +6,22 @@ Dialogs for data validation progress and results.
 
 from typing import List, Callable, Optional
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem,
-    QDialogButtonBox, QFileDialog, QMessageBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QDialogButtonBox,
+    QFileDialog,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QColor
 
-from openbench.gui.data_validator import (
-    DataValidator, DataValidationReport, SourceValidationResult
-)
+from openbench.gui.data_validator import DataValidator, DataValidationReport, SourceValidationResult
 
 
 class ValidationWorker(QThread):
@@ -25,13 +31,7 @@ class ValidationWorker(QThread):
     finished = Signal(object)  # DataValidationReport
     error = Signal(str)
 
-    def __init__(
-        self,
-        validator: DataValidator,
-        sources: dict,
-        general_config: dict,
-        parent=None
-    ):
+    def __init__(self, validator: DataValidator, sources: dict, general_config: dict, parent=None):
         super().__init__(parent)
         self._validator = validator
         self._sources = sources
@@ -41,16 +41,13 @@ class ValidationWorker(QThread):
     def run(self):
         """Run validation in background thread."""
         try:
+
             def progress_callback(current, total, var_name, source_name):
                 if self._cancelled:
                     raise InterruptedError("Cancelled")
                 self.progress.emit(current, total, var_name, source_name)
 
-            report = self._validator.validate_all(
-                self._sources,
-                self._general_config,
-                progress_callback
-            )
+            report = self._validator.validate_all(self._sources, self._general_config, progress_callback)
             self.finished.emit(report)
         except InterruptedError:
             pass
@@ -65,13 +62,7 @@ class ValidationWorker(QThread):
 class ValidationProgressDialog(QDialog):
     """Dialog showing validation progress."""
 
-    def __init__(
-        self,
-        validator: DataValidator,
-        sources: dict,
-        general_config: dict,
-        parent=None
-    ):
+    def __init__(self, validator: DataValidator, sources: dict, general_config: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Validating Data...")
         self.setModal(True)
@@ -208,10 +199,7 @@ class ValidationResultsDialog(QDialog):
         layout.setSpacing(10)
 
         # Summary
-        summary = QLabel(
-            f"Validation complete: {self._report.passed_count} passed, "
-            f"{self._report.failed_count} failed"
-        )
+        summary = QLabel(f"Validation complete: {self._report.passed_count} passed, {self._report.failed_count} failed")
         summary.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(summary)
 
@@ -236,10 +224,7 @@ class ValidationResultsDialog(QDialog):
         for result in self._report.results:
             # Create source item
             status = "✓" if result.is_valid else "✗"
-            item = QTreeWidgetItem([
-                f"{result.var_name} / {result.source_name}",
-                status
-            ])
+            item = QTreeWidgetItem([f"{result.var_name} / {result.source_name}", status])
 
             if result.is_valid:
                 item.setForeground(1, QColor("#27ae60"))
@@ -259,14 +244,13 @@ class ValidationResultsDialog(QDialog):
     def _export_results(self):
         """Export results to text file."""
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Validation Results", "validation_results.txt",
-            "Text Files (*.txt)"
+            self, "Export Validation Results", "validation_results.txt", "Text Files (*.txt)"
         )
         if not file_path:
             return
 
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write("Data Validation Results\n")
                 f.write("=" * 50 + "\n\n")
                 f.write(f"Passed: {self._report.passed_count}\n")

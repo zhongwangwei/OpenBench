@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import xarray as xr
 
-warnings.filterwarnings('ignore', category=FutureWarning)  # Suppress numpy runtime warnings
+warnings.filterwarnings("ignore", category=FutureWarning)  # Suppress numpy runtime warnings
 
 
 def stat_functional_response(self, v, u):
@@ -27,9 +27,9 @@ def stat_functional_response(self, v, u):
         u = list(u.data_vars.values())[0]
 
     try:
-        nbins = self.stats_nml['Functional_Response']['nbins']
+        nbins = self.stats_nml["Functional_Response"]["nbins"]
     except:
-        nbins = self.compare_nml['Functional_Response']['nbins']
+        nbins = self.compare_nml["Functional_Response"]["nbins"]
 
     def calc_functional_response(v_series, u_series):
         # Remove NaN values
@@ -47,18 +47,18 @@ def stat_functional_response(self, v, u):
         u_bins = np.linspace(u_valid.min(), u_valid.max(), nbins + 1)
 
         # Calculate mean v for each bin
-        df = pd.DataFrame({'u': u_valid, 'v': v_valid})
+        df = pd.DataFrame({"u": u_valid, "v": v_valid})
         # binned_means = df.groupby(pd.cut(df['u'], bins=u_bins))['v'].mean()
         binned_means = df.groupby(
-            pd.cut(df['u'], bins=u_bins),
-            observed=True  # 或 observed=False 保持当前行为
-        )['v'].mean()
+            pd.cut(df["u"], bins=u_bins),
+            observed=True,  # 或 observed=False 保持当前行为
+        )["v"].mean()
 
-        df['bin'] = pd.cut(df['u'], bins=u_bins)
-        df['v_binned'] = df['bin'].map(binned_means)
+        df["bin"] = pd.cut(df["u"], bins=u_bins)
+        df["v_binned"] = df["bin"].map(binned_means)
 
         # Calculate RMSE
-        rmse = np.sqrt(np.mean((df['v_binned'].astype(float) - df['v'].astype(float)) ** 2))
+        rmse = np.sqrt(np.mean((df["v_binned"].astype(float) - df["v"].astype(float)) ** 2))
 
         # Calculate relative error
         relative_error = rmse / np.mean(v_valid)
@@ -69,35 +69,36 @@ def stat_functional_response(self, v, u):
         return score
 
     # Rechunk time dimension to single chunk for apply_ufunc with dask
-    if hasattr(v, 'chunks') and v.chunks is not None:
-        v = v.chunk({'time': -1})
-    if hasattr(u, 'chunks') and u.chunks is not None:
-        u = u.chunk({'time': -1})
+    if hasattr(v, "chunks") and v.chunks is not None:
+        v = v.chunk({"time": -1})
+    if hasattr(u, "chunks") and u.chunks is not None:
+        u = u.chunk({"time": -1})
 
     # Apply the function to each grid point
     score = xr.apply_ufunc(
         calc_functional_response,
-        v, u,
-        input_core_dims=[['time'], ['time']],
+        v,
+        u,
+        input_core_dims=[["time"], ["time"]],
         vectorize=True,
-        dask='parallelized',
-        output_dtypes=[float]
+        dask="parallelized",
+        output_dtypes=[float],
     )
 
     # Add attributes to the DataArray
-    v_name = v.name if v.name is not None else 'unknown'
-    u_name = u.name if u.name is not None else 'unknown'
-    score.name = 'functional_response_score'
-    score.attrs['long_name'] = 'Functional Response Score'
-    score.attrs['units'] = '1'
-    score.attrs['description'] = 'Functional response score calculated between variables ' + u_name + ' and ' + v_name
+    v_name = v.name if v.name is not None else "unknown"
+    u_name = u.name if u.name is not None else "unknown"
+    score.name = "functional_response_score"
+    score.attrs["long_name"] = "Functional Response Score"
+    score.attrs["units"] = "1"
+    score.attrs["description"] = "Functional response score calculated between variables " + u_name + " and " + v_name
     # Create a dataset with the score
-    ds = xr.Dataset({'functional_response_score': score})
+    ds = xr.Dataset({"functional_response_score": score})
     del score
 
     # Add global attributes
-    ds.attrs['title'] = 'Functional Response Score'
-    ds.attrs['description'] = 'Functional response score calculated between variables ' + u_name + ' and ' + v_name
-    ds.attrs['created_by'] = 'ILAMB var_functional_response function'
+    ds.attrs["title"] = "Functional Response Score"
+    ds.attrs["description"] = "Functional response score calculated between variables " + u_name + " and " + v_name
+    ds.attrs["created_by"] = "ILAMB var_functional_response function"
 
     return ds

@@ -45,7 +45,7 @@ class ConnectionManager:
         """Load connections from file."""
         if os.path.exists(self._config_path):
             try:
-                with open(self._config_path, 'r', encoding='utf-8') as f:
+                with open(self._config_path, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f) or {}
                 self._connections = data.get("connections", [])
             except Exception:
@@ -61,7 +61,7 @@ class ConnectionManager:
             os.makedirs(dir_path, exist_ok=True)
 
         data = {"connections": self._connections}
-        with open(self._config_path, 'w', encoding='utf-8') as f:
+        with open(self._config_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
     def list_connections(self) -> List[Dict[str, Any]]:
@@ -90,7 +90,7 @@ class ConnectionManager:
         auth_type: str = "key",
         key_file: Optional[str] = None,
         jump_node: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Save or update a connection.

@@ -30,22 +30,14 @@ class Grid:
         """Validate the initialized SpatialBounds class."""
         msg = None
         if self.south > self.north:
-            msg = (
-                "Value of north bound is greater than south bound."
-                "\nPlease check the bounds input."
-            )
+            msg = "Value of north bound is greater than south bound.\nPlease check the bounds input."
             pass
         if self.west > self.east:
-            msg = (
-                "Value of west bound is greater than east bound."
-                "\nPlease check the bounds input."
-            )
+            msg = "Value of west bound is greater than east bound.\nPlease check the bounds input."
         if msg is not None:
             raise InvalidBoundsError(msg)
 
-    def create_regridding_dataset(
-        self, lat_name: str = "lat", lon_name: str = "lon"
-    ) -> xr.Dataset:
+    def create_regridding_dataset(self, lat_name: str = "lat", lon_name: str = "lon") -> xr.Dataset:
         """Create a dataset to use for regridding.
 
         Args:
@@ -76,22 +68,16 @@ def create_lat_lon_coords(grid: Grid) -> tuple[np.ndarray, np.ndarray]:
     if np.remainder((grid.north - grid.south), grid.resolution_lat) > 0:
         lat_coords = np.arange(grid.south, grid.north, grid.resolution_lat)
     else:
-        lat_coords = np.arange(
-            grid.south, grid.north + grid.resolution_lat, grid.resolution_lat
-        )
+        lat_coords = np.arange(grid.south, grid.north + grid.resolution_lat, grid.resolution_lat)
 
     if np.remainder((grid.east - grid.west), grid.resolution_lat) > 0:
         lon_coords = np.arange(grid.west, grid.east, grid.resolution_lon)
     else:
-        lon_coords = np.arange(
-            grid.west, grid.east + grid.resolution_lon, grid.resolution_lon
-        )
+        lon_coords = np.arange(grid.west, grid.east + grid.resolution_lon, grid.resolution_lon)
     return lat_coords, lon_coords
 
 
-def create_regridding_dataset(
-    grid: Grid, lat_name: str = "lat", lon_name: str = "lon"
-) -> xr.Dataset:
+def create_regridding_dataset(grid: Grid, lat_name: str = "lat", lon_name: str = "lon") -> xr.Dataset:
     """Create a dataset to use for regridding.
 
     Args:
@@ -353,9 +339,7 @@ def format_lon(
     source_vals = obj.coords[lon_coord].values
     target_vals = target.coords[lon_coord].values
     wrap_point = (target_vals[-1] + target_vals[0] + 360) / 2
-    source_vals = np.where(
-        source_vals < wrap_point - 360, source_vals + 360, source_vals
-    )
+    source_vals = np.where(source_vals < wrap_point - 360, source_vals + 360, source_vals)
     source_vals = np.where(source_vals > wrap_point, source_vals - 360, source_vals)
     obj = update_coord(obj, lon_coord, source_vals)
 
@@ -385,9 +369,7 @@ def format_lon(
     return obj
 
 
-def coord_is_covered(
-    obj: xr.DataArray | xr.Dataset, target: xr.Dataset, coord: Hashable
-) -> bool:
+def coord_is_covered(obj: xr.DataArray | xr.Dataset, target: xr.Dataset, coord: Hashable) -> bool:
     """Check if the source coord fully covers the target coord."""
     pad = target[coord].diff(coord).max().values
     left_covered = obj[coord].min() <= target[coord].min() - pad
@@ -403,9 +385,7 @@ def ensure_monotonic(obj: xr.DataArray, coord: Hashable) -> xr.DataArray: ...
 def ensure_monotonic(obj: xr.Dataset, coord: Hashable) -> xr.Dataset: ...
 
 
-def ensure_monotonic(
-    obj: xr.DataArray | xr.Dataset, coord: Hashable
-) -> xr.DataArray | xr.Dataset:
+def ensure_monotonic(obj: xr.DataArray | xr.Dataset, coord: Hashable) -> xr.DataArray | xr.Dataset:
     """Ensure that an object has monotonically increasing indexes for a
     given coordinate. Only sort and drop duplicates if needed because this
     requires reindexing which can be expensive."""
@@ -417,20 +397,14 @@ def ensure_monotonic(
 
 
 @overload
-def update_coord(
-    obj: xr.DataArray, coord: Hashable, coord_vals: np.ndarray
-) -> xr.DataArray: ...
+def update_coord(obj: xr.DataArray, coord: Hashable, coord_vals: np.ndarray) -> xr.DataArray: ...
 
 
 @overload
-def update_coord(
-    obj: xr.Dataset, coord: Hashable, coord_vals: np.ndarray
-) -> xr.Dataset: ...
+def update_coord(obj: xr.Dataset, coord: Hashable, coord_vals: np.ndarray) -> xr.Dataset: ...
 
 
-def update_coord(
-    obj: xr.DataArray | xr.Dataset, coord: Hashable, coord_vals: np.ndarray
-) -> xr.DataArray | xr.Dataset:
+def update_coord(obj: xr.DataArray | xr.Dataset, coord: Hashable, coord_vals: np.ndarray) -> xr.DataArray | xr.Dataset:
     """Update the values of a coordinate, ensuring indexes stay in sync."""
     attrs = obj.coords[coord].attrs
     obj = obj.assign_coords({coord: coord_vals})

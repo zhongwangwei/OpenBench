@@ -69,6 +69,7 @@ def test_migrate():
         return
 
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
         out = f.name
 

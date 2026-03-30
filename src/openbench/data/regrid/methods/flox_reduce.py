@@ -76,9 +76,7 @@ def statistic_reduce(
     target_coords = xr.Dataset(target_ds.coords)  # coords target coords for reindexing
     sorted_target_coords = target_coords.sortby(coords)
 
-    bounds = tuple(
-        construct_intervals(sorted_target_coords[coord].to_numpy()) for coord in coords
-    )
+    bounds = tuple(construct_intervals(sorted_target_coords[coord].to_numpy()) for coord in coords)
 
     data = reduce_data_to_new_domain(data, sorted_target_coords, coords)
 
@@ -161,9 +159,7 @@ def compute_mode(
     target_coords = xr.Dataset(target_ds.coords)  # stores coords for reindexing later
     sorted_target_coords = target_coords.sortby(coords)
 
-    bounds = tuple(
-        construct_intervals(sorted_target_coords[coord].to_numpy()) for coord in coords
-    )
+    bounds = tuple(construct_intervals(sorted_target_coords[coord].to_numpy()) for coord in coords)
 
     data = reduce_data_to_new_domain(data, sorted_target_coords, coords)
 

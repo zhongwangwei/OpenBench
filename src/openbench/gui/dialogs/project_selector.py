@@ -7,8 +7,17 @@ Project selector dialog for startup.
 import os
 from typing import Optional
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QStackedWidget, QWidget, QLineEdit, QMessageBox, QFileDialog, QGroupBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QStackedWidget,
+    QWidget,
+    QLineEdit,
+    QMessageBox,
+    QFileDialog,
+    QGroupBox,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -203,19 +212,13 @@ class ProjectSelectorDialog(QDialog):
 
     def _browse_local(self):
         """Browse for local project directory."""
-        path = QFileDialog.getExistingDirectory(
-            self, "Select Project Directory",
-            os.path.expanduser("~")
-        )
+        path = QFileDialog.getExistingDirectory(self, "Select Project Directory", os.path.expanduser("~"))
         if path:
             self._local_path.setText(path)
 
     def _new_local_project(self):
         """Create new local project."""
-        path = QFileDialog.getExistingDirectory(
-            self, "Select Directory for New Project",
-            os.path.expanduser("~")
-        )
+        path = QFileDialog.getExistingDirectory(self, "Select Directory for New Project", os.path.expanduser("~"))
         if path:
             # Create nml directory
             nml_dir = os.path.join(path, "nml")
@@ -296,9 +299,7 @@ class ProjectSelectorDialog(QDialog):
         nml_dir = os.path.join(path, "nml")
         if not os.path.isdir(nml_dir):
             reply = QMessageBox.question(
-                self, "Create Project",
-                "No nml/ directory found. Create new project?",
-                QMessageBox.Yes | QMessageBox.No
+                self, "Create Project", "No nml/ directory found. Create new project?", QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
                 os.makedirs(nml_dir, exist_ok=True)
@@ -324,15 +325,11 @@ class ProjectSelectorDialog(QDialog):
             return
 
         # Check for nml directory
-        stdout, stderr, exit_code = ssh_manager.execute(
-            f"test -d '{path}/nml' && echo 'exists'", timeout=10
-        )
+        stdout, stderr, exit_code = ssh_manager.execute(f"test -d '{path}/nml' && echo 'exists'", timeout=10)
 
-        if 'exists' not in stdout:
+        if "exists" not in stdout:
             reply = QMessageBox.question(
-                self, "Create Project",
-                "No nml/ directory found. Create new project?",
-                QMessageBox.Yes | QMessageBox.No
+                self, "Create Project", "No nml/ directory found. Create new project?", QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
                 ssh_manager.execute(f"mkdir -p '{path}/nml'", timeout=10)
@@ -342,7 +339,7 @@ class ProjectSelectorDialog(QDialog):
         # Create sync engine and storage
         sync_engine = SyncEngine(ssh_manager, path)
         self._storage = RemoteStorage(path, sync_engine)
-        self._project_name = path.rstrip('/').split('/')[-1]
+        self._project_name = path.rstrip("/").split("/")[-1]
 
         # Start background sync
         sync_engine.start_background_sync()

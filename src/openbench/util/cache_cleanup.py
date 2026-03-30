@@ -44,16 +44,16 @@ def cleanup_pycache(base_dir: str = None, verbose: bool = True) -> Tuple[int, in
 
     # Find all __pycache__ directories
     for root, dirs, files in os.walk(base_dir):
-        if '__pycache__' in dirs:
-            cache_dir = Path(root) / '__pycache__'
+        if "__pycache__" in dirs:
+            cache_dir = Path(root) / "__pycache__"
             cache_dirs_found.append(cache_dir)
 
     # Remove found cache directories
     for cache_dir in cache_dirs_found:
         try:
             # Count files before removal
-            file_count = sum(1 for _ in cache_dir.glob('*.pyc'))
-            file_count += sum(1 for _ in cache_dir.glob('*.pyo'))
+            file_count = sum(1 for _ in cache_dir.glob("*.pyc"))
+            file_count += sum(1 for _ in cache_dir.glob("*.pyo"))
 
             # Remove the directory
             shutil.rmtree(cache_dir)
@@ -93,7 +93,7 @@ def cleanup_pyc_files(base_dir: str = None, verbose: bool = True) -> int:
     files_removed = 0
 
     # Find and remove .pyc and .pyo files
-    for pattern in ['**/*.pyc', '**/*.pyo']:
+    for pattern in ["**/*.pyc", "**/*.pyo"]:
         for pyc_file in base_dir.glob(pattern):
             try:
                 pyc_file.unlink()
@@ -128,14 +128,14 @@ def cleanup_all_cache(base_dir: str = None, verbose: bool = True) -> dict:
     loose_files_removed = cleanup_pyc_files(base_dir, verbose=False)
 
     stats = {
-        'pycache_dirs_removed': dirs_removed,
-        'cache_files_removed': cache_files_removed,
-        'loose_pyc_files_removed': loose_files_removed,
-        'total_files_removed': cache_files_removed + loose_files_removed
+        "pycache_dirs_removed": dirs_removed,
+        "cache_files_removed": cache_files_removed,
+        "loose_pyc_files_removed": loose_files_removed,
+        "total_files_removed": cache_files_removed + loose_files_removed,
     }
 
     if verbose:
-        if stats['pycache_dirs_removed'] > 0 or stats['loose_pyc_files_removed'] > 0:
+        if stats["pycache_dirs_removed"] > 0 or stats["loose_pyc_files_removed"] > 0:
             logging.info(f"  ✓ Removed {stats['pycache_dirs_removed']} __pycache__ directories")
             logging.info(f"  ✓ Removed {stats['total_files_removed']} cached files")
         else:
@@ -167,15 +167,15 @@ def get_cache_size(base_dir: str = None) -> Tuple[int, int]:
 
     # Check __pycache__ directories
     for root, dirs, files in os.walk(base_dir):
-        if '__pycache__' in dirs:
-            cache_dir = Path(root) / '__pycache__'
+        if "__pycache__" in dirs:
+            cache_dir = Path(root) / "__pycache__"
             for cache_file in cache_dir.iterdir():
                 if cache_file.is_file():
                     total_size += cache_file.stat().st_size
                     file_count += 1
 
     # Check loose .pyc files
-    for pattern in ['**/*.pyc', '**/*.pyo']:
+    for pattern in ["**/*.pyc", "**/*.pyo"]:
         for pyc_file in base_dir.glob(pattern):
             if pyc_file.is_file():
                 total_size += pyc_file.stat().st_size
@@ -186,10 +186,7 @@ def get_cache_size(base_dir: str = None) -> Tuple[int, int]:
 
 if __name__ == "__main__":
     # Configure logging for standalone execution
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
     print("OpenBench Cache Cleanup Utility")
     print("=" * 50)

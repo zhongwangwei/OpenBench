@@ -21,6 +21,7 @@ from openbench.remote.ssh import SSHManager, SSHConnectionError
 
 class RunnerStatus(Enum):
     """Runner status enum."""
+
     IDLE = "idle"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -31,6 +32,7 @@ class RunnerStatus(Enum):
 @dataclass
 class RunnerProgress:
     """Progress information."""
+
     status: RunnerStatus
     progress: float  # 0-100
     current_task: str
@@ -57,9 +59,9 @@ class RemoteRunner(threading.Thread):
     """
 
     # Progress calculation constants (same as EvaluationRunner)
-    PROGRESS_INIT = 5       # Reserve 5% for initialization
-    PROGRESS_WORK = 90      # 90% for actual work (5% to 95%)
-    PROGRESS_MAX = 95       # Cap at 95% until completion confirmed
+    PROGRESS_INIT = 5  # Reserve 5% for initialization
+    PROGRESS_WORK = 90  # 90% for actual work (5% to 95%)
+    PROGRESS_MAX = 95  # Cap at 95% until completion confirmed
     PROGRESS_INCREMENT = 0.5  # Slow increment when no task info available
 
     def __init__(
@@ -67,7 +69,7 @@ class RemoteRunner(threading.Thread):
         config_path: str,
         ssh_manager: SSHManager,
         remote_config: Dict[str, Any],
-        config_already_remote: bool = False
+        config_already_remote: bool = False,
     ):
         """Initialize the remote runner.
 
@@ -127,12 +129,7 @@ class RemoteRunner(threading.Thread):
         """Run the evaluation on the remote server."""
         try:
             self._emit_progress(
-                RunnerStatus.RUNNING,
-                0,
-                "Initializing",
-                "",
-                "Starting",
-                "Preparing remote execution..."
+                RunnerStatus.RUNNING, 0, "Initializing", "", "Starting", "Preparing remote execution..."
             )
             if self._on_log:
                 self._on_log("Starting remote OpenBench evaluation...")
@@ -172,9 +169,7 @@ class RemoteRunner(threading.Thread):
             else:
                 # Step 1: Create remote temp directory
                 self._emit_progress(
-                    RunnerStatus.RUNNING, 2,
-                    "Setup", "", "Creating directory",
-                    "Creating remote temporary directory..."
+                    RunnerStatus.RUNNING, 2, "Setup", "", "Creating directory", "Creating remote temporary directory..."
                 )
                 if self._on_log:
                     self._on_log("Creating remote temporary directory...")
@@ -189,9 +184,7 @@ class RemoteRunner(threading.Thread):
 
                 # Step 2: Upload config file
                 self._emit_progress(
-                    RunnerStatus.RUNNING, 4,
-                    "Upload", "", "Uploading config",
-                    "Uploading configuration file..."
+                    RunnerStatus.RUNNING, 4, "Upload", "", "Uploading config", "Uploading configuration file..."
                 )
                 if self._on_log:
                     self._on_log("Uploading configuration file...")
@@ -206,47 +199,31 @@ class RemoteRunner(threading.Thread):
 
             # Step 3: Execute OpenBench on remote server
             self._emit_progress(
-                RunnerStatus.RUNNING, self.PROGRESS_INIT,
-                "Executing", "", "Running",
-                "Starting OpenBench execution..."
+                RunnerStatus.RUNNING, self.PROGRESS_INIT, "Executing", "", "Running", "Starting OpenBench execution..."
             )
 
             success, message = self._execute_remote_openbench()
 
             if success:
                 self._emit_progress(
-                    RunnerStatus.COMPLETED, 100,
-                    "Complete", "", "",
-                    "Evaluation completed successfully"
+                    RunnerStatus.COMPLETED, 100, "Complete", "", "", "Evaluation completed successfully"
                 )
                 if self._on_finished:
                     self._on_finished(True, "Evaluation completed successfully")
             else:
-                self._emit_progress(
-                    RunnerStatus.FAILED, self.PROGRESS_MAX,
-                    "Failed", "", "",
-                    message
-                )
+                self._emit_progress(RunnerStatus.FAILED, self.PROGRESS_MAX, "Failed", "", "", message)
                 if self._on_finished:
                     self._on_finished(False, message)
 
         except SSHConnectionError as e:
             error_msg = f"SSH connection error: {e}"
-            self._emit_progress(
-                RunnerStatus.FAILED, 0,
-                "Error", "", "",
-                error_msg
-            )
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", error_msg)
             if self._on_finished:
                 self._on_finished(False, error_msg)
 
         except Exception as e:
             error_msg = f"Remote execution error: {e}"
-            self._emit_progress(
-                RunnerStatus.FAILED, 0,
-                "Error", "", "",
-                error_msg
-            )
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", error_msg)
             if self._on_finished:
                 self._on_finished(False, error_msg)
 
@@ -261,11 +238,7 @@ class RemoteRunner(threading.Thread):
 
     def _handle_stop(self):
         """Handle stop request."""
-        self._emit_progress(
-            RunnerStatus.STOPPED, 0,
-            "Stopped", "", "",
-            "Evaluation stopped by user"
-        )
+        self._emit_progress(RunnerStatus.STOPPED, 0, "Stopped", "", "", "Evaluation stopped by user")
         if self._on_finished:
             self._on_finished(False, "Stopped by user")
 
@@ -282,10 +255,7 @@ class RemoteRunner(threading.Thread):
             self._remote_temp_dir = f"/tmp/{temp_name}"
 
             quoted_dir = shlex.quote(self._remote_temp_dir)
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"mkdir -p {quoted_dir}",
-                timeout=30
-            )
+            stdout, stderr, exit_code = self._ssh_manager.execute(f"mkdir -p {quoted_dir}", timeout=30)
 
             if exit_code != 0:
                 error_msg = f"Failed to create remote temp directory: {stderr}"
@@ -348,7 +318,7 @@ class RemoteRunner(threading.Thread):
         try:
             # Upload any additional .yaml/.yml/.json files in the config directory
             for filename in os.listdir(config_dir):
-                if filename.endswith(('.yaml', '.yml', '.json')):
+                if filename.endswith((".yaml", ".yml", ".json")):
                     local_path = os.path.join(config_dir, filename)
                     if os.path.isfile(local_path) and local_path != self.config_path:
                         remote_path = f"{self._remote_temp_dir}/{filename}"
@@ -381,7 +351,7 @@ class RemoteRunner(threading.Thread):
         if conda_env:
             # Derive conda base from python path (e.g., /path/to/miniconda3/bin/python -> /path/to/miniconda3)
             # This works for paths like: .../miniconda3/bin/python or .../miniconda3/envs/myenv/bin/python
-            conda_base_match = re.search(r'(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)', python_path)
+            conda_base_match = re.search(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)", python_path)
             if conda_base_match:
                 conda_base = conda_base_match.group(1)
                 cmd = f"source {conda_base}/etc/profile.d/conda.sh && conda activate {conda_env} && cd {openbench_path} && PYTHONUNBUFFERED=1 {python_path} -u {openbench_script} {self._remote_config_path}"
@@ -406,7 +376,7 @@ class RemoteRunner(threading.Thread):
                     self._kill_remote_process()
                     return (False, "Stopped by user")
 
-                line = line.rstrip('\n\r')
+                line = line.rstrip("\n\r")
                 if line:
                     if self._on_log:
                         self._on_log(line)
@@ -414,12 +384,7 @@ class RemoteRunner(threading.Thread):
                     # Parse progress from log
                     progress, var, stage = self._parse_progress(line, progress)
                     self._emit_progress(
-                        RunnerStatus.RUNNING,
-                        progress,
-                        f"{var} - {stage}" if var else "Processing",
-                        var,
-                        stage,
-                        line
+                        RunnerStatus.RUNNING, progress, f"{var} - {stage}" if var else "Processing", var, stage, line
                     )
 
             return (True, "Completed")
@@ -433,10 +398,7 @@ class RemoteRunner(threading.Thread):
         """Attempt to kill the remote OpenBench process."""
         try:
             # Try to find and kill the Python process running openbench
-            self._ssh_manager.execute(
-                "pkill -f 'openbench.py' || true",
-                timeout=10
-            )
+            self._ssh_manager.execute("pkill -f 'openbench.py' || true", timeout=10)
             if self._on_log:
                 self._on_log("Sent kill signal to remote process")
         except Exception as e:
@@ -449,10 +411,7 @@ class RemoteRunner(threading.Thread):
         if self._remote_temp_dir and not self._config_already_remote:
             try:
                 quoted_dir = shlex.quote(self._remote_temp_dir)
-                self._ssh_manager.execute(
-                    f"rm -rf {quoted_dir}",
-                    timeout=30
-                )
+                self._ssh_manager.execute(f"rm -rf {quoted_dir}", timeout=30)
                 if self._on_log:
                     self._on_log(f"Cleaned up remote directory: {self._remote_temp_dir}")
             except Exception as e:
@@ -484,7 +443,7 @@ class RemoteRunner(threading.Thread):
                     if len(parts) > 1:
                         remaining = parts[1].strip()
                         if remaining:
-                            var_name = remaining.split()[0].strip('.:,')
+                            var_name = remaining.split()[0].strip(".:,")
                             if var_name and len(var_name) > 2:
                                 self._current_variable = var_name
                                 var = var_name
@@ -493,9 +452,9 @@ class RemoteRunner(threading.Thread):
         # Detect reference/simulation source being processed
         if "ref_source" in line_lower or "reference" in line_lower or " ref:" in line_lower:
             if " ref:" in line:
-                match = re.search(r'[-\s]ref:\s*(\S+)', line)
+                match = re.search(r"[-\s]ref:\s*(\S+)", line)
                 if match:
-                    self._current_ref = match.group(1).strip(',:')
+                    self._current_ref = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -503,9 +462,9 @@ class RemoteRunner(threading.Thread):
 
         if "sim_source" in line_lower or "simulation" in line_lower or " sim:" in line_lower:
             if " sim:" in line:
-                match = re.search(r'[-\s]sim:\s*(\S+)', line)
+                match = re.search(r"[-\s]sim:\s*(\S+)", line)
                 if match:
-                    self._current_sim = match.group(1).strip(',:')
+                    self._current_sim = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -517,7 +476,7 @@ class RemoteRunner(threading.Thread):
         elif "comparison" in line_lower or "groupby" in line_lower:
             stage = "Comparison"
             if "done running" in line_lower and "comparison" in line_lower:
-                match = re.search(r'done running\s+(\w+)\s+comparison', line_lower)
+                match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
                 if match:
                     comp_name = match.group(1)
                     if comp_name not in self._completed_comparison_tasks:
@@ -536,7 +495,9 @@ class RemoteRunner(threading.Thread):
 
         # Groupby task completion
         for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-            if groupby_type in line_lower and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
+            if groupby_type in line_lower and (
+                "completed" in line_lower or "finished" in line_lower or "done" in line_lower
+            ):
                 task_key = (self._current_variable, groupby_type)
                 if task_key not in self._completed_groupby_tasks:
                     self._completed_groupby_tasks.add(task_key)
@@ -551,14 +512,16 @@ class RemoteRunner(threading.Thread):
         # Calculate progress
         if self._total_tasks > 0:
             total_completed = (
-                len(self._completed_eval_tasks) +
-                len(self._completed_groupby_tasks) +
-                len(self._completed_comparison_tasks)
+                len(self._completed_eval_tasks)
+                + len(self._completed_groupby_tasks)
+                + len(self._completed_comparison_tasks)
             )
             task_progress = (total_completed / max(1, self._total_tasks)) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + task_progress, self.PROGRESS_MAX)
         elif self._num_comparisons > 0 and len(self._completed_comparison_tasks) > 0:
-            comparison_progress = (len(self._completed_comparison_tasks) / max(1, self._num_comparisons)) * self.PROGRESS_WORK
+            comparison_progress = (
+                len(self._completed_comparison_tasks) / max(1, self._num_comparisons)
+            ) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + comparison_progress, self.PROGRESS_MAX)
         elif self._num_variables > 0:
             completed_vars = len(set(t[0] for t in self._completed_eval_tasks if t[0]))
@@ -587,7 +550,7 @@ class RemoteRunner(threading.Thread):
         num_comparisons: int,
         do_evaluation: bool = True,
         do_comparison: bool = False,
-        do_statistics: bool = False
+        do_statistics: bool = False,
     ):
         """Set detailed task counts for accurate progress calculation.
 
@@ -628,25 +591,19 @@ class RemoteRunner(threading.Thread):
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
 
-    def _emit_progress(
-        self,
-        status: RunnerStatus,
-        progress: float,
-        task: str,
-        variable: str,
-        stage: str,
-        message: str
-    ):
+    def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
         """Invoke progress callback."""
         if self._on_progress:
-            self._on_progress(RunnerProgress(
-                status=status,
-                progress=progress,
-                current_task=task,
-                current_variable=variable,
-                current_stage=stage,
-                message=message
-            ))
+            self._on_progress(
+                RunnerProgress(
+                    status=status,
+                    progress=progress,
+                    current_task=task,
+                    current_variable=variable,
+                    current_stage=stage,
+                    message=message,
+                )
+            )
 
     def stop(self):
         """Request stop (thread-safe)."""

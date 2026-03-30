@@ -20,21 +20,26 @@ except ImportError:
 # Import parallel engine
 try:
     from openbench.util.parallel import ParallelEngine, get_parallel_engine, parallel_decorator, parallel_map
+
     _HAS_PARALLEL_ENGINE = True
 except ImportError:
     _HAS_PARALLEL_ENGINE = False
     ParallelEngine = None
+
     def get_parallel_engine(*args, **kwargs):
         return None
+
     def parallel_map(*args, **kwargs):
         # Fallback to sequential processing
         func = args[0]
         items = args[1]
         return [func(item) for item in items]
 
+
 # Import CacheSystem - CacheSystem is mandatory for evaluation engine
 try:
     from openbench.data.cache import cached, get_cache_manager
+
     _HAS_CACHE = True
 except ImportError:
     raise RuntimeError(
@@ -52,12 +57,15 @@ from ..scoring.Mod_Scores import scores
 # Import climatology processor
 try:
     from openbench.data.climatology import ClimatologyProcessor, process_climatology_evaluation
+
     _HAS_CLIMATOLOGY = True
 except ImportError:
     _HAS_CLIMATOLOGY = False
     ClimatologyProcessor = None
+
     def process_climatology_evaluation(*args, **kwargs):
         return args[0], args[1], args[2]
+
 
 # Import modular evaluation engine
 try:
@@ -68,33 +76,43 @@ try:
         create_evaluation_engine,
         evaluate_datasets,
     )
+
     _HAS_MODULAR_ENGINE = True
 except ImportError:
     _HAS_MODULAR_ENGINE = False
     ModularEvaluationEngine = object
     GridEvaluationEngine = object
     StationEvaluationEngine = object
+
     def create_evaluation_engine(*args, **kwargs):
         return None
+
     def evaluate_datasets(*args, **kwargs):
         return {}
+
 
 # Import output manager
 try:
     from openbench.util.output import ModularOutputManager, create_output_manager, save_evaluation_results
+
     _HAS_OUTPUT_MANAGER = True
 except ImportError:
     _HAS_OUTPUT_MANAGER = False
     ModularOutputManager = object
+
     def create_output_manager(*args, **kwargs):
         return None
+
     def save_evaluation_results(*args, **kwargs):
         return ""
 
+
 # Configure logging
-logging.getLogger('xarray').setLevel(logging.WARNING)  # Suppress INFO messages from xarray
-warnings.filterwarnings('ignore', category=RuntimeWarning)  # Suppress numpy runtime warnings
-logging.getLogger('dask').setLevel(logging.WARNING)  # Suppress INFO messages from dask
+logging.getLogger("xarray").setLevel(logging.WARNING)  # Suppress INFO messages from xarray
+warnings.filterwarnings("ignore", category=RuntimeWarning)  # Suppress numpy runtime warnings
+logging.getLogger("dask").setLevel(logging.WARNING)  # Suppress INFO messages from dask
+
+
 class Evaluation_grid(metrics, scores):
     def _calculate_metric(self, s, o, metric):
         """Helper method for parallel metric calculation."""
@@ -103,16 +121,17 @@ class Evaluation_grid(metrics, scores):
                 self.process_metric(metric, s, o)
                 return metric
             else:
-                logging.error(f'No such metric: {metric}')
+                logging.error(f"No such metric: {metric}")
                 return None
         except Exception as e:
-            logging.error(f'Error calculating metric {metric}: {e}')
+            logging.error(f"Error calculating metric {metric}: {e}")
             return None
+
     def __init__(self, info, fig_nml):
-        self.name = 'Evaluation_grid'
-        self.version = '0.1'
-        self.release = '0.1'
-        self.date = 'Mar 2023'
+        self.name = "Evaluation_grid"
+        self.version = "0.1"
+        self.release = "0.1"
+        self.date = "Mar 2023"
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
         self.fig_nml = fig_nml
@@ -120,16 +139,14 @@ class Evaluation_grid(metrics, scores):
 
         # Initialize modular evaluation engine if available
         if _HAS_MODULAR_ENGINE:
-            self.modular_engine = create_evaluation_engine('grid')
+            self.modular_engine = create_evaluation_engine("grid")
             logging.debug("Modular grid evaluation engine initialized")
         else:
             self.modular_engine = None
 
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
-            self.output_manager = create_output_manager(
-                self.casedir
-            )
+            self.output_manager = create_output_manager(self.casedir)
             logging.debug("Output manager initialized")
         else:
             self.output_manager = None
@@ -141,58 +158,58 @@ class Evaluation_grid(metrics, scores):
         logging.info(" ")
 
     @cached(key_prefix="eval_metric", ttl=1800)
-    def process_metric(self, metric, s, o, vkey=''):
+    def process_metric(self, metric, s, o, vkey=""):
         try:
             pb = getattr(self, metric)(s, o)
             pb = pb.squeeze()
-            pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=metric)
+            pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=metric)
 
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
-                filename = f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}'
+                filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}"
                 metadata = {
-                    'metric': metric,
-                    'item': self.item,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source,
-                    'variable_key': vkey
+                    "metric": metric,
+                    "item": self.item,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
+                    "variable_key": vkey,
                 }
-                output_path = self.output_manager.save_data(
-                    pb_da, 'metrics', filename, 'netcdf', metadata
-                )
+                output_path = self.output_manager.save_data(pb_da, "metrics", filename, "netcdf", metadata)
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'metrics',
-                                         f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc')
+                output_path = os.path.join(
+                    self.casedir,
+                    "metrics",
+                    f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc",
+                )
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
                 logging.info(f"Saved metric {metric} to {output_path}")
         finally:
             gc.collect()  # Clean up memory after processing each metric
 
-    def process_score(self, score, s, o, vkey=''):
+    def process_score(self, score, s, o, vkey=""):
         try:
             pb = getattr(self, score)(s, o)
             pb = pb.squeeze()
-            pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=['lat', 'lon'], name=score)
+            pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=score)
 
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
-                filename = f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}'
+                filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}"
                 metadata = {
-                    'score': score,
-                    'item': self.item,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source,
-                    'variable_key': vkey
+                    "score": score,
+                    "item": self.item,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
+                    "variable_key": vkey,
                 }
-                output_path = self.output_manager.save_data(
-                    pb_da, 'scores', filename, 'netcdf', metadata
-                )
+                output_path = self.output_manager.save_data(pb_da, "scores", filename, "netcdf", metadata)
             else:
                 # Original method
-                output_path = os.path.join(self.casedir, 'scores',
-                                         f'{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc')
+                output_path = os.path.join(
+                    self.casedir, "scores", f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc"
+                )
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 pb_da.to_netcdf(output_path)
                 logging.info(f"Saved score {score} to {output_path}")
@@ -204,30 +221,28 @@ class Evaluation_grid(metrics, scores):
         ref_ds = None
         sim_ds = None
         try:
-            ref_path = os.path.join(self.casedir, 'data',
-                                  f'{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc')
-            sim_path = os.path.join(self.casedir, 'data',
-                                  f'{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc')
+            ref_path = os.path.join(self.casedir, "data", f"{self.item}_ref_{self.ref_source}_{self.ref_varname}.nc")
+            sim_path = os.path.join(self.casedir, "data", f"{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc")
 
             # Open datasets and keep references for proper cleanup
             ref_ds = open_dataset_chunked(ref_path)
             sim_ds = open_dataset_chunked(sim_path)
-            o = ref_ds[f'{self.ref_varname}']
-            s = sim_ds[f'{self.sim_varname}']
+            o = ref_ds[f"{self.ref_varname}"]
+            s = sim_ds[f"{self.sim_varname}"]
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
             # Process climatology if applicable
             if _HAS_CLIMATOLOGY:
-                original_metrics = self.metrics.copy() if hasattr(self.metrics, 'copy') else list(self.metrics)
-                original_scores = self.scores.copy() if hasattr(self.scores, 'copy') else list(self.scores)
+                original_metrics = self.metrics.copy() if hasattr(self.metrics, "copy") else list(self.metrics)
+                original_scores = self.scores.copy() if hasattr(self.scores, "copy") else list(self.scores)
 
                 # Combine metrics and scores for filtering
                 all_evaluations = list(self.metrics) + list(self.scores)
 
                 # Get compare_tim_res and syear from instance attributes
-                compare_tim_res = getattr(self, 'compare_tim_res', None)
-                syear = getattr(self, 'syear', None)
+                compare_tim_res = getattr(self, "compare_tim_res", None)
+                syear = getattr(self, "syear", None)
                 if syear:
                     try:
                         syear = int(syear)
@@ -235,9 +250,7 @@ class Evaluation_grid(metrics, scores):
                         syear = None
 
                 o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
-                    ref_ds, sim_ds, all_evaluations,
-                    compare_tim_res=compare_tim_res,
-                    syear=syear
+                    ref_ds, sim_ds, all_evaluations, compare_tim_res=compare_tim_res, syear=syear
                 )
 
                 if o_clim is not None and s_clim is not None:
@@ -246,8 +259,8 @@ class Evaluation_grid(metrics, scores):
                     logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
                     logging.info("=" * 80)
 
-                    o = o_clim[f'{self.ref_varname}']
-                    s = s_clim[f'{self.sim_varname}']
+                    o = o_clim[f"{self.ref_varname}"]
+                    s = s_clim[f"{self.sim_varname}"]
                     o = Convert_Type.convert_nc(o)
                     s = Convert_Type.convert_nc(s)
 
@@ -266,16 +279,16 @@ class Evaluation_grid(metrics, scores):
                     logging.info("=" * 80)
                 else:
                     # Regular time series evaluation
-                    s['time'] = o['time']
+                    s["time"] = o["time"]
             else:
-                s['time'] = o['time']
+                s["time"] = o["time"]
 
-            if self.item == 'Terrestrial_Water_Storage_Change':
+            if self.item == "Terrestrial_Water_Storage_Change":
                 logging.info("Processing Terrestrial Water Storage Change...")
                 # Calculate time difference while preserving coordinates
                 s_values = s.values
-                s_values[1:,:,:] = s_values[1:,:,:] - s_values[:-1,:,:]
-                s_values[0,:,:] = np.nan
+                s_values[1:, :, :] = s_values[1:, :, :] - s_values[:-1, :, :]
+                s_values[0, :, :] = np.nan
                 s.values = s_values
                 # Save s to original file
                 s.to_netcdf(sim_path)
@@ -294,35 +307,36 @@ class Evaluation_grid(metrics, scores):
             if _HAS_PARALLEL_ENGINE and len(self.metrics) > 3:
                 logging.info("Processing metrics in parallel")
                 from functools import partial
+
                 metric_func = partial(self._calculate_metric, s, o)
                 metric_results = parallel_map(
                     metric_func,
                     self.metrics,
                     task_name="Calculating metrics",
                     show_progress=False,
-                    max_workers=min(4, len(self.metrics))
+                    max_workers=min(4, len(self.metrics)),
                 )
                 # Process results
                 for metric, result in zip(self.metrics, metric_results):
                     if result is not None:
-                        logging.info(f'Calculated metric: {metric}')
+                        logging.info(f"Calculated metric: {metric}")
             else:
                 # Sequential processing
                 for metric in self.metrics:
                     if hasattr(self, metric):
-                        logging.info(f'Calculating metric: {metric}')
+                        logging.info(f"Calculating metric: {metric}")
                         self.process_metric(metric, s, o)
                     else:
-                        logging.error(f'No such metric: {metric}')
+                        logging.error(f"No such metric: {metric}")
                         sys.exit(1)
 
             # Process scores (usually fewer, so sequential is fine)
             for score in self.scores:
                 if hasattr(self, score):
-                    logging.info(f'Calculating score: {score}')
+                    logging.info(f"Calculating score: {score}")
                     self.process_score(score, s, o)
                 else:
-                    logging.error(f'No such score: {score}')
+                    logging.error(f"No such score: {score}")
                     sys.exit(1)
 
             logging.info("=" * 80)
@@ -335,35 +349,36 @@ class Evaluation_grid(metrics, scores):
                 sim_ds.close()
             gc.collect()  # Final cleanup
 
+
 class Evaluation_stn(metrics, scores):
     def __init__(self, info, fig_nml):
-        self.name = 'Evaluation_point'
-        self.version = '0.1'
-        self.release = '0.1'
-        self.date = 'Mar 2023'
+        self.name = "Evaluation_point"
+        self.version = "0.1"
+        self.release = "0.1"
+        self.date = "Mar 2023"
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.fig_nml = fig_nml
         self.__dict__.update(info)
-        if isinstance(self.sim_varname, str): self.sim_varname = [self.sim_varname]
-        if isinstance(self.ref_varname, str): self.ref_varname = [self.ref_varname]
+        if isinstance(self.sim_varname, str):
+            self.sim_varname = [self.sim_varname]
+        if isinstance(self.ref_varname, str):
+            self.ref_varname = [self.ref_varname]
 
         # Initialize modular evaluation engine if available
         if _HAS_MODULAR_ENGINE:
-            self.modular_engine = create_evaluation_engine('station')
+            self.modular_engine = create_evaluation_engine("station")
             logging.debug("Modular station evaluation engine initialized")
         else:
             self.modular_engine = None
 
         # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
-            self.output_manager = create_output_manager(
-                self.casedir
-            )
+            self.output_manager = create_output_manager(self.casedir)
             logging.debug("Output manager initialized")
         else:
             self.output_manager = None
 
-        logging.info('Evaluation processes starting!')
+        logging.info("Evaluation processes starting!")
         logging.info("=======================================")
         logging.info(" ")
         logging.info(" ")
@@ -377,7 +392,7 @@ class Evaluation_stn(metrics, scores):
         return [selector]
 
     def _load_station_dataset(self, dataset, datasource):
-        attr_name = 'ref_varname' if datasource == 'ref' else 'sim_varname'
+        attr_name = "ref_varname" if datasource == "ref" else "sim_varname"
         selector = getattr(self, attr_name)
         selector_list = self._normalize_var_selector(selector)
 
@@ -394,13 +409,15 @@ class Evaluation_stn(metrics, scores):
             available_vars = list(dataset.data_vars) + list(dataset.coords)
             logging.error(
                 "Variable '%s' not found in %s dataset. Available variables: %s",
-                selector_list[0], datasource, available_vars
+                selector_list[0],
+                datasource,
+                available_vars,
             )
             raise
 
     def _apply_station_custom_filter(self, dataset, datasource, attr_name, canonical_name):
         # Get model name from _model attribute (e.g., TE-routing_model = "TE")
-        source = self.sim_source if datasource == 'sim' else self.ref_source
+        source = self.sim_source if datasource == "sim" else self.ref_source
         try:
             model = getattr(self, f"{source}_model")
         except AttributeError:
@@ -412,7 +429,9 @@ class Evaluation_stn(metrics, scores):
         except (ImportError, AttributeError):
             logging.warning(
                 "Variable '%s' missing in %s dataset for %s, no custom filter available",
-                canonical_name, datasource, model
+                canonical_name,
+                datasource,
+                model,
             )
             return None
 
@@ -423,7 +442,9 @@ class Evaluation_stn(metrics, scores):
         try:
             logging.warning(
                 "Variable '%s' missing in %s dataset for %s; applying custom fallback",
-                canonical_name, datasource, model
+                canonical_name,
+                datasource,
+                model,
             )
             updated_self, filtered_data = custom_filter(self, dataset)
             if filtered_data is None:
@@ -450,7 +471,7 @@ class Evaluation_stn(metrics, scores):
         if not isinstance(data_array, xr.DataArray):
             data_array = xr.DataArray(data_array)
 
-        if not getattr(data_array, 'name', None) or data_array.name != canonical_name:
+        if not getattr(data_array, "name", None) or data_array.name != canonical_name:
             data_array = data_array.rename(canonical_name)
 
         return data_array.to_dataset(name=canonical_name)
@@ -462,15 +483,15 @@ class Evaluation_stn(metrics, scores):
         Ensures reference/simulation station series use identical timestamps even when
         source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
         """
-        if not hasattr(data_array, 'coords') or 'time' not in data_array.coords:
+        if not hasattr(data_array, "coords") or "time" not in data_array.coords:
             return data_array
 
-        compare_res = str(getattr(self, 'compare_tim_res', '') or '').strip().lower()
+        compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
         if not compare_res:
             return data_array
 
         try:
-            times = pd.to_datetime(data_array['time'].values)
+            times = pd.to_datetime(data_array["time"].values)
         except Exception as err:
             logging.debug(f"Station time normalization skipped: {err}")
             return data_array
@@ -479,19 +500,19 @@ class Evaluation_stn(metrics, scores):
             return data_array
 
         normalized = None
-        if compare_res in {'day', 'd', '1d', 'daily'}:
-            normalized = (times.floor('D') + pd.Timedelta(hours=12)).values
-        elif compare_res in {'hour', 'h', '1h', 'hourly'}:
-            normalized = (times.floor('H') + pd.Timedelta(minutes=30)).values
-        elif compare_res in {'month', 'mon', 'm', '1m', 'monthly'}:
-            normalized = (times.to_period('M').to_timestamp(how='start') + pd.Timedelta(days=14, hours=12)).values
-        elif compare_res in {'year', 'yr', 'y', '1y', 'annual', 'yearly'}:
-            normalized = (times.to_period('Y').to_timestamp(how='start') + pd.Timedelta(days=182, hours=12)).values
+        if compare_res in {"day", "d", "1d", "daily"}:
+            normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
+        elif compare_res in {"hour", "h", "1h", "hourly"}:
+            normalized = (times.floor("H") + pd.Timedelta(minutes=30)).values
+        elif compare_res in {"month", "mon", "m", "1m", "monthly"}:
+            normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
+        elif compare_res in {"year", "yr", "y", "1y", "annual", "yearly"}:
+            normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values
         else:
             return data_array
 
         try:
-            data_array = data_array.assign_coords(time=('time', normalized))
+            data_array = data_array.assign_coords(time=("time", normalized))
         except Exception as err:
             logging.debug(f"Failed to assign normalized station times: {err}")
         return data_array
@@ -500,7 +521,7 @@ class Evaluation_stn(metrics, scores):
         try:
             # read station information
             # Use ref_fulllist if available, otherwise use dataset-specific filename
-            if hasattr(self, 'ref_fulllist') and self.ref_fulllist and os.path.exists(self.ref_fulllist):
+            if hasattr(self, "ref_fulllist") and self.ref_fulllist and os.path.exists(self.ref_fulllist):
                 stnlist = self.ref_fulllist
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
@@ -508,24 +529,32 @@ class Evaluation_stn(metrics, scores):
 
             # loop the keys in self.variables to get the metric output
             for metric in self.metrics:
-                station_list[f'{metric}'] = [-9999.0] * len(station_list['ID'])
+                station_list[f"{metric}"] = [-9999.0] * len(station_list["ID"])
             for score in self.scores:
-                station_list[f'{score}'] = [-9999.0] * len(station_list['ID'])
+                station_list[f"{score}"] = [-9999.0] * len(station_list["ID"])
 
-            for iik in range(len(station_list['ID'])):
+            for iik in range(len(station_list["ID"])):
                 sim_ds = None
                 ref_ds = None
                 try:
-                    sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
-                                          f"sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-                    ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
-                                          f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+                    sim_path = os.path.join(
+                        self.casedir,
+                        "data",
+                        f"stn_{self.ref_source}_{self.sim_source}",
+                        f"sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+                    )
+                    ref_path = os.path.join(
+                        self.casedir,
+                        "data",
+                        f"stn_{self.ref_source}_{self.sim_source}",
+                        f"ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+                    )
 
                     # Open datasets (station files are small, no chunking needed)
                     sim_ds = open_dataset_chunked(sim_path, use_chunking=False)
                     ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
-                    s = self._load_station_dataset(sim_ds, 'sim')
-                    o = self._load_station_dataset(ref_ds, 'ref')
+                    s = self._load_station_dataset(sim_ds, "sim")
+                    o = self._load_station_dataset(ref_ds, "ref")
 
                     # Process climatology if applicable
                     current_metrics = self.metrics
@@ -535,8 +564,8 @@ class Evaluation_stn(metrics, scores):
                         all_evaluations = list(self.metrics) + list(self.scores)
 
                         # Get compare_tim_res and syear from instance attributes
-                        compare_tim_res = getattr(self, 'compare_tim_res', None)
-                        syear = getattr(self, 'syear', None)
+                        compare_tim_res = getattr(self, "compare_tim_res", None)
+                        syear = getattr(self, "syear", None)
                         if syear:
                             try:
                                 syear = int(syear)
@@ -544,9 +573,7 @@ class Evaluation_stn(metrics, scores):
                                 syear = None
 
                         o_clim, s_clim, supported_evaluations = process_climatology_evaluation(
-                            ref_ds, sim_ds, all_evaluations,
-                            compare_tim_res=compare_tim_res,
-                            syear=syear
+                            ref_ds, sim_ds, all_evaluations, compare_tim_res=compare_tim_res, syear=syear
                         )
 
                         if o_clim is not None and s_clim is not None:
@@ -558,9 +585,9 @@ class Evaluation_stn(metrics, scores):
                             current_metrics = [m for m in self.metrics if m in supported_evaluations]
                             current_scores = [sc for sc in self.scores if sc in supported_evaluations]
                         else:
-                            s['time'] = o['time']
+                            s["time"] = o["time"]
                     else:
-                        s['time'] = o['time']
+                        s["time"] = o["time"]
                     s = self._normalize_time_coordinate(s)
                     o = self._normalize_time_coordinate(o)
 
@@ -576,17 +603,17 @@ class Evaluation_stn(metrics, scores):
                     for metric in current_metrics:
                         if hasattr(self, metric):
                             pb = getattr(self, metric)(s, o)
-                            station_list.loc[iik, f'{metric}'] = pb.values
+                            station_list.loc[iik, f"{metric}"] = pb.values
                         else:
-                            logging.error('No such metric')
+                            logging.error("No such metric")
                             sys.exit(1)
 
                     for score in current_scores:
                         if hasattr(self, score):
                             pb = getattr(self, score)(s, o)
-                            station_list.loc[iik, f'{score}'] = pb.values
+                            station_list.loc[iik, f"{score}"] = pb.values
                         else:
-                            logging.error('No such score')
+                            logging.error("No such score")
                             sys.exit(1)
                 finally:
                     # Close datasets to free memory and file handles
@@ -596,7 +623,7 @@ class Evaluation_stn(metrics, scores):
                         ref_ds.close()
                     gc.collect()  # Clean up memory after each station
 
-            logging.info('Comparison dataset prepared!')
+            logging.info("Comparison dataset prepared!")
             logging.info("=======================================")
 
             station_list = Convert_Type.convert_Frame(station_list)
@@ -604,70 +631,85 @@ class Evaluation_stn(metrics, scores):
             # Save metrics and scores using output manager if available
             if self.output_manager:
                 # Save metrics
-                metrics_filename = f'{self.ref_varname}_{self.sim_varname}_metrics'
+                metrics_filename = f"{self.ref_varname}_{self.sim_varname}_metrics"
                 metrics_metadata = {
-                    'type': 'station_metrics',
-                    'ref_varname': self.ref_varname,
-                    'sim_varname': self.sim_varname,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source
+                    "type": "station_metrics",
+                    "ref_varname": self.ref_varname,
+                    "sim_varname": self.sim_varname,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
                 }
                 self.output_manager.save_data(
-                    station_list, 'metrics', metrics_filename, 'csv',
-                    metrics_metadata, [f'stn_{self.ref_source}_{self.sim_source}']
+                    station_list,
+                    "metrics",
+                    metrics_filename,
+                    "csv",
+                    metrics_metadata,
+                    [f"stn_{self.ref_source}_{self.sim_source}"],
                 )
 
                 # Save scores
-                scores_filename = f'{self.ref_varname}_{self.sim_varname}_scores'
+                scores_filename = f"{self.ref_varname}_{self.sim_varname}_scores"
                 scores_metadata = {
-                    'type': 'station_scores',
-                    'ref_varname': self.ref_varname,
-                    'sim_varname': self.sim_varname,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source
+                    "type": "station_scores",
+                    "ref_varname": self.ref_varname,
+                    "sim_varname": self.sim_varname,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
                 }
                 self.output_manager.save_data(
-                    station_list, 'scores', scores_filename, 'csv',
-                    scores_metadata, [f'stn_{self.ref_source}_{self.sim_source}']
+                    station_list,
+                    "scores",
+                    scores_filename,
+                    "csv",
+                    scores_metadata,
+                    [f"stn_{self.ref_source}_{self.sim_source}"],
                 )
             else:
                 # Original method
                 # Save metrics
-                metrics_dir = os.path.join(self.casedir, 'metrics', f'stn_{self.ref_source}_{self.sim_source}')
+                metrics_dir = os.path.join(self.casedir, "metrics", f"stn_{self.ref_source}_{self.sim_source}")
                 os.makedirs(metrics_dir, exist_ok=True)
-                metrics_path = os.path.join(metrics_dir, f'{self.ref_varname}_{self.sim_varname}_metrics.csv')
+                metrics_path = os.path.join(metrics_dir, f"{self.ref_varname}_{self.sim_varname}_metrics.csv")
                 logging.info(f"Saving metrics to {metrics_path}")
                 station_list.to_csv(metrics_path, index=False)
 
                 # Save scores
-                scores_dir = os.path.join(self.casedir, 'scores', f'stn_{self.ref_source}_{self.sim_source}')
+                scores_dir = os.path.join(self.casedir, "scores", f"stn_{self.ref_source}_{self.sim_source}")
                 os.makedirs(scores_dir, exist_ok=True)
-                scores_path = os.path.join(scores_dir, f'{self.ref_varname}_{self.sim_varname}_scores.csv')
+                scores_path = os.path.join(scores_dir, f"{self.ref_varname}_{self.sim_varname}_scores.csv")
                 station_list.to_csv(scores_path, index=False)
         finally:
             gc.collect()  # Final cleanup
-
 
     def make_evaluation_parallel(self, station_list, iik):
         sim_ds = None
         ref_ds = None
         try:
-            sim_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
-                                  f"{self.item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
-            ref_path = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
-                                  f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc")
+            sim_path = os.path.join(
+                self.casedir,
+                "data",
+                f"stn_{self.ref_source}_{self.sim_source}",
+                f"{self.item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+            )
+            ref_path = os.path.join(
+                self.casedir,
+                "data",
+                f"stn_{self.ref_source}_{self.sim_source}",
+                f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+            )
 
             # Check if both files exist before processing
             if not os.path.exists(sim_path) or not os.path.exists(ref_path):
-                station_id = station_list['ID'][iik]
+                station_id = station_list["ID"][iik]
                 logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
                 return None
 
             # Open datasets (station files are small, no chunking needed)
             sim_ds = open_dataset_chunked(sim_path, use_chunking=False)
             ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
-            s_ds = self._load_station_dataset(sim_ds, 'sim')
-            o_ds = self._load_station_dataset(ref_ds, 'ref')
+            s_ds = self._load_station_dataset(sim_ds, "sim")
+            o_ds = self._load_station_dataset(ref_ds, "ref")
             s = s_ds.to_array().squeeze()
             o = o_ds.to_array().squeeze()
             o = Convert_Type.convert_nc(o)
@@ -677,25 +719,27 @@ class Evaluation_stn(metrics, scores):
 
             # Align by common timestamps to avoid dimension conflicts
             try:
-                s_times = pd.to_datetime(s['time'].values)
-                o_times = pd.to_datetime(o['time'].values)
+                s_times = pd.to_datetime(s["time"].values)
+                o_times = pd.to_datetime(o["time"].values)
                 # Intersect exact timestamps (normalization handled upstream)
-                common_times = np.intersect1d(s_times.values if hasattr(s_times, "values") else s_times,
-                                              o_times.values if hasattr(o_times, "values") else o_times)
+                common_times = np.intersect1d(
+                    s_times.values if hasattr(s_times, "values") else s_times,
+                    o_times.values if hasattr(o_times, "values") else o_times,
+                )
                 if common_times.size == 0:
-                    station_id = station_list['ID'][iik]
+                    station_id = station_list["ID"][iik]
                     logging.warning(f"Skipping station {station_id} - no overlapping time steps after alignment")
                     return None
                 # Select and sort by common times
-                s = s.sel(time=common_times).sortby('time')
-                o = o.sel(time=common_times).sortby('time')
+                s = s.sel(time=common_times).sortby("time")
+                o = o.sel(time=common_times).sortby("time")
             except Exception as e:
                 logging.debug(f"Time alignment fallback due to: {e}")
                 # Fallback to assigning if shapes already match
-                if s.sizes.get('time') == o.sizes.get('time'):
-                    s['time'] = o['time']
+                if s.sizes.get("time") == o.sizes.get("time"):
+                    s["time"] = o["time"]
                 else:
-                    station_id = station_list['ID'][iik]
+                    station_id = station_list["ID"][iik]
                     logging.warning(f"Skipping station {station_id} - failed to align time coordinates")
                     return None
             mask1 = np.isnan(s) | np.isnan(o)
@@ -710,56 +754,73 @@ class Evaluation_stn(metrics, scores):
             row = {}
             # for based plot
             try:
-                row['KGESS'] = self.KGESS(s, o).values
+                row["KGESS"] = self.KGESS(s, o).values
             except (ValueError, RuntimeError, AttributeError) as e:
                 logging.debug(f"KGESS calculation failed: {e}")
-                row['KGESS'] = -9999.0
+                row["KGESS"] = -9999.0
             try:
-                row['RMSE'] = self.rmse(s, o).values
+                row["RMSE"] = self.rmse(s, o).values
             except (ValueError, RuntimeError, AttributeError) as e:
                 logging.debug(f"RMSE calculation failed: {e}")
-                row['RMSE'] = -9999.0
+                row["RMSE"] = -9999.0
             try:
-                row['correlation'] = self.correlation(s, o).values
+                row["correlation"] = self.correlation(s, o).values
             except (ValueError, RuntimeError, AttributeError) as e:
                 logging.debug(f"Correlation calculation failed: {e}")
-                row['correlation'] = -9999.0
+                row["correlation"] = -9999.0
 
             for metric in self.metrics:
                 if hasattr(self, metric):
                     pb = getattr(self, metric)(s, o)
                     if pb.values is not None:
-                        row[f'{metric}'] = pb.values
+                        row[f"{metric}"] = pb.values
                     else:
-                        row[f'{metric}'] = -9999.0
-                        if 'ref_lat' in station_list:
-                            lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
+                        row[f"{metric}"] = -9999.0
+                        if "ref_lat" in station_list:
+                            lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
                         else:
-                            lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
-                        plot_stn(self, s.squeeze(), o.squeeze(), station_list['ID'][iik], self.ref_varname,
-                                      float(station_list['RMSE'][iik]), float(station_list['KGE'][iik]),
-                                      float(station_list['correlation'][iik]), lat_lon)
+                            lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
+                        plot_stn(
+                            self,
+                            s.squeeze(),
+                            o.squeeze(),
+                            station_list["ID"][iik],
+                            self.ref_varname,
+                            float(station_list["RMSE"][iik]),
+                            float(station_list["KGE"][iik]),
+                            float(station_list["correlation"][iik]),
+                            lat_lon,
+                        )
                 else:
-                    logging.error(f'No such metric: {metric}')
+                    logging.error(f"No such metric: {metric}")
                     sys.exit(1)
 
             for score in self.scores:
                 if hasattr(self, score):
                     pb2 = getattr(self, score)(s, o)
                     if pb2.values is not None:
-                        row[f'{score}'] = pb2.values
+                        row[f"{score}"] = pb2.values
                     else:
-                        row[f'{score}'] = -9999.0
+                        row[f"{score}"] = -9999.0
                 else:
-                    logging.error('No such score')
+                    logging.error("No such score")
                     sys.exit(1)
 
-            if 'ref_lat' in station_list:
-                lat_lon = [station_list['ref_lat'][iik], station_list['ref_lon'][iik]]
+            if "ref_lat" in station_list:
+                lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
             else:
-                lat_lon = [station_list['sim_lat'][iik], station_list['sim_lon'][iik]]
-            plot_stn(self, s, o, station_list['ID'][iik], self.ref_varname, float(row['RMSE']), float(row['KGESS']),
-                          float(row['correlation']), lat_lon)
+                lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
+            plot_stn(
+                self,
+                s,
+                o,
+                station_list["ID"][iik],
+                self.ref_varname,
+                float(row["RMSE"]),
+                float(row["KGESS"]),
+                float(row["correlation"]),
+                lat_lon,
+            )
             return row
         finally:
             # Close datasets to free memory and file handles
@@ -773,7 +834,7 @@ class Evaluation_stn(metrics, scores):
     def make_evaluation_P(self):
         try:
             # Use ref_fulllist if available, otherwise use dataset-specific filename
-            if hasattr(self, 'ref_fulllist') and self.ref_fulllist and os.path.exists(self.ref_fulllist):
+            if hasattr(self, "ref_fulllist") and self.ref_fulllist and os.path.exists(self.ref_fulllist):
                 stnlist = self.ref_fulllist
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
@@ -785,23 +846,22 @@ class Evaluation_stn(metrics, scores):
 
                 # Create partial function with station_list
                 from functools import partial
+
                 eval_func = partial(self.make_evaluation_parallel, station_list)
 
                 # Process stations in parallel
                 results = parallel_map(
-                    eval_func,
-                    list(range(len(station_list['ID']))),
-                    task_name="Evaluating stations",
-                    show_progress=True
+                    eval_func, list(range(len(station_list["ID"]))), task_name="Evaluating stations", show_progress=True
                 )
             else:
                 # Fallback to joblib
                 results = Parallel(n_jobs=-1)(
-                    delayed(self.make_evaluation_parallel)(station_list, iik) for iik in range(len(station_list['ID'])))
+                    delayed(self.make_evaluation_parallel)(station_list, iik) for iik in range(len(station_list["ID"]))
+                )
 
             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
 
-            logging.info('Evaluation finished')
+            logging.info("Evaluation finished")
             logging.info("=======================================")
 
             station_list = Convert_Type.convert_Frame(station_list)
@@ -809,40 +869,38 @@ class Evaluation_stn(metrics, scores):
             # Save metrics and scores using output manager if available
             if self.output_manager:
                 # Save scores
-                scores_filename = f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations'
+                scores_filename = f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations"
                 scores_metadata = {
-                    'type': 'station_evaluations_scores',
-                    'item': self.item,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source
+                    "type": "station_evaluations_scores",
+                    "item": self.item,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
                 }
-                self.output_manager.save_data(
-                    station_list, 'scores', scores_filename, 'csv', scores_metadata
-                )
+                self.output_manager.save_data(station_list, "scores", scores_filename, "csv", scores_metadata)
 
                 # Save metrics
-                metrics_filename = f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations'
+                metrics_filename = f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations"
                 metrics_metadata = {
-                    'type': 'station_evaluations_metrics',
-                    'item': self.item,
-                    'ref_source': self.ref_source,
-                    'sim_source': self.sim_source
+                    "type": "station_evaluations_metrics",
+                    "item": self.item,
+                    "ref_source": self.ref_source,
+                    "sim_source": self.sim_source,
                 }
-                self.output_manager.save_data(
-                    station_list, 'metrics', metrics_filename, 'csv', metrics_metadata
-                )
+                self.output_manager.save_data(station_list, "metrics", metrics_filename, "csv", metrics_metadata)
             else:
                 # Original method
                 # Save scores
-                scores_path = os.path.join(self.casedir, 'scores',
-                                         f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
+                scores_path = os.path.join(
+                    self.casedir, "scores", f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv"
+                )
                 logging.info(f"Saving scores to {scores_path}")
                 os.makedirs(os.path.dirname(scores_path), exist_ok=True)
                 station_list.to_csv(scores_path, index=False)
 
                 # Save metrics
-                metrics_path = os.path.join(self.casedir, 'metrics',
-                                          f'{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv')
+                metrics_path = os.path.join(
+                    self.casedir, "metrics", f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv"
+                )
                 logging.info(f"Saving metrics to {metrics_path}")
                 os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
                 station_list.to_csv(metrics_path, index=False)

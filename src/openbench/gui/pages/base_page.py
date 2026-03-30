@@ -6,10 +6,7 @@ Base class for all wizard pages.
 from abc import abstractmethod
 from typing import Dict, Any
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel,
-    QScrollArea, QFrame
-)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QFrame
 from PySide6.QtCore import Qt
 
 from openbench.gui.path_utils import get_openbench_root

@@ -1,4 +1,3 @@
-
 import numpy as np
 import xarray as xr
 
@@ -16,7 +15,7 @@ def stat_hellinger_distance(self, v, u):
     Returns:
         xarray.DataArray: Hellinger Distance score for each grid point
     """
-    nbins = self.stats_nml['Hellinger_Distance']['nbins']
+    nbins = self.stats_nml["Hellinger_Distance"]["nbins"]
 
     if isinstance(v, xr.Dataset):
         v = list(v.data_vars.values())[0]
@@ -52,35 +51,36 @@ def stat_hellinger_distance(self, v, u):
         return hellinger_dist
 
     # Rechunk time dimension to single chunk for apply_ufunc with dask
-    if hasattr(v, 'chunks') and v.chunks is not None:
-        v = v.chunk({'time': -1})
-    if hasattr(u, 'chunks') and u.chunks is not None:
-        u = u.chunk({'time': -1})
+    if hasattr(v, "chunks") and v.chunks is not None:
+        v = v.chunk({"time": -1})
+    if hasattr(u, "chunks") and u.chunks is not None:
+        u = u.chunk({"time": -1})
 
     # Apply the function to each grid point
     score = xr.apply_ufunc(
         calc_hellinger_distance,
-        v, u,
-        input_core_dims=[['time'], ['time']],
+        v,
+        u,
+        input_core_dims=[["time"], ["time"]],
         vectorize=True,
-        dask='parallelized',
-        output_dtypes=[float]
+        dask="parallelized",
+        output_dtypes=[float],
     )
 
     # Add attributes to the DataArray
-    v_name = v.name if v.name is not None else 'unknown'
-    u_name = u.name if u.name is not None else 'unknown'
-    score.name = 'hellinger_distance_score'
-    score.attrs['long_name'] = 'Hellinger Distance Score'
-    score.attrs['units'] = '-'
-    score.attrs['description'] = 'Hellinger Distance score calculated between variables ' + u_name + ' and ' + v_name
+    v_name = v.name if v.name is not None else "unknown"
+    u_name = u.name if u.name is not None else "unknown"
+    score.name = "hellinger_distance_score"
+    score.attrs["long_name"] = "Hellinger Distance Score"
+    score.attrs["units"] = "-"
+    score.attrs["description"] = "Hellinger Distance score calculated between variables " + u_name + " and " + v_name
 
     # Create a dataset with the score
-    ds = xr.Dataset({'hellinger_distance_score': score})
+    ds = xr.Dataset({"hellinger_distance_score": score})
     del score
     # Add global attributes
-    ds.attrs['title'] = 'Hellinger Distance Score'
-    ds.attrs['description'] = 'Hellinger Distance score calculated between variables ' + u_name + ' and ' + v_name
-    ds.attrs['created_by'] = 'ILAMB var_hellinger_distance function'
+    ds.attrs["title"] = "Hellinger Distance Score"
+    ds.attrs["description"] = "Hellinger Distance score calculated between variables " + u_name + " and " + v_name
+    ds.attrs["created_by"] = "ILAMB var_hellinger_distance function"
 
     return ds

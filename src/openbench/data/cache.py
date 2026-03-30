@@ -5,7 +5,7 @@ Caching System for OpenBench
 This module provides a comprehensive caching system with support for
 memory and disk caching, intelligent eviction policies, and performance monitoring.
 
-Author: Zhongwang Wei  
+Author: Zhongwang Wei
 Version: 1.0
 Date: July 2025
 """
@@ -26,6 +26,7 @@ try:
     import numpy as np
     import pandas as pd
     import xarray as xr
+
     _HAS_DATA_LIBS = True
 except ImportError:
     _HAS_DATA_LIBS = False
@@ -35,6 +36,7 @@ except ImportError:
 
 try:
     from diskcache import Cache as DiskCache
+
     _HAS_DISKCACHE = True
 except ImportError:
     _HAS_DISKCACHE = False
@@ -43,17 +45,22 @@ except ImportError:
 try:
     from openbench.util.exceptions import CacheError, error_handler
     from openbench.util.logging_system import get_logging_manager, performance_logged
+
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
     CacheError = Exception
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
     def performance_logged(operation=None):
         def decorator(func):
             return func
+
         return decorator
 
 
@@ -64,11 +71,11 @@ class CacheKey:
     def generate(obj: Any, prefix: str = "") -> str:
         """
         Generate a unique cache key for an object.
-        
+
         Args:
             obj: Object to generate key for
             prefix: Optional prefix for the key
-            
+
         Returns:
             Unique cache key string
         """
@@ -143,14 +150,14 @@ class CacheStats:
             runtime = time.time() - self.start_time
 
             return {
-                'hits': self.hits,
-                'misses': self.misses,
-                'hit_rate': hit_rate,
-                'evictions': self.evictions,
-                'errors': self.errors,
-                'total_requests': total_requests,
-                'total_size_mb': self.total_size / (1024 * 1024),
-                'runtime_seconds': runtime
+                "hits": self.hits,
+                "misses": self.misses,
+                "hit_rate": hit_rate,
+                "evictions": self.evictions,
+                "errors": self.errors,
+                "total_requests": total_requests,
+                "total_size_mb": self.total_size / (1024 * 1024),
+                "runtime_seconds": runtime,
             }
 
 
@@ -160,7 +167,7 @@ class MemoryCache:
     def __init__(self, max_size_mb: float = 1024, ttl_seconds: Optional[int] = None):
         """
         Initialize memory cache.
-        
+
         Args:
             max_size_mb: Maximum cache size in MB
             ttl_seconds: Time-to-live for entries (None = no expiry)
@@ -272,22 +279,21 @@ class MemoryCache:
         """Get cache information."""
         with self._lock:
             return {
-                'type': 'memory',
-                'entries': len(self.cache),
-                'size_mb': self._current_size / (1024 * 1024),
-                'max_size_mb': self.max_size / (1024 * 1024),
-                'stats': self.stats.get_stats()
+                "type": "memory",
+                "entries": len(self.cache),
+                "size_mb": self._current_size / (1024 * 1024),
+                "max_size_mb": self.max_size / (1024 * 1024),
+                "stats": self.stats.get_stats(),
             }
 
 
 class FileSystemCache:
     """File system based cache."""
 
-    def __init__(self, cache_dir: str = "./cache", max_size_mb: float = 10240,
-                 ttl_seconds: Optional[int] = None):
+    def __init__(self, cache_dir: str = "./cache", max_size_mb: float = 10240, ttl_seconds: Optional[int] = None):
         """
         Initialize file system cache.
-        
+
         Args:
             cache_dir: Directory for cache files
             max_size_mb: Maximum cache size in MB
@@ -303,9 +309,7 @@ class FileSystemCache:
         # Initialize disk cache if available
         if _HAS_DISKCACHE:
             self.disk_cache = DiskCache(
-                str(self.cache_dir),
-                size_limit=self.max_size,
-                eviction_policy='least-recently-used'
+                str(self.cache_dir), size_limit=self.max_size, eviction_policy="least-recently-used"
             )
         else:
             self.disk_cache = None
@@ -341,7 +345,7 @@ class FileSystemCache:
                 return None
 
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 value = pickle.load(f)
             self.stats.record_hit()
             return value
@@ -361,7 +365,7 @@ class FileSystemCache:
         file_path = self._get_file_path(key)
 
         try:
-            with open(file_path, 'wb') as f:
+            with open(file_path, "wb") as f:
                 pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
             return True
         except Exception as e:
@@ -390,25 +394,28 @@ class FileSystemCache:
             size_mb = sum(f.stat().st_size for f in files) / (1024 * 1024)
 
         return {
-            'type': 'filesystem',
-            'directory': str(self.cache_dir),
-            'entries': entries,
-            'size_mb': size_mb,
-            'max_size_mb': self.max_size / (1024 * 1024),
-            'stats': self.stats.get_stats()
+            "type": "filesystem",
+            "directory": str(self.cache_dir),
+            "entries": entries,
+            "size_mb": size_mb,
+            "max_size_mb": self.max_size / (1024 * 1024),
+            "stats": self.stats.get_stats(),
         }
 
 
 class CacheManager:
     """Unified cache manager with multiple levels."""
 
-    def __init__(self, memory_size_mb: float = 1024,
-                 disk_size_mb: float = 10240,
-                 cache_dir: str = "./cache",
-                 ttl_seconds: Optional[int] = None):
+    def __init__(
+        self,
+        memory_size_mb: float = 1024,
+        disk_size_mb: float = 10240,
+        cache_dir: str = "./cache",
+        ttl_seconds: Optional[int] = None,
+    ):
         """
         Initialize cache manager.
-        
+
         Args:
             memory_size_mb: Memory cache size in MB
             disk_size_mb: Disk cache size in MB
@@ -430,20 +437,20 @@ class CacheManager:
     def get(self, key: str, level: Optional[str] = None) -> Optional[Any]:
         """
         Get value from cache.
-        
+
         Args:
             key: Cache key
             level: Cache level ('memory', 'disk', or None for auto)
-            
+
         Returns:
             Cached value or None
         """
-        if level == 'memory' or (level is None and self.use_memory and self.memory_first):
+        if level == "memory" or (level is None and self.use_memory and self.memory_first):
             value = self.memory_cache.get(key)
             if value is not None:
                 return value
 
-        if level == 'disk' or (level is None and self.use_disk):
+        if level == "disk" or (level is None and self.use_disk):
             value = self.disk_cache.get(key)
             if value is not None and self.use_memory and level is None:
                 # Promote to memory cache
@@ -456,48 +463,48 @@ class CacheManager:
     def set(self, key: str, value: Any, level: Optional[str] = None) -> bool:
         """
         Set value in cache.
-        
+
         Args:
             key: Cache key
             value: Value to cache
             level: Cache level ('memory', 'disk', 'both', or None for auto)
-            
+
         Returns:
             Success status
         """
         success = True
 
-        if level in ['memory', 'both'] or (level is None and self.use_memory):
+        if level in ["memory", "both"] or (level is None and self.use_memory):
             success &= self.memory_cache.set(key, value)
 
-        if level in ['disk', 'both'] or (level is None and self.use_disk and not self.memory_first):
+        if level in ["disk", "both"] or (level is None and self.use_disk and not self.memory_first):
             success &= self.disk_cache.set(key, value)
 
         return success
 
     def clear(self, level: Optional[str] = None):
         """Clear cache at specified level."""
-        if level in ['memory', None] and self.use_memory:
+        if level in ["memory", None] and self.use_memory:
             self.memory_cache.clear()
 
-        if level in ['disk', None] and self.use_disk:
+        if level in ["disk", None] and self.use_disk:
             self.disk_cache.clear()
 
     def get_info(self) -> Dict[str, Any]:
         """Get comprehensive cache information."""
         info = {
-            'configuration': {
-                'use_memory': self.use_memory,
-                'use_disk': self.use_disk,
-                'memory_first': self.memory_first
+            "configuration": {
+                "use_memory": self.use_memory,
+                "use_disk": self.use_disk,
+                "memory_first": self.memory_first,
             }
         }
 
         if self.use_memory:
-            info['memory_cache'] = self.memory_cache.get_info()
+            info["memory_cache"] = self.memory_cache.get_info()
 
         if self.use_disk:
-            info['disk_cache'] = self.disk_cache.get_info()
+            info["disk_cache"] = self.disk_cache.get_info()
 
         return info
 
@@ -517,16 +524,16 @@ def get_cache_manager(**kwargs) -> CacheManager:
 
 
 # Decorator for automatic caching
-def cached(key_prefix: str = "", ttl: Optional[int] = None,
-          level: str = 'memory'):
+def cached(key_prefix: str = "", ttl: Optional[int] = None, level: str = "memory"):
     """
     Decorator for automatic function caching.
-    
+
     Args:
         key_prefix: Prefix for cache keys
         ttl: Time-to-live in seconds
         level: Cache level to use
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -556,6 +563,7 @@ def cached(key_prefix: str = "", ttl: Optional[int] = None,
         wrapper.cache_info = lambda: get_cache_manager().get_info()
 
         return wrapper
+
     return decorator
 
 
@@ -568,11 +576,10 @@ class DataCache:
         self.cache_manager = cache_manager or get_cache_manager()
 
     @performance_logged("cache_dataset")
-    def cache_dataset(self, dataset: 'xr.Dataset', name: str,
-                     metadata: Optional[Dict[str, Any]] = None) -> str:
+    def cache_dataset(self, dataset: "xr.Dataset", name: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Cache xarray dataset with metadata.
-        
+
         Returns:
             Cache key for retrieval
         """
@@ -584,26 +591,26 @@ class DataCache:
 
         # Store dataset and metadata
         cache_data = {
-            'dataset': dataset,
-            'metadata': metadata or {},
-            'timestamp': datetime.now().isoformat(),
-            'shape': dataset.dims,
-            'variables': list(dataset.data_vars)
+            "dataset": dataset,
+            "metadata": metadata or {},
+            "timestamp": datetime.now().isoformat(),
+            "shape": dataset.dims,
+            "variables": list(dataset.data_vars),
         }
 
-        self.cache_manager.set(key, cache_data, level='disk')
+        self.cache_manager.set(key, cache_data, level="disk")
         return key
 
-    def get_dataset(self, key: str) -> Optional[Tuple['xr.Dataset', Dict[str, Any]]]:
+    def get_dataset(self, key: str) -> Optional[Tuple["xr.Dataset", Dict[str, Any]]]:
         """Retrieve cached dataset and metadata."""
         cache_data = self.cache_manager.get(key)
 
         if cache_data and isinstance(cache_data, dict):
-            return cache_data.get('dataset'), cache_data.get('metadata', {})
+            return cache_data.get("dataset"), cache_data.get("metadata", {})
 
         return None, None
 
-    @cached(key_prefix="computation", level='memory')
+    @cached(key_prefix="computation", level="memory")
     def cached_computation(self, func: Callable, *args, **kwargs) -> Any:
         """Execute computation with automatic caching."""
         return func(*args, **kwargs)
@@ -612,17 +619,13 @@ class DataCache:
 # Example usage
 if __name__ == "__main__":
     # Initialize cache manager
-    cache_mgr = get_cache_manager(
-        memory_size_mb=512,
-        disk_size_mb=2048,
-        ttl_seconds=3600
-    )
+    cache_mgr = get_cache_manager(memory_size_mb=512, disk_size_mb=2048, ttl_seconds=3600)
 
     # Example 1: Basic caching
     @cached(key_prefix="example", ttl=60)
     def expensive_computation(n):
         time.sleep(1)  # Simulate expensive operation
-        return n ** 2
+        return n**2
 
     # First call (miss)
     result1 = expensive_computation(10)

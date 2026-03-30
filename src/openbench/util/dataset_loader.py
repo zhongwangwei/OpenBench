@@ -111,8 +111,8 @@ def get_glob_cache_stats() -> Dict[str, Any]:
 
 # Default chunk sizes optimized for typical climate/earth science data
 DEFAULT_CHUNKS = {
-    "time": 12,      # Monthly data: 1 year per chunk
-    "lat": 500,      # Spatial chunks
+    "time": 12,  # Monthly data: 1 year per chunk
+    "lat": 500,  # Spatial chunks
     "lon": 500,
     "latitude": 500,
     "longitude": 500,
@@ -145,7 +145,7 @@ def _open_dataset_with_fallback(path: str, **kwargs) -> xr.Dataset:
         return xr.open_dataset(path, **kwargs)
     except Exception as e:
         # If decode_times is not already set to False, try with decode_times=False
-        if kwargs.get('decode_times', True) is not False:
+        if kwargs.get("decode_times", True) is not False:
             logging.warning(f"Failed to open {path} with default time decoding: {e}. Retrying with decode_times=False")
             try:
                 return xr.open_dataset(path, decode_times=False, **kwargs)
@@ -188,7 +188,7 @@ def open_dataset(
     chunks: Optional[Union[Dict[str, int], str]] = "auto",
     use_chunking: bool = True,
     size_threshold: int = CHUNK_SIZE_THRESHOLD,
-    **kwargs
+    **kwargs,
 ) -> xr.Dataset:
     """
     Open a NetCDF dataset with automatic chunking for memory efficiency.
@@ -288,10 +288,7 @@ def _get_auto_chunks(path: str) -> Dict[str, int]:
 
 
 def open_mfdataset(
-    paths: list,
-    chunks: Optional[Union[Dict[str, int], str]] = "auto",
-    combine: str = "by_coords",
-    **kwargs
+    paths: list, chunks: Optional[Union[Dict[str, int], str]] = "auto", combine: str = "by_coords", **kwargs
 ) -> xr.Dataset:
     """
     Open multiple NetCDF files as a single dataset with chunking.
@@ -329,10 +326,7 @@ def open_mfdataset(
 
 
 def load_and_compute(
-    path: str,
-    variables: Optional[list] = None,
-    chunks: Optional[Union[Dict[str, int], str]] = "auto",
-    **kwargs
+    path: str, variables: Optional[list] = None, chunks: Optional[Union[Dict[str, int], str]] = "auto", **kwargs
 ) -> xr.Dataset:
     """
     Load a dataset with chunking, then compute to load into memory.

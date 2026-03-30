@@ -18,8 +18,9 @@ def _snapshot_directory(path: str) -> List[Tuple[str, int, float]]:
     return snapshot
 
 
-def wait_for_directory_stable(path: str, timeout: float = 60.0, check_interval: float = 0.5,
-                              required_matches: int = 3) -> bool:
+def wait_for_directory_stable(
+    path: str, timeout: float = 60.0, check_interval: float = 0.5, required_matches: int = 3
+) -> bool:
     """
     Wait until the directory contents (size + mtime) remain stable.
 

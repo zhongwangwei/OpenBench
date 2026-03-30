@@ -7,10 +7,7 @@ import logging
 import os
 import tempfile
 
-from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
-    QPushButton, QLabel, QMessageBox
-)
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QPushButton, QLabel, QMessageBox
 from PySide6.QtCore import Signal
 
 from openbench.gui.pages.base_page import BasePage
@@ -32,6 +29,7 @@ def get_remote_ssh_manager(controller):
     """
     # Check storage type to determine if in remote mode
     from openbench.remote.storage import RemoteStorage
+
     if not isinstance(controller.storage, RemoteStorage):
         return None
     return controller.ssh_manager
@@ -75,10 +73,10 @@ class PagePreview(BasePage):
         info_layout.addWidget(self.output_dir_label, 1)
         self.content_layout.addLayout(info_layout)
 
-
     def load_from_config(self):
         """Load and generate previews."""
         import os
+
         config = self.controller.config
 
         # Update output directory display
@@ -110,6 +108,7 @@ class PagePreview(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -126,11 +125,7 @@ class PagePreview(BasePage):
 
         try:
             openbench_root = self._get_openbench_root()
-            files = self.config_manager.export_all(
-                self.controller.config,
-                output_dir,
-                openbench_root=openbench_root
-            )
+            files = self.config_manager.export_all(self.controller.config, output_dir, openbench_root=openbench_root)
 
             # Navigate to run page
             self.controller.go_to_page("run_monitor")
@@ -148,8 +143,7 @@ class PagePreview(BasePage):
         ssh_manager = get_remote_ssh_manager(self.controller)
         if not ssh_manager or not ssh_manager.is_connected:
             QMessageBox.warning(
-                self, "Not Connected",
-                "Please connect to the remote server first in the Runtime Environment page."
+                self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
             return False
 
@@ -160,14 +154,10 @@ class PagePreview(BasePage):
             ref_nml_dir = f"{nml_dir}/ref"
 
             stdout, stderr, exit_code = ssh_manager.execute(
-                f"mkdir -p '{nml_dir}' '{sim_nml_dir}' '{ref_nml_dir}'",
-                timeout=30
+                f"mkdir -p '{nml_dir}' '{sim_nml_dir}' '{ref_nml_dir}'", timeout=30
             )
             if exit_code != 0:
-                QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to create remote directories:\n{stderr}"
-                )
+                QMessageBox.critical(self, "Error", f"Failed to create remote directories:\n{stderr}")
                 return False
 
             # Export to local temp directory, but use remote paths in generated files
@@ -180,13 +170,11 @@ class PagePreview(BasePage):
 
                 # Generate config files with remote output_dir paths
                 # This ensures paths like reference_nml point to remote locations
-                files = self._export_for_remote(
-                    temp_dir, output_dir, openbench_root, remote_openbench_path
-                )
+                files = self._export_for_remote(temp_dir, output_dir, openbench_root, remote_openbench_path)
 
                 # Debug: list temp directory contents before upload
                 debug_log = os.path.join(tempfile.gettempdir(), "openbench_wizard_debug.log")
-                with open(debug_log, 'a') as f:
+                with open(debug_log, "a") as f:
                     f.write(f"\n=== Before upload ===\n")
                     f.write(f"temp_dir: {temp_dir}\n")
                     local_nml_dir = os.path.join(temp_dir, "nml")
@@ -219,8 +207,9 @@ class PagePreview(BasePage):
             QMessageBox.critical(self, "Export Error", str(e))
             return False
 
-    def _export_for_remote(self, local_dir: str, remote_dir: str, openbench_root: str,
-                            remote_openbench_path: str = "") -> dict:
+    def _export_for_remote(
+        self, local_dir: str, remote_dir: str, openbench_root: str, remote_openbench_path: str = ""
+    ) -> dict:
         """Export config files locally but with remote paths inside.
 
         Args:
@@ -248,25 +237,23 @@ class PagePreview(BasePage):
 
         # Generate main config with remote paths
         remote_nml_dir = f"{remote_dir}/nml"
-        main_content = self.config_manager.generate_main_nml(
-            config, openbench_root, remote_dir, remote_openbench_path
-        )
+        main_content = self.config_manager.generate_main_nml(config, openbench_root, remote_dir, remote_openbench_path)
         main_path = os.path.join(nml_dir, f"main-{basename}.yaml")
-        with open(main_path, 'w', encoding='utf-8') as f:
+        with open(main_path, "w", encoding="utf-8") as f:
             f.write(main_content)
         files["main"] = main_path
 
         # Generate ref config with remote paths
         ref_content = self.config_manager.generate_ref_nml(config, openbench_root, remote_dir)
         ref_path = os.path.join(nml_dir, f"ref-{basename}.yaml")
-        with open(ref_path, 'w', encoding='utf-8') as f:
+        with open(ref_path, "w", encoding="utf-8") as f:
             f.write(ref_content)
         files["ref"] = ref_path
 
         # Generate sim config with remote paths
         sim_content = self.config_manager.generate_sim_nml(config, openbench_root, remote_dir)
         sim_path = os.path.join(nml_dir, f"sim-{basename}.yaml")
-        with open(sim_path, 'w', encoding='utf-8') as f:
+        with open(sim_path, "w", encoding="utf-8") as f:
             f.write(sim_content)
         files["sim"] = sim_path
 
@@ -284,7 +271,7 @@ class PagePreview(BasePage):
 
         # Debug logging at function start
         debug_log = os.path.join(tempfile.gettempdir(), "openbench_wizard_debug.log")
-        with open(debug_log, 'a') as f:
+        with open(debug_log, "a") as f:
             f.write(f"\n=== _sync_namelists_for_remote called ===\n")
             f.write(f"local_dir: {local_dir}\n")
             f.write(f"remote_dir: {remote_dir}\n")
@@ -316,7 +303,7 @@ class PagePreview(BasePage):
         sim_source_configs = sim_data.get("source_configs", {})
 
         # Debug: log sim_source_configs structure
-        with open(debug_log, 'a') as f:
+        with open(debug_log, "a") as f:
             f.write(f"sim_source_configs keys: {list(sim_source_configs.keys())}\n")
             for key, sc in sim_source_configs.items():
                 general = sc.get("general", {})
@@ -351,29 +338,33 @@ class PagePreview(BasePage):
         copied_models = set()
 
         # Debug logging for model copy phase
-        with open(debug_log, 'a') as f:
+        with open(debug_log, "a") as f:
             f.write(f"\n=== Model copy phase ===\n")
             f.write(f"sim_models_dir: {sim_models_dir}\n")
 
         for key, source_config in sim_source_configs.items():
             general = source_config.get("general", {})
             model_path = general.get("model_namelist", "")
-            with open(debug_log, 'a') as f:
+            with open(debug_log, "a") as f:
                 f.write(f"key={key}, model_path={model_path}\n")
             if model_path and model_path not in copied_models:
                 copied_models.add(model_path)
-                actual_path = self._resolve_model_path(model_path, openbench_root, is_remote=True, ssh_manager=ssh_manager)
-                with open(debug_log, 'a') as f:
+                actual_path = self._resolve_model_path(
+                    model_path, openbench_root, is_remote=True, ssh_manager=ssh_manager
+                )
+                with open(debug_log, "a") as f:
                     f.write(f"resolved actual_path={actual_path}\n")
                 if actual_path:
                     # Extract model name from path
-                    model_basename = actual_path.rstrip('/').split('/')[-1]
+                    model_basename = actual_path.rstrip("/").split("/")[-1]
                     model_name = os.path.splitext(model_basename)[0] + ".yaml"
                     dest_path = os.path.join(sim_models_dir, model_name)
-                    with open(debug_log, 'a') as f:
+                    with open(debug_log, "a") as f:
                         f.write(f"copying model from {actual_path} to {dest_path}\n")
-                    self._copy_model_definition_filtered(actual_path, dest_path, selected_items, is_remote=True, ssh_manager=ssh_manager)
-                    with open(debug_log, 'a') as f:
+                    self._copy_model_definition_filtered(
+                        actual_path, dest_path, selected_items, is_remote=True, ssh_manager=ssh_manager
+                    )
+                    with open(debug_log, "a") as f:
                         f.write(f"model copy done, file exists: {os.path.exists(dest_path)}\n")
 
         # Process reference data namelists - group by source_name
@@ -458,7 +449,9 @@ class PagePreview(BasePage):
 
         return merged
 
-    def _resolve_model_path(self, model_path: str, openbench_root: str, is_remote: bool = False, ssh_manager=None) -> str:
+    def _resolve_model_path(
+        self, model_path: str, openbench_root: str, is_remote: bool = False, ssh_manager=None
+    ) -> str:
         """Resolve model definition path, handling .nml to .yaml conversion.
 
         For remote mode, works the same as local mode:
@@ -477,12 +470,12 @@ class PagePreview(BasePage):
             path = to_posix_path(model_path)
 
             # If it's already an absolute path on the remote server, try it directly first
-            if path.startswith('/') and ssh_manager:
+            if path.startswith("/") and ssh_manager:
                 paths_to_try = [path]
-                if path.endswith('.nml'):
-                    paths_to_try.insert(0, path[:-4] + '.yaml')
-                elif not path.endswith('.yaml'):
-                    paths_to_try.append(path + '.yaml')
+                if path.endswith(".nml"):
+                    paths_to_try.insert(0, path[:-4] + ".yaml")
+                elif not path.endswith(".yaml"):
+                    paths_to_try.append(path + ".yaml")
 
                 for try_path in paths_to_try:
                     try:
@@ -490,28 +483,28 @@ class PagePreview(BasePage):
                         stdout, stderr, exit_code = ssh_manager.execute(
                             f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
-                        if exit_code == 0 and 'exists' in stdout:
+                        if exit_code == 0 and "exists" in stdout:
                             return try_path
                     except Exception:
                         pass
 
             # Handle Windows absolute paths (e.g., C:/Users/...)
-            if len(path) >= 2 and path[1] == ':':
+            if len(path) >= 2 and path[1] == ":":
                 # This is a Windows local path - extract relative part if contains /nml/
-                if '/nml/' in path:
-                    relative_path = 'nml/' + path.split('/nml/', 1)[1]
+                if "/nml/" in path:
+                    relative_path = "nml/" + path.split("/nml/", 1)[1]
                 else:
                     # Unknown Windows path
                     relative_path = path
             # Extract relative path - look for /nml/ marker (handles local temp paths)
-            elif '/nml/' in path:
-                relative_path = 'nml/' + path.split('/nml/', 1)[1]
-            elif path.startswith('./'):
+            elif "/nml/" in path:
+                relative_path = "nml/" + path.split("/nml/", 1)[1]
+            elif path.startswith("./"):
                 relative_path = path[2:]
-            elif path.startswith('/'):
+            elif path.startswith("/"):
                 # Already absolute but file doesn't exist, try to resolve
-                if '/nml/' in path:
-                    relative_path = 'nml/' + path.split('/nml/', 1)[1]
+                if "/nml/" in path:
+                    relative_path = "nml/" + path.split("/nml/", 1)[1]
                 else:
                     relative_path = None
             else:
@@ -525,10 +518,10 @@ class PagePreview(BasePage):
             # Try different extensions on remote
             if ssh_manager:
                 paths_to_try = [path]
-                if path.endswith('.nml'):
-                    paths_to_try.insert(0, path[:-4] + '.yaml')
-                elif not path.endswith('.yaml'):
-                    paths_to_try.append(path + '.yaml')
+                if path.endswith(".nml"):
+                    paths_to_try.insert(0, path[:-4] + ".yaml")
+                elif not path.endswith(".yaml"):
+                    paths_to_try.append(path + ".yaml")
 
                 for try_path in paths_to_try:
                     try:
@@ -536,7 +529,7 @@ class PagePreview(BasePage):
                         stdout, stderr, exit_code = ssh_manager.execute(
                             f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
-                        if exit_code == 0 and 'exists' in stdout:
+                        if exit_code == 0 and "exists" in stdout:
                             return try_path
                     except Exception:
                         pass
@@ -551,14 +544,16 @@ class PagePreview(BasePage):
             return abs_path
 
         # Try .yaml extension if .nml was specified
-        if abs_path.endswith('.nml'):
-            yaml_path = abs_path[:-4] + '.yaml'
+        if abs_path.endswith(".nml"):
+            yaml_path = abs_path[:-4] + ".yaml"
             if os.path.exists(yaml_path):
                 return yaml_path
 
         return ""
 
-    def _copy_model_definition_filtered(self, src_path: str, dest_path: str, selected_items: list, is_remote: bool = False, ssh_manager=None):
+    def _copy_model_definition_filtered(
+        self, src_path: str, dest_path: str, selected_items: list, is_remote: bool = False, ssh_manager=None
+    ):
         """Copy model definition file with filtering for selected items."""
         import yaml
 
@@ -569,8 +564,8 @@ class PagePreview(BasePage):
             try:
                 # Try .yaml first, then .nml
                 paths_to_try = [src_path]
-                if src_path.endswith('.nml'):
-                    paths_to_try.insert(0, src_path[:-4] + '.yaml')
+                if src_path.endswith(".nml"):
+                    paths_to_try.insert(0, src_path[:-4] + ".yaml")
 
                 for path in paths_to_try:
                     stdout, stderr, exit_code = ssh_manager.execute(f"cat '{path}' 2>/dev/null", timeout=30)
@@ -582,7 +577,7 @@ class PagePreview(BasePage):
         else:
             # Read from local file
             try:
-                with open(src_path, 'r', encoding='utf-8') as f:
+                with open(src_path, "r", encoding="utf-8") as f:
                     content = yaml.safe_load(f) or {}
             except Exception:
                 return
@@ -604,7 +599,7 @@ class PagePreview(BasePage):
 
         if filtered:
             os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            with open(dest_path, 'w', encoding='utf-8') as f:
+            with open(dest_path, "w", encoding="utf-8") as f:
                 yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
     def _resolve_path_for_remote(self, path: str, openbench_root: str) -> str:
@@ -623,28 +618,30 @@ class PagePreview(BasePage):
 
         # Handle Windows absolute paths (e.g., C:/Users/... or D:/...)
         # After to_posix_path, Windows paths become like "C:/Users/..."
-        if len(path) >= 2 and path[1] == ':':
+        if len(path) >= 2 and path[1] == ":":
             # This is a Windows local path - extract relative part if contains /nml/
-            if '/nml/' in path:
-                relative_path = 'nml/' + path.split('/nml/', 1)[1]
+            if "/nml/" in path:
+                relative_path = "nml/" + path.split("/nml/", 1)[1]
                 return f"{openbench_root.rstrip('/')}/{relative_path}"
             # Unknown Windows path - cannot convert to remote
             return path
 
         # If path is already an absolute Unix path
-        if path.startswith('/'):
+        if path.startswith("/"):
             # Check if it's a valid remote server path
-            if any(path.startswith(p) for p in ['/home/', '/share/', '/data/', '/work/', '/scratch/', '/opt/', '/usr/']):
+            if any(
+                path.startswith(p) for p in ["/home/", "/share/", "/data/", "/work/", "/scratch/", "/opt/", "/usr/"]
+            ):
                 return path
             # Handle local temp paths (like /var/folders/... or /tmp/...) - extract relative part
-            if '/nml/' in path:
-                relative_path = 'nml/' + path.split('/nml/', 1)[1]
+            if "/nml/" in path:
+                relative_path = "nml/" + path.split("/nml/", 1)[1]
                 return f"{openbench_root.rstrip('/')}/{relative_path}"
             # Unknown absolute path - return as-is (might be a valid remote path)
             return path
 
         # Handle relative paths starting with ./
-        if path.startswith('./'):
+        if path.startswith("./"):
             path = path[2:]
 
         # Join relative path with openbench_root
@@ -653,8 +650,9 @@ class PagePreview(BasePage):
 
         return path
 
-    def _write_source_config_remote(self, source_data: dict, dest_path: str, selected_items: list,
-                                      openbench_root: str, remote_dest_path: str = ""):
+    def _write_source_config_remote(
+        self, source_data: dict, dest_path: str, selected_items: list, openbench_root: str, remote_dest_path: str = ""
+    ):
         """Write source config file for remote execution.
 
         Expects source_data to have structure:
@@ -703,13 +701,13 @@ class PagePreview(BasePage):
             # Update model_namelist path to point to models subdirectory (consistent with local mode)
             if "model_namelist" in general and general["model_namelist"]:
                 model_path = general["model_namelist"]
-                model_basename = model_path.rstrip('/').split('/')[-1]
+                model_basename = model_path.rstrip("/").split("/")[-1]
                 model_basename = os.path.splitext(model_basename)[0]
                 # Use remote path for model_namelist, not local path
                 if remote_dest_path:
-                    dest_dir = remote_dest_path.rsplit('/', 1)[0] if '/' in remote_dest_path else remote_dest_path
+                    dest_dir = remote_dest_path.rsplit("/", 1)[0] if "/" in remote_dest_path else remote_dest_path
                 else:
-                    dest_dir = dest_path.rsplit('/', 1)[0] if '/' in dest_path else os.path.dirname(dest_path)
+                    dest_dir = dest_path.rsplit("/", 1)[0] if "/" in dest_path else os.path.dirname(dest_path)
                 models_dir = remote_join(dest_dir, "models")
                 general["model_namelist"] = remote_join(models_dir, model_basename + ".yaml")
 
@@ -750,20 +748,21 @@ class PagePreview(BasePage):
             return
 
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        with open(dest_path, 'w', encoding='utf-8') as f:
+        with open(dest_path, "w", encoding="utf-8") as f:
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
     def _upload_directory(self, sftp, local_dir: str, remote_dir: str):
         """Recursively upload a directory to remote server."""
         import tempfile
+
         debug_log = os.path.join(tempfile.gettempdir(), "openbench_wizard_debug.log")
 
         if not os.path.exists(local_dir):
-            with open(debug_log, 'a') as f:
+            with open(debug_log, "a") as f:
                 f.write(f"_upload_directory: local_dir does not exist: {local_dir}\n")
             return
 
-        with open(debug_log, 'a') as f:
+        with open(debug_log, "a") as f:
             f.write(f"\n=== Uploading directory ===\n")
             f.write(f"local_dir: {local_dir}\n")
             f.write(f"remote_dir: {remote_dir}\n")
@@ -774,16 +773,16 @@ class PagePreview(BasePage):
             remote_path = f"{remote_dir}/{item}"
 
             if os.path.isfile(local_path):
-                with open(debug_log, 'a') as f:
+                with open(debug_log, "a") as f:
                     f.write(f"  uploading file: {local_path} -> {remote_path}\n")
                 sftp.put(local_path, remote_path)
             elif os.path.isdir(local_path):
                 # Create remote directory
-                with open(debug_log, 'a') as f:
+                with open(debug_log, "a") as f:
                     f.write(f"  creating remote dir: {remote_path}\n")
                 try:
                     sftp.mkdir(remote_path)
                 except IOError as e:
-                    with open(debug_log, 'a') as f:
+                    with open(debug_log, "a") as f:
                         f.write(f"    mkdir error (may already exist): {e}\n")
                 self._upload_directory(sftp, local_path, remote_path)

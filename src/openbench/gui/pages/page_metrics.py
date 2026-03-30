@@ -9,24 +9,57 @@ from openbench.gui.widgets import CheckboxGroup
 
 METRICS_ITEMS = {
     "Basic Metrics": [
-        "bias", "percent_bias", "absolute_percent_bias",
-        "mean_absolute_error", "RMSE", "MSE", "ubRMSE", "CRMSD", "nrmse"
+        "bias",
+        "percent_bias",
+        "absolute_percent_bias",
+        "mean_absolute_error",
+        "RMSE",
+        "MSE",
+        "ubRMSE",
+        "CRMSD",
+        "nrmse",
     ],
-    "Correlation": [
-        "correlation", "correlation_R2", "rSpearman",
-        "ubcorrelation", "ubcorrelation_R2"
-    ],
+    "Correlation": ["correlation", "correlation_R2", "rSpearman", "ubcorrelation", "ubcorrelation_R2"],
     "Efficiency": [
-        "NSE", "LNSE", "KGE", "KGESS", "ubNSE", "ubKGE",
-        "mNSE", "rNSE", "wNSE", "wsNSE", "sKGE",
-        "KGEkm", "KGElf", "KGEnp"
+        "NSE",
+        "LNSE",
+        "KGE",
+        "KGESS",
+        "ubNSE",
+        "ubKGE",
+        "mNSE",
+        "rNSE",
+        "wNSE",
+        "wsNSE",
+        "sKGE",
+        "KGEkm",
+        "KGElf",
+        "KGEnp",
     ],
     "Other": [
-        "L", "kappa_coeff", "rv", "pc_max", "pc_min", "pc_ampli",
-        "rSD", "PBIAS_HF", "PBIAS_LF", "SMPI",
-        "ggof", "gof", "md", "pbiasfdc", "pfactor",
-        "rd", "rfactor", "rsr", "ssq", "valindex", "ve",
-        "index_agreement", "MFM"
+        "L",
+        "kappa_coeff",
+        "rv",
+        "pc_max",
+        "pc_min",
+        "pc_ampli",
+        "rSD",
+        "PBIAS_HF",
+        "PBIAS_LF",
+        "SMPI",
+        "ggof",
+        "gof",
+        "md",
+        "pbiasfdc",
+        "pfactor",
+        "rd",
+        "rfactor",
+        "rsr",
+        "ssq",
+        "valindex",
+        "ve",
+        "index_agreement",
+        "MFM",
     ],
 }
 
@@ -70,10 +103,7 @@ class PageMetrics(BasePage):
         combined = self.controller.get_combined_metrics_scores_selection()
 
         error = FieldValidator.selection_required(
-            combined,
-            "metrics_scores",
-            "Please select at least one metric or score",
-            page_id=self.PAGE_ID
+            combined, "metrics_scores", "Please select at least one metric or score", page_id=self.PAGE_ID
         )
 
         if error:

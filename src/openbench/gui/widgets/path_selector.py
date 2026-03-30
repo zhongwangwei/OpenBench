@@ -6,9 +6,7 @@ Path selector widget with browse button and drag-drop support.
 import os
 from typing import Optional, TYPE_CHECKING
 
-from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QLineEdit, QPushButton, QFileDialog
-)
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QPushButton, QFileDialog
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
@@ -28,11 +26,9 @@ def get_default_browse_path() -> str:
 
     # Try from runtime settings file
     try:
-        settings_path = os.path.join(
-            os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml"
-        )
+        settings_path = os.path.join(os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml")
         if os.path.exists(settings_path):
-            with open(settings_path, 'r', encoding='utf-8') as f:
+            with open(settings_path, "r", encoding="utf-8") as f:
                 settings = yaml.safe_load(f) or {}
                 saved_path = settings.get("local_openbench_path", "")
                 if saved_path and os.path.isdir(saved_path):
@@ -56,7 +52,7 @@ class PathSelector(QWidget):
         filter: str = "",
         placeholder: str = "",
         parent=None,
-        storage: Optional['ProjectStorage'] = None
+        storage: Optional["ProjectStorage"] = None,
     ):
         """
         Initialize PathSelector.
@@ -76,7 +72,7 @@ class PathSelector(QWidget):
         self._skip_validation = False  # Skip path existence validation (for remote mode)
 
         # Autocomplete support
-        self._storage: Optional['ProjectStorage'] = storage
+        self._storage: Optional["ProjectStorage"] = storage
         self._completer: Optional[PathCompleter] = None
 
         self._setup_ui(placeholder)
@@ -121,19 +117,9 @@ class PathSelector(QWidget):
             return
 
         if self.mode == "directory":
-            path = QFileDialog.getExistingDirectory(
-                self,
-                "Select Directory",
-                self._last_dir,
-                QFileDialog.ShowDirsOnly
-            )
+            path = QFileDialog.getExistingDirectory(self, "Select Directory", self._last_dir, QFileDialog.ShowDirsOnly)
         else:
-            path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Select File",
-                self._last_dir,
-                self.filter
-            )
+            path, _ = QFileDialog.getOpenFileName(self, "Select File", self._last_dir, self.filter)
 
         if path:
             self._last_dir = os.path.dirname(path) if self.mode == "file" else path
@@ -235,7 +221,7 @@ class PathSelector(QWidget):
         if os.path.isdir(dir_path):
             self._last_dir = dir_path
 
-    def _setup_completer(self, storage: 'ProjectStorage'):
+    def _setup_completer(self, storage: "ProjectStorage"):
         """Setup path autocomplete.
 
         Args:
@@ -259,7 +245,7 @@ class PathSelector(QWidget):
         if self._completer:
             self._completer.update_completions(text)
 
-    def set_storage(self, storage: Optional['ProjectStorage']):
+    def set_storage(self, storage: Optional["ProjectStorage"]):
         """Set storage backend for autocomplete.
 
         Args:

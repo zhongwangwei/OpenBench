@@ -1,8 +1,6 @@
 """Tests for metrics module — verify numerical correctness."""
 
-import numpy as np
 import pandas as pd
-import pytest
 import xarray as xr
 
 
@@ -15,6 +13,7 @@ def make_da(values):
 def test_metrics_class_exists():
     """Verify metrics class can be imported."""
     from openbench.core.metrics import metrics
+
     assert metrics is not None
 
 

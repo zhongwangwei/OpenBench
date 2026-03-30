@@ -27,48 +27,54 @@ def get_platform_colors() -> Dict[str, str]:
 
     # Check if terminal supports colors
     supports_color = (
-        hasattr(sys.stdout, 'isatty') and sys.stdout.isatty() and
-        os.environ.get('TERM', '') != 'dumb' and
-        ('COLORTERM' in os.environ or
-         os.environ.get('TERM', '').endswith(('color', '256color', 'truecolor')))
+        hasattr(sys.stdout, "isatty")
+        and sys.stdout.isatty()
+        and os.environ.get("TERM", "") != "dumb"
+        and ("COLORTERM" in os.environ or os.environ.get("TERM", "").endswith(("color", "256color", "truecolor")))
     )
 
     # Windows Command Prompt has limited ANSI support
-    if system == 'windows' and not os.environ.get('WT_SESSION'):
+    if system == "windows" and not os.environ.get("WT_SESSION"):
         supports_color = False
 
     # Check if terminal supports Unicode (emoji)
     # Most modern terminals support Unicode, but old Windows Command Prompt doesn't
     supports_unicode = True
-    if system == 'windows':
+    if system == "windows":
         # Old Windows Command Prompt doesn't support Unicode well
-        if not os.environ.get('WT_SESSION'):  # Not Windows Terminal
+        if not os.environ.get("WT_SESSION"):  # Not Windows Terminal
             supports_unicode = False
     # Check encoding
     try:
-        if sys.stdout.encoding and 'utf' not in sys.stdout.encoding.lower():
+        if sys.stdout.encoding and "utf" not in sys.stdout.encoding.lower():
             supports_unicode = False
     except (AttributeError, TypeError):
         pass
 
     if supports_color:
         return {
-            'reset': '\033[0m',
-            'bold': '\033[1m',
-            'cyan': '\033[1;36m',
-            'green': '\033[1;32m',
-            'yellow': '\033[1;33m',
-            'blue': '\033[1;34m',
-            'magenta': '\033[1;35m',
-            'red': '\033[1;31m',
-            'unicode_support': supports_unicode
+            "reset": "\033[0m",
+            "bold": "\033[1m",
+            "cyan": "\033[1;36m",
+            "green": "\033[1;32m",
+            "yellow": "\033[1;33m",
+            "blue": "\033[1;34m",
+            "magenta": "\033[1;35m",
+            "red": "\033[1;31m",
+            "unicode_support": supports_unicode,
         }
     else:
         # Fallback to no colors for compatibility
         return {
-            'reset': '', 'bold': '', 'cyan': '', 'green': '',
-            'yellow': '', 'blue': '', 'magenta': '', 'red': '',
-            'unicode_support': supports_unicode
+            "reset": "",
+            "bold": "",
+            "cyan": "",
+            "green": "",
+            "yellow": "",
+            "blue": "",
+            "magenta": "",
+            "red": "",
+            "unicode_support": supports_unicode,
         }
 
 
@@ -102,12 +108,7 @@ def check_config_files_exist(main_config_path: str, check_external: bool = True)
     main_path = Path(main_config_path)
     if not main_path.exists():
         errors.append(f"Main configuration file not found: {main_config_path}")
-        return {
-            'valid': False,
-            'errors': errors,
-            'warnings': warnings,
-            'files_checked': files_checked
-        }
+        return {"valid": False, "errors": errors, "warnings": warnings, "files_checked": files_checked}
 
     files_checked.append(str(main_path.resolve()))
 
@@ -122,15 +123,10 @@ def check_config_files_exist(main_config_path: str, check_external: bool = True)
 
             # Check for external config file references
             external_configs = []
-            general = main_config.get('general', {})
+            general = main_config.get("general", {})
 
             # Common external config keys
-            external_config_keys = [
-                'reference_nml',
-                'simulation_nml',
-                'statistics_nml',
-                'figlib_nml'
-            ]
+            external_config_keys = ["reference_nml", "simulation_nml", "statistics_nml", "figlib_nml"]
 
             for key in external_config_keys:
                 if key in general:
@@ -150,10 +146,7 @@ def check_config_files_exist(main_config_path: str, check_external: bool = True)
                     config_path_obj = config_path_obj.resolve()
 
                 if not config_path_obj.exists():
-                    errors.append(
-                        f"{config_name} file not found: {config_path}\n"
-                        f"  Referenced in: {main_config_path}"
-                    )
+                    errors.append(f"{config_name} file not found: {config_path}\n  Referenced in: {main_config_path}")
                 else:
                     files_checked.append(str(config_path_obj))
 
@@ -163,12 +156,7 @@ def check_config_files_exist(main_config_path: str, check_external: bool = True)
     # Determine overall validity
     valid = len(errors) == 0
 
-    return {
-        'valid': valid,
-        'errors': errors,
-        'warnings': warnings,
-        'files_checked': files_checked
-    }
+    return {"valid": valid, "errors": errors, "warnings": warnings, "files_checked": files_checked}
 
 
 def print_config_validation_results(results: Dict[str, Any]) -> None:
@@ -185,23 +173,23 @@ def print_config_validation_results(results: Dict[str, Any]) -> None:
     print(f"{colors['cyan']}{'=' * 80}{colors['reset']}\n")
 
     # Show files checked
-    if results['files_checked']:
+    if results["files_checked"]:
         print(f"{colors['bold']}{colors['blue']}Files Checked:{colors['reset']}")
-        for file_path in results['files_checked']:
+        for file_path in results["files_checked"]:
             print(f"  {colors['green']}✓{colors['reset']} {file_path}")
         print()
 
     # Show warnings
-    if results['warnings']:
+    if results["warnings"]:
         print(f"{colors['bold']}{colors['yellow']}Warnings:{colors['reset']}")
-        for warning in results['warnings']:
+        for warning in results["warnings"]:
             print(f"  {colors['yellow']}⚠{colors['reset']} {warning}")
         print()
 
     # Show errors
-    if results['errors']:
+    if results["errors"]:
         print(f"{colors['bold']}{colors['red']}Errors Found:{colors['reset']}")
-        for error in results['errors']:
+        for error in results["errors"]:
             print(f"  {colors['red']}✗{colors['reset']} {error}")
         print()
         print(f"{colors['cyan']}{'=' * 80}{colors['reset']}\n")
@@ -240,7 +228,9 @@ def validate_config_before_processing(main_config_path: str, exit_on_error: bool
         # Handle errors
         if not success:
             if exit_on_error:
-                print(f"{colors['red']}❌ Configuration validation failed. Please fix the errors above.{colors['reset']}\n")
+                print(
+                    f"{colors['red']}❌ Configuration validation failed. Please fix the errors above.{colors['reset']}\n"
+                )
                 sys.exit(1)
             return False
 
@@ -276,8 +266,10 @@ def perform_early_validation(config_file_path: Optional[str] = None) -> str:
     # Step 1: Validate command line arguments
     if config_file_path is None:
         if len(sys.argv) < 2:
-            error_icon = "❌" if colors['reset'] else "[ERROR]"
-            print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file path required{colors['reset']}")
+            error_icon = "❌" if colors["reset"] else "[ERROR]"
+            print(
+                f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file path required{colors['reset']}"
+            )
             print(f"\n{colors['bold']}Usage:{colors['reset']} python openbench.py <config_file_path>")
             print(f"\n{colors['bold']}Examples:{colors['reset']}")
             print("  python openbench.py nml/nml-json/main-Debug.json")
@@ -288,13 +280,13 @@ def perform_early_validation(config_file_path: Optional[str] = None) -> str:
 
     # Step 2: Check main configuration file exists
     if not os.path.exists(config_file_path):
-        error_icon = "❌" if colors['reset'] else "[ERROR]"
+        error_icon = "❌" if colors["reset"] else "[ERROR]"
         print(f"\n{error_icon} {colors['red']}{colors['bold']}Error: Configuration file not found{colors['reset']}")
         print(f"  File: {config_file_path}")
         sys.exit(1)
 
     # Step 3: Validate all referenced configuration files exist
-    rocket = "🔍" if colors['reset'] else ">>>"
+    rocket = "🔍" if colors["reset"] else ">>>"
     print(f"\n{rocket} {colors['bold']}{colors['cyan']}Validating configuration files...{colors['reset']}")
 
     validate_config_before_processing(config_file_path, exit_on_error=True)
@@ -302,7 +294,9 @@ def perform_early_validation(config_file_path: Optional[str] = None) -> str:
     return config_file_path
 
 
-def print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars):
+def print_config_summary(
+    main_nl, sim_nml, ref_nml, evaluation_items, metric_vars, score_vars, comparison_vars, statistic_vars
+):
     """
     Print a comprehensive summary of the configuration after validation.
 
@@ -321,34 +315,36 @@ def print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_var
     colors = get_platform_colors()
     width = 80
 
-    print("\n" + colors['cyan'] + "=" * width + colors['reset'])
+    print("\n" + colors["cyan"] + "=" * width + colors["reset"])
     print(f"{colors['bold']}{colors['cyan']}📋 CONFIGURATION SUMMARY{colors['reset']}")
-    print(colors['cyan'] + "=" * width + colors['reset'])
+    print(colors["cyan"] + "=" * width + colors["reset"])
 
     # General settings
     print(f"\n{colors['bold']}{colors['blue']}General Settings:{colors['reset']}")
     print(f"  Output directory: {main_nl['general']['basedir']}/{main_nl['general']['basename']}")
     print(f"  Time period: {main_nl['general']['syear']} - {main_nl['general']['eyear']}")
-    print(f"  Spatial domain: Lat[{main_nl['general']['min_lat']}°, {main_nl['general']['max_lat']}°], Lon[{main_nl['general']['min_lon']}°, {main_nl['general']['max_lon']}°]")
+    print(
+        f"  Spatial domain: Lat[{main_nl['general']['min_lat']}°, {main_nl['general']['max_lat']}°], Lon[{main_nl['general']['min_lon']}°, {main_nl['general']['max_lon']}°]"
+    )
 
     # Enabled modules
     print(f"\n{colors['bold']}{colors['blue']}Enabled Modules:{colors['reset']}")
     modules = []
-    if main_nl['general'].get('evaluation', False):
+    if main_nl["general"].get("evaluation", False):
         modules.append(f"{colors['green']}✓{colors['reset']} Evaluation")
-    if main_nl['general'].get('comparison', False):
+    if main_nl["general"].get("comparison", False):
         modules.append(f"{colors['green']}✓{colors['reset']} Comparison")
-    if main_nl['general'].get('statistics', False):
+    if main_nl["general"].get("statistics", False):
         modules.append(f"{colors['green']}✓{colors['reset']} Statistics")
     print(f"  {' | '.join(modules)}")
 
     # Groupby options
     groupby_opts = []
-    if main_nl['general'].get('IGBP_groupby', False):
+    if main_nl["general"].get("IGBP_groupby", False):
         groupby_opts.append("IGBP")
-    if main_nl['general'].get('PFT_groupby', False):
+    if main_nl["general"].get("PFT_groupby", False):
         groupby_opts.append("PFT")
-    if main_nl['general'].get('Climate_zone_groupby', False):
+    if main_nl["general"].get("Climate_zone_groupby", False):
         groupby_opts.append("Climate Zone")
     if groupby_opts:
         print(f"  Group-by analysis: {', '.join(groupby_opts)}")
@@ -359,41 +355,41 @@ def print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_var
         print(f"\n  {colors['bold']}{i}. {item}{colors['reset']}")
 
         # Reference sources
-        ref_sources = ref_nml['general'].get(f'{item}_ref_source', [])
+        ref_sources = ref_nml["general"].get(f"{item}_ref_source", [])
         if isinstance(ref_sources, str):
             ref_sources = [ref_sources]
 
         print(f"     {colors['yellow']}Reference Data:{colors['reset']}")
         for ref_src in ref_sources:
-            if item in ref_nml and f'{ref_src}_data_type' in ref_nml[item]:
-                data_type = ref_nml[item][f'{ref_src}_data_type']
-                varname = ref_nml[item].get(f'{ref_src}_varname', 'N/A')
-                unit = ref_nml[item].get(f'{ref_src}_varunit', 'N/A')
-                data_type_icon = "📍" if data_type == 'stn' else "🌐"
-                if not colors['reset']:
-                    data_type_icon = "[STN]" if data_type == 'stn' else "[GRID]"
+            if item in ref_nml and f"{ref_src}_data_type" in ref_nml[item]:
+                data_type = ref_nml[item][f"{ref_src}_data_type"]
+                varname = ref_nml[item].get(f"{ref_src}_varname", "N/A")
+                unit = ref_nml[item].get(f"{ref_src}_varunit", "N/A")
+                data_type_icon = "📍" if data_type == "stn" else "🌐"
+                if not colors["reset"]:
+                    data_type_icon = "[STN]" if data_type == "stn" else "[GRID]"
                 print(f"       {data_type_icon} {ref_src}: {varname} ({unit})")
 
         # Simulation sources
-        sim_sources = sim_nml['general'].get(f'{item}_sim_source', [])
+        sim_sources = sim_nml["general"].get(f"{item}_sim_source", [])
         if isinstance(sim_sources, str):
             sim_sources = [sim_sources]
 
         print(f"     {colors['cyan']}Simulation Data:{colors['reset']}")
         for sim_src in sim_sources:
-            if item in sim_nml and f'{sim_src}_data_type' in sim_nml[item]:
-                data_type = sim_nml[item][f'{sim_src}_data_type']
-                varname = sim_nml[item].get(f'{sim_src}_varname', 'N/A')
-                unit = sim_nml[item].get(f'{sim_src}_varunit', 'N/A')
-                data_type_icon = "📍" if data_type == 'stn' else "🌐"
-                if not colors['reset']:
-                    data_type_icon = "[STN]" if data_type == 'stn' else "[GRID]"
+            if item in sim_nml and f"{sim_src}_data_type" in sim_nml[item]:
+                data_type = sim_nml[item][f"{sim_src}_data_type"]
+                varname = sim_nml[item].get(f"{sim_src}_varname", "N/A")
+                unit = sim_nml[item].get(f"{sim_src}_varunit", "N/A")
+                data_type_icon = "📍" if data_type == "stn" else "🌐"
+                if not colors["reset"]:
+                    data_type_icon = "[STN]" if data_type == "stn" else "[GRID]"
                 print(f"       {data_type_icon} {sim_src}: {varname} ({unit})")
 
     # Metrics
     if metric_vars:
         print(f"\n{colors['bold']}{colors['blue']}Metrics ({len(metric_vars)}):{colors['reset']}")
-        metrics_list = ', '.join(metric_vars)
+        metrics_list = ", ".join(metric_vars)
         # Wrap long lines
         if len(metrics_list) > 70:
             metrics = list(metric_vars)
@@ -412,13 +408,13 @@ def print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_var
     # Scores
     if score_vars:
         print(f"\n{colors['bold']}{colors['blue']}Scoring Methods ({len(score_vars)}):{colors['reset']}")
-        scores_list = ', '.join(score_vars)
+        scores_list = ", ".join(score_vars)
         print(f"  {scores_list}")
 
     # Comparisons
-    if comparison_vars and main_nl['general'].get('comparison', False):
+    if comparison_vars and main_nl["general"].get("comparison", False):
         print(f"\n{colors['bold']}{colors['blue']}Comparison Analyses ({len(comparison_vars)}):{colors['reset']}")
-        comp_list = ', '.join(comparison_vars)
+        comp_list = ", ".join(comparison_vars)
         # Wrap long lines
         if len(comp_list) > 70:
             comps = list(comparison_vars)
@@ -435,14 +431,14 @@ def print_config_summary(main_nl, sim_nml, ref_nml, evaluation_items, metric_var
             print(f"  {comp_list}")
 
     # Statistics
-    if statistic_vars and main_nl['general'].get('statistics', False):
+    if statistic_vars and main_nl["general"].get("statistics", False):
         print(f"\n{colors['bold']}{colors['blue']}Statistical Analyses ({len(statistic_vars)}):{colors['reset']}")
-        stats_list = ', '.join(statistic_vars)
+        stats_list = ", ".join(statistic_vars)
         print(f"  {stats_list}")
 
-    print("\n" + colors['cyan'] + "=" * width + colors['reset'])
+    print("\n" + colors["cyan"] + "=" * width + colors["reset"])
     print(f"{colors['bold']}{colors['green']}Ready to start processing...{colors['reset']}")
-    print(colors['cyan'] + "=" * width + colors['reset'] + "\n")
+    print(colors["cyan"] + "=" * width + colors["reset"] + "\n")
 
     # Also log to file
     logging.info("=" * 80)

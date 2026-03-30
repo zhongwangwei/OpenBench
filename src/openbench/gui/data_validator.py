@@ -24,6 +24,7 @@ def safe_open(path: str):
         xarray.Dataset
     """
     import xarray as xr
+
     try:
         return xr.open_dataset(path)
     except Exception:
@@ -44,6 +45,7 @@ def safe_open(path):
 @dataclass
 class ValidationCheck:
     """Single validation check result."""
+
     name: str
     passed: bool
     message: str
@@ -52,6 +54,7 @@ class ValidationCheck:
 @dataclass
 class SourceValidationResult:
     """Validation result for a single data source."""
+
     var_name: str
     source_name: str
     checks: List[ValidationCheck] = field(default_factory=list)
@@ -70,6 +73,7 @@ class SourceValidationResult:
 @dataclass
 class DataValidationReport:
     """Complete validation report for all sources."""
+
     results: List[SourceValidationResult] = field(default_factory=list)
 
     @property
@@ -102,7 +106,7 @@ class FilePathGenerator:
         eyear: int,
         is_remote: bool = False,
         ssh_manager=None,
-        remote_openbench_root: str = ""
+        remote_openbench_root: str = "",
     ):
         self.root_dir = root_dir
         self.sub_dir = sub_dir
@@ -119,16 +123,16 @@ class FilePathGenerator:
         """Get the base directory path (root_dir + sub_dir)."""
         if self._is_remote:
             # Remote mode: use forward slashes and remote root
-            root = self.root_dir.replace('\\', '/')
+            root = self.root_dir.replace("\\", "/")
             if self.sub_dir:
-                sub = self.sub_dir.replace('\\', '/')
+                sub = self.sub_dir.replace("\\", "/")
                 path = f"{root.rstrip('/')}/{sub.lstrip('/')}"
             else:
                 path = root
 
             # Convert relative path to absolute using remote OpenBench root
-            if not path.startswith('/') and self._remote_openbench_root:
-                if path.startswith('./'):
+            if not path.startswith("/") and self._remote_openbench_root:
+                if path.startswith("./"):
                     path = path[2:]
                 path = f"{self._remote_openbench_root.rstrip('/')}/{path}"
             return path
@@ -171,6 +175,7 @@ class FilePathGenerator:
         else:
             # Local mode: use local glob
             import glob
+
             full_pattern = os.path.join(base_dir, pattern)
             matching_files = sorted(glob.glob(full_pattern))
 
@@ -195,7 +200,7 @@ class FilePathGenerator:
             cmd = f"find '{base_dir}' -maxdepth 1 -name '{pattern}' -type f 2>/dev/null | sort"
             stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
             if exit_code == 0 and stdout.strip():
-                return [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+                return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
         except Exception:
             pass
         return []
@@ -205,9 +210,9 @@ class LocalNetCDFValidator:
     """Validate NetCDF files locally using xarray."""
 
     # Common dimension names
-    TIME_DIMS = ['time', 'Time', 'TIME', 't', 'date']
-    LAT_DIMS = ['lat', 'latitude', 'Lat', 'LAT', 'y']
-    LON_DIMS = ['lon', 'longitude', 'Lon', 'LON', 'x']
+    TIME_DIMS = ["time", "Time", "TIME", "t", "date"]
+    LAT_DIMS = ["lat", "latitude", "Lat", "LAT", "y"]
+    LON_DIMS = ["lon", "longitude", "Lon", "LON", "x"]
 
     def check_file_exists(self, path: str) -> ValidationCheck:
         """Check if file exists."""
@@ -225,10 +230,7 @@ class LocalNetCDFValidator:
         try:
             import xarray as xr
         except ImportError:
-            return ValidationCheck(
-                "variable_exists", False,
-                "xarray required: pip install xarray netCDF4"
-            )
+            return ValidationCheck("variable_exists", False, "xarray required: pip install xarray netCDF4")
 
         try:
             ds = self._open_dataset(path)
@@ -238,8 +240,7 @@ class LocalNetCDFValidator:
             if varname in available_vars:
                 return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
             return ValidationCheck(
-                "variable_exists", False,
-                f"Variable '{varname}' not found, available: {available_vars}"
+                "variable_exists", False, f"Variable '{varname}' not found, available: {available_vars}"
             )
         except Exception as e:
             return ValidationCheck("variable_exists", False, f"Cannot read file: {e}")
@@ -251,18 +252,13 @@ class LocalNetCDFValidator:
                 return name
         return None
 
-    def check_time_range(
-        self, path: str, syear: int, eyear: int
-    ) -> ValidationCheck:
+    def check_time_range(self, path: str, syear: int, eyear: int) -> ValidationCheck:
         """Check if data time range covers required period."""
         try:
             import xarray as xr
             import pandas as pd
         except ImportError:
-            return ValidationCheck(
-                "time_range", False,
-                "xarray required: pip install xarray netCDF4"
-            )
+            return ValidationCheck("time_range", False, "xarray required: pip install xarray netCDF4")
 
         try:
             ds = self._open_dataset(path)
@@ -270,10 +266,7 @@ class LocalNetCDFValidator:
 
             if time_dim is None:
                 ds.close()
-                return ValidationCheck(
-                    "time_range", False,
-                    f"Time dimension not found, tried: {self.TIME_DIMS}"
-                )
+                return ValidationCheck("time_range", False, f"Time dimension not found, tried: {self.TIME_DIMS}")
 
             time_vals = ds[time_dim].values
             ds.close()
@@ -283,39 +276,31 @@ class LocalNetCDFValidator:
                 time_years = pd.to_datetime(time_vals).year
             except (TypeError, ValueError):
                 # cftime or other non-standard calendar - skip time check
-                return ValidationCheck(
-                    "time_range", True,
-                    "Time check skipped (non-standard calendar)"
-                )
+                return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
 
             data_syear = int(time_years.min())
             data_eyear = int(time_years.max())
 
             if data_syear <= syear and data_eyear >= eyear:
                 return ValidationCheck(
-                    "time_range", True,
-                    f"Time range OK: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
+                    "time_range", True, f"Time range OK: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
                 )
             return ValidationCheck(
-                "time_range", False,
-                f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
+                "time_range",
+                False,
+                f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}",
             )
         except Exception as e:
             return ValidationCheck("time_range", False, f"Time check failed: {e}")
 
     def check_spatial_range(
-        self, path: str,
-        min_lat: float, max_lat: float,
-        min_lon: float, max_lon: float
+        self, path: str, min_lat: float, max_lat: float, min_lon: float, max_lon: float
     ) -> ValidationCheck:
         """Check if data spatial range covers required area."""
         try:
             import xarray as xr
         except ImportError:
-            return ValidationCheck(
-                "spatial_range", False,
-                "xarray required: pip install xarray netCDF4"
-            )
+            return ValidationCheck("spatial_range", False, "xarray required: pip install xarray netCDF4")
 
         try:
             ds = self._open_dataset(path)
@@ -324,10 +309,7 @@ class LocalNetCDFValidator:
 
             if lat_dim is None or lon_dim is None:
                 ds.close()
-                return ValidationCheck(
-                    "spatial_range", False,
-                    "Lat/lon dimensions not found"
-                )
+                return ValidationCheck("spatial_range", False, "Lat/lon dimensions not found")
 
             lat_vals = ds[lat_dim].values
             lon_vals = ds[lon_dim].values
@@ -340,16 +322,17 @@ class LocalNetCDFValidator:
             lon_ok = data_min_lon <= min_lon and data_max_lon >= max_lon
 
             if lat_ok and lon_ok:
-                return ValidationCheck(
-                    "spatial_range", True,
-                    "Spatial range OK"
-                )
+                return ValidationCheck("spatial_range", True, "Spatial range OK")
 
             msg_parts = []
             if not lat_ok:
-                msg_parts.append(f"Lat: data {data_min_lat:.1f}~{data_max_lat:.1f}, required {min_lat:.1f}~{max_lat:.1f}")
+                msg_parts.append(
+                    f"Lat: data {data_min_lat:.1f}~{data_max_lat:.1f}, required {min_lat:.1f}~{max_lat:.1f}"
+                )
             if not lon_ok:
-                msg_parts.append(f"Lon: data {data_min_lon:.1f}~{data_max_lon:.1f}, required {min_lon:.1f}~{max_lon:.1f}")
+                msg_parts.append(
+                    f"Lon: data {data_min_lon:.1f}~{data_max_lon:.1f}, required {min_lon:.1f}~{max_lon:.1f}"
+                )
 
             return ValidationCheck("spatial_range", False, "Spatial range insufficient: " + "; ".join(msg_parts))
         except Exception as e:
@@ -436,6 +419,7 @@ except Exception as e:
     def _run_inspect_script(self, path: str) -> Optional[Dict[str, Any]]:
         """Run inspection script on remote server."""
         import base64
+
         script = self.INSPECT_SCRIPT.format(path=path)
 
         # Encode script as base64 to avoid shell quoting issues
@@ -470,10 +454,7 @@ except Exception as e:
         variables = result.get("variables", [])
         if varname in variables:
             return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
-        return ValidationCheck(
-            "variable_exists", False,
-            f"Variable '{varname}' not found, available: {variables}"
-        )
+        return ValidationCheck("variable_exists", False, f"Variable '{varname}' not found, available: {variables}")
 
     def check_time_range(self, path: str, syear: int, eyear: int) -> ValidationCheck:
         """Check time range on remote file."""
@@ -492,19 +473,13 @@ except Exception as e:
 
         data_syear, data_eyear = time_range
         if data_syear <= syear and data_eyear >= eyear:
-            return ValidationCheck(
-                "time_range", True,
-                f"Time range OK: data {data_syear}-{data_eyear}"
-            )
+            return ValidationCheck("time_range", True, f"Time range OK: data {data_syear}-{data_eyear}")
         return ValidationCheck(
-            "time_range", False,
-            f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
+            "time_range", False, f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
         )
 
     def check_spatial_range(
-        self, path: str,
-        min_lat: float, max_lat: float,
-        min_lon: float, max_lon: float
+        self, path: str, min_lat: float, max_lat: float, min_lon: float, max_lon: float
     ) -> ValidationCheck:
         """Check spatial range on remote file."""
         result = self._run_inspect_script(path)
@@ -527,10 +502,7 @@ except Exception as e:
         if lat_ok and lon_ok:
             return ValidationCheck("spatial_range", True, "Spatial range OK")
 
-        return ValidationCheck(
-            "spatial_range", False,
-            "Spatial range insufficient"
-        )
+        return ValidationCheck("spatial_range", False, "Spatial range insufficient")
 
 
 class DataValidator:
@@ -542,8 +514,14 @@ class DataValidator:
     local filesystem (xarray) and remote execution (SSH + Python script).
     """
 
-    def __init__(self, is_remote: bool = False, ssh_manager=None, remote_openbench_root: str = "",
-                 python_path: str = "", conda_env: str = ""):
+    def __init__(
+        self,
+        is_remote: bool = False,
+        ssh_manager=None,
+        remote_openbench_root: str = "",
+        python_path: str = "",
+        conda_env: str = "",
+    ):
         """Initialize validator.
 
         Args:
@@ -564,11 +542,7 @@ class DataValidator:
             self._validator = LocalNetCDFValidator()
 
     def validate_source(
-        self,
-        var_name: str,
-        source_name: str,
-        source_config: Dict[str, Any],
-        general_config: Dict[str, Any]
+        self, var_name: str, source_name: str, source_config: Dict[str, Any], general_config: Dict[str, Any]
     ) -> SourceValidationResult:
         """Validate a single data source.
 
@@ -616,7 +590,7 @@ class DataValidator:
             eyear=eyear,
             is_remote=self._is_remote,
             ssh_manager=self._ssh_manager,
-            remote_openbench_root=self._remote_openbench_root
+            remote_openbench_root=self._remote_openbench_root,
         )
         sample_paths = path_gen.get_sample_paths()
 
@@ -626,10 +600,9 @@ class DataValidator:
             # No files found matching the pattern
             base_dir = path_gen._get_base_dir()
             pattern = f"{prefix}*{suffix}.nc"
-            checks.append(ValidationCheck(
-                "file_exists", False,
-                f"No files found matching pattern '{pattern}' in {base_dir}"
-            ))
+            checks.append(
+                ValidationCheck("file_exists", False, f"No files found matching pattern '{pattern}' in {base_dir}")
+            )
         else:
             for path in sample_paths:
                 check = self._validator.check_file_exists(path)
@@ -649,19 +622,13 @@ class DataValidator:
         # Check time range (only for grid data with Single groupby)
         # For Year/Month/Day groupby, each file only contains partial data
         if data_type == "grid" and data_groupby == "Single":
-            check = self._validator.check_time_range(
-                first_existing_path,
-                int(syear), int(eyear)
-            )
+            check = self._validator.check_time_range(first_existing_path, int(syear), int(eyear))
             checks.append(check)
 
         return SourceValidationResult(var_name, source_name, checks)
 
     def validate_all(
-        self,
-        sources: Dict[str, Dict[str, Dict]],
-        general_config: Dict[str, Any],
-        progress_callback=None
+        self, sources: Dict[str, Dict[str, Dict]], general_config: Dict[str, Any], progress_callback=None
     ) -> DataValidationReport:
         """Validate all data sources.
 
@@ -682,9 +649,7 @@ class DataValidator:
                 if progress_callback:
                     progress_callback(current, total, var_name, source_name)
 
-                result = self.validate_source(
-                    var_name, source_name, source_config, general_config
-                )
+                result = self.validate_source(var_name, source_name, source_config, general_config)
                 results.append(result)
                 current += 1
 

@@ -9,10 +9,21 @@ import yaml
 from typing import Dict, Any, Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QTableWidget, QTableWidgetItem, QPushButton,
-    QGroupBox, QDialogButtonBox, QFileDialog, QMessageBox,
-    QHeaderView, QLabel, QInputDialog
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLineEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QPushButton,
+    QGroupBox,
+    QDialogButtonBox,
+    QFileDialog,
+    QMessageBox,
+    QHeaderView,
+    QLabel,
+    QInputDialog,
 )
 from PySide6.QtCore import Qt
 
@@ -55,7 +66,7 @@ class ModelDefinitionEditor(QDialog):
         initial_data: Optional[Dict[str, Any]] = None,
         file_path: Optional[str] = None,
         ssh_manager=None,
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self.initial_data = initial_data or {}
@@ -174,11 +185,7 @@ class ModelDefinitionEditor(QDialog):
 
     def get_data(self) -> Dict[str, Any]:
         """Get form data as dictionary."""
-        data = {
-            "general": {
-                "model": self.model_name.text()
-            }
-        }
+        data = {"general": {"model": self.model_name.text()}}
 
         # Collect variable mappings
         for i in range(self.var_table.rowCount()):
@@ -192,10 +199,7 @@ class ModelDefinitionEditor(QDialog):
 
             # Only include if at least varname is provided
             if varname or varunit:
-                data[var_name] = {
-                    "varname": varname,
-                    "varunit": varunit
-                }
+                data[var_name] = {"varname": varname, "varunit": varunit}
 
         return data
 
@@ -216,31 +220,18 @@ class ModelDefinitionEditor(QDialog):
 
         if self._is_remote_mode():
             # Save to remote server
-            yaml_content = yaml.dump(
-                data,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2
-            )
+            yaml_content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
             try:
                 cmd = f"cat > '{self.file_path}' << 'YAML_EOF'\n{yaml_content}YAML_EOF"
                 stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
 
                 if exit_code != 0:
-                    QMessageBox.critical(
-                        self, "Error",
-                        f"Failed to save file on remote server:\n{stderr or stdout}"
-                    )
+                    QMessageBox.critical(self, "Error", f"Failed to save file on remote server:\n{stderr or stdout}")
                     return
 
                 self._saved_path = self.file_path
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    f"Model definition saved to remote server:\n{self.file_path}"
-                )
+                QMessageBox.information(self, "Success", f"Model definition saved to remote server:\n{self.file_path}")
                 self.accept()
 
             except Exception as e:
@@ -248,22 +239,11 @@ class ModelDefinitionEditor(QDialog):
         else:
             # Save to local file
             try:
-                with open(self.file_path, 'w', encoding='utf-8') as f:
-                    yaml.dump(
-                        data,
-                        f,
-                        default_flow_style=False,
-                        allow_unicode=True,
-                        sort_keys=False,
-                        indent=2
-                    )
+                with open(self.file_path, "w", encoding="utf-8") as f:
+                    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
                 self._saved_path = self.file_path
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    f"Model definition saved to:\n{self.file_path}"
-                )
+                QMessageBox.information(self, "Success", f"Model definition saved to:\n{self.file_path}")
                 self.accept()
 
             except Exception as e:
@@ -291,12 +271,7 @@ class ModelDefinitionEditor(QDialog):
         os.makedirs(default_dir, exist_ok=True)
         default_path = os.path.join(default_dir, f"{model_name}.yaml")
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Model Definition",
-            default_path,
-            "YAML Files (*.yaml)"
-        )
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Model Definition", default_path, "YAML Files (*.yaml)")
 
         if not file_path:
             return
@@ -306,22 +281,11 @@ class ModelDefinitionEditor(QDialog):
 
         try:
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                yaml.dump(
-                    data,
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                    sort_keys=False,
-                    indent=2
-                )
+            with open(file_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
             self._saved_path = file_path
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Model definition saved to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Success", f"Model definition saved to:\n{file_path}")
             self.accept()
 
         except Exception as e:
@@ -363,18 +327,12 @@ class ModelDefinitionEditor(QDialog):
             return
 
         # Build full file path
-        remote_dir = selected_path[0].rstrip('/')
+        remote_dir = selected_path[0].rstrip("/")
         remote_file = f"{remote_dir}/{model_name}.yaml"
 
         # Generate YAML content
         data = self.get_data()
-        yaml_content = yaml.dump(
-            data,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-            indent=2
-        )
+        yaml_content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
         # Save to remote server
         try:
@@ -383,18 +341,11 @@ class ModelDefinitionEditor(QDialog):
             stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
 
             if exit_code != 0:
-                QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to save file on remote server:\n{stderr or stdout}"
-                )
+                QMessageBox.critical(self, "Error", f"Failed to save file on remote server:\n{stderr or stdout}")
                 return
 
             self._saved_path = remote_file
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Model definition saved to remote server:\n{remote_file}"
-            )
+            QMessageBox.information(self, "Success", f"Model definition saved to remote server:\n{remote_file}")
             self.accept()
 
         except Exception as e:

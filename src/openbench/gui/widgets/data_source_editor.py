@@ -7,15 +7,24 @@ import logging
 from typing import Dict, Any, Optional
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
     QLineEdit,
-    QPushButton, QGroupBox, QRadioButton, QButtonGroup,
-    QDialogButtonBox, QLabel, QMessageBox, QFileDialog,
-    QCheckBox, QScrollArea, QWidget
+    QPushButton,
+    QGroupBox,
+    QRadioButton,
+    QButtonGroup,
+    QDialogButtonBox,
+    QLabel,
+    QMessageBox,
+    QFileDialog,
+    QCheckBox,
+    QScrollArea,
+    QWidget,
 )
-from openbench.gui.widgets.no_scroll_widgets import (
-    NoScrollDoubleSpinBox, NoScrollComboBox
-)
+from openbench.gui.widgets.no_scroll_widgets import NoScrollDoubleSpinBox, NoScrollComboBox
 from PySide6.QtCore import Qt
 
 from openbench.gui.widgets.path_selector import PathSelector
@@ -45,7 +54,7 @@ class DataSourceEditor(QDialog):
         var_name: str = "",  # Variable name (for ref data context)
         initial_data: Optional[Dict[str, Any]] = None,
         ssh_manager=None,  # SSH manager for remote browsing
-        parent=None
+        parent=None,
     ):
         super().__init__(parent)
         self.source_name = source_name
@@ -83,16 +92,16 @@ class DataSourceEditor(QDialog):
             # Try to get controller from parent widget chain
             parent = self.parent()
             while parent:
-                if hasattr(parent, 'controller'):
+                if hasattr(parent, "controller"):
                     controller = parent.controller
                     # Get remote OpenBench path from config
                     remote_config = controller.config.get("general", {}).get("remote", {})
                     remote_path = remote_config.get("openbench_path", "")
                     if remote_path:
-                        return remote_path.rstrip('/').replace('\\', '/')
+                        return remote_path.rstrip("/").replace("\\", "/")
                     # Fallback to project_root if available
-                    if hasattr(controller, 'project_root') and controller.project_root:
-                        return controller.project_root.rstrip('/').replace('\\', '/')
+                    if hasattr(controller, "project_root") and controller.project_root:
+                        return controller.project_root.rstrip("/").replace("\\", "/")
                     break
                 parent = parent.parent()
         except Exception as e:
@@ -109,10 +118,10 @@ class DataSourceEditor(QDialog):
             return path
 
         # Normalize slashes first
-        path = path.replace('\\', '/')
+        path = path.replace("\\", "/")
 
         # Check if already absolute
-        if path.startswith('/'):
+        if path.startswith("/"):
             return path
 
         if self._is_remote_mode():
@@ -120,7 +129,7 @@ class DataSourceEditor(QDialog):
             remote_root = self._get_remote_openbench_root()
             if remote_root:
                 # Handle ./ prefix
-                if path.startswith('./'):
+                if path.startswith("./"):
                     path = path[2:]
                 return f"{remote_root}/{path}"
             # If no remote root available, keep path as-is
@@ -192,9 +201,7 @@ class DataSourceEditor(QDialog):
         # Station list file (for station data, optional)
         self.fulllist_label = QLabel("Station List:")
         self.fulllist = PathSelector(
-            mode="file",
-            filter="CSV Files (*.csv);;All Files (*)",
-            placeholder="Station list CSV file (optional)"
+            mode="file", filter="CSV Files (*.csv);;All Files (*)", placeholder="Station list CSV file (optional)"
         )
         basic_layout.addRow(self.fulllist_label, self.fulllist)
 
@@ -207,9 +214,7 @@ class DataSourceEditor(QDialog):
             # Model definition with New and Show Variables buttons
             model_row = QHBoxLayout()
             self.model_nml = PathSelector(
-                mode="file",
-                filter="YAML Files (*.yaml)",
-                placeholder="Model definition file"
+                mode="file", filter="YAML Files (*.yaml)", placeholder="Model definition file"
             )
             model_row.addWidget(self.model_nml, 1)
 
@@ -288,7 +293,9 @@ class DataSourceEditor(QDialog):
         # === Variable Mapping (for ref data) or File Naming (for sim data) ===
         if self.source_type == "ref":
             # For reference data: variable-specific settings
-            var_group_title = f"Variable Settings ({self.var_name.replace('_', ' ')})" if self.var_name else "Variable Settings"
+            var_group_title = (
+                f"Variable Settings ({self.var_name.replace('_', ' ')})" if self.var_name else "Variable Settings"
+            )
             var_group = QGroupBox(var_group_title)
             var_layout = QFormLayout(var_group)
 
@@ -316,7 +323,9 @@ class DataSourceEditor(QDialog):
             layout.addWidget(var_group)
         else:
             # For simulation data: variable settings with defaults from model definition
-            var_group_title = f"Variable Settings ({self.var_name.replace('_', ' ')})" if self.var_name else "Variable Settings"
+            var_group_title = (
+                f"Variable Settings ({self.var_name.replace('_', ' ')})" if self.var_name else "Variable Settings"
+            )
             var_group = QGroupBox(var_group_title)
             var_layout = QFormLayout(var_group)
 
@@ -349,9 +358,7 @@ class DataSourceEditor(QDialog):
         main_layout.addWidget(scroll_area, 1)  # Stretch factor 1 to fill space
 
         # === Dialog Buttons (outside scroll area) ===
-        btn_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         main_layout.addWidget(btn_box)
@@ -366,33 +373,24 @@ class DataSourceEditor(QDialog):
         self.fulllist.set_skip_validation(True)
 
         # Set custom browse handlers for PathSelector widgets
-        self.root_dir.set_custom_browse_handler(
-            lambda: self._browse_remote_path(self.root_dir, "directory")
-        )
-        self.fulllist.set_custom_browse_handler(
-            lambda: self._browse_remote_path(self.fulllist, "file")
-        )
+        self.root_dir.set_custom_browse_handler(lambda: self._browse_remote_path(self.root_dir, "directory"))
+        self.fulllist.set_custom_browse_handler(lambda: self._browse_remote_path(self.fulllist, "file"))
 
         # Model definition (sim data only)
-        if self.source_type == "sim" and hasattr(self, 'model_nml'):
+        if self.source_type == "sim" and hasattr(self, "model_nml"):
             self.model_nml.set_skip_validation(True)
-            self.model_nml.set_custom_browse_handler(
-                lambda: self._browse_remote_path(self.model_nml, "file")
-            )
+            self.model_nml.set_custom_browse_handler(lambda: self._browse_remote_path(self.model_nml, "file"))
 
     def _browse_remote_path(self, path_selector, mode: str):
         """Browse remote server for path."""
         if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(
-                self, "Not Connected",
-                "Remote server is not connected."
-            )
+            QMessageBox.warning(self, "Not Connected", "Remote server is not connected.")
             return
 
         # Get start path
         current_path = path_selector.path()
         if current_path:
-            start_path = current_path if mode == "directory" else current_path.rsplit('/', 1)[0]
+            start_path = current_path if mode == "directory" else current_path.rsplit("/", 1)[0]
         else:
             try:
                 start_path = self._ssh_manager._get_home_dir()
@@ -406,10 +404,7 @@ class DataSourceEditor(QDialog):
         dialog.resize(500, 400)
 
         layout = QVBoxLayout(dialog)
-        browser = RemoteFileBrowser(
-            self._ssh_manager, start_path, dialog,
-            select_dirs=(mode == "directory")
-        )
+        browser = RemoteFileBrowser(self._ssh_manager, start_path, dialog, select_dirs=(mode == "directory"))
         layout.addWidget(browser)
 
         def on_path_selected(path):
@@ -556,7 +551,7 @@ class DataSourceEditor(QDialog):
         self._reset_form_fields()
 
         # Update source name from filename
-        if hasattr(self, 'name_input'):
+        if hasattr(self, "name_input"):
             source_name = os.path.splitext(os.path.basename(file_path))[0]
             self.name_input.setText(source_name)
 
@@ -565,16 +560,13 @@ class DataSourceEditor(QDialog):
         self._populate_general_settings(general)
         self._populate_variable_settings(content, general)
 
-        QMessageBox.information(
-            self, "Loaded",
-            f"Configuration loaded from:\n{os.path.basename(file_path)}"
-        )
+        QMessageBox.information(self, "Loaded", f"Configuration loaded from:\n{os.path.basename(file_path)}")
 
     def _reset_form_fields(self):
         """Reset all form fields to default/empty values before loading new data."""
         # Reset path fields
         self.root_dir.set_path("")
-        if hasattr(self, 'fulllist'):
+        if hasattr(self, "fulllist"):
             self.fulllist.set_path("")
 
         # Reset data type to default (grid)
@@ -594,19 +586,19 @@ class DataSourceEditor(QDialog):
         self.timezone_spin.setValue(0.0)
 
         # Reset variable-specific fields
-        if hasattr(self, 'sub_dir_input'):
+        if hasattr(self, "sub_dir_input"):
             self.sub_dir_input.clear()
-        if hasattr(self, 'varname_input'):
+        if hasattr(self, "varname_input"):
             self.varname_input.clear()
-        if hasattr(self, 'varunit_input'):
+        if hasattr(self, "varunit_input"):
             self.varunit_input.clear()
-        if hasattr(self, 'prefix_input'):
+        if hasattr(self, "prefix_input"):
             self.prefix_input.clear()
-        if hasattr(self, 'suffix_input'):
+        if hasattr(self, "suffix_input"):
             self.suffix_input.clear()
 
         # Reset sim-specific fields
-        if self.source_type == "sim" and hasattr(self, 'model_nml'):
+        if self.source_type == "sim" and hasattr(self, "model_nml"):
             self.model_nml.set_path("")
 
     def _get_local_openbench_path(self) -> str:
@@ -615,7 +607,7 @@ class DataSourceEditor(QDialog):
         import yaml as yaml_module
 
         # Try from controller if available
-        if hasattr(self, '_controller') and self._controller:
+        if hasattr(self, "_controller") and self._controller:
             general = self._controller.config.get("general", {})
             local_path = general.get("local_openbench_path", "")
             if local_path and os.path.isdir(local_path):
@@ -623,11 +615,9 @@ class DataSourceEditor(QDialog):
 
         # Try from runtime settings file
         try:
-            settings_path = os.path.join(
-                os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml"
-            )
+            settings_path = os.path.join(os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml")
             if os.path.exists(settings_path):
-                with open(settings_path, 'r', encoding='utf-8') as f:
+                with open(settings_path, "r", encoding="utf-8") as f:
                     settings = yaml_module.safe_load(f) or {}
                     saved_path = settings.get("local_openbench_path", "")
                     if saved_path and os.path.isdir(saved_path):
@@ -659,10 +649,7 @@ class DataSourceEditor(QDialog):
                 default_dir = user_dir
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Configuration from YAML",
-            default_dir,
-            "YAML Files (*.yaml *.yml);;All Files (*)"
+            self, "Load Configuration from YAML", default_dir, "YAML Files (*.yaml *.yml);;All Files (*)"
         )
         return file_path
 
@@ -673,8 +660,7 @@ class DataSourceEditor(QDialog):
             home = self._ssh_manager._get_home_dir()
             # Try to find OpenBench nml directory
             stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"ls -d {home}/OpenBench/nml/nml-yaml 2>/dev/null || echo {home}",
-                timeout=10
+                f"ls -d {home}/OpenBench/nml/nml-yaml 2>/dev/null || echo {home}", timeout=10
             )
             start_path = stdout.strip() if exit_code == 0 else home
         except Exception as e:
@@ -694,7 +680,7 @@ class DataSourceEditor(QDialog):
 
         def on_path_selected(path):
             # Only accept yaml/yml files
-            if path.endswith('.yaml') or path.endswith('.yml'):
+            if path.endswith(".yaml") or path.endswith(".yml"):
                 selected_path[0] = path
                 dialog.accept()
             else:
@@ -714,13 +700,10 @@ class DataSourceEditor(QDialog):
             return self._load_remote_yaml_content(file_path)
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
-            QMessageBox.warning(
-                self, "Load Error",
-                f"Failed to load file:\n{file_path}\n\nError: {str(e)}"
-            )
+            QMessageBox.warning(self, "Load Error", f"Failed to load file:\n{file_path}\n\nError: {str(e)}")
             return None
 
     def _load_remote_yaml_content(self, file_path: str) -> dict:
@@ -728,21 +711,13 @@ class DataSourceEditor(QDialog):
         import yaml
 
         try:
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"cat '{file_path}'", timeout=30
-            )
+            stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{file_path}'", timeout=30)
             if exit_code != 0:
-                QMessageBox.warning(
-                    self, "Load Error",
-                    f"Failed to load remote file:\n{file_path}\n\nError: {stderr}"
-                )
+                QMessageBox.warning(self, "Load Error", f"Failed to load remote file:\n{file_path}\n\nError: {stderr}")
                 return None
             return yaml.safe_load(stdout) or {}
         except Exception as e:
-            QMessageBox.warning(
-                self, "Load Error",
-                f"Failed to load remote file:\n{file_path}\n\nError: {str(e)}"
-            )
+            QMessageBox.warning(self, "Load Error", f"Failed to load remote file:\n{file_path}\n\nError: {str(e)}")
             return None
 
     def _populate_general_settings(self, general: dict):
@@ -804,11 +779,12 @@ class DataSourceEditor(QDialog):
             available_vars = [k for k in content.keys() if k != "general"]
             if available_vars:
                 QMessageBox.information(
-                    self, "Variable Not Found",
+                    self,
+                    "Variable Not Found",
                     f"Variable '{self.var_name}' not found in file.\n\n"
                     f"Available variables: {', '.join(available_vars[:10])}"
                     f"{'...' if len(available_vars) > 10 else ''}\n\n"
-                    "General settings have been loaded."
+                    "General settings have been loaded.",
                 )
 
         if var_config:
@@ -868,9 +844,7 @@ class DataSourceEditor(QDialog):
         if self._is_remote_mode():
             # Load from remote server
             try:
-                stdout, stderr, exit_code = self._ssh_manager.execute(
-                    f"cat '{path}'", timeout=30
-                )
+                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{path}'", timeout=30)
                 if exit_code == 0 and stdout.strip():
                     content = yaml.safe_load(stdout) or {}
             except Exception:
@@ -882,7 +856,7 @@ class DataSourceEditor(QDialog):
                 return
 
             try:
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, "r", encoding="utf-8") as f:
                     content = yaml.safe_load(f) or {}
             except Exception:
                 return
@@ -910,10 +884,7 @@ class DataSourceEditor(QDialog):
 
         model_path = self.model_nml.path()
         if not model_path:
-            QMessageBox.information(
-                self, "No Model Selected",
-                "Please select a model definition file first."
-            )
+            QMessageBox.information(self, "No Model Selected", "Please select a model definition file first.")
             return
 
         content = None
@@ -921,57 +892,38 @@ class DataSourceEditor(QDialog):
         if self._is_remote_mode():
             # Remote mode: load file from remote server
             try:
-                stdout, stderr, exit_code = self._ssh_manager.execute(
-                    f"cat '{model_path}'", timeout=30
-                )
+                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{model_path}'", timeout=30)
                 if exit_code != 0:
                     QMessageBox.warning(
-                        self, "Load Error",
-                        f"Failed to load remote file:\n{model_path}\n\nError: {stderr}"
+                        self, "Load Error", f"Failed to load remote file:\n{model_path}\n\nError: {stderr}"
                     )
                     return
                 content = yaml.safe_load(stdout) or {}
             except Exception as e:
-                QMessageBox.warning(
-                    self, "Load Error",
-                    f"Failed to load remote file:\n{str(e)}"
-                )
+                QMessageBox.warning(self, "Load Error", f"Failed to load remote file:\n{str(e)}")
                 return
 
             # Open editor with remote support
             dialog = ModelDefinitionEditor(
-                initial_data=content,
-                file_path=model_path,
-                ssh_manager=self._ssh_manager,
-                parent=self
+                initial_data=content, file_path=model_path, ssh_manager=self._ssh_manager, parent=self
             )
         else:
             # Local mode: resolve path and edit
             full_path = to_absolute_path(model_path, get_openbench_root())
 
             if not os.path.exists(full_path):
-                QMessageBox.warning(
-                    self, "File Not Found",
-                    f"Model definition file not found:\n{full_path}"
-                )
+                QMessageBox.warning(self, "File Not Found", f"Model definition file not found:\n{full_path}")
                 return
 
             try:
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, "r", encoding="utf-8") as f:
                     content = yaml.safe_load(f) or {}
             except Exception as e:
-                QMessageBox.warning(
-                    self, "Load Error",
-                    f"Failed to load model file:\n{str(e)}"
-                )
+                QMessageBox.warning(self, "Load Error", f"Failed to load model file:\n{str(e)}")
                 return
 
             # Open editor without remote support
-            dialog = ModelDefinitionEditor(
-                initial_data=content,
-                file_path=full_path,
-                parent=self
-            )
+            dialog = ModelDefinitionEditor(initial_data=content, file_path=full_path, parent=self)
 
         dialog.exec()
         # Always refresh after dialog closes (user may have saved)
@@ -1073,24 +1025,16 @@ class DataSourceEditor(QDialog):
         manager = ValidationManager(self)
 
         # Validate source name (required for new sources)
-        if hasattr(self, 'name_input'):
+        if hasattr(self, "name_input"):
             error = FieldValidator.required(
-                self.name_input.text().strip(),
-                "source_name",
-                "Source name is required",
-                widget=self.name_input
+                self.name_input.text().strip(), "source_name", "Source name is required", widget=self.name_input
             )
             if error:
                 errors.append(error)
 
         # Validate root_dir (required)
         root_dir = self.root_dir.path()
-        error = FieldValidator.required(
-            root_dir,
-            "root_dir",
-            "Root directory is required",
-            widget=self.root_dir
-        )
+        error = FieldValidator.required(root_dir, "root_dir", "Root directory is required", widget=self.root_dir)
         if error:
             errors.append(error)
 
@@ -1105,17 +1049,14 @@ class DataSourceEditor(QDialog):
                 [self.prefix_input.text().strip(), self.suffix_input.text().strip()],
                 ["prefix", "suffix"],
                 "At least one of file prefix or suffix is required",
-                widget=self.prefix_input
+                widget=self.prefix_input,
             )
             if error:
                 errors.append(error)
             # Grid resolution required
             grid_res = self.grid_res_input.text().strip()
             error = FieldValidator.required(
-                grid_res,
-                "grid_res",
-                "Grid resolution is required for grid data type",
-                widget=self.grid_res_input
+                grid_res, "grid_res", "Grid resolution is required for grid data type", widget=self.grid_res_input
             )
             if error:
                 errors.append(error)
@@ -1125,19 +1066,13 @@ class DataSourceEditor(QDialog):
             eyear = self.eyear_input.text().strip()
 
             error = FieldValidator.required(
-                syear,
-                "syear",
-                "Start year is required for grid data type",
-                widget=self.syear_input
+                syear, "syear", "Start year is required for grid data type", widget=self.syear_input
             )
             if error:
                 errors.append(error)
 
             error = FieldValidator.required(
-                eyear,
-                "eyear",
-                "End year is required for grid data type",
-                widget=self.eyear_input
+                eyear, "eyear", "End year is required for grid data type", widget=self.eyear_input
             )
             if error:
                 errors.append(error)
@@ -1152,7 +1087,7 @@ class DataSourceEditor(QDialog):
                         eyear_int,
                         "year_range",
                         "Start year cannot be greater than end year",
-                        widget=self.syear_input
+                        widget=self.syear_input,
                     )
                     if error:
                         errors.append(error)
@@ -1170,12 +1105,7 @@ class DataSourceEditor(QDialog):
                 root_dir = to_absolute_path(root_dir, get_openbench_root())
                 is_valid, error_msg = validate_path(root_dir, "directory")
                 if not is_valid:
-                    error = ValidationError(
-                        "root_dir",
-                        f"Root directory does not exist: {root_dir}",
-                        "",
-                        self.root_dir
-                    )
+                    error = ValidationError("root_dir", f"Root directory does not exist: {root_dir}", "", self.root_dir)
                     manager.show_error_and_focus(error)
                     return
 
@@ -1187,10 +1117,7 @@ class DataSourceEditor(QDialog):
                     is_valid, error_msg = validate_path(fulllist_path, "file")
                     if not is_valid:
                         error = ValidationError(
-                            "fulllist",
-                            f"Station list file does not exist: {fulllist_path}",
-                            "",
-                            self.fulllist
+                            "fulllist", f"Station list file does not exist: {fulllist_path}", "", self.fulllist
                         )
                         manager.show_error_and_focus(error)
                         return
@@ -1203,10 +1130,7 @@ class DataSourceEditor(QDialog):
                     is_valid, error_msg = validate_path(model_path, "file")
                     if not is_valid:
                         error = ValidationError(
-                            "model_nml",
-                            f"Model definition file does not exist: {model_path}",
-                            "",
-                            self.model_nml
+                            "model_nml", f"Model definition file does not exist: {model_path}", "", self.model_nml
                         )
                         manager.show_error_and_focus(error)
                         return
@@ -1227,7 +1151,7 @@ class DataSourceEditor(QDialog):
                 f"in the filter configuration (e.g., CoLM_filter.py).\n\n"
                 f"Click 'Yes' to continue, 'No' to go back and edit.",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
             if reply == QMessageBox.No:
                 return
@@ -1236,7 +1160,7 @@ class DataSourceEditor(QDialog):
 
     def get_source_name(self) -> str:
         """Get source name."""
-        if hasattr(self, 'name_input'):
+        if hasattr(self, "name_input"):
             return self.name_input.text()
         return self.source_name
 
@@ -1245,10 +1169,7 @@ class DataSourceEditor(QDialog):
         from openbench.gui.widgets.model_definition_editor import ModelDefinitionEditor
 
         # Pass ssh_manager for remote mode support
-        dialog = ModelDefinitionEditor(
-            ssh_manager=self._ssh_manager,
-            parent=self
-        )
+        dialog = ModelDefinitionEditor(ssh_manager=self._ssh_manager, parent=self)
         if dialog.exec():
             file_path = dialog.get_saved_path()
             if file_path:
@@ -1261,11 +1182,11 @@ class DataSourceEditor(QDialog):
         crashes when reopening the dialog.
         """
         # Clear custom browse handlers (they hold lambdas that reference self)
-        if hasattr(self, 'root_dir'):
+        if hasattr(self, "root_dir"):
             self.root_dir.set_custom_browse_handler(None)
-        if hasattr(self, 'fulllist'):
+        if hasattr(self, "fulllist"):
             self.fulllist.set_custom_browse_handler(None)
-        if self.source_type == "sim" and hasattr(self, 'model_nml'):
+        if self.source_type == "sim" and hasattr(self, "model_nml"):
             self.model_nml.set_custom_browse_handler(None)
             # Disconnect model path change signal
             try:

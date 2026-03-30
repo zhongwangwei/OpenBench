@@ -22,13 +22,13 @@ def _read_comparison_file(file):
     file_to_read = file
 
     if not os.path.exists(file):
-        if file.endswith('.csv'):
-            alt_file = file[:-4] + '.txt'
+        if file.endswith(".csv"):
+            alt_file = file[:-4] + ".txt"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
-        elif file.endswith('.txt'):
-            alt_file = file[:-4] + '.csv'
+        elif file.endswith(".txt"):
+            alt_file = file[:-4] + ".csv"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
@@ -36,30 +36,33 @@ def _read_comparison_file(file):
     if not os.path.exists(file_to_read):
         raise FileNotFoundError(f"Neither {file} nor alternative extension found")
 
-    with open(file_to_read, 'r') as f:
+    with open(file_to_read, "r") as f:
         first_line = f.readline()
 
-    sep = '\t' if '\t' in first_line else ','
+    sep = "\t" if "\t" in first_line else ","
     df = pd.read_csv(file_to_read, sep=sep, header=0)
     # Remove index name to prevent it from appearing in visualizations
     df.index.name = None
     return df
 
+
 def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option):
     # Read the SMPI data
-    font = {'family': option['font']}
-    matplotlib.rc('font', **font)
+    font = {"family": option["font"]}
+    matplotlib.rc("font", **font)
 
-    params = {'backend': 'ps',
-              'axes.linewidth': 1,
-              'font.size': option['fontsize'],
-              'xtick.labelsize': option['xtick'],
-              'xtick.direction': 'out',
-              # 'ytick.labelsize': option['ytick'],
-              'ytick.direction': 'out',
-              'savefig.bbox': 'tight',
-              'axes.unicode_minus': False,
-              'text.usetex': False}
+    params = {
+        "backend": "ps",
+        "axes.linewidth": 1,
+        "font.size": option["fontsize"],
+        "xtick.labelsize": option["xtick"],
+        "xtick.direction": "out",
+        # 'ytick.labelsize': option['ytick'],
+        "ytick.direction": "out",
+        "savefig.bbox": "tight",
+        "axes.unicode_minus": False,
+        "text.usetex": False,
+    }
     rcParams.update(params)
 
     data_path = f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison.csv"
@@ -69,11 +72,12 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     # Prepare the subplot grid
     n_items = len(evaluation_items)
 
-    fig, axs = plt.subplots(n_items, 1, figsize=(option['x_wise'], option['y_wise']/3*n_items), sharey=True, squeeze=False)  # sharey=True,
+    fig, axs = plt.subplots(
+        n_items, 1, figsize=(option["x_wise"], option["y_wise"] / 3 * n_items), sharey=True, squeeze=False
+    )  # sharey=True,
     # MCOLORS = generate_colors(evaluation_items)
 
-    fig.subplots_adjust(left=0., right=1,
-                    bottom=0, top=0.82, hspace=option["hspace"], wspace=option["wspace"])
+    fig.subplots_adjust(left=0.0, right=1, bottom=0, top=0.82, hspace=option["hspace"], wspace=option["wspace"])
 
     # Calculate overall min and max I² values for consistent x-axis range
     # min_I2 = max(0, df['SMPI'].min() - 0.5)
@@ -84,30 +88,31 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     # color_map = plt.cm.get_cmap('tab20')
 
     for i, item in enumerate(evaluation_items):
-        smpi_max = df[(df['Item'] == item)]['SMPI'].max()
+        smpi_max = df[(df["Item"] == item)]["SMPI"].max()
         max_I2 = math.ceil(max(1, smpi_max))
 
-        ref_sources = ref_nml['general'][f'{item}_ref_source']
+        ref_sources = ref_nml["general"][f"{item}_ref_source"]
         if isinstance(ref_sources, str):
             ref_sources = [ref_sources]
         ax = axs[i, 0]
 
         for j, ref_source in enumerate(ref_sources):
-
             # Filter data for this item and reference source
-            item_data = df[(df['Item'] == item) & (df['Reference'] == ref_source)]
+            item_data = df[(df["Item"] == item) & (df["Reference"] == ref_source)]
 
             if item_data.empty:
-                ax.text(0.5, 0.5, 'No Data', ha='center', va='center', transform=ax.transAxes, fontsize=option['fontsize'])
+                ax.text(
+                    0.5, 0.5, "No Data", ha="center", va="center", transform=ax.transAxes, fontsize=option["fontsize"]
+                )
                 continue
 
-            I2_values = item_data['SMPI'].tolist()
-            labels = item_data['Simulation'].tolist()
+            I2_values = item_data["SMPI"].tolist()
+            labels = item_data["Simulation"].tolist()
 
             # Calculate confidence intervals
             mean = np.mean(I2_values)
             sem = st.sem(I2_values)
-            conf_interval = sem * st.t.ppf((1 + 0.95) / 2., len(I2_values) - 1)
+            conf_interval = sem * st.t.ppf((1 + 0.95) / 2.0, len(I2_values) - 1)
             sizes = [150 * conf_interval] * len(I2_values)  # Reduced circle size
 
             # Get color for this subplot
@@ -116,13 +121,26 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             for k, (value, size) in enumerate(zip(I2_values, sizes)):
                 if np.isnan(size):
                     size = 2
-                MCOLORS = generate_colors(k,j)
-                ax.scatter(value, 0, s=size * option["n"], facecolors=MCOLORS["selected_color"]["Color"],
-                           edgecolors=MCOLORS["selected_color"]["Color"],
-                           alpha=option['markeraplha'])
-                ax.scatter(value, 0, s=10, facecolors='white', edgecolors='none')
+                MCOLORS = generate_colors(k, j)
+                ax.scatter(
+                    value,
+                    0,
+                    s=size * option["n"],
+                    facecolors=MCOLORS["selected_color"]["Color"],
+                    edgecolors=MCOLORS["selected_color"]["Color"],
+                    alpha=option["markeraplha"],
+                )
+                ax.scatter(value, 0, s=10, facecolors="white", edgecolors="none")
 
-            ax.text(0+0.4*j, 1, f'ref{j+1}: {ref_source.replace("_"," ")}', ha='left', va='center', transform=ax.transAxes, fontsize=option['fontsize'])
+            ax.text(
+                0 + 0.4 * j,
+                1,
+                f"ref{j + 1}: {ref_source.replace('_', ' ')}",
+                ha="left",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=option["fontsize"],
+            )
             # Annotate labels
             # for k, value in enumerate(I2_values):
             #     ax.annotate(
@@ -137,7 +155,7 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             #     )
 
             # Mean (black circle)
-            MCOLORS = generate_colors(k+1,j)
+            MCOLORS = generate_colors(k + 1, j)
             ax.scatter(mean, 0, color=MCOLORS["selected_color"]["Color"], s=50, marker="s", alpha=0.6)
             ax.scatter(mean, 0, color="white", s=2, marker="s", alpha=0.6)
             # Add mean label
@@ -177,129 +195,171 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             # Set titles
             # if i == 0:
             #    ax.set_title(f"Reference: {ref_source}", fontsize=16)
-        ax.text(option["x_posi"], option["y_posi"], item.replace('_', ' '), rotation=option["y_rotation"], va='center',
-                ha=option['y_ha'], transform=ax.transAxes, fontsize=option['ylabelsize'], weight='bold')
+        ax.text(
+            option["x_posi"],
+            option["y_posi"],
+            item.replace("_", " "),
+            rotation=option["y_rotation"],
+            va="center",
+            ha=option["y_ha"],
+            transform=ax.transAxes,
+            fontsize=option["ylabelsize"],
+            weight="bold",
+        )
 
-    # Overall title
-        if i == (len(evaluation_items)-1):
+        # Overall title
+        if i == (len(evaluation_items) - 1):
             for k, value in enumerate(I2_values):
                 legend_elements = []
                 for j, ref_source in enumerate(ref_sources):
-
-                    MCOLORS = generate_colors(k,j)
+                    MCOLORS = generate_colors(k, j)
                     # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"],
                     #                 linewidth=1.5, edgecolor='black', label=''))
-                    legend_elements.append(Line2D([0], [0], marker='o',
-                              color=MCOLORS["selected_color"]["Color"],
-                              linestyle='None',
-                              markersize=24,
-                              markeredgecolor='None',
-                              markerfacecolor=MCOLORS["selected_color"]["Color"],
-                              label=''))
-                    if k==0:
-                        fig.text(0.04, -0.06-j*0.07, f"ref{str(j+1)}", va='center',
-                            ha='right', fontsize=option['fontsize'])
+                    legend_elements.append(
+                        Line2D(
+                            [0],
+                            [0],
+                            marker="o",
+                            color=MCOLORS["selected_color"]["Color"],
+                            linestyle="None",
+                            markersize=24,
+                            markeredgecolor="None",
+                            markerfacecolor=MCOLORS["selected_color"]["Color"],
+                            label="",
+                        )
+                    )
+                    if k == 0:
+                        fig.text(
+                            0.04,
+                            -0.06 - j * 0.07,
+                            f"ref{str(j + 1)}",
+                            va="center",
+                            ha="right",
+                            fontsize=option["fontsize"],
+                        )
 
                     # item_data = df[(df['Item'] == item) & (df['Reference'] == ref_source)]
                     # labels = item_data['Simulation'].tolist()
 
                 fig.legend(
                     handles=legend_elements,
-                    bbox_to_anchor=(0.125+k*0.07, 0.045),
+                    bbox_to_anchor=(0.125 + k * 0.07, 0.045),
                     frameon=False,
-                    title=f'sim{str(k+1)}',
-                    fontsize=option['fontsize'],
+                    title=f"sim{str(k + 1)}",
+                    fontsize=option["fontsize"],
                     handlelength=2,
                     handleheight=2,
                     handletextpad=0.5,
-                    labelspacing= 0.5
+                    labelspacing=0.5,
                 )
-                fig.text(0.701, -0.06-k*0.07, f"sim{str(k+1)}: {labels[k]}", va='center',
-                        ha='left', fontsize=option['fontsize'])
+                fig.text(
+                    0.701,
+                    -0.06 - k * 0.07,
+                    f"sim{str(k + 1)}: {labels[k]}",
+                    va="center",
+                    ha="left",
+                    fontsize=option["fontsize"],
+                )
 
             legend_elements = []
             for j, ref_source in enumerate(ref_sources):
-                MCOLORS = generate_colors(k+1,j)
+                MCOLORS = generate_colors(k + 1, j)
                 # legend_elements.append(Patch(facecolor=MCOLORS["selected_color"]["Color"],
                 #                     linewidth=1.5, edgecolor='black', label=''))
-                legend_elements.append(Line2D([0], [0], marker='s',
-                              color=MCOLORS["selected_color"]["Color"],
-                              linestyle='None',
-                              markersize=24,
-                              markeredgecolor='None',
-                              markerfacecolor=MCOLORS["selected_color"]["Color"],
-                              label=''))
+                legend_elements.append(
+                    Line2D(
+                        [0],
+                        [0],
+                        marker="s",
+                        color=MCOLORS["selected_color"]["Color"],
+                        linestyle="None",
+                        markersize=24,
+                        markeredgecolor="None",
+                        markerfacecolor=MCOLORS["selected_color"]["Color"],
+                        label="",
+                    )
+                )
             fig.legend(
                 handles=legend_elements,
-                bbox_to_anchor=(0.125+k*0.07+0.07, 0.045),
+                bbox_to_anchor=(0.125 + k * 0.07 + 0.07, 0.045),
                 frameon=False,
-                title='mean',
-                fontsize=option['fontsize'],
+                title="mean",
+                fontsize=option["fontsize"],
                 handlelength=2,
                 handleheight=2,
                 handletextpad=0.5,
-                labelspacing= 0.5
+                labelspacing=0.5,
             )
 
-    legend_elements = [Line2D([0], [0], marker='o', color='#bfbfbf',
+    legend_elements = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="#bfbfbf",
             label="$\\text{         point size} \\propto \\sigma_{\\text{CI}}$\n    (larger size indicates\n  greater variability across\nsimulations for a reference)",
-            linestyle='None', markersize=20*len(ref_sources), markeredgecolor='None', markerfacecolor='#bfbfbf')]
+            linestyle="None",
+            markersize=20 * len(ref_sources),
+            markeredgecolor="None",
+            markerfacecolor="#bfbfbf",
+        )
+    ]
     fig.legend(
         handles=legend_elements,
-        bbox_to_anchor=(0.67, 0.015*len(ref_sources)),
+        bbox_to_anchor=(0.67, 0.015 * len(ref_sources)),
         frameon=False,
-        title='',
-        fontsize=option['fontsize'],
+        title="",
+        fontsize=option["fontsize"],
         handlelength=2,
         handleheight=2,
         handletextpad=0.5,
-        labelspacing= 0.5,
+        labelspacing=0.5,
     )
 
     fig.suptitle("Single Model Performance Index Comparison", fontsize=16, weight="bold", y=0.95)
 
     plt.savefig(
-        f'{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.{option["saving_format"]}',
-        format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+        f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.{option['saving_format']}",
+        format=f"{option['saving_format']}",
+        dpi=option["dpi"],
+        bbox_inches="tight",
+    )
     plt.close()
 
-def generate_colors(color_index, list_index,  name="selected_color"):
+
+def generate_colors(color_index, list_index, name="selected_color"):
     """
     Generate a color dictionary based on list_index and color_index.
-    
+
     Parameters:
     - list_index (int): Index to select a color list from colorslist (0 to 4).
     - color_index (int): Index to select a color from the chosen color list.
     - name (str): Optional name for the color dictionary key (default: "selected_color").
-    
+
     Returns:
     - dict: A dictionary with the format {name: {"Color": color}}.
     """
     # Define color lists
-    colors1 = ['#a30327', '#d53126', '#f0734b', '#fbae62', '#fde28e']
-    colors2 = ['#303692', '#4376b7', '#76aecf', '#2c75ea', '#aadae7']
-    colors3 = ['#727a5f', '#95a07c', '#b8c699', '#aadae7', '#e8ffc4']
-    colors4 = ['#673e54', '#8d5573', '#b36c92', '#d983b1', '#ff99c9']
-    colors5 = ['#b6a772', '#dcca89', '#fff09e', '#fff69e', '#fffc9e']
+    colors1 = ["#a30327", "#d53126", "#f0734b", "#fbae62", "#fde28e"]
+    colors2 = ["#303692", "#4376b7", "#76aecf", "#2c75ea", "#aadae7"]
+    colors3 = ["#727a5f", "#95a07c", "#b8c699", "#aadae7", "#e8ffc4"]
+    colors4 = ["#673e54", "#8d5573", "#b36c92", "#d983b1", "#ff99c9"]
+    colors5 = ["#b6a772", "#dcca89", "#fff09e", "#fff69e", "#fffc9e"]
     colorslist = [colors1, colors2, colors3, colors4, colors5]
 
     # Validate inputs
     if not isinstance(list_index, int) or list_index < 0 or list_index >= len(colorslist):
-        raise ValueError(f"list_index must be an integer between 0 and {len(colorslist)-1}")
+        raise ValueError(f"list_index must be an integer between 0 and {len(colorslist) - 1}")
 
     selected_colors = colorslist[list_index]
 
     if not isinstance(color_index, int) or color_index < 0 or color_index >= len(selected_colors):
-        raise ValueError(f"color_index must be an integer between 0 and {len(selected_colors)-1}")
+        raise ValueError(f"color_index must be an integer between 0 and {len(selected_colors) - 1}")
 
     # Select the color
     selected_color = selected_colors[color_index]
 
     # Create the output dictionary
-    gcolors = {
-        name: {
-            "Color": selected_color
-        }
-    }
+    gcolors = {name: {"Color": selected_color}}
 
     return gcolors

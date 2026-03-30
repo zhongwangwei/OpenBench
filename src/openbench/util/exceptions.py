@@ -24,11 +24,11 @@ class OpenBenchException(Exception):
         message: str,
         context: Optional[Dict[str, Any]] = None,
         original_error: Optional[Exception] = None,
-        error_code: Optional[str] = None
+        error_code: Optional[str] = None,
     ):
         """
         Initialize OpenBench exception.
-        
+
         Args:
             message: Human-readable error message
             context: Additional context information
@@ -62,12 +62,12 @@ class OpenBenchException(Exception):
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for logging/serialization."""
         return {
-            'error_type': self.__class__.__name__,
-            'message': self.message,
-            'error_code': self.error_code,
-            'context': self.context,
-            'timestamp': self.timestamp.isoformat(),
-            'original_error': str(self.original_error) if self.original_error else None
+            "error_type": self.__class__.__name__,
+            "message": self.message,
+            "error_code": self.error_code,
+            "context": self.context,
+            "timestamp": self.timestamp.isoformat(),
+            "original_error": str(self.original_error) if self.original_error else None,
         }
 
 
@@ -128,23 +128,21 @@ class ResourceError(OpenBenchException):
 
 
 def error_handler(
-    reraise: bool = True,
-    log_level: int = logging.ERROR,
-    return_value: Any = None,
-    error_types: Optional[tuple] = None
+    reraise: bool = True, log_level: int = logging.ERROR, return_value: Any = None, error_types: Optional[tuple] = None
 ) -> Callable:
     """
     Decorator for standardized error handling.
-    
+
     Args:
         reraise: Whether to reraise the exception after handling
         log_level: Logging level for error messages
         return_value: Value to return if exception is caught and not reraised
         error_types: Tuple of exception types to catch (default: catch all)
-    
+
     Returns:
         Decorated function with error handling
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -157,10 +155,10 @@ def error_handler(
 
                 # Create context information
                 context = {
-                    'function': func.__name__,
-                    'module': func.__module__,
-                    'args_count': len(args),
-                    'kwargs_keys': list(kwargs.keys())
+                    "function": func.__name__,
+                    "module": func.__module__,
+                    "args_count": len(args),
+                    "kwargs_keys": list(kwargs.keys()),
                 }
 
                 # Log the error
@@ -172,9 +170,7 @@ def error_handler(
                 else:
                     # Convert regular exceptions to OpenBench exceptions
                     wrapped_error = OpenBenchException(
-                        f"Unexpected error in {func.__name__}: {str(e)}",
-                        context=context,
-                        original_error=e
+                        f"Unexpected error in {func.__name__}: {str(e)}", context=context, original_error=e
                     )
                     logger.log(log_level, wrapped_error.format_message())
 
@@ -184,14 +180,13 @@ def error_handler(
                     else:
                         # Wrap and reraise as OpenBench exception
                         raise OpenBenchException(
-                            f"Error in {func.__name__}: {str(e)}",
-                            context=context,
-                            original_error=e
+                            f"Error in {func.__name__}: {str(e)}", context=context, original_error=e
                         ) from e
                 else:
                     return return_value
 
         return wrapper
+
     return decorator
 
 
@@ -201,11 +196,11 @@ def safe_execute(
     default_return: Any = None,
     error_message: Optional[str] = None,
     log_errors: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """
     Safely execute a function with error handling.
-    
+
     Args:
         func: Function to execute
         *args: Positional arguments for the function
@@ -213,7 +208,7 @@ def safe_execute(
         error_message: Custom error message prefix
         log_errors: Whether to log errors
         **kwargs: Keyword arguments for the function
-    
+
     Returns:
         Function result or default_return if function fails
     """
@@ -231,11 +226,11 @@ def safe_execute(
 def validate_file_exists(file_path: str, error_message: Optional[str] = None) -> None:
     """
     Validate that a file exists, raising FileSystemError if not.
-    
+
     Args:
         file_path: Path to the file to validate
         error_message: Custom error message
-    
+
     Raises:
         FileSystemError: If file does not exist
     """
@@ -243,22 +238,22 @@ def validate_file_exists(file_path: str, error_message: Optional[str] = None) ->
 
     if not os.path.exists(file_path):
         message = error_message or f"File not found: {file_path}"
-        raise FileSystemError(message, context={'file_path': file_path})
+        raise FileSystemError(message, context={"file_path": file_path})
 
     if not os.path.isfile(file_path):
         message = error_message or f"Path exists but is not a file: {file_path}"
-        raise FileSystemError(message, context={'file_path': file_path})
+        raise FileSystemError(message, context={"file_path": file_path})
 
 
 def validate_directory_exists(dir_path: str, create: bool = False, error_message: Optional[str] = None) -> None:
     """
     Validate that a directory exists, optionally creating it.
-    
+
     Args:
         dir_path: Path to the directory to validate
         create: Whether to create the directory if it doesn't exist
         error_message: Custom error message
-    
+
     Raises:
         FileSystemError: If directory validation fails
     """
@@ -269,26 +264,27 @@ def validate_directory_exists(dir_path: str, create: bool = False, error_message
             try:
                 os.makedirs(dir_path, exist_ok=True)
             except Exception as e:
-                raise FileSystemError(f"Failed to create directory: {dir_path}",
-                                    context={'dir_path': dir_path}, original_error=e)
+                raise FileSystemError(
+                    f"Failed to create directory: {dir_path}", context={"dir_path": dir_path}, original_error=e
+                )
         else:
             message = error_message or f"Directory not found: {dir_path}"
-            raise FileSystemError(message, context={'dir_path': dir_path})
+            raise FileSystemError(message, context={"dir_path": dir_path})
 
     if not os.path.isdir(dir_path):
         message = error_message or f"Path exists but is not a directory: {dir_path}"
-        raise FileSystemError(message, context={'dir_path': dir_path})
+        raise FileSystemError(message, context={"dir_path": dir_path})
 
 
 def validate_required_keys(data: Dict[str, Any], required_keys: list, context_name: str = "data") -> None:
     """
     Validate that required keys exist in a dictionary.
-    
+
     Args:
         data: Dictionary to validate
         required_keys: List of required keys
         context_name: Name of the data context for error messages
-    
+
     Raises:
         ValidationError: If required keys are missing
     """
@@ -297,14 +293,14 @@ def validate_required_keys(data: Dict[str, Any], required_keys: list, context_na
     if missing_keys:
         raise ValidationError(
             f"Missing required keys in {context_name}: {missing_keys}",
-            context={'missing_keys': missing_keys, 'available_keys': list(data.keys())}
+            context={"missing_keys": missing_keys, "available_keys": list(data.keys())},
         )
 
 
 def log_performance_warning(func_name: str, execution_time: float, threshold: float = 10.0) -> None:
     """
     Log performance warning if execution time exceeds threshold.
-    
+
     Args:
         func_name: Name of the function
         execution_time: Execution time in seconds
@@ -322,7 +318,7 @@ class ErrorContext:
     def __init__(self, operation_name: str, reraise: bool = True):
         """
         Initialize error context.
-        
+
         Args:
             operation_name: Name of the operation for error messages
             reraise: Whether to reraise exceptions
@@ -362,10 +358,7 @@ def setup_global_error_handler():
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
 
-        logger = logging.getLogger('openbench.global')
-        logger.critical(
-            "Uncaught exception",
-            exc_info=(exc_type, exc_value, exc_traceback)
-        )
+        logger = logging.getLogger("openbench.global")
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = handle_exception

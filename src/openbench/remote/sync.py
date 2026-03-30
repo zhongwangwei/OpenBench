@@ -16,15 +16,17 @@ logger = logging.getLogger(__name__)
 
 class SyncStatus(Enum):
     """Sync status for a file."""
-    SYNCED = "synced"      # File is synced with remote
-    PENDING = "pending"    # Local changes not yet synced
-    SYNCING = "syncing"    # Currently syncing
-    ERROR = "error"        # Sync failed
+
+    SYNCED = "synced"  # File is synced with remote
+    PENDING = "pending"  # Local changes not yet synced
+    SYNCING = "syncing"  # Currently syncing
+    ERROR = "error"  # Sync failed
 
 
 @dataclass
 class SyncState:
     """State of a file in the sync engine."""
+
     status: SyncStatus
     error_message: Optional[str] = None
     retry_count: int = 0
@@ -43,7 +45,7 @@ class SyncEngine:
         self,
         ssh_manager,
         remote_project_dir: str,
-        on_status_changed: Optional[Callable[[str, SyncStatus], None]] = None
+        on_status_changed: Optional[Callable[[str, SyncStatus], None]] = None,
     ):
         """
         Initialize sync engine.
@@ -54,7 +56,7 @@ class SyncEngine:
             on_status_changed: Callback when file sync status changes
         """
         self._ssh = ssh_manager
-        self._remote_dir = remote_project_dir.rstrip('/')
+        self._remote_dir = remote_project_dir.rstrip("/")
         self._on_status_changed = on_status_changed
 
         # Cache storage
@@ -100,6 +102,7 @@ class SyncEngine:
             while path in self._fetching:
                 self._lock.release()
                 import time
+
                 time.sleep(0.05)  # Small delay before retry
                 self._lock.acquire()
                 # Check cache again after waiting
@@ -112,9 +115,7 @@ class SyncEngine:
         try:
             # Fetch from remote (outside lock to avoid blocking other operations)
             remote_path = self._remote_path(path)
-            stdout, stderr, exit_code = self._ssh.execute(
-                f"cat '{remote_path}'", timeout=30
-            )
+            stdout, stderr, exit_code = self._ssh.execute(f"cat '{remote_path}'", timeout=30)
 
             if exit_code != 0:
                 raise FileNotFoundError(f"Remote file not found: {remote_path}")
@@ -242,12 +243,10 @@ class SyncEngine:
     def list_dir(self, path: str) -> List[str]:
         """List remote directory contents."""
         remote_path = self._remote_path(path)
-        stdout, stderr, exit_code = self._ssh.execute(
-            f"ls -1 '{remote_path}' 2>/dev/null", timeout=30
-        )
+        stdout, stderr, exit_code = self._ssh.execute(f"ls -1 '{remote_path}' 2>/dev/null", timeout=30)
         if exit_code != 0:
             return []
-        return [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+        return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
 
     def exists(self, path: str) -> bool:
         """Check if remote path exists."""
@@ -257,10 +256,8 @@ class SyncEngine:
                 return True
 
         remote_path = self._remote_path(path)
-        stdout, stderr, exit_code = self._ssh.execute(
-            f"test -e '{remote_path}' && echo 'exists'", timeout=10
-        )
-        return exit_code == 0 and 'exists' in stdout
+        stdout, stderr, exit_code = self._ssh.execute(f"test -e '{remote_path}' && echo 'exists'", timeout=10)
+        return exit_code == 0 and "exists" in stdout
 
     def glob(self, pattern: str) -> List[str]:
         """Find files matching pattern on remote.
@@ -270,14 +267,13 @@ class SyncEngine:
         base_dir = self._remote_dir
         # Use bash with globstar for ** support, ls to list matches
         # shopt -s globstar enables ** pattern; nullglob prevents literal pattern on no match
-        cmd = f"cd '{base_dir}' && shopt -s globstar nullglob && for f in {pattern}; do [ -f \"$f\" ] && echo \"$f\"; done"
-        stdout, stderr, exit_code = self._ssh.execute(
-            f"bash -c '{cmd}'",
-            timeout=30
+        cmd = (
+            f'cd \'{base_dir}\' && shopt -s globstar nullglob && for f in {pattern}; do [ -f "$f" ] && echo "$f"; done'
         )
+        stdout, stderr, exit_code = self._ssh.execute(f"bash -c '{cmd}'", timeout=30)
         if exit_code != 0:
             return []
-        return [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+        return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
 
     def mkdir(self, path: str) -> None:
         """Create remote directory."""
@@ -300,11 +296,7 @@ class SyncEngine:
             return
 
         self._stop_sync.clear()
-        self._sync_thread = threading.Thread(
-            target=self._background_sync_loop,
-            args=(interval,),
-            daemon=True
-        )
+        self._sync_thread = threading.Thread(target=self._background_sync_loop, args=(interval,), daemon=True)
         self._sync_thread.start()
 
     def stop_background_sync(self):
@@ -351,10 +343,7 @@ class SyncEngine:
     def retry_errors(self) -> bool:
         """Retry syncing files that had errors."""
         with self._lock:
-            error_files = [
-                path for path, status in self._sync_status.items()
-                if status == SyncStatus.ERROR
-            ]
+            error_files = [path for path, status in self._sync_status.items() if status == SyncStatus.ERROR]
 
         success = True
         for path in error_files:

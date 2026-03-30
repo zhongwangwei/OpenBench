@@ -113,6 +113,7 @@ def with_timeout(timeout_seconds: int = 300, error_message: Optional[str] = None
             # Your code here
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -141,6 +142,7 @@ def with_timeout(timeout_seconds: int = 300, error_message: Optional[str] = None
             return result[0]
 
         return wrapper
+
     return decorator
 
 
@@ -170,6 +172,7 @@ class HeartbeatMonitor:
     def _schedule_heartbeat(self):
         """Schedule next heartbeat."""
         if not self._stopped:
+
             def beat():
                 if not self._stopped:
                     elapsed = time.time() - self.start_time
@@ -216,6 +219,7 @@ def log_progress(operation_name: str, total_items: int):
                 # Your code here
                 yield i  # Yield progress
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -226,7 +230,8 @@ def log_progress(operation_name: str, total_items: int):
                 result = func(*args, **kwargs)
 
                 # If it's a generator, wrap it with progress logging
-                if hasattr(result, '__iter__') and not isinstance(result, (str, bytes)):
+                if hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
+
                     def progress_wrapper():
                         for i, item in enumerate(result):
                             if i % max(1, total_items // 10) == 0:  # Log every 10%
@@ -251,4 +256,5 @@ def log_progress(operation_name: str, total_items: int):
                 raise
 
         return wrapper
+
     return decorator

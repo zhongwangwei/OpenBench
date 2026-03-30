@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QWidget, QMessageBox
 @dataclass
 class ValidationError:
     """Single validation error."""
+
     field_name: str
     message: str
     page_id: str
@@ -25,6 +26,7 @@ class ValidationError:
 @dataclass
 class ValidationResult:
     """Validation result containing validity status and errors."""
+
     is_valid: bool
     errors: List[ValidationError] = field(default_factory=list)
 
@@ -34,11 +36,7 @@ class FieldValidator:
 
     @staticmethod
     def required(
-        value: Any,
-        field_name: str,
-        message: str,
-        page_id: str = "",
-        widget: QWidget = None
+        value: Any, field_name: str, message: str, page_id: str = "", widget: QWidget = None
     ) -> Optional[ValidationError]:
         """
         Validate that a field is not empty.
@@ -63,11 +61,7 @@ class FieldValidator:
 
     @staticmethod
     def path_exists(
-        path: str,
-        field_name: str,
-        message: str,
-        page_id: str = "",
-        widget: QWidget = None
+        path: str, field_name: str, message: str, page_id: str = "", widget: QWidget = None
     ) -> Optional[ValidationError]:
         """
         Validate that a path exists.
@@ -102,7 +96,7 @@ class FieldValidator:
         field_name: str,
         message: str,
         page_id: str = "",
-        widget: QWidget = None
+        widget: QWidget = None,
     ) -> Optional[ValidationError]:
         """
         Validate that a number is within a range.
@@ -125,12 +119,7 @@ class FieldValidator:
 
     @staticmethod
     def min_max(
-        min_value: float,
-        max_value: float,
-        field_name: str,
-        message: str,
-        page_id: str = "",
-        widget: QWidget = None
+        min_value: float, max_value: float, field_name: str, message: str, page_id: str = "", widget: QWidget = None
     ) -> Optional[ValidationError]:
         """
         Validate that min value is less than or equal to max value.
@@ -152,11 +141,7 @@ class FieldValidator:
 
     @staticmethod
     def at_least_one(
-        values: List[Any],
-        field_names: List[str],
-        message: str,
-        page_id: str = "",
-        widget: QWidget = None
+        values: List[Any], field_names: List[str], message: str, page_id: str = "", widget: QWidget = None
     ) -> Optional[ValidationError]:
         """
         Validate that at least one of the values is non-empty.
@@ -183,11 +168,7 @@ class FieldValidator:
 
     @staticmethod
     def selection_required(
-        selection: Dict[str, bool],
-        field_name: str,
-        message: str,
-        page_id: str = "",
-        widget: QWidget = None
+        selection: Dict[str, bool], field_name: str, message: str, page_id: str = "", widget: QWidget = None
     ) -> Optional[ValidationError]:
         """
         Validate that at least one item is selected (True).
@@ -246,16 +227,12 @@ class ValidationManager:
                 "Validation Warning",
                 f"{error.message}\n\nDo you want to continue anyway?",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
-            user_wants_to_continue = (reply == QMessageBox.Yes)
+            user_wants_to_continue = reply == QMessageBox.Yes
         else:
             # Just show warning, no option to skip
-            QMessageBox.warning(
-                self._parent,
-                "Validation Error",
-                error.message
-            )
+            QMessageBox.warning(self._parent, "Validation Error", error.message)
             user_wants_to_continue = False
 
         if error.widget is not None and not user_wants_to_continue:

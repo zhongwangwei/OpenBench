@@ -63,11 +63,7 @@ class PageRunMonitor(BasePage):
             config_path: Path to the exported OpenBench configuration file
         """
         if self._runner and self._runner.isRunning():
-            QMessageBox.warning(
-                self,
-                "Already Running",
-                "An evaluation is already running. Stop it first."
-            )
+            QMessageBox.warning(self, "Already Running", "An evaluation is already running. Stop it first.")
             return
 
         # Build task list from config
@@ -127,6 +123,7 @@ class PageRunMonitor(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -152,7 +149,7 @@ class PageRunMonitor(BasePage):
             num_comparisons=num_comparisons,
             do_evaluation=general.get("evaluation", True),
             do_comparison=general.get("comparison", False),
-            do_statistics=general.get("statistics", False)
+            do_statistics=general.get("statistics", False),
         )
 
         # Connect signals - same interface for both runners
@@ -179,7 +176,7 @@ class PageRunMonitor(BasePage):
                 self,
                 "Remote Configuration Missing",
                 "Remote execution is enabled but no remote server is configured.\n\n"
-                "Please configure a remote server in Runtime Environment."
+                "Please configure a remote server in Runtime Environment.",
             )
             return None
 
@@ -196,7 +193,7 @@ class PageRunMonitor(BasePage):
                 "1. Go to Runtime Environment\n"
                 "2. Configure the remote server\n"
                 "3. Click 'Test' to establish the connection\n"
-                "4. Then return here and click Run again"
+                "4. Then return here and click Run again",
             )
             return None
 
@@ -209,7 +206,7 @@ class PageRunMonitor(BasePage):
                 self,
                 "Remote Python Not Configured",
                 "Remote Python path is not configured.\n\n"
-                "Please configure the Python path in Runtime Environment > Remote Python Environment."
+                "Please configure the Python path in Runtime Environment > Remote Python Environment.",
             )
             return None
 
@@ -218,7 +215,7 @@ class PageRunMonitor(BasePage):
                 self,
                 "Remote OpenBench Not Configured",
                 "Remote OpenBench path is not configured.\n\n"
-                "Please configure the OpenBench path in Runtime Environment > Remote Python Environment."
+                "Please configure the OpenBench path in Runtime Environment > Remote Python Environment.",
             )
             return None
 
@@ -294,17 +291,13 @@ class PageRunMonitor(BasePage):
         reply = QMessageBox.question(
             self,
             "OpenBench Not Found",
-            "Could not find the OpenBench directory automatically.\n\n"
-            "Would you like to select it manually?",
-            QMessageBox.Yes | QMessageBox.No
+            "Could not find the OpenBench directory automatically.\n\nWould you like to select it manually?",
+            QMessageBox.Yes | QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
             dir_path = QFileDialog.getExistingDirectory(
-                self,
-                "Select OpenBench Directory",
-                os.path.expanduser("~"),
-                QFileDialog.ShowDirsOnly
+                self, "Select OpenBench Directory", os.path.expanduser("~"), QFileDialog.ShowDirsOnly
             )
 
             if dir_path:
@@ -314,16 +307,13 @@ class PageRunMonitor(BasePage):
                     # Save the path
                     self._save_openbench_path(dir_path)
                     QMessageBox.information(
-                        self,
-                        "Success",
-                        f"OpenBench directory saved:\n{dir_path}\n\n"
-                        "Please click Run again."
+                        self, "Success", f"OpenBench directory saved:\n{dir_path}\n\nPlease click Run again."
                     )
                 else:
                     QMessageBox.warning(
                         self,
                         "Invalid Directory",
-                        f"The selected directory does not contain openbench/openbench.py:\n{dir_path}"
+                        f"The selected directory does not contain openbench/openbench.py:\n{dir_path}",
                     )
 
     def _save_openbench_path(self, path: str):
@@ -333,7 +323,7 @@ class PageRunMonitor(BasePage):
             config_dir = os.path.join(home_dir, ".openbench_wizard")
             os.makedirs(config_dir, exist_ok=True)
             config_file = os.path.join(config_dir, "config.txt")
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 f.write(path)
         except Exception as e:
             print(f"Warning: Could not save OpenBench path: {e}")
@@ -342,10 +332,7 @@ class PageRunMonitor(BasePage):
         """Handle stop request."""
         if self._runner:
             reply = QMessageBox.question(
-                self,
-                "Confirm Stop",
-                "Are you sure you want to stop the evaluation?",
-                QMessageBox.Yes | QMessageBox.No
+                self, "Confirm Stop", "Are you sure you want to stop the evaluation?", QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
                 self._runner.stop()
@@ -357,6 +344,7 @@ class PageRunMonitor(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
         if is_remote:
@@ -374,17 +362,9 @@ class PageRunMonitor(BasePage):
                 else:  # Linux
                     subprocess.run(["xdg-open", output_dir], check=False)
             except Exception as e:
-                QMessageBox.warning(
-                    self,
-                    "Open Error",
-                    f"Could not open directory:\n{output_dir}\n\nError: {str(e)}"
-                )
+                QMessageBox.warning(self, "Open Error", f"Could not open directory:\n{output_dir}\n\nError: {str(e)}")
         else:
-            QMessageBox.warning(
-                self,
-                "Directory Not Found",
-                f"Output directory does not exist:\n{output_dir}"
-            )
+            QMessageBox.warning(self, "Directory Not Found", f"Output directory does not exist:\n{output_dir}")
 
     def _open_remote_output(self, output_dir: str):
         """Open remote output directory in file browser with download option."""
@@ -394,23 +374,14 @@ class PageRunMonitor(BasePage):
         ssh_manager = self._get_ssh_manager()
         if not ssh_manager or not ssh_manager.is_connected:
             QMessageBox.warning(
-                self,
-                "Not Connected",
-                "SSH connection is not available.\n\n"
-                f"Remote output directory:\n{output_dir}"
+                self, "Not Connected", f"SSH connection is not available.\n\nRemote output directory:\n{output_dir}"
             )
             return
 
         # Check if directory exists on remote
-        stdout, stderr, exit_code = ssh_manager.execute(
-            f"test -d '{output_dir}' && echo 'exists'", timeout=10
-        )
-        if exit_code != 0 or 'exists' not in stdout:
-            QMessageBox.warning(
-                self,
-                "Directory Not Found",
-                f"Remote output directory does not exist:\n{output_dir}"
-            )
+        stdout, stderr, exit_code = ssh_manager.execute(f"test -d '{output_dir}' && echo 'exists'", timeout=10)
+        if exit_code != 0 or "exists" not in stdout:
+            QMessageBox.warning(self, "Directory Not Found", f"Remote output directory does not exist:\n{output_dir}")
             return
 
         # Create dialog with remote file browser
@@ -421,12 +392,7 @@ class PageRunMonitor(BasePage):
         layout = QVBoxLayout(dialog)
 
         # Remote file browser
-        browser = RemoteFileBrowser(
-            ssh_manager=ssh_manager,
-            start_path=output_dir,
-            parent=dialog,
-            select_dirs=True
-        )
+        browser = RemoteFileBrowser(ssh_manager=ssh_manager, start_path=output_dir, parent=dialog, select_dirs=True)
         layout.addWidget(browser, 1)
 
         # Button layout
@@ -435,9 +401,7 @@ class PageRunMonitor(BasePage):
         # Download folder button
         btn_download_all = QPushButton("Download Folder to Local...")
         btn_download_all.setToolTip("Download the entire output folder to local machine")
-        btn_download_all.clicked.connect(
-            lambda: self._download_remote_folder(ssh_manager, output_dir, dialog)
-        )
+        btn_download_all.clicked.connect(lambda: self._download_remote_folder(ssh_manager, output_dir, dialog))
         btn_layout.addWidget(btn_download_all)
 
         btn_layout.addStretch()
@@ -458,26 +422,18 @@ class PageRunMonitor(BasePage):
 
         # Ask user where to save
         local_dir = QFileDialog.getExistingDirectory(
-            parent_dialog,
-            "Select Local Directory to Save Output",
-            os.path.expanduser("~"),
-            QFileDialog.ShowDirsOnly
+            parent_dialog, "Select Local Directory to Save Output", os.path.expanduser("~"), QFileDialog.ShowDirsOnly
         )
 
         if not local_dir:
             return
 
         # Get folder name from remote path
-        folder_name = os.path.basename(remote_dir.rstrip('/'))
+        folder_name = os.path.basename(remote_dir.rstrip("/"))
         local_target = os.path.join(local_dir, folder_name)
 
         # Create progress dialog
-        progress = QProgressDialog(
-            "Downloading files from remote server...",
-            "Cancel",
-            0, 100,
-            parent_dialog
-        )
+        progress = QProgressDialog("Downloading files from remote server...", "Cancel", 0, 100, parent_dialog)
         progress.setWindowTitle("Downloading")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
@@ -485,24 +441,14 @@ class PageRunMonitor(BasePage):
 
         try:
             # Get list of files to download
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"find '{remote_dir}' -type f", timeout=60
-            )
+            stdout, stderr, exit_code = ssh_manager.execute(f"find '{remote_dir}' -type f", timeout=60)
             if exit_code != 0:
-                QMessageBox.warning(
-                    parent_dialog,
-                    "Error",
-                    f"Failed to list remote files:\n{stderr}"
-                )
+                QMessageBox.warning(parent_dialog, "Error", f"Failed to list remote files:\n{stderr}")
                 return
 
-            files = [f.strip() for f in stdout.strip().split('\n') if f.strip()]
+            files = [f.strip() for f in stdout.strip().split("\n") if f.strip()]
             if not files:
-                QMessageBox.information(
-                    parent_dialog,
-                    "Empty Directory",
-                    "No files found in the remote directory."
-                )
+                QMessageBox.information(parent_dialog, "Empty Directory", "No files found in the remote directory.")
                 return
 
             total_files = len(files)
@@ -536,7 +482,7 @@ class PageRunMonitor(BasePage):
                 QMessageBox.information(
                     parent_dialog,
                     "Download Complete",
-                    f"Successfully downloaded {total_files} files to:\n{local_target}"
+                    f"Successfully downloaded {total_files} files to:\n{local_target}",
                 )
 
                 # Open the downloaded folder
@@ -551,11 +497,7 @@ class PageRunMonitor(BasePage):
                     logger.debug("Failed to open downloaded folder: %s", e)
 
         except Exception as e:
-            QMessageBox.warning(
-                parent_dialog,
-                "Download Error",
-                f"Failed to download files:\n{str(e)}"
-            )
+            QMessageBox.warning(parent_dialog, "Download Error", f"Failed to download files:\n{str(e)}")
 
     def load_from_config(self):
         """Called when page becomes visible."""

@@ -66,7 +66,7 @@ class WizardController(QObject):
         self._config_manager = ConfigManager()
         self._auto_sync_enabled = True
         self._ssh_manager = None  # SSH manager for remote mode
-        self._storage: Optional['ProjectStorage'] = None
+        self._storage: Optional["ProjectStorage"] = None
 
     @property
     def project_root(self) -> str:
@@ -89,18 +89,19 @@ class WizardController(QObject):
         self._ssh_manager = value
 
     @property
-    def storage(self) -> Optional['ProjectStorage']:
+    def storage(self) -> Optional["ProjectStorage"]:
         """Get project storage instance."""
         return self._storage
 
     @storage.setter
-    def storage(self, value: Optional['ProjectStorage']):
+    def storage(self, value: Optional["ProjectStorage"]):
         """Set project storage instance."""
         self._storage = value
 
     def is_remote_mode(self) -> bool:
         """Check if using remote storage."""
         from openbench.remote.storage import RemoteStorage
+
         return isinstance(self._storage, RemoteStorage)
 
     def _default_config(self) -> Dict[str, Any]:
@@ -284,13 +285,14 @@ class WizardController(QObject):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.storage, RemoteStorage)
 
-        if basedir and (os.path.isabs(basedir) or basedir.startswith('/')):
+        if basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
             # Check if basedir already ends with basename to avoid duplication
             # Use both separators for compatibility
-            basedir_stripped = basedir.rstrip('/').rstrip('\\')
-            basedir_basename = basedir_stripped.split('/')[-1].split('\\')[-1]
+            basedir_stripped = basedir.rstrip("/").rstrip("\\")
+            basedir_basename = basedir_stripped.split("/")[-1].split("\\")[-1]
             if basedir_basename == basename:
                 result = basedir
             else:
@@ -307,7 +309,7 @@ class WizardController(QObject):
 
         # In remote mode, ensure forward slashes
         if is_remote:
-            result = result.replace('\\', '/')
+            result = result.replace("\\", "/")
 
         return result
 
@@ -336,9 +338,7 @@ class WizardController(QObject):
 
             try:
                 # Sync data source namelists
-                self._config_manager.sync_namelists(
-                    self._config, output_dir, openbench_root
-                )
+                self._config_manager.sync_namelists(self._config, output_dir, openbench_root)
                 # Also cleanup unused files
                 self._config_manager.cleanup_unused_namelists(self._config, output_dir)
 
@@ -365,24 +365,20 @@ class WizardController(QObject):
         main_content = self._config_manager.generate_main_nml(
             self._config, openbench_root, output_dir, remote_openbench_path
         )
-        ref_content = self._config_manager.generate_ref_nml(
-            self._config, openbench_root, output_dir
-        )
-        sim_content = self._config_manager.generate_sim_nml(
-            self._config, openbench_root, output_dir
-        )
+        ref_content = self._config_manager.generate_ref_nml(self._config, openbench_root, output_dir)
+        sim_content = self._config_manager.generate_sim_nml(self._config, openbench_root, output_dir)
 
         # Calculate the relative path from storage root to output_dir
         # This ensures files are written to the case output directory, not OpenBench/nml
         storage_root = self._storage.project_dir
         if self.is_remote_mode():
             # Remote mode: use forward slashes
-            storage_root = storage_root.rstrip('/').replace('\\', '/')
-            output_dir_clean = output_dir.rstrip('/').replace('\\', '/')
+            storage_root = storage_root.rstrip("/").replace("\\", "/")
+            output_dir_clean = output_dir.rstrip("/").replace("\\", "/")
             if output_dir_clean.startswith(storage_root):
-                rel_path = output_dir_clean[len(storage_root):].lstrip('/')
+                rel_path = output_dir_clean[len(storage_root) :].lstrip("/")
             else:
-                rel_path = output_dir_clean.lstrip('/')
+                rel_path = output_dir_clean.lstrip("/")
             nml_path = f"{rel_path}/nml" if rel_path else "nml"
         else:
             # Local mode: use os.path
@@ -415,11 +411,9 @@ class WizardController(QObject):
         os.makedirs(nml_dir, exist_ok=True)
 
         main_path = os.path.join(nml_dir, f"main-{basename}.yaml")
-        main_content = self._config_manager.generate_main_nml(
-            self._config, openbench_root, output_dir
-        )
+        main_content = self._config_manager.generate_main_nml(self._config, openbench_root, output_dir)
 
-        with open(main_path, 'w', encoding='utf-8') as f:
+        with open(main_path, "w", encoding="utf-8") as f:
             f.write(main_content)
 
     def get_combined_metrics_scores_selection(self) -> Dict[str, bool]:

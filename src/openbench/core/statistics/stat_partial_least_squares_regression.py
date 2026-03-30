@@ -5,7 +5,8 @@ import numpy as np
 import xarray as xr
 from joblib import Parallel, delayed
 
-warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action="ignore", category=UserWarning)
+
 
 def stat_partial_least_squares_regression(self, *variables):
     """
@@ -29,9 +30,9 @@ def stat_partial_least_squares_regression(self, *variables):
     from scipy.stats import t
 
     # Prepare Dependent and Independent data
-    max_components = self.stats_nml['Partial_Least_Squares_Regression']['max_components']
-    n_splits = self.stats_nml['Partial_Least_Squares_Regression']['n_splits']
-    n_jobs = self.stats_nml['Partial_Least_Squares_Regression']['n_jobs']
+    max_components = self.stats_nml["Partial_Least_Squares_Regression"]["max_components"]
+    n_splits = self.stats_nml["Partial_Least_Squares_Regression"]["n_splits"]
+    n_jobs = self.stats_nml["Partial_Least_Squares_Regression"]["n_jobs"]
 
     Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
     X_vars = list(variables[1:])  # [var for var in variables if '_Y' not in var.name]
@@ -86,7 +87,7 @@ def stat_partial_least_squares_regression(self, *variables):
         coef = pls.coef_.T
         intercept = pls.intercept_.T
         residuals = y - pls.predict(x).ravel()
-        mse = np.mean(residuals ** 2)
+        mse = np.mean(residuals**2)
         coef_std_err = np.sqrt(mse / len(y))
         df = len(y) - 1
         t_vals = coef.ravel() / coef_std_err
@@ -97,8 +98,7 @@ def stat_partial_least_squares_regression(self, *variables):
         # Compute best number of components
 
     results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_best_components)(lat, lon)
-        for lat in range(Y_data.shape[1]) for lon in range(Y_data.shape[2])
+        delayed(compute_best_components)(lat, lon) for lat in range(Y_data.shape[1]) for lon in range(Y_data.shape[2])
     )
 
     best_n_components = np.zeros((Y_data.shape[1], Y_data.shape[2]), dtype=int)
@@ -109,7 +109,8 @@ def stat_partial_least_squares_regression(self, *variables):
     # Compute PLSR results
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_plsr)(lat, lon, best_n_components[lat, lon])
-        for lat in range(Y_data.shape[1]) for lon in range(Y_data.shape[2])
+        for lat in range(Y_data.shape[1])
+        for lon in range(Y_data.shape[2])
     )
 
     coef_values = np.zeros((X_data.shape[1], Y_data.shape[1], Y_data.shape[2]))
@@ -128,26 +129,22 @@ def stat_partial_least_squares_regression(self, *variables):
     # Create output dataset
     ds = xr.Dataset(
         data_vars={
-            'best_n_components': (['lat', 'lon'], best_n_components),
-            'coefficients': (['variable', 'lat', 'lon'], coef_values),
-            'intercepts': (['variable', 'lat', 'lon'], intercept_values),
-            'p_values': (['variable', 'lat', 'lon'], p_values),
-            'r_squared': (['lat', 'lon'], r_squared_values),
-            'anomaly': (['variable', 'lat', 'lon'], anomaly)
+            "best_n_components": (["lat", "lon"], best_n_components),
+            "coefficients": (["variable", "lat", "lon"], coef_values),
+            "intercepts": (["variable", "lat", "lon"], intercept_values),
+            "p_values": (["variable", "lat", "lon"], p_values),
+            "r_squared": (["lat", "lon"], r_squared_values),
+            "anomaly": (["variable", "lat", "lon"], anomaly),
         },
-        coords={
-            'lat': Y_vars.lat,
-            'lon': Y_vars.lon,
-            'variable': [f'x{i + 1}' for i in range(len(X_vars))]
-        }
+        coords={"lat": Y_vars.lat, "lon": Y_vars.lon, "variable": [f"x{i + 1}" for i in range(len(X_vars))]},
     )
 
     # Add metadata
-    ds['best_n_components'].attrs['long_name'] = 'Best number of components'
-    ds['coefficients'].attrs['long_name'] = 'PLSR coefficients'
-    ds['intercepts'].attrs['long_name'] = 'PLSR intercepts'
-    ds['p_values'].attrs['long_name'] = 'P-values'
-    ds['r_squared'].attrs['long_name'] = 'R-squared'
-    ds['anomaly'].attrs['long_name'] = 'Anomaly (coefficients * Y standard deviation)'
+    ds["best_n_components"].attrs["long_name"] = "Best number of components"
+    ds["coefficients"].attrs["long_name"] = "PLSR coefficients"
+    ds["intercepts"].attrs["long_name"] = "PLSR intercepts"
+    ds["p_values"].attrs["long_name"] = "P-values"
+    ds["r_squared"].attrs["long_name"] = "R-squared"
+    ds["anomaly"].attrs["long_name"] = "Anomaly (coefficients * Y standard deviation)"
 
     return ds

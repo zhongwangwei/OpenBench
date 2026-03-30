@@ -32,7 +32,7 @@ class IOutputManager(ABC):
         pass
 
     @abstractmethod
-    def register_formatter(self, formatter: 'IOutputFormatter') -> None:
+    def register_formatter(self, formatter: "IOutputFormatter") -> None:
         """Register an output formatter."""
         pass
 
@@ -63,11 +63,11 @@ class IDataProcessor(ABC):
     def process(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
         """
         Process a dataset with specified operations.
-        
+
         Args:
             data: Input dataset
             **kwargs: Additional processing parameters
-            
+
         Returns:
             Processed dataset
         """
@@ -77,10 +77,10 @@ class IDataProcessor(ABC):
     def validate_input(self, data: xr.Dataset) -> bool:
         """
         Validate input data format and content.
-        
+
         Args:
             data: Dataset to validate
-            
+
         Returns:
             True if valid, False otherwise
         """
@@ -94,11 +94,11 @@ class IDataLoader(ABC):
     def load(self, source: Union[str, Path, List[str]], **kwargs) -> xr.Dataset:
         """
         Load data from source(s).
-        
+
         Args:
             source: Data source path(s)
             **kwargs: Additional loading parameters
-            
+
         Returns:
             Loaded dataset
         """
@@ -108,10 +108,10 @@ class IDataLoader(ABC):
     def supports_format(self, file_path: Union[str, Path]) -> bool:
         """
         Check if loader supports the given file format.
-        
+
         Args:
             file_path: Path to file to check
-            
+
         Returns:
             True if format is supported
         """
@@ -122,22 +122,16 @@ class IEvaluationEngine(ABC):
     """Abstract interface for evaluation engines."""
 
     @abstractmethod
-    def evaluate(
-        self,
-        simulation: xr.Dataset,
-        reference: xr.Dataset,
-        metrics: List[str],
-        **kwargs
-    ) -> Dict[str, Any]:
+    def evaluate(self, simulation: xr.Dataset, reference: xr.Dataset, metrics: List[str], **kwargs) -> Dict[str, Any]:
         """
         Evaluate simulation against reference data.
-        
+
         Args:
             simulation: Simulation dataset
             reference: Reference dataset
             metrics: List of metrics to calculate
             **kwargs: Additional evaluation parameters
-            
+
         Returns:
             Dictionary containing evaluation results
         """
@@ -147,7 +141,7 @@ class IEvaluationEngine(ABC):
     def get_supported_metrics(self) -> List[str]:
         """
         Get list of supported metrics.
-        
+
         Returns:
             List of metric names
         """
@@ -157,11 +151,11 @@ class IEvaluationEngine(ABC):
     def validate_datasets(self, simulation: xr.Dataset, reference: xr.Dataset) -> bool:
         """
         Validate that datasets are compatible for evaluation.
-        
+
         Args:
             simulation: Simulation dataset
             reference: Reference dataset
-            
+
         Returns:
             True if datasets are compatible
         """
@@ -175,11 +169,11 @@ class IMetricsCalculator(ABC):
     def calculate(self, simulation: xr.Dataset, reference: xr.Dataset) -> float:
         """
         Calculate metric value.
-        
+
         Args:
             simulation: Simulation data
             reference: Reference data
-            
+
         Returns:
             Calculated metric value
         """
@@ -189,7 +183,7 @@ class IMetricsCalculator(ABC):
     def get_name(self) -> str:
         """
         Get metric name.
-        
+
         Returns:
             Metric name
         """
@@ -199,7 +193,7 @@ class IMetricsCalculator(ABC):
     def get_description(self) -> str:
         """
         Get metric description.
-        
+
         Returns:
             Metric description
         """
@@ -210,20 +204,15 @@ class IVisualizationEngine(ABC):
     """Abstract interface for visualization engines."""
 
     @abstractmethod
-    def create_plot(
-        self,
-        data: Union[xr.Dataset, pd.DataFrame],
-        plot_type: str,
-        **kwargs
-    ) -> Any:
+    def create_plot(self, data: Union[xr.Dataset, pd.DataFrame], plot_type: str, **kwargs) -> Any:
         """
         Create a plot from data.
-        
+
         Args:
             data: Data to plot
             plot_type: Type of plot to create
             **kwargs: Additional plotting parameters
-            
+
         Returns:
             Plot object or figure
         """
@@ -233,7 +222,7 @@ class IVisualizationEngine(ABC):
     def save_plot(self, plot: Any, output_path: Union[str, Path], **kwargs) -> None:
         """
         Save plot to file.
-        
+
         Args:
             plot: Plot object to save
             output_path: Output file path
@@ -245,7 +234,7 @@ class IVisualizationEngine(ABC):
     def get_supported_plot_types(self) -> List[str]:
         """
         Get list of supported plot types.
-        
+
         Returns:
             List of plot type names
         """
@@ -259,11 +248,11 @@ class IConfigurationManager(ABC):
     def load_config(self, config_path: Union[str, Path], **kwargs) -> Dict[str, Any]:
         """
         Load configuration from file.
-        
+
         Args:
             config_path: Path to configuration file
             **kwargs: Additional loading parameters
-            
+
         Returns:
             Configuration dictionary
         """
@@ -273,10 +262,10 @@ class IConfigurationManager(ABC):
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """
         Validate configuration.
-        
+
         Args:
             config: Configuration to validate
-            
+
         Returns:
             True if valid
         """
@@ -286,7 +275,7 @@ class IConfigurationManager(ABC):
     def get_supported_formats(self) -> List[str]:
         """
         Get supported configuration file formats.
-        
+
         Returns:
             List of format extensions
         """
@@ -300,10 +289,10 @@ class IOrchestrator(ABC):
     def execute(self, workflow_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a workflow based on configuration.
-        
+
         Args:
             workflow_config: Workflow configuration
-            
+
         Returns:
             Execution results
         """
@@ -313,10 +302,10 @@ class IOrchestrator(ABC):
     def validate_workflow(self, workflow_config: Dict[str, Any]) -> bool:
         """
         Validate workflow configuration.
-        
+
         Args:
             workflow_config: Workflow to validate
-            
+
         Returns:
             True if valid
         """
@@ -330,10 +319,10 @@ class IResourceManager(ABC):
     def allocate_resources(self, task_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Allocate computational resources for a task.
-        
+
         Args:
             task_config: Task configuration
-            
+
         Returns:
             Resource allocation information
         """
@@ -343,7 +332,7 @@ class IResourceManager(ABC):
     def release_resources(self, allocation_id: str) -> None:
         """
         Release allocated resources.
-        
+
         Args:
             allocation_id: ID of allocation to release
         """
@@ -353,7 +342,7 @@ class IResourceManager(ABC):
     def get_resource_status(self) -> Dict[str, Any]:
         """
         Get current resource status.
-        
+
         Returns:
             Resource status information
         """
@@ -366,7 +355,7 @@ class BaseProcessor(IDataProcessor):
     def __init__(self, name: str):
         """
         Initialize base processor.
-        
+
         Args:
             name: Processor name
         """
@@ -406,7 +395,7 @@ class BaseEvaluator(IEvaluationEngine):
     def __init__(self, name: str):
         """
         Initialize base evaluator.
-        
+
         Args:
             name: Evaluator name
         """
@@ -416,7 +405,7 @@ class BaseEvaluator(IEvaluationEngine):
     def register_metric(self, metric: IMetricsCalculator) -> None:
         """
         Register a metric calculator.
-        
+
         Args:
             metric: Metric calculator to register
         """
@@ -448,20 +437,20 @@ class ProcessingPipeline:
     def __init__(self, name: str = "default"):
         """
         Initialize processing pipeline.
-        
+
         Args:
             name: Pipeline name
         """
         self.name = name
         self._processors = []
 
-    def add_processor(self, processor: IDataProcessor) -> 'ProcessingPipeline':
+    def add_processor(self, processor: IDataProcessor) -> "ProcessingPipeline":
         """
         Add a processor to the pipeline.
-        
+
         Args:
             processor: Processor to add
-            
+
         Returns:
             Self for method chaining
         """
@@ -471,11 +460,11 @@ class ProcessingPipeline:
     def process(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
         """
         Process data through the entire pipeline.
-        
+
         Args:
             data: Input data
             **kwargs: Additional parameters
-            
+
         Returns:
             Processed data
         """
@@ -504,7 +493,7 @@ class ComponentRegistry:
     def register(self, name: str, component: Any, category: str = "default") -> None:
         """
         Register a component.
-        
+
         Args:
             name: Component name
             component: Component instance
@@ -518,11 +507,11 @@ class ComponentRegistry:
     def get(self, name: str, category: str = "default") -> Optional[Any]:
         """
         Get a registered component.
-        
+
         Args:
             name: Component name
             category: Component category
-            
+
         Returns:
             Component instance or None if not found
         """
@@ -531,10 +520,10 @@ class ComponentRegistry:
     def list_components(self, category: Optional[str] = None) -> Dict[str, List[str]]:
         """
         List all registered components.
-        
+
         Args:
             category: Specific category to list (optional)
-            
+
         Returns:
             Dictionary mapping categories to component names
         """
@@ -546,11 +535,11 @@ class ComponentRegistry:
     def unregister(self, name: str, category: str = "default") -> bool:
         """
         Unregister a component.
-        
+
         Args:
             name: Component name
             category: Component category
-            
+
         Returns:
             True if component was removed
         """

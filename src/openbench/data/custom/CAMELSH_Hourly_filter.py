@@ -18,32 +18,38 @@ from joblib import Parallel, delayed
 
 def get_resolution_suffix(sim_grid_res):
     """Map simulation grid resolution to CaMA resolution suffix.
-    
+
     Args:
         sim_grid_res: Simulation grid resolution in degrees
-        
+
     Returns:
         str: Resolution suffix (e.g., '03min', '15min')
     """
-    res_map = {
-        0.25: '15min',
-        0.1: '06min',
-        0.0833: '05min',
-        0.05: '03min',
-        0.0167: '01min'
-    }
+    res_map = {0.25: "15min", 0.1: "06min", 0.0833: "05min", 0.05: "03min", 0.0167: "01min"}
     # Handle float precision issues
     for res, suffix in res_map.items():
         if abs(float(sim_grid_res) - res) < 0.001:
             return suffix
     # Default fallback
     logging.warning(f"Unknown resolution {sim_grid_res}, defaulting to 03min")
-    return '03min'
+    return "03min"
 
 
-def process_site(station_idx, station_ids, lons, lats, areas,
-                 cama_lons, cama_lats, alloc_errs,
-                 streamflow_data, times, info, scratch_dir, area_err_threshold):
+def process_site(
+    station_idx,
+    station_ids,
+    lons,
+    lats,
+    areas,
+    cama_lons,
+    cama_lats,
+    alloc_errs,
+    streamflow_data,
+    times,
+    info,
+    scratch_dir,
+    area_err_threshold,
+):
     """Extract metadata for a single station and persist its series as NetCDF."""
     station_id = str(station_ids[station_idx])
     lon = float(lons[station_idx])
@@ -85,23 +91,25 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
     # Apply filters: time range, spatial extent, and drainage area
-    if ((use_eyear - use_syear) < info.min_year or
-            lon < info.min_lon or lon > info.max_lon or
-            lat < info.min_lat or lat > info.max_lat):
+    if (
+        (use_eyear - use_syear) < info.min_year
+        or lon < info.min_lon
+        or lon > info.max_lon
+        or lat < info.min_lat
+        or lat > info.max_lat
+    ):
         return None
 
     # Filter by drainage area if specified
-    if hasattr(info, 'min_uparea') and area < info.min_uparea:
+    if hasattr(info, "min_uparea") and area < info.min_uparea:
         return None
-    if hasattr(info, 'max_uparea') and area > info.max_uparea:
+    if hasattr(info, "max_uparea") and area > info.max_uparea:
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
 
     # Save streamflow data as 1D time series
-    ds_out = xr.Dataset({
-        'streamflow': (['time'], streamflow)
-    }, coords={'time': times})
+    ds_out = xr.Dataset({"streamflow": (["time"], streamflow)}, coords={"time": times})
     ds_out.to_netcdf(file_path)
 
     # Return CaMA allocated coordinates as ref_lon/ref_lat
@@ -113,18 +121,18 @@ def filter_CAMELSH_Hourly(info, ds=None):
 
     This function reads from the consolidated CAMELSH hourly NetCDF file that contains
     multi-resolution CaMA-Flood allocation data.
-    
+
     Args:
         info: Configuration/info object with processing parameters
         ds: Optional xarray Dataset to filter (for data filtering mode)
-        
+
     Returns:
         For data filtering mode: Tuple of (info, filtered_data)
         For initialization mode: None (modifies info in place)
     """
     # If ds is provided, we're in data filtering mode
     if ds is not None:
-        varname = 'streamflow'
+        varname = "streamflow"
         if varname in ds:
             return info, ds[varname]
         else:
@@ -143,16 +151,16 @@ def filter_CAMELSH_Hourly(info, ds=None):
     logging.info(f"Loading CAMELSH station metadata from {dataset_path}...")
 
     # Get resolution suffix for CaMA variables
-    if hasattr(info, 'sim_grid_res'):
+    if hasattr(info, "sim_grid_res"):
         res_suffix = get_resolution_suffix(info.sim_grid_res)
         logging.info(f"Using CaMA resolution: {res_suffix} (sim_grid_res={info.sim_grid_res})")
     else:
-        res_suffix = '03min'  # Default
+        res_suffix = "03min"  # Default
         logging.warning("sim_grid_res not defined, using default 03min resolution")
 
     # Get area error threshold from config (default 0.2 = 20%)
-    area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
-    logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
+    area_err_threshold = getattr(info, "area_err_threshold", 0.2)
+    logging.info(f"Area allocation error threshold: {area_err_threshold * 100:.1f}%")
 
     # Create scratch directory
     scratch_dir = Path(info.casedir) / "scratch" / f"CAMELSH_Hourly_{info.sim_source}"
@@ -160,17 +168,17 @@ def filter_CAMELSH_Hourly(info, ds=None):
 
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
-        station_ids = ds_file['station'].values
-        lons = ds_file['lon'].values
-        lats = ds_file['lat'].values
-        areas = ds_file['drainage_area'].values
-        streamflow_data = ds_file['streamflow'].values  # (station, time)
-        times = ds_file['time'].values
+        station_ids = ds_file["station"].values
+        lons = ds_file["lon"].values
+        lats = ds_file["lat"].values
+        areas = ds_file["drainage_area"].values
+        streamflow_data = ds_file["streamflow"].values  # (station, time)
+        times = ds_file["time"].values
 
         # Load CaMA allocation data for the specified resolution
-        cama_lon_var = f'cama_lon_{res_suffix}'
-        cama_lat_var = f'cama_lat_{res_suffix}'
-        alloc_err_var = f'cama_alloc_err_{res_suffix}'
+        cama_lon_var = f"cama_lon_{res_suffix}"
+        cama_lat_var = f"cama_lat_{res_suffix}"
+        alloc_err_var = f"cama_alloc_err_{res_suffix}"
 
         if cama_lon_var in ds_file:
             cama_lons = ds_file[cama_lon_var].values
@@ -188,10 +196,21 @@ def filter_CAMELSH_Hourly(info, ds=None):
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
-                idx, station_ids, lons, lats, areas,
-                cama_lons, cama_lats, alloc_errs,
-                streamflow_data, times, info, scratch_dir, area_err_threshold
-            ) for idx in range(n_stations)
+                idx,
+                station_ids,
+                lons,
+                lats,
+                areas,
+                cama_lons,
+                cama_lats,
+                alloc_errs,
+                streamflow_data,
+                times,
+                info,
+                scratch_dir,
+                area_err_threshold,
+            )
+            for idx in range(n_stations)
         )
 
         # Filter out None results
@@ -201,16 +220,13 @@ def filter_CAMELSH_Hourly(info, ds=None):
         logging.error("No CAMELSH stations satisfy the selection criteria.")
         return
 
-    df = pd.DataFrame(
-        station_rows,
-        columns=['ID', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear', 'ref_dir']
-    )
+    df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
-    info.use_syear = int(df['use_syear'].min())
-    info.use_eyear = int(df['use_eyear'].max())
+    info.use_syear = int(df["use_syear"].min())
+    info.use_eyear = int(df["use_eyear"].max())
     info.ref_fulllist = f"{info.casedir}/stn_CAMELSH_Hourly_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)
-    logging.info(f'CAMELSH station list saved: {len(df)} stations')
-    logging.info(f'Time range: {info.use_syear} - {info.use_eyear}')
+    logging.info(f"CAMELSH station list saved: {len(df)} stations")
+    logging.info(f"Time range: {info.use_syear} - {info.use_eyear}")

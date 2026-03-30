@@ -21,11 +21,13 @@ logger = logging.getLogger(__name__)
 
 class SSHConnectionError(Exception):
     """SSH connection error."""
+
     pass
 
 
 class HostKeyVerificationError(Exception):
     """Host key verification failed."""
+
     pass
 
 
@@ -42,7 +44,7 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
         self,
         known_hosts_path: Optional[str] = None,
         confirm_callback: Optional[Callable[[str, str, str], bool]] = None,
-        auto_add: bool = False
+        auto_add: bool = False,
     ):
         """Initialize the host key policy.
 
@@ -117,7 +119,7 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
 
         key_bytes = key.asbytes()
         digest = hashlib.sha256(key_bytes).digest()
-        fingerprint = base64.b64encode(digest).decode('ascii').rstrip('=')
+        fingerprint = base64.b64encode(digest).decode("ascii").rstrip("=")
         return f"SHA256:{fingerprint}"
 
     def missing_host_key(self, client: SSHClient, hostname: str, key: paramiko.PKey) -> None:
@@ -165,9 +167,7 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
                 self._save_host_key(hostname, key)
                 return
             else:
-                raise HostKeyVerificationError(
-                    f"Host key verification rejected by user for {hostname}"
-                )
+                raise HostKeyVerificationError(f"Host key verification rejected by user for {hostname}")
 
         # No callback and not auto-add - reject
         raise HostKeyVerificationError(
@@ -185,7 +185,7 @@ class SSHManager:
         self,
         timeout: int = 30,
         host_key_callback: Optional[Callable[[str, str, str], bool]] = None,
-        auto_add_host_keys: bool = False
+        auto_add_host_keys: bool = False,
     ):
         """Initialize SSH manager.
 
@@ -255,7 +255,7 @@ class SSHManager:
         host_string: str,
         password: Optional[str] = None,
         key_file: Optional[str] = None,
-        passphrase: Optional[str] = None
+        passphrase: Optional[str] = None,
     ) -> None:
         """Connect to SSH server.
 
@@ -276,10 +276,7 @@ class SSHManager:
         self._client = paramiko.SSHClient()
 
         # Use secure host key policy
-        policy = InteractiveHostKeyPolicy(
-            confirm_callback=self._host_key_callback,
-            auto_add=self._auto_add_host_keys
-        )
+        policy = InteractiveHostKeyPolicy(confirm_callback=self._host_key_callback, auto_add=self._auto_add_host_keys)
         self._client.set_missing_host_key_policy(policy)
 
         try:
@@ -291,7 +288,7 @@ class SSHManager:
                 key_filename=key_file,
                 timeout=self._timeout,
                 allow_agent=False,
-                look_for_keys=False
+                look_for_keys=False,
             )
             self._host = host
             self._user = user
@@ -357,7 +354,7 @@ class SSHManager:
         jump_password: Optional[str] = None,
         jump_key_file: Optional[str] = None,
         main_password: Optional[str] = None,
-        main_key_file: Optional[str] = None
+        main_key_file: Optional[str] = None,
     ) -> None:
         """Connect to main/compute node through jump server.
 
@@ -383,18 +380,15 @@ class SSHManager:
             # Open channel to node through main server
             transport = self._client.get_transport()
             dest_addr = (main_host, 22)
-            local_addr = ('127.0.0.1', 0)
-            self._jump_channel = transport.open_channel(
-                "direct-tcpip", dest_addr, local_addr
-            )
+            local_addr = ("127.0.0.1", 0)
+            self._jump_channel = transport.open_channel("direct-tcpip", dest_addr, local_addr)
 
             # Connect through the channel
             self._jump_client = paramiko.SSHClient()
 
             # Use secure host key policy for jump connection
             policy = InteractiveHostKeyPolicy(
-                confirm_callback=self._host_key_callback,
-                auto_add=self._auto_add_host_keys
+                confirm_callback=self._host_key_callback, auto_add=self._auto_add_host_keys
             )
             self._jump_client.set_missing_host_key_policy(policy)
 
@@ -407,7 +401,7 @@ class SSHManager:
                     sock=self._jump_channel,
                     timeout=self._timeout,
                     allow_agent=False,
-                    look_for_keys=False
+                    look_for_keys=False,
                 )
             elif main_key_file:
                 # SSH key authentication for compute node
@@ -418,7 +412,7 @@ class SSHManager:
                     sock=self._jump_channel,
                     timeout=self._timeout,
                     allow_agent=False,
-                    look_for_keys=False
+                    look_for_keys=False,
                 )
             else:
                 # Internal trust - try without explicit auth
@@ -429,7 +423,7 @@ class SSHManager:
                     sock=self._jump_channel,
                     timeout=self._timeout,
                     allow_agent=True,
-                    look_for_keys=True
+                    look_for_keys=True,
                 )
         except Exception as e:
             self._jump_client = None
@@ -482,23 +476,18 @@ class SSHManager:
             raise SSHConnectionError("Not connected to server")
 
         try:
-            stdin, stdout, stderr = client.exec_command(
-                command,
-                timeout=timeout or self._timeout
-            )
+            stdin, stdout, stderr = client.exec_command(command, timeout=timeout or self._timeout)
             exit_code = stdout.channel.recv_exit_status()
             return (
-                stdout.read().decode('utf-8', errors='replace'),
-                stderr.read().decode('utf-8', errors='replace'),
-                exit_code
+                stdout.read().decode("utf-8", errors="replace"),
+                stderr.read().decode("utf-8", errors="replace"),
+                exit_code,
             )
         except SSHException as e:
             raise SSHConnectionError(f"Command execution failed: {e}")
 
     def execute_stream(
-        self,
-        command: str,
-        callback: Optional[Callable[[str], None]] = None
+        self, command: str, callback: Optional[Callable[[str], None]] = None
     ) -> Generator[str, None, int]:
         """Execute command and stream output (both stdout and stderr).
 
@@ -533,14 +522,14 @@ class SSHManager:
             readable, _, _ = select.select([channel], [], [], 0.1)
 
             if channel.recv_ready():
-                data = channel.recv(4096).decode('utf-8', errors='replace')
+                data = channel.recv(4096).decode("utf-8", errors="replace")
                 for line in data.splitlines(keepends=True):
                     if callback:
                         callback(line)
                     yield line
 
             if channel.recv_stderr_ready():
-                data = channel.recv_stderr(4096).decode('utf-8', errors='replace')
+                data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
                 for line in data.splitlines(keepends=True):
                     if callback:
                         callback(line)
@@ -548,14 +537,14 @@ class SSHManager:
 
         # Read any remaining data after exit
         while channel.recv_ready():
-            data = channel.recv(4096).decode('utf-8', errors='replace')
+            data = channel.recv(4096).decode("utf-8", errors="replace")
             for line in data.splitlines(keepends=True):
                 if callback:
                     callback(line)
                 yield line
 
         while channel.recv_stderr_ready():
-            data = channel.recv_stderr(4096).decode('utf-8', errors='replace')
+            data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
             for line in data.splitlines(keepends=True):
                 if callback:
                     callback(line)
@@ -670,7 +659,7 @@ class SSHManager:
         home = self._get_home_dir()
 
         # System paths to exclude (don't want system or /opt installs)
-        system_prefixes = ['/usr/bin', '/bin', '/opt/', '/usr/local/bin']
+        system_prefixes = ["/usr/bin", "/bin", "/opt/", "/usr/local/bin"]
 
         def is_system_path(path: str) -> bool:
             return any(path.startswith(prefix) for prefix in system_prefixes)
@@ -681,7 +670,7 @@ class SSHManager:
             cmd = f"ls -d {home}/miniconda*/bin/python {home}/miniforge*/bin/python {home}/anaconda*/bin/python {home}/mambaforge*/bin/python 2>/dev/null"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
-                for path in stdout.strip().split('\n'):
+                for path in stdout.strip().split("\n"):
                     path = path.strip()
                     if path and path not in pythons:
                         pythons.append(path)
@@ -698,7 +687,7 @@ class SSHManager:
             try:
                 stdout, _, exit_code = self.execute(cmd, timeout=15)
                 if exit_code == 0 and stdout.strip():
-                    path = stdout.strip().split('\n')[0]
+                    path = stdout.strip().split("\n")[0]
                     if path and path not in pythons and not is_system_path(path):
                         pythons.append(path)
             except Exception:
@@ -734,7 +723,7 @@ class SSHManager:
             cmd = f"ls -d {home}/miniconda*/bin/conda {home}/miniforge*/bin/conda {home}/anaconda*/bin/conda {home}/mambaforge*/bin/conda 2>/dev/null | head -1"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
-                conda_exe = stdout.strip().split('\n')[0]
+                conda_exe = stdout.strip().split("\n")[0]
         except Exception:
             pass
 
@@ -743,7 +732,7 @@ class SSHManager:
             try:
                 stdout, _, exit_code = self.execute("bash -i -l -c 'which conda' 2>/dev/null", timeout=15)
                 if exit_code == 0 and stdout.strip():
-                    conda_exe = stdout.strip().split('\n')[0]
+                    conda_exe = stdout.strip().split("\n")[0]
             except Exception:
                 pass
 
@@ -755,12 +744,12 @@ class SSHManager:
             quoted_conda = shlex.quote(conda_exe)
             stdout, _, exit_code = self.execute(f"{quoted_conda} env list", timeout=10)
             if exit_code == 0:
-                for line in stdout.strip().split('\n'):
+                for line in stdout.strip().split("\n"):
                     line = line.strip()
-                    if line and not line.startswith('#'):
+                    if line and not line.startswith("#"):
                         parts = line.split()
                         if len(parts) >= 1:
-                            name = parts[0].replace('*', '').strip()
+                            name = parts[0].replace("*", "").strip()
                             path = parts[-1] if len(parts) > 1 else ""
                             if name and name != "base":
                                 envs.append((name, path))

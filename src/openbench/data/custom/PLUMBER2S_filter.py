@@ -24,7 +24,7 @@ def filter_PLUMBER2S(info, ds=None):
     # For station filtering, we need to call the default filter to properly handle time range filtering.
     if ds is None:
         # Call default filter to handle station time range filtering
-        if hasattr(info, '_apply_default_filter'):
+        if hasattr(info, "_apply_default_filter"):
             info._apply_default_filter()
         return
 
@@ -32,16 +32,16 @@ def filter_PLUMBER2S(info, ds=None):
     if info.item == "Sensible_Heat":
         try:
             # If Qh_cor exists, let default processing handle it
-            if 'Qh_cor' in ds.variables:
+            if "Qh_cor" in ds.variables:
                 return None, None
             # Fall back to Qh only if Qh_cor is not available
-            elif 'Qh' in ds.variables:
-                logging.warning('Qh_cor not found, falling back to Qh for Sensible_Heat')
-                info.ref_varname = ['Qh']  # Must be a list, not a string!
-                info.ref_varunit = 'w m-2'
-                return info, ds['Qh']
+            elif "Qh" in ds.variables:
+                logging.warning("Qh_cor not found, falling back to Qh for Sensible_Heat")
+                info.ref_varname = ["Qh"]  # Must be a list, not a string!
+                info.ref_varunit = "w m-2"
+                return info, ds["Qh"]
             else:
-                logging.error('Neither Qh_cor nor Qh found in dataset for Sensible_Heat')
+                logging.error("Neither Qh_cor nor Qh found in dataset for Sensible_Heat")
                 return info, None
         except Exception as e:
             logging.error(f"Sensible_Heat processing ERROR: {e}")
@@ -51,16 +51,16 @@ def filter_PLUMBER2S(info, ds=None):
     if info.item == "Latent_Heat":
         try:
             # If Qle_cor exists, let default processing handle it
-            if 'Qle_cor' in ds.variables:
+            if "Qle_cor" in ds.variables:
                 return None, None
             # Fall back to Qle only if Qle_cor is not available
-            elif 'Qle' in ds.variables:
-                logging.warning('Qle_cor not found, falling back to Qle for Latent_Heat')
-                info.ref_varname = ['Qle']  # Must be a list, not a string!
-                info.ref_varunit = 'w m-2'
-                return info, ds['Qle']
+            elif "Qle" in ds.variables:
+                logging.warning("Qle_cor not found, falling back to Qle for Latent_Heat")
+                info.ref_varname = ["Qle"]  # Must be a list, not a string!
+                info.ref_varunit = "w m-2"
+                return info, ds["Qle"]
             else:
-                logging.error('Neither Qle_cor nor Qle found in dataset for Latent_Heat')
+                logging.error("Neither Qle_cor nor Qle found in dataset for Latent_Heat")
                 return info, None
         except Exception as e:
             logging.error(f"Latent_Heat processing ERROR: {e}")

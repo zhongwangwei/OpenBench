@@ -22,44 +22,44 @@ class ClimatologyProcessor:
 
     def __init__(self):
         """Initialize the climatology processor."""
-        self.name = 'ClimatologyProcessor'
-        self.version = '1.0'
-        self.author = 'Zhongwang Wei / zhongwang007@gmail.com'
+        self.name = "ClimatologyProcessor"
+        self.version = "1.0"
+        self.author = "Zhongwang Wei / zhongwang007@gmail.com"
 
         # Climatology types
-        self.ANNUAL_CLIMATOLOGY = 'annual'
-        self.MONTHLY_CLIMATOLOGY = 'monthly'
+        self.ANNUAL_CLIMATOLOGY = "annual"
+        self.MONTHLY_CLIMATOLOGY = "monthly"
 
         # Legacy constants (kept for backward compatibility, but no longer used internally)
         # Modern code should use syear-based time coordinate generation
-        self.ANNUAL_TIME = pd.Timestamp('2000-06-15')
-        self.MONTHLY_TIMES = pd.date_range('2000-01-15', periods=12, freq='MS') + pd.Timedelta(days=14)
+        self.ANNUAL_TIME = pd.Timestamp("2000-06-15")
+        self.MONTHLY_TIMES = pd.date_range("2000-01-15", periods=12, freq="MS") + pd.Timedelta(days=14)
 
         # Metrics that never support climatology evaluation (regardless of time points)
         self.NEVER_SUPPORTED_METRICS = [
-            'nPhaseScore',  # Phase score requires temporal cycle
-            'nIavScore',    # Interannual variability score requires multiple years
-            'APFB',         # Annual Peak Flow Bias requires multi-year data with hydrological year grouping
+            "nPhaseScore",  # Phase score requires temporal cycle
+            "nIavScore",  # Interannual variability score requires multiple years
+            "APFB",  # Annual Peak Flow Bias requires multi-year data with hydrological year grouping
         ]
 
         # Metrics that require multiple time points (not supported for annual climatology with 1 time point)
         self.MULTI_TIME_METRICS = [
-            'correlation',      # Correlation requires at least 2 time points
-            'correlation_R2',   # R-squared correlation
-            'ubcorrelation',    # Unbiased correlation
-            'ubcorrelation_R2', # Unbiased correlation R-squared
-            'NSE',             # Nash-Sutcliffe Efficiency
-            'KGE',             # Kling-Gupta Efficiency
-            'KGESS',           # KGE with multiple components
-            'mKGE',            # Modified KGE
-            'nKGE',            # Normalized KGE
-            'pc_ampli',        # Phase and amplitude require temporal variation
-            'pc_max',          # Temporal phase
-            'pc_min',          # Temporal phase
-            'CRMSD',           # Centered RMSD uses std(dim='time') and correlation
-            'rv',              # Relative variability requires std(dim='time')
-            'cp',              # Coefficient of Persistence uses .diff(dim='time')
-            'br2',             # R-squared × slope requires correlation
+            "correlation",  # Correlation requires at least 2 time points
+            "correlation_R2",  # R-squared correlation
+            "ubcorrelation",  # Unbiased correlation
+            "ubcorrelation_R2",  # Unbiased correlation R-squared
+            "NSE",  # Nash-Sutcliffe Efficiency
+            "KGE",  # Kling-Gupta Efficiency
+            "KGESS",  # KGE with multiple components
+            "mKGE",  # Modified KGE
+            "nKGE",  # Normalized KGE
+            "pc_ampli",  # Phase and amplitude require temporal variation
+            "pc_max",  # Temporal phase
+            "pc_min",  # Temporal phase
+            "CRMSD",  # Centered RMSD uses std(dim='time') and correlation
+            "rv",  # Relative variability requires std(dim='time')
+            "cp",  # Coefficient of Persistence uses .diff(dim='time')
+            "br2",  # R-squared × slope requires correlation
         ]
 
     def is_climatology_mode(self, compare_tim_res: str) -> bool:
@@ -75,7 +75,7 @@ class ClimatologyProcessor:
         if not compare_tim_res:
             return False
         compare_tim_res_str = str(compare_tim_res).strip().lower()
-        return compare_tim_res_str in ['climatology-year', 'climatology-month']
+        return compare_tim_res_str in ["climatology-year", "climatology-month"]
 
     def get_climatology_type_from_config(self, compare_tim_res: str) -> Optional[str]:
         """
@@ -92,10 +92,10 @@ class ClimatologyProcessor:
 
         compare_tim_res_str = str(compare_tim_res).strip().lower()
 
-        if compare_tim_res_str == 'climatology-year':
+        if compare_tim_res_str == "climatology-year":
             logging.info("Climatology-year mode - using annual climatology")
             return self.ANNUAL_CLIMATOLOGY
-        elif compare_tim_res_str == 'climatology-month':
+        elif compare_tim_res_str == "climatology-month":
             logging.info("Climatology-month mode - using monthly climatology")
             return self.MONTHLY_CLIMATOLOGY
         else:
@@ -117,37 +117,37 @@ class ClimatologyProcessor:
             raise ValueError("Climatology type cannot be None")
 
         # Check time dimension status
-        has_time_dim = 'time' in ds.dims or 'time' in ds.coords
+        has_time_dim = "time" in ds.dims or "time" in ds.coords
         time_size = len(ds.time) if has_time_dim else 0
 
         if clim_type == self.ANNUAL_CLIMATOLOGY:
             # Annual climatology processing
             if not has_time_dim or time_size == 0:
                 # No time dimension - add time dimension with syear-01-01
-                ds = ds.expand_dims('time')
-                annual_time = pd.Timestamp(f'{syear}-01-01')
+                ds = ds.expand_dims("time")
+                annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Added time dimension with {annual_time}")
             elif time_size == 1:
                 # Single time point - set to syear-01-01
-                ds = ds.isel(time=0).expand_dims('time')
-                annual_time = pd.Timestamp(f'{syear}-01-01')
+                ds = ds.isel(time=0).expand_dims("time")
+                annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Set single time point to {annual_time}")
             elif time_size == 12:
                 # 12 time points - set to syear's 12 months, then average to annual
-                monthly_times = pd.date_range(f'{syear}-01-01', periods=12, freq='MS') + pd.Timedelta(days=14)
+                monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                 ds = ds.assign_coords(time=monthly_times)
                 # Average to annual climatology
-                ds = ds.mean(dim='time', skipna=True).expand_dims('time')
-                annual_time = pd.Timestamp(f'{syear}-01-01')
+                ds = ds.mean(dim="time", skipna=True).expand_dims("time")
+                annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Averaged 12 months to annual climatology at {annual_time}")
             else:
                 # Multiple time points (e.g., daily data) - average to annual climatology
                 logging.info(f"Reference: Processing {time_size} time points to annual climatology")
-                ds = ds.mean(dim='time', skipna=True).expand_dims('time')
-                annual_time = pd.Timestamp(f'{syear}-01-01')
+                ds = ds.mean(dim="time", skipna=True).expand_dims("time")
+                annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Averaged {time_size} time points to annual climatology at {annual_time}")
 
@@ -157,17 +157,17 @@ class ClimatologyProcessor:
                 raise ValueError("Monthly climatology requires time dimension with data")
             elif time_size == 12:
                 # 12 time points - set to syear's 12 months as monthly climatology
-                monthly_times = pd.date_range(f'{syear}-01-01', periods=12, freq='MS') + pd.Timedelta(days=14)
+                monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                 ds = ds.assign_coords(time=monthly_times)
                 logging.info(f"Reference: Set 12 time points to monthly climatology for year {syear}")
             else:
                 # Multiple time points - calculate monthly climatology via groupby
                 try:
                     logging.info(f"Reference: Processing {time_size} time points to monthly climatology")
-                    ds_monthly = ds.groupby('time.month').mean(dim='time', skipna=True)
+                    ds_monthly = ds.groupby("time.month").mean(dim="time", skipna=True)
 
                     # Reorder to ensure months are in order (1-12)
-                    ds_monthly = ds_monthly.sortby('month')
+                    ds_monthly = ds_monthly.sortby("month")
 
                     # Check if we got 12 months
                     if len(ds_monthly.month) != 12:
@@ -178,10 +178,12 @@ class ClimatologyProcessor:
                         )
 
                     # Rename month dimension to time and assign monthly times
-                    ds = ds_monthly.rename({'month': 'time'})
-                    monthly_times = pd.date_range(f'{syear}-01-01', periods=12, freq='MS') + pd.Timedelta(days=14)
+                    ds = ds_monthly.rename({"month": "time"})
+                    monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                     ds = ds.assign_coords(time=monthly_times)
-                    logging.info(f"Reference: Calculated monthly climatology for year {syear} from {time_size} time points")
+                    logging.info(
+                        f"Reference: Calculated monthly climatology for year {syear} from {time_size} time points"
+                    )
                 except Exception as e:
                     logging.error(f"Error calculating monthly climatology from reference data: {e}")
                     raise
@@ -203,15 +205,15 @@ class ClimatologyProcessor:
         if clim_type is None:
             return ds
 
-        if 'time' not in ds.dims:
+        if "time" not in ds.dims:
             logging.warning("Simulation data has no time dimension for climatology calculation")
             return ds
 
         if clim_type == self.ANNUAL_CLIMATOLOGY:
             # Calculate multi-year mean
-            ds_mean = ds.mean(dim='time', skipna=True)
-            ds_mean = ds_mean.expand_dims('time')
-            annual_time = pd.Timestamp(f'{syear}-01-01')
+            ds_mean = ds.mean(dim="time", skipna=True)
+            ds_mean = ds_mean.expand_dims("time")
+            annual_time = pd.Timestamp(f"{syear}-01-01")
             ds_mean = ds_mean.assign_coords(time=[annual_time])
             logging.info(f"Calculated annual climatology from simulation data at {annual_time}")
 
@@ -219,14 +221,14 @@ class ClimatologyProcessor:
             # Calculate multi-year monthly mean
             try:
                 # Group by month and calculate mean
-                ds_monthly = ds.groupby('time.month').mean(dim='time', skipna=True)
+                ds_monthly = ds.groupby("time.month").mean(dim="time", skipna=True)
 
                 # Reorder to ensure months are in order (1-12)
-                ds_monthly = ds_monthly.sortby('month')
+                ds_monthly = ds_monthly.sortby("month")
 
                 # Drop the month coordinate and create new time dimension
-                ds_mean = ds_monthly.rename({'month': 'time'})
-                monthly_times = pd.date_range(f'{syear}-01-01', periods=12, freq='MS') + pd.Timedelta(days=14)
+                ds_mean = ds_monthly.rename({"month": "time"})
+                monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                 ds_mean = ds_mean.assign_coords(time=monthly_times)
 
                 logging.info(f"Calculated monthly climatology from simulation data for year {syear}")
@@ -260,7 +262,9 @@ class ClimatologyProcessor:
         if metric_name in self.MULTI_TIME_METRICS:
             # For annual climatology with 1 time point, skip multi-time metrics
             if clim_type == self.ANNUAL_CLIMATOLOGY and time_points == 1:
-                logging.info(f"Metric '{metric_name}' requires multiple time points, skipping for annual climatology (1 time point)")
+                logging.info(
+                    f"Metric '{metric_name}' requires multiple time points, skipping for annual climatology (1 time point)"
+                )
                 return False
             # For monthly climatology with less than 2 time points, skip
             if time_points is not None and time_points < 2:
@@ -281,7 +285,7 @@ class ClimatologyProcessor:
             bool: True if compatible, False otherwise
         """
         # Check if both have time dimension
-        if 'time' not in ref_ds.dims or 'time' not in sim_ds.dims:
+        if "time" not in ref_ds.dims or "time" not in sim_ds.dims:
             logging.warning("Both datasets must have time dimension for climatology evaluation")
             return False
 
@@ -315,12 +319,9 @@ class ClimatologyProcessor:
         return True
 
 
-def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
-                                   metrics: List[str],
-                                   compare_tim_res: str = None,
-                                   syear: int = None) -> Tuple[Optional[xr.Dataset],
-                                                                           Optional[xr.Dataset],
-                                                                           List[str]]:
+def process_climatology_evaluation(
+    ref_ds: xr.Dataset, sim_ds: xr.Dataset, metrics: List[str], compare_tim_res: str = None, syear: int = None
+) -> Tuple[Optional[xr.Dataset], Optional[xr.Dataset], List[str]]:
     """
     Process datasets for climatology evaluation.
 
@@ -377,7 +378,7 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
         return None, None, []
 
     # Get number of time points from processed reference data
-    if 'time' in ref_processed.dims:
+    if "time" in ref_processed.dims:
         time_points = len(ref_processed.time)
         if time_points == 0:
             logging.error("Time dimension exists but contains no time points")
@@ -388,8 +389,7 @@ def process_climatology_evaluation(ref_ds: xr.Dataset, sim_ds: xr.Dataset,
 
     # Filter supported metrics based on climatology type and time points
     supported_metrics = [
-        m for m in metrics
-        if processor.is_metric_supported(m, clim_type=clim_type, time_points=time_points)
+        m for m in metrics if processor.is_metric_supported(m, clim_type=clim_type, time_points=time_points)
     ]
 
     # Provide detailed information about skipped metrics

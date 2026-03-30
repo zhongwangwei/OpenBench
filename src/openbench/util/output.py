@@ -5,7 +5,7 @@ Output Management System for OpenBench
 This module provides a unified output management system with support for
 multiple formats, structured organization, and metadata handling.
 
-Author: Zhongwang Wei  
+Author: Zhongwang Wei
 Version: 1.0
 Date: July 2025
 """
@@ -26,6 +26,7 @@ import xarray as xr
 try:
     from openbench.util.exceptions import FileSystemError, OutputError, ValidationError, error_handler
     from openbench.util.interfaces import BaseComponent, IOutputFormatter, IOutputManager
+
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
@@ -35,9 +36,11 @@ except ImportError:
     OutputError = Exception
     FileSystemError = Exception
     ValidationError = Exception
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
 
 
@@ -47,7 +50,7 @@ class OutputFormatter(IOutputFormatter if _HAS_DEPENDENCIES else object):
     def __init__(self, name: str, extension: str, description: str = ""):
         """
         Initialize output formatter.
-        
+
         Args:
             name: Formatter name
             extension: File extension (e.g., '.nc', '.csv')
@@ -184,14 +187,11 @@ class JSONFormatter(OutputFormatter):
         if isinstance(data, dict):
             json_data = convert_numpy(data)
             if metadata:
-                json_data['metadata'] = convert_numpy(metadata)
+                json_data["metadata"] = convert_numpy(metadata)
         else:
-            json_data = {
-                'data': convert_numpy(data),
-                'metadata': convert_numpy(metadata) if metadata else {}
-            }
+            json_data = {"data": convert_numpy(data), "metadata": convert_numpy(metadata) if metadata else {}}
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(json_data, f, indent=2, default=str)
 
         logging.info(f"Saved JSON file: {output_path}")
@@ -208,7 +208,7 @@ class OutputStructure:
     def __init__(self, base_dir: str):
         """
         Initialize output structure.
-        
+
         Args:
             base_dir: Base output directory
         """
@@ -216,11 +216,11 @@ class OutputStructure:
         # All output folders are directly under base_dir, no 'output' subdirectory
         self.base_dir = Path(base_dir)
         self.structure = {
-            'metrics': self.base_dir / 'metrics',
-            'scores': self.base_dir / 'scores',
-            'data': self.base_dir / 'data',
-            'comparisons': self.base_dir / 'comparisons',
-            'reports': self.base_dir / 'reports',
+            "metrics": self.base_dir / "metrics",
+            "scores": self.base_dir / "scores",
+            "data": self.base_dir / "data",
+            "comparisons": self.base_dir / "comparisons",
+            "reports": self.base_dir / "reports",
         }
 
     def create_structure(self) -> None:
@@ -232,11 +232,11 @@ class OutputStructure:
     def get_path(self, category: str, *subdirs: str) -> Path:
         """
         Get path for a specific category.
-        
+
         Args:
             category: Output category (metrics, scores, etc.)
             *subdirs: Additional subdirectories
-            
+
         Returns:
             Full path to the category directory
         """
@@ -265,7 +265,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
     def __init__(self, base_dir: str, name: str = "ModularOutputManager"):
         """
         Initialize output manager.
-        
+
         Args:
             base_dir: Base output directory
             name: Manager name
@@ -290,11 +290,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 
     def _register_default_formatters(self):
         """Register default output formatters."""
-        default_formatters = [
-            NetCDFFormatter(),
-            CSVFormatter(),
-            JSONFormatter()
-        ]
+        default_formatters = [NetCDFFormatter(), CSVFormatter(), JSONFormatter()]
 
         for formatter in default_formatters:
             self.register_formatter(formatter)
@@ -330,9 +326,9 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 
         formatter = self._formatters_registry[formatter_name]
         return {
-            'name': formatter.get_name(),
-            'extension': formatter.get_extension(),
-            'description': formatter.get_description()
+            "name": formatter.get_name(),
+            "extension": formatter.get_extension(),
+            "description": formatter.get_description(),
         }
 
     @error_handler(reraise=True)
@@ -341,14 +337,14 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         data: Any,
         category: str,
         filename: str,
-        format_type: str = 'auto',
+        format_type: str = "auto",
         metadata: Optional[Dict[str, Any]] = None,
         subdirs: Optional[List[str]] = None,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         Save data to output directory.
-        
+
         Args:
             data: Data to save
             category: Output category (metrics, scores, etc.)
@@ -357,12 +353,12 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             metadata: Optional metadata to include
             subdirs: Optional subdirectories
             **kwargs: Additional formatting options
-            
+
         Returns:
             Path to saved file
         """
         # Determine format
-        if format_type == 'auto':
+        if format_type == "auto":
             format_type = self._auto_detect_format(data)
 
         if format_type not in self._formatters_registry:
@@ -396,14 +392,14 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
     def _auto_detect_format(self, data: Any) -> str:
         """Auto-detect appropriate format for data."""
         if isinstance(data, (xr.DataArray, xr.Dataset)):
-            return 'netcdf'
+            return "netcdf"
         elif isinstance(data, pd.DataFrame):
-            return 'csv'
+            return "csv"
         elif isinstance(data, (dict, list)):
-            return 'json'
+            return "json"
         else:
             # Default to JSON for other types
-            return 'json'
+            return "json"
 
     @error_handler(reraise=True)
     def save_metrics(
@@ -412,12 +408,12 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         item: str,
         ref_source: str,
         sim_source: str,
-        format_type: str = 'auto',
-        **kwargs
+        format_type: str = "auto",
+        **kwargs,
     ) -> str:
         """
         Save metrics data with standardized naming.
-        
+
         Args:
             metrics_data: Metrics data to save
             item: Evaluation item name
@@ -425,28 +421,21 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             sim_source: Simulation data source
             format_type: Output format
             **kwargs: Additional options
-            
+
         Returns:
             Path to saved file
         """
         filename = f"{item}_ref_{ref_source}_sim_{sim_source}_metrics"
 
         metadata = {
-            'type': 'metrics',
-            'item': item,
-            'reference_source': ref_source,
-            'simulation_source': sim_source,
-            'creation_time': pd.Timestamp.now().isoformat()
+            "type": "metrics",
+            "item": item,
+            "reference_source": ref_source,
+            "simulation_source": sim_source,
+            "creation_time": pd.Timestamp.now().isoformat(),
         }
 
-        return self.save_data(
-            metrics_data,
-            'metrics',
-            filename,
-            format_type,
-            metadata,
-            **kwargs
-        )
+        return self.save_data(metrics_data, "metrics", filename, format_type, metadata, **kwargs)
 
     @error_handler(reraise=True)
     def save_scores(
@@ -455,12 +444,12 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
         item: str,
         ref_source: str,
         sim_source: str,
-        format_type: str = 'auto',
-        **kwargs
+        format_type: str = "auto",
+        **kwargs,
     ) -> str:
         """
         Save scores data with standardized naming.
-        
+
         Args:
             scores_data: Scores data to save
             item: Evaluation item name
@@ -468,71 +457,53 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             sim_source: Simulation data source
             format_type: Output format
             **kwargs: Additional options
-            
+
         Returns:
             Path to saved file
         """
         filename = f"{item}_ref_{ref_source}_sim_{sim_source}_scores"
 
         metadata = {
-            'type': 'scores',
-            'item': item,
-            'reference_source': ref_source,
-            'simulation_source': sim_source,
-            'creation_time': pd.Timestamp.now().isoformat()
+            "type": "scores",
+            "item": item,
+            "reference_source": ref_source,
+            "simulation_source": sim_source,
+            "creation_time": pd.Timestamp.now().isoformat(),
         }
 
-        return self.save_data(
-            scores_data,
-            'scores',
-            filename,
-            format_type,
-            metadata,
-            **kwargs
-        )
+        return self.save_data(scores_data, "scores", filename, format_type, metadata, **kwargs)
 
     @error_handler(reraise=True)
     def save_comparison(
-        self,
-        comparison_data: Dict[str, Any],
-        comparison_name: str,
-        format_type: str = 'auto',
-        **kwargs
+        self, comparison_data: Dict[str, Any], comparison_name: str, format_type: str = "auto", **kwargs
     ) -> str:
         """
         Save comparison results.
-        
+
         Args:
             comparison_data: Comparison data to save
             comparison_name: Name of the comparison
             format_type: Output format
             **kwargs: Additional options
-            
+
         Returns:
             Path to saved file
         """
         metadata = {
-            'type': 'comparison',
-            'comparison_name': comparison_name,
-            'creation_time': pd.Timestamp.now().isoformat()
+            "type": "comparison",
+            "comparison_name": comparison_name,
+            "creation_time": pd.Timestamp.now().isoformat(),
         }
 
-        return self.save_data(
-            comparison_data,
-            'comparisons',
-            comparison_name,
-            format_type,
-            metadata,
-            **kwargs
-        )
+        return self.save_data(comparison_data, "comparisons", comparison_name, format_type, metadata, **kwargs)
 
     def list_outputs(self, category: Optional[str] = None) -> Dict[str, List[str]]:
         """
         List all output files.
-        
+
         Args:
             category: Specific category to list (optional)
-            
+
         Returns:
             Dictionary of category -> list of files
         """
@@ -544,7 +515,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             if cat in self.structure.structure:
                 cat_path = self.structure.structure[cat]
                 if cat_path.exists():
-                    files = [f.name for f in cat_path.rglob('*') if f.is_file()]
+                    files = [f.name for f in cat_path.rglob("*") if f.is_file()]
                     results[cat] = sorted(files)
                 else:
                     results[cat] = []
@@ -554,7 +525,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
     def cleanup_outputs(self, category: Optional[str] = None) -> None:
         """
         Clean up output files.
-        
+
         Args:
             category: Specific category to clean (optional)
         """
@@ -567,21 +538,21 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
     def get_summary(self) -> Dict[str, Any]:
         """Get summary of output manager state."""
         summary = {
-            'base_directory': str(self.base_dir),
-            'supported_formats': self.get_supported_formats(),
-            'output_categories': list(self.structure.structure.keys()),
-            'configuration': {
-                'auto_create_dirs': self.auto_create_dirs,
-                'overwrite_existing': self.overwrite_existing,
-                'backup_existing': self.backup_existing
-            }
+            "base_directory": str(self.base_dir),
+            "supported_formats": self.get_supported_formats(),
+            "output_categories": list(self.structure.structure.keys()),
+            "configuration": {
+                "auto_create_dirs": self.auto_create_dirs,
+                "overwrite_existing": self.overwrite_existing,
+                "backup_existing": self.backup_existing,
+            },
         }
 
         # Add file counts
         file_counts = {}
         for category, files in self.list_outputs().items():
             file_counts[category] = len(files)
-        summary['file_counts'] = file_counts
+        summary["file_counts"] = file_counts
 
         return summary
 
@@ -590,11 +561,11 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 def create_output_manager(base_dir: str, **config) -> ModularOutputManager:
     """
     Create an output manager instance.
-    
+
     Args:
         base_dir: Base output directory
         **config: Configuration parameters
-        
+
     Returns:
         Output manager instance
     """
@@ -616,11 +587,11 @@ def save_evaluation_results(
     item: str,
     ref_source: str,
     sim_source: str,
-    result_type: str = 'metrics'
+    result_type: str = "metrics",
 ) -> str:
     """
     Convenience function for saving evaluation results.
-    
+
     Args:
         manager: Output manager instance
         results: Results data
@@ -628,13 +599,13 @@ def save_evaluation_results(
         ref_source: Reference source
         sim_source: Simulation source
         result_type: Type of results ('metrics' or 'scores')
-        
+
     Returns:
         Path to saved file
     """
-    if result_type == 'metrics':
+    if result_type == "metrics":
         return manager.save_metrics(results, item, ref_source, sim_source)
-    elif result_type == 'scores':
+    elif result_type == "scores":
         return manager.save_scores(results, item, ref_source, sim_source)
     else:
         raise ValueError(f"Unknown result type: {result_type}")

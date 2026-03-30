@@ -11,8 +11,15 @@ import shlex
 from typing import Dict, Any
 
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
-    QListWidget, QLabel, QWidget, QMessageBox, QDialog
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QPushButton,
+    QListWidget,
+    QLabel,
+    QWidget,
+    QMessageBox,
+    QDialog,
 )
 
 from openbench.gui.pages.base_page import BasePage
@@ -33,6 +40,7 @@ def get_remote_ssh_manager(controller):
     """
     # Check storage type to determine if in remote mode
     from openbench.remote.storage import RemoteStorage
+
     if not isinstance(controller.storage, RemoteStorage):
         return None
     return controller.ssh_manager
@@ -135,7 +143,7 @@ class PageSimData(BasePage):
             source_type="sim",
             var_name=var_name,  # Pass for context (shown in title)
             ssh_manager=ssh_manager,
-            parent=self
+            parent=self,
         )
         if dialog.exec():
             source_name = dialog.get_source_name()
@@ -170,20 +178,13 @@ class PageSimData(BasePage):
         # Open dialog with copied data but no source name (user must enter new name)
         ssh_manager = get_remote_ssh_manager(self.controller)
         dialog = DataSourceEditor(
-            source_type="sim",
-            var_name=var_name,
-            initial_data=copied_data,
-            ssh_manager=ssh_manager,
-            parent=self
+            source_type="sim", var_name=var_name, initial_data=copied_data, ssh_manager=ssh_manager, parent=self
         )
         if dialog.exec():
             new_source_name = dialog.get_source_name()
             if new_source_name:
                 if new_source_name == source_name:
-                    QMessageBox.warning(
-                        self, "Error",
-                        "New source name must be different from the original."
-                    )
+                    QMessageBox.warning(self, "Error", "New source name must be different from the original.")
                     return
                 if var_name not in self._source_configs:
                     self._source_configs[var_name] = {}
@@ -212,7 +213,7 @@ class PageSimData(BasePage):
             var_name=var_name,  # Pass for context (shown in title)
             initial_data=existing_data,
             ssh_manager=ssh_manager,
-            parent=self
+            parent=self,
         )
         if dialog.exec():
             self._source_configs[var_name][source_name] = dialog.get_data()
@@ -231,9 +232,7 @@ class PageSimData(BasePage):
 
         source_name = current.text()
         reply = QMessageBox.question(
-            self, "Confirm",
-            f"Remove source '{source_name}'?",
-            QMessageBox.Yes | QMessageBox.No
+            self, "Confirm", f"Remove source '{source_name}'?", QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
             if var_name in self._source_configs:
@@ -275,6 +274,7 @@ class PageSimData(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
 
@@ -323,7 +323,7 @@ class PageSimData(BasePage):
                         full_path = self._resolve_def_nml_path(def_nml_path)
                         if full_path and os.path.exists(full_path):
                             try:
-                                with open(full_path, 'r', encoding='utf-8') as f:
+                                with open(full_path, "r", encoding="utf-8") as f:
                                     nml_content = yaml.safe_load(f) or {}
                             except Exception as e:
                                 print(f"Warning: Failed to load def_nml file {full_path}: {e}")
@@ -337,9 +337,7 @@ class PageSimData(BasePage):
                         # Load varname from model definition file
                         model_nml_path = nml_content.get("general", {}).get("model_namelist", "")
                         if model_nml_path:
-                            varname = self._load_varname_from_model(
-                                model_nml_path, var_name, is_remote, ssh_manager
-                            )
+                            varname = self._load_varname_from_model(model_nml_path, var_name, is_remote, ssh_manager)
                             if varname:
                                 source_data["varname"] = varname
 
@@ -359,9 +357,7 @@ class PageSimData(BasePage):
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"cat '{def_nml_path}'", timeout=30
-            )
+            stdout, stderr, exit_code = ssh_manager.execute(f"cat '{def_nml_path}'", timeout=30)
             if exit_code == 0 and stdout.strip():
                 return yaml.safe_load(stdout) or {}
             else:
@@ -396,10 +392,10 @@ class PageSimData(BasePage):
         path = to_posix_path(def_nml_path)
 
         # Handle Windows absolute paths (e.g., C:/Users/...)
-        if len(path) >= 2 and path[1] == ':':
+        if len(path) >= 2 and path[1] == ":":
             # This is a Windows local path - extract relative part if contains /nml/
-            if '/nml/' in path:
-                relative_path = 'nml/' + path.split('/nml/', 1)[1]
+            if "/nml/" in path:
+                relative_path = "nml/" + path.split("/nml/", 1)[1]
                 return f"{remote_openbench_path.rstrip('/')}/{relative_path}"
             # Unknown Windows path - cannot convert to remote
             return path
@@ -408,17 +404,17 @@ class PageSimData(BasePage):
         relative_path = path
 
         # If path contains /nml/, extract from that point (handles local temp paths)
-        if '/nml/' in path:
-            relative_path = 'nml/' + path.split('/nml/', 1)[1]
-        elif path.startswith('./'):
+        if "/nml/" in path:
+            relative_path = "nml/" + path.split("/nml/", 1)[1]
+        elif path.startswith("./"):
             relative_path = path[2:]
-        elif path.startswith('/'):
+        elif path.startswith("/"):
             # Check if it's already a valid remote path
-            if any(path.startswith(prefix) for prefix in ['/home/', '/share/', '/data/', '/work/', '/scratch/']):
+            if any(path.startswith(prefix) for prefix in ["/home/", "/share/", "/data/", "/work/", "/scratch/"]):
                 return path
             # Extract relative portion if contains /nml/
-            if '/nml/' in path:
-                relative_path = 'nml/' + path.split('/nml/', 1)[1]
+            if "/nml/" in path:
+                relative_path = "nml/" + path.split("/nml/", 1)[1]
             else:
                 return path
 
@@ -449,9 +445,7 @@ class PageSimData(BasePage):
 
         return full_path  # Return even if doesn't exist, let validation catch it
 
-    def _load_varname_from_model(
-        self, model_path: str, var_name: str, is_remote: bool, ssh_manager
-    ) -> str:
+    def _load_varname_from_model(self, model_path: str, var_name: str, is_remote: bool, ssh_manager) -> str:
         """Load varname from model definition file for a specific variable.
 
         Args:
@@ -472,9 +466,7 @@ class PageSimData(BasePage):
             # Load from remote
             remote_path = self._resolve_remote_def_nml_path(ssh_manager, model_path)
             try:
-                stdout, stderr, exit_code = ssh_manager.execute(
-                    f"cat '{remote_path}'", timeout=30
-                )
+                stdout, stderr, exit_code = ssh_manager.execute(f"cat '{remote_path}'", timeout=30)
                 if exit_code == 0 and stdout.strip():
                     model_content = yaml.safe_load(stdout) or {}
             except Exception as e:
@@ -484,7 +476,7 @@ class PageSimData(BasePage):
             full_path = self._resolve_def_nml_path(model_path)
             if full_path and os.path.exists(full_path):
                 try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
+                    with open(full_path, "r", encoding="utf-8") as f:
                         model_content = yaml.safe_load(f) or {}
                 except Exception as e:
                     logger.debug("Failed to load model file %s: %s", full_path, e)
@@ -529,7 +521,7 @@ class PageSimData(BasePage):
         sim_data = {
             "general": general,
             "def_nml": def_nml,
-            "source_configs": source_configs  # Include full configs for sync
+            "source_configs": source_configs,  # Include full configs for sync
         }
         self.controller.update_section("sim_data", sim_data)
 
@@ -552,7 +544,7 @@ class PageSimData(BasePage):
                     field_name="data_source",
                     message=f"{var_name.replace('_', ' ')} is missing simulation data source configuration",
                     page_id=self.PAGE_ID,
-                    context={"var_name": var_name}
+                    context={"var_name": var_name},
                 )
                 if not manager.show_error_and_focus(error):
                     # Auto-open add source dialog
@@ -564,12 +556,7 @@ class PageSimData(BasePage):
                 # Check varname - can be at top level, in general, or in var_config
                 general = source_data.get("general", {})
                 var_config = source_data.get("var_config", {})
-                varname = (
-                    source_data.get("varname") or
-                    var_config.get("varname") or
-                    general.get("varname") or
-                    ""
-                )
+                varname = source_data.get("varname") or var_config.get("varname") or general.get("varname") or ""
                 if not varname:
                     # Show warning and ask for confirmation
                     reply = QMessageBox.warning(
@@ -581,7 +568,7 @@ class PageSimData(BasePage):
                         f"Is this variable defined in the filter configuration?\n\n"
                         f"Click 'Yes' to continue, 'No' to edit the source.",
                         QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No
+                        QMessageBox.No,
                     )
                     if reply == QMessageBox.No:
                         self._select_and_edit_source(var_name, source_name)
@@ -598,7 +585,7 @@ class PageSimData(BasePage):
                             field_name="prefix/suffix",
                             message=f"At least one of file prefix or suffix is required\n\nData source: {source_name}\nVariable: {var_name.replace('_', ' ')}",
                             page_id=self.PAGE_ID,
-                            context={"var_name": var_name, "source_name": source_name}
+                            context={"var_name": var_name, "source_name": source_name},
                         )
                         if not manager.show_error_and_focus(error):
                             self._select_and_edit_source(var_name, source_name)
@@ -611,7 +598,7 @@ class PageSimData(BasePage):
                         field_name="root_dir",
                         message=f"Root directory is required\n\nData source: {source_name}\nVariable: {var_name.replace('_', ' ')}",
                         page_id=self.PAGE_ID,
-                        context={"var_name": var_name, "source_name": source_name}
+                        context={"var_name": var_name, "source_name": source_name},
                     )
                     if not manager.show_error_and_focus(error):
                         self._select_and_edit_source(var_name, source_name)
@@ -635,15 +622,11 @@ class PageSimData(BasePage):
     def _validate_data(self):
         """Validate all configured data sources."""
         from openbench.gui.data_validator import DataValidator
-        from openbench.gui.widgets.validation_dialog import (
-            ValidationProgressDialog, ValidationResultsDialog
-        )
+        from openbench.gui.widgets.validation_dialog import ValidationProgressDialog, ValidationResultsDialog
 
         # Check if any sources configured
         if not self._source_configs:
-            QMessageBox.information(
-                self, "No Data", "No data sources configured. Please add a data source first."
-            )
+            QMessageBox.information(self, "No Data", "No data sources configured. Please add a data source first.")
             return
 
         # Get general config
@@ -651,13 +634,12 @@ class PageSimData(BasePage):
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
+
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
 
         if is_remote and not ssh_manager:
-            QMessageBox.warning(
-                self, "Not Connected", "Remote mode requires connecting to the server first."
-            )
+            QMessageBox.warning(self, "Not Connected", "Remote mode requires connecting to the server first.")
             return
 
         # Get remote config for remote mode
@@ -676,16 +658,11 @@ class PageSimData(BasePage):
             ssh_manager=ssh_manager,
             remote_openbench_root=remote_openbench_root,
             python_path=python_path,
-            conda_env=conda_env
+            conda_env=conda_env,
         )
 
         # Show progress dialog
-        progress_dialog = ValidationProgressDialog(
-            validator,
-            self._source_configs,
-            general_config,
-            parent=self
-        )
+        progress_dialog = ValidationProgressDialog(validator, self._source_configs, general_config, parent=self)
 
         if progress_dialog.exec() == QDialog.Accepted:
             report = progress_dialog.get_report()

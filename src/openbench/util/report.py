@@ -19,6 +19,7 @@ from jinja2 import Template
 # Import PDF generation libraries
 try:
     from xhtml2pdf import pisa
+
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
@@ -35,7 +36,7 @@ class ReportGenerator:
     def __init__(self, config: Dict[str, Any], output_dir: str):
         """
         Initialize the report generator
-        
+
         Args:
             config: Configuration dictionary
             output_dir: Base output directory
@@ -69,7 +70,7 @@ class ReportGenerator:
             "title": "OpenBench Evaluation Report",
             "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "config_file": config.get("config_file", "N/A"),
-            "evaluation_items": enabled_items
+            "evaluation_items": enabled_items,
         }
 
         logger.info(f"Report generator initialized with output directory: {self.report_dir}")
@@ -77,10 +78,10 @@ class ReportGenerator:
     def generate_report(self, report_name: str = "evaluation_report") -> Dict[str, str]:
         """
         Generate both HTML and PDF reports
-        
+
         Args:
             report_name: Base name for the report files
-            
+
         Returns:
             Dictionary with paths to generated reports
         """
@@ -106,9 +107,7 @@ class ReportGenerator:
         if pdf_path:
             logger.info(f"PDF report: {pdf_path}")
 
-        result = {
-            "html": html_path
-        }
+        result = {"html": html_path}
         if pdf_path:
             result["pdf"] = pdf_path
 
@@ -123,7 +122,7 @@ class ReportGenerator:
             "evaluation_items": {},
             "overall_summary": {},
             "comparisons": {},
-            "climate_zone_analysis": {}
+            "climate_zone_analysis": {},
         }
 
         # Collect data for each evaluation item
@@ -133,14 +132,14 @@ class ReportGenerator:
                 "metrics": self._collect_metrics_data(item),
                 "scores": self._collect_scores_data(item),
                 "figures": self._collect_figures(item),
-                "statistics": self._collect_statistics(item)
+                "statistics": self._collect_statistics(item),
             }
 
             # Debug logging
             logger.info(f"Collected data for {item}:")
             logger.info(f"  - Figures: {list(item_data['figures'].keys())}")
             logger.info(f"  - Statistics: {list(item_data['statistics'].keys())}")
-            for fig_type, figs in item_data['figures'].items():
+            for fig_type, figs in item_data["figures"].items():
                 if figs:
                     logger.info(f"    {fig_type}: {len(figs)} figures")
 
@@ -170,8 +169,8 @@ class ReportGenerator:
             try:
                 df = pd.read_csv(csv_file)
                 metrics_data[key] = {
-                    "data": df.to_dict(orient='records'),
-                    "summary": self._generate_metrics_summary(df)
+                    "data": df.to_dict(orient="records"),
+                    "summary": self._generate_metrics_summary(df),
                 }
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
@@ -212,7 +211,7 @@ class ReportGenerator:
                                 if "ref_" in key and "sim_" in key:
                                     try:
                                         # Extract ref and sim sources from filename
-                                        parts = key.split('_')
+                                        parts = key.split("_")
                                         ref_source = None
                                         sim_source = None
 
@@ -235,7 +234,9 @@ class ReportGenerator:
                                                 break
 
                                         if ref_source and sim_source:
-                                            comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
+                                            comparison_pair = self._get_comparison_pair_from_config(
+                                                item, ref_source, sim_source
+                                            )
                                     except Exception as e:
                                         logger.warning(f"Error extracting sources from filename {key}: {e}")
 
@@ -250,7 +251,7 @@ class ReportGenerator:
                                     "data_coverage": float(len(valid_data) / main_var.size * 100),
                                     "shape": str(main_var.dims),
                                     "metric_type": self._extract_metric_type(key),
-                                    "comparison_pair": comparison_pair
+                                    "comparison_pair": comparison_pair,
                                 }
                             else:
                                 logger.warning(f"No valid data found in {nc_file}")
@@ -273,10 +274,7 @@ class ReportGenerator:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
             try:
                 df = pd.read_csv(csv_file)
-                scores_data[key] = {
-                    "data": df.to_dict(orient='records'),
-                    "summary": self._generate_scores_summary(df)
-                }
+                scores_data[key] = {"data": df.to_dict(orient="records"), "summary": self._generate_scores_summary(df)}
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
 
@@ -294,7 +292,7 @@ class ReportGenerator:
             "comparisons": [],
             "igbp_groupby": [],
             "pft_groupby": [],
-            "climate_zone_groupby": []
+            "climate_zone_groupby": [],
         }
 
         # Metrics figures
@@ -306,11 +304,24 @@ class ReportGenerator:
         figures["scores"] = [os.path.basename(f) for f in glob.glob(scores_pattern)]
 
         # Comparison figures (from various subdirectories)
-        comparison_dirs = ["Taylor_Diagram", "Target_Diagram", "Whisker_Plot",
-                          "Ridgeline_Plot", "Kernel_Density_Estimate", "Parallel_Coordinates",
-                          "HeatMap", "RadarMap", "Relative_Score", "Diff_Plot",
-                          "Single_Model_Performance_Index", "Correlation", "Functional_Response",
-                          "Standard_Deviation", "Mann_Kendall_Trend_Test", "Portrait_Plot_seasonal"]
+        comparison_dirs = [
+            "Taylor_Diagram",
+            "Target_Diagram",
+            "Whisker_Plot",
+            "Ridgeline_Plot",
+            "Kernel_Density_Estimate",
+            "Parallel_Coordinates",
+            "HeatMap",
+            "RadarMap",
+            "Relative_Score",
+            "Diff_Plot",
+            "Single_Model_Performance_Index",
+            "Correlation",
+            "Functional_Response",
+            "Standard_Deviation",
+            "Mann_Kendall_Trend_Test",
+            "Portrait_Plot_seasonal",
+        ]
 
         for comp_dir in comparison_dirs:
             # HeatMap and RadarMap show aggregate data across all items, not per-item
@@ -432,7 +443,7 @@ class ReportGenerator:
         groupby_types = {
             "IGBP_groupby": ["IGBP_groupby"],
             "PFT_groupby": ["PFT_groupby"],
-            "Climate_zone_groupby": ["Climate_zone_groupby", "CZ_groupby"]
+            "Climate_zone_groupby": ["Climate_zone_groupby", "CZ_groupby"],
         }
 
         for groupby_name, groupby_dirs in groupby_types.items():
@@ -454,7 +465,7 @@ class ReportGenerator:
                         # Look for metrics.txt files
                         txt_patterns = [
                             os.path.join(subdir, f"*{item}*metrics.txt"),
-                            os.path.join(subdir, f"*{item}*.txt")
+                            os.path.join(subdir, f"*{item}*.txt"),
                         ]
                         for pattern in txt_patterns:
                             found_txt = glob.glob(pattern)
@@ -465,7 +476,7 @@ class ReportGenerator:
                         os.path.join(groupby_path, f"*{item}*_statistics.csv"),
                         os.path.join(groupby_path, f"*{item}*.csv"),
                         os.path.join(groupby_path, f"{item}_*.csv"),
-                        os.path.join(groupby_path, "*.csv")
+                        os.path.join(groupby_path, "*.csv"),
                     ]
 
                     for pattern in csv_patterns:
@@ -478,7 +489,7 @@ class ReportGenerator:
                     nc_patterns = [
                         os.path.join(groupby_path, f"*{item}*.nc"),
                         os.path.join(groupby_path, f"{item}_*.nc"),
-                        os.path.join(groupby_path, "*.nc")
+                        os.path.join(groupby_path, "*.nc"),
                     ]
 
                     for pattern in nc_patterns:
@@ -493,20 +504,22 @@ class ReportGenerator:
                 for txt_file in txt_files:
                     try:
                         # Read txt file and parse it
-                        with open(txt_file, 'r') as f:
+                        with open(txt_file, "r") as f:
                             content = f.read()
-                        stats_data.append({
-                            "file": os.path.basename(txt_file),
-                            "content": content,
-                            "summary": {"groups": self._extract_groups_from_txt(content)}
-                        })
+                        stats_data.append(
+                            {
+                                "file": os.path.basename(txt_file),
+                                "content": content,
+                                "summary": {"groups": self._extract_groups_from_txt(content)},
+                            }
+                        )
                     except Exception as e:
                         logger.warning(f"Error reading {txt_file}: {e}")
 
                 if stats_data:
                     groupby_stats[groupby_name] = {
                         "statistics": stats_data,
-                        "description": self._get_groupby_description(groupby_name)
+                        "description": self._get_groupby_description(groupby_name),
                     }
 
             # Process CSV files if found
@@ -515,11 +528,13 @@ class ReportGenerator:
                 for csv_file in csv_files:
                     try:
                         df = pd.read_csv(csv_file)
-                        stats_data.append({
-                            "file": os.path.basename(csv_file),
-                            "data": df.to_dict(orient='records'),
-                            "summary": self._generate_groupby_summary(df)
-                        })
+                        stats_data.append(
+                            {
+                                "file": os.path.basename(csv_file),
+                                "data": df.to_dict(orient="records"),
+                                "summary": self._generate_groupby_summary(df),
+                            }
+                        )
                     except Exception as e:
                         logger.warning(f"Error reading {csv_file}: {e}")
 
@@ -527,7 +542,7 @@ class ReportGenerator:
                     if groupby_name not in groupby_stats:
                         groupby_stats[groupby_name] = {
                             "statistics": stats_data,
-                            "description": self._get_groupby_description(groupby_name)
+                            "description": self._get_groupby_description(groupby_name),
                         }
                     else:
                         groupby_stats[groupby_name]["statistics"].extend(stats_data)
@@ -537,7 +552,7 @@ class ReportGenerator:
                 if groupby_name not in groupby_stats:
                     groupby_stats[groupby_name] = {
                         "statistics": [],
-                        "description": self._get_groupby_description(groupby_name)
+                        "description": self._get_groupby_description(groupby_name),
                     }
 
                 groupby_stats[groupby_name]["spatial_files"] = [os.path.basename(f) for f in nc_files]
@@ -559,26 +574,42 @@ class ReportGenerator:
                     "min": float(df[col].min()),
                     "max": float(df[col].max()),
                     "median": float(df[col].median()),
-                    "count": int(df[col].count())
+                    "count": int(df[col].count()),
                 }
 
         # Try to extract group information - check various possible column names
-        group_columns = ['Group', 'group', 'IGBP', 'igbp', 'PFT', 'pft', 'Climate_Zone', 'climate_zone',
-                         'Zone', 'zone', 'Type', 'type', 'Class', 'class', 'Category', 'category']
+        group_columns = [
+            "Group",
+            "group",
+            "IGBP",
+            "igbp",
+            "PFT",
+            "pft",
+            "Climate_Zone",
+            "climate_zone",
+            "Zone",
+            "zone",
+            "Type",
+            "type",
+            "Class",
+            "class",
+            "Category",
+            "category",
+        ]
 
         for col in group_columns:
             if col in df.columns:
-                summary['groups'] = df[col].unique().tolist()
-                summary['group_count'] = len(summary['groups'])
-                summary['group_column'] = col
+                summary["groups"] = df[col].unique().tolist()
+                summary["group_count"] = len(summary["groups"])
+                summary["group_column"] = col
 
                 # Add performance ranking if metrics are available
                 if len(numeric_cols) > 0:
                     # Find the best and worst performing groups
                     metric_col = numeric_cols[0]  # Use first numeric column
                     group_performance = df.groupby(col)[metric_col].mean().sort_values()
-                    summary['worst_performing_groups'] = group_performance.head(3).index.tolist()
-                    summary['best_performing_groups'] = group_performance.tail(3).index.tolist()
+                    summary["worst_performing_groups"] = group_performance.head(3).index.tolist()
+                    summary["best_performing_groups"] = group_performance.tail(3).index.tolist()
                 break
 
         return summary
@@ -587,14 +618,14 @@ class ReportGenerator:
         """Extract group names from txt file content"""
         groups = []
         # Look for lines that might contain group names
-        lines = content.split('\n')
+        lines = content.split("\n")
         for line in lines:
             # Common patterns for group names in txt files
-            if 'IGBP_' in line or 'PFT_' in line or 'CZ_' in line:
+            if "IGBP_" in line or "PFT_" in line or "CZ_" in line:
                 # Extract the group name
                 parts = line.split()
                 for part in parts:
-                    if 'IGBP_' in part or 'PFT_' in part or 'CZ_' in part:
+                    if "IGBP_" in part or "PFT_" in part or "CZ_" in part:
                         groups.append(part)
         return list(set(groups))  # Return unique groups
 
@@ -603,7 +634,7 @@ class ReportGenerator:
         descriptions = {
             "IGBP_groupby": "Analysis grouped by International Geosphere-Biosphere Programme (IGBP) land cover classification. This analysis evaluates model performance across different land cover types including forests, grasslands, croplands, and urban areas, providing insights into ecosystem-specific model behaviors.",
             "PFT_groupby": "Analysis grouped by Plant Functional Types (PFTs). This classification groups vegetation based on physiological and morphological characteristics, allowing assessment of model performance for different plant strategies such as evergreen vs. deciduous, C3 vs. C4 photosynthesis, and various growth forms.",
-            "Climate_zone_groupby": "Analysis grouped by Köppen-Geiger climate zones. This classification divides the global land surface based on temperature and precipitation patterns, enabling evaluation of model performance under different climatic conditions from tropical to polar regions."
+            "Climate_zone_groupby": "Analysis grouped by Köppen-Geiger climate zones. This classification divides the global land surface based on temperature and precipitation patterns, enabling evaluation of model performance under different climatic conditions from tropical to polar regions.",
         }
         return descriptions.get(groupby_name, f"{groupby_name} analysis")
 
@@ -621,18 +652,20 @@ class ReportGenerator:
             "HeatMap": {
                 "data_file": os.path.join(self.comparisons_dir, "HeatMap", "scenarios_Overall_Score_comparison.txt"),
                 "figure_pattern": "*heatmap.jpg",
-                "data_key": "heatmap"
+                "data_key": "heatmap",
             },
             "Parallel_Coordinates": {
-                "data_file": os.path.join(self.comparisons_dir, "Parallel_Coordinates", "Parallel_Coordinates_evaluations.txt"),
+                "data_file": os.path.join(
+                    self.comparisons_dir, "Parallel_Coordinates", "Parallel_Coordinates_evaluations.txt"
+                ),
                 "figure_pattern": "*Overall_Score*.jpg",
-                "data_key": "parallel_coords"
+                "data_key": "parallel_coords",
             },
             "RadarMap": {
                 "data_file": os.path.join(self.comparisons_dir, "RadarMap", "scenarios_Overall_Score_comparison.txt"),
                 "figure_pattern": "*radarmap.jpg",
-                "data_key": "radar"
-            }
+                "data_key": "radar",
+            },
         }
 
         # Collect data only for enabled comparisons
@@ -642,8 +675,8 @@ class ReportGenerator:
                 # Collect data file
                 if os.path.exists(mapping["data_file"]):
                     try:
-                        df = pd.read_csv(mapping["data_file"], sep='\t')
-                        comparison_data[mapping["data_key"]] = df.to_dict(orient='records')
+                        df = pd.read_csv(mapping["data_file"], sep="\t")
+                        comparison_data[mapping["data_key"]] = df.to_dict(orient="records")
                     except Exception as e:
                         logger.warning(f"Error reading {mapping['data_file']}: {e}")
 
@@ -665,13 +698,22 @@ class ReportGenerator:
         numeric_cols = df.select_dtypes(include=[np.number]).columns
 
         for col in numeric_cols:
-            if col not in ['sim_lon', 'sim_lat', 'ref_lon', 'ref_lat', 'sim_syear', 'sim_eyear', 'ref_syear', 'ref_eyear']:
+            if col not in [
+                "sim_lon",
+                "sim_lat",
+                "ref_lon",
+                "ref_lat",
+                "sim_syear",
+                "sim_eyear",
+                "ref_syear",
+                "ref_eyear",
+            ]:
                 summary[col] = {
                     "mean": float(df[col].mean()) if not df[col].isna().all() else None,
                     "std": float(df[col].std()) if not df[col].isna().all() else None,
                     "min": float(df[col].min()) if not df[col].isna().all() else None,
                     "max": float(df[col].max()) if not df[col].isna().all() else None,
-                    "count": int(df[col].count())
+                    "count": int(df[col].count()),
                 }
 
         return summary
@@ -686,7 +728,7 @@ class ReportGenerator:
         summary = {
             "total_items": len(report_data["evaluation_items"]),
             "items": list(report_data["evaluation_items"].keys()),
-            "overall_scores": {}
+            "overall_scores": {},
         }
 
         # Calculate average scores across all items
@@ -722,7 +764,7 @@ class ReportGenerator:
             "igbp_items": [],
             "pft_items": [],
             "climate_zone_items": [],
-            "total_groupby_analyses": 0
+            "total_groupby_analyses": 0,
         }
 
         # Check each evaluation item for groupby analyses
@@ -737,7 +779,9 @@ class ReportGenerator:
                 summary["pft_items"].append(item)
                 summary["total_groupby_analyses"] += 1
 
-            if item_data.get("figures", {}).get("climate_zone_groupby") or item_data.get("statistics", {}).get("Climate_zone_groupby"):
+            if item_data.get("figures", {}).get("climate_zone_groupby") or item_data.get("statistics", {}).get(
+                "Climate_zone_groupby"
+            ):
                 summary["has_climate_zone"] = True
                 summary["climate_zone_items"].append(item)
                 summary["total_groupby_analyses"] += 1
@@ -748,7 +792,9 @@ class ReportGenerator:
         if summary["has_pft"]:
             summary["pft_message"] = f"PFT analysis performed for: {', '.join(summary['pft_items'])}"
         if summary["has_climate_zone"]:
-            summary["climate_zone_message"] = f"Climate zone analysis performed for: {', '.join(summary['climate_zone_items'])}"
+            summary["climate_zone_message"] = (
+                f"Climate zone analysis performed for: {', '.join(summary['climate_zone_items'])}"
+            )
 
         return summary
 
@@ -774,7 +820,7 @@ class ReportGenerator:
         """Extract comparison pair from filename (reference vs simulation)"""
         # Extract reference and simulation sources from filename
         # Format: ItemName_ref_RefSource_sim_SimSource_Metric
-        parts = filename.split('_')
+        parts = filename.split("_")
 
         ref_source = "Unknown"
         sim_source = "Unknown"
@@ -805,8 +851,8 @@ class ReportGenerator:
         """Get comparison pair from configuration instead of filename parsing"""
         try:
             # Get display names from configuration if available
-            ref_display_name = self._get_source_display_name(item, ref_source, 'ref')
-            sim_display_name = self._get_source_display_name(item, sim_source, 'sim')
+            ref_display_name = self._get_source_display_name(item, ref_source, "ref")
+            sim_display_name = self._get_source_display_name(item, sim_source, "sim")
 
             return f"{ref_display_name} vs {sim_display_name}"
 
@@ -869,19 +915,51 @@ class ReportGenerator:
             base_pattern = f"{item}_ref_{ref_source}_sim_{sim_source}_"
 
             # Get year information from data files
-            syear = self._get_year_info(item, ref_source, sim_source, 'syear')
-            eyear = self._get_year_info(item, ref_source, sim_source, 'eyear')
+            syear = self._get_year_info(item, ref_source, sim_source, "syear")
+            eyear = self._get_year_info(item, ref_source, sim_source, "eyear")
 
             # Collect all metrics and scores for this pair
             pair_data = {}
             if syear is not None:
-                pair_data["use_syear"] = {"values": [syear], "mean": float(syear), "std": 0.0, "min": float(syear), "max": float(syear), "median": float(syear), "coverage": 100.0}
+                pair_data["use_syear"] = {
+                    "values": [syear],
+                    "mean": float(syear),
+                    "std": 0.0,
+                    "min": float(syear),
+                    "max": float(syear),
+                    "median": float(syear),
+                    "coverage": 100.0,
+                }
             else:
-                pair_data["use_syear"] = {"values": [np.nan], "mean": np.nan, "std": np.nan, "min": np.nan, "max": np.nan, "median": np.nan, "coverage": 0.0}
+                pair_data["use_syear"] = {
+                    "values": [np.nan],
+                    "mean": np.nan,
+                    "std": np.nan,
+                    "min": np.nan,
+                    "max": np.nan,
+                    "median": np.nan,
+                    "coverage": 0.0,
+                }
             if eyear is not None:
-                pair_data["use_eyear"] = {"values": [eyear], "mean": float(eyear), "std": 0.0, "min": float(eyear), "max": float(eyear), "median": float(eyear), "coverage": 100.0}
+                pair_data["use_eyear"] = {
+                    "values": [eyear],
+                    "mean": float(eyear),
+                    "std": 0.0,
+                    "min": float(eyear),
+                    "max": float(eyear),
+                    "median": float(eyear),
+                    "coverage": 100.0,
+                }
             else:
-                pair_data["use_eyear"] = {"values": [np.nan], "mean": np.nan, "std": np.nan, "min": np.nan, "max": np.nan, "median": np.nan, "coverage": 0.0}
+                pair_data["use_eyear"] = {
+                    "values": [np.nan],
+                    "mean": np.nan,
+                    "std": np.nan,
+                    "min": np.nan,
+                    "max": np.nan,
+                    "median": np.nan,
+                    "coverage": 0.0,
+                }
 
             # Search for metrics in metrics directory
             metrics_files = glob.glob(os.path.join(self.metrics_dir, f"{base_pattern}*.nc"))
@@ -915,7 +993,7 @@ class ReportGenerator:
                                     "min": float(np.min(valid_data)),
                                     "max": float(np.max(valid_data)),
                                     "median": float(np.median(valid_data)),
-                                    "coverage": float(coverage)
+                                    "coverage": float(coverage),
                                 }
 
                 except Exception as e:
@@ -954,13 +1032,16 @@ class ReportGenerator:
                     "min": max(0.0, estimated_corr - 0.1),
                     "max": min(1.0, estimated_corr + 0.1),
                     "median": estimated_corr,
-                    "coverage": 100.0
+                    "coverage": 100.0,
                 }
 
             if len(pair_data) > 2:  # More than just the year entries
                 # Calculate average data coverage across all metrics
-                coverages = [metric_info.get('coverage', 0.0) for metric_info in pair_data.values()
-                           if isinstance(metric_info, dict) and 'coverage' in metric_info]
+                coverages = [
+                    metric_info.get("coverage", 0.0)
+                    for metric_info in pair_data.values()
+                    if isinstance(metric_info, dict) and "coverage" in metric_info
+                ]
                 avg_coverage = np.mean(coverages) if coverages else 100.0
 
                 # Get comparison pair from configuration
@@ -971,7 +1052,7 @@ class ReportGenerator:
                     "comparison_pair": comparison_pair,
                     "station_format": True,  # Flag to use station-like display
                     "metrics": pair_data,
-                    "data_coverage": float(avg_coverage)
+                    "data_coverage": float(avg_coverage),
                 }
 
                 logger.info(f"Generated comprehensive stats for {comparison_pair}")
@@ -994,7 +1075,7 @@ class ReportGenerator:
 
                 for file_path in files:
                     filename = os.path.basename(file_path)
-                    parts = filename.split('_')
+                    parts = filename.split("_")
 
                     # Extract ref and sim sources
                     ref_source = None
@@ -1033,13 +1114,13 @@ class ReportGenerator:
             ref_sources = []
 
             # Get from general reference configuration
-            if 'ref_nml' in self.config and 'general' in self.config['ref_nml']:
+            if "ref_nml" in self.config and "general" in self.config["ref_nml"]:
                 # Look for the specific evaluation item in general section
-                if item in self.config['ref_nml']['general']:
-                    value = self.config['ref_nml']['general'][item]
-                    if isinstance(value, str) and ',' in value:
+                if item in self.config["ref_nml"]["general"]:
+                    value = self.config["ref_nml"]["general"][item]
+                    if isinstance(value, str) and "," in value:
                         # This is a list of reference sources
-                        sources = [s.strip() for s in value.split(',')]
+                        sources = [s.strip() for s in value.split(",")]
                         ref_sources.extend(sources)
                     elif isinstance(value, str):
                         # Single reference source
@@ -1058,12 +1139,12 @@ class ReportGenerator:
             sim_sources = []
 
             # Get from general simulation configuration
-            if 'sim_nml' in self.config and 'general' in self.config['sim_nml']:
+            if "sim_nml" in self.config and "general" in self.config["sim_nml"]:
                 # Look for Case_lib which contains simulation sources
-                if 'Case_lib' in self.config['sim_nml']['general']:
-                    value = self.config['sim_nml']['general']['Case_lib']
-                    if isinstance(value, str) and ',' in value:
-                        sources = [s.strip() for s in value.split(',')]
+                if "Case_lib" in self.config["sim_nml"]["general"]:
+                    value = self.config["sim_nml"]["general"]["Case_lib"]
+                    if isinstance(value, str) and "," in value:
+                        sources = [s.strip() for s in value.split(",")]
                         sim_sources.extend(sources)
                     elif isinstance(value, str):
                         sim_sources.append(value.strip())
@@ -1089,11 +1170,11 @@ class ReportGenerator:
             for data_file in glob.glob(pattern):
                 try:
                     with xr.open_dataset(data_file) as ds:
-                        if 'time' in ds.dims or 'time' in ds.coords:
-                            time_var = ds['time']
+                        if "time" in ds.dims or "time" in ds.coords:
+                            time_var = ds["time"]
                             if len(time_var) > 0:
                                 time_values = pd.to_datetime(time_var.values)
-                                if year_type == 'syear':
+                                if year_type == "syear":
                                     years_found.append(int(time_values.min().year))
                                 else:
                                     years_found.append(int(time_values.max().year))
@@ -1101,7 +1182,7 @@ class ReportGenerator:
                     pass
 
         if years_found:
-            if year_type == 'syear':
+            if year_type == "syear":
                 return max(years_found)  # use_syear = max of all start years
             else:
                 return min(years_found)  # use_eyear = min of all end years
@@ -1131,7 +1212,7 @@ class ReportGenerator:
         if os.path.exists(self.metrics_dir):
             for root, dirs, files in os.walk(self.metrics_dir):
                 for file in files:
-                    if file.endswith('.jpg'):
+                    if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.metrics_dir)
                         dst_file = os.path.join(figures_dir, "metrics", rel_path)
@@ -1144,7 +1225,7 @@ class ReportGenerator:
         if os.path.exists(self.scores_dir):
             for root, dirs, files in os.walk(self.scores_dir):
                 for file in files:
-                    if file.endswith('.jpg'):
+                    if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.scores_dir)
                         dst_file = os.path.join(figures_dir, "scores", rel_path)
@@ -1157,7 +1238,7 @@ class ReportGenerator:
         if os.path.exists(self.comparisons_dir):
             for root, dirs, files in os.walk(self.comparisons_dir):
                 for file in files:
-                    if file.endswith('.jpg'):
+                    if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.comparisons_dir)
                         dst_file = os.path.join(figures_dir, "comparisons", rel_path)
@@ -1224,7 +1305,7 @@ class ReportGenerator:
         logger.info("Generating HTML report...")
 
         # HTML template
-        html_template = Template('''<!DOCTYPE html>
+        html_template = Template("""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1715,14 +1796,14 @@ class ReportGenerator:
         <p>Generated by OpenBench v2.0 | {{ metadata.generated_date }}</p>
     </div>
 </body>
-</html>''')
+</html>""")
 
         # Render HTML
         html_content = html_template.render(**report_data)
 
         # Save HTML file
         html_path = os.path.join(self.report_dir, f"{report_name}.html")
-        with open(html_path, 'w', encoding='utf-8') as f:
+        with open(html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         return html_path
@@ -1730,11 +1811,11 @@ class ReportGenerator:
     def _generate_pdf_report(self, html_path: str, report_name: str) -> Optional[str]:
         """
         Generate PDF report from HTML file using xhtml2pdf
-        
+
         Args:
             html_path: Path to the HTML file
             report_name: Base name for the PDF file
-            
+
         Returns:
             Path to generated PDF file, or None if generation failed
         """
@@ -1748,7 +1829,7 @@ class ReportGenerator:
             pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
 
             # Read the HTML file
-            with open(html_path, 'r', encoding='utf-8') as f:
+            with open(html_path, "r", encoding="utf-8") as f:
                 html_content = f.read()
 
             # Modify HTML content for better PDF generation
@@ -1760,11 +1841,11 @@ class ReportGenerator:
                 src = match.group(1)
 
                 # Skip if already an absolute path or URL
-                if src.startswith(('http://', 'https://', 'file://', '/')):
+                if src.startswith(("http://", "https://", "file://", "/")):
                     return match.group(0)
 
                 # Handle paths that start with 'figures/'
-                if src.startswith('figures/'):
+                if src.startswith("figures/"):
                     abs_path = os.path.join(self.report_dir, src)
                     abs_path = os.path.abspath(abs_path)  # Normalize the path
                     if os.path.exists(abs_path):
@@ -1775,7 +1856,7 @@ class ReportGenerator:
                         return f'src="file://{abs_path}"'  # Keep file:// prefix even if not found
 
                 # Handle other relative paths
-                elif not src.startswith('./'):
+                elif not src.startswith("./"):
                     # If it's a relative path without ./, try to resolve it relative to report dir
                     potential_path = os.path.join(self.report_dir, src)
                     potential_path = os.path.abspath(potential_path)
@@ -1843,15 +1924,12 @@ class ReportGenerator:
             """
 
             # Insert PDF CSS into HTML head
-            html_content = html_content.replace('</head>', pdf_css + '</head>')
+            html_content = html_content.replace("</head>", pdf_css + "</head>")
 
             # Generate PDF
-            with open(pdf_path, 'wb') as pdf_file:
+            with open(pdf_path, "wb") as pdf_file:
                 result = pisa.CreatePDF(
-                    html_content,
-                    dest=pdf_file,
-                    encoding='utf-8',
-                    link_callback=self._link_callback
+                    html_content, dest=pdf_file, encoding="utf-8", link_callback=self._link_callback
                 )
 
                 if result.err:
@@ -1870,7 +1948,7 @@ class ReportGenerator:
         Callback function to handle local file links in PDF generation
         """
         # Handle file:// URLs
-        if uri.startswith('file://'):
+        if uri.startswith("file://"):
             path = uri[7:]  # Remove 'file://' prefix
             if os.path.exists(path):
                 logger.debug(f"Link callback found file: {path}")
@@ -1880,7 +1958,7 @@ class ReportGenerator:
                 return path  # Return path anyway, let PDF generator handle it
 
         # Handle relative paths directly
-        elif uri.startswith('figures/'):
+        elif uri.startswith("figures/"):
             abs_path = os.path.join(self.report_dir, uri)
             abs_path = os.path.abspath(abs_path)
             if os.path.exists(abs_path):
@@ -1891,11 +1969,11 @@ class ReportGenerator:
                 return abs_path
 
         # Handle other relative paths (like ./output/...)
-        elif uri.startswith('./') and 'figures' in uri:
+        elif uri.startswith("./") and "figures" in uri:
             # Extract the figures part
-            if 'reports/figures' in uri:
-                figures_part = uri.split('reports/figures/')[-1]
-                abs_path = os.path.join(self.report_dir, 'figures', figures_part)
+            if "reports/figures" in uri:
+                figures_part = uri.split("reports/figures/")[-1]
+                abs_path = os.path.join(self.report_dir, "figures", figures_part)
                 abs_path = os.path.abspath(abs_path)
                 if os.path.exists(abs_path):
                     logger.debug(f"Link callback resolved complex relative path: {uri} -> {abs_path}")

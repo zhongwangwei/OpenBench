@@ -8,14 +8,22 @@ from dataclasses import dataclass
 from enum import Enum
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QProgressBar, QPlainTextEdit, QPushButton, QGroupBox, QGridLayout
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPlainTextEdit,
+    QPushButton,
+    QGroupBox,
+    QGridLayout,
 )
 from PySide6.QtCore import Signal, QTimer
 
 
 class TaskStatus(Enum):
     """Task status enum."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,6 +33,7 @@ class TaskStatus(Enum):
 @dataclass
 class TaskInfo:
     """Task information."""
+
     name: str
     status: TaskStatus = TaskStatus.PENDING
     progress: float = 0.0
@@ -180,6 +189,7 @@ class ProgressDashboard(QWidget):
     def append_log(self, message: str):
         """Append message to log output."""
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_output.appendPlainText(f"[{timestamp}] {message}")
 

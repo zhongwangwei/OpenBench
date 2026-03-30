@@ -23,6 +23,7 @@ import xarray as xr
 
 class ValidationError(Exception):
     """Custom exception for validation errors."""
+
     pass
 
 
@@ -37,8 +38,9 @@ class PreValidator:
     - Unit validation with unknown unit detection
     """
 
-    def __init__(self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any],
-                 ref_nml: Dict[str, Any], evaluation_items: List[str]):
+    def __init__(
+        self, main_nl: Dict[str, Any], sim_nml: Dict[str, Any], ref_nml: Dict[str, Any], evaluation_items: List[str]
+    ):
         """
         Initialize the PreValidator.
 
@@ -63,15 +65,36 @@ class PreValidator:
         # Used to detect invalid coarse-to-fine resolution conversions
         self._time_resolution_ranks = {
             # Hourly resolutions
-            'h': 1, 'hour': 1, 'hr': 1, 'hourly': 1, '1h': 1,
+            "h": 1,
+            "hour": 1,
+            "hr": 1,
+            "hourly": 1,
+            "1h": 1,
             # Daily resolutions
-            'd': 2, 'day': 2, 'daily': 2, '1d': 2,
+            "d": 2,
+            "day": 2,
+            "daily": 2,
+            "1d": 2,
             # Weekly resolutions
-            'w': 3, 'week': 3, 'wk': 3, 'weekly': 3,
+            "w": 3,
+            "week": 3,
+            "wk": 3,
+            "weekly": 3,
             # Monthly resolutions
-            'm': 4, 'me': 4, 'month': 4, 'mon': 4, 'monthly': 4, '1m': 4,
+            "m": 4,
+            "me": 4,
+            "month": 4,
+            "mon": 4,
+            "monthly": 4,
+            "1m": 4,
             # Yearly resolutions
-            'y': 5, 'ye': 5, 'year': 5, 'yr': 5, 'yearly': 5, 'annual': 5, '1y': 5,
+            "y": 5,
+            "ye": 5,
+            "year": 5,
+            "yr": 5,
+            "yearly": 5,
+            "annual": 5,
+            "1y": 5,
         }
 
     def validate_all(self, skip_data_check: bool = False) -> bool:
@@ -197,17 +220,17 @@ class PreValidator:
 
         # Check main namelist paths
         critical_files = [
-            ('reference_nml', self.main_nl['general'].get('reference_nml')),
-            ('simulation_nml', self.main_nl['general'].get('simulation_nml')),
-            ('figure_nml', self.main_nl['general'].get('figure_nml')),
+            ("reference_nml", self.main_nl["general"].get("reference_nml")),
+            ("simulation_nml", self.main_nl["general"].get("simulation_nml")),
+            ("figure_nml", self.main_nl["general"].get("figure_nml")),
         ]
 
         # Check statistics namelist if enabled
-        if self.main_nl['general'].get('statistics', False):
-            critical_files.append(('statistics_nml', self.main_nl['general'].get('statistics_nml')))
+        if self.main_nl["general"].get("statistics", False):
+            critical_files.append(("statistics_nml", self.main_nl["general"].get("statistics_nml")))
 
         # Check base directory
-        basedir = self.main_nl['general'].get('basedir')
+        basedir = self.main_nl["general"].get("basedir")
         if basedir and not os.path.exists(basedir):
             try:
                 os.makedirs(basedir, exist_ok=True)
@@ -243,18 +266,16 @@ class PreValidator:
 
         # Check reference sources
         for item in self.evaluation_items:
-            ref_source_key = f'{item}_ref_source'
-            if ref_source_key in self.ref_nml.get('general', {}):
-                ref_sources = self.ref_nml['general'][ref_source_key]
+            ref_source_key = f"{item}_ref_source"
+            if ref_source_key in self.ref_nml.get("general", {}):
+                ref_sources = self.ref_nml["general"][ref_source_key]
                 ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
                 # Check each ref_source has a def_nml entry
-                def_nml = self.ref_nml.get('def_nml', {})
+                def_nml = self.ref_nml.get("def_nml", {})
                 for source in ref_sources:
                     if source not in def_nml:
-                        errors.append(
-                            f"Reference source '{source}' for {item} is not defined in ref_nml['def_nml']"
-                        )
+                        errors.append(f"Reference source '{source}' for {item} is not defined in ref_nml['def_nml']")
                     else:
                         # Also check if the file path exists
                         config_file = def_nml[source]
@@ -265,18 +286,16 @@ class PreValidator:
 
         # Check simulation sources
         for item in self.evaluation_items:
-            sim_source_key = f'{item}_sim_source'
-            if sim_source_key in self.sim_nml.get('general', {}):
-                sim_sources = self.sim_nml['general'][sim_source_key]
+            sim_source_key = f"{item}_sim_source"
+            if sim_source_key in self.sim_nml.get("general", {}):
+                sim_sources = self.sim_nml["general"][sim_source_key]
                 sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
 
                 # Check each sim_source has a def_nml entry
-                def_nml = self.sim_nml.get('def_nml', {})
+                def_nml = self.sim_nml.get("def_nml", {})
                 for source in sim_sources:
                     if source not in def_nml:
-                        errors.append(
-                            f"Simulation source '{source}' for {item} is not defined in sim_nml['def_nml']"
-                        )
+                        errors.append(f"Simulation source '{source}' for {item} is not defined in sim_nml['def_nml']")
                     else:
                         # Also check if the file path exists
                         config_file = def_nml[source]
@@ -297,7 +316,7 @@ class PreValidator:
         """
         # Check main namelist required fields
         required_main_fields = {
-            'general': ['basedir', 'basename', 'reference_nml', 'simulation_nml', 'figure_nml'],
+            "general": ["basedir", "basename", "reference_nml", "simulation_nml", "figure_nml"],
         }
 
         for section, fields in required_main_fields.items():
@@ -324,22 +343,22 @@ class PreValidator:
         logging.info(f"  Validating configuration for: {item}")
 
         # Check reference sources
-        ref_source_key = f'{item}_ref_source'
-        if ref_source_key not in self.ref_nml['general']:
+        ref_source_key = f"{item}_ref_source"
+        if ref_source_key not in self.ref_nml["general"]:
             raise ValidationError(f"Missing reference source for {item} in reference namelist")
 
-        ref_sources = self.ref_nml['general'][ref_source_key]
+        ref_sources = self.ref_nml["general"][ref_source_key]
         ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
         if not ref_sources:
             raise ValidationError(f"No reference sources defined for {item}")
 
         # Check simulation sources
-        sim_source_key = f'{item}_sim_source'
-        if sim_source_key not in self.sim_nml['general']:
+        sim_source_key = f"{item}_sim_source"
+        if sim_source_key not in self.sim_nml["general"]:
             raise ValidationError(f"Missing simulation source for {item} in simulation namelist")
 
-        sim_sources = self.sim_nml['general'][sim_source_key]
+        sim_sources = self.sim_nml["general"][sim_source_key]
         sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
 
         if not sim_sources:
@@ -347,10 +366,10 @@ class PreValidator:
 
         # Validate each source has required configuration
         for ref_source in ref_sources:
-            self._validate_source_config(item, ref_source, self.ref_nml, 'reference')
+            self._validate_source_config(item, ref_source, self.ref_nml, "reference")
 
         for sim_source in sim_sources:
-            self._validate_source_config(item, sim_source, self.sim_nml, 'simulation')
+            self._validate_source_config(item, sim_source, self.sim_nml, "simulation")
 
     def _check_filter_handles_item(self, model: str, item: str) -> Tuple[bool, Optional[str]]:
         """
@@ -365,17 +384,14 @@ class PreValidator:
         """
         # Construct filter file path
         filter_filename = f"{model}_filter.py"
-        filter_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'data', 'custom', filter_filename
-        )
+        filter_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "custom", filter_filename)
 
         if not os.path.exists(filter_path):
             return False, None
 
         try:
             # Read filter file content
-            with open(filter_path, 'r', encoding='utf-8') as f:
+            with open(filter_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Check if the filter handles this item
@@ -414,51 +430,46 @@ class PreValidator:
 
         # Required fields (after UpdateNamelist merge)
         required_fields = [
-            f'{source}_data_type',
-            f'{source}_varname',
-            f'{source}_dir',
-            f'{source}_varunit',  # Note: varunit after UpdateNamelist
+            f"{source}_data_type",
+            f"{source}_varname",
+            f"{source}_dir",
+            f"{source}_varunit",  # Note: varunit after UpdateNamelist
         ]
 
         # Get model name if available (for filter checking)
-        model_name = nml[item].get(f'{source}_model', None)
+        model_name = nml[item].get(f"{source}_model", None)
 
         # Check if filter handles this item (only for simulation sources with model info)
         filter_handles_item = False
         filter_path = None
-        if source_type == 'simulation' and model_name:
+        if source_type == "simulation" and model_name:
             filter_handles_item, filter_path = self._check_filter_handles_item(model_name, item)
 
         missing_fields = []
         for field in required_fields:
             value = nml[item].get(field)
-            if value is None or value == '':
+            if value is None or value == "":
                 # Skip varname and varunit validation if filter handles this item
-                if filter_handles_item and field in [f'{source}_varname', f'{source}_varunit']:
+                if filter_handles_item and field in [f"{source}_varname", f"{source}_varunit"]:
                     logging.info(f"  ✓ {field} will be handled by filter: {filter_path}")
                     continue
                 missing_fields.append(field)
 
         if missing_fields:
             raise ValidationError(
-                f"Missing required fields for {source} in {item} {source_type} configuration:\n" +
-                "\n".join(f"    - {f}" for f in missing_fields)
+                f"Missing required fields for {source} in {item} {source_type} configuration:\n"
+                + "\n".join(f"    - {f}" for f in missing_fields)
             )
 
         # Check data type is valid
-        data_type = nml[item][f'{source}_data_type']
-        if data_type not in ['grid', 'stn']:
-            raise ValidationError(
-                f"Invalid data type '{data_type}' for {source} in {item}. Must be 'grid' or 'stn'"
-            )
+        data_type = nml[item][f"{source}_data_type"]
+        if data_type not in ["grid", "stn"]:
+            raise ValidationError(f"Invalid data type '{data_type}' for {source} in {item}. Must be 'grid' or 'stn'")
 
         # Check data directory exists
-        data_dir = nml[item][f'{source}_dir']
+        data_dir = nml[item][f"{source}_dir"]
         if not os.path.exists(data_dir):
-            raise ValidationError(
-                f"Data directory does not exist: {data_dir}\n"
-                f"  ({source_type} {source} for {item})"
-            )
+            raise ValidationError(f"Data directory does not exist: {data_dir}\n  ({source_type} {source} for {item})")
 
     def _validate_units(self):
         """
@@ -476,10 +487,10 @@ class PreValidator:
 
         # Check units for all evaluation items
         for item in self.evaluation_items:
-            ref_sources = self.ref_nml['general'][f'{item}_ref_source']
+            ref_sources = self.ref_nml["general"][f"{item}_ref_source"]
             ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
-            sim_sources = self.sim_nml['general'][f'{item}_sim_source']
+            sim_sources = self.sim_nml["general"][f"{item}_sim_source"]
             sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
 
             for ref_source in ref_sources:
@@ -507,6 +518,7 @@ class PreValidator:
             import inspect
 
             from openbench.data.Lib_Unit import UnitProcessing
+
             source = inspect.getsource(UnitProcessing.convert_unit)
 
             # Parse conversion_factors dictionary from source
@@ -515,20 +527,38 @@ class PreValidator:
 
             # These are the base units and all their conversions from Lib_Unit.py
             conversion_factors = {
-                'gc m-2 day-1': ['gc m-2 s-1', 'g c m-2 s-1', 'g c m-2 day-1', 'g m-2 s-1', 'mol m-2 s-1', 'mumolco2 m-2 s-1'],
-                'mm day-1': ['kg m-2 s-1', 'mm s-1', 'mm hr-1', 'mm h-1', 'mm hour-1', 'mm mon-1', 'mm m-1', 'mm month-1', 'w m-2 heat', 'mm 3hour-1'],
-                'w m-2': ['mj m-2 day-1', 'mj m-2 d-1'],
-                'unitless': ['percent', 'percentage', '%', 'g kg-1', 'fraction', 'm3 m-3', 'm2 m-2', 'g g-1', '1', '0'],
-                'k': ['c', 'degc', 'degreec', 'degree c', 'celsius', 'f', 'degf', 'degreef', 'degree f', 'fahrenheit'],
-                'm3 s-1': ['m3 day-1', 'm3 d-1', 'l s-1'],
-                'mcm': ['m3', 'km3', 'million cubic meters'],
-                'mm year-1': ['m year-1', 'cm year-1', 'kg m-2', 'mm month-1', 'mm mon-1', 'mm day-1'],
-                'm': ['cm', 'mm'],
-                'km2': ['m2'],
-                'm s-1': ['km h-1'],
-                't ha-1': ['kg ha-1'],
-                'kg c m-2': ['g c m-2'],
-                'kgc m-2': ['gc m-2', 'g c m-2'],
+                "gc m-2 day-1": [
+                    "gc m-2 s-1",
+                    "g c m-2 s-1",
+                    "g c m-2 day-1",
+                    "g m-2 s-1",
+                    "mol m-2 s-1",
+                    "mumolco2 m-2 s-1",
+                ],
+                "mm day-1": [
+                    "kg m-2 s-1",
+                    "mm s-1",
+                    "mm hr-1",
+                    "mm h-1",
+                    "mm hour-1",
+                    "mm mon-1",
+                    "mm m-1",
+                    "mm month-1",
+                    "w m-2 heat",
+                    "mm 3hour-1",
+                ],
+                "w m-2": ["mj m-2 day-1", "mj m-2 d-1"],
+                "unitless": ["percent", "percentage", "%", "g kg-1", "fraction", "m3 m-3", "m2 m-2", "g g-1", "1", "0"],
+                "k": ["c", "degc", "degreec", "degree c", "celsius", "f", "degf", "degreef", "degree f", "fahrenheit"],
+                "m3 s-1": ["m3 day-1", "m3 d-1", "l s-1"],
+                "mcm": ["m3", "km3", "million cubic meters"],
+                "mm year-1": ["m year-1", "cm year-1", "kg m-2", "mm month-1", "mm mon-1", "mm day-1"],
+                "m": ["cm", "mm"],
+                "km2": ["m2"],
+                "m s-1": ["km h-1"],
+                "t ha-1": ["kg ha-1"],
+                "kg c m-2": ["g c m-2"],
+                "kgc m-2": ["gc m-2", "g c m-2"],
             }
 
             # Add all base units and their conversions
@@ -568,11 +598,11 @@ class PreValidator:
 
         # Prompt user to continue
         print("\n⚠️  Unknown units detected. See log for details.")
-        print("Do you want to continue anyway? (yes/no): ", end='')
+        print("Do you want to continue anyway? (yes/no): ", end="")
 
         try:
             response = input().strip().lower()
-            if response not in ['yes', 'y']:
+            if response not in ["yes", "y"]:
                 logging.info("User chose to abort due to unknown units")
                 raise ValidationError("Validation aborted: Unknown units detected")
             logging.info("User chose to continue despite unknown units")
@@ -597,10 +627,10 @@ class PreValidator:
         sample_item = list(self.evaluation_items)[0]
         logging.info(f"  Performing dimension check on sample item: {sample_item}")
 
-        ref_sources = self.ref_nml['general'][f'{sample_item}_ref_source']
+        ref_sources = self.ref_nml["general"][f"{sample_item}_ref_source"]
         ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
-        sim_sources = self.sim_nml['general'][f'{sample_item}_sim_source']
+        sim_sources = self.sim_nml["general"][f"{sample_item}_sim_source"]
         sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
 
         # Check first ref-sim pair
@@ -608,22 +638,24 @@ class PreValidator:
         sim_source = sim_sources[0]
 
         try:
-            ref_info = self._get_dimension_info(sample_item, ref_source, self.ref_nml, 'reference')
-            sim_info = self._get_dimension_info(sample_item, sim_source, self.sim_nml, 'simulation')
+            ref_info = self._get_dimension_info(sample_item, ref_source, self.ref_nml, "reference")
+            sim_info = self._get_dimension_info(sample_item, sim_source, self.sim_nml, "simulation")
 
             # Compare data types
-            if ref_info['data_type'] != sim_info['data_type']:
-                logging.info(f"  ℹ️  Different data types: reference={ref_info['data_type']}, simulation={sim_info['data_type']}")
+            if ref_info["data_type"] != sim_info["data_type"]:
+                logging.info(
+                    f"  ℹ️  Different data types: reference={ref_info['data_type']}, simulation={sim_info['data_type']}"
+                )
                 logging.info("     This is acceptable - OpenBench can handle mixed grid/station data")
 
             # If both are grid data, check spatial compatibility
-            if ref_info['data_type'] == 'grid' and sim_info['data_type'] == 'grid':
-                if ref_info['dimensions'] and sim_info['dimensions']:
+            if ref_info["data_type"] == "grid" and sim_info["data_type"] == "grid":
+                if ref_info["dimensions"] and sim_info["dimensions"]:
                     logging.info(f"  Reference dimensions: {ref_info['dimensions']}")
                     logging.info(f"  Simulation dimensions: {sim_info['dimensions']}")
 
                     # Different dimensions is OK - OpenBench will regrid
-                    if ref_info['dimensions'] != sim_info['dimensions']:
+                    if ref_info["dimensions"] != sim_info["dimensions"]:
                         logging.info("  ℹ️  Dimensions differ - automatic regridding will be performed")
 
             logging.info("  ✓ Dimension compatibility check passed")
@@ -646,13 +678,13 @@ class PreValidator:
             Tuple of (rank, normalized_name). Returns (0, 'unknown') if not recognized.
         """
         if not tim_res:
-            return (0, 'unknown')
+            return (0, "unknown")
 
         # Normalize the string
         tim_res_lower = str(tim_res).strip().lower()
 
         # Handle numeric prefixes like '3month', '6hour'
-        match = re.match(r'(\d*)\s*([a-zA-Z]+)', tim_res_lower)
+        match = re.match(r"(\d*)\s*([a-zA-Z]+)", tim_res_lower)
         if match:
             _, time_unit = match.groups()
             tim_res_lower = time_unit
@@ -661,17 +693,17 @@ class PreValidator:
 
         # Get human-readable name
         if rank == 1:
-            name = 'Hourly'
+            name = "Hourly"
         elif rank == 2:
-            name = 'Daily'
+            name = "Daily"
         elif rank == 3:
-            name = 'Weekly'
+            name = "Weekly"
         elif rank == 4:
-            name = 'Monthly'
+            name = "Monthly"
         elif rank == 5:
-            name = 'Yearly'
+            name = "Yearly"
         else:
-            name = f'Unknown ({tim_res})'
+            name = f"Unknown ({tim_res})"
 
         return (rank, name)
 
@@ -688,7 +720,7 @@ class PreValidator:
         logging.info("  Checking time resolution compatibility...")
 
         # Get comparison time resolution from main namelist
-        compare_tim_res = self.main_nl['general'].get('compare_tim_res', '')
+        compare_tim_res = self.main_nl["general"].get("compare_tim_res", "")
         if not compare_tim_res:
             logging.warning("  ⚠️  compare_tim_res not specified, skipping time resolution validation")
             return
@@ -704,11 +736,11 @@ class PreValidator:
 
         # Check each evaluation item's reference sources
         for item in self.evaluation_items:
-            ref_source_key = f'{item}_ref_source'
-            if ref_source_key not in self.ref_nml.get('general', {}):
+            ref_source_key = f"{item}_ref_source"
+            if ref_source_key not in self.ref_nml.get("general", {}):
                 continue
 
-            ref_sources = self.ref_nml['general'][ref_source_key]
+            ref_sources = self.ref_nml["general"][ref_source_key]
             ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
             for ref_source in ref_sources:
@@ -717,17 +749,18 @@ class PreValidator:
 
                 # Try to get from merged namelist (after UpdateNamelist)
                 if item in self.ref_nml:
-                    ref_tim_res = self.ref_nml[item].get(f'{ref_source}_tim_res')
+                    ref_tim_res = self.ref_nml[item].get(f"{ref_source}_tim_res")
 
                 # If not found, try to read from source definition file
                 if not ref_tim_res:
-                    source_def_path = self.ref_nml.get('def_nml', {}).get(ref_source)
+                    source_def_path = self.ref_nml.get("def_nml", {}).get(ref_source)
                     if source_def_path and os.path.exists(source_def_path):
                         try:
                             import yaml
-                            with open(source_def_path, 'r') as f:
+
+                            with open(source_def_path, "r") as f:
                                 source_def = yaml.safe_load(f)
-                            ref_tim_res = source_def.get('general', {}).get('tim_res')
+                            ref_tim_res = source_def.get("general", {}).get("tim_res")
                         except Exception as e:
                             logging.debug(f"  Could not read tim_res from {source_def_path}: {e}")
 
@@ -743,14 +776,16 @@ class PreValidator:
                 # Check if reference resolution is coarser than comparison resolution
                 # Higher rank = coarser resolution
                 if ref_rank > compare_rank:
-                    incompatible_sources.append({
-                        'item': item,
-                        'source': ref_source,
-                        'ref_tim_res': ref_tim_res,
-                        'ref_name': ref_name,
-                        'compare_tim_res': compare_tim_res,
-                        'compare_name': compare_name
-                    })
+                    incompatible_sources.append(
+                        {
+                            "item": item,
+                            "source": ref_source,
+                            "ref_tim_res": ref_tim_res,
+                            "ref_name": ref_name,
+                            "compare_tim_res": compare_tim_res,
+                            "compare_name": compare_name,
+                        }
+                    )
                 else:
                     logging.info(f"  ✓ {ref_source} ({ref_name}) → {compare_name}: OK")
 
@@ -769,28 +804,32 @@ class PreValidator:
             for src in incompatible_sources:
                 error_lines.append(f"  • {src['item']} / {src['source']}:")
                 error_lines.append(f"    Reference resolution: {src['ref_name']} (tim_res={src['ref_tim_res']})")
-                error_lines.append(f"    Comparison resolution: {src['compare_name']} (compare_tim_res={src['compare_tim_res']})")
+                error_lines.append(
+                    f"    Comparison resolution: {src['compare_name']} (compare_tim_res={src['compare_tim_res']})"
+                )
                 error_lines.append("")
 
-            error_lines.extend([
-                "⚠️  This configuration is INVALID because:",
-                "   - Coarse-resolution data (e.g., Monthly) cannot be meaningfully compared",
-                "     at finer resolution (e.g., Daily)",
-                "   - The system would create sparse/interpolated data with mostly NaN values",
-                "   - Evaluation metrics would be unreliable or misleading",
-                "",
-                "📝 To fix this issue, choose ONE of the following:",
-                "",
-                "   Option 1: Change compare_tim_res to match the coarsest reference data",
-                "            Example: compare_tim_res: Month",
-                "",
-                "   Option 2: Use a different reference dataset with finer resolution",
-                "            Example: Use GRDC (daily) instead of GRDD (monthly)",
-                "",
-                "   Option 3: Remove the incompatible reference sources from your configuration",
-                "",
-                "=" * 80
-            ])
+            error_lines.extend(
+                [
+                    "⚠️  This configuration is INVALID because:",
+                    "   - Coarse-resolution data (e.g., Monthly) cannot be meaningfully compared",
+                    "     at finer resolution (e.g., Daily)",
+                    "   - The system would create sparse/interpolated data with mostly NaN values",
+                    "   - Evaluation metrics would be unreliable or misleading",
+                    "",
+                    "📝 To fix this issue, choose ONE of the following:",
+                    "",
+                    "   Option 1: Change compare_tim_res to match the coarsest reference data",
+                    "            Example: compare_tim_res: Month",
+                    "",
+                    "   Option 2: Use a different reference dataset with finer resolution",
+                    "            Example: Use GRDC (daily) instead of GRDD (monthly)",
+                    "",
+                    "   Option 3: Remove the incompatible reference sources from your configuration",
+                    "",
+                    "=" * 80,
+                ]
+            )
 
             error_msg = "\n".join(error_lines)
             raise ValidationError(error_msg)
@@ -815,24 +854,23 @@ class PreValidator:
         # After UpdateNamelist, units are directly in nml[item][f'{source}_varunit']
         if item in nml:
             # Try varunit first (standard format after UpdateNamelist)
-            unit_value = nml[item].get(f'{source}_varunit', '')
+            unit_value = nml[item].get(f"{source}_varunit", "")
             # Convert to string if it's not already (handle integer values like 0)
-            if unit_value is not None and unit_value != '':
+            if unit_value is not None and unit_value != "":
                 unit = str(unit_value).strip()
                 if unit:
                     return unit
 
             # Fallback to _unit for backward compatibility
-            unit_value = nml[item].get(f'{source}_unit', '')
-            if unit_value is not None and unit_value != '':
+            unit_value = nml[item].get(f"{source}_unit", "")
+            if unit_value is not None and unit_value != "":
                 unit = str(unit_value).strip()
                 if unit:
                     return unit
 
         return None
 
-    def _get_dimension_info(self, item: str, source: str, nml: Dict[str, Any],
-                           source_type: str) -> Dict[str, Any]:
+    def _get_dimension_info(self, item: str, source: str, nml: Dict[str, Any], source_type: str) -> Dict[str, Any]:
         """
         Get dimension information for a data source after UpdateNamelist.
 
@@ -849,40 +887,41 @@ class PreValidator:
         """
         # After UpdateNamelist, all info is in nml[item]
         if item not in nml:
-            return {'data_type': 'unknown', 'dimensions': None, 'shape': None}
+            return {"data_type": "unknown", "dimensions": None, "shape": None}
 
         # Get configuration from merged namelist
-        data_type = nml[item].get(f'{source}_data_type', 'grid')
-        data_dir = nml[item].get(f'{source}_dir', '')
-        varname = nml[item].get(f'{source}_varname', '')
-        data_groupby = nml[item].get(f'{source}_data_groupby', 'single')
+        data_type = nml[item].get(f"{source}_data_type", "grid")
+        data_dir = nml[item].get(f"{source}_dir", "")
+        varname = nml[item].get(f"{source}_varname", "")
+        data_groupby = nml[item].get(f"{source}_data_groupby", "single")
         if isinstance(data_groupby, str):
             data_groupby = data_groupby.lower()
-        prefix = nml[item].get(f'{source}_prefix', '')
-        suffix = nml[item].get(f'{source}_suffix', '')
+        prefix = nml[item].get(f"{source}_prefix", "")
+        suffix = nml[item].get(f"{source}_suffix", "")
 
         info = {
-            'data_type': data_type,
-            'dimensions': None,
-            'shape': None,
+            "data_type": data_type,
+            "dimensions": None,
+            "shape": None,
         }
 
         # For grid data, try to get a sample file
-        if data_type == 'grid':
+        if data_type == "grid":
             sample_file = None
-            if data_groupby == 'single':
+            if data_groupby == "single":
                 sample_file = os.path.join(data_dir, f"{prefix}{suffix}.nc")
-            elif data_groupby == 'year':
+            elif data_groupby == "year":
                 # Try to find any year file
                 import glob
+
                 pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
                 files = glob.glob(pattern)
                 # Filter files: only keep files where prefix is followed by digit (year), not letters
                 # This prevents matching "prefix_cama_year.nc" when we want "prefix_year.nc"
                 if files:
                     prefix_escaped = re.escape(prefix)
-                    suffix_escaped = re.escape(suffix) if suffix else ''
-                    file_pattern = re.compile(rf'^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$')
+                    suffix_escaped = re.escape(suffix) if suffix else ""
+                    file_pattern = re.compile(rf"^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$")
                     filtered_files = [f for f in files if file_pattern.match(os.path.basename(f))]
                     files = filtered_files if filtered_files else files  # Fallback to original
                 if files:
@@ -893,8 +932,8 @@ class PreValidator:
                     with xr.open_dataset(sample_file) as ds:
                         if varname in ds:
                             var = ds[varname]
-                            info['dimensions'] = list(var.dims)
-                            info['shape'] = var.shape
+                            info["dimensions"] = list(var.dims)
+                            info["shape"] = var.shape
                         else:
                             logging.warning(f"  Variable '{varname}' not found in {sample_file}")
                 except Exception as e:
@@ -920,25 +959,21 @@ class PreValidator:
             logging.info(f"  Validating variables for: {item}")
 
             # Check reference sources
-            ref_sources = self.ref_nml['general'][f'{item}_ref_source']
+            ref_sources = self.ref_nml["general"][f"{item}_ref_source"]
             ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
 
             for ref_source in ref_sources:
-                result = self._check_variable_availability(
-                    item, ref_source, self.ref_nml, 'reference'
-                )
-                if not result['available']:
+                result = self._check_variable_availability(item, ref_source, self.ref_nml, "reference")
+                if not result["available"]:
                     missing_variables.append(result)
 
             # Check simulation sources
-            sim_sources = self.sim_nml['general'][f'{item}_sim_source']
+            sim_sources = self.sim_nml["general"][f"{item}_sim_source"]
             sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
 
             for sim_source in sim_sources:
-                result = self._check_variable_availability(
-                    item, sim_source, self.sim_nml, 'simulation'
-                )
-                if not result['available']:
+                result = self._check_variable_availability(item, sim_source, self.sim_nml, "simulation")
+                if not result["available"]:
                     missing_variables.append(result)
 
         # Report missing variables
@@ -948,39 +983,34 @@ class PreValidator:
 
         logging.info("  ✓ All required variables are available")
 
-    def _check_variable_availability(self, item: str, source: str,
-                                     nml: Dict[str, Any], source_type: str) -> Dict[str, Any]:
+    def _check_variable_availability(
+        self, item: str, source: str, nml: Dict[str, Any], source_type: str
+    ) -> Dict[str, Any]:
         """
         Check if a variable is available in data file or custom filter.
 
         Returns:
             Dict with keys: 'available', 'item', 'source', 'source_type', 'reason'
         """
-        result = {
-            'available': False,
-            'item': item,
-            'source': source,
-            'source_type': source_type,
-            'reason': ''
-        }
+        result = {"available": False, "item": item, "source": source, "source_type": source_type, "reason": ""}
 
         # Get variable name from config (handle None values)
-        varname = ''
+        varname = ""
 
         # Try from nml[item] (if UpdateNamelist has run)
         if item in nml:
-            varname_raw = nml[item].get(f'{source}_varname', '')
-            varname = str(varname_raw).strip() if varname_raw is not None else ''
+            varname_raw = nml[item].get(f"{source}_varname", "")
+            varname = str(varname_raw).strip() if varname_raw is not None else ""
 
         # If varname is empty, use item name as default and rely on custom filter
         if not varname:
             logging.info(f"    Variable name empty for {source_type} {source} in {item}, checking custom filter...")
             filter_available = self._check_custom_filter(item, source, nml, source_type)
             if filter_available:
-                result['available'] = True
+                result["available"] = True
                 logging.info(f"    ✓ Custom filter available for {source}")
             else:
-                result['reason'] = "Variable name is empty and no custom filter found"
+                result["reason"] = "Variable name is empty and no custom filter found"
             return result
 
         # Try to find and check a sample data file
@@ -990,12 +1020,17 @@ class PreValidator:
                 # Check if variable exists in file
                 try:
                     import xarray as xr
+
                     # Try with default time decoding first, then fallback to decode_times=False
                     # for datasets with non-standard time formats (e.g., 'months since 1800 01')
                     try:
                         ds = xr.open_dataset(sample_file)
                     except (ValueError, OSError) as time_err:
-                        if 'time' in str(time_err).lower() or 'decode' in str(time_err).lower() or 'calendar' in str(time_err).lower():
+                        if (
+                            "time" in str(time_err).lower()
+                            or "decode" in str(time_err).lower()
+                            or "calendar" in str(time_err).lower()
+                        ):
                             logging.debug(f"    Retrying with decode_times=False due to: {time_err}")
                             ds = xr.open_dataset(sample_file, decode_times=False)
                         else:
@@ -1003,7 +1038,7 @@ class PreValidator:
 
                     with ds:
                         if varname in ds:
-                            result['available'] = True
+                            result["available"] = True
                             logging.info(f"    ✓ Variable '{varname}' found in data file")
                             return result
                         else:
@@ -1011,45 +1046,46 @@ class PreValidator:
                             logging.info(f"    Variable '{varname}' not in data file, checking custom filter...")
                             filter_available = self._check_custom_filter(item, source, nml, source_type)
                             if filter_available:
-                                result['available'] = True
+                                result["available"] = True
                                 logging.info(f"    ✓ Custom filter can generate '{varname}'")
                             else:
                                 available_vars = list(ds.data_vars) + list(ds.coords)
-                                result['reason'] = f"Variable '{varname}' not in data file and no custom filter found. Available variables: {available_vars[:10]}"
+                                result["reason"] = (
+                                    f"Variable '{varname}' not in data file and no custom filter found. Available variables: {available_vars[:10]}"
+                                )
                             return result
                 except Exception as e:
                     logging.debug(f"    Could not read sample file {sample_file}: {str(e)}")
                     # Can't verify from file, check filter
                     filter_available = self._check_custom_filter(item, source, nml, source_type)
                     if filter_available:
-                        result['available'] = True
+                        result["available"] = True
                         logging.info("    ✓ Custom filter available (couldn't verify from file)")
                     else:
-                        result['reason'] = f"Could not verify variable in data file: {str(e)}"
+                        result["reason"] = f"Could not verify variable in data file: {str(e)}"
                     return result
             else:
                 # No sample file found, must have custom filter
                 logging.info("    No sample data file found, checking custom filter...")
                 filter_available = self._check_custom_filter(item, source, nml, source_type)
                 if filter_available:
-                    result['available'] = True
+                    result["available"] = True
                     logging.info("    ✓ Custom filter available")
                 else:
-                    result['reason'] = "No sample data file found and no custom filter available"
+                    result["reason"] = "No sample data file found and no custom filter available"
                 return result
         except Exception as e:
             logging.warning(f"    Error checking variable availability: {str(e)}")
             # As fallback, check if custom filter exists
             filter_available = self._check_custom_filter(item, source, nml, source_type)
             if filter_available:
-                result['available'] = True
+                result["available"] = True
                 logging.info("    ✓ Custom filter available (as fallback)")
             else:
-                result['reason'] = f"Error during validation: {str(e)}"
+                result["reason"] = f"Error during validation: {str(e)}"
             return result
 
-    def _check_custom_filter(self, item: str, source: str,
-                            nml: Dict[str, Any], source_type: str) -> bool:
+    def _check_custom_filter(self, item: str, source: str, nml: Dict[str, Any], source_type: str) -> bool:
         """
         Check if a custom filter exists and handles the evaluation item.
 
@@ -1060,29 +1096,30 @@ class PreValidator:
         import inspect
 
         # Determine filter name
-        if source_type == 'simulation':
+        if source_type == "simulation":
             # For simulation, try to get model name
             model = None
 
             # First try from {source}_model attribute (if UpdateNamelist has run)
             if item in nml:
-                model = nml[item].get(f'{source}_model')
+                model = nml[item].get(f"{source}_model")
 
             # If not available, try reading from source definition file -> model_namelist
             if model is None or (isinstance(model, str) and not model.strip()):
                 # Get source definition file path from def_nml
-                source_def_path = nml.get('def_nml', {}).get(source)
+                source_def_path = nml.get("def_nml", {}).get(source)
                 if source_def_path and os.path.exists(source_def_path):
                     try:
                         import yaml
-                        with open(source_def_path, 'r') as f:
+
+                        with open(source_def_path, "r") as f:
                             source_def = yaml.safe_load(f)
                         # Get model_namelist path from source definition
-                        model_namelist_path = source_def.get('general', {}).get('model_namelist')
+                        model_namelist_path = source_def.get("general", {}).get("model_namelist")
                         if model_namelist_path and os.path.exists(model_namelist_path):
-                            with open(model_namelist_path, 'r') as f:
+                            with open(model_namelist_path, "r") as f:
                                 model_nml = yaml.safe_load(f)
-                            model = model_nml.get('general', {}).get('model')
+                            model = model_nml.get("general", {}).get("model")
                     except Exception:
                         pass
 
@@ -1117,13 +1154,13 @@ class PreValidator:
             # (e.g., GSIM_Monthly_filter handles GSIM_Monthly data)
             # These filters process their specific data format without explicit item checks
             # So if a filter function exists for a reference source, assume it handles the item
-            if source_type == 'reference':
+            if source_type == "reference":
                 logging.debug(f"    Reference filter {filter_name}_filter assumed to handle {item}")
                 return True
 
             # For simulation sources, check if filter has generic handling (no item-specific checks)
             # This typically means it handles all items uniformly
-            if 'info.item' not in source_code:
+            if "info.item" not in source_code:
                 logging.debug(f"    Generic filter {filter_name}_filter (no item checks) assumed to handle {item}")
                 return True
 
@@ -1146,17 +1183,17 @@ class PreValidator:
         """
         import glob
 
-        data_dir = nml[item].get(f'{source}_dir', '')
+        data_dir = nml[item].get(f"{source}_dir", "")
         if not data_dir or not os.path.exists(data_dir):
             return None
 
-        data_type = nml[item].get(f'{source}_data_type', 'grid')
-        data_groupby = nml[item].get(f'{source}_data_groupby', 'single')
+        data_type = nml[item].get(f"{source}_data_type", "grid")
+        data_groupby = nml[item].get(f"{source}_data_groupby", "single")
         if isinstance(data_groupby, str):
             data_groupby = data_groupby.lower()
 
-        prefix = nml[item].get(f'{source}_prefix', '')
-        suffix = nml[item].get(f'{source}_suffix', '')
+        prefix = nml[item].get(f"{source}_prefix", "")
+        suffix = nml[item].get(f"{source}_suffix", "")
 
         # Helper function to filter files: only keep files where the part after prefix contains no letters before digits
         # This prevents matching files like "prefix_cama_year" when we want "prefix_year"
@@ -1166,10 +1203,10 @@ class PreValidator:
                 return files
             filtered = []
             prefix_escaped = re.escape(prefix)
-            suffix_escaped = re.escape(suffix) if suffix else ''
+            suffix_escaped = re.escape(suffix) if suffix else ""
             # Pattern: prefix + (year starting with digit) + (only digits and symbols, no letters) + suffix + .nc
             # Match files like: prefix2006-01.nc, prefix2006.nc but not prefix_cama_2006.nc
-            pattern = re.compile(rf'^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$')
+            pattern = re.compile(rf"^{prefix_escaped}\d[^a-zA-Z]*{suffix_escaped}\.nc$")
             for f in files:
                 filename = os.path.basename(f)
                 if pattern.match(filename):
@@ -1179,15 +1216,15 @@ class PreValidator:
         # For station data, try to find source-specific consolidated file first
         # Station data sources like GSIM_Monthly, GRDC_Monthly, etc. use consolidated files
         # named like GSIM_monthly.nc, GRDC_monthly.nc in the data directory
-        if data_type == 'stn':
+        if data_type == "stn":
             # Extract base source name (e.g., "GSIM" from "GSIM_Monthly")
             # Try multiple naming patterns for station data
             source_patterns = []
 
             # Pattern 1: source_timeres.nc (e.g., GSIM_monthly.nc)
-            if '_' in source:
-                base_name = source.rsplit('_', 1)[0]  # GSIM_Monthly -> GSIM
-                time_suffix = source.rsplit('_', 1)[1].lower()  # Monthly -> monthly
+            if "_" in source:
+                base_name = source.rsplit("_", 1)[0]  # GSIM_Monthly -> GSIM
+                time_suffix = source.rsplit("_", 1)[1].lower()  # Monthly -> monthly
                 source_patterns.append(f"{base_name}_{time_suffix}.nc")
                 # Also try with hyphen (e.g., R-ArcticNet_monthly.nc)
                 source_patterns.append(f"{base_name.replace('_', '-')}_{time_suffix}.nc")
@@ -1207,22 +1244,23 @@ class PreValidator:
                     return sample_file
 
             # If not found by name patterns, look for files containing source base name
-            if '_' in source:
-                base_name = source.rsplit('_', 1)[0]
+            if "_" in source:
+                base_name = source.rsplit("_", 1)[0]
                 all_files = glob.glob(os.path.join(data_dir, "*.nc"))
                 for f in all_files:
                     fname = os.path.basename(f).lower()
-                    if base_name.lower() in fname or base_name.lower().replace('_', '-') in fname:
+                    if base_name.lower() in fname or base_name.lower().replace("_", "-") in fname:
                         logging.debug(f"    Found station data file by pattern: {f}")
                         return f
 
             # Try fulllist CSV to find a sample file
-            fulllist_path = nml[item].get(f'{source}_fulllist', '')
+            fulllist_path = nml[item].get(f"{source}_fulllist", "")
             if fulllist_path and os.path.exists(fulllist_path):
                 try:
                     import pandas as pd
+
                     stn_df = pd.read_csv(fulllist_path, nrows=1)
-                    dir_col = 'DIR' if 'DIR' in stn_df.columns else 'sim_dir' if 'sim_dir' in stn_df.columns else None
+                    dir_col = "DIR" if "DIR" in stn_df.columns else "sim_dir" if "sim_dir" in stn_df.columns else None
                     if dir_col and len(stn_df) > 0:
                         sample = stn_df[dir_col].iloc[0]
                         if os.path.exists(sample):
@@ -1235,18 +1273,18 @@ class PreValidator:
             return None
 
         # For grid data, try to find a sample file based on data_groupby
-        if data_groupby == 'single':
+        if data_groupby == "single":
             sample_file = os.path.join(data_dir, f"{prefix}{suffix}.nc")
             if os.path.exists(sample_file):
                 return sample_file
-        elif data_groupby == 'year':
+        elif data_groupby == "year":
             # Find any year file
             pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
             files = glob.glob(pattern)
             files = filter_files_no_letters_before_year(files, prefix, suffix)
             if files:
                 return files[0]
-        elif data_groupby == 'month':
+        elif data_groupby == "month":
             # Find any month file
             pattern = os.path.join(data_dir, f"{prefix}*{suffix}.nc")
             files = glob.glob(pattern)
@@ -1297,9 +1335,13 @@ class PreValidator:
         return "\n".join(lines)
 
 
-def run_pre_validation(main_nl: Dict[str, Any], sim_nml: Dict[str, Any],
-                       ref_nml: Dict[str, Any], evaluation_items: List[str],
-                       skip_data_check: bool = False) -> bool:
+def run_pre_validation(
+    main_nl: Dict[str, Any],
+    sim_nml: Dict[str, Any],
+    ref_nml: Dict[str, Any],
+    evaluation_items: List[str],
+    skip_data_check: bool = False,
+) -> bool:
     """
     Convenience function to run pre-validation.
 

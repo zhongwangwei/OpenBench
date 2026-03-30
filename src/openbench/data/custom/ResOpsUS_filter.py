@@ -38,11 +38,11 @@ def _resolve_station_list(info) -> Path:
 
 def filter_ResOpsUS(info, ds=None):
     """Load and filter ResOpsUS station metadata based on simulation settings.
-    
+
     Args:
         info: Configuration/info object with processing parameters
         ds: Optional xarray Dataset to filter (for data filtering mode)
-        
+
     Returns:
         For data filtering mode: Tuple of (info, filtered_data)
         For initialization mode: None (modifies info in place)
@@ -82,12 +82,8 @@ def filter_ResOpsUS(info, ds=None):
     syear_series = pd.Series([int(info.syear)] * len(df))
     eyear_series = pd.Series([int(info.eyear)] * len(df))
 
-    df["use_syear"] = (
-        pd.concat([df["ref_syear"], sim_syear, syear_series], axis=1).max(axis=1).astype(int)
-    )
-    df["use_eyear"] = (
-        pd.concat([df["ref_eyear"], sim_eyear, eyear_series], axis=1).min(axis=1).astype(int)
-    )
+    df["use_syear"] = pd.concat([df["ref_syear"], sim_syear, syear_series], axis=1).max(axis=1).astype(int)
+    df["use_eyear"] = pd.concat([df["ref_eyear"], sim_eyear, eyear_series], axis=1).min(axis=1).astype(int)
 
     duration_ok = (df["use_eyear"] - df["use_syear"]) >= info.min_year
     lat_ok = (df["ref_lat"] >= info.min_lat) & (df["ref_lat"] <= info.max_lat)
@@ -101,4 +97,3 @@ def filter_ResOpsUS(info, ds=None):
 
     info.use_syear = int(info.stn_list["use_syear"].min())
     info.use_eyear = int(info.stn_list["use_eyear"].max())
-

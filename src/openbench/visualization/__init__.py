@@ -1,4 +1,5 @@
 """Plotting and figure generation."""
+
 from .Fig_ANOVA import make_ANOVA
 from .Fig_Basic_Plot import make_Basic, make_plot_index_grid, make_plot_index_stn, plot_stn
 from .Fig_Correlation import make_Correlation
@@ -42,18 +43,17 @@ __all__ = [
     "make_scenarios_comparison_Ridgeline_Plot",
     "make_scenarios_comparison_Diff_Plot",
     "make_scenarios_comparison_radar_map",
-
-    'make_Mann_Kendall_Trend_Test',
-    'make_Correlation',
-    'make_Standard_Deviation',
-    'make_Hellinger_Distance',
-    'make_Z_Score',
-    'make_Functional_Response',
-    'make_Partial_Least_Squares_Regression',
-    'make_plot_index_stn',
-    'make_plot_index_grid',
-    'plot_stn',
-    'make_Basic',
-    'make_ANOVA',
-    'make_Three_Cornered_Hat',
+    "make_Mann_Kendall_Trend_Test",
+    "make_Correlation",
+    "make_Standard_Deviation",
+    "make_Hellinger_Distance",
+    "make_Z_Score",
+    "make_Functional_Response",
+    "make_Partial_Least_Squares_Regression",
+    "make_plot_index_stn",
+    "make_plot_index_grid",
+    "plot_stn",
+    "make_Basic",
+    "make_ANOVA",
+    "make_Three_Cornered_Hat",
 ]

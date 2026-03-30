@@ -1,5 +1,3 @@
-
-
 def stat_mean(self, data):
     """
     Calculate the mean of the input data.

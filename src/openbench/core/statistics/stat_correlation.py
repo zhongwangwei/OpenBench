@@ -24,4 +24,3 @@ def stat_correlation(self, data1, data2):
     else:
         logging.error("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
         raise TypeError("Input must be either two xarray Datasets with single variables or two xarray DataArrays")
-

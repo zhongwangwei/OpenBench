@@ -70,8 +70,8 @@ statistics_calculate.stat_mann_kendall_trend_test = stat_mann_kendall_trend_test
 statistics_calculate.stat_False_Discovery_Rate = stat_False_Discovery_Rate
 statistics_calculate.stat_anova = stat_anova
 
-__all__ = ['statistics_calculate']
+__all__ = ["statistics_calculate"]
 
-__version__ = '0.2'
-__author__ = 'Zhongwang Wei'
-__email__ = 'zhongwang007@gmail.com'
+__version__ = "0.2"
+__author__ = "Zhongwang Wei"
+__email__ = "zhongwang007@gmail.com"

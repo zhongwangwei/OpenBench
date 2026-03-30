@@ -24,16 +24,17 @@ except ImportError:
     # Fallback if exceptions module not available
     class FileSystemError(Exception):
         pass
+
     class DataProcessingError(Exception):
         pass
+
     class ValidationError(Exception):
         pass
 
 
-def validate_file_path(file_path: str,
-                       check_readable: bool = True,
-                       check_writable: bool = False,
-                       create_parent: bool = False) -> None:
+def validate_file_path(
+    file_path: str, check_readable: bool = True, check_writable: bool = False, create_parent: bool = False
+) -> None:
     """
     Validate file path with comprehensive checks.
 
@@ -59,69 +60,56 @@ def validate_file_path(file_path: str,
             except Exception as e:
                 raise FileSystemError(
                     f"Failed to create parent directory: {parent_dir}",
-                    context={'parent_dir': parent_dir, 'file_path': file_path},
-                    original_error=e
+                    context={"parent_dir": parent_dir, "file_path": file_path},
+                    original_error=e,
                 )
         else:
             raise FileSystemError(
                 f"Parent directory does not exist: {parent_dir}",
-                context={'parent_dir': parent_dir, 'file_path': file_path}
+                context={"parent_dir": parent_dir, "file_path": file_path},
             )
 
     # Check if file exists (for read operations)
     if check_readable:
         if not os.path.exists(file_path):
-            raise FileSystemError(
-                f"File not found: {file_path}",
-                context={'file_path': file_path}
-            )
+            raise FileSystemError(f"File not found: {file_path}", context={"file_path": file_path})
 
         if not os.path.isfile(file_path):
             raise FileSystemError(
                 f"Path exists but is not a file: {file_path}",
-                context={'file_path': file_path, 'is_dir': os.path.isdir(file_path)}
+                context={"file_path": file_path, "is_dir": os.path.isdir(file_path)},
             )
 
         # Check file size (be tolerant of race conditions)
         try:
             file_size = os.path.getsize(file_path)
             if file_size == 0:
-                raise FileSystemError(
-                    f"File is empty: {file_path}",
-                    context={'file_path': file_path, 'size': 0}
-                )
+                raise FileSystemError(f"File is empty: {file_path}", context={"file_path": file_path, "size": 0})
         except (OSError, IOError) as e:
             # File exists but size check failed (possible race condition)
             logging.debug(f"File size check failed for {file_path}: {e}")
 
         # Check read permission
         if not os.access(file_path, os.R_OK):
-            raise FileSystemError(
-                f"No read permission for file: {file_path}",
-                context={'file_path': file_path}
-            )
+            raise FileSystemError(f"No read permission for file: {file_path}", context={"file_path": file_path})
 
     # Check write permission (for write operations)
     if check_writable:
         if os.path.exists(file_path):
             if not os.access(file_path, os.W_OK):
-                raise FileSystemError(
-                    f"No write permission for file: {file_path}",
-                    context={'file_path': file_path}
-                )
+                raise FileSystemError(f"No write permission for file: {file_path}", context={"file_path": file_path})
         else:
             # Check if parent directory is writable
             if not os.access(parent_dir, os.W_OK):
                 raise FileSystemError(
                     f"No write permission for directory: {parent_dir}",
-                    context={'parent_dir': parent_dir, 'file_path': file_path}
+                    context={"parent_dir": parent_dir, "file_path": file_path},
                 )
 
 
-def safe_open_netcdf(file_path: str,
-                     variable_name: Optional[str] = None,
-                     timeout: int = 30,
-                     validate: bool = True) -> Union[xr.Dataset, xr.DataArray]:
+def safe_open_netcdf(
+    file_path: str, variable_name: Optional[str] = None, timeout: int = 30, validate: bool = True
+) -> Union[xr.Dataset, xr.DataArray]:
     """
     Safely open NetCDF file with comprehensive error handling.
 
@@ -148,7 +136,7 @@ def safe_open_netcdf(file_path: str,
         if not _wait_for_file(file_path, max_wait_time=timeout):
             raise FileSystemError(
                 f"File not available after {timeout}s: {file_path}",
-                context={'file_path': file_path, 'timeout': timeout}
+                context={"file_path": file_path, "timeout": timeout},
             )
 
     # Validate file if requested (only after we know it exists)
@@ -166,21 +154,15 @@ def safe_open_netcdf(file_path: str,
         ds = xr.open_dataset(file_path)
     except FileNotFoundError as e:
         raise FileSystemError(
-            f"File not found when opening: {file_path}",
-            context={'file_path': file_path},
-            original_error=e
+            f"File not found when opening: {file_path}", context={"file_path": file_path}, original_error=e
         )
     except PermissionError as e:
         raise FileSystemError(
-            f"Permission denied when opening: {file_path}",
-            context={'file_path': file_path},
-            original_error=e
+            f"Permission denied when opening: {file_path}", context={"file_path": file_path}, original_error=e
         )
     except (OSError, IOError) as e:
         raise DataProcessingError(
-            f"I/O error when opening NetCDF file: {file_path}",
-            context={'file_path': file_path},
-            original_error=e
+            f"I/O error when opening NetCDF file: {file_path}", context={"file_path": file_path}, original_error=e
         )
     except Exception as e:
         # Try with decode_times=False as fallback
@@ -190,8 +172,8 @@ def safe_open_netcdf(file_path: str,
         except Exception as e2:
             raise DataProcessingError(
                 f"Failed to open NetCDF file: {file_path}",
-                context={'file_path': file_path, 'error_type': type(e).__name__},
-                original_error=e2
+                context={"file_path": file_path, "error_type": type(e).__name__},
+                original_error=e2,
             )
 
     # If variable name is specified, extract it
@@ -200,16 +182,14 @@ def safe_open_netcdf(file_path: str,
             return _extract_variable(ds, variable_name, file_path)
         except Exception:
             # Close dataset on error
-            if hasattr(ds, 'close'):
+            if hasattr(ds, "close"):
                 ds.close()
             raise
 
     return ds
 
 
-def _extract_variable(ds: xr.Dataset,
-                     variable_name: str,
-                     file_path: str) -> xr.DataArray:
+def _extract_variable(ds: xr.Dataset, variable_name: str, file_path: str) -> xr.DataArray:
     """
     Extract variable from dataset with validation.
 
@@ -239,11 +219,11 @@ def _extract_variable(ds: xr.Dataset,
         raise ValidationError(
             error_msg,
             context={
-                'file_path': file_path,
-                'requested_variable': variable_name,
-                'available_data_vars': available_data_vars,
-                'available_coords': available_coords
-            }
+                "file_path": file_path,
+                "requested_variable": variable_name,
+                "available_data_vars": available_data_vars,
+                "available_coords": available_coords,
+            },
         )
 
     # Extract variable
@@ -254,14 +234,14 @@ def _extract_variable(ds: xr.Dataset,
     except Exception as e:
         raise DataProcessingError(
             f"Failed to extract variable '{variable_name}' from {file_path}",
-            context={'file_path': file_path, 'variable_name': variable_name},
-            original_error=e
+            context={"file_path": file_path, "variable_name": variable_name},
+            original_error=e,
         )
 
 
-def validate_variable_in_dataset(ds: Union[xr.Dataset, xr.DataArray],
-                                 variable_name: str,
-                                 context: str = "dataset") -> None:
+def validate_variable_in_dataset(
+    ds: Union[xr.Dataset, xr.DataArray], variable_name: str, context: str = "dataset"
+) -> None:
     """
     Validate that a variable exists in a dataset.
 
@@ -278,7 +258,7 @@ def validate_variable_in_dataset(ds: Union[xr.Dataset, xr.DataArray],
         if ds.name != variable_name:
             raise ValidationError(
                 f"DataArray name '{ds.name}' does not match expected '{variable_name}'",
-                context={'context': context, 'expected': variable_name, 'actual': ds.name}
+                context={"context": context, "expected": variable_name, "actual": ds.name},
             )
         return
 
@@ -292,18 +272,17 @@ def validate_variable_in_dataset(ds: Union[xr.Dataset, xr.DataArray],
         raise ValidationError(
             f"Variable '{variable_name}' not found in {context}",
             context={
-                'context': context,
-                'requested_variable': variable_name,
-                'available_data_vars': available_data_vars,
-                'available_coords': available_coords
-            }
+                "context": context,
+                "requested_variable": variable_name,
+                "available_data_vars": available_data_vars,
+                "available_coords": available_coords,
+            },
         )
 
 
-def safe_save_netcdf(ds: Union[xr.Dataset, xr.DataArray],
-                     file_path: str,
-                     create_parent: bool = True,
-                     backup_existing: bool = False) -> None:
+def safe_save_netcdf(
+    ds: Union[xr.Dataset, xr.DataArray], file_path: str, create_parent: bool = True, backup_existing: bool = False
+) -> None:
     """
     Safely save NetCDF file with error handling.
 
@@ -322,12 +301,7 @@ def safe_save_netcdf(ds: Union[xr.Dataset, xr.DataArray],
 
     # Validate output path
     try:
-        validate_file_path(
-            file_path,
-            check_readable=False,
-            check_writable=True,
-            create_parent=create_parent
-        )
+        validate_file_path(file_path, check_readable=False, check_writable=True, create_parent=create_parent)
     except FileSystemError as e:
         logging.error(f"Output path validation failed: {e}")
         raise
@@ -337,6 +311,7 @@ def safe_save_netcdf(ds: Union[xr.Dataset, xr.DataArray],
         backup_path = f"{file_path}.backup"
         try:
             import shutil
+
             shutil.copy2(file_path, backup_path)
             logging.info(f"Backed up existing file to: {backup_path}")
         except Exception as e:
@@ -353,17 +328,17 @@ def safe_save_netcdf(ds: Union[xr.Dataset, xr.DataArray],
         if not os.path.exists(temp_path):
             raise DataProcessingError(
                 f"Temporary file was not created: {temp_path}",
-                context={'temp_path': temp_path, 'final_path': file_path}
+                context={"temp_path": temp_path, "final_path": file_path},
             )
 
         if os.path.getsize(temp_path) == 0:
             raise DataProcessingError(
-                f"Temporary file is empty: {temp_path}",
-                context={'temp_path': temp_path, 'final_path': file_path}
+                f"Temporary file is empty: {temp_path}", context={"temp_path": temp_path, "final_path": file_path}
             )
 
         # Move temporary file to final location
         import shutil
+
         shutil.move(temp_path, file_path)
         logging.info(f"Successfully saved NetCDF file: {file_path}")
 
@@ -378,14 +353,12 @@ def safe_save_netcdf(ds: Union[xr.Dataset, xr.DataArray],
 
         raise DataProcessingError(
             f"Failed to save NetCDF file: {file_path}",
-            context={'file_path': file_path, 'temp_path': temp_path},
-            original_error=e
+            context={"file_path": file_path, "temp_path": temp_path},
+            original_error=e,
         )
 
 
-def _wait_for_file(file_path: str,
-                   max_wait_time: int = 30,
-                   check_interval: float = 1.0) -> bool:
+def _wait_for_file(file_path: str, max_wait_time: int = 30, check_interval: float = 1.0) -> bool:
     """
     Wait for a file to exist and be readable.
 
@@ -421,10 +394,12 @@ def _wait_for_file(file_path: str,
     return False
 
 
-def check_dataset_integrity(ds: Union[xr.Dataset, xr.DataArray],
-                           required_dims: Optional[list] = None,
-                           required_vars: Optional[list] = None,
-                           context: str = "dataset") -> None:
+def check_dataset_integrity(
+    ds: Union[xr.Dataset, xr.DataArray],
+    required_dims: Optional[list] = None,
+    required_vars: Optional[list] = None,
+    context: str = "dataset",
+) -> None:
     """
     Check dataset integrity and completeness.
 
@@ -444,11 +419,11 @@ def check_dataset_integrity(ds: Union[xr.Dataset, xr.DataArray],
             raise ValidationError(
                 f"Missing required dimensions in {context}: {missing_dims}",
                 context={
-                    'context': context,
-                    'required_dims': required_dims,
-                    'available_dims': list(ds.dims),
-                    'missing_dims': list(missing_dims)
-                }
+                    "context": context,
+                    "required_dims": required_dims,
+                    "available_dims": list(ds.dims),
+                    "missing_dims": list(missing_dims),
+                },
             )
 
     # Check variables (for Dataset only)
@@ -458,20 +433,17 @@ def check_dataset_integrity(ds: Union[xr.Dataset, xr.DataArray],
             raise ValidationError(
                 f"Missing required variables in {context}: {missing_vars}",
                 context={
-                    'context': context,
-                    'required_vars': required_vars,
-                    'available_vars': list(ds.data_vars),
-                    'missing_vars': list(missing_vars)
-                }
+                    "context": context,
+                    "required_vars": required_vars,
+                    "available_vars": list(ds.data_vars),
+                    "missing_vars": list(missing_vars),
+                },
             )
 
     # Check for NaN values
     if isinstance(ds, xr.DataArray):
         if ds.isnull().all():
-            raise ValidationError(
-                f"Dataset contains only NaN values: {context}",
-                context={'context': context}
-            )
+            raise ValidationError(f"Dataset contains only NaN values: {context}", context={"context": context})
     elif isinstance(ds, xr.Dataset):
         all_nan_vars = []
         for var in ds.data_vars:

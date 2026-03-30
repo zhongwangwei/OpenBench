@@ -5,7 +5,7 @@ Modular Evaluation Engine for OpenBench
 This module provides a modular evaluation engine with pluggable metrics,
 unified interfaces, and enhanced error handling.
 
-Author: Zhongwang Wei  
+Author: Zhongwang Wei
 Version: 1.0
 Date: July 2025
 """
@@ -22,6 +22,7 @@ import xarray as xr
 try:
     from openbench.util.exceptions import EvaluationError, ValidationError, error_handler
     from openbench.util.interfaces import BaseEvaluator, IEvaluationEngine, IMetricsCalculator
+
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
@@ -30,14 +31,18 @@ except ImportError:
     BaseEvaluator = ABC
     EvaluationError = Exception
     ValidationError = Exception
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
 
 # Import caching - CacheSystem is now mandatory for data processing modules
 try:
     from openbench.data.cache import cached, get_cache_manager
+
     _HAS_CACHE = True
 except ImportError:
     raise RuntimeError(
@@ -52,7 +57,7 @@ class MetricCalculator(IMetricsCalculator if _HAS_DEPENDENCIES else object):
     def __init__(self, name: str, description: str = "", unit: str = ""):
         """
         Initialize metric calculator.
-        
+
         Args:
             name: Metric name
             description: Metric description
@@ -229,18 +234,13 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
         self._register_default_metrics()
 
         # Configuration
-        self.output_format = 'netcdf'
+        self.output_format = "netcdf"
         self.save_intermediates = False
         self.parallel_processing = False
 
     def _register_default_metrics(self):
         """Register default metric calculators."""
-        default_metrics = [
-            BiasCalculator(),
-            RMSECalculator(),
-            CorrelationCalculator(),
-            NSECalculator()
-        ]
+        default_metrics = [BiasCalculator(), RMSECalculator(), CorrelationCalculator(), NSECalculator()]
 
         for metric in default_metrics:
             self.register_metric(metric)
@@ -273,9 +273,9 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
 
         metric = self._metrics_registry[metric_name]
         return {
-            'name': metric.get_name(),
-            'description': metric.get_description(),
-            'unit': getattr(metric, 'get_unit', lambda: 'unknown')()
+            "name": metric.get_name(),
+            "description": metric.get_description(),
+            "unit": getattr(metric, "get_unit", lambda: "unknown")(),
         }
 
     def validate_datasets(self, simulation: xr.Dataset, reference: xr.Dataset) -> bool:
@@ -286,22 +286,16 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
             return isinstance(simulation, xr.Dataset) and isinstance(reference, xr.Dataset)
 
     @error_handler(reraise=True)
-    def evaluate(
-        self,
-        simulation: xr.Dataset,
-        reference: xr.Dataset,
-        metrics: List[str],
-        **kwargs
-    ) -> Dict[str, Any]:
+    def evaluate(self, simulation: xr.Dataset, reference: xr.Dataset, metrics: List[str], **kwargs) -> Dict[str, Any]:
         """
         Evaluate simulation against reference data.
-        
+
         Args:
             simulation: Simulation dataset
             reference: Reference dataset
             metrics: List of metrics to calculate
             **kwargs: Additional evaluation parameters
-            
+
         Returns:
             Dictionary containing evaluation results
         """
@@ -324,29 +318,26 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
 
         # Calculate metrics
         results = {
-            'metrics': {},
-            'metadata': {
-                'simulation_info': self._get_dataset_info(simulation),
-                'reference_info': self._get_dataset_info(reference),
-                'evaluation_time': pd.Timestamp.now().isoformat()
-            }
+            "metrics": {},
+            "metadata": {
+                "simulation_info": self._get_dataset_info(simulation),
+                "reference_info": self._get_dataset_info(reference),
+                "evaluation_time": pd.Timestamp.now().isoformat(),
+            },
         }
 
         for metric_name in metrics:
             try:
                 calculator = self._metrics_registry[metric_name]
                 value = calculator.calculate(simulation, reference)
-                results['metrics'][metric_name] = {
-                    'value': value,
-                    'info': self.get_metric_info(metric_name)
-                }
+                results["metrics"][metric_name] = {"value": value, "info": self.get_metric_info(metric_name)}
                 logging.debug(f"Calculated {metric_name}: {value}")
             except Exception as e:
                 logging.error(f"Error calculating {metric_name}: {e}")
-                results['metrics'][metric_name] = {
-                    'value': np.nan,
-                    'error': str(e),
-                    'info': self.get_metric_info(metric_name)
+                results["metrics"][metric_name] = {
+                    "value": np.nan,
+                    "error": str(e),
+                    "info": self.get_metric_info(metric_name),
                 }
 
         return results
@@ -354,30 +345,33 @@ class ModularEvaluationEngine(BaseEvaluator if _HAS_DEPENDENCIES else object):
     def _get_dataset_info(self, dataset: xr.Dataset) -> Dict[str, Any]:
         """Get information about a dataset."""
         return {
-            'variables': list(dataset.data_vars.keys()),
-            'dimensions': dict(dataset.dims),
-            'coordinates': list(dataset.coords.keys()),
-            'shape': {var: dataset[var].shape for var in dataset.data_vars},
-            'attributes': dict(dataset.attrs)
+            "variables": list(dataset.data_vars.keys()),
+            "dimensions": dict(dataset.dims),
+            "coordinates": list(dataset.coords.keys()),
+            "shape": {var: dataset[var].shape for var in dataset.data_vars},
+            "attributes": dict(dataset.attrs),
         }
 
     def save_results(self, results: Dict[str, Any], output_path: str) -> None:
         """Save evaluation results to file."""
         try:
-            if self.output_format == 'json':
+            if self.output_format == "json":
                 import json
-                with open(output_path, 'w') as f:
+
+                with open(output_path, "w") as f:
                     json.dump(results, f, indent=2, default=str)
-            elif self.output_format == 'csv':
+            elif self.output_format == "csv":
                 # Convert to DataFrame for CSV
                 metrics_data = []
-                for metric_name, metric_data in results['metrics'].items():
-                    metrics_data.append({
-                        'metric': metric_name,
-                        'value': metric_data['value'],
-                        'description': metric_data['info']['description'],
-                        'unit': metric_data['info']['unit']
-                    })
+                for metric_name, metric_data in results["metrics"].items():
+                    metrics_data.append(
+                        {
+                            "metric": metric_name,
+                            "value": metric_data["value"],
+                            "description": metric_data["info"]["description"],
+                            "unit": metric_data["info"]["unit"],
+                        }
+                    )
                 df = pd.DataFrame(metrics_data)
                 df.to_csv(output_path, index=False)
             else:
@@ -393,24 +387,18 @@ class GridEvaluationEngine(ModularEvaluationEngine):
 
     def __init__(self):
         super().__init__("GridEvaluationEngine")
-        self.spatial_aggregation = 'mean'  # mean, median, sum
-        self.temporal_aggregation = 'mean'
+        self.spatial_aggregation = "mean"  # mean, median, sum
+        self.temporal_aggregation = "mean"
 
     @error_handler(reraise=True)
-    def evaluate(
-        self,
-        simulation: xr.Dataset,
-        reference: xr.Dataset,
-        metrics: List[str],
-        **kwargs
-    ) -> Dict[str, Any]:
+    def evaluate(self, simulation: xr.Dataset, reference: xr.Dataset, metrics: List[str], **kwargs) -> Dict[str, Any]:
         """Evaluate gridded data with spatial/temporal aggregation options."""
         # Apply spatial aggregation if requested
-        if kwargs.get('spatial_aggregation'):
-            self.spatial_aggregation = kwargs['spatial_aggregation']
+        if kwargs.get("spatial_aggregation"):
+            self.spatial_aggregation = kwargs["spatial_aggregation"]
 
-        if kwargs.get('temporal_aggregation'):
-            self.temporal_aggregation = kwargs['temporal_aggregation']
+        if kwargs.get("temporal_aggregation"):
+            self.temporal_aggregation = kwargs["temporal_aggregation"]
 
         # Preprocess data for gridded evaluation
         sim_processed = self._preprocess_gridded_data(simulation)
@@ -420,22 +408,22 @@ class GridEvaluationEngine(ModularEvaluationEngine):
         results = super().evaluate(sim_processed, ref_processed, metrics, **kwargs)
 
         # Add grid-specific metadata
-        results['metadata']['evaluation_type'] = 'gridded'
-        results['metadata']['spatial_aggregation'] = self.spatial_aggregation
-        results['metadata']['temporal_aggregation'] = self.temporal_aggregation
+        results["metadata"]["evaluation_type"] = "gridded"
+        results["metadata"]["spatial_aggregation"] = self.spatial_aggregation
+        results["metadata"]["temporal_aggregation"] = self.temporal_aggregation
 
         return results
 
     def _preprocess_gridded_data(self, data: xr.Dataset) -> xr.Dataset:
         """Preprocess gridded data for evaluation."""
         # Apply temporal aggregation if time dimension exists
-        if 'time' in data.dims and self.temporal_aggregation != 'none':
-            if self.temporal_aggregation == 'mean':
-                data = data.mean(dim='time')
-            elif self.temporal_aggregation == 'median':
-                data = data.median(dim='time')
-            elif self.temporal_aggregation == 'sum':
-                data = data.sum(dim='time')
+        if "time" in data.dims and self.temporal_aggregation != "none":
+            if self.temporal_aggregation == "mean":
+                data = data.mean(dim="time")
+            elif self.temporal_aggregation == "median":
+                data = data.median(dim="time")
+            elif self.temporal_aggregation == "sum":
+                data = data.sum(dim="time")
 
         return data
 
@@ -445,41 +433,35 @@ class StationEvaluationEngine(ModularEvaluationEngine):
 
     def __init__(self):
         super().__init__("StationEvaluationEngine")
-        self.station_aggregation = 'individual'  # individual, mean, weighted
+        self.station_aggregation = "individual"  # individual, mean, weighted
 
     @error_handler(reraise=True)
-    def evaluate(
-        self,
-        simulation: xr.Dataset,
-        reference: xr.Dataset,
-        metrics: List[str],
-        **kwargs
-    ) -> Dict[str, Any]:
+    def evaluate(self, simulation: xr.Dataset, reference: xr.Dataset, metrics: List[str], **kwargs) -> Dict[str, Any]:
         """Evaluate station data with station-specific processing."""
         # Call parent evaluation
         results = super().evaluate(simulation, reference, metrics, **kwargs)
 
         # Add station-specific metadata
-        results['metadata']['evaluation_type'] = 'station'
-        results['metadata']['station_aggregation'] = self.station_aggregation
+        results["metadata"]["evaluation_type"] = "station"
+        results["metadata"]["station_aggregation"] = self.station_aggregation
 
         return results
 
 
-def create_evaluation_engine(engine_type: str = 'modular', **config) -> ModularEvaluationEngine:
+def create_evaluation_engine(engine_type: str = "modular", **config) -> ModularEvaluationEngine:
     """
     Create an evaluation engine instance.
-    
+
     Args:
         engine_type: Type of engine ('modular', 'grid', 'station')
         **config: Configuration parameters
-        
+
     Returns:
         Evaluation engine instance
     """
-    if engine_type == 'grid':
+    if engine_type == "grid":
         engine = GridEvaluationEngine()
-    elif engine_type == 'station':
+    elif engine_type == "station":
         engine = StationEvaluationEngine()
     else:
         engine = ModularEvaluationEngine()
@@ -495,22 +477,18 @@ def create_evaluation_engine(engine_type: str = 'modular', **config) -> ModularE
 # Convenience function for quick evaluation
 @error_handler(reraise=True)
 def evaluate_datasets(
-    simulation: xr.Dataset,
-    reference: xr.Dataset,
-    metrics: List[str],
-    engine_type: str = 'modular',
-    **kwargs
+    simulation: xr.Dataset, reference: xr.Dataset, metrics: List[str], engine_type: str = "modular", **kwargs
 ) -> Dict[str, Any]:
     """
     Convenience function for dataset evaluation.
-    
+
     Args:
         simulation: Simulation dataset
         reference: Reference dataset
         metrics: List of metrics to calculate
         engine_type: Type of evaluation engine
         **kwargs: Additional parameters
-        
+
     Returns:
         Evaluation results
     """

@@ -5,7 +5,7 @@ Parallel Processing Engine for OpenBench
 This module provides enhanced parallel processing capabilities with
 intelligent task scheduling, resource management, and progress tracking.
 
-Author: Zhongwang Wei  
+Author: Zhongwang Wei
 Version: 1.0
 Date: July 2025
 """
@@ -25,6 +25,7 @@ from tqdm import tqdm
 # Try to import psutil for resource monitoring, use fallback if not available
 try:
     import psutil
+
     _HAS_PSUTIL = True
 except ImportError:
     _HAS_PSUTIL = False
@@ -33,6 +34,7 @@ except ImportError:
 # Import dependencies
 try:
     from joblib import Parallel, delayed, parallel_backend
+
     _HAS_JOBLIB = True
 except ImportError:
     _HAS_JOBLIB = False
@@ -44,6 +46,7 @@ try:
     from dask import delayed as dask_delayed
     from dask.distributed import Client
     from dask.distributed import as_completed as dask_as_completed
+
     _HAS_DASK = True
 except ImportError:
     _HAS_DASK = False
@@ -53,17 +56,22 @@ except ImportError:
 try:
     from openbench.util.exceptions import ParallelProcessingError, error_handler
     from openbench.util.logging_system import get_logging_manager, performance_logged
+
     _HAS_DEPENDENCIES = True
 except ImportError:
     _HAS_DEPENDENCIES = False
     ParallelProcessingError = Exception
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
     def performance_logged(operation=None):
         def decorator(func):
             return func
+
         return decorator
 
 
@@ -92,8 +100,9 @@ class TaskError:
 class TaskResult:
     """Container for task execution results."""
 
-    def __init__(self, task_id: str, success: bool, result: Any = None,
-                 error: Optional[Exception] = None, duration: float = 0.0):
+    def __init__(
+        self, task_id: str, success: bool, result: Any = None, error: Optional[Exception] = None, duration: float = 0.0
+    ):
         """
         Initialize task result.
 
@@ -132,55 +141,56 @@ class ResourceMonitor:
                 memory = psutil.virtual_memory()
 
                 return {
-                    'cpu_available': max(1, int(self.cpu_count * (100 - cpu_percent) / 100)),
-                    'cpu_percent_used': cpu_percent,
-                    'memory_available_gb': memory.available / (1024**3),
-                    'memory_percent_used': memory.percent,
-                    'load_average': os.getloadavg()[0] if hasattr(os, 'getloadavg') else 0
+                    "cpu_available": max(1, int(self.cpu_count * (100 - cpu_percent) / 100)),
+                    "cpu_percent_used": cpu_percent,
+                    "memory_available_gb": memory.available / (1024**3),
+                    "memory_percent_used": memory.percent,
+                    "load_average": os.getloadavg()[0] if hasattr(os, "getloadavg") else 0,
                 }
             else:
                 # Fallback when psutil not available
                 return {
-                    'cpu_available': self.cpu_count,
-                    'cpu_percent_used': 0.0,
-                    'memory_available_gb': 0.0,
-                    'memory_percent_used': 0.0,
-                    'load_average': os.getloadavg()[0] if hasattr(os, 'getloadavg') else 0
+                    "cpu_available": self.cpu_count,
+                    "cpu_percent_used": 0.0,
+                    "memory_available_gb": 0.0,
+                    "memory_percent_used": 0.0,
+                    "load_average": os.getloadavg()[0] if hasattr(os, "getloadavg") else 0,
                 }
 
-    def can_schedule_task(self, cpu_required: int = 1,
-                         memory_required_gb: float = 1.0) -> bool:
+    def can_schedule_task(self, cpu_required: int = 1, memory_required_gb: float = 1.0) -> bool:
         """
         Check if resources are available for task.
-        
+
         Args:
             cpu_required: Number of CPUs required
             memory_required_gb: Memory required in GB
-            
+
         Returns:
             True if resources available
         """
         resources = self.get_available_resources()
 
-        return (resources['cpu_available'] >= cpu_required and
-                resources['memory_available_gb'] >= memory_required_gb and
-                resources['cpu_percent_used'] < 90)
+        return (
+            resources["cpu_available"] >= cpu_required
+            and resources["memory_available_gb"] >= memory_required_gb
+            and resources["cpu_percent_used"] < 90
+        )
 
     def get_optimal_workers(self, max_workers: Optional[int] = None) -> int:
         """
         Determine optimal number of workers based on resources.
-        
+
         Args:
             max_workers: Maximum workers to consider
-            
+
         Returns:
             Optimal number of workers
         """
         resources = self.get_available_resources()
 
         # Base on available CPUs and memory
-        cpu_based = resources['cpu_available']
-        memory_based = int(resources['memory_available_gb'] / 0.5)  # 0.5GB per worker
+        cpu_based = resources["cpu_available"]
+        memory_based = int(resources["memory_available_gb"] / 0.5)  # 0.5GB per worker
 
         optimal = min(cpu_based, memory_based)
 
@@ -193,11 +203,10 @@ class ResourceMonitor:
 class ParallelEngine:
     """Main parallel processing engine with multiple backends."""
 
-    def __init__(self, backend: str = 'auto', max_workers: Optional[int] = None,
-                 show_progress: bool = True):
+    def __init__(self, backend: str = "auto", max_workers: Optional[int] = None, show_progress: bool = True):
         """
         Initialize parallel engine.
-        
+
         Args:
             backend: Backend to use ('auto', 'joblib', 'dask', 'concurrent', 'threading')
             max_workers: Maximum number of workers
@@ -221,35 +230,35 @@ class ParallelEngine:
 
     def _select_backend(self, backend: str) -> str:
         """Select appropriate backend based on availability."""
-        if backend == 'auto':
+        if backend == "auto":
             # Prefer joblib over dask due to compatibility issues
             if _HAS_JOBLIB:
-                return 'joblib'
+                return "joblib"
             elif _HAS_DASK:
-                return 'dask'
+                return "dask"
             else:
-                return 'concurrent'
+                return "concurrent"
 
         # Validate requested backend
-        if backend == 'dask' and not _HAS_DASK:
+        if backend == "dask" and not _HAS_DASK:
             logging.warning("Dask not available, falling back to joblib")
-            return 'joblib' if _HAS_JOBLIB else 'concurrent'
+            return "joblib" if _HAS_JOBLIB else "concurrent"
 
-        if backend == 'joblib' and not _HAS_JOBLIB:
+        if backend == "joblib" and not _HAS_JOBLIB:
             logging.warning("Joblib not available, falling back to concurrent")
-            return 'concurrent'
+            return "concurrent"
 
         return backend
 
     def _initialize_backend(self):
         """Initialize the selected backend."""
-        if self.backend == 'dask':
+        if self.backend == "dask":
             # Initialize Dask client
             self.dask_client = Client(
                 n_workers=self.max_workers or self.resource_monitor.get_optimal_workers(),
                 threads_per_worker=1,
-                memory_limit='auto',
-                silence_logs=logging.WARNING
+                memory_limit="auto",
+                silence_logs=logging.WARNING,
             )
             logging.info(f"Dask client initialized: {self.dask_client}")
         else:
@@ -257,18 +266,18 @@ class ParallelEngine:
 
     @error_handler(reraise=True)
     @performance_logged("parallel_map")
-    def map(self, func: Callable, items: List[Any],
-            chunk_size: Optional[int] = None,
-            task_name: str = "Processing") -> List[Any]:
+    def map(
+        self, func: Callable, items: List[Any], chunk_size: Optional[int] = None, task_name: str = "Processing"
+    ) -> List[Any]:
         """
         Parallel map operation with progress tracking.
-        
+
         Args:
             func: Function to apply
             items: Items to process
             chunk_size: Optional chunk size for batching
             task_name: Name for progress bar
-            
+
         Returns:
             List of results in order
         """
@@ -282,17 +291,16 @@ class ParallelEngine:
         logging.info(f"Starting parallel {task_name} with {n_workers} workers")
 
         # Select implementation based on backend
-        if self.backend == 'dask':
+        if self.backend == "dask":
             return self._map_dask(func, items, n_workers, task_name)
-        elif self.backend == 'joblib':
+        elif self.backend == "joblib":
             return self._map_joblib(func, items, n_workers, task_name)
-        elif self.backend == 'threading':
+        elif self.backend == "threading":
             return self._map_threading(func, items, n_workers, task_name)
         else:
             return self._map_concurrent(func, items, n_workers, task_name)
 
-    def _map_dask(self, func: Callable, items: List[Any],
-                  n_workers: int, task_name: str) -> List[Any]:
+    def _map_dask(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """Map using Dask backend."""
         # Create delayed tasks
         tasks = [dask_delayed(func)(item) for item in items]
@@ -311,22 +319,17 @@ class ParallelEngine:
 
         return results
 
-    def _map_joblib(self, func: Callable, items: List[Any],
-                    n_workers: int, task_name: str) -> List[Any]:
+    def _map_joblib(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """Map using Joblib backend."""
-        with parallel_backend('loky', n_jobs=n_workers):
+        with parallel_backend("loky", n_jobs=n_workers):
             if self.show_progress:
-                results = Parallel()(
-                    delayed(func)(item)
-                    for item in tqdm(items, desc=task_name)
-                )
+                results = Parallel()(delayed(func)(item) for item in tqdm(items, desc=task_name))
             else:
                 results = Parallel()(delayed(func)(item) for item in items)
 
         return results
 
-    def _map_concurrent(self, func: Callable, items: List[Any],
-                       n_workers: int, task_name: str) -> List[Any]:
+    def _map_concurrent(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """
         Map using concurrent.futures backend with partial failure support.
 
@@ -340,10 +343,7 @@ class ParallelEngine:
 
         with ProcessPoolExecutor(max_workers=n_workers) as executor:
             # Submit all tasks
-            future_to_index = {
-                executor.submit(func, item): i
-                for i, item in enumerate(items)
-            }
+            future_to_index = {executor.submit(func, item): i for i, item in enumerate(items)}
 
             # Track progress
             if self.show_progress:
@@ -373,8 +373,10 @@ class ParallelEngine:
         # Report failure statistics
         if failed_tasks:
             failure_rate = len(failed_tasks) / len(items)
-            logging.warning(f"Task completion: {successful_tasks}/{len(items)} succeeded, "
-                          f"{len(failed_tasks)} failed ({failure_rate*100:.1f}%)")
+            logging.warning(
+                f"Task completion: {successful_tasks}/{len(items)} succeeded, "
+                f"{len(failed_tasks)} failed ({failure_rate * 100:.1f}%)"
+            )
 
             # Raise error if all tasks failed
             if len(failed_tasks) == len(items):
@@ -388,17 +390,13 @@ class ParallelEngine:
 
         return results
 
-    def _map_threading(self, func: Callable, items: List[Any],
-                      n_workers: int, task_name: str) -> List[Any]:
+    def _map_threading(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """Map using threading backend (for I/O bound tasks)."""
         results = [None] * len(items)
 
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             # Submit all tasks
-            future_to_index = {
-                executor.submit(func, item): i
-                for i, item in enumerate(items)
-            }
+            future_to_index = {executor.submit(func, item): i for i, item in enumerate(items)}
 
             # Track progress
             if self.show_progress:
@@ -415,19 +413,24 @@ class ParallelEngine:
         return results
 
     @error_handler(reraise=True)
-    def map_reduce(self, map_func: Callable, reduce_func: Callable,
-                   items: List[Any], initial: Any = None,
-                   task_name: str = "MapReduce") -> Any:
+    def map_reduce(
+        self,
+        map_func: Callable,
+        reduce_func: Callable,
+        items: List[Any],
+        initial: Any = None,
+        task_name: str = "MapReduce",
+    ) -> Any:
         """
         Parallel map-reduce operation.
-        
+
         Args:
             map_func: Function to map over items
             reduce_func: Function to reduce results
             items: Items to process
             initial: Initial value for reduction
             task_name: Name for progress tracking
-            
+
         Returns:
             Reduced result
         """
@@ -480,28 +483,29 @@ class ParallelEngine:
             Dictionary with failure statistics
         """
         if not failed_tasks:
-            return {'total_failures': 0}
+            return {"total_failures": 0}
 
         error_types = {}
         for task in failed_tasks:
             error_types[task.error_type] = error_types.get(task.error_type, 0) + 1
 
         return {
-            'total_failures': len(failed_tasks),
-            'error_types': error_types,
-            'failed_indices': [t.index for t in failed_tasks],
-            'sample_errors': [f"{t.error_type}: {t.error_message}" for t in failed_tasks[:3]]
+            "total_failures": len(failed_tasks),
+            "error_types": error_types,
+            "failed_indices": [t.index for t in failed_tasks],
+            "sample_errors": [f"{t.error_type}: {t.error_message}" for t in failed_tasks[:3]],
         }
 
-    def submit_batch(self, tasks: List[Tuple[Callable, Tuple, Dict]],
-                    task_name: str = "Batch Processing") -> List[TaskResult]:
+    def submit_batch(
+        self, tasks: List[Tuple[Callable, Tuple, Dict]], task_name: str = "Batch Processing"
+    ) -> List[TaskResult]:
         """
         Submit batch of heterogeneous tasks.
-        
+
         Args:
             tasks: List of (function, args, kwargs) tuples
             task_name: Name for progress tracking
-            
+
         Returns:
             List of TaskResult objects
         """
@@ -530,8 +534,7 @@ class ParallelEngine:
 
         return results
 
-    def _execute_task(self, task_id: str, func: Callable,
-                     args: Tuple, kwargs: Dict) -> TaskResult:
+    def _execute_task(self, task_id: str, func: Callable, args: Tuple, kwargs: Dict) -> TaskResult:
         """Execute a single task and return result."""
         start_time = time.time()
 
@@ -549,23 +552,23 @@ class ParallelEngine:
         resources = self.resource_monitor.get_available_resources()
 
         summary = {
-            'backend': self.backend,
-            'max_workers': self.max_workers,
-            'optimal_workers': self.resource_monitor.get_optimal_workers(),
-            'resources': resources
+            "backend": self.backend,
+            "max_workers": self.max_workers,
+            "optimal_workers": self.resource_monitor.get_optimal_workers(),
+            "resources": resources,
         }
 
-        if self.backend == 'dask' and self.dask_client:
-            summary['dask_info'] = {
-                'workers': len(self.dask_client.scheduler_info()['workers']),
-                'dashboard': self.dask_client.dashboard_link
+        if self.backend == "dask" and self.dask_client:
+            summary["dask_info"] = {
+                "workers": len(self.dask_client.scheduler_info()["workers"]),
+                "dashboard": self.dask_client.dashboard_link,
             }
 
         return summary
 
     def shutdown(self):
         """Shutdown parallel engine and cleanup resources."""
-        if self.backend == 'dask' and self.dask_client:
+        if self.backend == "dask" and self.dask_client:
             self.dask_client.close()
             logging.info("Dask client closed")
 
@@ -574,15 +577,14 @@ class ParallelEngine:
 _parallel_engine = None
 
 
-def get_parallel_engine(backend: str = 'auto',
-                       max_workers: Optional[int] = None) -> ParallelEngine:
+def get_parallel_engine(backend: str = "auto", max_workers: Optional[int] = None) -> ParallelEngine:
     """
     Get or create global parallel engine.
-    
+
     Args:
         backend: Backend to use
         max_workers: Maximum workers
-        
+
     Returns:
         ParallelEngine instance
     """
@@ -596,14 +598,17 @@ def get_parallel_engine(backend: str = 'auto',
 
 # Convenience functions
 @error_handler(reraise=True)
-def parallel_map(func: Callable, items: List[Any],
-                 max_workers: Optional[int] = None,
-                 backend: str = 'auto',
-                 show_progress: bool = True,
-                 task_name: str = "Processing") -> List[Any]:
+def parallel_map(
+    func: Callable,
+    items: List[Any],
+    max_workers: Optional[int] = None,
+    backend: str = "auto",
+    show_progress: bool = True,
+    task_name: str = "Processing",
+) -> List[Any]:
     """
     Convenience function for parallel map.
-    
+
     Args:
         func: Function to apply
         items: Items to process
@@ -611,7 +616,7 @@ def parallel_map(func: Callable, items: List[Any],
         backend: Backend to use
         show_progress: Show progress bar
         task_name: Name for progress
-        
+
     Returns:
         List of results
     """
@@ -622,17 +627,16 @@ def parallel_map(func: Callable, items: List[Any],
         engine.shutdown()
 
 
-def parallel_decorator(max_workers: Optional[int] = None,
-                      backend: str = 'auto',
-                      show_progress: bool = False):
+def parallel_decorator(max_workers: Optional[int] = None, backend: str = "auto", show_progress: bool = False):
     """
     Decorator for automatic parallelization of functions.
-    
+
     Args:
         max_workers: Maximum workers
         backend: Backend to use
         show_progress: Show progress
     """
+
     def decorator(func):
         def wrapper(items, *args, **kwargs):
             # Create partial function with additional arguments
@@ -645,10 +649,11 @@ def parallel_decorator(max_workers: Optional[int] = None,
                 max_workers=max_workers,
                 backend=backend,
                 show_progress=show_progress,
-                task_name=func.__name__
+                task_name=func.__name__,
             )
 
         return wrapper
+
     return decorator
 
 
@@ -657,7 +662,7 @@ if __name__ == "__main__":
     # Example 1: Simple parallel map
     def process_item(x):
         time.sleep(0.1)  # Simulate work
-        return x ** 2
+        return x**2
 
     items = list(range(10))
     results = parallel_map(process_item, items, task_name="Squaring numbers")
@@ -675,10 +680,10 @@ if __name__ == "__main__":
     # Example 3: Map-reduce
     engine = get_parallel_engine()
     total = engine.map_reduce(
-        lambda x: x ** 2,  # Square each item
+        lambda x: x**2,  # Square each item
         lambda a, b: a + b,  # Sum results
         items,
-        initial=0
+        initial=0,
     )
     print(f"Sum of squares: {total}")
 

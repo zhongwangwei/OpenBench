@@ -17,23 +17,29 @@ from joblib import Parallel, delayed
 
 def get_resolution_suffix(sim_grid_res):
     """Map simulation grid resolution to CaMA resolution suffix."""
-    res_map = {
-        0.25: '15min',
-        0.1: '06min',
-        0.0833: '05min',
-        0.05: '03min',
-        0.0167: '01min'
-    }
+    res_map = {0.25: "15min", 0.1: "06min", 0.0833: "05min", 0.05: "03min", 0.0167: "01min"}
     for res, suffix in res_map.items():
         if abs(float(sim_grid_res) - res) < 0.001:
             return suffix
     logging.warning(f"Unknown resolution {sim_grid_res}, defaulting to 03min")
-    return '03min'
+    return "03min"
 
 
-def process_site(station_idx, station_ids, lons, lats, areas,
-                 cama_lons, cama_lats, alloc_errs,
-                 streamflow_data, times, info, scratch_dir, area_err_threshold):
+def process_site(
+    station_idx,
+    station_ids,
+    lons,
+    lats,
+    areas,
+    cama_lons,
+    cama_lats,
+    alloc_errs,
+    streamflow_data,
+    times,
+    info,
+    scratch_dir,
+    area_err_threshold,
+):
     """Extract metadata for a single station and persist its series as NetCDF."""
     station_id = str(station_ids[station_idx])
     lon = float(lons[station_idx])
@@ -73,23 +79,25 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
     # Apply filters: time range, spatial extent
-    if ((use_eyear - use_syear) < info.min_year or
-            lon < info.min_lon or lon > info.max_lon or
-            lat < info.min_lat or lat > info.max_lat):
+    if (
+        (use_eyear - use_syear) < info.min_year
+        or lon < info.min_lon
+        or lon > info.max_lon
+        or lat < info.min_lat
+        or lat > info.max_lat
+    ):
         return None
 
     # Filter by drainage area if specified
-    if hasattr(info, 'min_uparea') and area < info.min_uparea:
+    if hasattr(info, "min_uparea") and area < info.min_uparea:
         return None
-    if hasattr(info, 'max_uparea') and area > info.max_uparea:
+    if hasattr(info, "max_uparea") and area > info.max_uparea:
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
 
     # Save streamflow data as 1D time series
-    ds_out = xr.Dataset({
-        'discharge': (['time'], streamflow)
-    }, coords={'time': times})
+    ds_out = xr.Dataset({"discharge": (["time"], streamflow)}, coords={"time": times})
     ds_out.to_netcdf(file_path)
 
     return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
@@ -99,11 +107,11 @@ def filter_GSHA_Monthly(info, ds=None):
     """Generate required station metadata for GSHA_Monthly runs or filter dataset."""
     # If ds is provided, we're in data filtering mode
     if ds is not None:
-        varname = 'mean'
+        varname = "mean"
         if varname in ds:
             return info, ds[varname]
-        elif 'discharge' in ds:
-            return info, ds['discharge']
+        elif "discharge" in ds:
+            return info, ds["discharge"]
         else:
             data_vars = list(ds.data_vars)
             if data_vars:
@@ -120,16 +128,16 @@ def filter_GSHA_Monthly(info, ds=None):
     logging.info(f"Loading GSHA station metadata from {dataset_path}...")
 
     # Get resolution suffix for CaMA variables
-    if hasattr(info, 'sim_grid_res'):
+    if hasattr(info, "sim_grid_res"):
         res_suffix = get_resolution_suffix(info.sim_grid_res)
         logging.info(f"Using CaMA resolution: {res_suffix}")
     else:
-        res_suffix = '03min'
+        res_suffix = "03min"
         logging.warning("sim_grid_res not defined, using default 03min resolution")
 
     # Get area error threshold from config (default 0.2 = 20%)
-    area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
-    logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
+    area_err_threshold = getattr(info, "area_err_threshold", 0.2)
+    logging.info(f"Area allocation error threshold: {area_err_threshold * 100:.1f}%")
 
     # Create scratch directory
     scratch_dir = Path(info.casedir) / "scratch" / f"GSHA_Monthly_{info.sim_source}"
@@ -137,17 +145,17 @@ def filter_GSHA_Monthly(info, ds=None):
 
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
-        station_ids = ds_file['station_id'].values
-        lons = ds_file['longitude'].values
-        lats = ds_file['latitude'].values
-        areas = ds_file['area'].values
-        streamflow_data = ds_file['mean'].values  # (station, time)
-        times = ds_file['time'].values
+        station_ids = ds_file["station_id"].values
+        lons = ds_file["longitude"].values
+        lats = ds_file["latitude"].values
+        areas = ds_file["area"].values
+        streamflow_data = ds_file["mean"].values  # (station, time)
+        times = ds_file["time"].values
 
         # Load CaMA allocation data
-        cama_lon_var = f'cama_lon_{res_suffix}'
-        cama_lat_var = f'cama_lat_{res_suffix}'
-        alloc_err_var = f'cama_alloc_err_{res_suffix}'
+        cama_lon_var = f"cama_lon_{res_suffix}"
+        cama_lat_var = f"cama_lat_{res_suffix}"
+        alloc_err_var = f"cama_alloc_err_{res_suffix}"
 
         if cama_lon_var in ds_file:
             cama_lons = ds_file[cama_lon_var].values
@@ -165,10 +173,21 @@ def filter_GSHA_Monthly(info, ds=None):
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
-                idx, station_ids, lons, lats, areas,
-                cama_lons, cama_lats, alloc_errs,
-                streamflow_data, times, info, scratch_dir, area_err_threshold
-            ) for idx in range(n_stations)
+                idx,
+                station_ids,
+                lons,
+                lats,
+                areas,
+                cama_lons,
+                cama_lats,
+                alloc_errs,
+                streamflow_data,
+                times,
+                info,
+                scratch_dir,
+                area_err_threshold,
+            )
+            for idx in range(n_stations)
         )
 
         # Filter out None results
@@ -178,15 +197,12 @@ def filter_GSHA_Monthly(info, ds=None):
         logging.error("No GSHA stations satisfy the selection criteria.")
         return
 
-    df = pd.DataFrame(
-        station_rows,
-        columns=['ID', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear', 'ref_dir']
-    )
+    df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
-    info.use_syear = int(df['use_syear'].min())
-    info.use_eyear = int(df['use_eyear'].max())
+    info.use_syear = int(df["use_syear"].min())
+    info.use_eyear = int(df["use_eyear"].max())
     info.ref_fulllist = f"{info.casedir}/stn_GSHA_Monthly_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)
-    logging.info(f'GSHA station list saved: {len(df)} stations')
+    logging.info(f"GSHA station list saved: {len(df)} stations")

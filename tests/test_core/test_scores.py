@@ -1,8 +1,6 @@
 """Tests for scores module — verify normalized score calculations."""
 
-import numpy as np
 import pandas as pd
-import pytest
 import xarray as xr
 
 
@@ -15,6 +13,7 @@ def make_da(values):
 def test_scores_class_exists():
     """Verify scores class can be imported."""
     from openbench.core.scores import scores
+
     assert scores is not None
 
 

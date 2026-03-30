@@ -18,34 +18,41 @@ from joblib import Parallel, delayed
 
 def get_resolution_suffix(sim_grid_res):
     """Map simulation grid resolution to CaMA resolution suffix.
-    
+
     Args:
         sim_grid_res: Simulation grid resolution in degrees
-        
+
     Returns:
         str: Resolution suffix (e.g., '03min', '15min')
     """
-    res_map = {
-        0.25: '15min',
-        0.1: '06min',
-        0.0833: '05min',
-        0.05: '03min',
-        0.0167: '01min'
-    }
+    res_map = {0.25: "15min", 0.1: "06min", 0.0833: "05min", 0.05: "03min", 0.0167: "01min"}
     # Handle float precision issues
     for res, suffix in res_map.items():
         if abs(float(sim_grid_res) - res) < 0.001:
             return suffix
     # Default fallback
     logging.warning(f"Unknown resolution {sim_grid_res}, defaulting to 03min")
-    return '03min'
+    return "03min"
 
 
-def process_site(station_idx, station_ids, lons, lats, areas,
-                 cama_lons, cama_lats, alloc_errs, uparea_obs,
-                 streamflow_data, times, info, scratch_dir, area_err_threshold):
+def process_site(
+    station_idx,
+    station_ids,
+    lons,
+    lats,
+    areas,
+    cama_lons,
+    cama_lats,
+    alloc_errs,
+    uparea_obs,
+    streamflow_data,
+    times,
+    info,
+    scratch_dir,
+    area_err_threshold,
+):
     """Extract metadata for a single station and persist its series as NetCDF.
-    
+
     Args:
         station_idx: Index of station in arrays
         station_ids: Array of station IDs
@@ -61,7 +68,7 @@ def process_site(station_idx, station_ids, lons, lats, areas,
         info: Configuration object
         scratch_dir: Path to scratch directory
         area_err_threshold: Maximum allowed allocation error (fraction)
-        
+
     Returns:
         list: [station_id, ref_lon, ref_lat, use_syear, use_eyear, ref_dir] or None
     """
@@ -99,23 +106,25 @@ def process_site(station_idx, station_ids, lons, lats, areas,
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
     # Apply filters: time range, spatial extent, and drainage area
-    if ((use_eyear - use_syear) < info.min_year or
-            lon < info.min_lon or lon > info.max_lon or
-            lat < info.min_lat or lat > info.max_lat):
+    if (
+        (use_eyear - use_syear) < info.min_year
+        or lon < info.min_lon
+        or lon > info.max_lon
+        or lat < info.min_lat
+        or lat > info.max_lat
+    ):
         return None
 
     # Filter by drainage area if specified
-    if hasattr(info, 'min_uparea') and area > 0 and area < info.min_uparea:
+    if hasattr(info, "min_uparea") and area > 0 and area < info.min_uparea:
         return None
-    if hasattr(info, 'max_uparea') and area > 0 and area > info.max_uparea:
+    if hasattr(info, "max_uparea") and area > 0 and area > info.max_uparea:
         return None
 
     file_path = scratch_dir / f"{station_id}.nc"
 
     # Save streamflow data as 1D time series
-    ds_out = xr.Dataset({
-        'discharge': (['time'], streamflow)
-    }, coords={'time': times})
+    ds_out = xr.Dataset({"discharge": (["time"], streamflow)}, coords={"time": times})
     ds_out.to_netcdf(file_path)
 
     # Return CaMA allocated coordinates as ref_lon/ref_lat
@@ -131,19 +140,19 @@ def filter_GRDC_Daily(info, ds=None):
     Args:
         info: Configuration/info object with processing parameters
         ds: Optional xarray Dataset to filter (for data filtering mode)
-        
+
     Returns:
         For data filtering mode: Tuple of (info, filtered_data)
         For initialization mode: None (modifies info in place)
     """
     # If ds is provided, we're in data filtering mode
     if ds is not None:
-        if 'discharge' in ds:
-            return info, ds['discharge']
-        elif 'Disch' in ds:
-            return info, ds['Disch']
-        elif 'runoff_mean' in ds:
-            return info, ds['runoff_mean']
+        if "discharge" in ds:
+            return info, ds["discharge"]
+        elif "Disch" in ds:
+            return info, ds["Disch"]
+        elif "runoff_mean" in ds:
+            return info, ds["runoff_mean"]
         else:
             data_vars = list(ds.data_vars)
             if data_vars:
@@ -153,13 +162,14 @@ def filter_GRDC_Daily(info, ds=None):
     # Initialization mode: generate station list
 
     # Check for hourly comparison (not supported)
-    if info.compare_tim_res.lower() in ['h', 'hour', '1h']:
-        logging.error('GRDC does not support hourly comparison. Use Day or Month.')
+    if info.compare_tim_res.lower() in ["h", "hour", "1h"]:
+        logging.error("GRDC does not support hourly comparison. Use Day or Month.")
         import sys
+
         sys.exit(1)
 
     # Determine which consolidated file to use based on temporal resolution
-    if info.compare_tim_res.lower() in ['m', 'me', '1m', 'month', 'mon']:
+    if info.compare_tim_res.lower() in ["m", "me", "1m", "month", "mon"]:
         dataset_file = "GRDC_monthly.nc"
     else:  # Daily
         dataset_file = "GRDC_daily.nc"
@@ -173,23 +183,26 @@ def filter_GRDC_Daily(info, ds=None):
     logging.info(f"Loading GRDC station metadata from {dataset_path}...")
 
     # Get resolution suffix for CaMA variables
-    if not hasattr(info, 'sim_grid_res'):
+    if not hasattr(info, "sim_grid_res"):
         logging.error("sim_grid_res is not defined in info object")
         import sys
+
         sys.exit(1)
 
     res_suffix = get_resolution_suffix(info.sim_grid_res)
     logging.info(f"Using CaMA resolution: {res_suffix} (sim_grid_res={info.sim_grid_res})")
 
     # Get area error threshold from config (default 0.2 = 20%)
-    area_err_threshold = getattr(info, 'area_err_threshold', 0.2)
-    logging.info(f"Area allocation error threshold: {area_err_threshold*100:.1f}%")
+    area_err_threshold = getattr(info, "area_err_threshold", 0.2)
+    logging.info(f"Area allocation error threshold: {area_err_threshold * 100:.1f}%")
 
     # Get upstream area filters
-    max_uparea = info.ref_nml.get('Streamflow', {}).get('GRDC_max_uparea',
-                 info.ref_nml.get('Streamflow', {}).get('max_uparea', float('inf')))
-    min_uparea = info.ref_nml.get('Streamflow', {}).get('GRDC_min_uparea',
-                 info.ref_nml.get('Streamflow', {}).get('min_uparea', 0))
+    max_uparea = info.ref_nml.get("Streamflow", {}).get(
+        "GRDC_max_uparea", info.ref_nml.get("Streamflow", {}).get("max_uparea", float("inf"))
+    )
+    min_uparea = info.ref_nml.get("Streamflow", {}).get(
+        "GRDC_min_uparea", info.ref_nml.get("Streamflow", {}).get("min_uparea", 0)
+    )
     info.min_uparea = min_uparea
     info.max_uparea = max_uparea
 
@@ -199,22 +212,22 @@ def filter_GRDC_Daily(info, ds=None):
 
     with xr.open_dataset(dataset_path) as ds_file:
         # Pre-load all data into memory for parallel processing
-        station_ids = ds_file['GRDC_Num'].values
-        lons = ds_file['Lon'].values
-        lats = ds_file['Lat'].values
-        areas = ds_file['Upstream_Area'].values
-        streamflow_data = ds_file['Disch'].values  # (GRDC_Num, Time)
-        times = ds_file['Time'].values
+        station_ids = ds_file["GRDC_Num"].values
+        lons = ds_file["Lon"].values
+        lats = ds_file["Lat"].values
+        areas = ds_file["Upstream_Area"].values
+        streamflow_data = ds_file["Disch"].values  # (GRDC_Num, Time)
+        times = ds_file["Time"].values
 
         # Load CaMA allocation data for the specified resolution
-        cama_lon_var = f'cama_lon_{res_suffix}'
-        cama_lat_var = f'cama_lat_{res_suffix}'
-        alloc_err_var = f'cama_alloc_err_{res_suffix}'
+        cama_lon_var = f"cama_lon_{res_suffix}"
+        cama_lat_var = f"cama_lat_{res_suffix}"
+        alloc_err_var = f"cama_alloc_err_{res_suffix}"
 
         if cama_lon_var not in ds_file:
-            logging.error(f"CaMA variable {cama_lon_var} not found in dataset. "
-                          f"Available: {list(ds_file.data_vars)}")
+            logging.error(f"CaMA variable {cama_lon_var} not found in dataset. Available: {list(ds_file.data_vars)}")
             import sys
+
             sys.exit(1)
 
         cama_lons = ds_file[cama_lon_var].values
@@ -227,10 +240,22 @@ def filter_GRDC_Daily(info, ds=None):
         # Process stations in parallel
         station_rows = Parallel(n_jobs=-1, verbose=1)(
             delayed(process_site)(
-                idx, station_ids, lons, lats, areas,
-                cama_lons, cama_lats, alloc_errs, areas,
-                streamflow_data, times, info, scratch_dir, area_err_threshold
-            ) for idx in range(n_stations)
+                idx,
+                station_ids,
+                lons,
+                lats,
+                areas,
+                cama_lons,
+                cama_lats,
+                alloc_errs,
+                areas,
+                streamflow_data,
+                times,
+                info,
+                scratch_dir,
+                area_err_threshold,
+            )
+            for idx in range(n_stations)
         )
 
         # Filter out None results
@@ -240,21 +265,18 @@ def filter_GRDC_Daily(info, ds=None):
         logging.error("No GRDC stations satisfy the selection criteria.")
         raise ValueError("No valid stations found")
 
-    df = pd.DataFrame(
-        station_rows,
-        columns=['ID', 'ref_lon', 'ref_lat', 'use_syear', 'use_eyear', 'ref_dir']
-    )
+    df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
     # Ensure year columns are integers
-    df['use_syear'] = df['use_syear'].astype(int)
-    df['use_eyear'] = df['use_eyear'].astype(int)
-    df['ID'] = df['ID'].astype(int)
+    df["use_syear"] = df["use_syear"].astype(int)
+    df["use_eyear"] = df["use_eyear"].astype(int)
+    df["ID"] = df["ID"].astype(int)
 
-    info.use_syear = int(df['use_syear'].min())
-    info.use_eyear = int(df['use_eyear'].max())
+    info.use_syear = int(df["use_syear"].min())
+    info.use_eyear = int(df["use_eyear"].max())
     info.ref_fulllist = f"{info.casedir}/stn_GRDC_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
     df.to_csv(info.ref_fulllist, index=False)
-    logging.info(f'GRDC station list saved: {len(df)} stations')
-    logging.info(f'Time range: {info.use_syear} - {info.use_eyear}')
+    logging.info(f"GRDC station list saved: {len(df)} stations")
+    logging.info(f"Time range: {info.use_syear} - {info.use_eyear}")

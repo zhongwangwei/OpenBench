@@ -6,9 +6,17 @@ Grouped checkbox widget with search and select all/none functionality.
 from typing import Dict, List
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QCheckBox, QLineEdit, QPushButton, QLabel,
-    QGroupBox, QScrollArea, QFrame
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QCheckBox,
+    QLineEdit,
+    QPushButton,
+    QLabel,
+    QGroupBox,
+    QScrollArea,
+    QFrame,
 )
 from PySide6.QtCore import Signal, Qt
 
@@ -18,11 +26,7 @@ class CheckboxGroup(QWidget):
 
     selection_changed = Signal(dict)  # Emits {item_id: bool, ...}
 
-    def __init__(
-        self,
-        items: Dict[str, Dict[str, List[str]]],
-        parent=None
-    ):
+    def __init__(self, items: Dict[str, Dict[str, List[str]]], parent=None):
         """
         Initialize CheckboxGroup.
 
@@ -146,10 +150,7 @@ class CheckboxGroup(QWidget):
 
     def get_selection(self) -> Dict[str, bool]:
         """Get current selection state."""
-        return {
-            item_id: cb.isChecked()
-            for item_id, cb in self._checkboxes.items()
-        }
+        return {item_id: cb.isChecked() for item_id, cb in self._checkboxes.items()}
 
     def set_selection(self, selection: Dict[str, bool]):
         """Set selection state."""
@@ -162,7 +163,4 @@ class CheckboxGroup(QWidget):
 
     def get_selected_items(self) -> List[str]:
         """Get list of selected item IDs."""
-        return [
-            item_id for item_id, cb in self._checkboxes.items()
-            if cb.isChecked()
-        ]
+        return [item_id for item_id, cb in self._checkboxes.items() if cb.isChecked()]

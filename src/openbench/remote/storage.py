@@ -128,14 +128,15 @@ class LocalStorage(ProjectStorage):
         # Resolve the full path and check it's within project directory
         full_path = os.path.normpath(os.path.join(self._project_dir, path))
         # Security check: ensure path doesn't escape project directory
-        if not full_path.startswith(os.path.normpath(self._project_dir) + os.sep) and \
-           full_path != os.path.normpath(self._project_dir):
+        if not full_path.startswith(os.path.normpath(self._project_dir) + os.sep) and full_path != os.path.normpath(
+            self._project_dir
+        ):
             raise ValueError(f"Path escapes project directory: {path}")
         return full_path
 
     def read_file(self, path: str) -> str:
         full_path = self._full_path(path)
-        with open(full_path, 'r', encoding='utf-8') as f:
+        with open(full_path, "r", encoding="utf-8") as f:
             return f.read()
 
     def write_file(self, path: str, content: str) -> None:
@@ -144,7 +145,7 @@ class LocalStorage(ProjectStorage):
         dir_path = os.path.dirname(full_path)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
-        with open(full_path, 'w', encoding='utf-8') as f:
+        with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
 
     def list_dir(self, path: str) -> List[str]:
@@ -179,7 +180,7 @@ class LocalStorage(ProjectStorage):
 class RemoteStorage(ProjectStorage):
     """Storage implementation for remote server via SyncEngine."""
 
-    def __init__(self, project_dir: str, sync_engine: 'SyncEngine'):
+    def __init__(self, project_dir: str, sync_engine: "SyncEngine"):
         """
         Initialize remote storage.
 
@@ -191,7 +192,7 @@ class RemoteStorage(ProjectStorage):
         self._sync = sync_engine
 
     @property
-    def sync_engine(self) -> 'SyncEngine':
+    def sync_engine(self) -> "SyncEngine":
         """Get the sync engine."""
         return self._sync
 

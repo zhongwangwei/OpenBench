@@ -5,7 +5,7 @@ API Service Module for OpenBench
 This module provides standardized REST API interfaces for external services,
 enabling remote access to OpenBench evaluation capabilities.
 
-Author: Zhongwang Wei  
+Author: Zhongwang Wei
 Version: 1.0
 Date: July 2025
 """
@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 # Optional web server import
 try:
     import uvicorn
+
     _HAS_UVICORN = True
 except ImportError:
     _HAS_UVICORN = False
@@ -30,6 +31,7 @@ try:
     from fastapi.responses import FileResponse, JSONResponse
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     from pydantic import BaseModel, Field, validator
+
     _HAS_FASTAPI = True
 except ImportError:
     _HAS_FASTAPI = False
@@ -40,8 +42,10 @@ except ImportError:
     HTTPAuthorizationCredentials = object
     BackgroundTasks = object
     FileResponse = object
+
     def Field(*args, **kwargs):
         return None
+
 
 # Import OpenBench modules
 try:
@@ -52,22 +56,27 @@ try:
     from openbench.util.logging_system import get_logging_manager
     from openbench.util.output import ModularOutputManager
     from openbench.util.parallel import ParallelEngine
+
     _HAS_OPENBENCH_MODULES = True
 except ImportError:
     _HAS_OPENBENCH_MODULES = False
     ConfigManager = object
     APIError = Exception
     ValidationError = Exception
+
     def error_handler(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
 
 # Import xarray for data handling
 try:
     import numpy as np
     import pandas as pd
     import xarray as xr
+
     _HAS_DATA_MODULES = True
 except ImportError:
     _HAS_DATA_MODULES = False
@@ -152,7 +161,7 @@ class APIService:
 
         # Security
         self.security = HTTPBearer() if _HAS_FASTAPI else None
-        self.api_keys = self.config.get('api_keys', [])
+        self.api_keys = self.config.get("api_keys", [])
 
         # Initialize FastAPI app
         if _HAS_FASTAPI:
@@ -161,18 +170,18 @@ class APIService:
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default API configuration."""
         return {
-            'host': '0.0.0.0',
-            'port': 8000,
-            'reload': False,
-            'workers': 1,
-            'max_upload_size': 100 * 1024 * 1024,  # 100MB
-            'rate_limit': 100,  # requests per minute
-            'enable_cors': True,
-            'cors_origins': ['*'],
-            'api_keys': [],
-            'enable_auth': False,
-            'result_ttl': 3600,  # 1 hour
-            'max_concurrent_tasks': 10
+            "host": "0.0.0.0",
+            "port": 8000,
+            "reload": False,
+            "workers": 1,
+            "max_upload_size": 100 * 1024 * 1024,  # 100MB
+            "rate_limit": 100,  # requests per minute
+            "enable_cors": True,
+            "cors_origins": ["*"],
+            "api_keys": [],
+            "enable_auth": False,
+            "result_ttl": 3600,  # 1 hour
+            "max_concurrent_tasks": 10,
         }
 
     def _create_app(self):
@@ -185,14 +194,14 @@ class APIService:
             description="Land Surface Model Benchmarking API",
             version="2.0.0",
             docs_url="/docs",
-            redoc_url="/redoc"
+            redoc_url="/redoc",
         )
 
         # CORS middleware
-        if self.config.get('enable_cors', True):
+        if self.config.get("enable_cors", True):
             self.app.add_middleware(
                 CORSMiddleware,
-                allow_origins=self.config.get('cors_origins', ['*']),
+                allow_origins=self.config.get("cors_origins", ["*"]),
                 allow_credentials=True,
                 allow_methods=["*"],
                 allow_headers=["*"],
@@ -218,10 +227,12 @@ class APIService:
         async def create_evaluation(
             request: EvaluationRequest,
             background_tasks: BackgroundTasks,
-            credentials: HTTPAuthorizationCredentials = Depends(self.security) if self.config.get('enable_auth') else None
+            credentials: HTTPAuthorizationCredentials = Depends(self.security)
+            if self.config.get("enable_auth")
+            else None,
         ):
             """Create new evaluation task."""
-            if self.config.get('enable_auth') and not self._validate_auth(credentials):
+            if self.config.get("enable_auth") and not self._validate_auth(credentials):
                 raise HTTPException(status_code=401, detail="Invalid authentication")
 
             return await self._create_evaluation_task(request, background_tasks)
@@ -264,39 +275,38 @@ class APIService:
 
     async def _get_system_status(self) -> StatusResponse:
         """Get current system status."""
-        active_tasks = sum(1 for task in self.tasks.values() if task['status'] == 'running')
-        completed_tasks = sum(1 for task in self.tasks.values() if task['status'] == 'completed')
-        failed_tasks = sum(1 for task in self.tasks.values() if task['status'] == 'failed')
+        active_tasks = sum(1 for task in self.tasks.values() if task["status"] == "running")
+        completed_tasks = sum(1 for task in self.tasks.values() if task["status"] == "completed")
+        failed_tasks = sum(1 for task in self.tasks.values() if task["status"] == "failed")
 
         # System information
         try:
             import psutil
+
             system_info = {
-                'cpu_percent': psutil.cpu_percent(),
-                'memory_percent': psutil.virtual_memory().percent,
-                'disk_usage': psutil.disk_usage('/').percent
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_usage": psutil.disk_usage("/").percent,
             }
         except ImportError:
-            system_info = {'message': 'System monitoring not available'}
+            system_info = {"message": "System monitoring not available"}
 
         return StatusResponse(
             system_status="healthy",
             active_tasks=active_tasks,
             completed_tasks=completed_tasks,
             failed_tasks=failed_tasks,
-            system_info=system_info
+            system_info=system_info,
         )
 
     async def _create_evaluation_task(
-        self,
-        request: EvaluationRequest,
-        background_tasks: BackgroundTasks
+        self, request: EvaluationRequest, background_tasks: BackgroundTasks
     ) -> EvaluationResponse:
         """Create new evaluation task."""
 
         # Check concurrent task limit
-        active_tasks = sum(1 for task in self.tasks.values() if task['status'] == 'running')
-        if active_tasks >= self.config.get('max_concurrent_tasks', 10):
+        active_tasks = sum(1 for task in self.tasks.values() if task["status"] == "running")
+        if active_tasks >= self.config.get("max_concurrent_tasks", 10):
             raise HTTPException(status_code=429, detail="Too many concurrent tasks")
 
         # Generate task ID
@@ -305,13 +315,13 @@ class APIService:
 
         # Create task record
         task_record = {
-            'id': task_id,
-            'status': 'pending',
-            'request': request.dict(),
-            'created_at': datetime.now().isoformat(),
-            'completed_at': None,
-            'results': None,
-            'error': None
+            "id": task_id,
+            "status": "pending",
+            "request": request.dict(),
+            "created_at": datetime.now().isoformat(),
+            "completed_at": None,
+            "results": None,
+            "error": None,
         }
 
         self.tasks[task_id] = task_record
@@ -319,17 +329,13 @@ class APIService:
         # Schedule background task
         background_tasks.add_task(self._execute_evaluation, task_id, request)
 
-        return EvaluationResponse(
-            task_id=task_id,
-            status='pending',
-            created_at=task_record['created_at']
-        )
+        return EvaluationResponse(task_id=task_id, status="pending", created_at=task_record["created_at"])
 
     async def _execute_evaluation(self, task_id: str, request: EvaluationRequest):
         """Execute evaluation in background."""
         try:
             # Update status
-            self.tasks[task_id]['status'] = 'running'
+            self.tasks[task_id]["status"] = "running"
 
             if not _HAS_OPENBENCH_MODULES or not _HAS_DATA_MODULES:
                 raise Exception("Required modules not available")
@@ -342,53 +348,48 @@ class APIService:
                 raise Exception(f"Failed to load datasets: {e}")
 
             # Create evaluation engine
-            engine = create_evaluation_engine(
-                request.evaluation_type,
-                **(request.config or {})
-            )
+            engine = create_evaluation_engine(request.evaluation_type, **(request.config or {}))
 
             # Perform evaluation
             results = engine.evaluate(simulation, reference, request.metrics)
 
             # Save results if requested
-            if request.output_format != 'memory':
+            if request.output_format != "memory":
                 output_path = f"./output/api_results/{task_id}.{request.output_format}"
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-                if request.output_format == 'json':
-                    with open(output_path, 'w') as f:
+                if request.output_format == "json":
+                    with open(output_path, "w") as f:
                         json.dump(results, f, indent=2, default=str)
-                elif request.output_format == 'csv':
+                elif request.output_format == "csv":
                     # Convert to CSV format
                     metrics_data = []
-                    for metric_name, metric_data in results['metrics'].items():
-                        metrics_data.append({
-                            'metric': metric_name,
-                            'value': metric_data['value'],
-                            'description': metric_data['info']['description'],
-                            'unit': metric_data['info']['unit']
-                        })
+                    for metric_name, metric_data in results["metrics"].items():
+                        metrics_data.append(
+                            {
+                                "metric": metric_name,
+                                "value": metric_data["value"],
+                                "description": metric_data["info"]["description"],
+                                "unit": metric_data["info"]["unit"],
+                            }
+                        )
                     df = pd.DataFrame(metrics_data)
                     df.to_csv(output_path, index=False)
 
-                results['output_path'] = output_path
+                results["output_path"] = output_path
 
             # Update task with results
-            self.tasks[task_id].update({
-                'status': 'completed',
-                'results': results,
-                'completed_at': datetime.now().isoformat()
-            })
+            self.tasks[task_id].update(
+                {"status": "completed", "results": results, "completed_at": datetime.now().isoformat()}
+            )
 
             self.logger.info(f"Evaluation task {task_id} completed successfully")
 
         except Exception as e:
             # Update task with error
-            self.tasks[task_id].update({
-                'status': 'failed',
-                'error': str(e),
-                'completed_at': datetime.now().isoformat()
-            })
+            self.tasks[task_id].update(
+                {"status": "failed", "error": str(e), "completed_at": datetime.now().isoformat()}
+            )
 
             self.logger.error(f"Evaluation task {task_id} failed: {e}")
 
@@ -401,11 +402,11 @@ class APIService:
 
         return EvaluationResponse(
             task_id=task_id,
-            status=task['status'],
-            results=task['results'],
-            error=task['error'],
-            created_at=task['created_at'],
-            completed_at=task['completed_at']
+            status=task["status"],
+            results=task["results"],
+            error=task["error"],
+            created_at=task["created_at"],
+            completed_at=task["completed_at"],
         )
 
     async def _delete_evaluation_task(self, task_id: str):
@@ -415,8 +416,8 @@ class APIService:
 
         # Clean up output files if they exist
         task = self.tasks[task_id]
-        if task.get('results') and 'output_path' in task['results']:
-            output_path = task['results']['output_path']
+        if task.get("results") and "output_path" in task["results"]:
+            output_path = task["results"]["output_path"]
             if os.path.exists(output_path):
                 os.remove(output_path)
 
@@ -431,13 +432,13 @@ class APIService:
 
         task = self.tasks[task_id]
 
-        if task['status'] != 'completed':
+        if task["status"] != "completed":
             raise HTTPException(status_code=400, detail="Task not completed")
 
-        if not task.get('results') or 'output_path' not in task['results']:
+        if not task.get("results") or "output_path" not in task["results"]:
             raise HTTPException(status_code=404, detail="Results file not found")
 
-        output_path = task['results']['output_path']
+        output_path = task["results"]["output_path"]
 
         if not os.path.exists(output_path):
             raise HTTPException(status_code=404, detail="Results file not found")
@@ -445,7 +446,7 @@ class APIService:
         return FileResponse(
             output_path,
             filename=f"{task_id}_results.{output_path.split('.')[-1]}",
-            media_type='application/octet-stream'
+            media_type="application/octet-stream",
         )
 
     async def _validate_configuration(self, request: ConfigurationRequest):
@@ -483,18 +484,18 @@ class APIService:
             {
                 "name": "modular",
                 "description": "General purpose modular evaluation engine",
-                "supported_data_types": ["gridded", "station", "time_series"]
+                "supported_data_types": ["gridded", "station", "time_series"],
             },
             {
                 "name": "grid",
                 "description": "Specialized engine for gridded data evaluation",
-                "supported_data_types": ["gridded"]
+                "supported_data_types": ["gridded"],
             },
             {
                 "name": "station",
                 "description": "Specialized engine for station data evaluation",
-                "supported_data_types": ["station", "point"]
-            }
+                "supported_data_types": ["station", "point"],
+            },
         ]
 
         return {"engines": engines}
@@ -514,10 +515,10 @@ class APIService:
 
         uvicorn.run(
             self.app,
-            host=config['host'],
-            port=config['port'],
-            reload=config.get('reload', False),
-            workers=config.get('workers', 1)
+            host=config["host"],
+            port=config["port"],
+            reload=config.get("reload", False),
+            workers=config.get("workers", 1),
         )
 
 
@@ -540,8 +541,4 @@ if __name__ == "__main__":
 
     # Create and run service
     service = create_api_service(args.config)
-    service.run(
-        host=args.host,
-        port=args.port,
-        reload=args.reload
-    )
+    service.run(host=args.host, port=args.port, reload=args.reload)

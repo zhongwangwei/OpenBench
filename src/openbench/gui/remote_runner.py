@@ -34,9 +34,9 @@ class RemoteRunner(QThread):
     """
 
     # Progress calculation constants (same as EvaluationRunner)
-    PROGRESS_INIT = 5       # Reserve 5% for initialization
-    PROGRESS_WORK = 90      # 90% for actual work (5% to 95%)
-    PROGRESS_MAX = 95       # Cap at 95% until completion confirmed
+    PROGRESS_INIT = 5  # Reserve 5% for initialization
+    PROGRESS_WORK = 90  # 90% for actual work (5% to 95%)
+    PROGRESS_MAX = 95  # Cap at 95% until completion confirmed
     PROGRESS_INCREMENT = 0.5  # Slow increment when no task info available
 
     # Signals - same interface as EvaluationRunner
@@ -50,7 +50,7 @@ class RemoteRunner(QThread):
         ssh_manager: SSHManager,
         remote_config: Dict[str, Any],
         parent=None,
-        config_already_remote: bool = False
+        config_already_remote: bool = False,
     ):
         """Initialize the remote runner.
 
@@ -106,12 +106,7 @@ class RemoteRunner(QThread):
         """Run the evaluation on the remote server."""
         try:
             self._emit_progress(
-                RunnerStatus.RUNNING,
-                0,
-                "Initializing",
-                "",
-                "Starting",
-                "Preparing remote execution..."
+                RunnerStatus.RUNNING, 0, "Initializing", "", "Starting", "Preparing remote execution..."
             )
             self.log_message.emit("Starting remote OpenBench evaluation...")
 
@@ -146,9 +141,7 @@ class RemoteRunner(QThread):
             else:
                 # Step 1: Create remote temp directory
                 self._emit_progress(
-                    RunnerStatus.RUNNING, 2,
-                    "Setup", "", "Creating directory",
-                    "Creating remote temporary directory..."
+                    RunnerStatus.RUNNING, 2, "Setup", "", "Creating directory", "Creating remote temporary directory..."
                 )
                 self.log_message.emit("Creating remote temporary directory...")
 
@@ -162,9 +155,7 @@ class RemoteRunner(QThread):
 
                 # Step 2: Upload config file
                 self._emit_progress(
-                    RunnerStatus.RUNNING, 4,
-                    "Upload", "", "Uploading config",
-                    "Uploading configuration file..."
+                    RunnerStatus.RUNNING, 4, "Upload", "", "Uploading config", "Uploading configuration file..."
                 )
                 self.log_message.emit("Uploading configuration file...")
 
@@ -178,44 +169,28 @@ class RemoteRunner(QThread):
 
             # Step 3: Execute OpenBench on remote server
             self._emit_progress(
-                RunnerStatus.RUNNING, self.PROGRESS_INIT,
-                "Executing", "", "Running",
-                "Starting OpenBench execution..."
+                RunnerStatus.RUNNING, self.PROGRESS_INIT, "Executing", "", "Running", "Starting OpenBench execution..."
             )
 
             success, message = self._execute_remote_openbench()
 
             if success:
                 self._emit_progress(
-                    RunnerStatus.COMPLETED, 100,
-                    "Complete", "", "",
-                    "Evaluation completed successfully"
+                    RunnerStatus.COMPLETED, 100, "Complete", "", "", "Evaluation completed successfully"
                 )
                 self.finished_signal.emit(True, "Evaluation completed successfully")
             else:
-                self._emit_progress(
-                    RunnerStatus.FAILED, self.PROGRESS_MAX,
-                    "Failed", "", "",
-                    message
-                )
+                self._emit_progress(RunnerStatus.FAILED, self.PROGRESS_MAX, "Failed", "", "", message)
                 self.finished_signal.emit(False, message)
 
         except SSHConnectionError as e:
             error_msg = f"SSH connection error: {e}"
-            self._emit_progress(
-                RunnerStatus.FAILED, 0,
-                "Error", "", "",
-                error_msg
-            )
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", error_msg)
             self.finished_signal.emit(False, error_msg)
 
         except Exception as e:
             error_msg = f"Remote execution error: {e}"
-            self._emit_progress(
-                RunnerStatus.FAILED, 0,
-                "Error", "", "",
-                error_msg
-            )
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", error_msg)
             self.finished_signal.emit(False, error_msg)
 
         finally:
@@ -229,11 +204,7 @@ class RemoteRunner(QThread):
 
     def _handle_stop(self):
         """Handle stop request."""
-        self._emit_progress(
-            RunnerStatus.STOPPED, 0,
-            "Stopped", "", "",
-            "Evaluation stopped by user"
-        )
+        self._emit_progress(RunnerStatus.STOPPED, 0, "Stopped", "", "", "Evaluation stopped by user")
         self.finished_signal.emit(False, "Stopped by user")
 
     def _create_remote_temp_dir(self) -> bool:
@@ -249,10 +220,7 @@ class RemoteRunner(QThread):
             self._remote_temp_dir = f"/tmp/{temp_name}"
 
             quoted_dir = shlex.quote(self._remote_temp_dir)
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"mkdir -p {quoted_dir}",
-                timeout=30
-            )
+            stdout, stderr, exit_code = self._ssh_manager.execute(f"mkdir -p {quoted_dir}", timeout=30)
 
             if exit_code != 0:
                 error_msg = f"Failed to create remote temp directory: {stderr}"
@@ -307,7 +275,7 @@ class RemoteRunner(QThread):
         try:
             # Upload any additional .yaml/.yml/.json files in the config directory
             for filename in os.listdir(config_dir):
-                if filename.endswith(('.yaml', '.yml', '.json')):
+                if filename.endswith((".yaml", ".yml", ".json")):
                     local_path = os.path.join(config_dir, filename)
                     if os.path.isfile(local_path) and local_path != self.config_path:
                         remote_path = f"{self._remote_temp_dir}/{filename}"
@@ -337,7 +305,7 @@ class RemoteRunner(QThread):
         if conda_env:
             # Derive conda base from python path (e.g., /path/to/miniconda3/bin/python -> /path/to/miniconda3)
             # This works for paths like: .../miniconda3/bin/python or .../miniconda3/envs/myenv/bin/python
-            conda_base_match = re.search(r'(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)', python_path)
+            conda_base_match = re.search(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)", python_path)
             if conda_base_match:
                 conda_base = conda_base_match.group(1)
                 cmd = f"source {conda_base}/etc/profile.d/conda.sh && conda activate {conda_env} && cd {openbench_path} && PYTHONUNBUFFERED=1 {python_path} -u {openbench_script} {self._remote_config_path}"
@@ -362,19 +330,14 @@ class RemoteRunner(QThread):
                     self._kill_remote_process()
                     return (False, "Stopped by user")
 
-                line = line.rstrip('\n\r')
+                line = line.rstrip("\n\r")
                 if line:
                     self.log_message.emit(line)
 
                     # Parse progress from log
                     progress, var, stage = self._parse_progress(line, progress)
                     self._emit_progress(
-                        RunnerStatus.RUNNING,
-                        progress,
-                        f"{var} - {stage}" if var else "Processing",
-                        var,
-                        stage,
-                        line
+                        RunnerStatus.RUNNING, progress, f"{var} - {stage}" if var else "Processing", var, stage, line
                     )
 
             # Get exit code from the generator (returned by execute_stream)
@@ -387,7 +350,7 @@ class RemoteRunner(QThread):
             # A more robust check: try to get the exit status
             stdout, stderr, exit_code = self._ssh_manager.execute(
                 "echo $?",  # Get last exit code
-                timeout=10
+                timeout=10,
             )
 
             # This won't work reliably since we're in a new shell context
@@ -406,10 +369,7 @@ class RemoteRunner(QThread):
         """Attempt to kill the remote OpenBench process."""
         try:
             # Try to find and kill the Python process running openbench
-            self._ssh_manager.execute(
-                "pkill -f 'openbench.py' || true",
-                timeout=10
-            )
+            self._ssh_manager.execute("pkill -f 'openbench.py' || true", timeout=10)
             self.log_message.emit("Sent kill signal to remote process")
         except Exception as e:
             self.log_message.emit(f"Warning: Could not kill remote process: {e}")
@@ -420,10 +380,7 @@ class RemoteRunner(QThread):
         if self._remote_temp_dir and not self._config_already_remote:
             try:
                 quoted_dir = shlex.quote(self._remote_temp_dir)
-                self._ssh_manager.execute(
-                    f"rm -rf {quoted_dir}",
-                    timeout=30
-                )
+                self._ssh_manager.execute(f"rm -rf {quoted_dir}", timeout=30)
                 self.log_message.emit(f"Cleaned up remote directory: {self._remote_temp_dir}")
             except Exception as e:
                 self.log_message.emit(f"Warning: Could not clean up remote directory: {e}")
@@ -453,7 +410,7 @@ class RemoteRunner(QThread):
                     if len(parts) > 1:
                         remaining = parts[1].strip()
                         if remaining:
-                            var_name = remaining.split()[0].strip('.:,')
+                            var_name = remaining.split()[0].strip(".:,")
                             if var_name and len(var_name) > 2:
                                 self._current_variable = var_name
                                 var = var_name
@@ -462,9 +419,9 @@ class RemoteRunner(QThread):
         # Detect reference/simulation source being processed
         if "ref_source" in line_lower or "reference" in line_lower or " ref:" in line_lower:
             if " ref:" in line:
-                match = re.search(r'[-\s]ref:\s*(\S+)', line)
+                match = re.search(r"[-\s]ref:\s*(\S+)", line)
                 if match:
-                    self._current_ref = match.group(1).strip(',:')
+                    self._current_ref = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -472,9 +429,9 @@ class RemoteRunner(QThread):
 
         if "sim_source" in line_lower or "simulation" in line_lower or " sim:" in line_lower:
             if " sim:" in line:
-                match = re.search(r'[-\s]sim:\s*(\S+)', line)
+                match = re.search(r"[-\s]sim:\s*(\S+)", line)
                 if match:
-                    self._current_sim = match.group(1).strip(',:')
+                    self._current_sim = match.group(1).strip(",:")
             else:
                 parts = line.split(":")
                 if len(parts) > 1:
@@ -486,7 +443,7 @@ class RemoteRunner(QThread):
         elif "comparison" in line_lower or "groupby" in line_lower:
             stage = "Comparison"
             if "done running" in line_lower and "comparison" in line_lower:
-                match = re.search(r'done running\s+(\w+)\s+comparison', line_lower)
+                match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
                 if match:
                     comp_name = match.group(1)
                     if comp_name not in self._completed_comparison_tasks:
@@ -505,7 +462,9 @@ class RemoteRunner(QThread):
 
         # Groupby task completion
         for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-            if groupby_type in line_lower and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
+            if groupby_type in line_lower and (
+                "completed" in line_lower or "finished" in line_lower or "done" in line_lower
+            ):
                 task_key = (self._current_variable, groupby_type)
                 if task_key not in self._completed_groupby_tasks:
                     self._completed_groupby_tasks.add(task_key)
@@ -520,14 +479,16 @@ class RemoteRunner(QThread):
         # Calculate progress
         if self._total_tasks > 0:
             total_completed = (
-                len(self._completed_eval_tasks) +
-                len(self._completed_groupby_tasks) +
-                len(self._completed_comparison_tasks)
+                len(self._completed_eval_tasks)
+                + len(self._completed_groupby_tasks)
+                + len(self._completed_comparison_tasks)
             )
             task_progress = (total_completed / max(1, self._total_tasks)) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + task_progress, self.PROGRESS_MAX)
         elif self._num_comparisons > 0 and len(self._completed_comparison_tasks) > 0:
-            comparison_progress = (len(self._completed_comparison_tasks) / max(1, self._num_comparisons)) * self.PROGRESS_WORK
+            comparison_progress = (
+                len(self._completed_comparison_tasks) / max(1, self._num_comparisons)
+            ) * self.PROGRESS_WORK
             current_progress = min(self.PROGRESS_INIT + comparison_progress, self.PROGRESS_MAX)
         elif self._num_variables > 0:
             completed_vars = len(set(t[0] for t in self._completed_eval_tasks if t[0]))
@@ -556,7 +517,7 @@ class RemoteRunner(QThread):
         num_comparisons: int,
         do_evaluation: bool = True,
         do_comparison: bool = False,
-        do_statistics: bool = False
+        do_statistics: bool = False,
     ):
         """Set detailed task counts for accurate progress calculation.
 
@@ -597,24 +558,18 @@ class RemoteRunner(QThread):
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
 
-    def _emit_progress(
-        self,
-        status: RunnerStatus,
-        progress: float,
-        task: str,
-        variable: str,
-        stage: str,
-        message: str
-    ):
+    def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
         """Emit progress signal."""
-        self.progress_updated.emit(RunnerProgress(
-            status=status,
-            progress=progress,
-            current_task=task,
-            current_variable=variable,
-            current_stage=stage,
-            message=message
-        ))
+        self.progress_updated.emit(
+            RunnerProgress(
+                status=status,
+                progress=progress,
+                current_task=task,
+                current_variable=variable,
+                current_stage=stage,
+                message=message,
+            )
+        )
 
     def stop(self):
         """Request stop (thread-safe)."""

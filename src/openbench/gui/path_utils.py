@@ -24,21 +24,21 @@ def is_cross_platform_path(path: str) -> bool:
     if not path:
         return False
 
-    is_windows = sys.platform == 'win32'
+    is_windows = sys.platform == "win32"
 
     # On Windows, check for Unix-style paths
     if is_windows:
         # Unix absolute path (starts with / but not UNC path //)
-        if path.startswith('/') and not path.startswith('//'):
+        if path.startswith("/") and not path.startswith("//"):
             return True
 
     # On Unix/Mac, check for Windows-style paths
     else:
         # Windows drive letter (e.g., C:\ or C:/)
-        if len(path) >= 2 and path[1] == ':':
+        if len(path) >= 2 and path[1] == ":":
             return True
         # Windows backslash paths
-        if '\\' in path and not path.startswith('/'):
+        if "\\" in path and not path.startswith("/"):
             return True
 
     return False
@@ -58,7 +58,7 @@ def to_posix_path(path: str) -> str:
     """
     if not path:
         return ""
-    return path.replace('\\', '/')
+    return path.replace("\\", "/")
 
 
 def remote_join(*parts) -> str:
@@ -78,13 +78,13 @@ def remote_join(*parts) -> str:
     for i, part in enumerate(parts):
         if not part:
             continue
-        part = str(part).replace('\\', '/')
+        part = str(part).replace("\\", "/")
         if i == 0:
             # Keep leading slash for absolute paths
-            clean_parts.append(part.rstrip('/'))
+            clean_parts.append(part.rstrip("/"))
         else:
-            clean_parts.append(part.strip('/'))
-    return '/'.join(clean_parts)
+            clean_parts.append(part.strip("/"))
+    return "/".join(clean_parts)
 
 
 def remote_dirname(path: str) -> str:
@@ -101,10 +101,10 @@ def remote_dirname(path: str) -> str:
     """
     if not path:
         return ""
-    path = to_posix_path(path).rstrip('/')
-    if '/' not in path:
+    path = to_posix_path(path).rstrip("/")
+    if "/" not in path:
         return ""
-    return '/'.join(path.split('/')[:-1]) or '/'
+    return "/".join(path.split("/")[:-1]) or "/"
 
 
 def remote_basename(path: str) -> str:
@@ -121,8 +121,8 @@ def remote_basename(path: str) -> str:
     """
     if not path:
         return ""
-    path = to_posix_path(path).rstrip('/')
-    return path.split('/')[-1]
+    path = to_posix_path(path).rstrip("/")
+    return path.split("/")[-1]
 
 
 def get_openbench_root() -> str:
@@ -137,7 +137,7 @@ def get_openbench_root() -> str:
         home_dir = os.path.expanduser("~")
         config_file = os.path.join(home_dir, ".openbench_wizard", "config.txt")
         if os.path.exists(config_file):
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 path = f.read().strip()
                 if path and os.path.exists(path):
                     return os.path.normpath(path)
@@ -214,10 +214,10 @@ def normalize_path_separators(path: str) -> str:
         return ""
 
     # Replace both types of separators with the current platform's separator
-    if os.sep == '/':
-        return path.replace('\\', '/')
+    if os.sep == "/":
+        return path.replace("\\", "/")
     else:
-        return path.replace('/', '\\')
+        return path.replace("/", "\\")
 
 
 def convert_cross_platform_path(path: str, openbench_root: Optional[str] = None) -> str:
@@ -245,14 +245,14 @@ def convert_cross_platform_path(path: str, openbench_root: Optional[str] = None)
     if openbench_root is None:
         openbench_root = get_openbench_root()
 
-    is_windows = sys.platform == 'win32'
+    is_windows = sys.platform == "win32"
 
     # Detect Linux path on Windows (starts with / but no drive letter)
-    if is_windows and path.startswith('/') and not path.startswith('//'):
+    if is_windows and path.startswith("/") and not path.startswith("//"):
         return _convert_linux_to_windows(path, openbench_root)
 
     # Detect Windows path on Linux/Mac (has drive letter like C:\ or C:/)
-    if not is_windows and len(path) >= 2 and path[1] == ':':
+    if not is_windows and len(path) >= 2 and path[1] == ":":
         return _convert_windows_to_linux(path, openbench_root)
 
     return path
@@ -261,16 +261,16 @@ def convert_cross_platform_path(path: str, openbench_root: Optional[str] = None)
 def _convert_linux_to_windows(linux_path: str, openbench_root: str) -> str:
     """Convert a Linux path to Windows path by finding relative portion."""
     # Normalize separators in the linux path for searching
-    search_path = linux_path.replace('\\', '/')
+    search_path = linux_path.replace("\\", "/")
 
     # Common markers that indicate OpenBench structure
     markers = [
-        '/OpenBench/',
-        '/openbench/',
-        '/nml/nml-yaml/',
-        '/nml/nml-Fortran/',
-        '/output/',
-        '/Mod_variables_definition/',
+        "/OpenBench/",
+        "/openbench/",
+        "/nml/nml-yaml/",
+        "/nml/nml-Fortran/",
+        "/output/",
+        "/Mod_variables_definition/",
     ]
 
     for marker in markers:
@@ -278,68 +278,68 @@ def _convert_linux_to_windows(linux_path: str, openbench_root: str) -> str:
         lower_marker = marker.lower()
         if lower_marker in lower_search:
             # Extract the relative path after the marker's parent
-            if lower_marker == '/openbench/':
+            if lower_marker == "/openbench/":
                 # Get everything after OpenBench/
-                idx = lower_search.find('/openbench/')
-                relative = search_path[idx + len('/openbench/'):]
+                idx = lower_search.find("/openbench/")
+                relative = search_path[idx + len("/openbench/") :]
             else:
                 # For other markers, find OpenBench root first
-                idx = lower_search.find('/openbench/')
+                idx = lower_search.find("/openbench/")
                 if idx >= 0:
-                    relative = search_path[idx + len('/openbench/'):]
+                    relative = search_path[idx + len("/openbench/") :]
                 else:
                     # Just use the marker position
                     idx = lower_search.find(lower_marker)
-                    relative = search_path[idx + 1:]  # Skip leading /
+                    relative = search_path[idx + 1 :]  # Skip leading /
 
             # Build Windows path - normalize all separators to backslash
             if relative:
-                relative = relative.replace('/', '\\')
+                relative = relative.replace("/", "\\")
                 result = os.path.join(openbench_root, relative)
-                return result.replace('/', '\\')
+                return result.replace("/", "\\")
 
     # If no marker found, just normalize separators
-    return linux_path.replace('/', '\\')
+    return linux_path.replace("/", "\\")
 
 
 def _convert_windows_to_linux(windows_path: str, openbench_root: str) -> str:
     """Convert a Windows path to Linux path by finding relative portion."""
     # Normalize separators
-    search_path = windows_path.replace('\\', '/')
+    search_path = windows_path.replace("\\", "/")
 
     # Common markers
     markers = [
-        '/OpenBench/',
-        '/openbench/',
-        '/nml/nml-yaml/',
-        '/nml/nml-Fortran/',
-        '/output/',
-        '/Mod_variables_definition/',
+        "/OpenBench/",
+        "/openbench/",
+        "/nml/nml-yaml/",
+        "/nml/nml-Fortran/",
+        "/output/",
+        "/Mod_variables_definition/",
     ]
 
     for marker in markers:
         lower_search = search_path.lower()
         lower_marker = marker.lower()
         if lower_marker in lower_search:
-            if lower_marker == '/openbench/':
-                idx = lower_search.find('/openbench/')
-                relative = search_path[idx + len('/openbench/'):]
+            if lower_marker == "/openbench/":
+                idx = lower_search.find("/openbench/")
+                relative = search_path[idx + len("/openbench/") :]
             else:
-                idx = lower_search.find('/openbench/')
+                idx = lower_search.find("/openbench/")
                 if idx >= 0:
-                    relative = search_path[idx + len('/openbench/'):]
+                    relative = search_path[idx + len("/openbench/") :]
                 else:
                     idx = lower_search.find(lower_marker)
-                    relative = search_path[idx + 1:]
+                    relative = search_path[idx + 1 :]
 
             # Build Linux path - normalize all separators to forward slash
             if relative:
-                relative = relative.replace('\\', '/')
+                relative = relative.replace("\\", "/")
                 result = os.path.join(openbench_root, relative)
-                return result.replace('\\', '/')
+                return result.replace("\\", "/")
 
     # If no marker found, just normalize separators
-    return windows_path.replace('\\', '/')
+    return windows_path.replace("\\", "/")
 
 
 def validate_path(path: str, path_type: str = "file", must_exist: bool = True) -> Tuple[bool, str]:
@@ -378,8 +378,12 @@ def validate_path(path: str, path_type: str = "file", must_exist: bool = True) -
     return True, ""
 
 
-def convert_paths_in_dict(data: dict, base_dir: Optional[str] = None, path_keys: Optional[list] = None,
-                          all_values_are_paths_keys: Optional[list] = None) -> dict:
+def convert_paths_in_dict(
+    data: dict,
+    base_dir: Optional[str] = None,
+    path_keys: Optional[list] = None,
+    all_values_are_paths_keys: Optional[list] = None,
+) -> dict:
     """
     Recursively convert all path values in a dictionary to absolute paths.
 
@@ -395,9 +399,18 @@ def convert_paths_in_dict(data: dict, base_dir: Optional[str] = None, path_keys:
     """
     if path_keys is None:
         path_keys = [
-            "root_dir", "basedir", "fulllist", "model_namelist",
-            "reference_nml", "simulation_nml", "statistics_nml", "figure_nml",
-            "def_nml_path", "data_path", "file_path", "output_dir"
+            "root_dir",
+            "basedir",
+            "fulllist",
+            "model_namelist",
+            "reference_nml",
+            "simulation_nml",
+            "statistics_nml",
+            "figure_nml",
+            "def_nml_path",
+            "data_path",
+            "file_path",
+            "output_dir",
         ]
 
     if all_values_are_paths_keys is None:
@@ -411,14 +424,15 @@ def convert_paths_in_dict(data: dict, base_dir: Optional[str] = None, path_keys:
         # Special handling for sections where ALL values are paths (like def_nml)
         if key in all_values_are_paths_keys and isinstance(value, dict):
             result[key] = {
-                k: to_absolute_path(v, base_dir) if isinstance(v, str) and v else v
-                for k, v in value.items()
+                k: to_absolute_path(v, base_dir) if isinstance(v, str) and v else v for k, v in value.items()
             }
         elif isinstance(value, dict):
             result[key] = convert_paths_in_dict(value, base_dir, path_keys, all_values_are_paths_keys)
         elif isinstance(value, list):
             result[key] = [
-                convert_paths_in_dict(item, base_dir, path_keys, all_values_are_paths_keys) if isinstance(item, dict) else item
+                convert_paths_in_dict(item, base_dir, path_keys, all_values_are_paths_keys)
+                if isinstance(item, dict)
+                else item
                 for item in value
             ]
         elif isinstance(value, str) and key in path_keys and value:
@@ -429,8 +443,9 @@ def convert_paths_in_dict(data: dict, base_dir: Optional[str] = None, path_keys:
     return result
 
 
-def validate_paths_in_dict(data: dict, path_keys: Optional[list] = None,
-                          all_values_are_paths_keys: Optional[list] = None) -> list:
+def validate_paths_in_dict(
+    data: dict, path_keys: Optional[list] = None, all_values_are_paths_keys: Optional[list] = None
+) -> list:
     """
     Validate all paths in a dictionary.
 
@@ -445,8 +460,14 @@ def validate_paths_in_dict(data: dict, path_keys: Optional[list] = None,
     """
     if path_keys is None:
         path_keys = [
-            "root_dir", "basedir", "fulllist", "model_namelist",
-            "reference_nml", "simulation_nml", "statistics_nml", "figure_nml"
+            "root_dir",
+            "basedir",
+            "fulllist",
+            "model_namelist",
+            "reference_nml",
+            "simulation_nml",
+            "statistics_nml",
+            "figure_nml",
         ]
 
     if all_values_are_paths_keys is None:

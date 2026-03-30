@@ -5,13 +5,8 @@ YAML preview widget with syntax highlighting.
 
 import re
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QPlainTextEdit, QHBoxLayout,
-    QPushButton, QApplication
-)
-from PySide6.QtGui import (
-    QSyntaxHighlighter, QTextCharFormat, QColor, QFont
-)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QHBoxLayout, QPushButton, QApplication
+from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 
 class YamlHighlighter(QSyntaxHighlighter):
@@ -54,18 +49,18 @@ class YamlHighlighter(QSyntaxHighlighter):
         """Setup highlighting rules."""
         self.rules = [
             # Comments
-            (r'#.*$', self.comment_format),
+            (r"#.*$", self.comment_format),
             # Keys (word followed by colon)
-            (r'^[\s]*[\w_]+(?=\s*:)', self.key_format),
+            (r"^[\s]*[\w_]+(?=\s*:)", self.key_format),
             # Quoted strings
             (r'"[^"]*"', self.string_format),
             (r"'[^']*'", self.string_format),
             # Booleans
-            (r'\b(true|false|True|False|yes|no|Yes|No)\b', self.bool_format),
+            (r"\b(true|false|True|False|yes|no|Yes|No)\b", self.bool_format),
             # Numbers
-            (r'\b-?\d+\.?\d*\b', self.number_format),
+            (r"\b-?\d+\.?\d*\b", self.number_format),
             # List items
-            (r'^\s*-\s', self.list_format),
+            (r"^\s*-\s", self.list_format),
         ]
 
     def highlightBlock(self, text: str):

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 def stat_resample(self, data, time):
     """
     Resample the input data.

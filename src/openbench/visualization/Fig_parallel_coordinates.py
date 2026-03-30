@@ -25,13 +25,13 @@ def _read_comparison_file(file):
     file_to_read = file
 
     if not os.path.exists(file):
-        if file.endswith('.csv'):
-            alt_file = file[:-4] + '.txt'
+        if file.endswith(".csv"):
+            alt_file = file[:-4] + ".txt"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
-        elif file.endswith('.txt'):
-            alt_file = file[:-4] + '.csv'
+        elif file.endswith(".txt"):
+            alt_file = file[:-4] + ".csv"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
@@ -39,17 +39,17 @@ def _read_comparison_file(file):
     if not os.path.exists(file_to_read):
         raise FileNotFoundError(f"Neither {file} nor alternative extension found")
 
-    with open(file_to_read, 'r') as f:
+    with open(file_to_read, "r") as f:
         first_line = f.readline()
 
-    sep = '\t' if '\t' in first_line else ','
+    sep = "\t" if "\t" in first_line else ","
     df = pd.read_csv(file_to_read, sep=sep, header=0)
     # Remove index name to prevent it from appearing in visualizations
     df.index.name = None
     return df
 
-def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics,
-                                                   option):
+
+def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics, option):
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -58,38 +58,40 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     #                                                                                  #
     # ----------------------------------------------------------------------------------#
     # Set figure size
-    font = {'family': option['font']}
-    matplotlib.rc('font', **font)
+    font = {"family": option["font"]}
+    matplotlib.rc("font", **font)
 
-    params = {'backend': 'ps',
-              'axes.linewidth': option['axes_linewidth'],
-              'font.size': 15,
-              'xtick.labelsize': option['xticksize'],
-              'xtick.direction': 'out',
-              'ytick.labelsize': option['yticksize'],
-              'ytick.direction': 'out',
-              'savefig.bbox': 'tight',
-              'axes.unicode_minus': False,
-              'text.usetex': False}
+    params = {
+        "backend": "ps",
+        "axes.linewidth": option["axes_linewidth"],
+        "font.size": 15,
+        "xtick.labelsize": option["xticksize"],
+        "xtick.direction": "out",
+        "ytick.labelsize": option["yticksize"],
+        "ytick.direction": "out",
+        "savefig.bbox": "tight",
+        "axes.unicode_minus": False,
+        "text.usetex": False,
+    }
     rcParams.update(params)
     # Set figure size
-    figsize = (option['x_wise'], option['y_wise'])
+    figsize = (option["x_wise"], option["y_wise"])
 
     # Read the data from the file with fallback and auto-detection
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
-    evaluation_items = df['Item'].unique()
+    evaluation_items = df["Item"].unique()
     # Get unique `Reference` values for each `Item` and store them in `item_references`.
-    item_references = df.groupby('Item')['Reference'].unique()
+    item_references = df.groupby("Item")["Reference"].unique()
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
     # Specify the scores to be plotted
 
     # Iterate over each evaluation item
-    option['situation'] = 1
-    if not option['set_legend']:
+    option["situation"] = 1
+    if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.15)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
@@ -99,10 +101,10 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         # Iterate over each reference
         for ref_source in references:
             # Select rows where 'Item' matches the evaluation item and 'Reference' matches the reference
-            df_selected = df.loc[(df['Item'] == evaluation_item) & (df['Reference'] == ref_source)]
+            df_selected = df.loc[(df["Item"] == evaluation_item) & (df["Reference"] == ref_source)]
 
             # Get the model names
-            model_names = df_selected['Simulation'].values
+            model_names = df_selected["Simulation"].values
 
             # Iterate over each score
             # Select the columns with the names of the score
@@ -110,36 +112,41 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
 
             # Create a new figure
             try:
-            # Create the parallel coordinate plot
-                fig, ax = parallel_coordinate_plot(data, list(scores), model_names,
-                                                   models_to_highlight=model_names,
-                                                   models_to_highlight_by_line=option["models_to_highlight_by_line"],
-                                                   models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
-                                                   debug=False,
-                                                   figsize=figsize,
-                                                   colormap=option['cmap'],
-                                                   xtick_labelsize=option['xticksize'],
-                                                   ytick_labelsize=option['yticksize'],
-                                                   legend_off=option["legend_off"],
-                                                   legend_ncol=option["legend_ncol"],
-                                                   legend_bbox_to_anchor=legend_bbox_to_anchor,
-                                                   legend_loc=option["legend_loc"],
-                                                   legend_fontsize=option["fontsize"],
-                                                   option=option,
-                                                   )
-                ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
-                ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
-                ax.set_title(option['title'], fontsize=option['title_size'])
+                # Create the parallel coordinate plot
+                fig, ax = parallel_coordinate_plot(
+                    data,
+                    list(scores),
+                    model_names,
+                    models_to_highlight=model_names,
+                    models_to_highlight_by_line=option["models_to_highlight_by_line"],
+                    models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                    debug=False,
+                    figsize=figsize,
+                    colormap=option["cmap"],
+                    xtick_labelsize=option["xticksize"],
+                    ytick_labelsize=option["yticksize"],
+                    legend_off=option["legend_off"],
+                    legend_ncol=option["legend_ncol"],
+                    legend_bbox_to_anchor=legend_bbox_to_anchor,
+                    legend_loc=option["legend_loc"],
+                    legend_fontsize=option["fontsize"],
+                    option=option,
+                )
+                ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
+                ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
+                ax.set_title(option["title"], fontsize=option["title_size"])
                 # Save the plot
 
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_scores_{evaluation_item}_{ref_source}.{option['saving_format']}"
-                fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                fig.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
             except:
                 logging.error(f"Error in {evaluation_item} - {ref_source}, Scores contains Na  (Removing)")
 
     # -------第二种情况：多个item，多个模型，一个score，每幅图一个score
-    option['situation'] = 2
-    if not option['set_legend']:
+    option["situation"] = 2
+    if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.25)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
@@ -147,16 +154,16 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = filtered_df['Item'].unique()
+    unique_items = filtered_df["Item"].unique()
 
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
 
     # Specify the scores to be plotted
     # scores = sco['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df['Reference']))
+    all_combinations = list(itertools.product(*filtered_df["Reference"]))
 
     # Iterate over each score
     for score in scores:
@@ -165,7 +172,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
-                mask |= (df['Item'] == item) & (df['Reference'] == item_combination[i])
+                mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
@@ -180,10 +187,10 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Iterate over each simulation
             for sim_source in sim_sources:
                 # Select rows where 'Simulation' matches the current simulation
-                df_selected = filtered_df.loc[filtered_df['Simulation'] == sim_source]
+                df_selected = filtered_df.loc[filtered_df["Simulation"] == sim_source]
 
                 # Extract the score values for each item in the current simulation
-                score_values = df_selected.set_index('Item')[score].reindex(unique_items).values.reshape(1, -1)
+                score_values = df_selected.set_index("Item")[score].reindex(unique_items).values.reshape(1, -1)
                 data_list.append(score_values)
                 model_names.append(sim_source)
 
@@ -192,34 +199,40 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
 
             # Create the parallel coordinate plot
             try:
-                fig, ax = parallel_coordinate_plot(data, unique_items, model_names,
-                                                   models_to_highlight=model_names,
-                                                   models_to_highlight_by_line=option["models_to_highlight_by_line"],
-                                                   models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
-                                                   debug=False,
-                                                   figsize=figsize,
-                                                   colormap=option['cmap'],
-                                                   xtick_labelsize=option['xticksize'],
-                                                   ytick_labelsize=option['yticksize'],
-                                                   legend_off=option["legend_off"],
-                                                   legend_ncol=option["legend_ncol"],
-                                                   legend_bbox_to_anchor=legend_bbox_to_anchor,
-                                                   legend_loc=option["legend_loc"],
-                                                   legend_fontsize=option["fontsize"],
-                                                   option=option, )
+                fig, ax = parallel_coordinate_plot(
+                    data,
+                    unique_items,
+                    model_names,
+                    models_to_highlight=model_names,
+                    models_to_highlight_by_line=option["models_to_highlight_by_line"],
+                    models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                    debug=False,
+                    figsize=figsize,
+                    colormap=option["cmap"],
+                    xtick_labelsize=option["xticksize"],
+                    ytick_labelsize=option["yticksize"],
+                    legend_off=option["legend_off"],
+                    legend_ncol=option["legend_ncol"],
+                    legend_bbox_to_anchor=legend_bbox_to_anchor,
+                    legend_loc=option["legend_loc"],
+                    legend_fontsize=option["fontsize"],
+                    option=option,
+                )
 
                 # Set the title of the plot
-                title = option['title']
+                title = option["title"]
                 ypad = 0
-                if option['title'] == '':
+                if option["title"] == "":
                     title = f"Parallel Coordinates Plot - {score.replace('_', ' ')} \n References: {', '.join(item_combination).replace('_', ' ')}"
                     ypad = 10
-                ax.set_title(title, fontsize=option['title_size'], pad=ypad)
-                ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
-                ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
+                ax.set_title(title, fontsize=option["title_size"], pad=ypad)
+                ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
+                ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 # Save the plot
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}.{option['saving_format']}"
-                fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                fig.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
             except:
                 logging.error(f"Error in {score} - {item_combination} ")
     # ------------in the end of the function----------------
@@ -228,8 +241,8 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # interate over each metric item
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Read the data from the file
-    option['situation'] = 1
-    if not option['set_legend']:
+    option["situation"] = 1
+    if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.15)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
@@ -238,11 +251,11 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     df = Convert_Type.convert_Frame(df)
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
-    evaluation_items = df['Item'].unique()
+    evaluation_items = df["Item"].unique()
     # Get unique `Reference` values for each `Item` and store them in `item_references`.
-    item_references = df.groupby('Item')['Reference'].unique()
+    item_references = df.groupby("Item")["Reference"].unique()
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
     # Specify the scores to be plotted
 
     # Iterate over each evaluation item
@@ -252,10 +265,10 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         # Iterate over each reference
         for ref_source in references:
             # Select rows where 'Item' matches the evaluation item and 'Reference' matches the reference
-            df_selected = df.loc[(df['Item'] == evaluation_item) & (df['Reference'] == ref_source)]
+            df_selected = df.loc[(df["Item"] == evaluation_item) & (df["Reference"] == ref_source)]
 
             # Get the model names
-            model_names = df_selected['Simulation'].values
+            model_names = df_selected["Simulation"].values
 
             # Iterate over each score
             # Select the columns with the names of the score
@@ -264,34 +277,40 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 plt.subplots(figsize=figsize)
 
                 # # Create the parallel coordinate plot
-                fig, ax = parallel_coordinate_plot(data, list(metrics), model_names,
-                                                   models_to_highlight=model_names,
-                                                   models_to_highlight_by_line=option["models_to_highlight_by_line"],
-                                                   models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
-                                                   debug=False,
-                                                   figsize=figsize,
-                                                   colormap=option['cmap'],
-                                                   xtick_labelsize=option['xticksize'],
-                                                   ytick_labelsize=option['yticksize'],
-                                                   legend_off=option["legend_off"],
-                                                   legend_ncol=option["legend_ncol"],
-                                                   legend_bbox_to_anchor=legend_bbox_to_anchor,
-                                                   legend_loc=option["legend_loc"],
-                                                   legend_fontsize=option["fontsize"],
-                                                   option=option, )
+                fig, ax = parallel_coordinate_plot(
+                    data,
+                    list(metrics),
+                    model_names,
+                    models_to_highlight=model_names,
+                    models_to_highlight_by_line=option["models_to_highlight_by_line"],
+                    models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                    debug=False,
+                    figsize=figsize,
+                    colormap=option["cmap"],
+                    xtick_labelsize=option["xticksize"],
+                    ytick_labelsize=option["yticksize"],
+                    legend_off=option["legend_off"],
+                    legend_ncol=option["legend_ncol"],
+                    legend_bbox_to_anchor=legend_bbox_to_anchor,
+                    legend_loc=option["legend_loc"],
+                    legend_fontsize=option["fontsize"],
+                    option=option,
+                )
 
                 # Save the plot
-                ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
-                ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
-                ax.set_title(option['title'], fontsize=option['title_size'])
+                ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
+                ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
+                ax.set_title(option["title"], fontsize=option["title_size"])
 
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_metrics_{evaluation_item}_{ref_source}.{option['saving_format']}"
-                fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                fig.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
             except:
                 logging.error(f"Error in {evaluation_item} - {ref_source}, metrics contains Nan (Removing) ")
 
-    option['situation'] = 2
-    if not option['set_legend']:
+    option["situation"] = 2
+    if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.25)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
@@ -304,16 +323,16 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = filtered_df['Item'].unique()
+    unique_items = filtered_df["Item"].unique()
 
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
 
     # Specify the scores to be plotted
     # scores = ['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df['Reference']))
+    all_combinations = list(itertools.product(*filtered_df["Reference"]))
 
     # Iterate over each metric
     for metric in metrics:
@@ -322,7 +341,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
-                mask |= (df['Item'] == item) & (df['Reference'] == item_combination[i])
+                mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
@@ -337,10 +356,10 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Iterate over each simulation
             for sim_source in sim_sources:
                 # Select rows where 'Simulation' matches the current simulation
-                df_selected = filtered_df.loc[filtered_df['Simulation'] == sim_source]
+                df_selected = filtered_df.loc[filtered_df["Simulation"] == sim_source]
 
                 # Extract the score values for each item in the current simulation
-                metric_values = df_selected.set_index('Item')[metric].reindex(unique_items).values.reshape(1, -1)
+                metric_values = df_selected.set_index("Item")[metric].reindex(unique_items).values.reshape(1, -1)
                 data_list.append(metric_values)
                 model_names.append(sim_source)
 
@@ -348,75 +367,74 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             data = np.concatenate(data_list, axis=0)
             try:
                 # Create the parallel coordinate plot
-                fig, ax = parallel_coordinate_plot(data, unique_items, model_names,
-                                                   models_to_highlight=model_names,
-                                                   models_to_highlight_by_line=option["models_to_highlight_by_line"],
-                                                   models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
-                                                   debug=False,
-                                                   figsize=figsize,
-                                                   colormap=option['cmap'],
-                                                   xtick_labelsize=option['xticksize'],
-                                                   ytick_labelsize=option['yticksize'],
-                                                   legend_off=option["legend_off"],
-                                                   legend_ncol=option["legend_ncol"],
-                                                   legend_bbox_to_anchor=legend_bbox_to_anchor,
-                                                   legend_loc=option["legend_loc"],
-                                                   legend_fontsize=option["fontsize"],
-                                                   option=option,
-                                                   )
+                fig, ax = parallel_coordinate_plot(
+                    data,
+                    unique_items,
+                    model_names,
+                    models_to_highlight=model_names,
+                    models_to_highlight_by_line=option["models_to_highlight_by_line"],
+                    models_to_highlight_markers_size=option["models_to_highlight_markers_size"],
+                    debug=False,
+                    figsize=figsize,
+                    colormap=option["cmap"],
+                    xtick_labelsize=option["xticksize"],
+                    ytick_labelsize=option["yticksize"],
+                    legend_off=option["legend_off"],
+                    legend_ncol=option["legend_ncol"],
+                    legend_bbox_to_anchor=legend_bbox_to_anchor,
+                    legend_loc=option["legend_loc"],
+                    legend_fontsize=option["fontsize"],
+                    option=option,
+                )
 
                 # Set the title of the plot
-                title = option['title']
+                title = option["title"]
                 ypad = 0
-                if option['title'] == '':
+                if option["title"] == "":
                     title = f"Parallel Coordinates Plot - {metric.replace('_', ' ')} \n References: {', '.join(item_combination).replace('_', ' ')}"
                     ypad = 10
-                ax.set_title(title, fontsize=option['title_size'], pad=ypad)
-                ax.set_ylabel(option['yticklabel'], fontsize=option['yticksize'] + 1)
-                ax.set_xlabel(option['xticklabel'], fontsize=option['xticksize'] + 1)
+                ax.set_title(title, fontsize=option["title_size"], pad=ypad)
+                ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
+                ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 # Save the plot
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{metric}_{'_'.join(item_combination)}.{option['saving_format']}"
-                fig.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                fig.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
             except:
                 logging.error(f"Error in {metric} - {item_combination} -4")
+
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):
     # Quick initial QC
     if data.shape[0] != len(model_names):
         sys.exit(
-            "Error: data.shape[0], "
-            + str(data.shape[0])
-            + ", mismatch to len(model_names), "
-            + str(len(model_names))
+            "Error: data.shape[0], " + str(data.shape[0]) + ", mismatch to len(model_names), " + str(len(model_names))
         )
     if data.shape[1] != len(metric_names):
         sys.exit(
-            "Error: data.shape[1], "
-            + str(data.shape[1])
-            + ", mismatch to len(metric_names), "
-            + str(len(metric_names))
+            "Error: data.shape[1], " + str(data.shape[1]) + ", mismatch to len(metric_names), " + str(len(metric_names))
         )
     if model_names2 is not None:
         # Check: model_names2 should be a subset of model_names
         for model in model_names2:
             if model not in model_names:
                 sys.exit(
-                    "Error: model_names2 should be a subset of model_names, but "
-                    + model
-                    + " is not in model_names"
+                    "Error: model_names2 should be a subset of model_names, but " + model + " is not in model_names"
                 )
     # print("Passed a quick QC")
 
+
 def _data_transform(
-        data,
-        metric_names,
-        model_names,
-        model_names2=None,
-        group1_name="group1",
-        group2_name="group2",
-        vertical_center=None,
-        ymax=None,
-        ymin=None,
+    data,
+    metric_names,
+    model_names,
+    model_names2=None,
+    group1_name="group1",
+    group2_name="group2",
+    vertical_center=None,
+    ymax=None,
+    ymin=None,
 ):
     # Data to plot
     ys = data  # stacked y-axis values
@@ -458,9 +476,7 @@ def _data_transform(
             raise ValueError(f"vertical center {vertical_center} unknown.")
 
         for i in range(0, N):
-            distance_from_middle = max(
-                abs(ymaxs[i] - ymids[i]), abs(ymids[i] - ymins[i])
-            )
+            distance_from_middle = max(abs(ymaxs[i] - ymids[i]), abs(ymids[i] - ymins[i]))
             ymaxs[i] = ymids[i] + distance_from_middle
             ymins[i] = ymids[i] - distance_from_middle
 
@@ -515,13 +531,14 @@ def _data_transform(
 
     return zs, zs_middle, N, ymins, ymaxs, df_stacked, df2_stacked
 
+
 def _to_pd_dataframe(
-        data,
-        metric_names,
-        model_names,
-        model_names2=None,
-        group1_name="group1",
-        group2_name="group2",
+    data,
+    metric_names,
+    model_names,
+    model_names2=None,
+    group1_name="group1",
+    group2_name="group2",
 ):
     # Pandas dataframe for seaborn plotting
     df = pd.DataFrame(data, columns=metric_names, index=model_names)
@@ -529,67 +546,64 @@ def _to_pd_dataframe(
     # df_stacked = df.stack(dropna=False).reset_index()
     # df_stacked = df.stack(dropna=False, future_stack=True).reset_index()
     df_stacked = df.stack(future_stack=True).reset_index()
-    df_stacked = df_stacked.rename(
-        columns={"level_0": "Model", "level_1": "Metric", 0: "value"}
-    )
+    df_stacked = df_stacked.rename(columns={"level_0": "Model", "level_1": "Metric", 0: "value"})
     df_stacked = df_stacked.assign(group=group1_name)
     if model_names2 is not None:
         for model2 in model_names2:
-            df_stacked["group"] = np.where(
-                (df_stacked.Model == model2), group2_name, df_stacked.group
-            )
+            df_stacked["group"] = np.where((df_stacked.Model == model2), group2_name, df_stacked.group)
     return df_stacked
 
+
 def parallel_coordinate_plot(
-        data,
-        metric_names,
-        model_names,
-        models_to_highlight=list(),
-        models_to_highlight_by_line=True,
-        models_to_highlight_colors=None,
-        models_to_highlight_labels=None,
-        models_to_highlight_markers=["s", "o", "^", "*"],
-        models_to_highlight_markers_size=22,
-        fig=None,
-        ax=None,
-        figsize=(15, 5),
-        show_boxplot=False,
-        show_violin=False,
-        violin_colors=("lightgrey", "pink"),
-        violin_label=None,
-        title=None,
-        identify_all_models=True,
-        xtick_labelsize=None,
-        ytick_labelsize=None,
-        colormap="viridis",
-        num_color=20,
-        legend_off=False,
-        legend_ncol=6,
-        legend_bbox_to_anchor=(0.5, -0.14),
-        legend_loc="upper center",
-        legend_fontsize=10,
-        logo_rect=None,
-        logo_off=False,
-        model_names2=None,
-        group1_name="group1",
-        group2_name="group2",
-        comparing_models=None,
-        fill_between_lines=False,
-        fill_between_lines_colors=("red", "green"),
-        arrow_between_lines=False,
-        arrow_between_lines_colors=("red", "green"),
-        arrow_alpha=1,
-        arrow_width=0.05,
-        arrow_linewidth=0,
-        arrow_head_width=0.15,
-        arrow_head_length=0.15,
-        vertical_center=None,
-        vertical_center_line=False,
-        vertical_center_line_label=None,
-        ymax=None,
-        ymin=None,
-        debug=False,
-        option={},
+    data,
+    metric_names,
+    model_names,
+    models_to_highlight=list(),
+    models_to_highlight_by_line=True,
+    models_to_highlight_colors=None,
+    models_to_highlight_labels=None,
+    models_to_highlight_markers=["s", "o", "^", "*"],
+    models_to_highlight_markers_size=22,
+    fig=None,
+    ax=None,
+    figsize=(15, 5),
+    show_boxplot=False,
+    show_violin=False,
+    violin_colors=("lightgrey", "pink"),
+    violin_label=None,
+    title=None,
+    identify_all_models=True,
+    xtick_labelsize=None,
+    ytick_labelsize=None,
+    colormap="viridis",
+    num_color=20,
+    legend_off=False,
+    legend_ncol=6,
+    legend_bbox_to_anchor=(0.5, -0.14),
+    legend_loc="upper center",
+    legend_fontsize=10,
+    logo_rect=None,
+    logo_off=False,
+    model_names2=None,
+    group1_name="group1",
+    group2_name="group2",
+    comparing_models=None,
+    fill_between_lines=False,
+    fill_between_lines_colors=("red", "green"),
+    arrow_between_lines=False,
+    arrow_between_lines_colors=("red", "green"),
+    arrow_alpha=1,
+    arrow_width=0.05,
+    arrow_linewidth=0,
+    arrow_head_width=0.15,
+    arrow_head_length=0.15,
+    vertical_center=None,
+    vertical_center_line=False,
+    vertical_center_line_label=None,
+    ymax=None,
+    ymin=None,
+    debug=False,
+    option={},
 ):
     """
     Parameters
@@ -727,15 +741,11 @@ def parallel_coordinate_plot(
     # Population distribuion on each vertical axis
     if show_boxplot or show_violin:
         y = [zs[:, i] for i in range(N)]
-        y_filtered = [
-            y_i[~np.isnan(y_i)] for y_i in y
-        ]  # Remove NaN value for box/violin plot
+        y_filtered = [y_i[~np.isnan(y_i)] for y_i in y]  # Remove NaN value for box/violin plot
 
         # Box plot
         if show_boxplot:
-            box = ax.boxplot(
-                y_filtered, positions=range(N), patch_artist=True, widths=0.15
-            )
+            box = ax.boxplot(y_filtered, positions=range(N), patch_artist=True, widths=0.15)
             for item in ["boxes", "whiskers", "fliers", "medians", "caps"]:
                 plt.setp(box[item], color="darkgrey")
             plt.setp(box["boxes"], facecolor="None")
@@ -753,9 +763,7 @@ def parallel_coordinate_plot(
                     showextrema=False,
                 )
                 for pc in violin["bodies"]:
-                    if isinstance(violin_colors, tuple) or isinstance(
-                            violin_colors, list
-                    ):
+                    if isinstance(violin_colors, tuple) or isinstance(violin_colors, list):
                         violin_color = violin_colors[0]
                     else:
                         violin_color = violin_colors
@@ -784,8 +792,8 @@ def parallel_coordinate_plot(
 
     colors = [plt.get_cmap(colormap)(c) for c in np.linspace(0, 1, len(model_names) + 1)]
 
-    if 'markers' in option:
-        marker_types = [option['markers']]
+    if "markers" in option:
+        marker_types = [option["markers"]]
         markers = list(flatten([[marker] * len(colors) for marker in marker_types]))
     else:
         marker_types = ["o", "s", "*", "^", "X", "D", "p"]
@@ -807,7 +815,15 @@ def parallel_coordinate_plot(
                 label = model
 
             if models_to_highlight_by_line:
-                ax.plot(range(N), zs[j, :], "-", c=color, label=label, lw=3, markersize=models_to_highlight_markers_size, )
+                ax.plot(
+                    range(N),
+                    zs[j, :],
+                    "-",
+                    c=color,
+                    label=label,
+                    lw=3,
+                    markersize=models_to_highlight_markers_size,
+                )
             else:
                 ax.plot(
                     range(N),
@@ -817,7 +833,7 @@ def parallel_coordinate_plot(
                     c=color,
                     label=label,
                     markersize=models_to_highlight_markers_size,
-                    alpha=option['markersalpha'],
+                    alpha=option["markersalpha"],
                 )
 
             mh_index += 1
@@ -830,7 +846,7 @@ def parallel_coordinate_plot(
                     c=colors[j],
                     label=model,
                     clip_on=False,
-                    markersize=models_to_highlight_markers_size
+                    markersize=models_to_highlight_markers_size,
                 )
 
     if vertical_center_line:
@@ -842,9 +858,7 @@ def parallel_coordinate_plot(
 
     # Compare two models
     if comparing_models is not None:
-        if isinstance(comparing_models, tuple) or (
-                isinstance(comparing_models, list) and len(comparing_models) == 2
-        ):
+        if isinstance(comparing_models, tuple) or (isinstance(comparing_models, list) and len(comparing_models) == 2):
             x = range(N)
             m1 = model_names.index(comparing_models[0])
             m2 = model_names.index(comparing_models[1])
@@ -897,23 +911,25 @@ def parallel_coordinate_plot(
                         zorder=999,
                     )
 
-    if option['situation'] == 2:
-        if 'x_rotation' in option:
+    if option["situation"] == 2:
+        if "x_rotation" in option:
             x_rotation = option["x_rotation"]
         else:
             x_rotation = 0
 
-        if 'x_ha' in option:
-            x_ha = option['x_ha']
+        if "x_ha" in option:
+            x_ha = option["x_ha"]
         else:
-            x_ha = 'center'
+            x_ha = "center"
     else:
         x_rotation = 0
-        x_ha = 'center'
+        x_ha = "center"
 
     ax.set_xlim(-0.5, N - 0.5)
     ax.set_xticks(range(N))
-    ax.set_xticklabels([name.replace('_', ' ') for name in metric_names], fontsize=xtick_labelsize, rotation=x_rotation, ha=x_ha)
+    ax.set_xticklabels(
+        [name.replace("_", " ") for name in metric_names], fontsize=xtick_labelsize, rotation=x_rotation, ha=x_ha
+    )
     ax.tick_params(axis="x", which="major", pad=7)
     ax.spines["right"].set_visible(False)
 

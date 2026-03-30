@@ -17,9 +17,9 @@ def stat_mann_kendall_trend_test(self, data):
         xarray.Dataset: Dataset containing trend test results for each variable and grid point.
     """
     try:
-        significance_level = self.stats_nml['Mann_Kendall_Trend_Test']['significance_level']
+        significance_level = self.stats_nml["Mann_Kendall_Trend_Test"]["significance_level"]
     except:
-        significance_level = self.compare_nml['Mann_Kendall_Trend_Test']['significance_level']
+        significance_level = self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"]
 
     def _apply_mann_kendall(da, significance_level):
         """
@@ -47,19 +47,19 @@ def stat_mann_kendall_trend_test(self, data):
 
         try:
             # Rechunk time dimension to single chunk for apply_ufunc with dask
-            if hasattr(da, 'chunks') and da.chunks is not None:
-                da = da.chunk({'time': -1})
+            if hasattr(da, "chunks") and da.chunks is not None:
+                da = da.chunk({"time": -1})
 
             # Apply the test to each grid point with chunking
             result = xr.apply_ufunc(
                 mk_test,
                 da,
-                input_core_dims=[['time']],
-                output_core_dims=[['mk_params']],
+                input_core_dims=[["time"]],
+                output_core_dims=[["mk_params"]],
                 vectorize=True,
-                dask='parallelized',
+                dask="parallelized",
                 output_dtypes=[float],
-                dask_gufunc_kwargs={'mk_params': 4}
+                dask_gufunc_kwargs={"mk_params": 4},
             )
 
             # Create separate variables for each component
@@ -69,25 +69,22 @@ def stat_mann_kendall_trend_test(self, data):
             tau = result.isel(mk_params=3)
 
             # Create a new Dataset with separate variables
-            ds = xr.Dataset({
-                'trend': trend,
-                'significance': significance,
-                'p_value': p_value,
-                'tau': tau
-            })
+            ds = xr.Dataset({"trend": trend, "significance": significance, "p_value": p_value, "tau": tau})
 
             # Add attributes
-            ds.trend.attrs['long_name'] = 'Mann-Kendall trend'
-            ds.trend.attrs['description'] = 'Trend direction: 1 (increasing), -1 (decreasing), 0 (no trend)'
-            ds.significance.attrs['long_name'] = 'Trend significance'
-            ds.significance.attrs['description'] = f'True if trend is significant at {significance_level} level, False otherwise'
-            ds.p_value.attrs['long_name'] = 'p-value'
-            ds.p_value.attrs['description'] = 'p-value of the Mann-Kendall trend test'
-            ds.tau.attrs['long_name'] = "Kendall's tau statistic"
-            ds.tau.attrs['description'] = "Kendall's tau correlation coefficient"
+            ds.trend.attrs["long_name"] = "Mann-Kendall trend"
+            ds.trend.attrs["description"] = "Trend direction: 1 (increasing), -1 (decreasing), 0 (no trend)"
+            ds.significance.attrs["long_name"] = "Trend significance"
+            ds.significance.attrs["description"] = (
+                f"True if trend is significant at {significance_level} level, False otherwise"
+            )
+            ds.p_value.attrs["long_name"] = "p-value"
+            ds.p_value.attrs["description"] = "p-value of the Mann-Kendall trend test"
+            ds.tau.attrs["long_name"] = "Kendall's tau statistic"
+            ds.tau.attrs["description"] = "Kendall's tau correlation coefficient"
 
-            ds.attrs['statistical_test'] = 'Mann-Kendall trend test (using Kendall\'s tau)'
-            ds.attrs['significance_level'] = significance_level
+            ds.attrs["statistical_test"] = "Mann-Kendall trend test (using Kendall's tau)"
+            ds.attrs["significance_level"] = significance_level
 
             # Clean up intermediate result
             del result
@@ -108,7 +105,7 @@ def stat_mann_kendall_trend_test(self, data):
                 result = result.assign_coords(variable=var)
                 results.append(result)
             # Save the result
-            return xr.concat(results, dim='variable')
+            return xr.concat(results, dim="variable")
         elif isinstance(data, xr.DataArray):
             # If it's a DataArray, apply the test directly
             return _apply_mann_kendall(data, significance_level)

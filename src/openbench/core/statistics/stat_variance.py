@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 def stat_variance(self, data):
     """
     Calculate the variance of the input data.

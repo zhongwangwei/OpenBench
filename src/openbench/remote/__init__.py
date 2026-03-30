@@ -10,6 +10,4 @@ def _check_remote_deps():
     try:
         import paramiko  # noqa: F401
     except ImportError:
-        raise ImportError(
-            "Remote execution requires paramiko. Install with: pip install 'openbench[remote]'"
-        ) from None
+        raise ImportError("Remote execution requires paramiko. Install with: pip install 'openbench[remote]'") from None

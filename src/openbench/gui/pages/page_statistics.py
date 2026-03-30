@@ -8,13 +8,16 @@ from openbench.gui.widgets import CheckboxGroup
 
 
 STATISTICS_ITEMS = {
-    "Basic Statistics": [
-        "Mean", "Median", "Min", "Max", "Sum", "Standard_Deviation"
-    ],
+    "Basic Statistics": ["Mean", "Median", "Min", "Max", "Sum", "Standard_Deviation"],
     "Advanced Statistics": [
-        "Mann_Kendall_Trend_Test", "Correlation", "Functional_Response",
-        "Z_Score", "Hellinger_Distance", "Three_Cornered_Hat",
-        "Partial_Least_Squares_Regression", "ANOVA"
+        "Mann_Kendall_Trend_Test",
+        "Correlation",
+        "Functional_Response",
+        "Z_Score",
+        "Hellinger_Distance",
+        "Three_Cornered_Hat",
+        "Partial_Least_Squares_Regression",
+        "ANOVA",
     ],
 }
 

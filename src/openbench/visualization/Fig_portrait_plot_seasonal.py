@@ -22,13 +22,13 @@ def _read_comparison_file(file):
     file_to_read = file
 
     if not os.path.exists(file):
-        if file.endswith('.csv'):
-            alt_file = file[:-4] + '.txt'
+        if file.endswith(".csv"):
+            alt_file = file[:-4] + ".txt"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
-        elif file.endswith('.txt'):
-            alt_file = file[:-4] + '.csv'
+        elif file.endswith(".txt"):
+            alt_file = file[:-4] + ".csv"
             if os.path.exists(alt_file):
                 logging.info(f"File {file} not found, using {alt_file}")
                 file_to_read = alt_file
@@ -36,33 +36,36 @@ def _read_comparison_file(file):
     if not os.path.exists(file_to_read):
         raise FileNotFoundError(f"Neither {file} nor alternative extension found")
 
-    with open(file_to_read, 'r') as f:
+    with open(file_to_read, "r") as f:
         first_line = f.readline()
 
-    sep = '\t' if '\t' in first_line else ','
+    sep = "\t" if "\t" in first_line else ","
     df = pd.read_csv(file_to_read, sep=sep, header=0)
     # Remove index name to prevent it from appearing in visualizations
     df.index.name = None
     return df
 
+
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
     # Set figure size
-    font = {'family': option['font']}
-    matplotlib.rc('font', **font)
+    font = {"family": option["font"]}
+    matplotlib.rc("font", **font)
 
-    params = {'backend': 'ps',
-              'axes.linewidth': option['axes_linewidth'],
-              'font.size': 15,
-              'xtick.labelsize': option['xtick'],
-              'xtick.direction': 'out',
-              'ytick.labelsize': option['ytick'],
-              'ytick.direction': 'out',
-              'savefig.bbox': 'tight',
-              'axes.unicode_minus': False,
-              'text.usetex': False}
+    params = {
+        "backend": "ps",
+        "axes.linewidth": option["axes_linewidth"],
+        "font.size": 15,
+        "xtick.labelsize": option["xtick"],
+        "xtick.direction": "out",
+        "ytick.labelsize": option["ytick"],
+        "ytick.direction": "out",
+        "savefig.bbox": "tight",
+        "axes.unicode_minus": False,
+        "text.usetex": False,
+    }
     rcParams.update(params)
     # Set figure size
-    figsize = (option['x_wise'], option['y_wise'])
+    figsize = (option["x_wise"], option["y_wise"])
 
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
@@ -78,34 +81,41 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = df['Item'].unique()
+    unique_items = df["Item"].unique()
     # Get unique `Reference` values for each `Item` and store them in `item_references`.
-    item_references = df.groupby('Item')['Reference'].unique()
+    item_references = df.groupby("Item")["Reference"].unique()
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
     # Iterate over each variable and its corresponding references
 
     # Set figure size
-    cbar_label = option['colorbar_label']
-    if option['colorbar_label'] == '':
-        cbar_label = 'Scores'
+    cbar_label = option["colorbar_label"]
+    if option["colorbar_label"] == "":
+        cbar_label = "Scores"
 
-    if option['vmin_max_on']:
-        vmin, vmax = option['vmin'], option['vmax']
+    if option["vmin_max_on"]:
+        vmin, vmax = option["vmin"], option["vmax"]
     else:
         vmin, vmax = 0, 1
 
     cbar_kw = dict(extend="both")
     cbar_option = dict()
-    if not option['colorbar_off']:
-        cbar_kw = dict(extend=option["extend"], orientation=option["colorbar_position"],
-                       )  # shrink=option["colorbar_shrink"], pad=option["colorbar_pad"]
-        cbar_option = dict(colorbar_position_set=option["colorbar_position_set"], )
-        if option['colorbar_position_set']:
-            cbar_option = dict(colorbar_position_set=option["colorbar_position_set"],
-                               colorbar_left=option['colorbar_left'], colorbar_bottom=option['colorbar_bottom'],
-                               colorbar_width=option['colorbar_width'],
-                               colorbar_height=option['colorbar_height'])
+    if not option["colorbar_off"]:
+        cbar_kw = dict(
+            extend=option["extend"],
+            orientation=option["colorbar_position"],
+        )  # shrink=option["colorbar_shrink"], pad=option["colorbar_pad"]
+        cbar_option = dict(
+            colorbar_position_set=option["colorbar_position_set"],
+        )
+        if option["colorbar_position_set"]:
+            cbar_option = dict(
+                colorbar_position_set=option["colorbar_position_set"],
+                colorbar_left=option["colorbar_left"],
+                colorbar_bottom=option["colorbar_bottom"],
+                colorbar_width=option["colorbar_width"],
+                colorbar_height=option["colorbar_height"],
+            )
 
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
@@ -115,68 +125,93 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             data_score = np.zeros((4, len(scores), len(sim_sources)))
 
             # Fill data_score array with corresponding values
-            for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
+            for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, score in enumerate(scores):
                     for j, sim_source in enumerate(sim_sources):
                         try:
-                            data_score[k, i, j] = \
-                                df.loc[(df['Item'] == item) & (df['Reference'] == reference) & (df['Simulation'] == sim_source)][
-                                    f'{score}_{season}'].iloc[0]
+                            data_score[k, i, j] = df.loc[
+                                (df["Item"] == item) & (df["Reference"] == reference) & (df["Simulation"] == sim_source)
+                            ][f"{score}_{season}"].iloc[0]
                         except:
                             data_score[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = [score.replace('_', ' ') for score in scores]
+            yaxis_labels = [score.replace("_", " ") for score in scores]
 
             try:
                 # Create the portrait plot
-                fig, ax, cbar = portrait_plot(data_score,
-                                              xaxis_labels=xaxis_labels,
-                                              yaxis_labels=yaxis_labels,
-                                              cbar_label=cbar_label,
-                                              box_as_square=True,
-                                              vrange=(vmin, vmax),
-                                              figsize=figsize,
-                                              xaxis_fontsize=option['xtick'],
-                                              yaxis_fontsize=option['ytick'],
-                                              colorbar_off=option['colorbar_off'],
-                                              cmap=option['cmap'],
-                                              cmap_bounds=np.linspace(vmin, vmax, 11),
-                                              cbar_kw=cbar_kw,
-                                              cbar_option=cbar_option,
-                                              cbar_label_fontsize=option["colorbar_labelsize"],
-                                              cbar_tick_fontsize=option["fontsize"],
-                                              missing_color='grey',
-                                              legend_on=True,
-                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                              legend_box_size=option["legend_box_size"],
-                                              legend_lw=option["legend_lw"],
-                                              legend_fontsize=option["legend_fontsize"],
-                                              logo_off=True)
+                fig, ax, cbar = portrait_plot(
+                    data_score,
+                    xaxis_labels=xaxis_labels,
+                    yaxis_labels=yaxis_labels,
+                    cbar_label=cbar_label,
+                    box_as_square=True,
+                    vrange=(vmin, vmax),
+                    figsize=figsize,
+                    xaxis_fontsize=option["xtick"],
+                    yaxis_fontsize=option["ytick"],
+                    colorbar_off=option["colorbar_off"],
+                    cmap=option["cmap"],
+                    cmap_bounds=np.linspace(vmin, vmax, 11),
+                    cbar_kw=cbar_kw,
+                    cbar_option=cbar_option,
+                    cbar_label_fontsize=option["colorbar_labelsize"],
+                    cbar_tick_fontsize=option["fontsize"],
+                    missing_color="grey",
+                    legend_on=True,
+                    legend_labels=["DJF", "MAM", "JJA", "SON"],
+                    legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                    legend_box_size=option["legend_box_size"],
+                    legend_lw=option["legend_lw"],
+                    legend_fontsize=option["legend_fontsize"],
+                    logo_off=True,
+                )
 
                 # Rotate x-axis labels for better readability
-                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-                if not option['ylabel']:
-                    ylabel = 'Scores'
-                if not option['xlabel']:
-                    xlabel = 'Simulations'
+                ax.set_xticklabels(
+                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
+                )
+                ax.set_yticklabels(
+                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
+                )
+                ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
+                if not option["ylabel"]:
+                    ylabel = "Scores"
+                if not option["xlabel"]:
+                    xlabel = "Simulations"
 
-                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-                ax.set_title(title, fontsize=option['title_size'])
+                ax.set_ylabel(ylabel, fontsize=option["ytick"] + 1)
+                ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
+                ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f'{item}_{reference}'
-                output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
-                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                filename = f"{item}_{reference}"
+                output_file_path = (
+                    f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
+                )
+                plt.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
                 plt.close()
             except Exception as e:
                 logging.error(f"Error in {item} - {reference}: {e}")
     # delete the variables
-    del df, unique_items, item_references, sim_sources, item, references, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
+    del (
+        df,
+        unique_items,
+        item_references,
+        sim_sources,
+        item,
+        references,
+        data_score,
+        xaxis_labels,
+        yaxis_labels,
+        fig,
+        ax,
+        cbar,
+        filename,
+        output_file_path,
+    )
 
     # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
@@ -189,16 +224,16 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = filtered_df['Item'].unique()
+    unique_items = filtered_df["Item"].unique()
 
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
 
     # Specify the scores to be plotted
     # scores = ['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df['Reference']))
+    all_combinations = list(itertools.product(*filtered_df["Reference"]))
 
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
@@ -209,7 +244,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
-                mask |= (df['Item'] == item) & (df['Reference'] == item_combination[i])
+                mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
@@ -218,70 +253,95 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             data_score = np.zeros((4, len(unique_items), len(sim_sources)))
 
             # Fill data_score array with corresponding values
-            for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
+            for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, uitem in enumerate(unique_items):
                     for j, sim_source in enumerate(sim_sources):
                         try:
-                            data_score[k, i, j] = \
-                                filtered_df.loc[(filtered_df['Item'] == uitem) & (filtered_df['Simulation'] == sim_source)][
-                                    f'{score}_{season}'].iloc[0]
+                            data_score[k, i, j] = filtered_df.loc[
+                                (filtered_df["Item"] == uitem) & (filtered_df["Simulation"] == sim_source)
+                            ][f"{score}_{season}"].iloc[0]
                         except IndexError:
                             data_score[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = [unique_item.replace('_', ' ') for unique_item in unique_items]
-            cbar_label = option['colorbar_label']
+            yaxis_labels = [unique_item.replace("_", " ") for unique_item in unique_items]
+            cbar_label = option["colorbar_label"]
 
-            if option['colorbar_label'] == '':
-                cbar_label = score.replace('_', ' ')
+            if option["colorbar_label"] == "":
+                cbar_label = score.replace("_", " ")
             # Create the portrait plot
             try:
-                fig, ax, cbar = portrait_plot(data_score,
-                                              xaxis_labels=xaxis_labels,
-                                              yaxis_labels=yaxis_labels,
-                                              cbar_label=cbar_label,
-                                              box_as_square=True,
-                                              vrange=(vmin, vmax),
-                                              figsize=figsize,
-                                              xaxis_fontsize=option['xtick'],
-                                              yaxis_fontsize=option['ytick'],
-                                              colorbar_off=option['colorbar_off'],
-                                              cmap=option['cmap'],
-                                              cmap_bounds=np.linspace(vmin, vmax, 11),
-                                              cbar_kw=cbar_kw,
-                                              cbar_option=cbar_option,
-                                              cbar_label_fontsize=option["colorbar_labelsize"],
-                                              cbar_tick_fontsize=option["fontsize"],
-                                              missing_color='grey',
-                                              legend_on=True,
-                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                              legend_box_size=option["legend_box_size"],
-                                              legend_lw=option["legend_lw"],
-                                              legend_fontsize=option["legend_fontsize"],
-                                              logo_off=True)
+                fig, ax, cbar = portrait_plot(
+                    data_score,
+                    xaxis_labels=xaxis_labels,
+                    yaxis_labels=yaxis_labels,
+                    cbar_label=cbar_label,
+                    box_as_square=True,
+                    vrange=(vmin, vmax),
+                    figsize=figsize,
+                    xaxis_fontsize=option["xtick"],
+                    yaxis_fontsize=option["ytick"],
+                    colorbar_off=option["colorbar_off"],
+                    cmap=option["cmap"],
+                    cmap_bounds=np.linspace(vmin, vmax, 11),
+                    cbar_kw=cbar_kw,
+                    cbar_option=cbar_option,
+                    cbar_label_fontsize=option["colorbar_labelsize"],
+                    cbar_tick_fontsize=option["fontsize"],
+                    missing_color="grey",
+                    legend_on=True,
+                    legend_labels=["DJF", "MAM", "JJA", "SON"],
+                    legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                    legend_box_size=option["legend_box_size"],
+                    legend_lw=option["legend_lw"],
+                    legend_fontsize=option["legend_fontsize"],
+                    logo_off=True,
+                )
 
                 # Rotate x-axis labels for better readability
-                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-                if not option['ylabel']:
-                    ylabel = score.replace('_', ' ')
-                if not option['xlabel']:
-                    xlabel = 'Simulations'
-                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-                ax.set_title(title, fontsize=option['title_size'])
+                ax.set_xticklabels(
+                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
+                )
+                ax.set_yticklabels(
+                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
+                )
+                ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
+                if not option["ylabel"]:
+                    ylabel = score.replace("_", " ")
+                if not option["xlabel"]:
+                    xlabel = "Simulations"
+                ax.set_ylabel(ylabel, fontsize=option["ytick"] + 1)
+                ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
+                ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f'{score}_{"_".join(item_combination)}'
+                filename = f"{score}_{'_'.join(item_combination)}"
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                plt.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
                 plt.close()
             except Exception as e:
                 logging.error(f"Error in {score} - {item_combination}: {e}")
     # delete the variables
-    del df, filtered_df, unique_items, sim_sources, all_combinations, score, item_combination, mask, data_score, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
+    del (
+        df,
+        filtered_df,
+        unique_items,
+        sim_sources,
+        all_combinations,
+        score,
+        item_combination,
+        mask,
+        data_score,
+        xaxis_labels,
+        yaxis_labels,
+        fig,
+        ax,
+        cbar,
+        filename,
+        output_file_path,
+    )
 
     # -------------------------------------------------------------------------------------------------------------------
     # end of the function
@@ -295,13 +355,13 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # 第一种：基于单变量，多个模型，多个评估指标的对比
     # -------------------------------------------------------------------------------------------------------------------
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = df['Item'].unique()
+    unique_items = df["Item"].unique()
     # Get unique `Reference` values for each `Item` and store them in `item_references`.
-    item_references = df.groupby('Item')['Reference'].unique()
+    item_references = df.groupby("Item")["Reference"].unique()
     # Specify the evaluation items (metrics) to be plotted
     evaluation_items = metrics
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
     # Iterate over each variable and its corresponding references
@@ -310,13 +370,13 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             #     Initialize data_metric array
             data_metric = np.zeros((4, len(evaluation_items), 1, len(sim_sources)))
             # Fill data_metric array with corresponding values
-            for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
+            for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, metric in enumerate(evaluation_items):
                     for j, sim_source in enumerate(sim_sources):
                         try:
-                            data_metric[k, i, 0, j] = \
-                                df.loc[(df['Item'] == item) & (df['Reference'] == reference) & (df['Simulation'] == sim_source)][
-                                    f'{metric}_{season}'].iloc[0]
+                            data_metric[k, i, 0, j] = df.loc[
+                                (df["Item"] == item) & (df["Reference"] == reference) & (df["Simulation"] == sim_source)
+                            ][f"{metric}_{season}"].iloc[0]
                         except IndexError:
                             data_metric[k, i, 0, j] = np.nan
 
@@ -328,72 +388,99 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             for i, metric in enumerate(metrics):
                 # Set x-axis and y-axis labels
                 xaxis_labels = sim_sources
-                yaxis_labels = [metric.replace('_', ' ')]
+                yaxis_labels = [metric.replace("_", " ")]
 
-                cbar_label = option['colorbar_label']
-                if option['colorbar_label'] == '':
-                    cbar_label = metric.replace('_', ' ')
+                cbar_label = option["colorbar_label"]
+                if option["colorbar_label"] == "":
+                    cbar_label = metric.replace("_", " ")
 
-                cbar_option['colorbar_position_set'] = False
+                cbar_option["colorbar_position_set"] = False
                 # Create the portrait plot
                 try:
-                    fig, ax, cbar = portrait_plot(data_metric[:, i, :],
-                                                  fig=figure,
-                                                  ax=axes[i],
-                                                  xaxis_labels=xaxis_labels,
-                                                  yaxis_labels=yaxis_labels,
-                                                  # cbar_label=cbar_label,
-                                                  box_as_square=True,
-                                                  figsize=mfigsize,
-                                                  xaxis_fontsize=option['xtick'],
-                                                  yaxis_fontsize=option['ytick'],
-                                                  colorbar_off=option['colorbar_off'],
-                                                  cmap=option['cmap'],
-                                                  cbar_kw=cbar_kw,
-                                                  cbar_option=cbar_option,
-                                                  cbar_label_fontsize=option["colorbar_labelsize"],
-                                                  cbar_tick_fontsize=option["fontsize"],
-                                                  missing_color='grey',
-                                                  legend_on=False,
-                                                  legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                                  legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                                  legend_box_size=option["legend_box_size"],
-                                                  legend_lw=option["legend_lw"],
-                                                  legend_fontsize=option["legend_fontsize"],
-                                                  use_axes=True,
-                                                  ifigure=i,
-                                                  )
+                    fig, ax, cbar = portrait_plot(
+                        data_metric[:, i, :],
+                        fig=figure,
+                        ax=axes[i],
+                        xaxis_labels=xaxis_labels,
+                        yaxis_labels=yaxis_labels,
+                        # cbar_label=cbar_label,
+                        box_as_square=True,
+                        figsize=mfigsize,
+                        xaxis_fontsize=option["xtick"],
+                        yaxis_fontsize=option["ytick"],
+                        colorbar_off=option["colorbar_off"],
+                        cmap=option["cmap"],
+                        cbar_kw=cbar_kw,
+                        cbar_option=cbar_option,
+                        cbar_label_fontsize=option["colorbar_labelsize"],
+                        cbar_tick_fontsize=option["fontsize"],
+                        missing_color="grey",
+                        legend_on=False,
+                        legend_labels=["DJF", "MAM", "JJA", "SON"],
+                        legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                        legend_box_size=option["legend_box_size"],
+                        legend_lw=option["legend_lw"],
+                        legend_fontsize=option["legend_fontsize"],
+                        use_axes=True,
+                        ifigure=i,
+                    )
                     axes[i] = ax
-                    axes[i].set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
+                    axes[i].set_yticklabels(
+                        yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
+                    )
 
                     # Rotate x-axis labels for better readability
-                    ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-                    if not option['ylabel']:
-                        ylabel = 'Metrics'
-                    if not option['xlabel']:
-                        xlabel = 'Simulations'
+                    ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
+                    if not option["ylabel"]:
+                        ylabel = "Metrics"
+                    if not option["xlabel"]:
+                        xlabel = "Simulations"
 
-                    ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-                    ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-                    axes[0].set_title(title, fontsize=option['title_size'])
+                    ax.set_xticklabels(
+                        xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
+                    )
+                    ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
+                    axes[0].set_title(title, fontsize=option["title_size"])
 
                     add_legend(
                         4,
                         axes[0],
                         (option["legend_box_x"], option["legend_box_y"] + 1),
                         option["legend_box_size"],
-                        labels=['DJF', 'MAM', 'JJA', 'SON'],
+                        labels=["DJF", "MAM", "JJA", "SON"],
                         lw=option["legend_lw"],
-                        fontsize=option["legend_fontsize"], )
+                        fontsize=option["legend_fontsize"],
+                    )
 
                     # Save the plot
-                    filename = f'{item}_{reference}'
-                    output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
-                    plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                    filename = f"{item}_{reference}"
+                    output_file_path = (
+                        f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
+                    )
+                    plt.savefig(
+                        output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                    )
                     plt.close()
                 except Exception as e:
                     logging.error(f"Error in {reference} - {item} {metric}: {e}")
-    del df, unique_items, item_references, metric, sim_sources, item, references, data_metric, xaxis_labels, yaxis_labels, mfigsize, fig, ax, cbar, filename, output_file_path
+    del (
+        df,
+        unique_items,
+        item_references,
+        metric,
+        sim_sources,
+        item,
+        references,
+        data_metric,
+        xaxis_labels,
+        yaxis_labels,
+        mfigsize,
+        fig,
+        ax,
+        cbar,
+        filename,
+        output_file_path,
+    )
 
     # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
@@ -405,13 +492,13 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
     # Get unique `Item` values and store them in `unique_items`.
-    unique_items = filtered_df['Item'].unique()
+    unique_items = filtered_df["Item"].unique()
 
     # Get unique `Simulation` values and store them in `sim_sources`.
-    sim_sources = df['Simulation'].unique()
+    sim_sources = df["Simulation"].unique()
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df['Reference']))
+    all_combinations = list(itertools.product(*filtered_df["Reference"]))
 
     # Iterate over each metric
     for metric in metrics:
@@ -420,7 +507,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
-                mask |= (df['Item'] == item) & (df['Reference'] == item_combination[i])
+                mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
@@ -429,117 +516,143 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             data_metric = np.zeros((4, len(unique_items), len(sim_sources)))
 
             # Fill data_metric array with corresponding values
-            for k, season in enumerate(['DJF', 'MAM', 'JJA', 'SON']):
+            for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, uitem in enumerate(unique_items):
                     for j, sim_source in enumerate(sim_sources):
                         try:
-                            data_metric[k, i, j] = \
-                                filtered_df.loc[(filtered_df['Item'] == uitem) & (filtered_df['Simulation'] == sim_source)][
-                                    f'{metric}_{season}'].iloc[0]
+                            data_metric[k, i, j] = filtered_df.loc[
+                                (filtered_df["Item"] == uitem) & (filtered_df["Simulation"] == sim_source)
+                            ][f"{metric}_{season}"].iloc[0]
                         except IndexError:
                             data_metric[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
-            yaxis_labels = [unique_item.replace('_', ' ') for unique_item in unique_items]
+            yaxis_labels = [unique_item.replace("_", " ") for unique_item in unique_items]
 
-            if option['colorbar_label'] == '':
-                cbar_label = metric.replace('_', ' ')
+            if option["colorbar_label"] == "":
+                cbar_label = metric.replace("_", " ")
 
             try:
-                if option['vmin_max_on']:
-                    vmin, vmax = option['vmin'], option['vmax']
+                if option["vmin_max_on"]:
+                    vmin, vmax = option["vmin"], option["vmax"]
                 else:
                     vmin, vmax = np.percentile(data_metric[~np.isnan(data_metric)], [5, 95])
                 # Create the portrait plot
-                fig, ax, cbar = portrait_plot(data_metric,
-                                              xaxis_labels=xaxis_labels,
-                                              yaxis_labels=yaxis_labels,
-                                              cbar_label=cbar_label,
-                                              box_as_square=True,
-                                              vrange=(vmin, vmax),
-                                              figsize=figsize,
-                                              xaxis_fontsize=option['xtick'],
-                                              yaxis_fontsize=option['ytick'],
-                                              colorbar_off=option['colorbar_off'],
-                                              cmap=option['cmap'],
-                                              cmap_bounds=np.linspace(vmin, vmax, 11),
-                                              cbar_kw=cbar_kw,
-                                              cbar_option=cbar_option,
-                                              cbar_label_fontsize=option["colorbar_labelsize"],
-                                              cbar_tick_fontsize=option["fontsize"],
-                                              missing_color='grey',
-                                              legend_on=True,
-                                              legend_labels=['DJF', 'MAM', 'JJA', 'SON'],
-                                              legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
-                                              legend_box_size=option["legend_box_size"],
-                                              legend_lw=option["legend_lw"],
-                                              legend_fontsize=option["legend_fontsize"],
-                                              logo_off=True)
+                fig, ax, cbar = portrait_plot(
+                    data_metric,
+                    xaxis_labels=xaxis_labels,
+                    yaxis_labels=yaxis_labels,
+                    cbar_label=cbar_label,
+                    box_as_square=True,
+                    vrange=(vmin, vmax),
+                    figsize=figsize,
+                    xaxis_fontsize=option["xtick"],
+                    yaxis_fontsize=option["ytick"],
+                    colorbar_off=option["colorbar_off"],
+                    cmap=option["cmap"],
+                    cmap_bounds=np.linspace(vmin, vmax, 11),
+                    cbar_kw=cbar_kw,
+                    cbar_option=cbar_option,
+                    cbar_label_fontsize=option["colorbar_labelsize"],
+                    cbar_tick_fontsize=option["fontsize"],
+                    missing_color="grey",
+                    legend_on=True,
+                    legend_labels=["DJF", "MAM", "JJA", "SON"],
+                    legend_box_xy=(option["legend_box_x"], option["legend_box_y"]),
+                    legend_box_size=option["legend_box_size"],
+                    legend_lw=option["legend_lw"],
+                    legend_fontsize=option["legend_fontsize"],
+                    logo_off=True,
+                )
 
                 # Rotate x-axis labels for better readability
-                ax.set_xticklabels(xaxis_labels, rotation=option['x_rotation'], ha=option['x_ha'], fontsize=option['xtick'])
-                ax.set_yticklabels(yaxis_labels, rotation=option['y_rotation'], ha=option['y_ha'], fontsize=option['ytick'])
-                ylabel, xlabel, title = option['ylabel'], option['xlabel'], option['title']
-                if not option['ylabel']:
-                    ylabel = metric.replace('_', ' ')
-                if not option['xlabel']:
-                    xlabel = 'Simulations'
-                ax.set_ylabel(ylabel, fontsize=option['ytick'] + 1)
-                ax.set_xlabel(xlabel, fontsize=option['xtick'] + 1)
-                ax.set_title(title, fontsize=option['title_size'])
+                ax.set_xticklabels(
+                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
+                )
+                ax.set_yticklabels(
+                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
+                )
+                ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
+                if not option["ylabel"]:
+                    ylabel = metric.replace("_", " ")
+                if not option["xlabel"]:
+                    xlabel = "Simulations"
+                ax.set_ylabel(ylabel, fontsize=option["ytick"] + 1)
+                ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
+                ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f'{metric}_{"_".join(item_combination)}'
+                filename = f"{metric}_{'_'.join(item_combination)}"
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-                plt.savefig(output_file_path, format=f'{option["saving_format"]}', dpi=option['dpi'], bbox_inches='tight')
+                plt.savefig(
+                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                )
                 plt.close()
             except Exception as e:
                 logging.error(f"Error in {metric} - {item_combination}: {e}")
 
-    del df, filtered_df, unique_items, sim_sources, all_combinations, metric, item_combination, mask, data_metric, xaxis_labels, yaxis_labels, fig, ax, cbar, filename, output_file_path
-
-def portrait_plot(
-        data,
+    del (
+        df,
+        filtered_df,
+        unique_items,
+        sim_sources,
+        all_combinations,
+        metric,
+        item_combination,
+        mask,
+        data_metric,
         xaxis_labels,
         yaxis_labels,
-        fig=None,
-        ax=None,
-        annotate=False,
-        annotate_data=None,
-        annotate_textcolors=("black", "white"),
-        annotate_textcolors_threshold=(-2, 2),
-        annotate_fontsize=15,
-        annotate_format="{x:.2f}",
-        figsize=(12, 10),
-        vrange=None,
-        xaxis_fontsize=15,
-        yaxis_fontsize=15,
-        xaxis_tick_labels_top_and_bottom=False,
-        xticklabel_rotation=45,
-        inner_line_color="k",
-        inner_line_width=0.5,
-        cmap="RdBu_r",
-        cmap_bounds=None,
-        cbar_label=None,
-        cbar_label_fontsize=15,
-        cbar_tick_fontsize=12,
-        cbar_kw={},
-        cbar_option={},
-        colorbar_off=False,
-        missing_color="grey",
-        invert_yaxis=True,
-        box_as_square=False,
-        legend_on=False,
-        legend_labels=None,
-        legend_box_xy=None,
-        legend_box_size=None,
-        legend_lw=1,
-        legend_fontsize=14,
-        logo_rect=None,
-        logo_off=False,
-        debug=False,
-        use_axes=False,
-        ifigure=None,
+        fig,
+        ax,
+        cbar,
+        filename,
+        output_file_path,
+    )
+
+
+def portrait_plot(
+    data,
+    xaxis_labels,
+    yaxis_labels,
+    fig=None,
+    ax=None,
+    annotate=False,
+    annotate_data=None,
+    annotate_textcolors=("black", "white"),
+    annotate_textcolors_threshold=(-2, 2),
+    annotate_fontsize=15,
+    annotate_format="{x:.2f}",
+    figsize=(12, 10),
+    vrange=None,
+    xaxis_fontsize=15,
+    yaxis_fontsize=15,
+    xaxis_tick_labels_top_and_bottom=False,
+    xticklabel_rotation=45,
+    inner_line_color="k",
+    inner_line_width=0.5,
+    cmap="RdBu_r",
+    cmap_bounds=None,
+    cbar_label=None,
+    cbar_label_fontsize=15,
+    cbar_tick_fontsize=12,
+    cbar_kw={},
+    cbar_option={},
+    colorbar_off=False,
+    missing_color="grey",
+    invert_yaxis=True,
+    box_as_square=False,
+    legend_on=False,
+    legend_labels=None,
+    legend_box_xy=None,
+    legend_box_size=None,
+    legend_lw=1,
+    legend_fontsize=14,
+    logo_rect=None,
+    logo_off=False,
+    debug=False,
+    use_axes=False,
+    ifigure=None,
 ):
     """
     Parameters
@@ -613,9 +726,7 @@ def portrait_plot(
             annotate_data = data
             num_divide_annotate = num_divide
         else:
-            annotate_data, num_divide_annotate = prepare_data(
-                annotate_data, xaxis_labels, yaxis_labels, debug=debug
-            )
+            annotate_data, num_divide_annotate = prepare_data(annotate_data, xaxis_labels, yaxis_labels, debug=debug)
             if num_divide_annotate != num_divide:
                 sys.exit("Error: annotate_data does not have same size as data")
 
@@ -792,11 +903,11 @@ def portrait_plot(
 
     if not colorbar_off:
         # Create colorbar
-        if not cbar_option['colorbar_position_set']:
+        if not cbar_option["colorbar_position_set"]:
             if not use_axes:
                 pos = ax.get_position()
                 left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-                if cbar_kw["orientation"] == 'vertical':
+                if cbar_kw["orientation"] == "vertical":
                     if len(yaxis_labels) <= 6:
                         cbar_ax = fig.add_axes([right + 0.05, bottom, 0.03, height])  # right + 0.2
                     else:
@@ -814,8 +925,13 @@ def portrait_plot(
                 cbar_ax = fig.add_axes([right + 0.02, bottom + height / 2, w, height / 4])
         else:
             cbar_ax = fig.add_axes(
-                [cbar_option['colorbar_left'], cbar_option['colorbar_bottom'], cbar_option['colorbar_width'],
-                 cbar_option['colorbar_height']])
+                [
+                    cbar_option["colorbar_left"],
+                    cbar_option["colorbar_bottom"],
+                    cbar_option["colorbar_width"],
+                    cbar_option["colorbar_height"],
+                ]
+            )
         cbar = ax.figure.colorbar(im, cax=cbar_ax, **cbar_kw)
 
         # Label for colorbar
@@ -870,7 +986,8 @@ def portrait_plot(
             cbar.ax.tick_params(labelsize=cbar_tick_fontsize)
             return fig, ax, cbar
     else:
-        return fig, ax, 'cbar'
+        return fig, ax, "cbar"
+
 
 # ======================================================================
 # Prepare data
@@ -918,6 +1035,7 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
 
     return data, num_divide
 
+
 # ======================================================================
 # Portrait plot 1: heatmap-style (no triangle)
 # (Inspired from: https://matplotlib.org/devdocs/gallery/images_contours_and_fields/image_annotated_heatmap.html)
@@ -961,15 +1079,16 @@ def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwa
 
     return ax, im
 
+
 def annotate_heatmap(
-        im,
-        ax,
-        data=None,
-        annotate_data=None,
-        valfmt="{x:.2f}",
-        textcolors=("black", "white"),
-        threshold=None,
-        **textkw,
+    im,
+    ax,
+    data=None,
+    annotate_data=None,
+    valfmt="{x:.2f}",
+    textcolors=("black", "white"),
+    threshold=None,
+    **textkw,
 ):
     """
     A function to annotate a heatmap.
@@ -1023,14 +1142,7 @@ def annotate_heatmap(
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
             if type(threshold) is tuple:
-                kw.update(
-                    color=textcolors[
-                        int(
-                            (data[i, j] > max(threshold))
-                            or (data[i, j] < min(threshold))
-                        )
-                    ]
-                )
+                kw.update(color=textcolors[int((data[i, j] > max(threshold)) or (data[i, j] < min(threshold)))])
             else:
                 kw.update(color=textcolors[int(data[i, j] > threshold)])
             text = ax.text(j + 0.5, i + 0.5, valfmt(annotate_data[i, j], None), **kw)
@@ -1038,23 +1150,24 @@ def annotate_heatmap(
 
     return ax
 
+
 # ======================================================================
 # Portrait plot 2 (two triangles)
 # (Inspired from: https://stackoverflow.com/questions/44291155/plotting-two-distance-matrices-together-on-same-plot)
 # ----------------------------------------------------------------------
 def triamatrix_wrap_up(
-        upper,
-        lower,
-        ax,
-        xaxis_labels,
-        yaxis_labels,
-        cmap="viridis",
-        vmin=-3,
-        vmax=3,
-        norm=None,
-        invert_yaxis=True,
-        inner_line_color="k",
-        inner_line_width=0.5,
+    upper,
+    lower,
+    ax,
+    xaxis_labels,
+    yaxis_labels,
+    cmap="viridis",
+    vmin=-3,
+    vmax=3,
+    norm=None,
+    invert_yaxis=True,
+    inner_line_color="k",
+    inner_line_width=0.5,
 ):
     # Colorbar range
     if norm is None:
@@ -1093,6 +1206,7 @@ def triamatrix_wrap_up(
 
     return ax, im
 
+
 def triatpos(pos=(0, 0), rot=0):
     r = np.array([[-1, -1], [1, -1], [1, 1], [-1, -1]]) * 0.5
     rm = [
@@ -1104,6 +1218,7 @@ def triatpos(pos=(0, 0), rot=0):
     r[:, 1] += pos[1]
     return r
 
+
 def triamatrix(a, ax, rot=0, cmap="viridis", **kwargs):
     segs = []
     for i in range(a.shape[0]):
@@ -1114,20 +1229,21 @@ def triamatrix(a, ax, rot=0, cmap="viridis", **kwargs):
     ax.add_collection(col)
     return col
 
+
 # ======================================================================
 # Portrait plot 4 (four triangles)
 # (Inspired from: https://stackoverflow.com/questions/44666679/something-like-plt-matshow-but-with-triangles)
 # ----------------------------------------------------------------------
 def quatromatrix(
-        top,
-        right,
-        bottom,
-        left,
-        ax=None,
-        tripcolorkw={},
-        xaxis_labels=None,
-        yaxis_labels=None,
-        invert_yaxis=True,
+    top,
+    right,
+    bottom,
+    left,
+    ax=None,
+    tripcolorkw={},
+    xaxis_labels=None,
+    yaxis_labels=None,
+    invert_yaxis=True,
 ):
     if ax is None:
         ax = plt.gca()
@@ -1144,18 +1260,14 @@ def quatromatrix(
     for i in range(n):
         for j in range(m):
             k = i * m + j
-            A[k * 5: (k + 1) * 5, :] = np.c_[a[:, 0] + j, a[:, 1] + i]
-            Tr[k * 4: (k + 1) * 4, :] = tr + k * 5
+            A[k * 5 : (k + 1) * 5, :] = np.c_[a[:, 0] + j, a[:, 1] + i]
+            Tr[k * 4 : (k + 1) * 4, :] = tr + k * 5
 
     if invert_yaxis:
         ax.invert_yaxis()
-        C = np.c_[
-            left.flatten(), top.flatten(), right.flatten(), bottom.flatten()
-        ].flatten()
+        C = np.c_[left.flatten(), top.flatten(), right.flatten(), bottom.flatten()].flatten()
     else:
-        C = np.c_[
-            left.flatten(), bottom.flatten(), right.flatten(), top.flatten()
-        ].flatten()
+        C = np.c_[left.flatten(), bottom.flatten(), right.flatten(), top.flatten()].flatten()
 
     # Prevent coloring missing data
     C = np.ma.array(C, mask=np.isnan(C))
@@ -1175,6 +1287,7 @@ def quatromatrix(
 
     return ax, tripcolor
 
+
 def list_between_elements(a):
     a_between = []
     for i in range(len(a)):
@@ -1185,12 +1298,11 @@ def list_between_elements(a):
             pass
     return a_between
 
+
 # ======================================================================
 # Portrait plot legend (four/two triangles)
 # ======================================================================
-def add_legend(
-        num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fontsize=14
-):
+def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fontsize=14):
     if box_xy is None:
         box_x = ax.get_xlim()[1] * 1.25
         box_y = ax.get_ylim()[1]

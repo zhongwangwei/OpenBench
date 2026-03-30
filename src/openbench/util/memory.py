@@ -20,6 +20,7 @@ import xarray as xr
 # Try to import psutil for memory monitoring, use fallback if not available
 try:
     import psutil
+
     _HAS_PSUTIL = True
 except ImportError:
     _HAS_PSUTIL = False
@@ -41,23 +42,19 @@ def cleanup_memory(verbose=True):
     Returns:
         dict: Cleanup statistics including memory before/after and objects collected
     """
-    stats = {
-        'memory_before': 0,
-        'memory_after': 0,
-        'memory_freed': 0,
-        'objects_collected': 0
-    }
+    stats = {"memory_before": 0, "memory_after": 0, "memory_freed": 0, "objects_collected": 0}
 
     try:
         # Get memory info before cleanup
         if _HAS_PSUTIL:
             process = psutil.Process()
-            stats['memory_before'] = process.memory_info().rss / 1024 / 1024  # MB
+            stats["memory_before"] = process.memory_info().rss / 1024 / 1024  # MB
         else:
-            stats['memory_before'] = 0  # Fallback when psutil is not available
+            stats["memory_before"] = 0  # Fallback when psutil is not available
 
         # 1. Clear Python's functools caches (lru_cache)
         import functools
+
         # Clear all lru_cache decorated functions
         for obj in gc.get_objects():
             try:
@@ -69,20 +66,21 @@ def cleanup_memory(verbose=True):
         # 2. Clear numpy caches
         try:
             import warnings
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", DeprecationWarning)
 
                 # Try new numpy structure first (numpy >= 1.20)
                 try:
-                    if hasattr(np, '_core') and hasattr(np._core, '_internal'):
-                        if hasattr(np._core._internal, 'clear_cache'):
+                    if hasattr(np, "_core") and hasattr(np._core, "_internal"):
+                        if hasattr(np._core._internal, "clear_cache"):
                             np._core._internal.clear_cache()
-                        elif hasattr(np._core._internal, '_clear_cache'):
+                        elif hasattr(np._core._internal, "_clear_cache"):
                             np._core._internal._clear_cache()
                     else:
                         # Fallback to older numpy structure
-                        if hasattr(np, 'core') and hasattr(np.core, '_internal'):
-                            if hasattr(np.core._internal, 'clear_cache'):
+                        if hasattr(np, "core") and hasattr(np.core, "_internal"):
+                            if hasattr(np.core._internal, "clear_cache"):
                                 np.core._internal.clear_cache()
                 except (AttributeError, TypeError):
                     pass
@@ -90,13 +88,13 @@ def cleanup_memory(verbose=True):
             pass
 
         # 3. Clear xarray caches
-        if hasattr(xr, 'set_options'):
+        if hasattr(xr, "set_options"):
             xr.set_options(keep_attrs=False)
 
         # Clear xarray's file manager cache
         try:
-            if hasattr(xr.backends, 'file_manager'):
-                if hasattr(xr.backends.file_manager, 'FILE_CACHE'):
+            if hasattr(xr.backends, "file_manager"):
+                if hasattr(xr.backends.file_manager, "FILE_CACHE"):
                     xr.backends.file_manager.FILE_CACHE.clear()
         except (AttributeError, TypeError):
             pass
@@ -104,8 +102,9 @@ def cleanup_memory(verbose=True):
         # 4. Clear pandas caches
         try:
             import pandas as pd
+
             # Clear string cache if available
-            if hasattr(pd.core.strings, 'cache_readonly'):
+            if hasattr(pd.core.strings, "cache_readonly"):
                 pd.core.strings.cache_readonly._cache.clear()
         except (AttributeError, ImportError, Exception):
             pass
@@ -113,8 +112,9 @@ def cleanup_memory(verbose=True):
         # 5. Clear matplotlib caches
         try:
             import matplotlib
-            if hasattr(matplotlib, 'font_manager'):
-                if hasattr(matplotlib.font_manager, '_fmcache'):
+
+            if hasattr(matplotlib, "font_manager"):
+                if hasattr(matplotlib.font_manager, "_fmcache"):
                     matplotlib.font_manager._fmcache = None
         except (ImportError, AttributeError):
             pass
@@ -122,12 +122,14 @@ def cleanup_memory(verbose=True):
         # 6. Clear Python's import cache
         try:
             import importlib
+
             importlib.invalidate_caches()
         except (ImportError, AttributeError):
             pass
 
         # 7. Clear linecache (used by traceback)
         import linecache
+
         linecache.clearcache()
 
         # 8. Force garbage collection multiple times
@@ -137,10 +139,10 @@ def cleanup_memory(verbose=True):
             collected = gc.collect(generation)
             collected_total += collected
 
-        stats['objects_collected'] = collected_total
+        stats["objects_collected"] = collected_total
 
         # 9. Force memory defragmentation if available
-        if hasattr(gc, 'set_threshold'):
+        if hasattr(gc, "set_threshold"):
             # Temporarily lower GC thresholds to be more aggressive
             old_thresholds = gc.get_threshold()
             gc.set_threshold(10, 5, 5)
@@ -150,6 +152,7 @@ def cleanup_memory(verbose=True):
 
         # 10. Clear weak references
         import weakref
+
         # Force cleanup of dead weak references
         for obj in gc.get_objects():
             try:
@@ -163,27 +166,29 @@ def cleanup_memory(verbose=True):
 
         # Get memory info after cleanup
         if _HAS_PSUTIL:
-            stats['memory_after'] = process.memory_info().rss / 1024 / 1024  # MB
-            stats['memory_freed'] = stats['memory_before'] - stats['memory_after']
+            stats["memory_after"] = process.memory_info().rss / 1024 / 1024  # MB
+            stats["memory_freed"] = stats["memory_before"] - stats["memory_after"]
 
-            if verbose and hasattr(logging, 'info'):
+            if verbose and hasattr(logging, "info"):
                 logging.info("Memory cleanup completed:")
                 logging.info(f"  - Memory before: {stats['memory_before']:.1f} MB")
                 logging.info(f"  - Memory after: {stats['memory_after']:.1f} MB")
                 logging.info(f"  - Objects collected: {stats['objects_collected']}")
-                if stats['memory_freed'] > 0:
+                if stats["memory_freed"] > 0:
                     logging.info(f"  - Memory freed: {stats['memory_freed']:.1f} MB")
                 else:
-                    logging.info(f"  - Memory usage: {abs(stats['memory_freed']):.1f} MB (may have increased due to logging)")
+                    logging.info(
+                        f"  - Memory usage: {abs(stats['memory_freed']):.1f} MB (may have increased due to logging)"
+                    )
         else:
-            if verbose and hasattr(logging, 'info'):
+            if verbose and hasattr(logging, "info"):
                 logging.info("Memory cleanup completed (psutil not available for detailed monitoring)")
                 logging.info("  - Garbage collection performed")
                 logging.info(f"  - Objects collected: {stats['objects_collected']}")
                 logging.info("  - Cache clearing attempted")
 
     except Exception as e:
-        if hasattr(logging, 'warning'):
+        if hasattr(logging, "warning"):
             logging.warning(f"Memory cleanup encountered an issue: {e}")
         # Still perform basic garbage collection
         gc.collect()
@@ -207,14 +212,14 @@ def initialize_memory_management():
         # gc.set_debug(gc.DEBUG_STATS)
 
         # Configure numpy for memory efficiency
-        if hasattr(np, 'seterr'):
-            np.seterr(all='ignore')  # Ignore numpy warnings to reduce memory overhead
+        if hasattr(np, "seterr"):
+            np.seterr(all="ignore")  # Ignore numpy warnings to reduce memory overhead
 
         # Configure xarray for memory efficiency
-        if hasattr(xr, 'set_options'):
+        if hasattr(xr, "set_options"):
             xr.set_options(
                 keep_attrs=False,  # Don't keep attributes to save memory
-                display_style='text',  # Use text display to save memory
+                display_style="text",  # Use text display to save memory
             )
 
         logging.info("Memory management initialized with optimized settings")
@@ -251,7 +256,7 @@ def log_memory_usage(label="Current"):
         logging.debug(f"{label} memory usage: (psutil not available)")
 
 
-def cleanup_old_outputs(main_nl, clean_level='tmp'):
+def cleanup_old_outputs(main_nl, clean_level="tmp"):
     """Clean up old outputs and temporary files before running.
 
     Args:
@@ -264,29 +269,27 @@ def cleanup_old_outputs(main_nl, clean_level='tmp'):
     Returns:
         int: Number of directories cleaned
     """
-    if clean_level == 'none':
+    if clean_level == "none":
         return 0
 
     # Import here to avoid circular dependency
     from openbench.util.config_check import get_platform_colors
 
-    base_path = os.path.join(main_nl['general']["basedir"], main_nl['general']['basename'])
+    base_path = os.path.join(main_nl["general"]["basedir"], main_nl["general"]["basename"])
 
     # Directories to clean based on level
     cleanup_dirs = []
 
-    if clean_level in ['tmp', 'all']:
-        cleanup_dirs.append(os.path.join(base_path, 'scratch'))
+    if clean_level in ["tmp", "all"]:
+        cleanup_dirs.append(os.path.join(base_path, "scratch"))
 
-    if clean_level == 'all':
-        cleanup_dirs.extend([
-            os.path.join(base_path, 'metrics'),
-            os.path.join(base_path, 'scores'),
-            os.path.join(base_path, 'data')
-        ])
+    if clean_level == "all":
+        cleanup_dirs.extend(
+            [os.path.join(base_path, "metrics"), os.path.join(base_path, "scores"), os.path.join(base_path, "data")]
+        )
 
     colors = get_platform_colors()
-    clean_icon = "🧹" if colors['reset'] else "[CLEAN]"
+    clean_icon = "🧹" if colors["reset"] else "[CLEAN]"
 
     cleaned_count = 0
     for dir_path in cleanup_dirs:
@@ -302,7 +305,7 @@ def cleanup_old_outputs(main_nl, clean_level='tmp'):
                 print(f"{colors['yellow']}Warning: Could not clean {dir_path}: {e}{colors['reset']}")
 
     if cleaned_count > 0:
-        check_icon = "✅" if colors['reset'] else "[OK]"
+        check_icon = "✅" if colors["reset"] else "[OK]"
         print(f"{check_icon} {colors['green']}Cleaned {cleaned_count} directories{colors['reset']}\n")
 
     return cleaned_count
