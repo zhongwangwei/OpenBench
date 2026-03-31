@@ -189,8 +189,9 @@ The current flow has multiple confirmed correctness problems, not just quality i
 
 - Fix `_detect_tim_res()` so more specific time-resolution tokens are checked before generic hourly matches.
 - Stop persisting unverified defaults like `years`, `data_groupby`, and implied grid resolution as authoritative facts.
+- Fix caller-side base-name shadowing so descriptor selection cannot hide variant-specific metadata.
 - Align the comparison-resolution fallback logic in `cli/check.py` and `config/adapter.py`.
-- Add focused regression tests for the three confirmed problems before making any broader cleanup.
+- Add focused regression tests for all four confirmed problems before making any broader cleanup.
 
 ## Moderate Cleanup
 
