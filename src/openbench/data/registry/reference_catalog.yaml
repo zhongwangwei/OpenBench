@@ -2711,3 +2711,23 @@ globsnow_v3_LowRes:
       varunit: mm
       sub_dir: Water/Snow_Water_Equivalent/globsnow_v3
       prefix: globsnow_v3_swe_monthly_lonlat_0.25deg
+CARE_MidRes:
+  name: CARE_MidRes
+  description: CARE reference dataset (MidRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  years:
+  - 2000
+  - 2020
+  root_dir: /Volumes/work/Reference/Grid/MidRes
+  grid_res: 0.25
+  variables:
+    Surface_Downward_LW_Radiation:
+      varname: LWDR
+      varunit: W m**-2
+      sub_dir: Heat/Surface_Downward_LW_Radiation/CARE
+      prefix: CARE_LWDR_
+      suffix: '01'

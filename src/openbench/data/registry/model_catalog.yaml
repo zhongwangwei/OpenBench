@@ -430,7 +430,7 @@ BCC_AVIM:
       : -1 hours
 CaMa:
   name: CaMa
-  description: CaMa-Flood River Model
+  description: CaMa-Flood River Routing Model
   data_type: grid
   tim_res: Day
   time_offset:
@@ -446,4 +446,31 @@ CaMa:
       default: -1 hours
       ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 hours
-  variables: {}
+  variables:
+    Streamflow:
+      varname: outflw
+      varunit: m3 s-1
+    Total_Runoff:
+      varname: runoff
+      varunit: m3 s-1
+    Inundation_Fraction:
+      varname: fldfrc
+      varunit: m2 m-2
+    Inundation_Area:
+      varname: fldare
+      varunit: m2
+    Depth_Of_Surface_Water:
+      varname: flddph
+      varunit: m
+    Dam_Inflow:
+      varname: daminf
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname:
+      - damouf
+      - outflw
+      varunit: m3 s-1
+    Streamflow_Ocean:
+      varname: outflw_ocean
+      varunit: m3 s-1
+  grid_res: 0.25
