@@ -76,3 +76,37 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Trigger: variable folders whose names do not map 1:1 to the desired logical variable identity
 - Outcome: the scanner uses the folder name as the variable key and records only the first subdirectory seen for that key; it does not infer variables from file contents during discovery
 - Evidence: grid scanning stores `scanned.variables[var_name] = sub_dir` only on first sight of a folder name, and station scanning uses `var_name` directly as the key
+
+## Registration Gate
+
+### Confirmed problem: registration persists unverified default metadata as authoritative facts
+
+- Classification: Problem
+- Code location: `src/openbench/data/registry/scanner.py:266-281`
+- Trigger: registering a scanned dataset without confirmed year bounds or other curated top-level metadata
+- Outcome: `register_scanned_dataset()` writes `tim_res: Month`, `data_groupby: Year`, `timezone: 0`, `years: [1980, 2023]`, and a grid `grid_res` derived only from the resolution label, even when those values were not verified during scanning
+- Evidence: `tests/test_registry/test_scanner_registration.py::test_register_scanned_dataset_does_not_persist_unverified_default_years` failed because the emitted YAML contained `1980` and `2023`; the code hard-codes those defaults before any scan-derived confirmation at lines 272-281
+
+### Confirmed merge boundary: variable metadata is preserved only for exact scanned-variable keys
+
+- Classification: Improvement item
+- Code location: `src/openbench/data/registry/scanner.py:289-331`
+- Trigger: an `existing_descriptor` whose `variables` mapping uses a different key than the scanned folder name
+- Outcome: variable-level `varname`, `varunit`, `prefix`, and `suffix` are preserved only when `existing_descriptor["variables"]` contains the exact scanned variable key; top-level fields are rebuilt from scan-time defaults or scan inspection, so `root_dir`, `grid_res`, `tim_res`, `data_groupby`, `timezone`, and `years` are overwritten rather than merged
+- Evidence: `tests/test_registry/test_scanner_registration.py::test_register_scanned_dataset_merges_existing_variable_descriptor_by_scanned_variable_key` passed and showed preserved `varname: ET`, `varunit: mm`, `prefix: pre_`, `suffix: _suf` while `root_dir` was rewritten to the scanned path and `grid_res` to `0.5`
+
+### Cleared suspicion: merge does not accidentally match by variable varname
+
+- Classification: Cleared suspicion
+- Code location: `src/openbench/data/registry/scanner.py:289-301`
+- Trigger: an existing descriptor that stores curated metadata under `variables["ET"]` while the scanned dataset key is `Evapotranspiration`
+- Outcome: no merge occurs; the registration keeps the scan-derived key and does not apply metadata from an alias-style varname entry
+- Evidence: `tests/test_registry/test_scanner_registration.py::test_register_scanned_dataset_does_not_match_existing_variable_descriptors_by_varname` passed, and the code checks `if var_name in existing_vars` rather than matching on `varname` or path suffix
+
+### Confirmed behavior: multi-variable NetCDF registration is callback-gated
+
+- Classification: Improvement item
+- Code location: `src/openbench/data/registry/scanner.py:309-319`
+- Trigger: an inspected NetCDF file exposes 2+ data variables
+- Outcome: `on_multi_var` is called with `(var_name, sub_dir, all_vars)` to choose a `varname`; if no callback is supplied, the first discovered variable remains authoritative
+- Evidence: code inspection of the `len(all_vars) > 1 and on_multi_var` branch; this is an explicit confirmation hook, not an automatic reconciliation step
