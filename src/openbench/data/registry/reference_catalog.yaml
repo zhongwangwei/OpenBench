@@ -435,9 +435,15 @@ FLUX_PLUMBER2:
     Sensible_Heat:
       varname: Qh_cor
       varunit: w m-2
+      fallbacks:
+      - varname: Qh
+        varunit: W m-2
     Latent_Heat:
       varname: Qle_cor
       varunit: w m-2
+      fallbacks:
+      - varname: Qle
+        varunit: W m-2
     Ground_Heat:
       varname: Qg
       varunit: w m-2
@@ -1023,9 +1029,15 @@ PLUMBER2S:
     Sensible_Heat:
       varname: Qh_cor
       varunit: w m-2
+      fallbacks:
+      - varname: Qh
+        varunit: W m-2
     Latent_Heat:
       varname: Qle_cor
       varunit: w m-2
+      fallbacks:
+      - varname: Qle
+        varunit: W m-2
     Ground_Heat:
       varname: Qg
       varunit: w m-2
