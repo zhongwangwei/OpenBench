@@ -1,5 +1,6 @@
 """Tests for RegistryManager."""
 
+from openbench.data.registry.schema import ReferenceDataset
 from openbench.data.registry.manager import RegistryManager
 
 
@@ -25,9 +26,16 @@ def test_get_reference_exact():
 def test_get_reference_auto_resolve():
     """Base name auto-resolves when sim context is provided."""
     mgr = RegistryManager()
-    ref = mgr.get_reference("GLEAM_v4.2a", sim_tim_res="Month", sim_grid_res=0.5)
+    ref = mgr.get_reference("CARE", sim_tim_res="Month", sim_grid_res=0.25)
     assert ref is not None
-    assert "GLEAM_v4.2a" in ref.name
+    assert ref.name == "CARE_MidRes"
+
+
+def test_get_reference_exact_variant_name_wins_over_auto_resolve():
+    mgr = RegistryManager()
+    ref = mgr.get_reference("CARE_LowRes", sim_tim_res="Month", sim_grid_res=0.25)
+    assert ref is not None
+    assert ref.name == "CARE_LowRes"
 
 
 def test_get_reference_base_name_no_context():
@@ -40,6 +48,49 @@ def test_get_reference_base_name_no_context():
     # Non-existent base name with variants but no context → None
     ref2 = mgr.get_reference("TotallyFakeDataset")
     assert ref2 is None
+
+
+def test_get_reference_base_name_requires_context_when_only_variants_exist():
+    mgr = RegistryManager()
+    assert mgr.get_reference("CARE") is None
+
+    ref = mgr.get_reference("CARE", sim_tim_res="Month", sim_grid_res=0.25)
+    assert ref is not None
+    assert ref.name == "CARE_MidRes"
+
+
+def test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie():
+    mgr = RegistryManager()
+    mgr._references = {
+        "demo_lowres": ReferenceDataset(
+            name="Demo_LowRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Month",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.25,
+        ),
+        "demo_midres": ReferenceDataset(
+            name="Demo_MidRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Day",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.25,
+        ),
+    }
+
+    ref = mgr.get_reference("Demo", sim_tim_res="Month", sim_grid_res=0.25)
+    assert ref is not None
+    assert ref.name == "Demo_LowRes"
 
 
 def test_get_reference_not_found():

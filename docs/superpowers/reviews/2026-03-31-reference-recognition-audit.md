@@ -118,3 +118,29 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Trigger: a scanned variant has both a standalone base-name descriptor and a resolution-specific registry entry available in the registry
 - Outcome: the CLI scan path evaluates `mgr.get_reference(variant.name)` before `mgr.get_reference(variant.registry_name)`, so a truthy base-name match prevents the registry-name fallback; the GUI app and page scan path only query `variant.name` / `base_name`, so they never consider the registry-name descriptor at all
 - Evidence: `tests/test_registry/test_scanner_registration.py::test_cli_scan_prefers_base_name_existing_descriptor_before_registry_name` passed and recorded only the base-name lookup; the cited source lines show the exact short-circuit and base-name-only lookup behavior
+
+## Resolution Gate
+
+### Cleared suspicion: exact registry names still win before any base-name resolution
+
+- Classification: Cleared suspicion
+- Code location: `src/openbench/data/registry/manager.py:152-192`
+- Trigger: querying an exact variant name such as `CARE_LowRes`, even when simulation resolution hints are present
+- Outcome: exact-name lookup returns immediately and bypasses variant auto-resolve; base names without context return `None`, while base names with context can resolve to the best variant
+- Evidence: `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` passed with `14 passed`, including `test_get_reference_exact_variant_name_wins_over_auto_resolve`, `test_get_reference_base_name_requires_context_when_only_variants_exist`, and `test_get_reference_auto_resolve`
+
+### Confirmed behavior: auto-resolve breaks ties by lower time waste after spatial closeness
+
+- Classification: Confirmed behavior
+- Code location: `src/openbench/data/registry/manager.py:249-301`
+- Trigger: two base-name variants have equal spatial distance from the target grid and both satisfy the target time frequency
+- Outcome: the resolver chooses the lower-frequency-waste option after spatial distance ties, which kept `Demo_LowRes` ahead of `Demo_MidRes` in the synthetic tie case
+- Evidence: `test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie` passed in the same `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` run
+
+### Cleared suspicion: CLI check and config adapter derive the same target resolution before delegating to RegistryManager
+
+- Classification: Cleared suspicion
+- Code location: `src/openbench/cli/check.py:32-58`, `src/openbench/config/adapter.py:275-291`
+- Trigger: comparison tim/grid resolution is unset and the code has to fall back to simulation metadata
+- Outcome: both paths prefer `cfg.comparison.tim_res/grid_res` first, then take the first populated simulation `tim_res/grid_res`; both hand the final target context to `RegistryManager.get_reference`, so base-name acceptance and variant requirement stay aligned
+- Evidence: direct code inspection of the two call sites shows the same comparison-first, simulation-fallback derivation; the manager tests above confirm the delegated resolver behavior on real catalog entries
