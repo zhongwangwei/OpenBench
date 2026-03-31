@@ -1475,6 +1475,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         source = getattr(self, f"{datasource}_source", "")
         if not source:
             source = getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
+            if source:
+                logging.debug(
+                    "prefix_fallback: using fallback source '%s' for datasource='%s'",
+                    source, datasource,
+                )
         pf_list = getattr(self, f"{source}_prefix_fallback", None)
         if pf_list:
             for fb in pf_list:

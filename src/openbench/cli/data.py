@@ -362,8 +362,6 @@ def scan(ref_root, auto):
     registered = 0
     for variant in to_register:
         existing = mgr.get_reference(variant.name) or mgr.get_reference(variant.registry_name)
-        if not existing:
-            existing = mgr.get_reference(variant.name)
         existing_dict = None
         if existing:
             existing_dict = {

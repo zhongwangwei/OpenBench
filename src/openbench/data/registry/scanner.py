@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 
@@ -225,6 +226,7 @@ def find_new_datasets(
         for res, variant in group.variants.items():
             if variant.registry_name not in existing_names:
                 has_new = True
+                break
         if has_new:
             new_groups.append(group)
 
@@ -492,14 +494,12 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
             result["varunit"] = varunit
 
         ds.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("NC inspection failed for %s: %s", nc_files[0].name, e)
 
     # Extract prefix and suffix from filename pattern
     # Pattern: <prefix><year><suffix>.nc
     # E.g., "E_2004_GLEAM_v4.2a.nc" → prefix="E_", suffix="_GLEAM_v4.2a"
-    import re
-
     fname = nc_files[0].stem  # Without .nc
     # Try to find a 4-digit year in the filename
     year_match = re.search(r"(\d{4})", fname)
@@ -563,8 +563,8 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
         if row:
             rows.append(row)
 
-    # If that found very few stations but there are large merged files, try merged parsing
-    if len(rows) < len(nc_files) // 2:
+    # If that found no stations but there are large merged files, try merged parsing
+    if not rows:
         merged_rows = []
         for nc_file in nc_files:
             mr = _parse_merged_station_file(nc_file, dataset_dir)
@@ -586,6 +586,7 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
 def _parse_single_station_file(nc_file: Path) -> list | None:
     """Extract station info from a single-station NC file."""
     try:
+        import pandas as pd
         import xarray as xr
 
         ds = xr.open_dataset(nc_file)
@@ -601,8 +602,13 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
 
         # Extract time range
         if "time" in ds.dims and len(ds.time) > 0:
-            syear = int(str(ds.time.values[0])[:4])
-            eyear = int(str(ds.time.values[-1])[:4])
+            time_vals = ds.time.values
+            try:
+                syear = int(pd.Timestamp(time_vals[0]).year)
+                eyear = int(pd.Timestamp(time_vals[-1]).year)
+            except Exception:
+                syear = ""
+                eyear = ""
         else:
             syear = ""
             eyear = ""
@@ -622,6 +628,7 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
     rows = []
     try:
         import numpy as np
+        import pandas as pd
         import xarray as xr
 
         ds = xr.open_dataset(nc_file)
@@ -648,8 +655,12 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
         eyear = ""
         if time_dim and ds.sizes[time_dim] > 0:
             time_vals = ds[time_dim].values
-            syear = int(str(time_vals[0])[:4])
-            eyear = int(str(time_vals[-1])[:4])
+            try:
+                syear = int(pd.Timestamp(time_vals[0]).year)
+                eyear = int(pd.Timestamp(time_vals[-1]).year)
+            except Exception:
+                syear = ""
+                eyear = ""
 
         for i in range(n_stations):
             station_id = str(ds[stn_dim].values[i]) if stn_dim in ds.coords else str(i)

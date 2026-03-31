@@ -77,17 +77,22 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
         # Try each fallback
         for fb in fallbacks:
             if fb.varname in available:
-                logger.info(
-                    "Varname fallback: %s not found → using %s (%s, convert: %s)",
-                    primary, fb.varname, fb.varunit, fb.convert or "none",
-                )
+                if fb.convert:
+                    logger.warning(
+                        "Varname fallback: %s not found → using %s; convert expression '%s' "
+                        "must be applied by the processing pipeline (not yet auto-applied by adapter).",
+                        primary, fb.varname, fb.convert,
+                    )
+                else:
+                    logger.info(
+                        "Varname fallback: %s not found → using %s (%s)",
+                        primary, fb.varname, fb.varunit or "no unit",
+                    )
                 # Return fallback's own unit (conversion happens in custom filter)
                 return fb.varname, fb.varunit or primary_unit
 
         # Legacy list fallback (no unit info)
-        if isinstance(profile_var, list if not hasattr(profile_var, "varname") else type(None)):
-            pass
-        elif hasattr(profile_var, "varname") and isinstance(profile_var.varname, list):
+        if hasattr(profile_var, "varname") and isinstance(profile_var.varname, list):
             for vn in profile_var.varname[1:]:
                 if vn in available:
                     logger.info("Varname fallback (legacy): %s → %s", primary, vn)
