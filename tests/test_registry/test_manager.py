@@ -1,5 +1,19 @@
 """Tests for RegistryManager."""
 
+from types import SimpleNamespace
+
+import openbench.config as config_module
+import openbench.data.registry as registry_package
+import openbench.data.registry.manager as registry_manager_module
+import openbench.cli.check as check_module
+from openbench.config.adapter import build_legacy_namelists
+from openbench.config.schema import (
+    ComparisonConfig,
+    EvaluationConfig,
+    OpenBenchConfig,
+    ProjectConfig,
+    SimulationEntry,
+)
 from openbench.data.registry.manager import RegistryManager, _auto_resolve_variant
 from openbench.data.registry.schema import ReferenceDataset
 
@@ -91,6 +105,73 @@ def test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie():
     ref = mgr.get_reference("Demo", sim_tim_res="Month", sim_grid_res=0.25)
     assert ref is not None
     assert ref.name == "Demo_LowRes"
+
+
+def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_entry(monkeypatch):
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="fallback", output_dir="/out", years=[2000, 2001]),
+        evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+        reference={"Evapotranspiration": "CARE"},
+        simulation={
+            "First": SimulationEntry(model="FirstModel", root_dir="/s1"),
+            "Second": SimulationEntry(
+                model="SecondModel",
+                root_dir="/s2",
+                tim_res="Month",
+                grid_res=0.25,
+            ),
+        },
+        comparison=ComparisonConfig(),
+    )
+
+    class CheckRegistryManager:
+        def get_reference(self, name, sim_tim_res=None, sim_grid_res=None):
+            check_calls.append((name, sim_tim_res, sim_grid_res))
+            if sim_tim_res is None and sim_grid_res is None:
+                return None
+            return SimpleNamespace(
+                name="CARE_MidRes",
+                data_type="grid",
+                tim_res=sim_tim_res,
+                grid_res=sim_grid_res,
+            )
+
+        def get_resolution_variants(self, name):
+            if name == "CARE":
+                return {"MidRes": SimpleNamespace(name="CARE_MidRes", data_type="grid", tim_res="Month", grid_res=0.25)}
+            return {}
+
+    class AdapterRegistryManager:
+        def get_reference(self, name, sim_tim_res=None, sim_grid_res=None):
+            adapter_calls.append((name, sim_tim_res, sim_grid_res))
+            return None
+
+        def get_model(self, name):
+            return None
+
+    check_calls = []
+    adapter_calls = []
+
+    monkeypatch.setattr(config_module, "load_config", lambda _path: cfg)
+    monkeypatch.setattr(config_module, "ConfigError", Exception)
+    monkeypatch.setattr(registry_package, "RegistryManager", CheckRegistryManager)
+    monkeypatch.setattr(check_module.click, "secho", lambda *args, **kwargs: None)
+    monkeypatch.setattr(check_module.click, "echo", lambda *args, **kwargs: None)
+
+    check_module.check.callback("/tmp/fallback.yaml")
+
+    monkeypatch.setattr(registry_manager_module, "RegistryManager", AdapterRegistryManager)
+
+    main_nl, ref_nml, sim_nml = build_legacy_namelists(cfg)
+
+    assert check_calls == [
+        ("CARE", None, None),
+        ("CARE", "Month", 0.25),
+    ]
+    assert adapter_calls == [("CARE", None, None)]
+    assert ref_nml["general"]["Evapotranspiration_ref_source"] == "CARE"
+    assert sim_nml["Evapotranspiration"]["First_varname"] == "Evapotranspiration"
+    assert main_nl["general"]["basename"] == "fallback"
 
 
 def test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_waste_penalty():
