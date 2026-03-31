@@ -95,7 +95,10 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
 
     groups: dict[str, DatasetGroup] = {}
 
-    # Scan grid data: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
+    # Scan grid data: Grid/{Res}/<Category>/<Variable>/<Dataset>/*.nc
+    # Walk 3 levels of directories. Skip "Composite" category (non-standard, register manually).
+    # If a 3rd-level dir has NC files → standard dataset.
+    # If not but its children do → dataset with sub-dirs (depth 4).
     grid_dir = ref_root / "Grid"
     if grid_dir.exists():
         for res_name in ["LowRes", "MidRes", "HigRes"]:
@@ -105,6 +108,8 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
 
             for category_dir in _iter_dirs(res_dir):
                 cat_name = category_dir.name
+                if cat_name == "Composite":
+                    continue  # Non-standard structure, register manually
                 category = CATEGORY_MAP.get(cat_name, cat_name)
 
                 for var_dir in _iter_dirs(category_dir):
@@ -112,12 +117,22 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
 
                     for dataset_dir in _iter_dirs(var_dir):
                         dataset_name = dataset_dir.name
+
+                        # Check for NC files directly in this dir
                         nc_count = len(list(dataset_dir.glob("*.nc")))
+
+                        # Also check one level deeper (e.g., Crop/GDHY2019ver/maize/)
+                        if nc_count == 0:
+                            for sub in _iter_dirs(dataset_dir):
+                                sub_nc = len(list(sub.glob("*.nc")))
+                                if sub_nc > 0:
+                                    nc_count += sub_nc
+
                         if nc_count == 0:
                             continue
 
-                        # Detect time resolution from filenames
                         tim_res = _detect_tim_res(dataset_dir)
+                        sub_dir = str(dataset_dir.relative_to(res_dir))
 
                         if dataset_name not in groups:
                             groups[dataset_name] = DatasetGroup(base_name=dataset_name)
@@ -128,16 +143,14 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
                                 resolution=res_name,
                                 category=category,
                                 data_type="grid",
-                                root_dir=str(category_dir.parent),  # e.g., .../Grid/LowRes
+                                root_dir=str(res_dir),
                                 tim_res=tim_res,
                             )
 
                         scanned = groups[dataset_name].variants[res_name]
-                        scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
-                        scanned.file_count += nc_count
-
-            # Note: Composite directory is skipped — its structure is non-standard.
-            # Use 'openbench data register' to manually register Composite datasets.
+                        if var_name not in scanned.variables:
+                            scanned.variables[var_name] = sub_dir
+                            scanned.file_count += nc_count
 
     # Scan station data: Station/<category>/<variable>/<dataset>/
     stn_dir = ref_root / "Station"
