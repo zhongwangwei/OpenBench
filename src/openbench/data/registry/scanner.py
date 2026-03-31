@@ -136,6 +136,70 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
                         scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
                         scanned.file_count += nc_count
 
+            # Also scan Composite: <res>/Composite/<Dataset>/<Variable>/<SubDataset>/files.nc
+            # or: <res>/Composite/<Dataset>/<Category>/files.nc
+            composite_dir = res_dir / "Composite"
+            if composite_dir.exists():
+                for dataset_dir_l1 in _iter_dirs(composite_dir):
+                    # L1 is the dataset family (e.g., FLUXCOM, ILAMB, GLEAM_v4.2)
+                    for var_or_cat_dir in _iter_dirs(dataset_dir_l1):
+                        var_or_cat = var_or_cat_dir.name
+
+                        # Check: does this dir have NC files directly?
+                        nc_here = list(var_or_cat_dir.glob("*.nc"))
+                        if nc_here:
+                            # Structure: Composite/<Dataset>/<Variable>/files.nc
+                            # variable name comes from parent dir or NC content
+                            dataset_name = dataset_dir_l1.name
+                            nc_info = _inspect_nc_file(var_or_cat_dir)
+                            actual_varname = nc_info.get("varname", var_or_cat)
+                            # Map NC variable to standard name using dir name as hint
+                            std_var = var_or_cat  # dir name IS the standard variable name
+
+                            if dataset_name not in groups:
+                                groups[dataset_name] = DatasetGroup(base_name=dataset_name)
+
+                            if res_name not in groups[dataset_name].variants:
+                                groups[dataset_name].variants[res_name] = ScannedDataset(
+                                    name=dataset_name,
+                                    resolution=res_name,
+                                    category="Other",
+                                    data_type="grid",
+                                    root_dir=str(res_dir),
+                                    tim_res=_detect_tim_res(var_or_cat_dir),
+                                )
+
+                            scanned = groups[dataset_name].variants[res_name]
+                            scanned.variables[std_var] = str(var_or_cat_dir.relative_to(res_dir))
+                            scanned.file_count += len(nc_here)
+
+                        else:
+                            # Structure: Composite/<Dataset>/<Variable>/<SubDataset>/files.nc
+                            for sub_dataset_dir in _iter_dirs(var_or_cat_dir):
+                                nc_files = list(sub_dataset_dir.glob("*.nc"))
+                                if not nc_files:
+                                    continue
+
+                                dataset_name = sub_dataset_dir.name
+                                std_var = var_or_cat
+
+                                if dataset_name not in groups:
+                                    groups[dataset_name] = DatasetGroup(base_name=dataset_name)
+
+                                if res_name not in groups[dataset_name].variants:
+                                    groups[dataset_name].variants[res_name] = ScannedDataset(
+                                        name=dataset_name,
+                                        resolution=res_name,
+                                        category="Other",
+                                        data_type="grid",
+                                        root_dir=str(res_dir),
+                                        tim_res=_detect_tim_res(sub_dataset_dir),
+                                    )
+
+                                scanned = groups[dataset_name].variants[res_name]
+                                scanned.variables[std_var] = str(sub_dataset_dir.relative_to(res_dir))
+                                scanned.file_count += len(nc_files)
+
     # Scan station data: Station/<category>/<variable>/<dataset>/
     stn_dir = ref_root / "Station"
     if stn_dir.exists():
