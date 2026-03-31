@@ -137,10 +137,10 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Outcome: `_auto_resolve_variant()` drops the insufficient-frequency option when valid candidates exist, chooses the closest-grid valid candidate, and treats higher-than-needed frequency as only a secondary penalty
 - Evidence: `test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_waste_penalty` passed in the same `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` run
 
-### Cleared suspicion: CLI check and config adapter derive the same target resolution before delegating to RegistryManager
+### Confirmed problem: CLI check and config adapter diverge when comparison resolution is unset and the first simulation entry is incomplete
 
-- Classification: Cleared suspicion
-- Code location: `src/openbench/cli/check.py:32-58`, `src/openbench/config/adapter.py:275-291`
-- Trigger: comparison tim/grid resolution is unset and the code has to fall back to simulation metadata
-- Outcome: both paths prefer `cfg.comparison.tim_res/grid_res` first, then take the first populated simulation `tim_res/grid_res`; both hand the final target context to `RegistryManager.get_reference`, so base-name acceptance and variant requirement stay aligned
-- Evidence: direct code inspection of the two call sites shows the same comparison-first, simulation-fallback derivation; the manager tests above confirm the delegated resolver behavior on real catalog entries
+- Classification: Problem
+- Code location: `src/openbench/cli/check.py:32-45`, `src/openbench/config/adapter.py:275-287`
+- Trigger: `cfg.comparison.tim_res` and/or `cfg.comparison.grid_res` are unset, and the first simulation entry lacks one of the fallback resolution values while a later simulation entry provides it
+- Outcome: `check.py` scans simulation entries until it finds populated `tim_res` and `grid_res`, but `to_legacy_config()` in `config/adapter.py` stops after the first simulation entry regardless of whether that entry actually supplies values; the adapter can therefore leave the derived target resolution unset when `check.py` would recover it
+- Evidence: direct code inspection of the two loops shows the mismatch. `check.py` uses `if not target_*: for entry in cfg.simulation.values(): if entry.*: target_* = entry.*; break`, while `config/adapter.py` uses `for entry in cfg.simulation.values(): target_* = entry.* or target_*; break`, which only consults the first simulation item
