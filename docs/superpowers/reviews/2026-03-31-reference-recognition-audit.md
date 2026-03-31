@@ -110,3 +110,11 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Trigger: an inspected NetCDF file exposes 2+ data variables
 - Outcome: `on_multi_var` is called with `(var_name, sub_dir, all_vars)` to choose a `varname`; if no callback is supplied, the first discovered variable remains authoritative
 - Evidence: code inspection of the `len(all_vars) > 1 and on_multi_var` branch; this is an explicit confirmation hook, not an automatic reconciliation step
+
+### Confirmed problem: caller-side descriptor selection can shadow variant-specific metadata with base-name matches
+
+- Classification: Problem
+- Code location: `src/openbench/cli/data.py:361-376`, `src/openbench/gui/app.py:101-118`, `src/openbench/gui/pages/page_ref_data.py:252-265`
+- Trigger: a scanned variant has both a standalone base-name descriptor and a resolution-specific registry entry available in the registry
+- Outcome: the CLI scan path evaluates `mgr.get_reference(variant.name)` before `mgr.get_reference(variant.registry_name)`, so a truthy base-name match prevents the registry-name fallback; the GUI app and page scan path only query `variant.name` / `base_name`, so they never consider the registry-name descriptor at all
+- Evidence: `tests/test_registry/test_scanner_registration.py::test_cli_scan_prefers_base_name_existing_descriptor_before_registry_name` passed and recorded only the base-name lookup; the cited source lines show the exact short-circuit and base-name-only lookup behavior
