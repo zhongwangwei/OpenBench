@@ -5,58 +5,58 @@ CLM5:
   grid_res: 1.25
   tim_res: Month
   variables:
-    Evapotranspiration: &id001
+    Evapotranspiration: &id002
       varname: QFLX_EVAP_TOT
       varunit: mm day-1
-    Latent_Heat: &id002
+    Latent_Heat: &id003
       varname: EFLX_LH_TOT
       varunit: W m-2
-    Sensible_Heat: &id003
+    Sensible_Heat: &id004
       varname: FSH
       varunit: W m-2
-    Gross_Primary_Productivity: &id004
+    Gross_Primary_Productivity: &id005
       varname: GPP
       varunit: gC m-2 s-1
-    Net_Ecosystem_Exchange: &id005
+    Net_Ecosystem_Exchange: &id006
       varname: NEE
       varunit: gC m-2 s-1
-    Net_Radiation: &id006
+    Net_Radiation: &id007
       varname: Net_Radiation
       varunit: W m-2
       compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE']
-    Total_Runoff: &id007
+    Total_Runoff: &id008
       varname: QRUNOFF
       varunit: mm day-1
-    Surface_Soil_Moisture: &id008
+    Surface_Soil_Moisture: &id009
       varname: Surface_Soil_Moisture
       varunit: m3 m-3
       compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06
         / 1000.0
-    Surface_Soil_Temperature: &id009
+    Surface_Soil_Temperature: &id010
       varname: TSOI_10CM
       varunit: K
-    Snow_Water_Equivalent: &id010
+    Snow_Water_Equivalent: &id011
       varname: H2OSNO
       varunit: mm
-    Leaf_Area_Index: &id011
+    Leaf_Area_Index: &id012
       varname: TLAI
       varunit: m2 m-2
-    Surface_Albedo: &id012
+    Surface_Albedo: &id013
       varname: Surface_Albedo
       varunit: '-'
       compute: ds['FSR'] / ds['FSDS']
-    Surface_Net_LW_Radiation: &id013
+    Surface_Net_LW_Radiation: &id014
       varname: FIRA
       varunit: W m-2
       compute: -ds['FIRA']
-    Root_Zone_Soil_Moisture: &id014
+    Root_Zone_Soil_Moisture: &id015
       varname: Root_Zone_Soil_Moisture
       varunit: m3 m-3
       compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1) + ds['SOILLIQ'].isel(levsoi=2)
         + ds['SOILLIQ'].isel(levsoi=3) + ds['SOILLIQ'].isel(levsoi=4) + ds['SOILLIQ'].isel(levsoi=5)
         + ds['SOILLIQ'].isel(levsoi=6) + ds['SOILLIQ'].isel(levsoi=7) + ds['SOILLIQ'].isel(levsoi=8)
         * 0.29) / 1000.0
-    Ground_Heat: &id015
+    Ground_Heat: &id016
       varname: Ground_Heat
       varunit: W m-2
       compute: ds['FSDS'] - ds['FSR'] + ds['FLDS'] - ds['FIRE'] - ds['FSH'] - ds['EFLX_LH_TOT']
@@ -258,27 +258,33 @@ CoLM2024:
     Streamflow:
       varname: outflw
       varunit: m3 s-1
-      prefix_fallback:
+      prefix_fallback: &id001
       - _cama_
       - _unitcat_
+      fallbacks:
+      - varname: f_discharge
+        varunit: m3 s-1
     Dam_Inflow:
       varname: daminf
       varunit: m3 s-1
-      prefix_fallback:
-      - _cama_
-      - _unitcat_
+      prefix_fallback: *id001
+      fallbacks:
+      - varname: qresv_in
+        varunit: m3 s-1
     Dam_Outflow:
       varname: damouf
       varunit: m3 s-1
-      prefix_fallback:
-      - _cama_
-      - _unitcat_
+      prefix_fallback: *id001
+      fallbacks:
+      - varname: qresv_out
+        varunit: m3 s-1
     Dam_Water_Storage:
       varname: damsto
       varunit: m3
-      prefix_fallback:
-      - _cama_
-      - _unitcat_
+      prefix_fallback: *id001
+      fallbacks:
+      - varname: volresv
+        varunit: m3
     Dam_Water_Elevation:
       varname: sfcelv
       varunit: m
@@ -300,9 +306,10 @@ CoLM2024:
     River_Water_Level:
       varname: sfcelv
       varunit: m
-      prefix_fallback:
-      - _cama_
-      - _unitcat_
+      prefix_fallback: *id001
+      fallbacks:
+      - varname: f_wdpth_ucat
+        varunit: m
   time_offset:
     Month:
       default: '0'
@@ -448,21 +455,21 @@ BCC_AVIM:
   data_type: grid
   tim_res: Month
   variables:
-    Evapotranspiration: *id001
-    Latent_Heat: *id002
-    Sensible_Heat: *id003
-    Gross_Primary_Productivity: *id004
-    Net_Ecosystem_Exchange: *id005
-    Net_Radiation: *id006
-    Total_Runoff: *id007
-    Surface_Soil_Moisture: *id008
-    Surface_Soil_Temperature: *id009
-    Snow_Water_Equivalent: *id010
-    Leaf_Area_Index: *id011
-    Surface_Albedo: *id012
-    Surface_Net_LW_Radiation: *id013
-    Root_Zone_Soil_Moisture: *id014
-    Ground_Heat: *id015
+    Evapotranspiration: *id002
+    Latent_Heat: *id003
+    Sensible_Heat: *id004
+    Gross_Primary_Productivity: *id005
+    Net_Ecosystem_Exchange: *id006
+    Net_Radiation: *id007
+    Total_Runoff: *id008
+    Surface_Soil_Moisture: *id009
+    Surface_Soil_Temperature: *id010
+    Snow_Water_Equivalent: *id011
+    Leaf_Area_Index: *id012
+    Surface_Albedo: *id013
+    Surface_Net_LW_Radiation: *id014
+    Root_Zone_Soil_Moisture: *id015
+    Ground_Heat: *id016
   time_offset:
     Month:
       default: -1 months
