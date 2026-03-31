@@ -43,7 +43,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Code location: `src/openbench/data/registry/scanner.py:421-433`
 - Trigger: a dataset directory whose first `.nc` stem contains `3hourly`
 - Outcome: `_detect_tim_res()` returns `Hour` because the generic `hourly` branch runs before the more specific `3hour` branch
-- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py` failed on `sample_3hourly.nc` with `AssertionError: assert 'Hour' == '3Hour'`
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_detect_tim_res_prefers_3hour_over_hourly` failed on `sample_3hourly.nc` with `AssertionError: assert 'Hour' == '3Hour'`
 
 ### Confirmed limitation: grid discovery only walks the intended tree shape
 
@@ -55,7 +55,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 
 ### Cleared suspicion: Composite is intentionally skipped
 
-- Classification: Cleared suspicion
+- Classification: Improvement item
 - Code location: `src/openbench/data/registry/scanner.py:114-119`
 - Trigger: `Grid/<Res>/Composite/...`
 - Outcome: the scanner emits a progress note and skips the category instead of treating it as a standard discovered dataset
