@@ -263,22 +263,35 @@ def register_scanned_dataset(
 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build descriptor
+    # Build descriptor — mark fields that are defaults (not verified from data)
+    unverified = []  # Track which fields are guessed defaults
+
+    tim_res = scanned.tim_res
+    if not tim_res:
+        tim_res = "Month"
+        unverified.append("tim_res")
+
     descriptor = {
         "name": scanned.registry_name,
         "description": f"{scanned.name} reference dataset ({scanned.resolution})",
         "category": scanned.category,
         "data_type": scanned.data_type,
-        "tim_res": scanned.tim_res or "Month",
+        "tim_res": tim_res,
         "data_groupby": "Year",
         "timezone": 0,
-        "years": [1980, 2023],  # Default, user should verify
         "root_dir": scanned.root_dir,
     }
+
+    # Year range: only set if detected from NC files (not hardcoded default)
+    # Will be updated per-variable below from _inspect_nc_file if detected
 
     if scanned.data_type == "grid":
         res_info = RESOLUTION_MAP.get(scanned.resolution, {})
         descriptor["grid_res"] = res_info.get("typical_grid_res", 0.25)
+        unverified.append("grid_res")
+
+    if unverified:
+        descriptor["_unverified"] = unverified
 
     # Build variables section
     # Priority: existing_descriptor > NC file inspection > directory name fallback
@@ -425,21 +438,22 @@ def _detect_tim_res(dataset_dir: Path) -> str:
         return ""
 
     name = nc_files[0].stem.lower()
-    if "daily" in name or "_daily" in str(dataset_dir).lower():
-        return "Day"
-    if "hourly" in name or "_hourly" in str(dataset_dir).lower():
-        return "Hour"
-    if "3hour" in name or "3h" in name:
+    dir_str = str(dataset_dir).lower()
+
+    # Check specific sub-daily BEFORE generic "hourly"/"daily" to avoid substring false matches
+    # e.g., "3hourly" contains "hourly" — must check "3hour" first
+    if "3hour" in name or "3h" in name or "3hour" in dir_str:
         return "3Hour"
-    if "8daily" in name or "8day" in name:
+    if "6hour" in name or "6h" in name or "6hour" in dir_str:
+        return "6Hour"
+    if "8daily" in name or "8day" in name or "8day" in dir_str:
         return "8Day"
 
-    # Check if parent directory hints at resolution
-    dir_str = str(dataset_dir).lower()
-    if "daily" in dir_str:
-        return "Day"
-    if "hourly" in dir_str:
+    # Then generic hourly/daily
+    if "hourly" in name or "hourly" in dir_str:
         return "Hour"
+    if "daily" in name or "daily" in dir_str:
+        return "Day"
 
     return "Month"  # Default assumption
 

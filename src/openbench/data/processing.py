@@ -1247,14 +1247,57 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 logging.error("Variable name list is empty")
                 raise ValueError("Variable name list cannot be empty")
 
-            # Check if variable exists in dataset
-            if varname[0] not in ds:
-                available_vars = list(ds.data_vars) + list(ds.coords)
-                logging.error(f"Variable '{varname[0]}' not found in dataset")
-                logging.error(f"Available variables: {available_vars}")
-                raise KeyError(f"Variable '{varname[0]}' not in dataset")
+            # Check if variable exists in dataset; if not, try fallback varnames from model profile
+            target_var = varname[0]
+            if target_var not in ds:
+                # Try to find a fallback from the model profile
+                fallback_found = False
+                try:
+                    source = getattr(self, f"{datasource}_source", "")
+                    model = getattr(self, f"{source}_model", source)
+                    from openbench.data.registry import RegistryManager
 
-            ds = Convert_Type.convert_nc(ds[varname[0]])
+                    mgr = RegistryManager()
+                    profile = mgr.get_model(model)
+                    item = getattr(self, "item", "")
+                    if profile and item in profile.variables:
+                        var_mapping = profile.variables[item]
+                        # Try fallbacks
+                        if var_mapping.fallbacks:
+                            for fb in var_mapping.fallbacks:
+                                if fb.varname in ds:
+                                    logging.warning(
+                                        "Variable '%s' not found, using fallback '%s'",
+                                        target_var, fb.varname,
+                                    )
+                                    target_var = fb.varname
+                                    setattr(self, f"{datasource}_varname", [target_var])
+                                    if fb.varunit:
+                                        setattr(self, f"{datasource}_varunit", fb.varunit)
+                                    fallback_found = True
+                                    break
+                        # Try legacy list fallback
+                        if not fallback_found and isinstance(var_mapping.varname, list):
+                            for vn in var_mapping.varname:
+                                if vn in ds and vn != target_var:
+                                    logging.warning(
+                                        "Variable '%s' not found, using fallback '%s'",
+                                        target_var, vn,
+                                    )
+                                    target_var = vn
+                                    setattr(self, f"{datasource}_varname", [target_var])
+                                    fallback_found = True
+                                    break
+                except Exception as e:
+                    logging.debug("Fallback lookup failed: %s", e)
+
+                if not fallback_found:
+                    available_vars = list(ds.data_vars) + list(ds.coords)
+                    logging.error(f"Variable '{varname[0]}' not found in dataset")
+                    logging.error(f"Available variables: {available_vars}")
+                    raise KeyError(f"Variable '{varname[0]}' not in dataset")
+
+            ds = Convert_Type.convert_nc(ds[target_var])
         return ds
 
     def _try_compute_from_profile(self, model: str, ds, datasource: str):

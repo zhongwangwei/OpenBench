@@ -51,6 +51,23 @@ def get_writable_registry_dir() -> Path:
     return fallback
 
 
+_REGISTRY_CACHE: Optional["RegistryManager"] = None
+
+
+def get_registry() -> "RegistryManager":
+    """Get a cached RegistryManager instance (avoids re-reading YAML on every call)."""
+    global _REGISTRY_CACHE
+    if _REGISTRY_CACHE is None:
+        _REGISTRY_CACHE = RegistryManager()
+    return _REGISTRY_CACHE
+
+
+def clear_registry_cache() -> None:
+    """Clear the cached instance (e.g., after registering new datasets)."""
+    global _REGISTRY_CACHE
+    _REGISTRY_CACHE = None
+
+
 class RegistryManager:
     """Manages reference dataset and model profile descriptors."""
 
@@ -298,7 +315,20 @@ def _auto_resolve_variant(
         return (spatial_diff, time_excess)
 
     candidates.sort(key=_score)
-    return candidates[0][1]
+
+    # Prefer variants whose root_dir actually exists on disk
+    best = candidates[0][1]
+    if best.root_dir and not Path(best.root_dir).is_dir():
+        for _, ref, _ in candidates[1:]:
+            if ref.root_dir and Path(ref.root_dir).is_dir():
+                logger.info(
+                    "Auto-resolve: preferred %s has no data on disk, using %s instead",
+                    best.name, ref.name,
+                )
+                return ref
+        logger.warning("Auto-resolve: %s selected but root_dir not found: %s", best.name, best.root_dir)
+
+    return best
 
 
 def _parse_fallbacks(raw_list: list | None) -> list[FallbackVar] | None:

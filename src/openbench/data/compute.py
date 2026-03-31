@@ -29,7 +29,7 @@ _SAFE_NODES = {
     ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
     ast.Subscript, ast.Attribute, ast.Index, ast.Slice,
-    ast.Name, ast.Load, ast.Constant, ast.Num, ast.Str,
+    ast.Name, ast.Load, ast.Constant,
     ast.Call, ast.keyword, ast.Starred,
     ast.Tuple, ast.List,
     ast.IfExp,

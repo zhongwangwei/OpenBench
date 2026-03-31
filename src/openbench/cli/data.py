@@ -378,9 +378,22 @@ def scan(ref_root, auto):
         click.secho(f"  ✓ {variant.registry_name}", fg="green")
         registered += 1
 
+    # Clear registry cache so subsequent lookups see newly registered datasets
+    from openbench.data.registry.manager import clear_registry_cache
+
+    clear_registry_cache()
+
     click.echo()
     click.secho(f"Registered {registered} dataset(s).", fg="green", bold=True)
     click.echo("Verify: openbench data list")
+
+    # Warn about unverified defaults
+    click.echo()
+    click.secho(
+        "Note: Some fields (tim_res, grid_res, years) may be defaults and not verified from data.",
+        fg="yellow",
+    )
+    click.echo("Use 'openbench data show <name>' to check, and 'openbench data register <name>' to fix.")
 
 
 @data.command()

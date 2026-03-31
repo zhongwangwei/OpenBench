@@ -24,9 +24,9 @@ def check(config):
     )
 
     click.secho(f"\nReference data ({len(cfg.reference)} sources):", bold=True)
-    from openbench.data.registry import RegistryManager
+    from openbench.data.registry.manager import get_registry
 
-    mgr = RegistryManager()
+    mgr = get_registry()
     has_errors = False
 
     # Derive target resolution for auto-resolve:
@@ -45,36 +45,26 @@ def check(config):
                 break
 
     for var, source in cfg.reference.items():
-        ref = mgr.get_reference(source)
+        # Always use the same resolution logic as the adapter:
+        # pass sim context so auto-resolve behaves identically
+        ref = mgr.get_reference(source, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res)
         if ref is not None:
-            click.secho(f"  ✓ {var} → {source} ({ref.data_type}, {ref.tim_res})", fg="green")
+            if ref.name != source:
+                click.secho(
+                    f"  ✓ {var} → {source} → {ref.name} ({ref.data_type}, {ref.tim_res}, {ref.grid_res}°)",
+                    fg="cyan",
+                )
+            else:
+                click.secho(f"  ✓ {var} → {source} ({ref.data_type}, {ref.tim_res})", fg="green")
         else:
             # Check if it's a base name with resolution variants
             variants = mgr.get_resolution_variants(source)
             if variants:
-                # Try auto-resolve using simulation context
-                resolved = mgr.get_reference(
-                    source, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res
-                )
-                if resolved:
-                    reason_parts = []
-                    if target_tim_res:
-                        reason_parts.append(f"target tim_res={target_tim_res}")
-                    if target_grid_res:
-                        reason_parts.append(f"target grid_res={target_grid_res}°")
-                    reason = f" (matched to {', '.join(reason_parts)})" if reason_parts else ""
-
-                    click.secho(
-                        f"  ✓ {var} → {source} → auto-resolved to {resolved.name}"
-                        f" ({resolved.data_type}, {resolved.tim_res}, {resolved.grid_res}°){reason}",
-                        fg="cyan",
-                    )
-                else:
-                    click.secho(f"  ✗ {var} → {source}", fg="red")
-                    click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
-                    for label, v in sorted(variants.items()):
-                        click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
-                    has_errors = True
+                click.secho(f"  ✗ {var} → {source}", fg="red")
+                click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
+                for label, v in sorted(variants.items()):
+                    click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
+                has_errors = True
             else:
                 click.secho(f"  ⚠ {var} → {source} (not in registry, will use inline config)", fg="yellow")
 

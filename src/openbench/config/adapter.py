@@ -247,9 +247,9 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
     Returns:
         (main_nl, ref_nml, sim_nml) tuple of legacy-format dicts.
     """
-    from openbench.data.registry.manager import RegistryManager
+    from openbench.data.registry.manager import get_registry
 
-    registry = RegistryManager()
+    registry = get_registry()
     legacy = to_legacy_config(cfg)
 
     # --- main_nl: general settings + evaluation_items ---
@@ -292,7 +292,18 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
 
         # Update source name to resolved name (may differ from base name)
         resolved_name = ref_ds.name if ref_ds else ref_source_name
+        if resolved_name != ref_source_name:
+            logger.info(
+                "Reference auto-resolved: %s → %s for variable %s "
+                "(tim_res=%s, grid_res=%s)",
+                ref_source_name, resolved_name, var_name,
+                ref_ds.tim_res if ref_ds else "?",
+                ref_ds.grid_res if ref_ds else "?",
+            )
         ref_general[f"{var_name}_ref_source"] = resolved_name
+        # Also store the original base name for traceability
+        if resolved_name != ref_source_name:
+            ref_general[f"{var_name}_ref_source_original"] = ref_source_name
         section: dict[str, Any] = {}
         prefix = resolved_name
 
@@ -304,6 +315,12 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
 
             # Construct directory: data_root / sub_dir or root_dir / sub_dir
             data_root = cfg.options.data_root or ref_ds.root_dir or ""
+            if not data_root:
+                logger.warning(
+                    "No data_root or root_dir for reference %s variable %s. "
+                    "Set options.data_root in config or register with --root-dir.",
+                    resolved_name, var_name,
+                )
             ref_dir = data_root
             if var_map.sub_dir:
                 ref_dir = os.path.join(ref_dir, var_map.sub_dir) if ref_dir else var_map.sub_dir
@@ -332,10 +349,24 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 section[f"{prefix}_min_uparea"] = var_map.min_uparea
         else:
             logger.warning(
-                "Reference %s not found in registry; variable %s will need inline config",
+                "Reference %s not found in registry; variable %s using minimal defaults. "
+                "Register the dataset or provide inline config.",
                 ref_source_name,
                 var_name,
             )
+            # Provide minimal defaults so processing doesn't crash on missing keys
+            section[f"{prefix}_data_type"] = "grid"
+            section[f"{prefix}_varname"] = var_name
+            section[f"{prefix}_varunit"] = ""
+            section[f"{prefix}_data_groupby"] = "Year"
+            section[f"{prefix}_tim_res"] = "Month"
+            section[f"{prefix}_grid_res"] = None
+            section[f"{prefix}_syear"] = cfg.project.years[0]
+            section[f"{prefix}_eyear"] = cfg.project.years[1]
+            section[f"{prefix}_dir"] = cfg.options.data_root or ""
+            section[f"{prefix}_prefix"] = ""
+            section[f"{prefix}_suffix"] = ""
+            section[f"{prefix}_timezone"] = 0
 
         ref_sections[var_name] = section
 

@@ -152,20 +152,25 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
     check_calls = []
     adapter_calls = []
 
+    check_mgr = CheckRegistryManager()
+    adapter_mgr = AdapterRegistryManager()
+
     monkeypatch.setattr(config_module, "load_config", lambda _path: cfg)
     monkeypatch.setattr(config_module, "ConfigError", Exception)
-    monkeypatch.setattr(registry_package, "RegistryManager", CheckRegistryManager)
+    # check.py imports get_registry from registry_manager_module at call time
+    monkeypatch.setattr(registry_manager_module, "get_registry", lambda: check_mgr)
     monkeypatch.setattr(check_module.click, "secho", lambda *args, **kwargs: None)
     monkeypatch.setattr(check_module.click, "echo", lambda *args, **kwargs: None)
 
     check_module.check.callback("/tmp/fallback.yaml")
 
-    monkeypatch.setattr(registry_manager_module, "RegistryManager", AdapterRegistryManager)
+    # adapter uses get_registry() too
+    monkeypatch.setattr(registry_manager_module, "get_registry", lambda: adapter_mgr)
 
     main_nl, ref_nml, sim_nml = build_legacy_namelists(cfg)
 
+    # check.py now always passes sim context (unified with adapter logic)
     assert check_calls == [
-        ("CARE", None, None),
         ("CARE", "Month", 0.25),
     ]
     assert adapter_calls == [("CARE", None, None)]
