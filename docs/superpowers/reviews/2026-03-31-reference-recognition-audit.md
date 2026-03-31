@@ -157,7 +157,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 
 ### Confirmed problem: GUI persistence stores a concrete variant name while runtime still accepts unresolved base names
 
-- Classification: Problem
+- Classification: Improvement item
 - Code location: `src/openbench/gui/pages/page_ref_data.py:300-331`, `src/openbench/gui/pages/page_ref_data.py:337-469`, `src/openbench/cli/check.py:32-79`, `src/openbench/config/adapter.py:289-295`
 - Trigger: a dataset has multiple `_LowRes/_MidRes/_HigRes` variants and the user selects it through the GUI registry picker, or later supplies a base-name reference in config
 - Outcome: the GUI picker resolves the selection to a full registry name and stores that exact `source_name`; runtime paths still accept an unresolved base name and defer binding to `get_reference()` using comparison/simulation context, so the persisted GUI choice and the runtime bind point are not the same abstraction
