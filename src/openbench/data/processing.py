@@ -750,7 +750,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
-        return {
+        params = {
             "data_dir": getattr(self, f"{datasource}_dir"),
             "data_groupby": getattr(self, f"{datasource}_data_groupby").lower(),
             "varname": getattr(self, f"{datasource}_varname"),
@@ -758,11 +758,17 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             "varunit": getattr(self, f"{datasource}_varunit"),
             "prefix": getattr(self, f"{datasource}_prefix"),
             "suffix": getattr(self, f"{datasource}_suffix"),
-            "datasource": datasource,  # This should be 'ref' or 'sim'
+            "datasource": datasource,
             "data_type": getattr(self, f"{datasource}_data_type"),
             "syear": getattr(self, f"{datasource}_syear"),
             "eyear": getattr(self, f"{datasource}_eyear"),
         }
+        # Include prefix_fallback if available (from model profile)
+        source = getattr(self, f"{datasource}_source", "")
+        pf = getattr(self, f"{source}_prefix_fallback", None)
+        if pf:
+            params["prefix_fallback"] = pf
+        return params
 
     @performance_monitor
     def process(self, data: Union[str, xr.Dataset] = None, **kwargs) -> xr.Dataset:
@@ -1433,37 +1439,12 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         datasource: str,
         tim_res: str,
     ) -> xr.Dataset:
-        # Try primary path first (use cached glob for performance)
-        var_files = cached_glob(os.path.join(dirx, f"{prefix}{year}*{suffix}.nc"))
-
-        # Try alternative path if no files found
-        if not var_files:
-            var_files = cached_glob(os.path.join(dirx, str(year), f"{prefix}{year}*{suffix}.nc"))
-
-        # Filter files: only keep files where the part between prefix+year and suffix contains no letters
-        # This prevents matching files like "prefix_cama_year" when we want "prefix_year"
-        # E.g., "FUXI-test_hist_2006-01.nc" ✓, "FUXI-test_hist_cama_2006-01.nc" ✗
-        if var_files:
-            filtered_files = []
-            # Escape special regex characters in prefix and suffix
-            prefix_escaped = re.escape(prefix)
-            suffix_escaped = re.escape(suffix) if suffix else ""
-            # Pattern: prefix + year + (only digits and symbols, no letters) + suffix + .nc
-            pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc$")
-            for f in var_files:
-                filename = os.path.basename(f)
-                if pattern.match(filename):
-                    filtered_files.append(f)
-                else:
-                    logging.debug(f"Filtered out file (contains letters after year): {filename}")
-            var_files = filtered_files
+        var_files = self._find_data_files(dirx, prefix, year, suffix)
 
         # Verify files were found
         if not var_files:
             logging.error(f"No files found for year {year} with prefix '{prefix}' and suffix '{suffix}'")
             logging.error(f"Searched in: {dirx}")
-            logging.error(f"  - Pattern 1: {os.path.join(dirx, f'{prefix}{year}*{suffix}.nc')}")
-            logging.error(f"  - Pattern 2: {os.path.join(dirx, str(year), f'{prefix}{year}*{suffix}.nc')}")
             raise FileNotFoundError(f"No data files found for year {year}")
 
         datasets = []
@@ -1487,6 +1468,66 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return file
 
     @performance_monitor
+    def _get_prefix_fallback_list(self, prefix: str) -> list:
+        """Build list of prefixes to try: primary + fallbacks."""
+        prefixes = [prefix]
+        source = getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
+        pf_list = getattr(self, f"{source}_prefix_fallback", None)
+        if pf_list:
+            for fb in pf_list:
+                if prefix.endswith("_"):
+                    prefixes.append(prefix[:-1] + fb)
+                else:
+                    prefixes.append(prefix + fb)
+        return prefixes
+
+    def _find_single_file(self, dirx: str, prefix: str, suffix: str) -> str:
+        """Find a single data file, trying prefix fallbacks."""
+        for try_prefix in self._get_prefix_fallback_list(prefix):
+            path = os.path.join(dirx, f"{try_prefix}{suffix}.nc")
+            if os.path.exists(path):
+                if try_prefix != prefix:
+                    logging.info(f"Using fallback prefix '{try_prefix}' for single file")
+                return path
+        # Fall through to original check (will raise if not found)
+        return self.check_file_exist(os.path.join(dirx, f"{prefix}{suffix}.nc"))
+
+    def _find_data_files(self, dirx: str, prefix: str, year: int, suffix: str) -> list:
+        """Find data files, trying prefix_fallback if primary prefix has no matches.
+
+        Search order for each prefix:
+            1. dirx/prefix_year*suffix.nc
+            2. dirx/year/prefix_year*suffix.nc
+
+        Prefix order:
+            1. Primary prefix (e.g., "Case01_hist_")
+            2. Fallback prefixes (e.g., "Case01_hist_cama_", "Case01_hist_unitcat_")
+        """
+        for try_prefix in self._get_prefix_fallback_list(prefix):
+            # Try primary path
+            var_files = cached_glob(os.path.join(dirx, f"{try_prefix}{year}*{suffix}.nc"))
+            # Try subdirectory path
+            if not var_files:
+                var_files = cached_glob(os.path.join(dirx, str(year), f"{try_prefix}{year}*{suffix}.nc"))
+
+            # Filter: only keep files where part between prefix+year and suffix has no letters
+            if var_files:
+                filtered = []
+                prefix_escaped = re.escape(try_prefix)
+                suffix_escaped = re.escape(suffix) if suffix else ""
+                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc$")
+                for f in var_files:
+                    if pattern.match(os.path.basename(f)):
+                        filtered.append(f)
+                var_files = filtered
+
+            if var_files:
+                if try_prefix != prefix:
+                    logging.info(f"Using fallback prefix '{try_prefix}' for year {year} (primary '{prefix}' not found)")
+                return var_files
+
+        return []
+
     def check_all(
         self,
         dirx: str,
@@ -1529,7 +1570,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         datasource: str,
     ) -> None:
         logging.debug("The dataset groupby is Single --> split it to Year")
-        varfile = self.check_file_exist(os.path.join(dirx, f"{prefix}{suffix}.nc"))
+        varfile = self._find_single_file(dirx, prefix, suffix)
         ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
