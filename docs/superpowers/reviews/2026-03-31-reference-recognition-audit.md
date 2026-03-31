@@ -210,7 +210,8 @@ The current flow has multiple confirmed correctness problems, not just quality i
 
 1. Fix the time-resolution misclassification bug.
 2. Remove or weaken dangerous registration defaults that turn guesses into facts.
-3. Add regression tests for the confirmed problems and the important cleared suspicions.
+3. Fix the caller-side base-name shadowing so descriptor selection does not hide variant-specific metadata.
 4. Unify CLI and adapter fallback resolution so they bind the same way.
-5. Clean up GUI and documentation semantics so they match runtime behavior.
-6. Evaluate the structural redesign only after the current semantics are stable.
+5. Add regression tests for the confirmed problems fixed in steps 1-4, then extend coverage to the important cleared suspicions that verify the intended invariants.
+6. Clean up GUI and documentation semantics so they match runtime behavior.
+7. Evaluate the structural redesign only after the current semantics are stable.
