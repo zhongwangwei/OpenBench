@@ -529,3 +529,475 @@ CaMa:
       varname: outflw_ocean
       varunit: m3 s-1
   grid_res: 0.25
+JRA3Q:
+  name: JRA3Q
+  description: JRA-3Q Reanalysis Forcing
+  data_type: grid
+  tim_res: Hour
+  variables:
+    Precipitation:
+      varname: tprate
+      varunit: mm s-1
+    Surface_Downward_SW_Radiation:
+      varname: dswrf
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: dlwrf
+      varunit: w m-2
+    Surface_Air_Temperature:
+      varname: tmp
+      varunit: k
+    Surface_Specific_Humidity:
+      varname: spfh
+      varunit: kg kg-1
+    Surface_Wind_Speed:
+      varname: ws
+      varunit: m s-1
+JRA55:
+  name: JRA55
+  description: JRA-55 Reanalysis Forcing
+  data_type: grid
+  tim_res: Day
+  variables:
+    Precipitation:
+      varname: tprate
+      varunit: mm day-1
+    Surface_Downward_SW_Radiation:
+      varname: dswrf
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: dlwrf
+      varunit: w m-2
+    Surface_Air_Temperature:
+      varname: tmp
+      varunit: k
+    Surface_Specific_Humidity:
+      varname: spfh
+      varunit: kg kg-1
+    Surface_Wind_Speed:
+      varname: ws
+      varunit: m s-1
+JULES7:
+  name: JULES7
+  description: JULES Land Surface Model v7
+  data_type: grid
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: ftl_gb
+      varunit: W m-2
+    Latent_Heat:
+      varname: latent_heat
+      varunit: W m-2
+    Net_Radiation:
+      varname: rad_net
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: lw_up
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: sw_net
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: lw_net
+      varunit: W m-2
+    Albedo:
+      varname: albedo_land
+      varunit: unitless
+    Gross_Primary_Productivity:
+      varname: gpp_gb
+      varunit: kg m-2 s-1
+    Ecosystem_Respiration:
+      varname: Ecosystem_Respiration
+      varunit: kg m-2 s-1
+      compute: ds['resp_s_gb'] + ds['resp_p_gb']
+    Leaf_Area_Index:
+      varname: lai_gb
+      varunit: unitless
+    Evapotranspiration:
+      varname: fqw_gb
+      varunit: kg m-2 s-1
+    Soil_Evaporation:
+      varname: esoil_gb
+      varunit: kg m-2 s-1
+    Canopy_Transpiration:
+      varname: et_stom_gb
+      varunit: kg m-2 s-1
+    Total_Runoff:
+      varname: runoff
+      varunit: kg m-2 s-1
+    Surface_Runoff:
+      varname: surf_roff
+      varunit: kg m-2 s-1
+    Subsurface_Runoff:
+      varname: sub_surf_roff
+      varunit: kg m-2 s-1
+    Saturation_Excess_Surface_Runoff:
+      varname: sat_excess_roff
+      varunit: ''
+    Snow_Water_Equivalent:
+      varname: snow_mass
+      varunit: kg m-2
+    Snow_Depth:
+      varname: snow_depth_gb
+      varunit: m
+    Surface_Snow_Cover_In_Fraction:
+      varname: snow_frac
+      varunit: unitless
+    Streamflow:
+      varname: rflow
+      varunit: kg m-2 s-1
+    Inundation_Fraction:
+      varname: frac_fplain_lp
+      varunit: percentage
+LEM2:
+  name: LEM2
+  description: Land surface Energy/water Model 2
+  data_type: grid
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: FSH
+      varunit: w m-2
+    Canopy_Sensible_Heat:
+      varname: FSH_V
+      varunit: w m-2
+    Ground_Sensible_Heat:
+      varname: FSH_G
+      varunit: w m-2
+    Latent_Heat:
+      varname: EFLX_LH_TOT
+      varunit: W m-2
+    Ground_Heat:
+      varname: FGR
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: FSR
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: FIRE
+      varunit: w m-2
+    Surface_Net_LW_Radiation:
+      varname: FIRA
+      varunit: w m-2
+    Canopy_Interception:
+      varname: QVEGE
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: FGEV
+      varunit: w m-2
+    Snow_Evaporation:
+      varname: FSM
+      varunit: w m-2
+    Canopy_Transpiration:
+      varname: QVEGT
+      varunit: mm s-1
+    Surface_Runoff:
+      varname: QOVER
+      varunit: mm s-1
+    Infiltration:
+      varname: QINFL
+      varunit: mm s-1
+    Snow_Water_Equivalent:
+      varname: H2OSNO
+      varunit: mm
+    Lake_Ice_Fraction_Cover:
+      varname: LAKEICEFRAC
+      varunit: unitless
+    Depth_Of_Surface_Water:
+      varname: H2OSFC
+      varunit: mm
+    Surface_Downward_SW_Radiation:
+      varname: FSDS
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: FLDS
+      varunit: w m-2
+    Surface_Specific_Humidity:
+      varname: QBOT
+      varunit: unitless
+LS3MIP:
+  name: LS3MIP
+  description: LS3MIP Land Surface Models
+  data_type: grid
+  tim_res: Month
+  variables:
+    Evapotranspiration:
+      varname: evspsbl
+      varunit: kg m-2 s-1
+    Canopy_Interception:
+      varname: evspsblveg
+      varunit: kg m-2 s-1
+    Total_Runoff:
+      varname: mrro
+      varunit: kg m-2 s-1
+    Canopy_Transpiration:
+      varname: tran
+      varunit: kg m-2 s-1
+MATSIRO:
+  name: MATSIRO
+  description: MATSIRO Land Surface Model
+  data_type: grid
+  tim_res: Month
+  variables: {}
+NoahMP5:
+  name: NoahMP5
+  description: Noah-MP Land Surface Model v5
+  data_type: grid
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: HeatSensibleSfc
+      varunit: w m-2
+    Canopy_Sensible_Heat:
+      varname: HeatSensibleCanopy
+      varunit: w m-2
+    Ground_Latent_Heat:
+      varname: HeatLatentGrd
+      varunit: w m-2
+    Latent_Heat:
+      varname: HeatLatentVegGrd
+      varunit: w m-2
+    Ground_Heat:
+      varname: HeatGroundTot
+      varunit: w m-2
+    Surface_Net_LW_Radiation:
+      varname: RadLwNetSfc
+      varunit: w m-2
+    Albedo:
+      varname: AlbedoSfc
+      varunit: unitless
+    Gross_Primary_Productivity:
+      varname: GrossPriProduction
+      varunit: g m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NetEcoExchange
+      varunit: g m-2 s-1
+    Ecosystem_Respiration:
+      varname: Ecosystem_Respiration
+      varunit: g m-2 s-1
+      compute: ds['RespirationPlantTot'] + ds['RespirationSoil']
+    Veg_Cover_In_Fraction:
+      varname: VegFrac
+      varunit: unitless
+    Leaf_Area_Index:
+      varname: LeafAreaIndex
+      varunit: unitless
+    Stem_Area_Index:
+      varname: StemAreaIndex
+      varunit: unitless
+    Evapotranspiration:
+      varname: WaterToAtmosTotal
+      varunit: mm s-1
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: Canopy_Evaporation_Canopy_Transpiration
+      varunit: mm s-1
+      compute: ds['EvapGroundNet'] + ds['EvapCanopyNet']
+    Canopy_Interception:
+      varname: EvapCanopyNet
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: EvapGroundNet
+      varunit: mm s-1
+    Soil_Evaporation:
+      varname: EvapSoilSfcLiq
+      varunit: mm s-1
+    Canopy_Transpiration:
+      varname: Transpiration
+      varunit: mm s-1
+    Total_Runoff:
+      varname: Total_Runoff
+      varunit: mm/s
+      compute: ds['RunoffSubsurface'] + ds['RunoffSurface']
+    Surface_Runoff:
+      varname: RunoffSurface
+      varunit: mm/s
+    Subsurface_Runoff:
+      varname: RunoffSubsurface
+      varunit: mm/s
+    Snow_Water_Equivalent:
+      varname: SnowWaterEquiv
+      varunit: mm
+    Snow_Depth:
+      varname: SnowDepth
+      varunit: mm
+    Surface_Snow_Cover_In_Fraction:
+      varname: SnowCoverFrac
+      varunit: unitless
+    Water_Table_Depth:
+      varname: WaterTableDepth
+      varunit: m
+    Depth_Of_Surface_Water:
+      varname: WaterHeadSfc
+      varunit: mm
+    Surface_Soil_Moisture:
+      varname: SoilMoisture
+      varunit: unitless
+    Root_Zone_Soil_Moisture:
+      varname: SoilMoisture
+      varunit: unitless
+    Surface_Downward_SW_Radiation:
+      varname: RadLwDownRefHeight
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: RadSwDownRefHeight
+      varunit: w m-2
+    Surface_Specific_Humidity:
+      varname: SpecHumidityRefHeight
+      varunit: unitless
+    Precipitation:
+      varname: Precipitation
+      varunit: mm s-1
+      compute: ds['PrecipConvRefHeight'] + ds['PrecipNonConvRefHeight']
+    Surface_Air_Temperature:
+      varname: TemperatureAirRefHeight
+      varunit: K
+TE:
+  name: TE
+  description: Terrestrial Ecosystem Model
+  data_type: grid
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: SENS
+      varunit: W m-2
+    Latent_Heat:
+      varname: LTNT
+      varunit: W m-2
+    Ground_Heat:
+      varname: GFLXTL
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: SSRU
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: SLRU
+      varunit: W m-2
+    Albedo:
+      varname: ALB
+      varunit: percentage
+    Canopy_Interception:
+      varname: EIFLX
+      varunit: kg m-2 s-1
+    Total_Runoff:
+      varname: RUNOFF
+      varunit: kg m-2 s-1
+    Snow_Water_Equivalent:
+      varname: GLSNW
+      varunit: kg m2-1
+    Surface_Snow_Cover_In_Fraction:
+      varname: SNRAT
+      varunit: unitless
+    Inundation_Fraction:
+      varname: FLDFRC
+      varunit: unitless
+    Inundation_Area:
+      varname: FLDARE
+      varunit: m2
+    Total_Water_Storage:
+      varname: STORGE
+      varunit: m3
+    Surface_Downward_SW_Radiation:
+      varname: SSRD
+      varunit: W m-2
+    Surface_Downward_LW_Radiation:
+      varname: SLRD
+      varunit: W m-2
+    Surface_Specific_Humidity:
+      varname: GDQ
+      varunit: unitless
+VIC5:
+  name: VIC5
+  description: Variable Infiltration Capacity Model v5
+  data_type: grid
+  tim_res: Day
+  variables:
+    Sensible_Heat:
+      varname: OUT_SENSIBLE
+      varunit: w m-2
+    Latent_Heat:
+      varname: OUT_LATENT
+      varunit: w m-2
+    Net_Radiation:
+      varname: OUT_R_NET
+      varunit: w m-2
+    Ground_Heat:
+      varname: OUT_GRND_FLUX
+      varunit: w m-2
+    Surface_Net_SW_Radiation:
+      varname: OUT_SWNET
+      varunit: w m-2
+    Surface_Net_LW_Radiation:
+      varname: Surface_Net_LW_Radiation
+      varunit: w m-2
+      compute: ds['OUT_R_NET']
+    Albedo:
+      varname: OUT_ALBEDO
+      varunit: unitless
+    Veg_Cover_In_Fraction:
+      varname: FCANOPY
+      varunit: unitless
+    Leaf_Area_Index:
+      varname: LAI
+      varunit: unitless
+    Evapotranspiration:
+      varname: OUT_EVAP
+      varunit: mm step-1
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: Canopy_Evaporation_Canopy_Transpiration
+      varunit: mm step-1
+      compute: ds['OUT_EVAP_CANOP'] + ds['OUT_TRANSP_VEG']
+    Canopy_Interception:
+      varname: OUT_EVAP_CANOP
+      varunit: mm step-1
+    Soil_Evaporation:
+      varname: OUT_EVAP_BARE
+      varunit: mm step-1
+    Canopy_Transpiration:
+      varname: OUT_TRANSP_VEG
+      varunit: mm step-1
+    Total_Runoff:
+      varname: OUT_RUNOFF
+      varunit: mm step-1
+    Subsurface_Runoff:
+      varname: OUT_BASEFLOW
+      varunit: mm step-1
+    Snow_Water_Equivalent:
+      varname: OUT_SWE
+      varunit: mm
+    Snow_Depth:
+      varname: OUT_SNOW_DEPTH
+      varunit: cm
+    Surface_Snow_Cover_In_Fraction:
+      varname: OUT_SNOW_COVER
+      varunit: unitless
+    Lake_temperature:
+      varname: OUT_LAKE_SURF_TEMP
+      varunit: C
+    Lake_Ice_Fraction_Cover:
+      varname: OUT_LAKE_ICE_FRACT
+      varunit: unitless
+    Surface_Soil_Moisture:
+      varname: OUT_SOIL_MOIST_FRAC
+      varunit: mm
+    Root_Zone_Soil_Moisture:
+      varname: OUT_SOIL_MOIST_FRAC
+      varunit: mm
+    Surface_Downward_SW_Radiation:
+      varname: SWDOWN
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: LWDOWN
+      varunit: w m-2
+    Surface_Relative_Humidity:
+      varname: OUT_REL_HUMID
+      varunit: unitless
+    Surface_Vapor_Pressure:
+      varname: VP
+      varunit: kPa
+    Precipitation:
+      varname: OUT_PREC
+      varunit: mm step-1
+    Surface_Air_Temperature:
+      varname: OUT_AIR_TEMP
+      varunit: C
