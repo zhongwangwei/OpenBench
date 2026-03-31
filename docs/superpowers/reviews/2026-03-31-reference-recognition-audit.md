@@ -129,13 +129,13 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Outcome: exact-name lookup returns immediately and bypasses variant auto-resolve; base names without context return `None`, while base names with context can resolve to the best variant
 - Evidence: `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` passed with `14 passed`, including `test_get_reference_exact_variant_name_wins_over_auto_resolve`, `test_get_reference_base_name_requires_context_when_only_variants_exist`, and `test_get_reference_auto_resolve`
 
-### Confirmed behavior: auto-resolve breaks ties by lower time waste after spatial closeness
+### Confirmed behavior: auto-resolve filters low-frequency candidates, then prioritizes closest grid with waste as a secondary penalty
 
 - Classification: Confirmed behavior
 - Code location: `src/openbench/data/registry/manager.py:249-301`
-- Trigger: two base-name variants have equal spatial distance from the target grid and both satisfy the target time frequency
-- Outcome: the resolver chooses the lower-frequency-waste option after spatial distance ties, which kept `Demo_LowRes` ahead of `Demo_MidRes` in the synthetic tie case
-- Evidence: `test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie` passed in the same `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` run
+- Trigger: a base-name query has one insufficient-frequency candidate, one valid but farther-grid candidate, and one valid closer-grid candidate with higher-than-needed frequency
+- Outcome: `_auto_resolve_variant()` drops the insufficient-frequency option when valid candidates exist, chooses the closest-grid valid candidate, and treats higher-than-needed frequency as only a secondary penalty
+- Evidence: `test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_waste_penalty` passed in the same `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` run
 
 ### Cleared suspicion: CLI check and config adapter derive the same target resolution before delegating to RegistryManager
 

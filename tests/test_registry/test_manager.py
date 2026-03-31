@@ -1,7 +1,7 @@
 """Tests for RegistryManager."""
 
+from openbench.data.registry.manager import RegistryManager, _auto_resolve_variant
 from openbench.data.registry.schema import ReferenceDataset
-from openbench.data.registry.manager import RegistryManager
 
 
 def test_list_references():
@@ -91,6 +91,51 @@ def test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie():
     ref = mgr.get_reference("Demo", sim_tim_res="Month", sim_grid_res=0.25)
     assert ref is not None
     assert ref.name == "Demo_LowRes"
+
+
+def test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_waste_penalty():
+    variants = {
+        "LowRes": ReferenceDataset(
+            name="Demo_LowRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Month",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.10,
+        ),
+        "MidRes": ReferenceDataset(
+            name="Demo_MidRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Day",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.50,
+        ),
+        "HigRes": ReferenceDataset(
+            name="Demo_HigRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Hour",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.25,
+        ),
+    }
+
+    ref = _auto_resolve_variant(variants, sim_tim_res="Day", sim_grid_res=0.25)
+    assert ref is not None
+    assert ref.name == "Demo_HigRes"
 
 
 def test_get_reference_not_found():
