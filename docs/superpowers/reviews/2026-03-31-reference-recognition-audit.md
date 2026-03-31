@@ -45,13 +45,13 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Outcome: `_detect_tim_res()` returns `Hour` because the generic `hourly` branch runs before the more specific `3hour` branch
 - Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_detect_tim_res_prefers_3hour_over_hourly` failed on `sample_3hourly.nc` with `AssertionError: assert 'Hour' == '3Hour'`
 
-### Confirmed limitation: grid discovery only walks the intended tree shape
+### Confirmed limitation: grid discovery stops at the dataset directory plus one child layer
 
 - Classification: Improvement item
 - Code location: `src/openbench/data/registry/scanner.py:100-162`
-- Trigger: a grid layout that does not fit `Grid/<Res>/<Category>/<Variable>/<Dataset>` with at most one extra child directory checked for files
-- Outcome: the scanner never descends beyond `dataset_dir` plus its immediate children, so deeper layouts are not discovered
-- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` discovered `DatasetA` and `DatasetB` but not `DatasetC`
+- Trigger: a dataset tree with `.nc` files only below a grandchild of the dataset directory
+- Outcome: the scanner checks `dataset_dir` and then only its immediate child directories for `.nc` files; deeper descendants are not discovered
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_misses_grandchildren` returned no dataset for `DatasetC`
 
 ### Scope clarification: Composite is intentionally skipped
 
@@ -59,7 +59,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Code location: `src/openbench/data/registry/scanner.py:114-119`
 - Trigger: `Grid/<Res>/Composite/...`
 - Outcome: the scanner emits a progress note and skips the category instead of treating it as a standard discovered dataset
-- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` does not return `DatasetD`, matching the explicit `Skipping Composite/ (register manually)` branch
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite` does not return `DatasetD`, matching the explicit `Skipping Composite/ (register manually)` branch
 
 ### Confirmed limitation: nested child NC search stops at one level
 
@@ -67,7 +67,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Code location: `src/openbench/data/registry/scanner.py:130-138`
 - Trigger: `.nc` files stored deeper than one child below the dataset directory
 - Outcome: only immediate child directories are inspected for `.nc` files; grandchildren and deeper descendants are ignored
-- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` discovered `DatasetB` with one nested child but not `DatasetC` with `.nc` under `child/grand/`
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_discovers_one_level_nested_children` discovered `DatasetB` with one nested child, while `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_misses_grandchildren` returned no dataset for `DatasetC`
 
 ### Confirmed assumption: variable discovery is path-driven, not content-driven
 
