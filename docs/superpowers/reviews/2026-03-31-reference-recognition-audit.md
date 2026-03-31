@@ -155,10 +155,18 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Outcome: the GUI writes `ref.name` into config, and `to_legacy_config()` later resolves that string through `registry.get_reference(ref_source_name, sim_tim_res, sim_grid_res)`; exact names bind immediately, while base names only auto-resolve when simulation context is available
 - Evidence: `PageVariables._populate_ref_combo()` stores `ref.name` as combo item data and `load_from_config()` matches the same string; `config/adapter.py` reads `cfg.reference[var_name]` and passes it to `get_reference()`, whose implementation returns exact matches before any auto-resolve branch.
 
-### Confirmed problem: GUI and CLI disagree on when multi-resolution binding is decided
+### Confirmed problem: GUI persistence stores a concrete variant name while runtime still accepts unresolved base names
 
 - Classification: Problem
-- Code location: `src/openbench/gui/pages/page_ref_data.py:300-331`, `src/openbench/gui/pages/page_ref_data.py:337-469`, `src/openbench/cli/data.py:240-270`, `src/openbench/cli/check.py:32-79`, `src/openbench/config/adapter.py:289-295`
-- Trigger: a dataset has multiple `_LowRes/_MidRes/_HigRes` variants and the user selects it through the GUI registry picker, reads the CLI `data show` guidance, or runs `openbench check` with a base-name reference
-- Outcome: the GUI groups variants by base name but immediately returns a concrete variant name from `_pick_resolution()` and stores that exact `source_name`; `data show` advertises `reference: <base_name>  # auto-select best resolution`, while `check.py` is the CLI surface that actually attempts the runtime bind and reports either `auto-resolved to <resolved.name>` or a list of explicit variants to choose from when resolution context is insufficient
-- Evidence: `_populate_registry_combo()` stores `{"group": base_name, "variants": [v.name ...]}`, `_pick_resolution()` maps the dialog selection back to a full registry name, and `_add_from_registry()` persists `source_name` verbatim; `data show` prints the base-name config example, `check.py` derives `target_tim_res`/`target_grid_res` from comparison or simulation entries and then prints either the resolved variant or the “Please specify one” list, and the adapter still resolves `cfg.reference[var_name]` later using `sim_tim_res` and `sim_grid_res`.
+- Code location: `src/openbench/gui/pages/page_ref_data.py:300-331`, `src/openbench/gui/pages/page_ref_data.py:337-469`, `src/openbench/cli/check.py:32-79`, `src/openbench/config/adapter.py:289-295`
+- Trigger: a dataset has multiple `_LowRes/_MidRes/_HigRes` variants and the user selects it through the GUI registry picker, or later supplies a base-name reference in config
+- Outcome: the GUI picker resolves the selection to a full registry name and stores that exact `source_name`; runtime paths still accept an unresolved base name and defer binding to `get_reference()` using comparison/simulation context, so the persisted GUI choice and the runtime bind point are not the same abstraction
+- Evidence: `_pick_resolution()` maps the dialog selection back to a full registry name and `_add_from_registry()` persists `source_name` verbatim; `check.py` still calls `get_reference(source, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res)` for base-name references, and `to_legacy_config()` resolves `cfg.reference[var_name]` the same way.
+
+### Confirmed UX/docs inconsistency: `data show` advertises auto-selection, but it is only guidance
+
+- Classification: Improvement item
+- Code location: `src/openbench/cli/data.py:240-270`, `src/openbench/cli/check.py:32-79`
+- Trigger: a user reads `openbench data show` output for a multi-resolution dataset
+- Outcome: `data show` presents `reference: <base_name>  # auto-select best resolution` as usage guidance, but the actual auto-resolution and failure messaging happen in `check.py`, not in `data show` itself
+- Evidence: `data show` prints the base-name example and exits, while `check.py` derives target resolution, prints `auto-resolved to <resolved.name>` when binding succeeds, or prints `Please specify one:` with explicit variants when it cannot bind.
