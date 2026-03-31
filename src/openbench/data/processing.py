@@ -750,7 +750,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             os.makedirs(output_dir, exist_ok=True)
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
-        params = {
+        # Note: prefix_fallback is read directly from instance attributes
+        # by _get_prefix_fallback_list(), not passed through params dict.
+        return {
             "data_dir": getattr(self, f"{datasource}_dir"),
             "data_groupby": getattr(self, f"{datasource}_data_groupby").lower(),
             "varname": getattr(self, f"{datasource}_varname"),
@@ -763,12 +765,6 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             "syear": getattr(self, f"{datasource}_syear"),
             "eyear": getattr(self, f"{datasource}_eyear"),
         }
-        # Include prefix_fallback if available (from model profile)
-        source = getattr(self, f"{datasource}_source", "")
-        pf = getattr(self, f"{source}_prefix_fallback", None)
-        if pf:
-            params["prefix_fallback"] = pf
-        return params
 
     @performance_monitor
     def process(self, data: Union[str, xr.Dataset] = None, **kwargs) -> xr.Dataset:
@@ -1439,7 +1435,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         datasource: str,
         tim_res: str,
     ) -> xr.Dataset:
-        var_files = self._find_data_files(dirx, prefix, year, suffix)
+        var_files = self._find_data_files(dirx, prefix, year, suffix, datasource)
 
         # Verify files were found
         if not var_files:
@@ -1467,11 +1463,18 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             raise FileNotFoundError(f"File '{file}' not found.")
         return file
 
-    @performance_monitor
-    def _get_prefix_fallback_list(self, prefix: str) -> list:
-        """Build list of prefixes to try: primary + fallbacks."""
+    def _get_prefix_fallback_list(self, prefix: str, datasource: str = "sim") -> list:
+        """Build list of prefixes to try: primary + fallbacks.
+
+        Args:
+            prefix: Primary file prefix (e.g., "Case01_hist_")
+            datasource: "sim" or "ref" — determines which source's fallback to use
+        """
         prefixes = [prefix]
-        source = getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
+        # Use the correct source based on datasource context
+        source = getattr(self, f"{datasource}_source", "")
+        if not source:
+            source = getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
         pf_list = getattr(self, f"{source}_prefix_fallback", None)
         if pf_list:
             for fb in pf_list:
@@ -1481,18 +1484,20 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     prefixes.append(prefix + fb)
         return prefixes
 
-    def _find_single_file(self, dirx: str, prefix: str, suffix: str) -> str:
+    def _find_single_file(self, dirx: str, prefix: str, suffix: str, datasource: str = "sim") -> str:
         """Find a single data file, trying prefix fallbacks."""
-        for try_prefix in self._get_prefix_fallback_list(prefix):
+        for try_prefix in self._get_prefix_fallback_list(prefix, datasource):
             path = os.path.join(dirx, f"{try_prefix}{suffix}.nc")
             if os.path.exists(path):
                 if try_prefix != prefix:
                     logging.info(f"Using fallback prefix '{try_prefix}' for single file")
                 return path
-        # Fall through to original check (will raise if not found)
-        return self.check_file_exist(os.path.join(dirx, f"{prefix}{suffix}.nc"))
+        # Raise with useful error
+        raise FileNotFoundError(
+            f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc')}"
+        )
 
-    def _find_data_files(self, dirx: str, prefix: str, year: int, suffix: str) -> list:
+    def _find_data_files(self, dirx: str, prefix: str, year: int, suffix: str, datasource: str = "sim") -> list:
         """Find data files, trying prefix_fallback if primary prefix has no matches.
 
         Search order for each prefix:
@@ -1503,7 +1508,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             1. Primary prefix (e.g., "Case01_hist_")
             2. Fallback prefixes (e.g., "Case01_hist_cama_", "Case01_hist_unitcat_")
         """
-        for try_prefix in self._get_prefix_fallback_list(prefix):
+        for try_prefix in self._get_prefix_fallback_list(prefix, datasource):
             # Try primary path
             var_files = cached_glob(os.path.join(dirx, f"{try_prefix}{year}*{suffix}.nc"))
             # Try subdirectory path
@@ -1570,7 +1575,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         datasource: str,
     ) -> None:
         logging.debug("The dataset groupby is Single --> split it to Year")
-        varfile = self._find_single_file(dirx, prefix, suffix)
+        varfile = self._find_single_file(dirx, prefix, suffix, datasource)
         ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
@@ -1618,7 +1623,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         prefix: str,
         datasource: str,
     ) -> None:
-        varfiles = self.check_file_exist(os.path.join(dirx, f"{prefix}{syear}{suffix}.nc"))
+        # Use fallback-aware file search (supports prefix_fallback for CaMa etc.)
+        found_files = self._find_data_files(dirx, prefix, syear, suffix, datasource)
+        if not found_files:
+            raise FileNotFoundError(f"No data files found for year {syear} with prefix '{prefix}'")
+        varfiles = found_files[0]
         ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
