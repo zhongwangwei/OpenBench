@@ -384,6 +384,7 @@ def _build_model(data: dict) -> ModelProfile:
             sub_dir=var_data.get("sub_dir"),
             fallbacks=_parse_fallbacks(var_data.get("fallbacks")),
             compute=var_data.get("compute"),
+            prefix_fallback=var_data.get("prefix_fallback"),
         )
 
     return ModelProfile(

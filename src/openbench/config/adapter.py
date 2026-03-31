@@ -412,6 +412,12 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_dir"] = sim_dir
             var_section[f"{prefix}_prefix"] = var_prefix
             var_section[f"{prefix}_suffix"] = var_suffix
+
+            # Pass prefix_fallback if this variable may be in alternative files
+            if model_profile and var_name in model_profile.variables:
+                pf = model_profile.variables[var_name].prefix_fallback
+                if pf:
+                    var_section[f"{prefix}_prefix_fallback"] = pf
             var_section[f"{prefix}_timezone"] = inline_vars.get("timezone", 0)
 
             # Optional station-related fields from inline config

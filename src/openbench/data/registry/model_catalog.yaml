@@ -255,6 +255,54 @@ CoLM2024:
         + ds['f_cropprodc_rainfed_wtwheat'].fillna(0) * ds['area_rainfed_wtwheat'].fillna(0)
         + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0))
         * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+    Streamflow:
+      varname: outflw
+      varunit: m3 s-1
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Dam_Inflow:
+      varname: daminf
+      varunit: m3 s-1
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Dam_Outflow:
+      varname: damouf
+      varunit: m3 s-1
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Dam_Water_Storage:
+      varname: damsto
+      varunit: m3
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Dam_Water_Elevation:
+      varname: sfcelv
+      varunit: m
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Inundation_Fraction:
+      varname: fldfrc
+      varunit: m2 m-2
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    Inundation_Area:
+      varname: fldare
+      varunit: m2
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
+    River_Water_Level:
+      varname: sfcelv
+      varunit: m
+      prefix_fallback:
+      - _cama_
+      - _unitcat_
   time_offset:
     Month:
       default: '0'

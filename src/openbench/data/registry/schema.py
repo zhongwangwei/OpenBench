@@ -43,7 +43,8 @@ class VariableMapping:
     max_uparea: Optional[float] = None
     min_uparea: Optional[float] = None
     fallbacks: Optional[list[FallbackVar]] = None  # Fallback variables with unit conversion
-    compute: Optional[str] = None  # Python expression to compute variable from dataset, e.g., "ds['a'] + ds['b']"
+    compute: Optional[str] = None  # Python expression to compute variable from dataset
+    prefix_fallback: Optional[list[str]] = None  # Alternative file prefix suffixes, e.g., ["_cama_", "_unitcat_"]
 
 
 @dataclass
