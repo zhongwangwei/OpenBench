@@ -432,3 +432,45 @@ def optimize(name):
     except Exception as e:
         click.secho(f"Conversion failed: {e}", fg="red")
         raise SystemExit(1)
+
+
+@data.command("generate-station-list")
+@click.argument("dataset_dir", type=click.Path(exists=True))
+@click.option("-o", "--output", default=None, help="Output CSV path. Default: dataset_dir/station_list.csv")
+def generate_station_list(dataset_dir, output):
+    """Auto-generate a station list CSV from NC files.
+
+    Scans NC files in DATASET_DIR, extracts station ID, lat, lon,
+    time range, and writes a fulllist CSV.
+
+    Supports:
+      - One-file-per-station (e.g., PLUMBER2: 90 NC files)
+      - Single merged file (e.g., GRDC: 1 NC with station dimension)
+
+    \b
+    Example:
+      openbench data generate-station-list /data/PLUMBER2/dataset/
+      openbench data generate-station-list /data/GRDC/ -o grdc_stations.csv
+    """
+    from pathlib import Path
+
+    from openbench.data.registry.scanner import generate_station_list as gen_list
+
+    dataset_path = Path(dataset_dir)
+    output_path = Path(output) if output else None
+
+    try:
+        csv_path = gen_list(dataset_path, output_path)
+        import pandas as pd
+
+        df = pd.read_csv(csv_path)
+        click.secho(f"✓ Generated {csv_path}", fg="green")
+        click.echo(f"  Stations: {len(df)}")
+        if "LON" in df.columns and "LAT" in df.columns:
+            click.echo(f"  Lon range: [{df['LON'].min():.2f}, {df['LON'].max():.2f}]")
+            click.echo(f"  Lat range: [{df['LAT'].min():.2f}, {df['LAT'].max():.2f}]")
+        if "SYEAR" in df.columns:
+            click.echo(f"  Year range: [{df['SYEAR'].min()}, {df['EYEAR'].max()}]")
+    except Exception as e:
+        click.secho(f"Failed: {e}", fg="red")
+        raise SystemExit(1)

@@ -472,3 +472,163 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
         result["eyear"] = max(years)
 
     return result
+
+
+def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> Path:
+    """Auto-generate a station list CSV from a directory of station NC files.
+
+    Scans all .nc files in the directory, extracts station ID, lat, lon,
+    time range from each file, and writes a CSV in the fulllist format:
+        ID, SYEAR, EYEAR, LON, LAT, DIR
+
+    Supports two formats:
+    1. One-file-per-station: each NC has lat/lon as variables or scalars
+    2. Single merged file: one NC with a station dimension
+
+    Args:
+        dataset_dir: Directory containing station NC files
+        output_csv: Output CSV path. Defaults to dataset_dir/station_list.csv
+
+    Returns:
+        Path to the generated CSV file.
+    """
+    import pandas as pd
+
+    if output_csv is None:
+        output_csv = dataset_dir / "station_list.csv"
+
+    nc_files = sorted(dataset_dir.glob("*.nc"))
+    if not nc_files:
+        raise FileNotFoundError(f"No NC files found in {dataset_dir}")
+
+    rows = []
+
+    # Try one-file-per-station first
+    for nc_file in nc_files:
+        row = _parse_single_station_file(nc_file)
+        if row:
+            rows.append(row)
+
+    # If that found very few stations but there are large merged files, try merged parsing
+    if len(rows) < len(nc_files) // 2:
+        merged_rows = []
+        for nc_file in nc_files:
+            mr = _parse_merged_station_file(nc_file, dataset_dir)
+            if mr:
+                merged_rows.extend(mr)
+        if len(merged_rows) > len(rows):
+            rows = merged_rows
+
+    if not rows:
+        raise ValueError(f"Could not extract station info from {dataset_dir}")
+
+    df = pd.DataFrame(rows, columns=["ID", "SYEAR", "EYEAR", "LON", "LAT", "DIR"])
+    df.to_csv(output_csv, index=False)
+    logger.info("Generated station list: %s (%d stations)", output_csv, len(df))
+
+    return output_csv
+
+
+def _parse_single_station_file(nc_file: Path) -> list | None:
+    """Extract station info from a single-station NC file."""
+    try:
+        import xarray as xr
+
+        ds = xr.open_dataset(nc_file)
+
+        # Extract station ID from filename
+        # Pattern: AU-How_2004-2005_OzFlux_Flux.nc → ID=AU-How
+        stem = nc_file.stem
+        station_id = stem.split("_")[0]
+
+        # Extract lat/lon
+        lat = _extract_scalar(ds, ["latitude", "lat", "LAT", "Latitude"])
+        lon = _extract_scalar(ds, ["longitude", "lon", "LON", "Longitude"])
+
+        # Extract time range
+        if "time" in ds.dims and len(ds.time) > 0:
+            syear = int(str(ds.time.values[0])[:4])
+            eyear = int(str(ds.time.values[-1])[:4])
+        else:
+            syear = ""
+            eyear = ""
+
+        ds.close()
+
+        if lat is not None and lon is not None:
+            return [station_id, syear, eyear, lon, lat, str(nc_file)]
+    except Exception as e:
+        logger.debug("Failed to parse station file %s: %s", nc_file.name, e)
+
+    return None
+
+
+def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
+    """Extract station info from a merged multi-station NC file."""
+    rows = []
+    try:
+        import numpy as np
+        import xarray as xr
+
+        ds = xr.open_dataset(nc_file)
+
+        # Find the station dimension (non-time dim)
+        stn_dim = None
+        time_dim = None
+        for dim in ds.dims:
+            if dim.lower() in ("time", "t"):
+                time_dim = dim
+            else:
+                stn_dim = dim  # First non-time dimension is the station dim
+
+        if not stn_dim:
+            ds.close()
+            return rows
+
+        n_stations = ds.sizes[stn_dim]
+        lat_var = _find_var(ds, ["Lat", "lat", "LAT", "latitude", "Latitude"])
+        lon_var = _find_var(ds, ["Lon", "lon", "LON", "longitude", "Longitude"])
+
+        # Time range (case-insensitive dim name)
+        syear = ""
+        eyear = ""
+        if time_dim and ds.sizes[time_dim] > 0:
+            time_vals = ds[time_dim].values
+            syear = int(str(time_vals[0])[:4])
+            eyear = int(str(time_vals[-1])[:4])
+
+        for i in range(n_stations):
+            station_id = str(ds[stn_dim].values[i]) if stn_dim in ds.coords else str(i)
+            lat = float(ds[lat_var].values[i]) if lat_var else None
+            lon = float(ds[lon_var].values[i]) if lon_var else None
+
+            if lat is not None and lon is not None and not (np.isnan(lat) or np.isnan(lon)):
+                rows.append([station_id, syear, eyear, lon, lat, str(nc_file)])
+
+        ds.close()
+    except Exception as e:
+        logger.debug("Failed to parse merged station file %s: %s", nc_file.name, e)
+
+    return rows
+
+
+def _extract_scalar(ds, var_names: list):
+    """Extract a scalar value from a dataset, trying multiple variable names."""
+    for name in var_names:
+        if name in ds:
+            val = ds[name].values
+            if hasattr(val, "item"):
+                return float(val.item())
+            elif hasattr(val, "__float__"):
+                return float(val)
+        if name in ds.attrs:
+            return float(ds.attrs[name])
+    return None
+
+
+def _find_var(ds, var_names: list) -> str | None:
+    """Find a variable name in a dataset from a list of candidates."""
+    for name in var_names:
+        if name in ds:
+            return name
+    return None
