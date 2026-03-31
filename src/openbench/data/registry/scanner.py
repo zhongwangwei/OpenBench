@@ -454,7 +454,12 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
             da = ds[dv]
             unit = da.attrs.get("units", da.attrs.get("unit", ""))
             unit = str(unit).replace(".", " ").strip() if unit else ""
-            result["all_data_vars"].append({"name": dv, "unit": unit, "dims": list(da.dims)})
+            long_name = da.attrs.get("long_name", "")
+            standard_name = da.attrs.get("standard_name", "")
+            result["all_data_vars"].append({
+                "name": dv, "unit": unit, "dims": list(da.dims),
+                "long_name": long_name, "standard_name": standard_name,
+            })
 
         if data_vars:
             varname = data_vars[0]

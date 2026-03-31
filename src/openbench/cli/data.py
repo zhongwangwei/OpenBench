@@ -341,9 +341,12 @@ def scan(ref_root, auto):
     def _multi_var_handler(var_name, sub_dir, all_vars):
         """Prompt user to pick a variable when NC file has multiple data variables."""
         click.echo()
-        click.secho(f"  Multiple variables found in {sub_dir}/ (standard name: {var_name}):", fg="yellow")
+        click.secho(f"  Multiple variables in {sub_dir}/ (evaluating: {var_name}):", fg="yellow")
         for i, v in enumerate(all_vars, 1):
-            click.echo(f"    [{i}] {v['name']:<25} {v['unit']:<20} dims={v['dims']}")
+            desc = v.get("long_name") or v.get("standard_name") or ""
+            if desc:
+                desc = f"  — {desc}"
+            click.echo(f"    [{i}] {v['name']:<20} {v['unit']:<15} {v['dims']}{desc}")
         if auto:
             click.echo(f"    → Auto-selected: {all_vars[0]['name']}")
             return all_vars[0]["name"]
