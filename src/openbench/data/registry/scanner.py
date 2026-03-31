@@ -79,11 +79,12 @@ class DatasetGroup:
         return "Other"
 
 
-def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
+def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[DatasetGroup]:
     """Scan a reference data directory and discover all datasets.
 
     Args:
         ref_root: Root directory (e.g., /Volumes/work/Reference)
+        on_progress: Optional callback(message: str) for progress updates.
 
     Returns:
         List of DatasetGroup, each containing resolution variants.
@@ -106,14 +107,21 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
             if not res_dir.exists():
                 continue
 
+            if on_progress:
+                on_progress(f"Scanning Grid/{res_name}...")
+
             for category_dir in _iter_dirs(res_dir):
                 cat_name = category_dir.name
                 if cat_name == "Composite":
-                    continue  # Non-standard structure, register manually
+                    if on_progress:
+                        on_progress(f"  Skipping Composite/ (register manually)")
+                    continue
                 category = CATEGORY_MAP.get(cat_name, cat_name)
 
                 for var_dir in _iter_dirs(category_dir):
                     var_name = var_dir.name
+                    if on_progress:
+                        on_progress(f"  {res_name}/{cat_name}/{var_name}")
 
                     for dataset_dir in _iter_dirs(var_dir):
                         dataset_name = dataset_dir.name
@@ -155,6 +163,8 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
     # Scan station data: Station/<category>/<variable>/<dataset>/
     stn_dir = ref_root / "Station"
     if stn_dir.exists():
+        if on_progress:
+            on_progress("Scanning Station/...")
         for category_dir in _iter_dirs(stn_dir):
             cat_name = category_dir.name
             category = CATEGORY_MAP.get(cat_name, cat_name)
@@ -190,6 +200,7 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
 def find_new_datasets(
     ref_root: str | Path,
     existing_names: Optional[set[str]] = None,
+    on_progress=None,
 ) -> list[DatasetGroup]:
     """Scan and return only datasets not already registered.
 
@@ -206,7 +217,7 @@ def find_new_datasets(
         mgr = RegistryManager()
         existing_names = {r.name for r in mgr.list_references()}
 
-    all_groups = scan_reference_directory(ref_root)
+    all_groups = scan_reference_directory(ref_root, on_progress=on_progress)
     new_groups = []
 
     for group in all_groups:

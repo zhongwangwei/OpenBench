@@ -312,11 +312,15 @@ def scan(ref_root, auto):
     """
     from openbench.data.registry.scanner import find_new_datasets, register_scanned_dataset
 
-    click.echo(f"Scanning {ref_root}...")
-    new_groups = find_new_datasets(ref_root)
+    def _progress(msg):
+        click.echo(msg)
 
+    click.secho(f"Scanning {ref_root}...", bold=True)
+    new_groups = find_new_datasets(ref_root, on_progress=_progress)
+
+    click.echo()
     if not new_groups:
-        click.secho("No new datasets found.", fg="yellow")
+        click.secho("No new datasets found. All datasets already registered.", fg="yellow")
         return
 
     click.secho(f"Found {len(new_groups)} new dataset(s):", bold=True)
