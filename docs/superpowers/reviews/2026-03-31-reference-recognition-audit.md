@@ -155,7 +155,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Outcome: the GUI writes `ref.name` into config, and `to_legacy_config()` later resolves that string through `registry.get_reference(ref_source_name, sim_tim_res, sim_grid_res)`; exact names bind immediately, while base names only auto-resolve when simulation context is available
 - Evidence: `PageVariables._populate_ref_combo()` stores `ref.name` as combo item data and `load_from_config()` matches the same string; `config/adapter.py` reads `cfg.reference[var_name]` and passes it to `get_reference()`, whose implementation returns exact matches before any auto-resolve branch.
 
-### Confirmed problem: GUI persistence stores a concrete variant name while runtime still accepts unresolved base names
+### Confirmed mismatch: GUI persistence stores a concrete variant name while runtime still accepts unresolved base names
 
 - Classification: Improvement item
 - Code location: `src/openbench/gui/pages/page_ref_data.py:300-331`, `src/openbench/gui/pages/page_ref_data.py:337-469`, `src/openbench/cli/check.py:32-79`, `src/openbench/config/adapter.py:289-295`
