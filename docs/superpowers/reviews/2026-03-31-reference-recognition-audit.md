@@ -51,15 +51,15 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Code location: `src/openbench/data/registry/scanner.py:100-162`
 - Trigger: a grid layout that does not fit `Grid/<Res>/<Category>/<Variable>/<Dataset>` with at most one extra child directory checked for files
 - Outcome: the scanner never descends beyond `dataset_dir` plus its immediate children, so deeper layouts are not discovered
-- Evidence: a temp-tree probe returned only `DatasetA` and `DatasetB`; `DatasetC` with `.nc` under `child/grand/` was absent from `scan_reference_directory()`
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` discovered `DatasetA` and `DatasetB` but not `DatasetC`
 
-### Cleared suspicion: Composite is intentionally skipped
+### Scope clarification: Composite is intentionally skipped
 
 - Classification: Improvement item
 - Code location: `src/openbench/data/registry/scanner.py:114-119`
 - Trigger: `Grid/<Res>/Composite/...`
 - Outcome: the scanner emits a progress note and skips the category instead of treating it as a standard discovered dataset
-- Evidence: the temp-tree probe produced no Composite entry, matching the explicit `Skipping Composite/ (register manually)` branch
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` does not return `DatasetD`, matching the explicit `Skipping Composite/ (register manually)` branch
 
 ### Confirmed limitation: nested child NC search stops at one level
 
@@ -67,7 +67,7 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Code location: `src/openbench/data/registry/scanner.py:130-138`
 - Trigger: `.nc` files stored deeper than one child below the dataset directory
 - Outcome: only immediate child directories are inspected for `.nc` files; grandchildren and deeper descendants are ignored
-- Evidence: the temp-tree probe recognized `DatasetB` with `.nc` in `DatasetB/child/`, but missed `DatasetC` with `.nc` in `DatasetC/child/grand/`
+- Evidence: `pytest -q tests/test_registry/test_scanner_tim_res.py::test_scan_reference_directory_skips_composite_and_deep_children` discovered `DatasetB` with one nested child but not `DatasetC` with `.nc` under `child/grand/`
 
 ### Confirmed assumption: variable discovery is path-driven, not content-driven
 
