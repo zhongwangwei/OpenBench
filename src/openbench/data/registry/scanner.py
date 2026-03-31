@@ -136,69 +136,8 @@ def scan_reference_directory(ref_root: str | Path) -> list[DatasetGroup]:
                         scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
                         scanned.file_count += nc_count
 
-            # Also scan Composite: <res>/Composite/<Dataset>/<Variable>/<SubDataset>/files.nc
-            # or: <res>/Composite/<Dataset>/<Category>/files.nc
-            composite_dir = res_dir / "Composite"
-            if composite_dir.exists():
-                for dataset_dir_l1 in _iter_dirs(composite_dir):
-                    # L1 is the dataset family (e.g., FLUXCOM, ILAMB, GLEAM_v4.2)
-                    for var_or_cat_dir in _iter_dirs(dataset_dir_l1):
-                        var_or_cat = var_or_cat_dir.name
-
-                        # Check: does this dir have NC files directly?
-                        nc_here = list(var_or_cat_dir.glob("*.nc"))
-                        if nc_here:
-                            # Structure: Composite/<Dataset>/<Variable>/files.nc
-                            # variable name comes from parent dir or NC content
-                            dataset_name = dataset_dir_l1.name
-                            nc_info = _inspect_nc_file(var_or_cat_dir)
-                            actual_varname = nc_info.get("varname", var_or_cat)
-                            # Map NC variable to standard name using dir name as hint
-                            std_var = var_or_cat  # dir name IS the standard variable name
-
-                            if dataset_name not in groups:
-                                groups[dataset_name] = DatasetGroup(base_name=dataset_name)
-
-                            if res_name not in groups[dataset_name].variants:
-                                groups[dataset_name].variants[res_name] = ScannedDataset(
-                                    name=dataset_name,
-                                    resolution=res_name,
-                                    category="Other",
-                                    data_type="grid",
-                                    root_dir=str(res_dir),
-                                    tim_res=_detect_tim_res(var_or_cat_dir),
-                                )
-
-                            scanned = groups[dataset_name].variants[res_name]
-                            scanned.variables[std_var] = str(var_or_cat_dir.relative_to(res_dir))
-                            scanned.file_count += len(nc_here)
-
-                        else:
-                            # Structure: Composite/<Dataset>/<Variable>/<SubDataset>/files.nc
-                            for sub_dataset_dir in _iter_dirs(var_or_cat_dir):
-                                nc_files = list(sub_dataset_dir.glob("*.nc"))
-                                if not nc_files:
-                                    continue
-
-                                dataset_name = sub_dataset_dir.name
-                                std_var = var_or_cat
-
-                                if dataset_name not in groups:
-                                    groups[dataset_name] = DatasetGroup(base_name=dataset_name)
-
-                                if res_name not in groups[dataset_name].variants:
-                                    groups[dataset_name].variants[res_name] = ScannedDataset(
-                                        name=dataset_name,
-                                        resolution=res_name,
-                                        category="Other",
-                                        data_type="grid",
-                                        root_dir=str(res_dir),
-                                        tim_res=_detect_tim_res(sub_dataset_dir),
-                                    )
-
-                                scanned = groups[dataset_name].variants[res_name]
-                                scanned.variables[std_var] = str(sub_dataset_dir.relative_to(res_dir))
-                                scanned.file_count += len(nc_files)
+            # Note: Composite directory is skipped — its structure is non-standard.
+            # Use 'openbench data register' to manually register Composite datasets.
 
     # Scan station data: Station/<category>/<variable>/<dataset>/
     stn_dir = ref_root / "Station"
@@ -272,6 +211,7 @@ def register_scanned_dataset(
     scanned: ScannedDataset,
     catalog_path: Optional[Path] = None,
     existing_descriptor: Optional[dict] = None,
+    on_multi_var=None,
 ) -> Path:
     """Register a scanned dataset into the user catalog.
 
@@ -280,9 +220,12 @@ def register_scanned_dataset(
     Args:
         scanned: The scanned dataset to register.
         catalog_path: Path to the catalog YAML file.
-            Defaults to ~/.openbench/reference_catalog.yaml.
+            Defaults to the writable registry dir.
         existing_descriptor: Optional existing descriptor to merge with
             (preserves hand-edited fields like varname, varunit).
+        on_multi_var: Optional callback when NC file has 2+ data variables.
+            Called with (var_name, sub_dir, all_vars_list) → selected varname string.
+            If None, first variable is used automatically.
 
     Returns:
         Path to the catalog file.
@@ -336,6 +279,19 @@ def register_scanned_dataset(
             dataset_path = Path(scanned.root_dir) / sub_dir
             if dataset_path.is_dir():
                 nc_info = _inspect_nc_file(dataset_path)
+
+                # Multi-variable: if NC has 2+ data vars, ask user to confirm
+                all_vars = nc_info.get("all_data_vars", [])
+                if len(all_vars) > 1 and on_multi_var:
+                    chosen = on_multi_var(var_name, sub_dir, all_vars)
+                    if chosen:
+                        nc_info["varname"] = chosen
+                        # Find unit for chosen var
+                        for av in all_vars:
+                            if av["name"] == chosen:
+                                nc_info["varunit"] = av["unit"]
+                                break
+
                 if nc_info.get("varname"):
                     var_entry["varname"] = nc_info["varname"]
                 if nc_info.get("varunit"):
@@ -492,12 +448,17 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
         }
         data_vars = [v for v in ds.data_vars if v not in skip_vars and len(ds[v].dims) >= 2]
 
+        # Store ALL data variables for multi-var detection
+        result["all_data_vars"] = []
+        for dv in data_vars:
+            da = ds[dv]
+            unit = da.attrs.get("units", da.attrs.get("unit", ""))
+            unit = str(unit).replace(".", " ").strip() if unit else ""
+            result["all_data_vars"].append({"name": dv, "unit": unit, "dims": list(da.dims)})
+
         if data_vars:
             varname = data_vars[0]
-            da = ds[varname]
-            varunit = da.attrs.get("units", da.attrs.get("unit", ""))
-            # Normalize unit format
-            varunit = str(varunit).replace(".", " ").strip() if varunit else ""
+            varunit = result["all_data_vars"][0]["unit"]
             result["varname"] = varname
             result["varunit"] = varunit
 

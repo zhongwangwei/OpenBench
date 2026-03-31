@@ -338,13 +338,24 @@ def scan(ref_root, auto):
     # Try to find existing descriptors for merging
     from openbench.data.registry.manager import RegistryManager
 
+    def _multi_var_handler(var_name, sub_dir, all_vars):
+        """Prompt user to pick a variable when NC file has multiple data variables."""
+        click.echo()
+        click.secho(f"  Multiple variables found in {sub_dir}/ (standard name: {var_name}):", fg="yellow")
+        for i, v in enumerate(all_vars, 1):
+            click.echo(f"    [{i}] {v['name']:<25} {v['unit']:<20} dims={v['dims']}")
+        if auto:
+            click.echo(f"    → Auto-selected: {all_vars[0]['name']}")
+            return all_vars[0]["name"]
+        choice = click.prompt("  Select variable number", type=int, default=1)
+        idx = max(0, min(choice - 1, len(all_vars) - 1))
+        return all_vars[idx]["name"]
+
     mgr = RegistryManager()
     registered = 0
     for variant in to_register:
-        # Look for existing metadata: try exact name, then base name (without suffix)
         existing = mgr.get_reference(variant.name) or mgr.get_reference(variant.registry_name)
         if not existing:
-            # Try base name (e.g., GLEAM_v4.2a from old built-in entries)
             existing = mgr.get_reference(variant.name)
         existing_dict = None
         if existing:
@@ -355,7 +366,10 @@ def scan(ref_root, auto):
                     for vn, vm in existing.variables.items()
                 }
             }
-        path = register_scanned_dataset(variant, existing_descriptor=existing_dict)
+        path = register_scanned_dataset(
+            variant, existing_descriptor=existing_dict,
+            on_multi_var=_multi_var_handler,
+        )
         click.secho(f"  ✓ {variant.registry_name}", fg="green")
         registered += 1
 
