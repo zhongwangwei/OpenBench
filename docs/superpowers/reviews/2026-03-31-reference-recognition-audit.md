@@ -144,3 +144,21 @@ These promises are documented in `src/openbench/data/registry/manager.py` and wi
 - Trigger: `cfg.comparison.tim_res` and/or `cfg.comparison.grid_res` are unset, and the first simulation entry lacks one of the fallback resolution values while a later simulation entry provides it
 - Outcome: `check.py` scans simulation entries until it finds populated `tim_res` and `grid_res`, but `to_legacy_config()` in `config/adapter.py` stops after the first simulation entry regardless of whether that entry actually supplies values; the adapter can therefore leave the derived target resolution unset when `check.py` would recover it
 - Evidence: `pytest -q /Volumes/Data01/Openbench/tests/test_registry/test_manager.py` passed with `16 passed`, including `test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_entry`, which captured `check_calls == [("CARE", None, None), ("CARE", "Month", 0.25)]` and `adapter_calls == [("CARE", None, None)]`
+
+## Consumption Gate
+
+### Confirmed behavior: GUI variable selection stores exact registry names, and the adapter performs the runtime bind
+
+- Classification: Improvement item
+- Code location: `src/openbench/gui/pages/page_variables.py:131-140`, `src/openbench/config/adapter.py:278-295`, `src/openbench/data/registry/manager.py:152-192`
+- Trigger: a user selects a reference source in the Variables & References page, or a base-name source is carried into `cfg.reference[var_name]`
+- Outcome: the GUI writes `ref.name` into config, and `to_legacy_config()` later resolves that string through `registry.get_reference(ref_source_name, sim_tim_res, sim_grid_res)`; exact names bind immediately, while base names only auto-resolve when simulation context is available
+- Evidence: `PageVariables._populate_ref_combo()` stores `ref.name` as combo item data and `load_from_config()` matches the same string; `config/adapter.py` reads `cfg.reference[var_name]` and passes it to `get_reference()`, whose implementation returns exact matches before any auto-resolve branch.
+
+### Confirmed problem: GUI and CLI disagree on when multi-resolution binding is decided
+
+- Classification: Problem
+- Code location: `src/openbench/gui/pages/page_ref_data.py:300-331`, `src/openbench/gui/pages/page_ref_data.py:337-469`, `src/openbench/cli/data.py:240-270`, `src/openbench/config/adapter.py:289-295`
+- Trigger: a dataset has multiple `_LowRes/_MidRes/_HigRes` variants and the user selects it through the GUI registry picker or follows the CLI base-name usage shown by `openbench data show`
+- Outcome: the GUI groups variants by base name but immediately returns a concrete variant name from `_pick_resolution()` and stores that exact `source_name`; the CLI `show` command instead advertises `reference: <base_name>  # auto-select best resolution`, leaving final selection to runtime auto-resolve inside `get_reference()`
+- Evidence: `_populate_registry_combo()` stores `{"group": base_name, "variants": [v.name ...]}`, `_pick_resolution()` maps the dialog selection back to a full registry name, and `_add_from_registry()` persists `source_name` verbatim; by contrast `data show` prints the base-name config example and the adapter resolves `cfg.reference[var_name]` using `sim_tim_res` and `sim_grid_res`.
