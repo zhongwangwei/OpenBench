@@ -31,6 +31,9 @@ BRSC_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 Beck_2017_Daily:
   name: Beck_2017_Daily
   description: Beck_2017_Daily reference dataset
@@ -46,6 +49,9 @@ Beck_2017_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 CAMELSH_Hourly:
   name: CAMELSH_Hourly
   description: CAMELSH_Hourly reference dataset
@@ -61,6 +67,9 @@ CAMELSH_Hourly:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 CERES_EBAF_Ed4.2:
   name: CERES_EBAF_Ed4.2
   description: CERES_EBAF_Ed4.2 reference dataset
@@ -117,6 +126,7 @@ CH4_FluxnetANN:
     FCH4:
       varname: FCH4
       varunit: g C m-2 d-1
+      data_groupby: single
 CLARA_3:
   name: CLARA_3
   description: CLARA_3 reference dataset
@@ -277,6 +287,9 @@ Caravan_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 Dai_Trenberth_Monthly:
   name: Dai_Trenberth_Monthly
   description: Dai_Trenberth_Monthly reference dataset
@@ -292,6 +305,7 @@ Dai_Trenberth_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
 ERA5LAND:
   name: ERA5LAND
   description: ERA5LAND reference dataset
@@ -435,15 +449,9 @@ FLUX_PLUMBER2:
     Sensible_Heat:
       varname: Qh_cor
       varunit: w m-2
-      fallbacks:
-      - varname: Qh
-        varunit: W m-2
     Latent_Heat:
       varname: Qle_cor
       varunit: w m-2
-      fallbacks:
-      - varname: Qle
-        varunit: W m-2
     Ground_Heat:
       varname: Qg
       varunit: w m-2
@@ -497,15 +505,19 @@ GEBA:
     Net_Radiation:
       varname: Rn
       varunit: W m-2
+      data_groupby: single
     Longwave_Incoming_Radiation:
       varname: LWin
       varunit: W m-2
+      data_groupby: single
     Latent_Heat_Flux:
       varname: LE
       varunit: W m-2
+      data_groupby: single
     Sensible_Heat_Flux:
       varname: H
       varunit: W m-2
+      data_groupby: single
 GGMSEUD:
   name: GGMSEUD
   description: GGMSEUD reference dataset
@@ -672,6 +684,9 @@ GRDC_Caravan_extension_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GRDC_Monthly:
   name: GRDC_Monthly
   description: GRDC_Monthly reference dataset
@@ -689,6 +704,9 @@ GRDC_Monthly:
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GRDC_RESG_Monthly:
   name: GRDC_RESG_Monthly
   description: GRDC_RESG_Monthly reference dataset
@@ -704,6 +722,9 @@ GRDC_RESG_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GRDC_daily:
   name: GRDC_daily
   description: GRDC_daily reference dataset
@@ -721,6 +742,9 @@ GRDC_daily:
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GRDD_Monthly:
   name: GRDD_Monthly
   description: GRDD_Monthly reference dataset
@@ -736,6 +760,9 @@ GRDD_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GRFR:
   name: GRFR
   description: GRFR reference dataset
@@ -787,6 +814,9 @@ GSHA_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GSIM_Monthly:
   name: GSIM_Monthly
   description: GSIM_Monthly reference dataset
@@ -802,6 +832,9 @@ GSIM_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 GloFlux:
   name: GloFlux
   description: GloFlux reference dataset
@@ -863,6 +896,9 @@ Hubei_Hydro_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 LAI_Yuan2011:
   name: LAI_Yuan2011
   description: LAI_Yuan2011 reference dataset
@@ -878,6 +914,7 @@ LAI_Yuan2011:
     Leaf_Area_Index:
       varname: lai
       varunit: unitless
+      data_groupby: single
 LGS_Reco:
   name: LGS_Reco
   description: LGS_Reco reference dataset
@@ -984,6 +1021,9 @@ OpenBench_Streamflow_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 OpenBench_Streamflow_Hourly:
   name: OpenBench_Streamflow_Hourly
   description: OpenBench_Streamflow_Hourly reference dataset
@@ -999,6 +1039,9 @@ OpenBench_Streamflow_Hourly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 OpenBench_Streamflow_Monthly:
   name: OpenBench_Streamflow_Monthly
   description: OpenBench_Streamflow_Monthly reference dataset
@@ -1014,6 +1057,9 @@ OpenBench_Streamflow_Monthly:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 PLUMBER2S:
   name: PLUMBER2S
   description: PLUMBER2S reference dataset
@@ -1029,15 +1075,9 @@ PLUMBER2S:
     Sensible_Heat:
       varname: Qh_cor
       varunit: w m-2
-      fallbacks:
-      - varname: Qh
-        varunit: W m-2
     Latent_Heat:
       varname: Qle_cor
       varunit: w m-2
-      fallbacks:
-      - varname: Qle
-        varunit: W m-2
     Ground_Heat:
       varname: Qg
       varunit: w m-2
@@ -1072,6 +1112,9 @@ R_ArcticNet_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 R_ArcticNet_Monthly:
   name: R_ArcticNet_Monthly
   description: R_ArcticNet_Monthly reference dataset
@@ -1087,6 +1130,9 @@ R_ArcticNet_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 ResOpsUS:
   name: ResOpsUS
   description: ResOpsUS reference dataset
@@ -1253,6 +1299,9 @@ YCZ_Bulletin_Monthly:
     Streamflow:
       varname: discharge
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 YRC_Daily:
   name: YRC_Daily
   description: YRC_Daily reference dataset
@@ -1268,6 +1317,9 @@ YRC_Daily:
     Streamflow:
       varname: streamflow
       varunit: m3 s-1
+      data_groupby: single
+  min_year: 1
+  area_err_threshold: 0.2
 globsnow_v3:
   name: globsnow_v3
   description: globsnow_v3 reference dataset
