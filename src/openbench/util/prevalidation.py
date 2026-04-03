@@ -413,9 +413,9 @@ class PreValidator:
 
     def _validate_source_config(self, item: str, source: str, nml: Dict[str, Any], source_type: str):
         """
-        Validate configuration for a specific data source after UpdateNamelist.
+        Validate configuration for a specific data source after config merging.
 
-        After UpdateNamelist runs, all external configs have been merged, so we validate
+        After configs are merged, all external configs have been merged, so we validate
         the merged configuration directly.
 
         Args:
@@ -424,16 +424,16 @@ class PreValidator:
             nml: Namelist containing the merged source configuration
             source_type: Type of source ('reference' or 'simulation')
         """
-        # After UpdateNamelist, check if the item section exists
+        # After config merging, check if the item section exists
         if item not in nml:
-            raise ValidationError(f"Missing section '{item}' in {source_type} namelist after UpdateNamelist")
+            raise ValidationError(f"Missing section '{item}' in {source_type} namelist after config merging")
 
-        # Required fields (after UpdateNamelist merge)
+        # Required fields (after config merge)
         required_fields = [
             f"{source}_data_type",
             f"{source}_varname",
             f"{source}_dir",
-            f"{source}_varunit",  # Note: varunit after UpdateNamelist
+            f"{source}_varunit",  # Note: varunit after config merge
         ]
 
         # Get model name if available (for filter checking)
@@ -747,7 +747,7 @@ class PreValidator:
                 # Get reference time resolution
                 ref_tim_res = None
 
-                # Try to get from merged namelist (after UpdateNamelist)
+                # Try to get from merged namelist after config merge
                 if item in self.ref_nml:
                     ref_tim_res = self.ref_nml[item].get(f"{ref_source}_tim_res")
 
@@ -838,22 +838,22 @@ class PreValidator:
 
     def _get_unit_from_config(self, item: str, source: str, nml: Dict[str, Any]) -> Optional[str]:
         """
-        Get unit from configuration after UpdateNamelist has merged external configs.
+        Get unit from configuration after external configs have been merged.
 
-        After UpdateNamelist runs, all units are directly available in the namelist as:
+        After configs are merged, all units are directly available in the namelist as:
         - nml[item][f'{source}_varunit']
 
         Args:
             item: Evaluation item name
             source: Source name
-            nml: Namelist configuration (after UpdateNamelist)
+            nml: Namelist configuration (after config merge)
 
         Returns:
             Unit string or None if not found
         """
-        # After UpdateNamelist, units are directly in nml[item][f'{source}_varunit']
+        # After config merge, units are directly in nml[item][f'{source}_varunit']
         if item in nml:
-            # Try varunit first (standard format after UpdateNamelist)
+            # Try varunit first (standard format after config merge)
             unit_value = nml[item].get(f"{source}_varunit", "")
             # Convert to string if it's not already (handle integer values like 0)
             if unit_value is not None and unit_value != "":
@@ -872,20 +872,20 @@ class PreValidator:
 
     def _get_dimension_info(self, item: str, source: str, nml: Dict[str, Any], source_type: str) -> Dict[str, Any]:
         """
-        Get dimension information for a data source after UpdateNamelist.
+        Get dimension information for a data source after config merging.
 
-        After UpdateNamelist, all config info is directly in nml[item][f'{source}_*'].
+        After config merge, all config info is directly in nml[item][f'{source}_*'].
 
         Args:
             item: Evaluation item name
             source: Source name
-            nml: Namelist configuration (after UpdateNamelist)
+            nml: Namelist configuration (after config merge)
             source_type: Type ('reference' or 'simulation')
 
         Returns:
             Dict containing dimension information
         """
-        # After UpdateNamelist, all info is in nml[item]
+        # After config merge, all info is in nml[item]
         if item not in nml:
             return {"data_type": "unknown", "dimensions": None, "shape": None}
 
@@ -997,7 +997,7 @@ class PreValidator:
         # Get variable name from config (handle None values)
         varname = ""
 
-        # Try from nml[item] (if UpdateNamelist has run)
+        # Try from nml[item] if config merging has run
         if item in nml:
             varname_raw = nml[item].get(f"{source}_varname", "")
             varname = str(varname_raw).strip() if varname_raw is not None else ""
@@ -1100,7 +1100,7 @@ class PreValidator:
             # For simulation, try to get model name
             model = None
 
-            # First try from {source}_model attribute (if UpdateNamelist has run)
+            # First try from {source}_model attribute if config merging has run
             if item in nml:
                 model = nml[item].get(f"{source}_model")
 
