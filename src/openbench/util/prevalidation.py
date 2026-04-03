@@ -415,8 +415,7 @@ class PreValidator:
         """
         Validate configuration for a specific data source after config merging.
 
-        After configs are merged, all external configs have been merged, so we validate
-        the merged configuration directly.
+        After configs are merged, we validate the merged configuration directly.
 
         Args:
             item: Evaluation item name

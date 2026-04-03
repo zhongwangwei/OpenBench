@@ -230,7 +230,7 @@ def build_fig_nml() -> dict[str, Any]:
             statistic[config_name] = data.get("general", data)
     fig_nml["Statistic"] = statistic
 
-    # Keep raw registry sections for UpdateFigNamelist compatibility
+    # Keep raw registry sections for legacy figure-updater compatibility
     fig_nml["validation_nml"] = figlib.get("validation_nml", {})
     fig_nml["comparison_nml"] = figlib.get("comparison_nml", {})
     fig_nml["statistic_nml"] = figlib.get("statistic_nml", {})
