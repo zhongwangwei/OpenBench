@@ -45,3 +45,42 @@ Scope: `src/openbench` local main flow
 ## Cross-Module Issues
 
 ## Recommended Change Priority
+
+### Runner
+- Overall judgment: The orchestration is mostly wired correctly and the targeted runner/cache/CLI tests are green (`24 passed`), but the phase boundaries are too loose. The biggest risks are comparison-only overreach and cache reuse across configuration changes that alter preprocessing output.
+- Confirmed issues:
+  - Finding: `run_evaluation(..., comparison_only=True)` still allows groupby, statistics, and report phases to run whenever those options are enabled, because the code reconstructs a synthetic `evaluated` list after preflight and later phase gates only check `evaluated`.
+    Category: bug
+    Confidence: confirmed
+    Impact: correctness
+    Action: fix now
+  - Finding: The incremental cache hash does not include preprocessing-affecting options such as `time_alignment`, `unified_mask`, or the derived comparison resolution inputs, so a change in those settings can incorrectly reuse stale evaluation outputs.
+    Category: bug
+    Confidence: confirmed
+    Impact: correctness
+    Action: fix now
+- High-risk risks:
+  - Finding: Comparison-only preflight accepts any loose glob match in `metrics/` or `scores/`, so stale or partial artifacts can satisfy the prerequisite check and let the runner proceed with incomplete inputs.
+    Category: bug
+    Confidence: high-risk
+    Trigger condition: an output directory contains old files whose names happen to match `"{var}_*{ref}*{sim}*"`.
+    Likely impact: comparison phases can run against incomplete or stale evaluation products, or fail later with less actionable errors.
+    Why current tests may not catch it: the current comparison-only tests only prove that one placeholder file is enough to pass preflight; they do not assert completeness or freshness of the prerequisite set.
+    Impact: correctness
+    Action: add tests first
+- Maintainability issues:
+  - Finding: `GeneralInfoReader.to_dict()` exposes the live bridge object state, and the runner mutates that dictionary directly (`ref_source`, `sim_source`, `ref_file_override`, `ref_preprocessed`). That makes runner behavior depend on legacy processor internals and undocumented output keys like `casedir`, `ref_varname`, and `sim_varname`.
+    Category: maintainability
+    Confidence: confirmed
+    Impact: extensibility
+    Action: queue next
+- Performance opportunities:
+  - Finding: `EvaluationCache.is_cached()` and `mark_done()` reload the JSON cache from disk on every task, which keeps the logic simple but adds repeated file I/O on larger runs.
+    Category: performance
+    Confidence: confirmed
+    Impact: runtime cost
+    Action: queue next
+- Recommended modification order:
+  1. Make comparison-only mode phase-exclusive so it cannot trigger groupby/statistics/report work.
+  2. Extend the cache hash to include the preprocessing and resolution knobs that affect generated outputs.
+  3. Add tests for comparison-only completeness and cache invalidation across time-alignment and unified-mask changes.
