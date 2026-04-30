@@ -1,0 +1,315 @@
+% docs/manual/user/chapters/07-results.tex
+% 第 7 章：结果解读
+
+\chapter{结果解读}
+
+评估跑完之后，\file{output/<run>/} 下会有大量文件。本章解释每个目录里有什么、各个 metric 是什么意思、scores 是怎么归一化的，以及如何用 Python 直接读取结果做二次分析。
+
+\section{输出目录布局}
+
+一次成功的 \cli{openbench run} 产出的目录树：
+
+\begin{minted}{text}
+output/<run>/
+├── config.yaml         # 本次评估实际使用的完整配置（含解析后默认值）
+├── run.log             # 完整日志（INFO/DEBUG/WARN/ERROR）
+├── data/               # 预处理与中间数据缓存（zarr）
+├── metrics/            # 评估指标 CSV
+│   ├── Evapotranspiration/
+│   │   ├── CoLM2024_metrics.csv
+│   │   └── CLM5_metrics.csv
+│   └── Latent_Heat/...
+├── scores/             # 归一化打分 CSV
+│   ├── Evapotranspiration/
+│   │   ├── CoLM2024_scores.csv
+│   │   └── CLM5_scores.csv
+│   └── ...
+├── figures/            # 全部可视化产物（PNG）
+│   ├── Evapotranspiration/
+│   │   ├── geo/
+│   │   ├── portrait/
+│   │   ├── radar/
+│   │   ├── correlation/
+│   │   └── ...
+│   └── ...
+├── comparisons/        # 跨模型对比（仅 comparison.enabled=true）
+│   ├── portrait_plot.png
+│   ├── radar_plot.png
+│   ├── ranking.csv
+│   └── ranking_table.png
+├── statistics/         # 统计分析（仅 statistics.enabled=true）
+│   ├── ANOVA/
+│   ├── Correlation/
+│   ├── Hellinger_Distance/
+│   └── ...
+├── reports/            # 子报告与 HTML/PDF 主报告
+│   ├── report.html
+│   ├── report.pdf      # 仅装了 [report] extra 时
+│   └── sections/...
+├── scratch/            # 增量缓存（任务级配置哈希）
+│   └── cache/<task_key>.json
+├── tmp/                # 临时文件（每次 run 清空）
+└── debug/              # 仅 --dump-config 时存在
+    ├── runner_config.yaml
+    ├── main_nl.yaml
+    ├── ref_nml.yaml
+    ├── sim_nml.yaml
+    └── fig_nml.yaml
+\end{minted}
+
+\textbf{首次熟悉时的查看顺序}：\file{report.html} → \file{comparisons/} → \file{figures/<var>/} → \file{metrics/<var>/<sim>\_metrics.csv}。
+
+\section{Metrics CSV 解读}
+
+\file{metrics/<var>/<sim>\_metrics.csv} 一行一个 reference（站点评估时也可能一行一个站点）：
+
+\begin{minted}{text}
+ref,bias,RMSE,ubRMSE,correlation,correlation_R2,NSE,KGE,KGESS,index_agreement,...
+GLEAM_v4.2a_LowRes,0.12,0.45,0.32,0.78,0.61,0.55,0.71,0.49,0.86,...
+\end{minted}
+
+\subsection{常用 metric 含义速查}
+
+\begin{longtable}{l p{3cm} p{8cm}}
+  \toprule
+  Metric & 范围 & 含义 \\
+  \midrule
+  \endhead
+  \texttt{bias} & (-∞, +∞) & 模型 - 观测的均值偏差。0 = 无偏。同号正负向偏 \\
+  \texttt{percent\_bias} & (-∞, +∞) \% & bias / 观测均值；相对偏差，方便跨变量比较 \\
+  \texttt{RMSE} & [0, +∞) & 均方根误差。越小越好 \\
+  \texttt{ubRMSE} & [0, +∞) & 去偏后的 RMSE = sqrt(RMSE² - bias²)。剔除均值偏差只看变化幅度 \\
+  \texttt{CRMSD} & [0, +∞) & Centered RMSD（同 ubRMSE 概念） \\
+  \texttt{mean\_absolute\_error} & [0, +∞) & 绝对偏差均值 \\
+  \texttt{correlation} & [-1, 1] & Pearson 相关系数。1 = 完美正相关 \\
+  \texttt{correlation\_R2} & [0, 1] & 相关系数平方，可解释方差比例 \\
+  \texttt{NSE} & (-∞, 1] & Nash-Sutcliffe Efficiency。1 = 完美；0 = 等价于均值；< 0 = 比均值还差 \\
+  \texttt{KGE} & (-∞, 1] & Kling-Gupta Efficiency，把 bias / 相关 / 方差比合并打分 \\
+  \texttt{KGESS} & (-∞, 1] & KGE Skill Score（相对参照） \\
+  \texttt{index\_agreement} & [0, 1] & Willmott index。1 = 完美 \\
+  \texttt{kappa\_coeff} & [-1, 1] & 类别一致性（适合分类型变量） \\
+  \texttt{rv} & [0, +∞) & 方差比 σ\_sim / σ\_obs。1 = 一致 \\
+  \texttt{ubNSE/ubKGE} & ... & 去偏版本 \\
+  \bottomrule
+\end{longtable}
+
+\openbench{} 内置 25+ metric。完整列表与公式见开发卷第 6 章。
+
+\subsection{用 \yamlkey{metrics} 限定子集}
+
+默认计算全部可用 metric（很多）。如果只关心几个：
+
+\begin{minted}{yaml}
+metrics:
+  - bias
+  - RMSE
+  - correlation
+  - KGE
+\end{minted}
+
+只计算这 4 个。\file{<sim>\_metrics.csv} 只含 4 列。
+
+\section{Scores 解读}
+
+Scores 把多个 metric 按归一化方式合并成 \emph{0-1 之间} 的可比分数（1 = 完美）：
+
+\begin{itemize}
+  \item \texttt{nBiasScore}：基于 bias 的归一化打分
+  \item \texttt{nRMSEScore}：基于 RMSE
+  \item \texttt{nPhaseScore}：相位一致性（季节循环对齐）
+  \item \texttt{nIavScore}：interannual variability 一致性
+  \item \texttt{nSpatialScore}：空间分布一致性
+  \item \texttt{nSeasonalityScore}：季节性一致性
+  \item \texttt{Overall\_Score}：综合分（加权平均）
+\end{itemize}
+
+CSV 格式：
+
+\begin{minted}{text}
+ref,nBiasScore,nRMSEScore,nPhaseScore,nIavScore,nSpatialScore,Overall_Score
+GLEAM_v4.2a_LowRes,0.84,0.71,0.68,0.79,0.82,0.77
+\end{minted}
+
+\textbf{Overall\_Score} 是 portrait plot 与 ranking 的核心输入；多模型比较时，它是单一最直观的"模型 X 对该变量评估得了 0.77 分"。
+
+\subsection{用 \yamlkey{scores} 限定子集}
+
+\begin{minted}{yaml}
+scores:
+  - nBiasScore
+  - nRMSEScore
+  - Overall_Score
+\end{minted}
+
+\section{Comparison 输出（多模型对比）}
+
+\yamlkey{comparison.enabled: true} 时，\file{comparisons/} 下会有：
+
+\subsection{portrait\_plot}
+
+\textbf{结构}：x 轴 = simulation（模型）；y 轴 = (variable, score) 二元组；填色 = score 值（0-1，颜色越深越好）。
+
+\textbf{用途}：一眼看哪个模型在哪个变量上强/弱。
+
+\subsection{radar\_plot}
+
+每个模型一组 spoke，每根 spoke 一个 score。多模型叠合显示。
+
+\subsection{ranking}
+
+\file{ranking.csv}：按 \texttt{Overall\_Score} 平均（跨变量、跨 reference）排序的简单表格。\file{ranking\_table.png} 是它的可视化版本。
+
+\section{Statistics 输出}
+
+\yamlkey{statistics.enabled: true} 时，\file{statistics/} 下按统计模块名分目录：
+
+\begin{itemize}
+  \item \texttt{ANOVA/}：方差分解
+  \item \texttt{Correlation/}：相关与协方差
+  \item \texttt{Hellinger\_Distance/}：分布相似度
+  \item \texttt{Mann\_Kendall\_Trend\_Test/}：趋势显著性
+  \item \texttt{Kernel\_Density\_Estimate/}
+  \item \texttt{Three\_Cornered\_Hat/}：三角帽误差分解
+  \item \texttt{Partial\_Least\_Squares\_Regression/}
+  \item \texttt{Functional\_Response/}
+  \item ...
+\end{itemize}
+
+每个目录内含 CSV 数值结果 + PNG 可视化。
+
+\subsection{用 \yamlkey{statistics.items} 限定}
+
+\begin{minted}{yaml}
+statistics:
+  enabled: true
+  items:
+    - Correlation
+    - Mann_Kendall_Trend_Test
+\end{minted}
+
+只跑这两个，省时。
+
+\section{Visualization 产物（figures/）}
+
+\file{figures/<var>/} 下按图种分子目录，每个 sim×ref 对一张：
+
+\begin{itemize}
+  \item \texttt{geo/}：地理分布图（mean / bias / correlation 三种 panel）
+  \item \texttt{portrait/}：portrait sub-plot
+  \item \texttt{radar/}：单变量雷达
+  \item \texttt{correlation/}：散点图（sim vs ref）
+  \item \texttt{kernel\_density\_estimate/}：KDE 概率密度对比
+  \item \texttt{ridgeline/}：脊线图
+  \item \texttt{heatmap/}：相关矩阵热图（多变量时）
+  \item \texttt{LC\_based\_heat\_map/}：按 IGBP 分类的 heatmap（仅 \yamlkey{IGBP_groupby: true}）
+  \item ...
+\end{itemize}
+
+\openbench{} 内置 17 个 \texttt{Fig\_*.py} 模块。开发卷第 7 章会介绍如何添加新图种。
+
+\section{HTML/PDF 总结报告}
+
+\subsection{HTML 报告}
+
+\file{reports/report.html} 默认在评估结束自动生成，结构：
+
+\begin{enumerate}
+  \item 项目元信息（name、年份、变量列表）
+  \item 每个变量一节：含主要图（geo / portrait）+ metric 表
+  \item Comparison 章节（多模型时）
+  \item Statistics 章节（启用时）
+  \item 附录：完整配置 + 日志摘要
+\end{enumerate}
+
+用浏览器打开即可：
+
+\begin{minted}{bash}
+open output/<run>/reports/report.html      # macOS
+xdg-open output/<run>/reports/report.html  # Linux
+\end{minted}
+
+\subsection{PDF 报告（可选）}
+
+\begin{minted}{bash}
+pip install "openbench[report]"
+\end{minted}
+
+启用后再 run，会同步生成 \file{report.pdf}（基于 \modname{xhtml2pdf}，把 HTML 转 PDF）。
+
+未装 \cli{[report]} extra 时：
+
+\begin{itemize}
+  \item HTML 仍正常生成
+  \item PDF 跳过，日志写 "PDF generation skipped (xhtml2pdf not installed)"
+  \item 不算错误
+\end{itemize}
+
+\subsection{关闭报告生成}
+
+\begin{minted}{yaml}
+project:
+  generate_report: false
+\end{minted}
+
+省 5-15\% 评估时间（大型评估时尤其有用）。CSV 与 figure 仍正常输出。
+
+\section{用 Python 二次分析}
+
+\openbench{} 的 CSV 输出标准 pandas 友好：
+
+\begin{minted}{python}
+import pandas as pd
+import xarray as xr
+from pathlib import Path
+
+run_dir = Path("output/demo")
+
+# 单变量 metrics 表
+df = pd.read_csv(run_dir / "metrics/Evapotranspiration/CoLM2024_metrics.csv")
+print(df[["ref", "bias", "RMSE", "KGE"]])
+
+# 跨模型 ranking
+ranking = pd.read_csv(run_dir / "comparisons/ranking.csv")
+print(ranking.sort_values("Overall_Score", ascending=False))
+
+# 中间 zarr 缓存（预处理后的对齐数据）
+ds = xr.open_zarr(run_dir / "data/Evapotranspiration_CoLM2024_GLEAM_v4.2a_LowRes.zarr")
+print(ds)
+\end{minted}
+
+\noteinline{zarr 缓存格式可能在 v3.0 后续版本调整；CSV 与 PNG 输出格式承诺向前兼容。}
+
+\section{常见解读问题}
+
+\subsection{为什么我的 metric 是 NaN}
+
+\begin{itemize}
+  \item Sim 与 ref 时间窗口无重叠 → check 应该已经报警
+  \item 空间网格全为 NaN（落入海洋 / 极地）→ 检查 \yamlkey{lat_range}/\yamlkey{lon_range}
+  \item 单位换算翻车（变量值变成无穷大）→ 看 \cli{openbench model show <model>} 的 compute 表达式
+  \item NaN 比例超过 \yamlkey{min_year_threshold} 阈值 → 提示数据稀疏
+\end{itemize}
+
+\subsection{为什么 Overall\_Score 比单 metric 还低}
+
+Overall\_Score 是多个 score 的平均。某个 score（如 spatial）很差会拉低均值。看分量 score：
+
+\begin{minted}{bash}
+cat output/<run>/scores/Evapotranspiration/MyModel_scores.csv
+\end{minted}
+
+\subsection{Comparison 图为空}
+
+只有 1 个 simulation 时，comparison 图退化为单模型自比，往往看不出差异。多 simulation 才有意义。
+
+\section{下一步}
+
+下一章介绍 GUI Wizard：
+
+\begin{itemize}
+  \item 启动 GUI
+  \item 14 个向导页面流程
+  \item 配置加载、保存、模板
+  \item GUI 触发的远程运行入口
+  \item 进度监控视图
+\end{itemize}
