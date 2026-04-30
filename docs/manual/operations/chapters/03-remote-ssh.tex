@@ -1,0 +1,355 @@
+% docs/manual/operations/chapters/03-remote-ssh.tex
+% 第 3 章：远程 SSH 执行
+
+\chapter{远程 SSH 执行}
+
+让用户在笔记本上配置评估、点一下提交到 HPC 节点、远程跑完后把结果拉回来——这是 \openbench{} 远程模块的目标。本章详解：当前实现状态、SSH 凭据管理、连接 profile、文件同步、端到端流程，以及当 GUI 远程不可用时的纯命令行替代。
+
+\section{现状：v3.0a1 远程支持矩阵}
+
+\begin{longtable}{p{4cm} p{3cm} p{6cm}}
+  \toprule
+  入口 & 状态 & 说明 \\
+  \midrule
+  \endhead
+  GUI Remote Run & [YES] 可用（实验性） & 通过 wizard 提交，远程跑 CLI \\
+  CLI \cli{run --remote} & [NO] 未实现 & 立即 SystemExit(1) 提示用 GUI \\
+  Python API & [!] 部分 & \modname{runner.remote} 模块就绪，但官方未公开 \\
+  手动 SSH + 远程 CLI & [YES] 推荐 & 最稳路径；本章详述 \\
+  \bottomrule
+\end{longtable}
+
+\warninline{当前状态下，\textbf{最稳的远程方案是手动 SSH + 远程 CLI}。GUI Remote Run 适合熟悉 SSH 的用户用作便利工具，但中途断连或大文件同步会失败。本章建议的"主路径"是手动方案，GUI 路径作为补充。}
+
+\section{[remote] extra 安装}
+
+GUI Remote 与底层 \modname{runner.remote} 都依赖 \cli{[remote]} extra：
+
+\begin{minted}{bash}
+pip install "openbench[remote]"
+\end{minted}
+
+引入两个核心依赖：
+
+\begin{itemize}
+  \item \modname{paramiko}：纯 Python SSH 客户端（连接、文件传输、命令执行）
+  \item \modname{cryptography}：fernet 加密（凭据本地存储）
+\end{itemize}
+
+\textbf{装在哪里}：装在你的 \emph{本地} 笔记本/工作站。HPC 节点不需要 \cli{[remote]}（它是被连的一方）。
+
+\section{Connection profile}
+
+\openbench{} 用 \modname{remote.connections.ConnectionManager} 管理 SSH 连接 profile。每个 profile 是一组连接信息：
+
+\begin{itemize}
+  \item \texttt{name}：profile 标识（如 "MyHPC"）
+  \item \texttt{host}：\texttt{user@hostname}
+  \item \texttt{port}：22（默认）
+  \item \texttt{key\_path}：私钥路径（推荐）
+  \item \texttt{password}：可选（不推荐）
+  \item \texttt{remote\_workdir}：远程工作目录
+\end{itemize}
+
+\subsection{存储位置}
+
+profile 持久化到 \texttt{\~{}/.openbench\_wizard/connections.yaml}（注意：路径源自历史 wizard 项目，不是 platformdirs）。
+
+\subsection{用 GUI 添加 profile}
+
+\begin{enumerate}
+  \item \cli{openbench gui}
+  \item Tools → Manage Remote Profiles
+  \item Add Connection
+  \item 填表：name / host / port / key path
+  \item Test Connection（绿/红状态）
+  \item Save
+\end{enumerate}
+
+\subsection{手动编辑 profile}
+
+\begin{minted}{yaml}
+# ~/.openbench_wizard/connections.yaml
+connections:
+  MyHPC:
+    host: alice@hpc01.example.edu
+    port: 22
+    key_path: ~/.ssh/hpc_id_rsa
+    remote_workdir: /home/alice/openbench-runs
+  CloudVM:
+    host: ec2-user@52.x.x.x
+    key_path: ~/.ssh/aws_key.pem
+    remote_workdir: /scratch/openbench
+\end{minted}
+
+\section{Credentials：加密存储}
+
+如果非用密码不可（不建议；建议用密钥），\openbench{} 用 fernet 加密本地存储。
+
+\subsection{加密原理}
+
+\modname{remote.credentials.CredentialManager}：
+
+\begin{itemize}
+  \item 用户首次保存密码时输入"主密码"（master password）
+  \item PBKDF2 + 32 字节 salt 派生 fernet key
+  \item 密码本身用派生 key 加密后存到 \texttt{\~{}/.openbench\_wizard/credentials.json}
+  \item Salt 单独存到 \texttt{encryption\_salt.bin}
+  \item 每次需要密码时要求输入主密码解密
+\end{itemize}
+
+\subsection{文件位置与权限}
+
+\begin{minted}{bash}
+ls -la ~/.openbench_wizard/
+# -rw-------  encryption_salt.bin
+# -rw-------  credentials.json
+# -rw-------  connections.yaml
+\end{minted}
+
+权限必须是 \texttt{0600}（仅本用户可读写）。如果发现权限被改成 \texttt{0644} 或更宽，立即：
+
+\begin{minted}{bash}
+chmod 600 ~/.openbench_wizard/*.{bin,json,yaml}
+\end{minted}
+
+\subsection{重置凭据}
+
+如果忘了主密码：
+
+\begin{minted}{bash}
+rm ~/.openbench_wizard/credentials.json ~/.openbench_wizard/encryption_salt.bin
+# 下次保存密码时会重新设主密码
+\end{minted}
+
+connection profile 不受影响（它没加密）。
+
+\section{推荐主路径：手动 SSH + 远程 CLI}
+
+最简单可靠：本地写 yaml，scp 到远程，远程 CLI 跑。完整流程：
+
+\subsection{Step 1：本地准备}
+
+\begin{minted}{bash}
+# 1. 在笔记本上用 GUI / 手写 yaml
+openbench gui          # 或直接 vim openbench.yaml
+# yaml 中 root_dir 写成 \emph{远程} 路径，不是本地路径
+
+# 2. 验证 yaml 语法（不验数据）
+openbench check openbench.yaml --skip-data   # 注：当前 check 默认会查 registry，
+                                              # 远程数据集如果本地无 catalog 会报警
+\end{minted}
+
+\subsection{Step 2：传文件到 HPC}
+
+\begin{minted}{bash}
+scp openbench.yaml hpc01:~/openbench-runs/
+\end{minted}
+
+\subsection{Step 3：SSH 进 HPC，提交评估}
+
+\begin{minted}{bash}
+ssh hpc01
+
+# Login 节点上：activate 环境 + 提交 SLURM
+cd ~/openbench-runs
+source ~/miniforge3/bin/activate openbench
+
+# 直接交互式跑（短任务）
+openbench run openbench.yaml --cores 16
+
+# 或 SLURM 提交（推荐长任务）
+cat > submit.sh <<EOF
+#!/bin/bash
+#SBATCH --job-name=ob-eval
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+#SBATCH --time=24:00:00
+#SBATCH --output=ob-%j.out
+#SBATCH --error=ob-%j.err
+
+source ~/miniforge3/bin/activate openbench
+openbench run openbench.yaml --cores \$SLURM_CPUS_PER_TASK
+EOF
+
+sbatch submit.sh
+\end{minted}
+
+\subsection{Step 4：监控进度}
+
+\begin{minted}{bash}
+# 远程 tail 日志
+ssh hpc01 'tail -f ~/openbench-runs/output/<run>/run.log'
+
+# 或看 SLURM 状态
+ssh hpc01 squeue -u $USER
+\end{minted}
+
+\subsection{Step 5：拉回结果}
+
+\begin{minted}{bash}
+# 拉关键产物
+rsync -avz hpc01:~/openbench-runs/output/<run>/{report.html,figures,comparisons}/ \
+            ./local-output/<run>/
+
+# 或全部
+rsync -avz --exclude='scratch/' --exclude='_minted/' \
+       hpc01:~/openbench-runs/output/<run>/ \
+       ./local-output/<run>/
+\end{minted}
+
+\textbf{注意排除 scratch 与 \_minted}：scratch 是 cache，远程节点更高效保留；\_minted 是 LaTeX 中间产物。
+
+\section{补充路径：GUI Remote Run}
+
+GUI 里也能直接提交评估到远程，省去手动 ssh。
+
+\subsection{流程}
+
+\begin{enumerate}
+  \item 启动 GUI：\cli{openbench gui}
+  \item 配置 yaml（前 13 个 page）
+  \item 第 14 page Run Monitor：选 "Remote run"
+  \item 选 connection profile
+  \item GUI 自动：
+    \begin{enumerate}
+      \item 把当前 yaml + 必要文件 sync 到远程的 \texttt{remote\_workdir}
+      \item 远程启动 \cli{openbench run}
+      \item 拉取实时日志显示在 GUI 中
+      \item 完成后下载关键结果到本地
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{已知限制}
+
+\begin{itemize}
+  \item 中途网络断连，GUI 与远程进程脱钩 → 远程仍跑，但 GUI 不再能跟进度（需手动 ssh 看）
+  \item 大文件 sync（GB 级）会卡 GUI 主线程
+  \item Remote run 不支持 SLURM 提交，是直接前台跑（占用 login 节点资源；不适合长任务）
+\end{itemize}
+
+\section{File Sync：哪些文件传，哪些不传}
+
+\modname{remote.sync.SyncEngine} 决定：
+
+\subsection{上传（本地 → 远程）}
+
+\begin{itemize}
+  \item \texttt{openbench.yaml}（必传）
+  \item 用户级 catalog（\texttt{\~{}/.config/openbench/}）—— 让远程能识别本地注册的数据集
+  \item simulation 数据 → \emph{不上传}（数据应已在远程）
+  \item reference 数据 → \emph{不上传}
+\end{itemize}
+
+\subsection{下载（远程 → 本地）}
+
+\begin{itemize}
+  \item \texttt{output/<run>/figures/}
+  \item \texttt{output/<run>/metrics/}, \texttt{scores/}, \texttt{comparisons/}, \texttt{statistics/}
+  \item \texttt{output/<run>/reports/}
+  \item \texttt{output/<run>/run.log}
+  \item \emph{不下载}：\texttt{scratch/}（cache）、\texttt{tmp/}、\texttt{data/}（zarr 中间产物）
+\end{itemize}
+
+\section{Storage 抽象：local 与 remote}
+
+\modname{remote.storage} 定义统一接口让 \openbench{} 的代码不管底层是本地盘还是远程：
+
+\begin{itemize}
+  \item \texttt{LocalStorage}：本地盘
+  \item \texttt{RemoteSSHStorage}：通过 SSH 透明访问远程文件
+  \item \texttt{StorageInterface}：抽象基类
+\end{itemize}
+
+实际使用主要在 GUI Remote Run 内部；普通用户不必关心。
+
+\section{安全建议}
+
+\subsection{密钥管理}
+
+\begin{itemize}
+  \item \textbf{用 ed25519 而非 RSA}：\texttt{ssh-keygen -t ed25519}
+  \item 密钥文件权限：\texttt{chmod 600 \~{}/.ssh/hpc\_key}
+  \item 密钥加 passphrase；用 ssh-agent 管理
+  \item \emph{不要}把私钥放到 GitHub
+\end{itemize}
+
+\subsection{Known\_hosts}
+
+第一次连远程时 SSH 会问"add to known\_hosts?"。GUI 自动接受这第一次，之后变化时会告警（防止 MITM）。如果集群确实换 host key（管理员重装），手动：
+
+\begin{minted}{bash}
+ssh-keygen -R hpc01.example.edu   # 删旧 entry
+ssh hpc01.example.edu              # 重新接受
+\end{minted}
+
+\subsection{堡垒机 / 跳板机}
+
+如果集群通过堡垒机访问，标准 SSH ProxyJump 配置：
+
+\begin{minted}{ssh-config}
+# ~/.ssh/config
+Host bastion
+  HostName bastion.example.edu
+  User alice
+
+Host hpc01
+  HostName hpc01.internal
+  User alice
+  ProxyJump bastion
+\end{minted}
+
+\openbench{} GUI 会读你的 \texttt{\~{}/.ssh/config}，所以 ProxyJump 自动生效。
+
+\subsection{多账号}
+
+不同集群用不同账号：
+
+\begin{minted}{yaml}
+connections:
+  HPC_Beijing:
+    host: alice_bj@bjhpc.example.cn
+    key_path: ~/.ssh/bjhpc_key
+  HPC_Shanghai:
+    host: alice_sh@shhpc.example.cn
+    key_path: ~/.ssh/shhpc_key
+\end{minted}
+
+每 connection profile 独立。
+
+\section{常见远程问题}
+
+\subsection{SSH 连接失败}
+
+GUI Test Connection 红色 / 命令行 \texttt{ssh} 失败：
+
+\begin{itemize}
+  \item 私钥权限是否 0600：\texttt{chmod 600 \~{}/.ssh/key}
+  \item 主机指纹是否需要先接受：手动 \texttt{ssh hostname} 一次
+  \item VPN / 防火墙：HPC 是否要求公司 VPN
+  \item 看 \texttt{ssh -vv} 详细诊断
+\end{itemize}
+
+\subsection{认证失败}
+
+\begin{itemize}
+  \item 私钥 vs 公钥：\texttt{cat \~{}/.ssh/key.pub} 的内容是否在远程 \texttt{\~{}/.ssh/authorized\_keys}
+  \item Passphrase 没解锁：\texttt{ssh-add \~{}/.ssh/key}
+  \item 密码方式被服务器禁用：用密钥
+\end{itemize}
+
+\subsection{远程跑成功但本地没拉到结果}
+
+\begin{itemize}
+  \item GUI 退出过早：等 "Run completed" 提示
+  \item Sync 排除规则太宽：手动 \texttt{rsync} 拉
+\end{itemize}
+
+\subsection{long-running job 中途断网}
+
+如用 SLURM：远程 job 不受影响，重连后 \texttt{squeue} 看状态即可。
+如用 GUI 直接跑：远程进程父进程是 SSH session，session 断 → 子进程被 SIGHUP。\textbf{修法}：用 \texttt{nohup openbench run ... \&} 或 \texttt{tmux} 把进程从 session 解耦。
+
+\section{下一步}
+
+下一章详解性能调优：\yamlkey{num_cores} 选择、CPU/内存/IO 瓶颈识别、并行边界。
