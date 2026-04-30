@@ -496,21 +496,32 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
     def _preprocess_variable(var_name: str, vtasks: list[dict]) -> list[dict[str, Any]]:
         """Preprocess all tasks for one variable (serial within variable).
 
-        Multi-reference support: ref preprocessing is tracked PER ref_source
-        (not once per variable), so configs with reference: [GLEAM, FLUXCOM]
-        actually preprocess both refs. Earlier code used a single ref_done
-        bool which caused refs 2+ to be silently skipped (regression).
+        Multi-reference + mixed data-type support: ref preprocessing dedupes
+        on (ref_source, output_signature). The signature distinguishes pure
+        grid×grid (which produces a shareable flat NC) from stn-involved
+        runs (which write per-pair ``stn_<ref>_<sim>/`` and DELETE the flat
+        as part of station extraction). Without this distinction, a sequence
+        like grid×grid → stn×ref-grid → grid×grid would skip the third
+        task's prep but find the flat NC already gone.
 
-        For intersection/strict: ref processed once per ref_source,
-        unified_mask accumulates across sims for that ref.
-        For per_pair: each sim gets its own ref copy (no mask cross-contamination).
+        For intersection/strict: unified_mask accumulates across sims for
+        that ref_source (tracked separately).
+        For per_pair: each sim gets its own ref copy (no cross-contamination).
         """
         from openbench.data.processing import DatasetProcessing
 
-        # Track preprocessing state per ref_source so multiple refs each get processed
-        refs_done: set[str] = set()
-        ref_data_dirs: dict[str, str] = {}   # ref_source -> first scheme data dir
-        ref_file_paths: dict[str, str] = {}  # ref_source -> processed ref NC file path
+        # Dedupe by (ref_source, signature):
+        #   - "_grid": pure grid×grid prep produces a flat NC reusable across
+        #     multiple grid sims with the same ref
+        #   - sim_source string: stn-involved prep writes a per-pair output
+        #     dir (stn_<ref>_<sim>) and deletes the flat NC; cannot be shared
+        preproc_done: set[tuple[str, str]] = set()
+        # Track first-time-seen per ref_source for unified_mask accumulation
+        refs_first_seen: set[str] = set()
+        # For stn×stn symlink optimization: first stn dir per ref_source
+        ref_stn_data_dirs: dict[str, str] = {}
+        # ref_source -> flat ref NC path (only valid while a grid-only path lives there)
+        ref_flat_paths: dict[str, str] = {}
         phase_errors: list[dict[str, Any]] = []
 
         for task in vtasks:
@@ -518,35 +529,54 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
             sim_source = task["sim_source"]
             try:
                 info = _build_bridge_runtime_info(task)
+                ref_dtype = info.get("ref_data_type", "grid")
+                sim_dtype = info.get("sim_data_type", "grid")
+                is_stn_path = (ref_dtype == "stn") or (sim_dtype == "stn")
+                prep_key = (ref_source, sim_source if is_stn_path else "_grid")
 
                 processor = DatasetProcessing(info)
 
-                # Ref: once per (variable, ref_source) — multi-ref aware
-                if ref_source not in refs_done:
-                    logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
+                # Ref: dedupe by (ref_source, signature). Mixed-type configs
+                # (same ref reused across grid and stn sims) correctly run
+                # separate prep for the stn-side without skipping.
+                if prep_key not in preproc_done:
+                    logger.info(
+                        "Preprocessing ref: %s (%s) [%s]",
+                        var_name, ref_source,
+                        "stn-pair" if is_stn_path else "grid",
+                    )
                     processor.prepare_source("ref")
-                    refs_done.add(ref_source)
-                    # Remember the ref data directory for symlinking to other schemes
-                    ref_data_dirs[ref_source] = os.path.join(
-                        info["casedir"], "data",
-                        f"stn_{ref_source}_{sim_source}",
-                    )
-                    # Remember the ref file path for per_pair mode
-                    ref_varname = info.get("ref_varname", "")
-                    ref_file_paths[ref_source] = os.path.join(
-                        info["casedir"], "data",
-                        f"{var_name}_ref_{ref_source}_{ref_varname}.nc",
-                    )
-                elif info.get("ref_data_type") == "stn" or info.get("sim_data_type") == "stn":
-                    # stn×stn: ref was processed into the first scheme's data dir
-                    # for this ref_source. Symlink so subsequent (ref, sim) pairs
-                    # share the same ref files.
+                    preproc_done.add(prep_key)
+                    if is_stn_path:
+                        # Remember first stn dir per ref for stn×stn symlink branch below
+                        ref_stn_data_dirs.setdefault(
+                            ref_source,
+                            os.path.join(
+                                info["casedir"], "data",
+                                f"stn_{ref_source}_{sim_source}",
+                            ),
+                        )
+                    else:
+                        # Grid prep produced a flat NC; remember its path
+                        ref_varname = info.get("ref_varname", "")
+                        ref_flat_paths[ref_source] = os.path.join(
+                            info["casedir"], "data",
+                            f"{var_name}_ref_{ref_source}_{ref_varname}.nc",
+                        )
+                elif is_stn_path and ref_source in ref_stn_data_dirs:
+                    # stn×stn (same ref, second sim): symlink ref files from
+                    # the first stn dir to this sim's dir so we don't re-extract
+                    # ref stations. Same-ref-same-stn-different-sim case.
                     this_data_dir = os.path.join(
                         info["casedir"], "data",
                         f"stn_{ref_source}_{sim_source}",
                     )
-                    src_data_dir = ref_data_dirs.get(ref_source)
-                    if src_data_dir and os.path.isdir(src_data_dir) and this_data_dir != src_data_dir:
+                    src_data_dir = ref_stn_data_dirs[ref_source]
+                    if (
+                        src_data_dir
+                        and os.path.isdir(src_data_dir)
+                        and this_data_dir != src_data_dir
+                    ):
                         os.makedirs(this_data_dir, exist_ok=True)
                         for ref_file in os.listdir(src_data_dir):
                             if "_ref_" in ref_file and ref_file.endswith(".nc"):
@@ -561,10 +591,8 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
 
                 # Unified mask: ensure evaluation only covers cells where both ref and sim are valid.
                 if unified_mask:
-                    ref_dtype = info.get("ref_data_type", "grid")
-                    sim_dtype = info.get("sim_data_type", "grid")
                     if ref_dtype != "stn" and sim_dtype != "stn":
-                        ref_file_path_for_pair = ref_file_paths.get(ref_source)
+                        ref_file_path_for_pair = ref_flat_paths.get(ref_source)
                         if time_alignment == "per_pair" and ref_file_path_for_pair:
                             # per_pair: each sim gets its own ref copy — no cross-contamination
                             ref_varname_m = info.get("ref_varname", "")

@@ -1441,3 +1441,126 @@ def test_preprocess_runs_for_each_ref_source(tmp_path, monkeypatch):
     # Sim should be preprocessed for every (sim, ref) task: 4 calls
     sim_calls = [c for c in prepare_calls if c[0] == "sim"]
     assert len(sim_calls) == 4, f"expected 4 sim preprocess calls (2 sim × 2 ref), got {len(sim_calls)}"
+
+
+def test_preprocess_mixed_grid_and_stn_sims_with_same_grid_ref(tmp_path, monkeypatch):
+    """Same grid ref reused across [SimGrid, SimStn] sims must trigger TWO ref preps.
+
+    Edge case: with simulation: {SimGrid: grid, SimStn: stn} and a single
+    grid reference, processing.extract_station_data_if_needed runs for the
+    stn-involved task and DELETES the flat ref NC. A naive ref-once-per-
+    ref_source dedupe would skip the third (RefA, SimGrid) task, leaving
+    its evaluation pointed at the deleted flat NC.
+
+    Fix: dedupe key is (ref_source, "_grid") for grid×grid AND
+    (ref_source, sim_source) when any side is stn. This test pins that
+    behavior — RefA gets at LEAST one grid-side prep AND one stn-side prep.
+    """
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(
+            name="case", output_dir=str(tmp_path), years=[2000, 2001],
+            generate_report=False, unified_mask=False,
+        ),
+        evaluation=EvaluationConfig(variables=["LH"]),
+        # Single grid ref, but reused across grid AND stn sim
+        reference=ReferenceConfig(sources={"LH": "RefGrid"}),
+        simulation={
+            "SimGrid": SimulationEntry(model="MG", root_dir=str(tmp_path)),
+            "SimStn": SimulationEntry(model="MS", root_dir=str(tmp_path)),
+        },
+        comparison=ComparisonConfig(enabled=False, items=[]),
+        statistics=StatisticsConfig(enabled=False, items=[]),
+    )
+
+    legacy = {
+        "general": {
+            "basename": "case", "basedir": str(tmp_path),
+            "num_cores": 1, "unified_mask": False, "generate_report": False,
+        },
+        "evaluation_items": {"LH": True},
+        "metrics": {"bias": True}, "scores": {"Overall_Score": True},
+        "comparisons": {}, "statistics": {},
+    }
+    main_nl = {
+        "general": {
+            "basename": "case", "basedir": str(tmp_path),
+            "num_cores": 1, "unified_mask": False,
+            "compare_tim_res": "Month", "compare_grid_res": 0.5,
+            "compare_tzone": 0, "syear": 2000, "eyear": 2001,
+            "time_alignment": "intersection",
+        },
+    }
+    ref_nml = {
+        "general": {"LH_ref_source": "RefGrid"},
+        "LH": {"RefGrid_data_type": "grid"},
+    }
+    sim_nml = {
+        "general": {"LH_sim_source": ["SimGrid", "SimStn"]},
+        # Mixed: SimGrid is grid, SimStn is stn
+        "LH": {"SimGrid_data_type": "grid", "SimStn_data_type": "stn"},
+    }
+
+    import openbench.config.adapter as adapter
+    import openbench.core.evaluation as evaluation
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    prepare_calls: list[tuple[str, str, str, str]] = []  # (ds, ref, sim, sim_dtype)
+
+    def fake_build_bridge_runtime_info(task):
+        sim = task["sim_source"]
+        sim_dtype = "grid" if sim == "SimGrid" else "stn"
+        return {
+            "casedir": str(tmp_path / "case"),
+            "ref_varname": "rv", "sim_varname": "sv",
+            "ref_data_type": "grid",  # same ref for all tasks
+            "sim_data_type": sim_dtype,
+            "ref_source": task["ref_source"], "sim_source": sim,
+        }
+
+    class FakeProcessor:
+        def __init__(self, info):
+            self.info = info
+
+        def prepare_source(self, datasource):
+            prepare_calls.append((
+                datasource,
+                self.info["ref_source"],
+                self.info["sim_source"],
+                self.info["sim_data_type"],
+            ))
+
+    class FakeStnEvaluation:
+        def __init__(self, info, fig_nml): pass
+        def make_evaluation_P(self): return None
+
+    class FakeGridEvaluation:
+        def __init__(self, info, fig_nml): pass
+        def make_Evaluation(self): return None
+
+    monkeypatch.setattr(adapter, "to_legacy_config", lambda cfg: legacy)
+    monkeypatch.setattr(adapter, "build_legacy_namelists", lambda cfg: (main_nl, ref_nml, sim_nml))
+    monkeypatch.setattr(adapter, "build_fig_nml", lambda: {})
+    monkeypatch.setattr(local_runner, "_build_bridge_runtime_info", fake_build_bridge_runtime_info)
+    monkeypatch.setattr(local_runner, "_apply_unified_mask", lambda *a, **k: None)
+    monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessor)
+    monkeypatch.setattr(evaluation, "Evaluation_grid", FakeGridEvaluation)
+    monkeypatch.setattr(evaluation, "Evaluation_stn", FakeStnEvaluation)
+    monkeypatch.setattr(local_runner, "_run_groupby", lambda *a, **k: [])
+
+    result = run_evaluation(cfg)
+    assert result["status"] == "success", result.get("errors")
+
+    # The ref preprocessing must run TWICE for RefGrid:
+    # - once for the grid×grid path (SimGrid)
+    # - once for the stn-involved path (SimStn) — the stn extraction would
+    #   delete the flat NC, so reusing the grid prep is unsafe
+    ref_calls_for_refgrid = [c for c in prepare_calls if c[0] == "ref" and c[1] == "RefGrid"]
+    assert len(ref_calls_for_refgrid) == 2, (
+        "Same grid ref reused across grid and stn sims should trigger 2 ref preps "
+        f"(one grid, one stn-pair); got {ref_calls_for_refgrid}"
+    )
+    sim_dtypes_seen = {c[3] for c in ref_calls_for_refgrid}
+    assert sim_dtypes_seen == {"grid", "stn"}, (
+        f"ref preps should cover both sim types, got {sim_dtypes_seen}"
+    )
