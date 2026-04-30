@@ -32,3 +32,4 @@ _minted-*/
 
 # PDF outputs (do NOT commit; use make to rebuild)
 *.pdf
+_generated/*.tex
