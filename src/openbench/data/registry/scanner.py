@@ -104,6 +104,59 @@ def _invalidate_registry_caches() -> None:
     clear_reference_profile_cache()
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def _catalog_write_lock(catalog_path: Path):
+    """Serialize concurrent writes to the same catalog via an exclusive flock.
+
+    Without this, two scan processes both load the same pre-write state,
+    each compute their own additions, and the second writer silently
+    overwrites the first writer's new entries. Common in HPC shared-registry
+    scenarios where multiple users scan their reference roots in parallel.
+
+    Falls back gracefully on platforms without flock (Windows native, NFS
+    without nlockmgr): logs a debug note and proceeds without serialization.
+    Single-user local installs see no behavior change.
+    """
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = Path(str(catalog_path) + ".lock")
+    try:
+        lock_path.touch(exist_ok=True)
+    except OSError as e:
+        logger.debug("Could not create lock file %s: %s", lock_path, e)
+        yield
+        return
+
+    try:
+        import fcntl
+    except ImportError:
+        # Windows native — proceed without locking
+        yield
+        return
+
+    lock_file = open(lock_path, "r")
+    have_lock = False
+    try:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            have_lock = True
+        except OSError as e:
+            logger.debug(
+                "flock unavailable for %s (%s); proceeding without lock",
+                lock_path, e,
+            )
+        yield
+    finally:
+        if have_lock:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        lock_file.close()
+
+
 # Lazy-loaded reference profiles (like model_catalog for references)
 _REFERENCE_PROFILES: dict | None = None
 
@@ -472,11 +525,12 @@ def register_scanned_dataset(
 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
-    catalog = _safe_load_catalog(catalog_path)
+    # Serialize across concurrent scan processes; load-modify-write inside lock
+    with _catalog_write_lock(catalog_path):
+        catalog = _safe_load_catalog(catalog_path)
+        _register_to_dict(scanned, catalog, existing_descriptor=existing_descriptor, on_multi_var=on_multi_var)
+        _backup_then_write(catalog_path, catalog)
 
-    _register_to_dict(scanned, catalog, existing_descriptor=existing_descriptor, on_multi_var=on_multi_var)
-
-    _backup_then_write(catalog_path, catalog)
     _invalidate_registry_caches()
 
     return catalog_path
@@ -506,19 +560,22 @@ def register_scanned_datasets_batch(
 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
-    catalog = _safe_load_catalog(catalog_path)
+    # Serialize across concurrent scan processes; load-modify-write inside lock
+    with _catalog_write_lock(catalog_path):
+        catalog = _safe_load_catalog(catalog_path)
 
-    # Build all descriptors (this is where NC inspection happens)
-    for i, scanned in enumerate(datasets):
-        if on_progress:
-            on_progress(f"  [{i + 1}/{len(datasets)}] {scanned.registry_name}")
+        # Build all descriptors (this is where NC inspection happens)
+        for i, scanned in enumerate(datasets):
+            if on_progress:
+                on_progress(f"  [{i + 1}/{len(datasets)}] {scanned.registry_name}")
 
-        # Merge with existing descriptor to preserve hand-edited fields
-        existing = catalog.get(scanned.registry_name)
-        _register_to_dict(scanned, catalog, existing_descriptor=existing, on_multi_var=on_multi_var)
+            # Merge with existing descriptor to preserve hand-edited fields
+            existing = catalog.get(scanned.registry_name)
+            _register_to_dict(scanned, catalog, existing_descriptor=existing, on_multi_var=on_multi_var)
 
-    # Write once (atomic, with backup of previous state)
-    _backup_then_write(catalog_path, catalog)
+        # Write once (atomic, with backup of previous state)
+        _backup_then_write(catalog_path, catalog)
+
     _invalidate_registry_caches()
 
     return catalog_path
@@ -1049,11 +1106,12 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
     """Detect whether a NC file contains gridded or station data.
 
     Rules:
-      - Grid: has lat and lon dimensions, both size > 1
-      - Station: has a station/site dimension, or lat/lon dims with size == 1
-      - None: cannot determine
+      - Station: has a station/site dimension, OR has neither lat nor lon
+        with size > 1 (single point or time-only series)
+      - Grid: has lat OR lon dimension with size > 1 (covers full 2D grids
+        AND 1D profile-style data with single-cell width along one axis)
 
-    Returns "grid", "stn", or None.
+    Returns "grid", "stn", or None on failure.
     """
     try:
         import netCDF4
@@ -1080,12 +1138,14 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
                 lon_size = dims[name.lower()]
                 break
 
-        if lat_size > 1 and lon_size > 1:
+        # Any spatial axis > 1 → grid (covers 2D and 1D profile data).
+        # Previously the lat>1, lon=1 case (zonal/profile slices along lat)
+        # returned None and the caller fell back to "grid" anyway; making
+        # this explicit avoids ambiguity downstream.
+        if lat_size > 1 or lon_size > 1:
             return "grid"
-        if lat_size <= 1 and lon_size <= 1:
-            return "stn"  # single point or no spatial dims
-
-        return None
+        # Both ≤1 → single point or time-only series → station
+        return "stn"
     except Exception:
         return None
 
@@ -1189,40 +1249,49 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
             _diff = float(_time_var[1] - _time_var[0])
             _units = getattr(_time_var, "units", "")
             _detected = None
+            # Tight tolerance buckets: each candidate frequency gets a centered
+            # window so half-hourly (1800s) doesn't get bucketed as "Hour" and
+            # quarterly (~90 days) doesn't fall through into "Year".
             if "seconds" in _units:
-                if _diff <= 5400:
+                if abs(_diff - 3600) < 600:           # 1 hour ± 10 min
                     _detected = "Hour"
-                elif _diff <= 14400:
+                elif abs(_diff - 10800) < 1800:       # 3 hour ± 30 min
                     _detected = "3Hour"
-                elif _diff <= 28800:
+                elif abs(_diff - 21600) < 3600:       # 6 hour ± 1 hour
                     _detected = "6Hour"
-                elif _diff <= 90000:
+                elif abs(_diff - 86400) < 7200:       # 1 day ± 2 hours
                     _detected = "Day"
-                elif _diff <= 2700000:
+                elif abs(_diff - 691200) < 86400:     # 8 day ± 1 day
+                    _detected = "8Day"
+                elif abs(_diff - 2592000) < 432000:   # 1 month ± 5 days
                     _detected = "Month"
-                else:
+                elif abs(_diff - 31536000) < 2592000: # 1 year ± 30 days
                     _detected = "Year"
+                # else: unrecognized interval (e.g., 1800=30min, 7776000≈90d)
+                #       leave _detected = None so caller can fall to default
             elif "hour" in _units:
-                if _diff <= 1.5:
+                if abs(_diff - 1) < 0.2:              # 1 hour ± 12 min
                     _detected = "Hour"
-                elif _diff <= 4:
+                elif abs(_diff - 3) < 0.5:            # 3 hour
                     _detected = "3Hour"
-                elif _diff <= 8:
+                elif abs(_diff - 6) < 1.0:            # 6 hour
                     _detected = "6Hour"
-                elif _diff <= 24:
+                elif abs(_diff - 24) < 2.0:           # 1 day
                     _detected = "Day"
-                elif _diff <= 750:
+                elif abs(_diff - 192) < 24:           # 8 day
+                    _detected = "8Day"
+                elif 696 <= _diff <= 768:             # 1 month (29-32 days × 24h)
                     _detected = "Month"
-                else:
+                elif abs(_diff - 8760) < 720:         # 1 year ± 30 days
                     _detected = "Year"
             elif "day" in _units:
-                if _diff <= 1.5:
+                if abs(_diff - 1) < 0.2:
                     _detected = "Day"
-                elif _diff <= 9:
+                elif abs(_diff - 8) < 1.0:
                     _detected = "8Day"
-                elif _diff <= 32:
+                elif 28 <= _diff <= 32:               # monthly: 28-32 days
                     _detected = "Month"
-                else:
+                elif abs(_diff - 365) < 30:
                     _detected = "Year"
             if _detected:
                 result["detected_tim_res"] = _detected

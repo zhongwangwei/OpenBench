@@ -210,7 +210,7 @@ def test_cli_scan_prefers_base_name_existing_descriptor_before_registry_name(
     monkeypatch.setattr(cli_data.click, "echo", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli_data.click, "secho", lambda *args, **kwargs: None)
 
-    cli_data.scan.callback(str(tmp_path), auto=True)
+    cli_data.scan.callback(str(tmp_path), auto=True, dry_run=False)
 
     assert captured["scanned"] == "Demo_LowRes"
 
@@ -1029,3 +1029,138 @@ def test_year_regex_excludes_version_prefix(tmp_path: Path):
     # And prefix should be the full stem (no year split)
     assert info.get("prefix") == "ET_v2010_GLEAM"
     assert info.get("suffix") == ""
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for batch 3 (concurrency lock, edge-case detections,
+# dry-run preview).
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_register_does_not_lose_writes_under_lock(tmp_path: Path):
+    """Two concurrent register calls must both land in the catalog.
+
+    Without the flock, the second writer reads pre-A state, computes its
+    write, then overwrites the file losing A's contribution. With flock,
+    B blocks until A's read-modify-write completes, then B reads A's
+    state and appends.
+    """
+    import threading
+
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    barrier = threading.Barrier(2)
+    errors: list[Exception] = []
+
+    def worker(name: str):
+        try:
+            scanned = ScannedDataset(
+                name=name, resolution="LowRes", category="Water",
+                data_type="grid", root_dir=str(tmp_path),
+                variables={"Evapotranspiration": "."},
+            )
+            barrier.wait(timeout=5)  # both threads start at the same moment
+            register_scanned_dataset(scanned, catalog_path=catalog_path)
+        except Exception as e:
+            errors.append(e)
+
+    t1 = threading.Thread(target=worker, args=("ConcurrentA",))
+    t2 = threading.Thread(target=worker, args=("ConcurrentB",))
+    t1.start(); t2.start()
+    t1.join(timeout=10); t2.join(timeout=10)
+
+    assert not errors, f"Worker errors: {errors}"
+
+    catalog = yaml.safe_load(catalog_path.read_text())
+    # BOTH datasets must be present — no silent overwrite
+    assert "ConcurrentA_LowRes" in catalog, (
+        f"ConcurrentA missing from catalog (race condition): {list(catalog.keys())}"
+    )
+    assert "ConcurrentB_LowRes" in catalog, (
+        f"ConcurrentB missing from catalog (race condition): {list(catalog.keys())}"
+    )
+
+
+def test_data_type_detection_classifies_profile_data_as_grid(tmp_path: Path):
+    """1D profile-style data (lat>1, lon=1) should detect as grid, not None.
+
+    Previously returned None and caller defaulted grid. Making it explicit
+    avoids ambiguity in callers that branch on the detected value.
+    """
+    from openbench.data.registry.scanner import _detect_data_type_from_nc
+    import netCDF4
+
+    nc_file = tmp_path / "profile.nc"
+    with netCDF4.Dataset(nc_file, "w") as nc:
+        nc.createDimension("time", 12)
+        nc.createDimension("lat", 90)   # multi-element zonal axis
+        nc.createDimension("lon", 1)    # single longitude
+        v = nc.createVariable("temp", "f4", ("time", "lat", "lon"))
+        v.units = "K"
+
+    assert _detect_data_type_from_nc(nc_file) == "grid"
+
+
+def test_tim_res_detection_rejects_half_hourly_interval(tmp_path: Path):
+    """30-min interval (1800s) doesn't match any valid tim_res value
+    (Hour/3Hour/6Hour/Day/...). Must return None instead of bucketing
+    into Hour, which would make downstream evaluation aggregate wrong.
+    """
+    from openbench.data.registry.scanner import _inspect_nc_file
+    import numpy as np
+    import xarray as xr
+
+    # 48 timesteps × 30min = 1 day of half-hourly data
+    times = np.arange(0, 86400, 1800, dtype="float64")  # 48 values, 1800s apart
+    ds = xr.Dataset(
+        {"flux": (["time", "lat", "lon"], np.zeros((48, 4, 4), dtype=np.float32))},
+        coords={"time": times, "lat": np.arange(4.0), "lon": np.arange(4.0)},
+    )
+    ds["time"].attrs["units"] = "seconds since 2010-01-01"
+    ds.to_netcdf(tmp_path / "halfhourly_2010.nc")
+
+    info = _inspect_nc_file(tmp_path)
+    # 1800s doesn't match any valid bucket — must NOT silently become "Hour"
+    assert info.get("detected_tim_res") != "Hour", (
+        f"Half-hourly (1800s) must not bucket as Hour, got: {info.get('detected_tim_res')!r}"
+    )
+
+
+def test_cli_scan_dry_run_does_not_write_catalog(tmp_path: Path, monkeypatch):
+    """openbench data scan --dry-run lists what would be registered but
+    does not modify the catalog file (or any registry state).
+    """
+    import openbench.cli.data as cli_data
+    import openbench.data.registry.scanner as scanner_module
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    # Pre-existing catalog content — must remain untouched after dry-run
+    catalog_path.write_text("ExistingDataset:\n  category: Water\n")
+    original = catalog_path.read_text()
+
+    group = DatasetGroup(base_name="DryDemo")
+    group.variants["LowRes"] = ScannedDataset(
+        name="DryDemo", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+    )
+
+    register_called = {"flag": False}
+
+    def fake_find_new_datasets(ref_root, on_progress=None):
+        return [group]
+
+    def fake_register_batch(*args, **kwargs):
+        register_called["flag"] = True
+
+    monkeypatch.setattr(scanner_module, "find_new_datasets", fake_find_new_datasets)
+    monkeypatch.setattr(scanner_module, "register_scanned_datasets_batch", fake_register_batch)
+    monkeypatch.setattr(cli_data.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_data.click, "secho", lambda *a, **k: None)
+
+    cli_data.scan.callback(str(tmp_path), auto=True, dry_run=True)
+
+    assert not register_called["flag"], (
+        "Dry-run must NOT call register_scanned_datasets_batch"
+    )
+    # Original catalog content unchanged
+    assert catalog_path.read_text() == original

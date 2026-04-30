@@ -402,14 +402,16 @@ def show(name):
 @data.command()
 @click.argument("ref_root", type=click.Path(exists=True))
 @click.option("--auto", is_flag=True, help="Register all found datasets without prompting.")
-def scan(ref_root, auto):
+@click.option("--dry-run", is_flag=True, help="Show what would be registered without writing the catalog.")
+def scan(ref_root, auto, dry_run):
     """Scan a directory for reference datasets and register new ones.
 
     REF_ROOT is the reference data root (e.g., /Volumes/work/Reference).
     Expected structure: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
 
-    Example:
+    Examples:
         openbench data scan /Volumes/work/Reference
+        openbench data scan /Volumes/work/Reference --dry-run
     """
     from openbench.data.registry.scanner import find_new_datasets, register_scanned_datasets_batch
 
@@ -435,6 +437,15 @@ def scan(ref_root, auto):
             to_register.append(variant)
 
     click.echo()
+
+    if dry_run:
+        click.secho(
+            f"[DRY RUN] Would register {len(to_register)} dataset(s). "
+            "No catalog changes made.",
+            fg="cyan", bold=True,
+        )
+        click.echo("Re-run without --dry-run to commit. Use --auto to skip the confirmation prompt.")
+        return
 
     if not auto:
         if not click.confirm(f"Register {len(to_register)} dataset(s)?"):
