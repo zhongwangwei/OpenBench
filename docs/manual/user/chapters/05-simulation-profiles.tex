@@ -323,6 +323,69 @@ simulation 标签（key 名）会进入输出目录与图例。建议：
   \item 受控对比实验（同启动、同时长） → \texttt{strict}
 \end{itemize}
 
+\section{unified\_mask：跨 sim 公平比较的第二把锁}
+
+\yamlkey{time_alignment} 解决了"时间窗口"的可比性，但还有一个隐患：\emph{空间维度上的 NaN 分布}。每个 sim 在不同位置可能有 NaN（陆地/海洋掩码不一致、域外裁剪、模型崩格）。如果不统一，多 sim 对比就会在不同的有效格点上算 metric ——
+
+\begin{itemize}
+  \item Sim A 在 N=10000 个有效格点上算 RMSE
+  \item Sim B 在 N=8500 个有效格点上算 RMSE（缺南极 + 部分海岸）
+  \item 两个 RMSE 不严格可比
+\end{itemize}
+
+\yamlkey{project.unified_mask}（默认 \texttt{true}）就是这个问题的解药。
+
+\subsection{它怎么工作}
+
+按"累积掩码"策略：
+
+\begin{enumerate}
+  \item 第一个 sim 处理完后，遍历 ref 与 sim 的每个时空点：任一为 NaN，就把 ref 那个点也置 NaN
+  \item 第二个 sim 处理时，看到的 ref 已经包含第一个 sim 的 NaN
+  \item 累积下去，最终 ref 仅在 \emph{所有 sim 都有效} 的点上保留值
+  \item 所有 sim 评估都跑在同一个最终 ref 上 → 同样的 N 个有效点
+\end{enumerate}
+
+实现细节（\modname{runner.local._apply_unified_mask}）：
+
+\begin{minted}{python}
+mask = np.isnan(sim_data) | np.isnan(ref_data)
+ref_data[mask] = np.nan   # 写回 ref，下个 sim 见到的就是这个
+\end{minted}
+
+\subsection{何时\emph{不}应用}
+
+\begin{itemize}
+  \item \textbf{Station 评估（任一边 stn）：跳过} —— 站点数据无空间网格 NaN 概念
+  \item \textbf{时间维不匹配：跳过 + WARN} —— ref/sim 时间长度或时间戳不一致时安全退出
+  \item \texttt{per\_pair} 时间对齐 + grid×grid：每个 sim 用自己的 ref 副本，掩码不跨 sim 累积（避免污染）
+\end{itemize}
+
+\subsection{要不要关掉它}
+
+\begin{itemize}
+  \item \textbf{保持默认 true}：多 sim 科学对比、发表论文中的 metric 表
+  \item 设 \texttt{false} 适合：
+  \begin{itemize}
+    \item 单 sim 评估（无累积可言）
+    \item 你 \emph{故意} 想看每个 sim 在自己最大有效域上的表现
+    \item 调试某个 sim 的 NaN 分布问题（不想被其他 sim 干扰）
+  \end{itemize}
+\end{itemize}
+
+\subsection{陷阱}
+
+\textbf{评估顺序敏感}：累积掩码意味着 sim 处理顺序影响中间状态。\openbench{} 内部按 sim 字典顺序处理；同一份配置每次跑顺序一致，结果可复现。但若你手动重命名 sim 标签让顺序变化，metrics 数值可能略变（虽然最终掩码是一样的，但中间 sim 看到的 ref 不同——只对带状态的 metric 有影响）。
+
+\textbf{时间不匹配静默跳过}：sim 与 ref 时间戳不一致时 \openbench{} 只打 WARN 跳过 unified\_mask（不报错），评估继续但失去掩码统一保证。\cli{check} 不会提前抓到这种情况——只在 run 阶段日志里看到：
+
+\begin{minted}{text}
+[WARN] Unified mask: time values mismatch for ET (lengths equal but
+       timestamps differ), skipping
+\end{minted}
+
+发现这条警告就要去查 ref/sim 的 time 坐标是否真的能对齐。
+
 \section{站点 simulation：fulllist 的作用}
 
 只要 sim 或 ref 任一是 station 数据，\openbench{} 就需要一份 \emph{站点列表}（station\_list）来驱动评估。来源优先级：
