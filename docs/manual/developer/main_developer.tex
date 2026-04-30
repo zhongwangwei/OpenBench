@@ -1,0 +1,25 @@
+% docs/manual/developer/main_developer.tex
+\documentclass[../manual]{subfiles}
+
+\begin{document}
+
+\ifSubfilesClassLoaded{%
+  \frontmatter
+  \title{\openbench{} 开发者指南\\[1ex]\large Developer Guide}
+  \author{OpenBench 项目组}
+  \date{\today}
+  \maketitle
+  \tableofcontents
+  \mainmatter
+}{%
+  \volumedivider{第二卷}{开发者指南}
+}
+
+\volpart{教程}
+\include{chapters/00-hello}
+
+\appendix
+\volpart{参考}
+\include{appendices/A-stub}
+
+\end{document}
