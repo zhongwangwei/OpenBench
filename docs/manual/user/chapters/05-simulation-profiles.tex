@@ -325,17 +325,16 @@ simulation 标签（key 名）会进入输出目录与图例。建议：
 
 \section{站点 simulation：fulllist 的作用}
 
-如果你的 simulation 是 grid 模型而 reference 是 station，\openbench{} 需要知道在 grid 中哪些点要采样。这通过 \yamlkey{fulllist} 指定：
+只要 sim 或 ref 任一是 station 数据，\openbench{} 就需要一份 \emph{站点列表}（station\_list）来驱动评估。来源优先级：
 
-\begin{minted}{yaml}
-simulation:
-  CoLM2024_PLUMBER:
-    model: CoLM2024
-    root_dir: /data/colm2024
-    fulllist: /data/PLUMBER2/list/PLUMBER2.csv  # 站点列表
-\end{minted}
+\begin{enumerate}
+  \item \yamlkey{simulation.<label>.fulllist}（用户显式指定）
+  \item ref 数据集 catalog 中的 \yamlkey{fulllist}
+  \item 上次评估生成的 \file{stn\_<ref>\_<sim>\_list.txt}
+  \item 自动扫描 sim 目录（仅当 sim 是 station）
+\end{enumerate}
 
-CSV 格式（必含 \texttt{site, lat, lon}）：
+CSV 格式必含 \texttt{site, lat, lon} 三列：
 
 \begin{minted}{text}
 site,lat,lon,IGBP
@@ -345,9 +344,81 @@ DE-Tha,50.9624,13.5651,ENF
 ...
 \end{minted}
 
-\openbench{} 在 grid 输出中按这些经纬度做最近邻或双线性采样，得到站点位置的伪观测，再与 reference 站点观测对比。
+\subsection{场景 A：grid sim × station ref（最常见）}
 
-如果 simulation 自身就是 station 数据（\yamlkey{data_type: stn}），\yamlkey{fulllist} 来自 simulation NC 文件的元数据，无需手动指定。
+模型是 grid 输出，参考是站点观测：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_PLUMBER:
+    model: CoLM2024
+    root_dir: /data/colm2024
+    fulllist: /data/PLUMBER2/list/PLUMBER2.csv  # 必填
+\end{minted}
+
+\openbench{} 在 grid sim 输出中按 fulllist 中的经纬度做最近邻或双线性采样，得到"站点位置的模型值"，与 station ref 观测对比。
+
+\subsection{场景 B：station sim × station ref}
+
+两个站点 dataset 直接对比（如同时段两个 PLUMBER2 版本、或某个已采样站点的 reference 自比）：
+
+\begin{minted}{yaml}
+simulation:
+  PLUMBER2_v2:
+    model: PLUMBER2-EXP        # 或自定义站点 model profile
+    root_dir: /data/plumber2_v2
+    data_type: stn             # 显式标 station
+    # fulllist 可省 —— 会从 sim NC 文件自动扫描
+
+reference:
+  Latent_Heat: FLUXNET_PLUMBER2
+\end{minted}
+
+\openbench{} 行为：
+
+\begin{itemize}
+  \item 从 sim 目录扫出全部站点（或读 \yamlkey{fulllist} 若给）
+  \item 与 ref 站点列表取交集（同 site ID）
+  \item 在交集站点上逐站做 metric / score
+  \item 不在交集的站点 WARN 跳过
+\end{itemize}
+
+\warninline{site ID 必须能对上 —— FLUXNET 用 \texttt{US-Ha1} 这种命名约定，PLUMBER2 与 GRDC 各自有自己的 ID 体系。混合源对比前先用 \texttt{ncdump -v site} 看两边 ID 风格是否一致。}
+
+\subsection{场景 C：station sim × grid ref（罕见）}
+
+模型已经是站点输出，但 reference 只有 grid：
+
+\begin{minted}{yaml}
+simulation:
+  PLUMBER2_sim:
+    model: PLUMBER2-EXP
+    root_dir: /data/plumber_runs
+    data_type: stn
+    fulllist: /data/plumber/sites.csv
+
+reference:
+  Latent_Heat: ERA5LAND  # grid
+\end{minted}
+
+\openbench{} 把 grid ref 在 fulllist 站点位置采样，再与 station sim 对比。逻辑与场景 A 对称。
+
+\subsection{场景 D：grid × grid（默认，不需要 fulllist）}
+
+无站点处理；两边重网格化后逐像素对比。本节其余内容跟你无关。
+
+\subsection{自动扫描机制}
+
+当 \yamlkey{sim.data_type: stn} 但 \yamlkey{fulllist} 没给时，\openbench{} 会：
+
+\begin{enumerate}
+  \item 扫 \yamlkey{simulation.<label>.root_dir}
+  \item 打开第一个 NC 文件，读 \texttt{site} 坐标与对应 \texttt{lat}/\texttt{lon}
+  \item 生成 \file{output/<run>/scratch/auto\_stn\_list.csv}
+  \item 后续按这个 list 跑
+\end{enumerate}
+
+自动扫描适合"sim 与 ref 是同一套站点"的场景；如果 sim 站点是 ref 站点的子集或超集，建议显式给 \yamlkey{fulllist}。
 
 \section{完整多模型对比示例}
 

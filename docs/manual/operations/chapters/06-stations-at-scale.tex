@@ -224,6 +224,112 @@ EOF
 
 预期：~200 站 × 4 变量 = 800 个 (var × ref) 评估单元，~3-5 小时跑完。
 
+\section{站点 × 站点：双 stn 评估}
+
+某些场景两边都是 station 数据，不涉及 grid 采样。典型用例：
+
+\begin{itemize}
+  \item 同一站点网络两个数据版本对比（PLUMBER2 v1 vs v2）
+  \item 站点观测 vs 站点级再处理产品
+  \item 不同质量控制流程的同源站点数据对比
+\end{itemize}
+
+\subsection{配置示例}
+
+\begin{minted}{yaml}
+project:
+  name: plumber-version-compare
+  output_dir: /scratch/$USER/plumber-cmp
+  years: [2003, 2014]
+  tim_res: Hour
+  num_cores: 16
+  time_alignment: per_pair
+  min_year_threshold: 3
+
+evaluation:
+  variables:
+    - Latent_Heat
+    - Sensible_Heat
+    - Net_Radiation
+
+reference:
+  Latent_Heat: FLUXNET_PLUMBER2          # 都是 station
+  Sensible_Heat: FLUXNET_PLUMBER2
+  Net_Radiation: FLUXNET_PLUMBER2
+
+simulation:
+  PLUMBER2_v1:
+    model: PLUMBER2-EXP
+    root_dir: /shared/PLUMBER2/v1
+    data_type: stn                       # 关键：标 stn
+    # fulllist 不写：自动扫描
+  PLUMBER2_v2:
+    model: PLUMBER2-EXP
+    root_dir: /shared/PLUMBER2/v2
+    data_type: stn
+\end{minted}
+
+\subsection{运行时观察点}
+
+\textbf{站点列表生成}：
+
+\begin{minted}{bash}
+ls output/<run>/scratch/auto_stn_list.csv
+# 或
+ls output/<run>/scratch/stn_FLUXNET_PLUMBER2_PLUMBER2_v1_list.txt
+\end{minted}
+
+第一次跑会写 list 文件；之后跑命中 cache 复用。
+
+\textbf{站点交集}：日志中会有：
+
+\begin{minted}{text}
+[INFO] sim sites: 200, ref sites: 250, intersection: 198
+[WARN] Skipping 2 sites in sim not in ref: ...
+[WARN] Skipping 52 sites in ref not in sim: ...
+\end{minted}
+
+只有 198 个共同站点会被评估。
+
+\subsection{常见陷阱}
+
+\textbf{Site ID 格式不一致}：
+
+\begin{itemize}
+  \item FLUXNET：\texttt{US-Ha1}
+  \item GRDC：数字 ID，如 \texttt{6233330}
+  \item Caravan：\texttt{camels\_01013500}
+\end{itemize}
+
+混合源前手动核对：
+
+\begin{minted}{bash}
+ncdump -v site /data/sim/file.nc | head -20
+ncdump -v site /data/ref/file.nc | head -20
+\end{minted}
+
+如风格不同，需要预处理统一 ID（在 sim 数据写出时改名，或写一个 \texttt{custom filter}）。
+
+\textbf{站点位置不一致}：
+
+即使 ID 对得上，sim 与 ref 的 \texttt{lat}/\texttt{lon} 可能略有偏差（坐标精度、版本变更）。\openbench{} 默认信任 ID，按 ID 配对不重新检查位置。要严格：自己 \texttt{merge} 两边 site / lat / lon 列后核对。
+
+\textbf{时间分辨率混合}：
+
+PLUMBER2 是 hourly，但 GRDC 多是 monthly。如果你的 sim 是 hourly station 而 ref 是 monthly station，\yamlkey{tim_res: Month} 让 \openbench{} 把 sim 降采样到月。逻辑同 grid×grid。
+
+\subsection{资源预算}
+
+双 stn 通常比 grid×stn \emph{更快}：
+
+\begin{itemize}
+  \item 不需要 grid 重网格化
+  \item 不需要 grid → station 采样
+  \item IO 模式更可预测（按站点切片）
+\end{itemize}
+
+200 站 × 3 变量 hourly × 5 年的 stn×stn 评估，HPC 16 核约 1-2 小时（同样规模 grid×stn 约 3-5 小时）。
+
 \section{下一步}
 
 下一章详解监控与日志：logging\_system 详解、外部监控集成、长任务监控。

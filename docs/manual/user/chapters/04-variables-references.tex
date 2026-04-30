@@ -39,6 +39,24 @@
   \item \textbf{stn}（station）：离散站点观测。NetCDF 文件含 \texttt{site}（或类似的站点 id）+ \texttt{time}。代表数据：\dataset{FLUXNET\_PLUMBER2}（FLUXNET）、\dataset{GRDC\_Daily}（GRDC 流量站）、\dataset{Caravan\_Daily}
 \end{itemize}
 
+\subsection{4 种数据形态组合}
+
+sim 与 ref 各 grid/stn → 4 种组合，\openbench{} 都支持：
+
+\begin{longtable}{p{2cm} p{2cm} p{8.5cm}}
+  \toprule
+  sim & ref & 处理方式 \\
+  \midrule
+  \endhead
+  grid & grid & 默认；两边重网格化到 \yamlkey{project.grid_res} 后逐像素对比 \\
+  grid & stn & sim 在站点位置采样（最近邻 / 双线性），与 stn ref 对比；要 \yamlkey{fulllist} \\
+  stn & grid & ref 在站点位置采样，与 stn sim 对比（罕见，但支持） \\
+  stn & stn & 两边都按站点列表逐点对比；station\_list 优先取 ref/sim 的 \yamlkey{fulllist}，否则自动从 sim 目录扫描 \\
+  \bottomrule
+\end{longtable}
+
+任一边是 stn 都触发"站点驱动模式"：评估按 station\_list 中每个站点独立做 metric。同站点 ID 在 sim 与 ref 中要能对上（缺失的站点会被跳过并 WARN）。
+
 \subsection{站点数据的特殊配置}
 
 如果你的 simulation 是 grid 模型而 reference 是 station，\openbench{} 会做"以站点位置抽样 grid"的处理。你需要在 \yamlkey{simulation} entry 里指定 \yamlkey{fulllist}（站点列表 CSV 路径）：
@@ -51,7 +69,7 @@ simulation:
     fulllist: /data/PLUMBER2/list/PLUMBER2.csv
 \end{minted}
 
-详见第 5 章 simulation profile 部分。
+如果两边都是 stn（同站点列表的两个 dataset 直接对比），\yamlkey{fulllist} 仍可指定，但通常省略 —— \openbench{} 会自动扫描 sim 目录提取站点列表。详见第 5 章。
 
 \section{分辨率后缀自动解析}
 
