@@ -1,14 +1,15 @@
 import logging
 import os
-import sys
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+logger = logging.getLogger(__name__)
 
-def process_station(station, info, min_uparea, max_uparea):
+
+def process_station(station, info):
     result = {
         "Flag": False,
         "use_syear": -9999,
@@ -17,8 +18,11 @@ def process_station(station, info, min_uparea, max_uparea):
         "obs_eyear": -9999,
         "ref_dir": "file",
     }
-    print(station["ID"])
-    if info.compare_tim_res.lower() == "1d":
+    # info.compare_tim_res arrives normalized via processing._normalize_frequency,
+    # so "Day" → "D" → .lower() == "d". Previously checked "1d" which never
+    # matched — caused all stations to fall through to Flag=False and the
+    # initialization mode then sys.exit on "No stations selected".
+    if info.compare_tim_res.lower() == "d":
         file_path = f"{info.ref_dir}/output/river/hydroprd_river_{station['ID']}.nc"
     else:
         return result
@@ -26,7 +30,7 @@ def process_station(station, info, min_uparea, max_uparea):
         result["ref_dir"] = file_path
         with xr.open_dataset(file_path) as df:
             if info.debug_mode:
-                logging.info(f"Processing station {int(station['ID'])}...")
+                logger.info("Processing station %s...", int(station["ID"]))
             result["obs_syear"] = int(df["time.year"].values[0])
             result["obs_eyear"] = int(df["time.year"].values[-1])
             result["use_syear"] = max(result["obs_syear"], int(info.sim_syear), int(info.syear))
@@ -40,7 +44,7 @@ def process_station(station, info, min_uparea, max_uparea):
             ):
                 result["Flag"] = True
                 if info.debug_mode:
-                    logging.info(f"Station {int(station['ID'])} is selected")
+                    logger.info("Station %s is selected", int(station["ID"]))
     return result
 
 
@@ -54,6 +58,11 @@ def filter_HydroWeb(info, ds=None):
     Returns:
         For data filtering mode: Tuple of (info, filtered_data)
         For initialization mode: None (modifies info in place)
+
+    Raises:
+        ValueError: For configuration errors that prevent station list generation.
+            Filters must NOT call sys.exit — that kills the entire runner mid-run,
+            making partial failures appear as silent dataset-not-found errors.
     """
     # If ds is provided, we're in data filtering mode
     if ds is not None:
@@ -64,37 +73,33 @@ def filter_HydroWeb(info, ds=None):
 
     # Initialization mode
     if info.compare_tim_res.lower() != "d":
-        logging.error('The compare_res should be "Day" ')
-        sys.exit(1)
-    # Add logging import if not already imported
-    import logging
+        raise ValueError(
+            f"HydroWeb filter requires compare_tim_res=Day; got {info.compare_tim_res!r}"
+        )
 
     # Confirm the resolution of info.sim_grid_res
     if not hasattr(info, "sim_grid_res"):
-        logging.error("sim_grid_res is not defined in info object")
-        sys.exit(1)
+        raise ValueError("HydroWeb filter requires info.sim_grid_res; not defined")
 
     if not isinstance(info.sim_grid_res, (int, float)):
-        logging.error(f"sim_grid_res must be a number, got {type(info.sim_grid_res)}")
-        sys.exit(1)
+        raise ValueError(
+            f"HydroWeb filter: sim_grid_res must be a number, got {type(info.sim_grid_res).__name__}"
+        )
 
     valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
-    # ask user to input the resolution
-    # add the reason for the input
-    logging.info("The simulation grid resolution of routing model can be different from the LSM grid resolution")
-    info.sim_grid_res = float(
-        input(
-            "Please input the simulation grid resolution of routing model again: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)"
-        )
+    logger.info(
+        "The simulation grid resolution of routing model can be different from the LSM grid resolution. "
+        "Using sim_grid_res = %s from configuration. "
+        "Valid values: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)",
+        info.sim_grid_res,
     )
     if info.sim_grid_res not in valid_resolutions:
-        logging.error(
-            f"sim_grid_res value {info.sim_grid_res} is not in the list of standard resolutions: {valid_resolutions}"
+        raise ValueError(
+            f"HydroWeb filter: sim_grid_res {info.sim_grid_res} not in valid set {valid_resolutions}"
         )
-        sys.exit(1)
 
     if info.debug_mode:
-        logging.info(f"Using simulation grid resolution: {info.sim_grid_res} degrees")
+        logger.info("Using simulation grid resolution: %s degrees", info.sim_grid_res)
     if info.sim_grid_res == 0.25:
         info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_15min.txt"
     elif info.sim_grid_res == 0.0167:
@@ -136,15 +141,15 @@ def filter_HydroWeb(info, ds=None):
         data_select["lon_cama"].values[iii] = float(lon0[int(data_select["ix1"].values[iii]) - 1])
         data_select["lat_cama"].values[iii] = float(lat0[int(data_select["iy1"].values[iii]) - 1])
         if abs(data_select["lat_cama"].values[iii] - data_select["lat"].values[iii]) > 1:
-            logging.warning(f"Warning: ID {data_select['ID'][iii]} lat is not match")
+            logger.warning("ID %s lat does not match (cama vs station)", data_select["ID"][iii])
         if abs(data_select["lon_cama"].values[iii] - data_select["lon"].values[iii]) > 1:
-            logging.warning(f"Warning: ID {data_select['ID'].values[iii]} lon is not match")
-    logging.info(f"In total: {len(data_select['ID'])} stations are selected")
+            logger.warning("ID %s lon does not match (cama vs station)", data_select["ID"].values[iii])
+    logger.info("HydroWeb filter selected %d stations", len(data_select["ID"]))
     if len(data_select["ID"]) == 0:
-        logging.error(
-            "Warning: No stations are selected, please check the station list and the min_year, min_lat, max_lat, min_lon, max_lon"
+        raise ValueError(
+            "HydroWeb filter selected zero stations. Check the station list and "
+            "the min_year / min_lat / max_lat / min_lon / max_lon thresholds."
         )
-        sys.exit(1)
     info.use_syear = data_select["use_syear"].min()
     info.use_eyear = data_select["use_eyear"].max()
     data_select["ref_lon"] = data_select["lon_cama"]
