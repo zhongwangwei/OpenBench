@@ -1,0 +1,278 @@
+% docs/manual/user/chapters/08-gui.tex
+% 第 8 章：GUI Wizard
+
+\chapter{GUI Wizard}
+
+\openbench{} 的 GUI 是一个 14 步向导式应用，覆盖配置生成、运行监控、远程提交三大场景。本章按用户操作顺序介绍各页面用途。GUI 的 Qt 前端基于 \modname{PySide6}，所以使用前需要装 \cli{[gui]} extra。
+
+\noteinline{本章描述功能与流程；屏幕截图集合放在 \file{docs/manual/common/figures/gui/}（待补）。开发卷第 9 章详解 GUI 架构与扩展方式。}
+
+\section{启动 GUI}
+
+\subsection{安装与启动}
+
+\begin{minted}{bash}
+pip install "openbench[gui]"
+openbench gui                    # 全新启动
+openbench gui openbench.yaml     # 启动并加载已有配置
+openbench gui --remote           # 进入远程模式（要求 [remote] extra）
+\end{minted}
+
+\openbench{} 启动时会做依赖自检：
+
+\begin{itemize}
+  \item PySide6 是否可 import
+  \item Qt 平台插件是否可用（无图形系统的服务器上会失败）
+\end{itemize}
+
+\warninline{在纯 SSH 服务器（无 X11 转发）上启动会报"Qt platform plugin could not be initialized"。GUI 是 \emph{本地客户端}——配置生成在本地，远程运行通过 SSH 子模块。请勿在 HPC 计算节点上运行 GUI。}
+
+\section{14 个向导页面}
+
+进入 GUI 后，左侧栏列出 14 步，每步一页。可来回切换，配置完整后到最后一步预览并启动评估。
+
+\subsection{第 1 步：General（通用）}
+
+\textbf{对应 schema}：\yamlkey{project} 块的核心字段
+
+\begin{itemize}
+  \item Project name（项目名）
+  \item Output directory（输出根目录）
+  \item Years（评估时段，两个数字输入）
+  \item Time resolution（Month / Day / Hour / Year 下拉）
+  \item Grid resolution（数值，度）
+  \item Time alignment（intersection / per\_pair / strict 下拉）
+  \item Lat range / Lon range（4 个数值）
+\end{itemize}
+
+\subsection{第 2 步：Variables（变量）}
+
+\textbf{对应 schema}：\yamlkey{evaluation.variables}
+
+按物理类别（Bio / Carbon / Water / Energy / ...）展示 56+ 标准变量；用 checkbox 多选。已选变量数量在底部实时统计。
+
+\subsection{第 3 步：Reference Data（参考数据）}
+
+\textbf{对应 schema}：\yamlkey{reference}
+
+为每个已选变量挑 reference 数据集：
+
+\begin{itemize}
+  \item 下拉框列出该变量的所有候选 reference（grid + station）
+  \item 显示每个 reference 的元信息：分辨率、时段、来源说明
+  \item 高亮已下载的（local cache 命中）vs 仅在 catalog 中的
+\end{itemize}
+
+\subsection{第 4 步：Simulation Data（模型输出）}
+
+\textbf{对应 schema}：\yamlkey{simulation} 字典
+
+\begin{itemize}
+  \item 添加 / 删除 simulation entry（按"+"/"-"按钮）
+  \item 每条 entry：Label、Model（profile 下拉）、Root directory（带 file picker）、可选 prefix/suffix/data\_groupby
+  \item 高级展开：变量级覆盖（深合并到 profile）
+  \item Station fulllist 文件选择（仅当模型与参考形态错配时）
+\end{itemize}
+
+\subsection{第 5 步：Evaluation（评估开关）}
+
+\textbf{对应 schema}：\yamlkey{project.unified_mask} / 各 groupby 开关
+
+\begin{itemize}
+  \item Unified mask（cross-sim NaN 统一）
+  \item IGBP / PFT / Climate zone groupby
+  \item Strict reference 模式
+\end{itemize}
+
+\subsection{第 6 步：Metrics（指标）}
+
+\textbf{对应 schema}：\yamlkey{metrics}
+
+25+ 个 metric 的 checkbox 列表。Quick-pick 按钮：默认（all）、最简（bias / RMSE / correlation）、综合（KGE 系列）。
+
+\subsection{第 7 步：Scores（打分）}
+
+\textbf{对应 schema}：\yamlkey{scores}
+
+8 个 normalized score 的多选。\texttt{Overall\_Score} 默认勾选（comparison 与 ranking 必需）。
+
+\subsection{第 8 步：Comparison（多模型对比）}
+
+\textbf{对应 schema}：\yamlkey{comparison}
+
+\begin{itemize}
+  \item 启用 / 禁用 comparison 阶段
+  \item 选择特定 comparison item（默认全部）
+  \item 预览 portrait/radar 布局示例
+\end{itemize}
+
+\subsection{第 9 步：Statistics（统计）}
+
+\textbf{对应 schema}：\yamlkey{statistics}
+
+\begin{itemize}
+  \item 启用 / 禁用 statistics 阶段
+  \item 每个统计模块（ANOVA / Correlation / KDE / ...）独立 checkbox
+  \item 每个模块的简短说明（"用途"+"输入要求"）
+\end{itemize}
+
+\subsection{第 10 步：Runtime（运行参数）}
+
+\textbf{对应 schema}：\yamlkey{project.num_cores} / \yamlkey{force} / \yamlkey{debug_mode} / \yamlkey{only_drawing}
+
+\begin{itemize}
+  \item Num cores（slider 或数字输入；0 表示 auto-detect）
+  \item Force re-run（清缓存全量重算）
+  \item Debug mode（详细日志）
+  \item Only drawing（只重出图）
+  \item Generate report（HTML/PDF）
+\end{itemize}
+
+\subsection{第 11 步：Registry（数据集 / 模型管理）}
+
+\textbf{对应 CLI}：\cli{openbench data list/register} 与 \cli{openbench model list/show/register}
+
+GUI 内嵌的 registry 浏览器：
+
+\begin{itemize}
+  \item 数据集表（按变量、类别、形态过滤）
+  \item Model profile 表（含变量映射详情）
+  \item 注册新 reference / 新 model 的表单（替代 CLI \cli{register} 命令）
+  \item 编辑已有 entry 的变量映射
+\end{itemize}
+
+\subsection{第 12 步：Options（其他选项）}
+
+\textbf{对应 schema}：\yamlkey{project} 高级字段
+
+\begin{itemize}
+  \item Min year threshold（最低重叠年数）
+  \item Weight（area / equal）
+  \item Timezone offset
+\end{itemize}
+
+\subsection{第 13 步：Preview（预览）}
+
+\textbf{对应命令}：\cli{openbench check}
+
+\begin{itemize}
+  \item 实时渲染当前配置对应的完整 \file{openbench.yaml}（含默认值）
+  \item 运行 \cli{check} 等价校验，显示绿/黄/红状态
+  \item 一键导出 \file{.yaml} 文件（之后可用 CLI 跑）
+  \item 配置错误时高亮跳转至对应页面
+\end{itemize}
+
+\subsection{第 14 步：Run Monitor（运行监控）}
+
+\textbf{对应命令}：\cli{openbench run} 实时进度
+
+\begin{itemize}
+  \item 启动 / 停止按钮
+  \item 实时进度条（按 task 计数）
+  \item 当前阶段（preprocess / evaluation / comparison / ...）
+  \item 实时日志窗口（含级别过滤）
+  \item 结束后自动跳转报告（打开 \file{report.html}）
+\end{itemize}
+
+\section{Configuration 加载、保存、模板}
+
+\subsection{加载已有配置}
+
+启动时：
+
+\begin{minted}{bash}
+openbench gui /path/to/openbench.yaml
+\end{minted}
+
+或 GUI 内菜单 \texttt{File → Open}。选择文件后所有 14 页都会按 yaml 内容自动填充。
+
+\subsection{保存配置}
+
+\texttt{File → Save} 把当前页面状态写回 yaml。如果是新配置，弹出文件对话框选保存位置。
+
+\subsection{模板}
+
+\texttt{File → New from Template} 提供常用预设：
+
+\begin{itemize}
+  \item ET evaluation（典型 ET 评估）
+  \item Energy budget（潜热 + 显热 + 净辐射）
+  \item Streamflow validation（基于 GRDC 站点）
+  \item Multi-model comparison（多 simulation 框架）
+\end{itemize}
+
+模板预填默认变量、reference、metrics，用户只需替换 simulation root\_dir 即可启动。
+
+\section{远程运行入口}
+
+\textbf{前提}：装了 \cli{[gui]} 与 \cli{[remote]} 两个 extra。
+
+\subsection{Connection profile 管理}
+
+\texttt{Tools → Manage Remote Profiles} 打开连接管理对话框：
+
+\begin{itemize}
+  \item 添加新 SSH 连接（host、port、username、密钥路径）
+  \item 测试连接（绿/红状态）
+  \item 凭据加密存储在本地（\modname{cryptography} fernet）
+\end{itemize}
+
+\subsection{提交远程评估}
+
+\begin{enumerate}
+  \item 在第 14 步 Run Monitor 选 "Remote run"
+  \item 选连接 profile
+  \item GUI 把 yaml + 必要文件 sync 到远程
+  \item 远程启动 \cli{openbench run}（用户指定的 conda env / module 加载脚本）
+  \item GUI 拉取实时日志显示
+  \item 完成后下载结果到本地 \file{output/}
+\end{enumerate}
+
+详细远程流程见运维卷第 3 章。
+
+\section{常见 GUI 问题}
+
+\subsection{启动后无窗口出现}
+
+\begin{itemize}
+  \item 检查是否在远程 SSH（无 X11 转发）—— GUI 是本地应用，不要在 HPC 计算节点上运行
+  \item 在 macOS 上，重新打开终端可能解决（Qt accessibility 缓存）
+  \item Linux 上设 \texttt{QT\_QPA\_PLATFORM=xcb}（或 \texttt{wayland}）尝试切换
+\end{itemize}
+
+\subsection{Variable / Reference 列表为空}
+
+Registry 加载失败。检查：
+
+\begin{itemize}
+  \item \cli{openbench data list} 在 CLI 是否正常
+  \item 用户级 catalog 是否被破坏（\file{\$HOME/.config/openbench/}）
+  \item 升级后第一次启动可能要清缓存
+\end{itemize}
+
+\subsection{Preview 显示 yaml 与 CLI 跑出来不一致}
+
+GUI 展示的是"含默认值"的解析后 yaml；保存时只写非默认字段（保持文件简洁）。这是预期行为，不是 bug。
+
+\subsection{Run Monitor 进度卡住}
+
+\begin{itemize}
+  \item 看 GUI 内嵌日志窗口最后几条 → 通常会指明卡哪
+  \item 大型评估某个 task 可能耗时很久；不要在 5 分钟没动静就结束
+  \item 真正死锁多与 HDF5 lock 有关（运维卷第 4 章）
+\end{itemize}
+
+\section{GUI vs CLI：何时用哪个}
+
+\begin{itemize}
+  \item \textbf{首次配置 + 探索内置数据集 + 模型}：用 GUI（更快上手）
+  \item \textbf{脚本化 / CI / 批量评估}：用 CLI（GUI 不能 headless 运行）
+  \item \textbf{HPC / 服务器}：必用 CLI（GUI 装不了）
+  \item \textbf{修微调字段}：直接编辑 yaml 比来回点 GUI 快
+\end{itemize}
+
+GUI 配出的 yaml 文件在 CLI 中完全等价；两者可以无缝切换。
+
+\section{下一步}
+
+下一章介绍从旧版 OpenBench（v1.x Fortran NML、v2.0 JSON）迁移到 v3.0 YAML 的流程。
