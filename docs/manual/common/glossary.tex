@@ -1,0 +1,26 @@
+% docs/manual/common/glossary.tex
+% 共享术语表骨架；各卷如需可在自己的章节里 \input{../common/glossary}
+% 后续每个 plan 撰写时按需新增条目
+
+\section*{术语表}
+\addcontentsline{toc}{section}{术语表}
+
+\begin{description}
+  \item[Reference dataset]
+    用作评估"真值"的观测或再分析数据集，例如 \dataset{GLEAM\_v4.2a}、\dataset{ERA5LAND}。
+  \item[Simulation]
+    待评估的模型输出。配置中通过 \yamlkey{simulation.<name>} 注册。
+  \item[Variable]
+    评估的物理量，如 \var{Evapotranspiration}、\var{Latent\_Heat}；标准命名见用户卷第 4 章。
+  \item[Model profile]
+    模型变量映射模板，定义文件名模式与单位换算；内置 CoLM2024 / CLM5 / ERA5-Land。
+  \item[Grid / Station]
+    数据形态：grid 为规则经纬度网格；station 为离散观测点（FLUXNET、GRDC 等）。
+  \item[Climatology]
+    多年平均的季节循环；OpenBench 的可选预处理阶段，详见用户卷第 6 章。
+  \item[Regrid]
+    将不同分辨率的源数据重网格化到目标分辨率（\yamlkey{project.grid\_res}）。
+  \item[Time alignment]
+    多个 simulation 与 reference 的时间窗口对齐策略：
+    \texttt{intersection} / \texttt{per\_pair} / \texttt{strict}。
+\end{description}
