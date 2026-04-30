@@ -1,0 +1,30 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.run.xml
+*.bcf
+*.idx
+*.ilg
+*.ind
+*.nav
+*.snm
+*.vrb
+
+# minted cache
+_minted-*/
+*.pyg
+
+# subfiles intermediate
+*-blx.bib
+
+# PDF outputs (do NOT commit; use make to rebuild)
+*.pdf
