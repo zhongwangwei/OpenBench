@@ -1,0 +1,314 @@
+% docs/manual/developer/chapters/02-dev-environment.tex
+% 第 2 章：开发环境
+
+\chapter{开发环境}
+
+本章给从 \emph{零安装} 到 \emph{能跑测试 + 能改代码} 的最短路径。读完后你应当能：clone 仓库、安装可编辑模式、跑 ruff + pytest、用 superpowers 流程提交修改。
+
+\section{Fork 与 clone}
+
+\openbench{} 主仓库在 \href{https://github.com/CoLM-SYSU/OpenBench}{github.com/CoLM-SYSU/OpenBench}。贡献流程是 fork → branch → PR：
+
+\begin{minted}{bash}
+# 1. 在 GitHub 上点 Fork
+# 2. clone 你的 fork
+git clone https://github.com/<your-username>/OpenBench.git
+cd OpenBench
+# 3. 加 upstream 便于同步
+git remote add upstream https://github.com/CoLM-SYSU/OpenBench.git
+git remote -v
+\end{minted}
+
+之后 sync 上游：
+
+\begin{minted}{bash}
+git fetch upstream
+git merge upstream/main
+\end{minted}
+
+\section{Python 与虚拟环境}
+
+\openbench{} 要求 Python 3.10+。强烈建议用虚拟环境隔离：
+
+\subsection{方式 1：uv（推荐，最快）}
+
+\begin{minted}{bash}
+# 装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 在项目根目录建 venv
+uv venv .venv --python 3.12
+source .venv/bin/activate
+
+# 可编辑安装 + 全部 extras + 开发工具
+uv pip install -e ".[all,dev]"
+\end{minted}
+
+\subsection{方式 2：conda}
+
+\begin{minted}{bash}
+conda create -n openbench python=3.12
+conda activate openbench
+pip install -e ".[all,dev]"
+\end{minted}
+
+\subsection{方式 3：标准 venv}
+
+\begin{minted}{bash}
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[all,dev]"
+\end{minted}
+
+\section{各 extras 含义}
+
+\file{pyproject.toml} 定义了 4 个可选 extras：
+
+\begin{itemize}
+  \item \cli{[gui]}：PySide6（向导 GUI）
+  \item \cli{[remote]}：paramiko + cryptography（SSH 远程执行）
+  \item \cli{[report]}：xhtml2pdf（PDF 报告生成）
+  \item \cli{[dev]}：pytest、pytest-cov、ruff
+  \item \cli{[all]}：合并 \cli{[gui,remote,report]}，但 \emph{不含} \cli{[dev]}
+\end{itemize}
+
+开发者完整安装命令：
+
+\begin{minted}{bash}
+pip install -e ".[all,dev]"
+\end{minted}
+
+\warninline{\cli{[gui]} 在无图形系统的 HPC 节点装不上 PySide6。如果你只在服务器上开发非 GUI 部分，用 \cli{".[remote,report,dev]"}。}
+
+\section{验证环境}
+
+\begin{minted}{bash}
+# 版本
+openbench version
+# 预期：openbench 3.0.0a1
+
+# CLI 入口
+openbench --help
+
+# 跑一次完整测试套件
+pytest tests/ -v
+
+# 编译手册（可选）
+cd docs/manual && make probe && make all
+\end{minted}
+
+\section{Ruff lint + format}
+
+\openbench{} 用 \modname{ruff} 同时做 lint 与 format。配置在 \file{pyproject.toml} 的 \texttt{[tool.ruff]} 段。
+
+\subsection{运行}
+
+\begin{minted}{bash}
+# Lint（仅检查）
+ruff check src tests
+
+# Format（自动修）
+ruff format src tests
+
+# 一并修可修的 lint 问题
+ruff check --fix src tests
+\end{minted}
+
+\subsection{规则集}
+
+\begin{itemize}
+  \item \texttt{E}：pycodestyle 错误
+  \item \texttt{F}：pyflakes（未使用 import 等）
+  \item \texttt{I}：isort（import 排序）
+  \item \texttt{W}：pycodestyle 警告
+\end{itemize}
+
+\subsection{已迁移文件的豁免}
+
+\file{pyproject.toml} 中 \texttt{[tool.ruff.lint.per-file-ignores]} 列出了 v1.x 迁移过来的"老代码"豁免：
+
+\begin{minted}{toml}
+"src/openbench/util/*.py" = ["E", "F", "W", "I"]
+"src/openbench/core/*.py" = ["E", "F", "W", "I"]
+# ...
+\end{minted}
+
+\textbf{含义}：这些路径下的代码暂时不强制 lint。原因是 v3.0 是 v1.x 的 Python 化迁移，强行 lint 会引发大量 churn。新代码（\file{config/}、\file{runner/}、\file{cli/}、\file{tests/}）仍然必须过 lint。
+
+\noteinline{开新文件、改新代码时，务必让 ruff 干净。修老文件时只在涉及行附近修 lint 问题，不做大规模重排。}
+
+\section{Pytest 与 pytest-cov}
+
+\subsection{测试目录}
+
+\begin{itemize}
+  \item \file{tests/}：pyproject 里 \yamlkey{testpaths} 指定的目录
+  \item \file{tests/test\_config/}、\file{tests/test\_registry/}、\file{tests/test\_runner/}、\file{tests/manual/}
+\end{itemize}
+
+\subsection{常用命令}
+
+\begin{minted}{bash}
+# 跑全部测试
+pytest
+
+# 详细输出 + 跑某文件
+pytest tests/test_config/test_loader.py -v
+
+# 按模式选
+pytest -k "init"   # 只跑名字含 init 的测试
+
+# 看覆盖率
+pytest --cov=openbench --cov-report=term-missing
+
+# 失败立刻停
+pytest -x
+
+# 并发跑（要装 pytest-xdist）
+pytest -n auto
+\end{minted}
+
+\subsection{pythonpath}
+
+\file{pyproject.toml}:
+
+\begin{minted}{toml}
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+\end{minted}
+
+\texttt{src} 让 \texttt{import openbench} 找到 \file{src/openbench/}；\texttt{.} 让 \texttt{import docs.manual.scripts.*}（手册生成器）也能 import。
+
+\section{Pre-commit hooks}
+
+如果项目根有 \file{.pre-commit-config.yaml}（可选）：
+
+\begin{minted}{bash}
+pip install pre-commit
+pre-commit install
+# 之后每次 git commit 自动跑 ruff + 其他 hook
+\end{minted}
+
+如果没有，手动在 commit 前跑 ruff：
+
+\begin{minted}{bash}
+ruff check src tests && ruff format --check src tests && pytest
+\end{minted}
+
+\section{Superpowers 工作流}
+
+\openbench{} 用 \modname{superpowers} 系列文档化中大型改动，分四个阶段：
+
+\begin{enumerate}
+  \item \textbf{Spec}（\file{docs/superpowers/specs/}）：设计文档；说"为什么改、改什么、不改什么"
+  \item \textbf{Plan}（\file{docs/superpowers/plans/}）：实施计划；按 task 拆，每 task 有可运行代码与测试
+  \item \textbf{Execute}：按 plan 落地；每个 task 单独 commit
+  \item \textbf{Review}（\file{docs/superpowers/reviews/}）：审计与回顾；记录发现的 bug 与决议
+\end{enumerate}
+
+\subsection{何时用，何时不用}
+
+\textbf{用}：
+
+\begin{itemize}
+  \item 新功能（新 CLI 命令、新 metric、新 GUI page）
+  \item 架构改动（schema 改动、API 重命名）
+  \item 修复需要细化讨论的 bug
+  \item 文档项目（如本手册）
+\end{itemize}
+
+\textbf{不用}：
+
+\begin{itemize}
+  \item 单 commit 能描述清的小 bug（直接 PR）
+  \item Typo / docstring 修复
+  \item Test 新增（已有功能加测试）
+\end{itemize}
+
+\subsection{文件命名}
+
+\begin{itemize}
+  \item Spec：\file{YYYY-MM-DD-<topic>-design.md}
+  \item Plan：\file{YYYY-MM-DD-<topic>.md}
+  \item Review：\file{YYYY-MM-DD-<topic>.md}（同名）
+\end{itemize}
+
+详见第 11 章贡献流程。
+
+\section{编辑器与 IDE}
+
+\openbench{} 不强制特定 IDE，但推荐配置：
+
+\subsection{VS Code}
+
+推荐扩展：
+
+\begin{itemize}
+  \item Python（Microsoft）
+  \item Pylance（类型检查）
+  \item Ruff（实时 lint + format）
+  \item GitLens（提交历史可视化）
+\end{itemize}
+
+\file{.vscode/settings.json} 建议：
+
+\begin{minted}{json}
+{
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  }
+}
+\end{minted}
+
+\subsection{PyCharm}
+
+\begin{itemize}
+  \item Settings → Project → Interpreter → 选 \file{.venv/bin/python}
+  \item Tools → External Tools → 加 ruff
+  \item Run → Edit Configurations → 加 pytest
+\end{itemize}
+
+\section{常见开发环境问题}
+
+\subsection{cartopy 装不上}
+
+第 1 章用户卷已详解。简言之：
+
+\begin{minted}{bash}
+brew install geos proj   # macOS
+sudo apt install libgeos-dev libproj-dev   # Linux
+\end{minted}
+
+或用 conda 装 cartopy：
+
+\begin{minted}{bash}
+conda install -c conda-forge cartopy
+pip install -e ".[remote,report,dev]"   # 跳过 [all] 中的 cartopy
+\end{minted}
+
+\subsection{import openbench 找不到}
+
+通常是 \texttt{pip install -e .} 没装成功，或者忘了 activate venv。检查：
+
+\begin{minted}{bash}
+which python   # 确认指向 .venv
+pip list | grep -i openbench   # 确认装了
+\end{minted}
+
+\subsection{测试导入失败}
+
+通常是 \texttt{pythonpath} 没配好。看 \file{pyproject.toml [tool.pytest.ini\_options]}：
+
+\begin{minted}{toml}
+pythonpath = ["src", "."]
+\end{minted}
+
+如果你 \texttt{cd tests/} 跑 pytest，要回到仓库根：\texttt{cd ..}。
+
+\section{下一步}
+
+下一章深入 \modname{config} 子系统：schema dataclass、loader 流程、adapter 翻译、migration 路径、resolver 解析。这是 \openbench{} 从用户输入到执行引擎之间最复杂的一层。
