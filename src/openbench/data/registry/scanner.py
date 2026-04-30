@@ -386,34 +386,48 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
 
                 for dataset_dir in _iter_dirs(var_dir):
                     dataset_name = dataset_dir.name
-                    nc_dir = dataset_dir  # where NC files live
-                    nc_count = _count_nc(dataset_dir)
 
-                    # Check one level deeper if no NCs at this level
-                    # Handles Composite layout: Composite/FLUXNET_PLUMBER2/dataset/*.nc
-                    if nc_count == 0:
-                        for child in _iter_dirs(dataset_dir):
-                            child_nc = _count_nc(child)
-                            if child_nc > 0:
-                                nc_count += child_nc
-                                nc_dir = child
-                    if nc_count == 0:
+                    # Use the same depth-3 descent helper as grid path:
+                    #   level 0: dataset_dir/*.nc (most common stn layout)
+                    #   level 1: dataset_dir/X/*.nc (e.g., dataset_dir/data/*.nc
+                    #            or composite Composite/<X>/dataset/*.nc)
+                    #   level 2: dataset_dir/X/Y/*.nc
+                    # multi-child → ambiguous (previously silently merged
+                    # year-subdir layouts with last-alphabetical wins)
+                    nc_dir, nc_count, status = _find_nc_dir_with_descent(
+                        dataset_dir, max_descent=2
+                    )
+
+                    if status == "ambiguous":
+                        logger.warning(
+                            "Skipped station '%s': multiple NC-bearing subdirectories. "
+                            "Year-split or multi-variant station layouts need a reference "
+                            "profile (reference_profiles.yaml) or manual "
+                            "'openbench data register'.",
+                            dataset_dir.relative_to(ref_root),
+                        )
+                        continue
+
+                    if status == "missing":
                         from openbench.data.coordinates import glob_nc as _deep_glob
                         deep_nc = _deep_glob(dataset_dir, recursive=True)
                         if deep_nc:
                             logger.warning(
-                                "Skipped '%s': %d NC files found in deeper subdirectories "
-                                "(beyond supported 2-level depth). Move files up or register manually.",
+                                "Skipped station '%s': %d NC files found in deeper "
+                                "subdirectories (beyond supported 3-level depth). "
+                                "Move files up or register manually.",
                                 dataset_dir.relative_to(ref_root), len(deep_nc),
                             )
                         continue
 
-                    # Composite layout: NC files live in a "dataset/" or "data/" subdir
-                    # → the real dataset name is the parent (var_dir.name)
+                    # Composite layout: dataset_dir is literally named "dataset"
+                    # or "data" — the real dataset name is var_name (one level up).
+                    # Detection key is dataset_dir.name (kept for backward compat
+                    # with reference roots that already use this convention).
                     is_composite = dataset_name in ("dataset", "data")
                     if is_composite:
-                        dataset_name = var_name  # e.g., FLUXNET_PLUMBER2
-                        ds_root = str(nc_dir)    # points directly to NC directory
+                        dataset_name = var_name      # e.g., FLUXNET_PLUMBER2
+                        ds_root = str(nc_dir)        # points directly to NC dir
                     else:
                         ds_root = str(category_dir.parent)
 
@@ -435,7 +449,13 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
                         if dataset_name not in scanned.variables:
                             scanned.variables[dataset_name] = ""
                     else:
-                        scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
+                        # Record the path of the actual NC-bearing dir relative
+                        # to ds_root. Previously hardcoded to dataset_dir's path,
+                        # which mismatched when NCs lived in a deeper subdir
+                        # (e.g., MyStn/data/*.nc) — finalize couldn't locate them.
+                        scanned.variables[var_name] = str(
+                            nc_dir.relative_to(category_dir.parent)
+                        )
                     scanned.file_count += nc_count
 
     return sorted(groups.values(), key=lambda g: g.base_name)

@@ -1125,6 +1125,100 @@ def test_tim_res_detection_rejects_half_hourly_interval(tmp_path: Path):
     )
 
 
+def test_stn_scan_skips_multi_year_subdirs_as_ambiguous(tmp_path: Path, caplog):
+    """Station dataset organized as MyStn/2010/, MyStn/2011/, MyStn/2012/
+    used to silently accumulate NC counts but record only the last child as
+    nc_dir. Now correctly detected as ambiguous and skipped with a warning.
+    """
+    import logging
+    from openbench.data.registry.scanner import scan_reference_directory
+
+    ref_root = tmp_path / "Reference"
+    base = ref_root / "Station" / "Carbon" / "CH4_Flux" / "MyStn"
+    for year in (2010, 2011, 2012):
+        ydir = base / str(year)
+        ydir.mkdir(parents=True)
+        for stn in (1, 2):
+            (ydir / f"stn_{stn:03d}.nc").write_text("")
+
+    with caplog.at_level(logging.WARNING, logger="openbench.data.registry.scanner"):
+        groups = scan_reference_directory(ref_root)
+
+    assert groups == [], (
+        f"Multi-year stn dataset must be skipped (ambiguous), got: "
+        f"{[g.base_name for g in groups]}"
+    )
+    assert any(
+        "multiple NC-bearing subdirectories" in rec.message for rec in caplog.records
+    ), f"Expected ambiguity warning, got: {[r.message for r in caplog.records]}"
+
+
+def test_stn_scan_records_nc_path_when_data_in_subdir(tmp_path: Path):
+    """Station dataset MyStn/data/*.nc (data is a subdir, not the dataset
+    name) should record variables[var_name] pointing to MyStn/data so
+    finalize can find the NCs. Previously recorded only MyStn/ and the
+    +/dataset heuristic happened to match here, but if the subdir was
+    something else (e.g., 'subset/'), fulllist would be silently skipped.
+    """
+    import netCDF4
+    from openbench.data.registry.scanner import scan_reference_directory
+
+    ref_root = tmp_path / "Reference"
+    nc_dir = (
+        ref_root / "Station" / "Carbon" / "CH4_Flux" / "MyStn" / "subset"
+    )
+    nc_dir.mkdir(parents=True)
+    with netCDF4.Dataset(nc_dir / "stn001.nc", "w") as nc:
+        nc.createDimension("time", 12)
+        v = nc.createVariable("CH4_flux", "f4", ("time",))
+        v.units = "g/m2/year"
+        lat = nc.createVariable("lat", "f4", ()); lat.units = "degrees_north"
+        lon = nc.createVariable("lon", "f4", ()); lon.units = "degrees_east"
+
+    groups = scan_reference_directory(ref_root)
+    assert len(groups) == 1, f"Expected one group, got: {[g.base_name for g in groups]}"
+    variant = groups[0].variants["Station"]
+    sub_dir = variant.variables["CH4_Flux"]
+    assert sub_dir.endswith("MyStn/subset"), (
+        f"Expected sub_dir to point to actual NC location, got: {sub_dir!r}"
+    )
+
+
+def test_stn_composite_layout_still_recognized(tmp_path: Path):
+    """Backward compat: Station/Composite/FLUXNET_PLUMBER2/dataset/*.nc
+    should still be treated as composite — dataset_name = FLUXNET_PLUMBER2
+    (one level up), variables key = dataset_name with empty value (relies
+    on reference_profiles.yaml to fill variable mappings).
+    """
+    import netCDF4
+    from openbench.data.registry.scanner import scan_reference_directory
+
+    ref_root = tmp_path / "Reference"
+    nc_dir = (
+        ref_root / "Station" / "Composite" / "FLUXNET_PLUMBER2" / "dataset"
+    )
+    nc_dir.mkdir(parents=True)
+    with netCDF4.Dataset(nc_dir / "stn001.nc", "w") as nc:
+        nc.createDimension("time", 12)
+        v = nc.createVariable("Qle", "f4", ("time",))
+        v.units = "W/m2"
+        lat = nc.createVariable("lat", "f4", ()); lat.units = "degrees_north"
+        lon = nc.createVariable("lon", "f4", ()); lon.units = "degrees_east"
+
+    groups = scan_reference_directory(ref_root)
+    assert len(groups) == 1, f"Expected one group, got: {[g.base_name for g in groups]}"
+
+    variant = groups[0].variants["Station"]
+    assert groups[0].base_name == "FLUXNET_PLUMBER2"
+    # Composite: variables key is dataset_name (not var_name "FLUXNET_PLUMBER2")
+    # — wait, var_name = FLUXNET_PLUMBER2 because Composite/FLUXNET_PLUMBER2/
+    # in this layout iter has var_dir = FLUXNET_PLUMBER2.
+    assert "FLUXNET_PLUMBER2" in variant.variables
+    assert variant.variables["FLUXNET_PLUMBER2"] == ""
+    # ds_root points to the literal "dataset" subdir directly (NCs there)
+    assert variant.root_dir.endswith("FLUXNET_PLUMBER2/dataset")
+
+
 def test_scan_uses_grandchild_dir_when_nc_files_two_levels_deep(tmp_path: Path):
     """Verify end-to-end that 3-level NC discovery wires through to a
     correct registration: sub_dir AND tim_res come from the level-2 dir,
