@@ -1,0 +1,42 @@
+% docs/manual/common/macros.tex
+% 自定义语义命令；调整全局样式时只改本文件
+
+% --- 项目名 ---
+\newcommand{\openbench}{\textsf{OpenBench}}
+
+% --- 代码语义命令 ---
+\newcommand{\cli}[1]{\texttt{#1}}                         % CLI 命令
+\newcommand{\yamlkey}[1]{\texttt{#1}}                      % YAML 键
+\newcommand{\var}[1]{\textsf{#1}}                          % 评估变量名
+\newcommand{\modname}[1]{\texttt{#1}}                      % Python 模块/类名
+\newcommand{\file}[1]{\texttt{#1}}                         % 文件名
+\newcommand{\dataset}[1]{\textsf{#1}}                      % 数据集名
+
+% --- 标注命令简写（一行内可用） ---
+\newcommand{\noteinline}[1]{\textcolor{obblue}{\textbf{注：}#1}}
+\newcommand{\warninline}[1]{\textcolor{obred}{\textbf{警告：}#1}}
+
+% --- 章节内的 TODO 占位（生产前必须清空） ---
+\newcommand{\TODO}[1]{\textcolor{obred}{\textbf{[TODO: #1]}}}
+
+% --- 卷感知的 part：独立编译用 \part（编号），合订用 \part*（不编号）---
+% 解决总卷 TOC 中 \part 跨卷连续编号导致卷边界混乱的问题
+% \ifSubfilesClassLoaded 由 subfiles 包提供（subfiles 1.3+，TeX Live 2018+）
+\providecommand{\volpart}[1]{%
+  \ifSubfilesClassLoaded{\part{#1}}{\part*{#1}\addcontentsline{toc}{part}{#1}}%
+}
+
+% --- 卷分隔（仅合订时使用，独立编译时由 \maketitle 替代）---
+\providecommand{\volumedivider}[2]{%
+  % #1 = 卷序号（如"第一卷"），#2 = 卷名（如"用户指南"）
+  \cleardoublepage
+  \thispagestyle{empty}
+  \vspace*{4cm}
+  \begin{center}
+    {\Huge\bfseries #1}\\[1.5ex]
+    {\Huge\bfseries #2}
+  \end{center}
+  \cleardoublepage
+  \markboth{#2}{#2}
+  \addcontentsline{toc}{chapter}{#1 ─ #2}
+}
