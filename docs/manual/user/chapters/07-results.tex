@@ -7,49 +7,51 @@
 
 \section{输出目录布局}
 
-一次成功的 \cli{openbench run} 产出的目录树：
+一次成功的 \cli{openbench run} 产出的目录树（核对自 \modname{util.output.OutputManager} 与 \modname{core.evaluation} / \modname{core.comparison}）：
 
 \begin{minted}{text}
-output/<run>/
-├── config.yaml         # 本次评估实际使用的完整配置（含解析后默认值）
-├── run.log             # 完整日志（INFO/DEBUG/WARN/ERROR）
-├── data/               # 预处理与中间数据缓存（zarr）
-├── metrics/            # 评估指标 CSV
-│   ├── Evapotranspiration/
-│   │   ├── CoLM2024_metrics.csv
-│   │   └── CLM5_metrics.csv
-│   └── Latent_Heat/...
-├── scores/             # 归一化打分 CSV
-│   ├── Evapotranspiration/
-│   │   ├── CoLM2024_scores.csv
-│   │   └── CLM5_scores.csv
-│   └── ...
-├── figures/            # 全部可视化产物（PNG）
-│   ├── Evapotranspiration/
-│   │   ├── geo/
-│   │   ├── portrait/
-│   │   ├── radar/
-│   │   ├── correlation/
-│   │   └── ...
-│   └── ...
-├── comparisons/        # 跨模型对比（仅 comparison.enabled=true）
-│   ├── portrait_plot.png
-│   ├── radar_plot.png
-│   ├── ranking.csv
-│   └── ranking_table.png
-├── statistics/         # 统计分析（仅 statistics.enabled=true）
-│   ├── ANOVA/
-│   ├── Correlation/
-│   ├── Hellinger_Distance/
-│   └── ...
-├── reports/            # 子报告与 HTML/PDF 主报告
+output/<project_name>/
+├── config.yaml          # 本次评估实际使用的完整配置（含解析后默认值）
+├── run.log              # 完整日志（INFO/DEBUG/WARN/ERROR）
+├── data/                # 预处理后的 sim/ref NC（重网格、时间裁剪后）
+│   ├── <var>_ref_<R>_<rv>.nc           # grid ref 的"扁平"NC
+│   ├── <var>_sim_<S>_<sv>.nc           # 每 sim 的预处理 NC
+│   ├── <var>_ref_<R>_<S>_<rv>.nc       # per_pair 模式下，每 sim 一份 ref 副本
+│   └── stn_<R>_<S>/                    # 站点评估时的逐站抽样 NC 目录
+├── metrics/             # 逐 (var, sim, ref) 评估指标
+│   ├── <var>_ref_<R>_sim_<S>_<metric>.nc   # grid×grid：每 metric 一个 NC
+│   └── <var>_stn_<R>_<S>_evaluations.csv   # 任一边 stn：聚合 CSV
+├── scores/              # 同 metrics 的命名规则，逐 score 一个 NC/CSV
+├── figures/             # 全部可视化（PNG），按图种切目录，每对 sim×ref 一张
+├── comparisons/         # 跨 sim×ref 对比（仅 comparison.enabled=true）
+│   ├── Portrait_Plot_seasonal/
+│   │   ├── Portrait_Plot_seasonal.csv          # 全部 (item, ref, sim) 一行一条
+│   │   ├── <item>_ref_<R>_sim_<S>_<metric>.nc  # 每对一份的逐图数据
+│   │   └── Portrait_Plot_seasonal.png
+│   ├── HeatMap/
+│   ├── Taylor_Diagram/
+│   ├── Target_Diagram/
+│   ├── Kernel_Density_Estimate/
+│   ├── Parallel_Coordinates/
+│   ├── Whisker_Plot/
+│   ├── Ridgeline_Plot/
+│   ├── Diff_Plot/
+│   ├── Single_Model_Performance_Index/
+│   ├── Relative_Score/
+│   ├── Mann_Kendall_Trend_Test/
+│   ├── IGBP_groupby/<sim>___<ref>/             # 仅 IGBP_groupby=true
+│   ├── PFT_groupby/<sim>___<ref>/              # 仅 PFT_groupby=true
+│   └── Climate_zone_groupby/<sim>___<ref>/     # 仅 climate_zone_groupby=true
+├── statistics/          # 统计分析（仅 statistics.enabled=true）
+│   ├── ANOVA/, Correlation/, Hellinger_Distance/, ...
+├── reports/             # HTML/PDF 主报告
 │   ├── report.html
-│   ├── report.pdf      # 仅装了 [report] extra 时
-│   └── sections/...
-├── scratch/            # 增量缓存（任务级配置哈希）
+│   ├── report.pdf       # 仅装了 [report] extra 时
+│   └── sections/
+├── scratch/             # 增量缓存（每 (var, sim, ref) 一份 JSON）
 │   └── cache/<task_key>.json
-├── tmp/                # 临时文件（每次 run 清空）
-└── debug/              # 仅 --dump-config 时存在
+├── tmp/                 # 临时文件（每次 run 清空）
+└── debug/               # 仅 --dump-config 时存在
     ├── runner_config.yaml
     ├── main_nl.yaml
     ├── ref_nml.yaml
@@ -57,16 +59,37 @@ output/<run>/
     └── fig_nml.yaml
 \end{minted}
 
-\textbf{首次熟悉时的查看顺序}：\file{report.html} → \file{comparisons/} → \file{figures/<var>/} → \file{metrics/<var>/<sim>\_metrics.csv}。
+\paragraph{多 ref / 多 sim 时的命名规则}
+
+文件名里 \texttt{\_ref\_<R>\_sim\_<S>} 这种三段式不是冗余，是为了让 (var × sim × ref) 笛卡尔积下每对都有独立产物，互不覆盖：
+
+\begin{itemize}
+  \item 一个变量 3 sim × 2 ref → \file{metrics/} 下每 metric 6 个 NC（不会因为 sim 名相同而冲突）
+  \item Comparison 阶段里所有 (sim, ref) 对会出现在同一份 \file{Portrait\_Plot\_seasonal.csv} 里，作为不同行（\texttt{Item} / \texttt{Reference} / \texttt{Simulation} 三列）
+  \item Comparison 的可视化通常按"\textbf{每个 ref 一张图}"或"\textbf{所有 ref 拼在一张图}"两种风格出（具体看图种实现，见第 6 章 \cli{run} 阶段流程）
+\end{itemize}
+
+\textbf{首次熟悉时的查看顺序}：\file{report.html} → \file{comparisons/Portrait\_Plot\_seasonal/} → \file{figures/} → \file{metrics/<var>\_ref\_<R>\_sim\_<S>\_<metric>.nc}。
 
 \section{Metrics CSV 解读}
 
-\file{metrics/<var>/<sim>\_metrics.csv} 一行一个 reference（站点评估时也可能一行一个站点）：
+实际产物分两类，按 ref/sim 数据形态决定：
+
+\textbf{Grid×grid}：每 (var, ref, sim, metric) 一个 NetCDF，逐格点存值。
+
+\file{metrics/<var>\_ref\_<R>\_sim\_<S>\_<metric>.nc} 内含一个名为 \texttt{<metric>} 的 \texttt{xarray.DataArray}，维度 \texttt{(time, lat, lon)} 或 \texttt{(lat, lon)}（climatology 模式聚合掉时间）。可用 \texttt{xarray.open_dataset()} 直接读，做空间分布分析。
+
+\textbf{任一边 stn}：每 (var, ref, sim) 一个聚合 CSV，一行一站。
+
+\file{metrics/<var>\_stn\_<R>\_<S>\_evaluations.csv}：
 
 \begin{minted}{text}
-ref,bias,RMSE,ubRMSE,correlation,correlation_R2,NSE,KGE,KGESS,index_agreement,...
-GLEAM_v4.2a_LowRes,0.12,0.45,0.32,0.78,0.61,0.55,0.71,0.49,0.86,...
+ID,sim_lat,sim_lon,ref_lon,ref_lat,use_syear,use_eyear,bias,RMSE,ubRMSE,correlation,KGE,...
+6101120,49.9,7.5,49.9,7.5,2000,2010,0.12,0.45,0.32,0.78,0.71,...
+6101200,50.2,7.8,50.2,7.8,2000,2010,0.08,0.39,0.28,0.81,0.74,...
 \end{minted}
+
+每 metric 各占一列；前若干列是站点元信息（ID、坐标、有效年份）。
 
 \subsection{常用 metric 含义速查}
 
@@ -263,21 +286,40 @@ overall_mean = ds[score].weighted(weights).mean(skipna=True)
 
 \section{Comparison 输出（多模型对比）}
 
-\yamlkey{comparison.enabled: true} 时，\file{comparisons/} 下会有：
+\yamlkey{comparison.enabled: true} 时，\file{comparisons/} 下产出多个图种，每种一个子目录。每子目录里有：聚合 CSV（一行 = 一个 (item, ref, sim) 组合）+ 逐图 NC（每对一个）+ 最终 PNG。
 
-\subsection{portrait\_plot}
+\subsection{核心图种}
 
-\textbf{结构}：x 轴 = simulation（模型）；y 轴 = (variable, score) 二元组；填色 = score 值（0-1，颜色越深越好）。
+\textbf{Portrait\_Plot\_seasonal} \file{Portrait\_Plot\_seasonal/Portrait\_Plot\_seasonal.csv} 列：\texttt{Item} / \texttt{Reference} / \texttt{Simulation} + 每 metric/score 的 4 个季节分量（DJF / MAM / JJA / SON）。配套 PNG 把全部行作为热图：x 轴 = simulation × 季节；y 轴 = (item, ref, metric)；色阶 = 数值。
 
-\textbf{用途}：一眼看哪个模型在哪个变量上强/弱。
+\textbf{HeatMap} \file{HeatMap/} 全 metric/score 跨 (item, sim, ref) 的二维热图汇总，按 weight 设置加权（详见本章 §"聚合权重"）。
 
-\subsection{radar\_plot}
+\textbf{Single\_Model\_Performance\_Index (SMPI)} \file{Single\_Model\_Performance\_Index/} 每个 sim × ref 一个综合得分（基于均方差 / 观测方差），辅以 bootstrap 置信区间。这是\emph{ranking 的实际数据来源}。
 
-每个模型一组 spoke，每根 spoke 一个 score。多模型叠合显示。
+\textbf{Taylor\_Diagram / Target\_Diagram} \file{Taylor\_Diagram/}、\file{Target\_Diagram/} 经典两种"标准化对比图"，把 (相关、归一化标准差) 或 (bias, ubRMSE) 二元投影到极坐标。每图叠合所有 (sim, ref) 点。
 
-\subsection{ranking}
+\textbf{Kernel\_Density\_Estimate / Ridgeline\_Plot / Whisker\_Plot} \file{Kernel\_Density\_Estimate/} 等 概率密度对比、脊线图、箱线图，用于看 sim/ref 分布形状差异。
 
-\file{ranking.csv}：按 \texttt{Overall\_Score} 平均（跨变量、跨 reference）排序的简单表格。\file{ranking\_table.png} 是它的可视化版本。
+\textbf{Parallel\_Coordinates / Diff\_Plot / Relative\_Score} \file{Parallel\_Coordinates/} 等 多 metric 联合视图、相对偏差地图、相对评分。
+
+\textbf{Mann\_Kendall\_Trend\_Test} \file{Mann\_Kendall\_Trend\_Test/} 趋势显著性检验输出（统计 p 值、Sen's slope）。
+
+\subsection{Groupby（仅条件触发）}
+
+仅当 \yamlkey{IGBP_groupby} / \yamlkey{PFT_groupby} / \yamlkey{climate_zone_groupby} 任一为 \texttt{true} 时产出（详见本章 §"按区域分类聚合"）。每子目录按 \file{<sim>\_\_\_<ref>/} 切分，再按 metric/score 出 NC + 总览 CSV + LC heatmap PNG。
+
+\subsection{多 ref 在 comparison 中的呈现}
+
+\openbench{} v3.0 多 ref 配置下，所有 (sim, ref) 对都进入同一组 comparison 输出：
+
+\begin{itemize}
+  \item 聚合 CSV：每对一行，\texttt{Reference} 列区分（同变量 \texttt{Item} + 不同 \texttt{Reference} → 多行）
+  \item Portrait/HeatMap PNG：把 \texttt{(item × ref)} 当作"扩展的变量"放在 y 轴，所以 2 ref × 5 metric = 10 行图块
+  \item Taylor/Target/SMPI：每对单独投点，图例区分
+  \item Groupby：按 \file{<sim>\_\_\_<ref>/} 拆目录，自然分开
+\end{itemize}
+
+\textbf{注意}：comparison 阶段并\emph{不}做"跨 ref 平均到一个数"——它把每个 ref 都展示出来，让你自己判断模型对 ref 选择的鲁棒性。如果你想要"跨 ref 平均"的最终评价，需要在 \file{Portrait\_Plot\_seasonal.csv} 上自己做后处理（pandas \texttt{groupby("Item")} 后 \texttt{mean()}）。
 
 \section{Statistics 输出}
 
@@ -384,20 +426,28 @@ from pathlib import Path
 
 run_dir = Path("output/demo")
 
-# 单变量 metrics 表
-df = pd.read_csv(run_dir / "metrics/Evapotranspiration/CoLM2024_metrics.csv")
-print(df[["ref", "bias", "RMSE", "KGE"]])
+# 站点评估的 metrics 表（每行一站，列含全部 metric）
+df = pd.read_csv(run_dir / "metrics/Streamflow_stn_GRDC_CoLM2024_evaluations.csv")
+print(df[["ID", "bias", "RMSE", "KGE"]])
 
-# 跨模型 ranking
-ranking = pd.read_csv(run_dir / "comparisons/ranking.csv")
-print(ranking.sort_values("Overall_Score", ascending=False))
+# Grid 评估的逐格点 metric NC
+ds = xr.open_dataset(run_dir / "metrics/Evapotranspiration_ref_GLEAM_sim_CoLM2024_KGE.nc")
+print(ds["KGE"])  # DataArray (lat, lon) 或 (time, lat, lon)
 
-# 中间 zarr 缓存（预处理后的对齐数据）
-ds = xr.open_zarr(run_dir / "data/Evapotranspiration_CoLM2024_GLEAM_v4.2a_LowRes.zarr")
+# 跨模型对比表（多 sim 多 ref 一行一对）
+portrait = pd.read_csv(run_dir / "comparisons/Portrait_Plot_seasonal/Portrait_Plot_seasonal.csv", sep="\t")
+print(portrait[["Item", "Reference", "Simulation", "KGE_DJF", "KGE_JJA"]])
+
+# Single_Model_Performance_Index：综合得分 + bootstrap CI
+smpi = pd.read_csv(run_dir / "comparisons/Single_Model_Performance_Index/SMPI.csv")
+print(smpi.sort_values("SMPI"))   # 越小越好（标准化均方差）
+
+# 预处理后的对齐 NC（重网格 + 时间裁剪后）
+ds = xr.open_dataset(run_dir / "data/Evapotranspiration_ref_GLEAM_v4.2a_LowRes_rv.nc")
 print(ds)
 \end{minted}
 
-\noteinline{zarr 缓存格式可能在 v3.0 后续版本调整；CSV 与 PNG 输出格式承诺向前兼容。}
+\noteinline{Comparison 子目录的具体 CSV 名取决于图种；上面的两个最常用。Statistics 目录下也有类似 CSV，命名遵循 \texttt{<method>/<item>\_<sim>\_\_\_<ref>\_<output>.csv} 模式。}
 
 \section{常见解读问题}
 
