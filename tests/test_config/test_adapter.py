@@ -581,3 +581,77 @@ def test_iter_task_sources_single_ref_str_works_unchanged():
     assert {(s.sim_source, s.ref_source) for s in sources} == {
         ("SimA", "GLEAM"), ("SimB", "GLEAM"),
     }
+
+
+def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
+    """has_grid_evaluation must check every (ref, sim) pair, not just sim_sources[0].
+
+    Regression: earlier code checked only sim_sources[0]. With ref=stn and
+    sim=[SimStn, SimGrid], it returned False because the first sim was stn —
+    silently skipping grid evaluation that SimGrid actually needed.
+    """
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case", basedir=".",
+        evaluation_items={"ET": True},
+        metrics=["bias"], scores=["Overall_Score"],
+        comparisons=[], statistics=[],
+        general={
+            "basename": "case", "basedir": ".",
+            "compare_tim_res": "Month", "compare_grid_res": 0.5,
+            "compare_tzone": 0, "num_cores": 1,
+            "syear": 2000, "eyear": 2001,
+        },
+    )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={
+                "general": {"ET_ref_source": "RefStn"},
+                "ET": {"RefStn_data_type": "stn"},
+            },
+            simulation={
+                # Mixed sim types: stn first, grid second (the regression scenario)
+                "general": {"ET_sim_source": ["SimStn", "SimGrid"]},
+                "ET": {"SimStn_data_type": "stn", "SimGrid_data_type": "grid"},
+            },
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    evidence = bindings.has_grid_evaluation(["ET"])
+    assert evidence.has_grid is True, (
+        "has_grid_evaluation returned False for mixed sim types — "
+        "SimGrid requires grid evaluation but was ignored"
+    )
+
+
+def test_has_grid_evaluation_pure_stn_x_stn_returns_false():
+    """Pure stn × stn (ref=stn, all sims=stn) should still return has_grid=False."""
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case", basedir=".",
+        evaluation_items={"ET": True},
+        metrics=["bias"], scores=["Overall_Score"],
+        comparisons=[], statistics=[],
+        general={
+            "basename": "case", "basedir": ".",
+            "compare_tim_res": "Month", "compare_grid_res": 0.5,
+            "compare_tzone": 0, "num_cores": 1,
+            "syear": 2000, "eyear": 2001,
+        },
+    )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={"general": {"ET_ref_source": "RefStn"}, "ET": {"RefStn_data_type": "stn"}},
+            simulation={
+                "general": {"ET_sim_source": ["SimStn1", "SimStn2"]},
+                "ET": {"SimStn1_data_type": "stn", "SimStn2_data_type": "stn"},
+            },
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    evidence = bindings.has_grid_evaluation(["ET"])
+    assert evidence.has_grid is False

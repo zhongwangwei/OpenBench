@@ -135,16 +135,22 @@ class RunnerBindings:
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
 
-            # Any (ref, sim) pair where either side is grid → grid evaluation needed
+            # Full Cartesian product: must inspect every (ref, sim) pair.
+            # Earlier code checked only sim_sources[0], which incorrectly returned
+            # has_grid=False for mixed sim types like [SimStn, SimGrid] paired with
+            # a stn ref — SimGrid required grid evaluation but was ignored.
             for ref_s in ref_sources_list:
                 ref_dtype = self.namelists.reference.get(var_name, {}).get(f"{ref_s}_data_type")
-                sim_dtype = None
-                if sim_sources:
+                if not sim_sources:
+                    if ref_dtype != "stn":
+                        return GridEvaluationEvidence(has_grid=True)
+                    continue
+                for sim_s in sim_sources:
                     sim_dtype = self.namelists.simulation.get(var_name, {}).get(
-                        f"{sim_sources[0]}_data_type"
+                        f"{sim_s}_data_type"
                     )
-                if ref_dtype != "stn" or sim_dtype != "stn":
-                    return GridEvaluationEvidence(has_grid=True)
+                    if ref_dtype != "stn" or sim_dtype != "stn":
+                        return GridEvaluationEvidence(has_grid=True)
 
         return GridEvaluationEvidence(has_grid=False)
 

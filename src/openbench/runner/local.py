@@ -6,24 +6,81 @@ and the migrated core engine.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
 from typing import Any
 
+from openbench.config.adapter import BridgeRuntimeInfo, RunnerConfig
 from openbench.config.schema import OpenBenchConfig
 
 logger = logging.getLogger(__name__)
+
+
+BRIDGE_RUNTIME_FIELDS = {
+    "casedir",
+    "ref_varname",
+    "sim_varname",
+    "ref_data_type",
+    "sim_data_type",
+    "compare_tim_res",
+    "compare_grid_res",
+    "compare_tzone",
+    "unified_mask",
+}
+
+
+@dataclass(frozen=True)
+class RuntimeContext:
+    """Runner-owned context layered on top of bridge-provided fields."""
+
+    bridge_info: BridgeRuntimeInfo
+    ref_source: str
+    sim_source: str
+    ref_file_override: str | None = None
+
+    def to_info(self) -> dict[str, Any]:
+        info = self.bridge_info.to_info()
+        info["ref_source"] = self.ref_source
+        info["sim_source"] = self.sim_source
+        if self.ref_file_override:
+            info["ref_file_override"] = self.ref_file_override
+        return info
+
+
+def _coerce_bridge_runtime_info(bridge_info: BridgeRuntimeInfo | dict[str, Any]) -> BridgeRuntimeInfo:
+    """Normalize adapter bridge payloads to the typed runtime-info wrapper."""
+    if isinstance(bridge_info, BridgeRuntimeInfo):
+        return bridge_info
+    return BridgeRuntimeInfo(payload=dict(bridge_info))
+
+
+def _build_runtime_context(task: dict[str, Any]) -> RuntimeContext:
+    """Build runner-owned runtime context without mutating reader state."""
+    bridge_info = _coerce_bridge_runtime_info(task["bindings"].build_runtime_info_for(
+        task["var_name"], task["sim_source"], task["ref_source"]
+    ))
+
+    return RuntimeContext(
+        bridge_info=bridge_info,
+        ref_source=task["ref_source"],
+        sim_source=task["sim_source"],
+        ref_file_override=task.get("ref_file_override"),
+    )
+
+
+def _build_bridge_runtime_info(task: dict[str, Any]) -> dict[str, Any]:
+    """Build the runner-owned bridge info dict for one task."""
+    return _build_runtime_context(task).to_info()
 
 
 def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
     """Evaluate a single variable+sim+ref pair.
 
     Args:
-        task: Dict with keys: var_name, sim_source, ref_source, main_nl,
-              sim_nml, ref_nml, metric_vars, score_vars, comparison_vars,
-              statistic_vars, fig_nml, cache_key, config_hash, use_cache,
-              cache_dir.
+        task: Dict with keys: var_name, sim_source, ref_source, bindings,
+              cache_key, config_hash, use_cache, cache_dir.
 
     Returns:
         Result dict with keys: variable, sim, ref, status, cache_key,
@@ -36,6 +93,7 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
     config_hash = task["config_hash"]
     use_cache = task["use_cache"]
     cache_dir = task.get("cache_dir")
+    bindings = task["bindings"]
 
     # Each worker process needs its own cache instance (for parallel safety)
     cache = None
@@ -44,47 +102,52 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
 
         cache = EvaluationCache(Path(cache_dir))
         if cache.is_cached(cache_key, config_hash):
-            logger.info("Cached, skipping %s: sim=%s ref=%s", var_name, sim_source, ref_source)
-            return {
-                "variable": var_name,
-                "sim": sim_source,
-                "ref": ref_source,
-                "status": "success",
-                "cache_key": cache_key,
-                "config_hash": config_hash,
-                "skipped": True,
-            }
+            # Verify that output files actually exist before trusting cache
+            output_dir = Path(cache_dir)
+            scores_pattern = f"{var_name}*{sim_source}*"
+            has_output = (
+                any((output_dir / "scores").glob(scores_pattern))
+                or any((output_dir / "metrics").glob(scores_pattern))
+            ) if (output_dir / "scores").is_dir() or (output_dir / "metrics").is_dir() else False
+            if has_output:
+                logger.info("Cached, skipping %s: sim=%s ref=%s", var_name, sim_source, ref_source)
+                return {
+                    "variable": var_name,
+                    "sim": sim_source,
+                    "ref": ref_source,
+                    "status": "success",
+                    "cache_key": cache_key,
+                    "config_hash": config_hash,
+                    "skipped": True,
+                }
+            else:
+                logger.warning(
+                    "Cache stale (output missing), re-evaluating %s: sim=%s ref=%s",
+                    var_name, sim_source, ref_source,
+                )
+                # invalidate() now takes an fcntl.flock; on NFS / locked
+                # filesystems that can OSError or EPERM. Don't let cache
+                # bookkeeping errors crash the worker — the evaluation
+                # itself will simply re-run, which is the safe default.
+                try:
+                    cache.invalidate(cache_key)
+                except Exception as inv_err:
+                    logger.warning(
+                        "Cache invalidate failed for %s (sim=%s ref=%s): %s — proceeding with re-evaluation",
+                        var_name, sim_source, ref_source, inv_err,
+                    )
 
     try:
-        from openbench.config.legacy_processors import GeneralInfoReader
+        info = _build_bridge_runtime_info(task)
+        evaluation_fig_nml = bindings.build_evaluation_fig_nml().to_fig_nml()
 
-        info_reader = GeneralInfoReader(
-            main_nl=task["main_nl"],
-            sim_nml=task["sim_nml"],
-            ref_nml=task["ref_nml"],
-            metric_vars=task["metric_vars"],
-            score_vars=task["score_vars"],
-            comparison_vars=task["comparison_vars"],
-            statistic_vars=task["statistic_vars"],
-            item=var_name,
-            sim_source=sim_source,
-            ref_source=ref_source,
-        )
-
-        info = info_reader.to_dict()
-        info["ref_source"] = ref_source
-        info["sim_source"] = sim_source
-
-        # Step 1: Preprocess simulation data
-        # NOTE: ref preprocessing is done separately before parallel dispatch
-        # to avoid race conditions (multiple tasks writing same ref file).
-        # Only preprocess sim here.
-        from openbench.data.processing import DatasetProcessing
-
-        dataset_processor = DatasetProcessing(info)
+        # Step 1: Preprocess data (skip if already done by _preprocess_variable)
         if not task.get("ref_preprocessed"):
-            dataset_processor.process("ref")
-        dataset_processor.process("sim")
+            from openbench.data.processing import DatasetProcessing
+
+            dataset_processor = DatasetProcessing(info)
+            dataset_processor.prepare_source("ref")
+            dataset_processor.prepare_source("sim")
 
         # Step 2: Run evaluation
         ref_dtype = info.get("ref_data_type", "grid")
@@ -93,7 +156,7 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         if ref_dtype == "stn" or sim_dtype == "stn":
             from openbench.core.evaluation import Evaluation_stn
 
-            evaluator = Evaluation_stn(info, task["fig_nml"])
+            evaluator = Evaluation_stn(info, evaluation_fig_nml)
             try:
                 evaluator.make_evaluation_P()
             except (KeyError, TypeError) as viz_err:
@@ -101,14 +164,25 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
         else:
             from openbench.core.evaluation import Evaluation_grid
 
-            evaluator = Evaluation_grid(info, task["fig_nml"])
+            evaluator = Evaluation_grid(info, evaluation_fig_nml)
             try:
                 evaluator.make_Evaluation()
             except (KeyError, TypeError) as viz_err:
                 logger.warning("Metrics computed but visualization skipped: %s", viz_err)
 
         if cache is not None:
-            cache.mark_done(cache_key, config_hash)
+            # The evaluation already succeeded — its output files are on
+            # disk. A failure to update the cache index (e.g. fcntl.flock
+            # rejected on NFS) MUST NOT downgrade success to error,
+            # otherwise GUI / CLI reports a false negative and the user
+            # re-runs an already-completed evaluation. Log and continue.
+            try:
+                cache.mark_done(cache_key, config_hash)
+            except Exception as mark_err:
+                logger.warning(
+                    "mark_done failed for %s (sim=%s ref=%s): %s — evaluation succeeded, cache index not updated",
+                    var_name, sim_source, ref_source, mark_err,
+                )
 
         logger.info("Completed %s: sim=%s ref=%s", var_name, sim_source, ref_source)
         return {
@@ -187,15 +261,23 @@ def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: 
         except ImportError:
             pass
 
-        # Align time dimension
-        if len(s["time"]) == len(o["time"]):
-            s["time"] = o["time"]
-        else:
+        # Align time dimension. Length-equal but value-different time
+        # vectors must NOT be coerced silently; that produced misaligned
+        # masks where ref hour 03 was treated as sim hour 04 etc.
+        if len(s["time"]) != len(o["time"]):
             logger.warning(
-                "Unified mask: time mismatch for %s (ref=%d, sim=%d), skipping",
+                "Unified mask: time length mismatch for %s (ref=%d, sim=%d), skipping",
                 var_name, len(o["time"]), len(s["time"]),
             )
             return
+        if not np.array_equal(s["time"].values, o["time"].values):
+            logger.warning(
+                "Unified mask: time values mismatch for %s (lengths equal but timestamps differ), skipping",
+                var_name,
+            )
+            return
+        # Lengths match AND values match — no copy needed; xarray ops will
+        # broadcast natively.
 
         # Apply mask: NaN where either is NaN
         mask = np.isnan(s.values) | np.isnan(o.values)
@@ -229,7 +311,41 @@ def _apply_unified_mask(info: dict, var_name: str, ref_source: str, sim_source: 
                 pass
 
 
-def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
+def _make_phase_error(phase: str, message: str, **details: Any) -> dict[str, Any]:
+    """Create a structured error entry for runner results."""
+    error = {"phase": phase, "status": "error", "message": message}
+    error.update(details)
+    return error
+
+
+def _find_existing_outputs(output_dir: Path, task: dict[str, Any]) -> list[Path]:
+    """Find existing evaluation outputs for comparison-only mode."""
+    pattern = f"{task['var_name']}_*{task['ref_source']}*{task['sim_source']}*"
+    matches: list[Path] = []
+    for subdir in ("metrics", "scores"):
+        matches.extend((output_dir / subdir).glob(pattern))
+    return matches
+
+
+def _validate_comparison_only_inputs(output_dir: Path, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ensure comparison-only mode has pre-existing evaluation outputs."""
+    errors = []
+    for task in tasks:
+        if _find_existing_outputs(output_dir, task):
+            continue
+        errors.append(
+            _make_phase_error(
+                "preflight",
+                "missing prerequisite outputs for comparison-only mode",
+                variable=task["var_name"],
+                sim=task["sim_source"],
+                ref=task["ref_source"],
+            )
+        )
+    return errors
+
+
+def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: bool = False) -> dict[str, Any]:
     """Run evaluation from a validated config.
 
     This is the main entry point that replaces the old openbench.py script.
@@ -237,7 +353,7 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     builds legacy namelists from the registry, and drives the evaluation
     engine for each variable / reference / simulation combination.
 
-    Supports variable-level parallelism via joblib when ``cfg.options.num_cores``
+    Supports variable-level parallelism via joblib when ``cfg.project.num_cores``
     is greater than 1, and an incremental cache that skips re-computation when
     the config for a variable hasn't changed (pass ``force=True`` to bypass).
 
@@ -248,92 +364,118 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     Returns:
         Summary dict with results.
     """
-    from openbench.config.adapter import build_legacy_namelists, to_legacy_config
+    # Disable HDF5 file locking for parallel reads.
+    # HDF5 ≥ 1.14 locks files even for read-only access, which causes
+    # "Resource temporarily unavailable" when multiple workers open the
+    # same reference NC file.  All writes go to distinct output files,
+    # so disabling the lock is safe.
+    os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
+
+    from openbench.config.adapter import build_runner_bindings
     from openbench.runner.cache import EvaluationCache, make_cache_key
 
-    legacy = to_legacy_config(cfg)
-    general = legacy["general"]
+    bindings = build_runner_bindings(cfg)
+    runner_cfg = bindings.runner_cfg
+    general = runner_cfg.general
 
     # Setup output directories
-    basedir = Path(general["basedir"])
-    basename = general["basename"]
+    basedir = Path(runner_cfg.basedir)
+    basename = runner_cfg.basename
     output_dir = basedir / basename
     for sub in ["data", "metrics", "scores", "figures", "comparisons", "reports", "scratch", "tmp"]:
         (output_dir / sub).mkdir(parents=True, exist_ok=True)
 
     logger.info("Starting evaluation: %s", basename)
     logger.info("Output directory: %s", output_dir)
-    logger.info("Variables: %s", list(legacy["evaluation_items"].keys()))
+    logger.info("Variables: %s", list(runner_cfg.evaluation_items.keys()))
     logger.info("Simulations: %s", list(cfg.simulation.keys()))
 
-    # Build the three legacy namelists from new config + registry
-    main_nl, ref_nml, sim_nml = build_legacy_namelists(cfg)
-
     # Derive list keys from the legacy config
-    metric_vars = list(legacy["metrics"].keys())
-    score_vars = list(legacy["scores"].keys())
-    comparison_vars = list(legacy["comparisons"].keys())
-    statistic_vars = list(legacy["statistics"].keys())
+    metric_vars = list(runner_cfg.metrics)
+    score_vars = list(runner_cfg.scores)
+    comparison_vars = list(runner_cfg.comparisons)
+    statistic_vars = list(runner_cfg.statistics)
 
-    # Build figure configuration from bundled figure config files
-    from openbench.config.adapter import build_fig_nml
+    # Determine parallelism level (auto-detect when num_cores is None/0).
+    # Currently unused at variable level — parallelism lives inside
+    # DatasetProcessing (station processing, yearly combination).
+    # Reserved for future variable-level parallel dispatch.
+    num_cores: int = max(1, os.cpu_count() or 1)
+    if hasattr(cfg, "project") and cfg.project is not None:
+        num_cores = getattr(cfg.project, "num_cores", 0) or num_cores
 
-    fig_nml = build_fig_nml()
-
-    # Determine parallelism level
-    num_cores: int = 1
-    if hasattr(cfg, "options") and cfg.options is not None:
-        num_cores = getattr(cfg.options, "num_cores", 1) or 1
-
-    # Also honour force flag from cfg.options if not passed directly
-    if not force and hasattr(cfg, "options") and cfg.options is not None:
-        force = bool(getattr(cfg.options, "force", False))
+    # Also honour force flag from cfg.project if not passed directly
+    if not force and hasattr(cfg, "project") and cfg.project is not None:
+        force = bool(getattr(cfg.project, "force", False))
 
     use_cache = not force
 
     # Build task list
     tasks: list[dict[str, Any]] = []
-    for var_name in cfg.evaluation.variables:
-        ref_source = ref_nml["general"].get(f"{var_name}_ref_source")
-        sim_sources = sim_nml["general"].get(f"{var_name}_sim_source", [])
+    for source in bindings.iter_task_sources(cfg.evaluation.variables):
+        var_name = source.var_name
+        sim_source = source.sim_source
+        ref_source = source.ref_source
+        cache_key = make_cache_key(var_name, sim_source, ref_source)
+        config_hash = EvaluationCache.hash_config(
+            {
+                "variable": var_name,
+                "sim_source": sim_source,
+                "ref_source": ref_source,
+                "metrics": metric_vars,
+                "scores": score_vars,
+                "comparisons": comparison_vars,
+                "statistics": statistic_vars,
+            }
+        )
+        tasks.append(
+            {
+                "var_name": var_name,
+                "sim_source": sim_source,
+                "ref_source": ref_source,
+                "bindings": bindings,
+                "cache_key": cache_key,
+                "config_hash": config_hash,
+                "use_cache": use_cache,
+                "cache_dir": str(output_dir),
+            }
+        )
+        logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
 
-        if not ref_source:
-            logger.warning("Skipping %s: no reference source", var_name)
-            continue
-
-        for sim_source in sim_sources:
-            cache_key = make_cache_key(var_name, sim_source, ref_source)
-            config_hash = EvaluationCache.hash_config(
-                {
-                    "variable": var_name,
-                    "sim_source": sim_source,
-                    "ref_source": ref_source,
-                    "metrics": metric_vars,
-                    "scores": score_vars,
-                    "comparisons": comparison_vars,
-                    "statistics": statistic_vars,
-                }
-            )
-            tasks.append(
-                {
-                    "var_name": var_name,
-                    "sim_source": sim_source,
-                    "ref_source": ref_source,
-                    "main_nl": main_nl,
-                    "sim_nml": sim_nml,
-                    "ref_nml": ref_nml,
-                    "metric_vars": metric_vars,
-                    "score_vars": score_vars,
-                    "comparison_vars": comparison_vars,
-                    "statistic_vars": statistic_vars,
-                    "fig_nml": fig_nml,
-                    "cache_key": cache_key,
-                    "config_hash": config_hash,
-                    "use_cache": use_cache,
-                    "cache_dir": str(output_dir),
-                }
-            )
-            logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
+    # ─── Phase 1: Evaluation ───
+    if comparison_only:
+        logger.info("Comparison-only mode: skipping evaluation phase")
+        # Validate up front: if NONE of the requested tasks have pre-existing
+        # outputs, the comparison phase has nothing to work with — surface
+        # that as a preflight error rather than silently completing.
+        errors = _validate_comparison_only_inputs(output_dir, tasks)
+        evaluated = []
+        skipped = 0
+        for t in tasks:
+            if _find_existing_outputs(output_dir, t):
+                evaluated.append({"variable": t["var_name"], "sim": t["sim_source"], "ref": t["ref_source"]})
+            else:
+                skipped += 1
+                logger.info(
+                    "Comparison-only: skipping %s/%s (no pre-existing outputs)",
+                    t["var_name"], t["sim_source"],
+                )
+        if skipped:
+            logger.info("Comparison-only: %d task(s) skipped, %d available", skipped, len(evaluated))
+        # If every task is missing outputs, abort before downstream phases
+        # so the caller sees a clean error instead of a "success-but-empty"
+        # result that misleads scripted pipelines.
+        if not evaluated:
+            return {
+                "status": "error",
+                "basename": basename,
+                "output_dir": str(output_dir),
+                "variables": list(runner_cfg.evaluation_items.keys()),
+                "simulations": list(cfg.simulation.keys()),
+                "metrics": metric_vars,
+                "evaluated": [],
+                "errors": errors,
+            }
 
     # ─── Pre-process data: parallel across variables, serial within each variable ───
     #
@@ -349,162 +491,204 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
     for task in tasks:
         var_tasks[task["var_name"]].append(task)
 
-    time_alignment = cfg.options.time_alignment  # "intersection", "per_pair", "strict"
+    time_alignment = cfg.project.time_alignment  # "intersection", "per_pair", "strict"
 
-    def _preprocess_variable(var_name: str, vtasks: list[dict]) -> None:
+    def _preprocess_variable(var_name: str, vtasks: list[dict]) -> list[dict[str, Any]]:
         """Preprocess all tasks for one variable (serial within variable).
 
-        For intersection/strict: ref processed once, unified_mask accumulates across sims.
+        Multi-reference support: ref preprocessing is tracked PER ref_source
+        (not once per variable), so configs with reference: [GLEAM, FLUXCOM]
+        actually preprocess both refs. Earlier code used a single ref_done
+        bool which caused refs 2+ to be silently skipped (regression).
+
+        For intersection/strict: ref processed once per ref_source,
+        unified_mask accumulates across sims for that ref.
         For per_pair: each sim gets its own ref copy (no mask cross-contamination).
         """
-        import shutil
-
-        from openbench.config.legacy_processors import GeneralInfoReader
         from openbench.data.processing import DatasetProcessing
 
-        ref_done = False
-        ref_file_path = None  # Track the original ref file for per_pair copies
+        # Track preprocessing state per ref_source so multiple refs each get processed
+        refs_done: set[str] = set()
+        ref_data_dirs: dict[str, str] = {}   # ref_source -> first scheme data dir
+        ref_file_paths: dict[str, str] = {}  # ref_source -> processed ref NC file path
+        phase_errors: list[dict[str, Any]] = []
 
         for task in vtasks:
             ref_source = task["ref_source"]
             sim_source = task["sim_source"]
             try:
-                info_reader = GeneralInfoReader(
-                    main_nl=task["main_nl"],
-                    sim_nml=task["sim_nml"],
-                    ref_nml=task["ref_nml"],
-                    metric_vars=task["metric_vars"],
-                    score_vars=task["score_vars"],
-                    comparison_vars=task["comparison_vars"],
-                    statistic_vars=task["statistic_vars"],
-                    item=var_name,
-                    sim_source=sim_source,
-                    ref_source=ref_source,
-                )
-                info = info_reader.to_dict()
-                info["ref_source"] = ref_source
-                info["sim_source"] = sim_source
+                info = _build_bridge_runtime_info(task)
 
                 processor = DatasetProcessing(info)
 
-                # Ref: once per variable
-                if not ref_done:
+                # Ref: once per (variable, ref_source) — multi-ref aware
+                if ref_source not in refs_done:
                     logger.info("Preprocessing ref: %s (%s)", var_name, ref_source)
-                    processor.process("ref")
-                    ref_done = True
+                    processor.prepare_source("ref")
+                    refs_done.add(ref_source)
+                    # Remember the ref data directory for symlinking to other schemes
+                    ref_data_dirs[ref_source] = os.path.join(
+                        info["casedir"], "data",
+                        f"stn_{ref_source}_{sim_source}",
+                    )
                     # Remember the ref file path for per_pair mode
                     ref_varname = info.get("ref_varname", "")
-                    ref_file_path = os.path.join(
+                    ref_file_paths[ref_source] = os.path.join(
                         info["casedir"], "data",
                         f"{var_name}_ref_{ref_source}_{ref_varname}.nc",
                     )
+                elif info.get("ref_data_type") == "stn" or info.get("sim_data_type") == "stn":
+                    # stn×stn: ref was processed into the first scheme's data dir
+                    # for this ref_source. Symlink so subsequent (ref, sim) pairs
+                    # share the same ref files.
+                    this_data_dir = os.path.join(
+                        info["casedir"], "data",
+                        f"stn_{ref_source}_{sim_source}",
+                    )
+                    src_data_dir = ref_data_dirs.get(ref_source)
+                    if src_data_dir and os.path.isdir(src_data_dir) and this_data_dir != src_data_dir:
+                        os.makedirs(this_data_dir, exist_ok=True)
+                        for ref_file in os.listdir(src_data_dir):
+                            if "_ref_" in ref_file and ref_file.endswith(".nc"):
+                                src = os.path.abspath(os.path.join(src_data_dir, ref_file))
+                                dst = os.path.join(this_data_dir, ref_file)
+                                if not os.path.exists(dst):
+                                    os.symlink(src, dst)
 
                 # Sim: each task
                 logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
-                processor.process("sim")
+                processor.prepare_source("sim")
 
-                # Unified mask
+                # Unified mask: ensure evaluation only covers cells where both ref and sim are valid.
                 if unified_mask:
                     ref_dtype = info.get("ref_data_type", "grid")
                     sim_dtype = info.get("sim_data_type", "grid")
                     if ref_dtype != "stn" and sim_dtype != "stn":
-                        if time_alignment == "per_pair" and ref_file_path:
-                            # per_pair: each sim gets its own ref copy
-                            # so one sim's NaN doesn't contaminate another's ref
-                            import shutil
-
-                            per_sim_ref = ref_file_path.replace(".nc", f"__{sim_source}.nc")
-                            shutil.copy2(ref_file_path, per_sim_ref)
-                            _apply_unified_mask(info, var_name, ref_source, sim_source, ref_override=per_sim_ref)
-                            task["ref_file_override"] = per_sim_ref
+                        ref_file_path_for_pair = ref_file_paths.get(ref_source)
+                        if time_alignment == "per_pair" and ref_file_path_for_pair:
+                            # per_pair: each sim gets its own ref copy — no cross-contamination
+                            ref_varname_m = info.get("ref_varname", "")
+                            pair_ref = os.path.join(
+                                info["casedir"], "data",
+                                f"{var_name}_ref_{ref_source}_{sim_source}_{ref_varname_m}.nc",
+                            )
+                            if not os.path.exists(pair_ref):
+                                import shutil
+                                shutil.copy2(ref_file_path_for_pair, pair_ref)
+                            _apply_unified_mask(info, var_name, ref_source, sim_source, ref_override=pair_ref)
+                            # Record per-pair ref path so evaluation uses this copy
+                            task["ref_file_override"] = pair_ref
                         else:
-                            # intersection/strict: accumulate mask on shared ref (correct)
+                            # intersection/strict: mask accumulates across sims onto shared ref
                             _apply_unified_mask(info, var_name, ref_source, sim_source)
 
                 task["ref_preprocessed"] = True
 
-            except Exception:
-                logger.exception(
-                    "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
+            except Exception as exc:
+                task["preprocess_failed"] = True
+                phase_errors.append(
+                    _make_phase_error(
+                        "preprocess",
+                        f"preprocessing failed: {exc}",
+                        variable=var_name,
+                        sim=sim_source,
+                        ref=ref_source,
+                    )
                 )
+                if isinstance(exc, (FileNotFoundError, ValueError)):
+                    # Expected errors: show concise message without full traceback
+                    logger.error(
+                        "Preprocessing failed: %s (sim=%s, ref=%s): %s",
+                        var_name, sim_source, ref_source, exc,
+                    )
+                else:
+                    logger.exception(
+                        "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
+                    )
 
-    # Dispatch: parallel across variables when num_cores > 1
-    var_names = list(var_tasks.keys())
-    if num_cores > 1 and len(var_names) > 1:
-        try:
-            from joblib import Parallel, delayed
+        return phase_errors
 
-            logger.info("Preprocessing %d variables in parallel (n_jobs=%d)", len(var_names), num_cores)
-            Parallel(n_jobs=min(num_cores, len(var_names)))(
-                delayed(_preprocess_variable)(vn, var_tasks[vn]) for vn in var_names
-            )
-        except Exception:
-            logger.warning("Parallel preprocessing failed, falling back to sequential", exc_info=True)
-            for vn in var_names:
-                _preprocess_variable(vn, var_tasks[vn])
-    else:
+    # Dispatch preprocessing + evaluation (skip in comparison_only mode)
+    if not comparison_only:
+        var_names = list(var_tasks.keys())
+        # Preprocess + evaluate: serial across variables (like old openbench.py).
+        # Parallelism lives *inside* station processing (Parallel n_jobs=num_cores)
+        # and inside yearly file combination, not at the variable/task level.
+        # This avoids nested-parallel deadlocks and I/O contention on shared
+        # reference files that plagued the previous variable-level parallel dispatch.
+        preprocess_errors: list[dict[str, Any]] = []
         for vn in var_names:
-            _preprocess_variable(vn, var_tasks[vn])
+            preprocess_errors.extend(_preprocess_variable(vn, var_tasks[vn]))
 
-    # Execute tasks: parallel when num_cores > 1, else sequential
-    raw_results: list[dict[str, Any]]
-    if num_cores > 1 and len(tasks) > 1:
-        try:
-            from joblib import Parallel, delayed
+        ready_tasks = [task for task in tasks if not task.get("preprocess_failed")]
 
-            logger.info("Running %d tasks in parallel (n_jobs=%d)", len(tasks), num_cores)
-            raw_results = Parallel(n_jobs=num_cores)(delayed(_evaluate_single)(t) for t in tasks)
-        except Exception:
-            logger.warning("Parallel execution failed, falling back to sequential", exc_info=True)
-            raw_results = [_evaluate_single(t) for t in tasks]
-    else:
-        raw_results = [_evaluate_single(t) for t in tasks]
+        raw_results: list[dict[str, Any]] = [_evaluate_single(t) for t in ready_tasks]
 
-    evaluated: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for res in raw_results:
-        if res["status"] == "success":
-            evaluated.append({
-                "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
-                "status": "success", "skipped": res.get("skipped", False),
-            })
-        else:
-            errors.append({
-                "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
-                "status": "error",
-            })
+        evaluated = []
+        errors = list(preprocess_errors)
+        for res in raw_results:
+            if res["status"] == "success":
+                evaluated.append({
+                    "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
+                    "status": "success", "skipped": res.get("skipped", False),
+                })
+            else:
+                errors.append({
+                    "variable": res["variable"], "sim": res["sim"], "ref": res["ref"],
+                    "status": "error",
+                })
 
     logger.info("Evaluation phase: %d succeeded, %d failed", len(evaluated), len(errors))
 
     # ─── Phase 2: Comparison ───
     if cfg.comparison.enabled and comparison_vars and evaluated:
         logger.info("Starting comparison phase: %s", comparison_vars)
-        _run_comparison(main_nl, sim_nml, ref_nml, legacy, comparison_vars, fig_nml, output_dir)
+        errors.extend(_run_comparison(bindings, comparison_vars, output_dir))
 
     # ─── Phase 2b: Groupby (IGBP / PFT / Climate Zone) ───
     if evaluated:
-        _run_groupby(cfg, main_nl, sim_nml, ref_nml, legacy, fig_nml, output_dir)
+        errors.extend(_run_groupby(cfg, bindings, output_dir))
 
     # ─── Phase 3: Statistics ───
-    if cfg.statistics.enabled and statistic_vars:
+    # Statistics module operates on gridded NC files (spatial remap + aggregation).
+    # Skip for purely station-based evaluations where metrics are CSV-only.
+    grid_evidence = bindings.has_grid_evaluation(cfg.evaluation.variables)
+    if cfg.statistics.enabled and statistic_vars and grid_evidence.has_grid:
         logger.info("Starting statistics phase: %s", statistic_vars)
-        _run_statistics(main_nl, statistic_vars, fig_nml)
+        errors.extend(_run_statistics(bindings, statistic_vars))
+    elif cfg.statistics.enabled and statistic_vars and not grid_evidence.has_grid:
+        logger.info("Skipping statistics phase: not applicable for station-only evaluations")
 
     # ─── Phase 4: Report ───
-    if cfg.options.generate_report:
-        _run_report(main_nl, legacy, ref_nml, sim_nml, output_dir)
+    if cfg.project.generate_report:
+        errors.extend(_run_report(bindings, output_dir))
+
+    if errors and evaluated:
+        status = "partial"
+    elif errors:
+        status = "error"
+    else:
+        status = "success"
 
     results: dict[str, Any] = {
-        "status": "success" if not errors else "partial",
+        "status": status,
         "basename": basename,
         "output_dir": str(output_dir),
-        "variables": list(legacy["evaluation_items"].keys()),
+        "variables": list(runner_cfg.evaluation_items.keys()),
         "simulations": list(cfg.simulation.keys()),
         "metrics": metric_vars,
         "evaluated": evaluated,
         "errors": errors,
     }
+
+    # Clean up per_pair temporary ref copies
+    for task in tasks:
+        pair_ref = task.get("ref_file_override")
+        if pair_ref and os.path.isfile(pair_ref):
+            try:
+                os.remove(pair_ref)
+            except OSError:
+                pass
 
     logger.info("All phases complete: %d evaluated, %d errors", len(evaluated), len(errors))
     return results
@@ -513,21 +697,44 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False) -> dict[str, Any]:
 # ─── Post-evaluation phases ───
 
 
-def _run_comparison(main_nl, sim_nml, ref_nml, legacy, comparison_vars, fig_nml, output_dir):
+def _run_comparison(bindings, comparison_vars, output_dir):
     """Run comparison visualizations (Taylor diagrams, heat maps, etc.)."""
     import gc
+    phase_errors = []
 
     try:
         from openbench.core.comparison import ComparisonProcessing
 
         basedir = str(output_dir)
-        evaluation_items = list(legacy["evaluation_items"].keys())
-        score_vars = list(legacy["scores"].keys())
-        metric_vars = list(legacy["metrics"].keys())
+        context = bindings.build_comparison_context()
+        namelists = context.namelists
+        score_vars = context.score_vars
+        metric_vars = context.metric_vars
 
-        ch = ComparisonProcessing(main_nl, score_vars, metric_vars)
+        # Filter evaluation items to only those that were successfully evaluated
+        # (i.e. have score/metric output files)
+        scores_dir = output_dir / "scores"
+        metrics_dir = output_dir / "metrics"
+        all_items = context.evaluation_items
+        evaluation_items = []
+        for item in all_items:
+            has_scores = scores_dir.exists() and any(
+                f.name.startswith(f"{item}_") for f in scores_dir.iterdir() if f.is_file()
+            )
+            has_metrics = metrics_dir.exists() and any(
+                f.name.startswith(f"{item}_") for f in metrics_dir.iterdir() if f.is_file()
+            )
+            if has_scores or has_metrics:
+                evaluation_items.append(item)
+            else:
+                logger.info("Skipping comparison for '%s': no evaluation outputs found", item)
+        if not evaluation_items:
+            logger.warning("No evaluation items with data files, skipping comparison phase")
+            return phase_errors
 
-        comparison_fig = fig_nml.get("Comparison", {})
+        ch = ComparisonProcessing(namelists.main, score_vars, metric_vars)
+
+        comparison_fig = context.comparison_fig
 
         for cvar in comparison_vars:
             logger.info("Running %s comparison...", cvar)
@@ -541,99 +748,116 @@ def _run_comparison(main_nl, sim_nml, ref_nml, legacy, comparison_vars, fig_nml,
             if hasattr(ch, method_name):
                 try:
                     getattr(ch, method_name)(
-                        basedir, sim_nml, ref_nml, evaluation_items,
+                        basedir, namelists.simulation, namelists.reference, evaluation_items,
                         score_vars, metric_vars, fig_opts,
                     )
                     logger.info("Completed %s comparison", cvar)
                 except Exception:
                     logger.exception("Failed %s comparison", cvar)
+                    phase_errors.append(_make_phase_error("comparison", f"{cvar} comparison failed"))
             else:
                 logger.warning("Comparison method %s not found, skipping", method_name)
+                phase_errors.append(_make_phase_error("comparison", f"{cvar} comparison method not found"))
 
             gc.collect()
 
     except ImportError:
         logger.warning("ComparisonProcessing not available, skipping comparison phase")
+        phase_errors.append(_make_phase_error("comparison", "comparison processing is not available"))
     except Exception:
         logger.exception("Comparison phase failed")
+        phase_errors.append(_make_phase_error("comparison", "comparison phase failed"))
+
+    return phase_errors
 
 
-def _run_groupby(cfg, main_nl, sim_nml, ref_nml, legacy, fig_nml, output_dir):
+def _run_groupby(cfg, bindings, output_dir):
     """Run land cover and climate zone groupby analysis."""
     import gc
+    phase_errors = []
 
     basedir = str(output_dir)
-    evaluation_items = list(legacy["evaluation_items"].keys())
-    score_vars = list(legacy["scores"].keys())
-    metric_vars = list(legacy["metrics"].keys())
-    validation_fig = fig_nml.get("IGBP_groupby", fig_nml.get("Validation", {}))
+    context = bindings.build_groupby_context()
+    namelists = context.namelists
+    evaluation_items = context.evaluation_items
+    score_vars = context.score_vars
+    metric_vars = context.metric_vars
+    validation_fig = context.validation_fig
 
-    if cfg.options.IGBP_groupby:
+    if cfg.project.IGBP_groupby:
         try:
             from openbench.core.landcover_groupby import LC_groupby
 
             logger.info("Running IGBP land cover groupby...")
-            lc = LC_groupby(main_nl, score_vars, metric_vars)
+            lc = LC_groupby(namelists.main, score_vars, metric_vars)
             lc.scenarios_IGBP_groupby_comparison(
-                basedir, sim_nml, ref_nml, evaluation_items,
+                basedir, namelists.simulation, namelists.reference, evaluation_items,
                 score_vars, metric_vars, validation_fig,
             )
             gc.collect()
             logger.info("IGBP groupby complete")
         except Exception:
             logger.exception("IGBP groupby failed")
+            phase_errors.append(_make_phase_error("groupby", "IGBP groupby failed"))
 
-    if cfg.options.PFT_groupby:
+    if cfg.project.PFT_groupby:
         try:
             from openbench.core.landcover_groupby import LC_groupby
 
             logger.info("Running PFT groupby...")
-            lc = LC_groupby(main_nl, score_vars, metric_vars)
+            lc = LC_groupby(namelists.main, score_vars, metric_vars)
             lc.scenarios_PFT_groupby_comparison(
-                basedir, sim_nml, ref_nml, evaluation_items,
+                basedir, namelists.simulation, namelists.reference, evaluation_items,
                 score_vars, metric_vars, validation_fig,
             )
             gc.collect()
             logger.info("PFT groupby complete")
         except Exception:
             logger.exception("PFT groupby failed")
+            phase_errors.append(_make_phase_error("groupby", "PFT groupby failed"))
 
-    if cfg.options.climate_zone_groupby:
+    if cfg.project.climate_zone_groupby:
         try:
             from openbench.core.climatezone_groupby import CZ_groupby
 
             logger.info("Running climate zone groupby...")
-            cz = CZ_groupby(main_nl, score_vars, metric_vars)
-            cz_fig = fig_nml.get("Climate_zone_groupby", validation_fig)
+            cz = CZ_groupby(namelists.main, score_vars, metric_vars)
+            cz_fig = context.climate_zone_fig
             cz.scenarios_CZ_groupby_comparison(
-                basedir, sim_nml, ref_nml, evaluation_items,
+                basedir, namelists.simulation, namelists.reference, evaluation_items,
                 score_vars, metric_vars, cz_fig,
             )
             gc.collect()
             logger.info("Climate zone groupby complete")
         except Exception:
             logger.exception("Climate zone groupby failed")
+            phase_errors.append(_make_phase_error("groupby", "climate zone groupby failed"))
+
+    return phase_errors
 
 
-def _run_statistics(main_nl, statistic_vars, fig_nml):
+def _run_statistics(bindings, statistic_vars):
     """Run statistical analysis."""
     import gc
     import os
+    phase_errors = []
 
     try:
         from openbench.core.statistics.Mod_Statistics import StatisticsProcessing
 
-        basedir = os.path.join(main_nl["general"]["basedir"], main_nl["general"]["basename"])
-        stats_dir = os.path.join(basedir, "statistics")
+        context = bindings.build_statistics_context(statistic_vars)
+        main_nl = context.namelists.main
+        stats_dir = context.stats_dir
+        stats_nml = context.stats_nml
         os.makedirs(stats_dir, exist_ok=True)
 
         stats_handler = StatisticsProcessing(
-            main_nl, {},  # stats_nml placeholder
+            main_nl, stats_nml,
             stats_dir,
-            num_cores=main_nl["general"].get("num_cores", 1),
+            num_cores=context.num_cores,
         )
 
-        statistic_fig = fig_nml.get("Statistic", {})
+        statistic_fig = context.statistic_fig
 
         for statistic in statistic_vars:
             logger.info("Running %s analysis...", statistic)
@@ -645,36 +869,33 @@ def _run_statistics(main_nl, statistic_vars, fig_nml):
             if hasattr(stats_handler, method_name):
                 try:
                     stat_fig = statistic_fig.get(statistic, {})
-                    getattr(stats_handler, method_name)(statistic, {}, stat_fig)
+                    getattr(stats_handler, method_name)(statistic, stats_nml.get(statistic, {}), stat_fig)
                     logger.info("Completed %s analysis", statistic)
                 except Exception:
                     logger.exception("Failed %s analysis", statistic)
+                    phase_errors.append(_make_phase_error("statistics", f"{statistic} analysis failed"))
             else:
                 logger.warning("Statistics method %s not found, skipping", method_name)
+                phase_errors.append(_make_phase_error("statistics", f"{statistic} analysis method not found"))
 
             gc.collect()
 
     except ImportError:
         logger.warning("StatisticsProcessing not available, skipping statistics phase")
+        phase_errors.append(_make_phase_error("statistics", "statistics processing is not available"))
     except Exception:
         logger.exception("Statistics phase failed")
+        phase_errors.append(_make_phase_error("statistics", "statistics phase failed"))
+
+    return phase_errors
 
 
-def _run_report(main_nl, legacy, ref_nml, sim_nml, output_dir):
+def _run_report(bindings, output_dir):
     """Generate evaluation report."""
+    phase_errors = []
     try:
         from openbench.util.report import ReportGenerator
-
-        report_config = {
-            "evaluation_items": list(legacy["evaluation_items"].keys()),
-            "metrics": legacy.get("metrics", {}),
-            "scores": legacy.get("scores", {}),
-            "comparisons": legacy.get("comparisons", {}),
-            "statistics": legacy.get("statistics", {}),
-            "general": legacy.get("general", {}),
-            "ref_nml": dict(ref_nml) if ref_nml else {},
-            "sim_nml": dict(sim_nml) if sim_nml else {},
-        }
+        report_config = bindings.build_report_config().to_report_config()
 
         report_gen = ReportGenerator(report_config, str(output_dir))
         report_paths = report_gen.generate_report()
@@ -687,5 +908,9 @@ def _run_report(main_nl, legacy, ref_nml, sim_nml, output_dir):
 
     except ImportError:
         logger.warning("ReportGenerator not available, skipping report generation")
+        phase_errors.append(_make_phase_error("report", "report generation is not available"))
     except Exception:
         logger.exception("Report generation failed")
+        phase_errors.append(_make_phase_error("report", "report generation failed"))
+
+    return phase_errors
