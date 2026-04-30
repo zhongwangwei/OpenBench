@@ -75,7 +75,14 @@ def _format_default(field: dataclasses.Field) -> str:
         return repr(field.default)
     if field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
         try:
-            return repr(field.default_factory())
+            value = field.default_factory()
+            # Avoid overfull hbox: dataclass repr like
+            # "ComparisonConfig(enabled=False, items=None)" is too wide for
+            # the 1.8cm default column. Show short form; field semantics
+            # already covered in their own dataclass section.
+            if dataclasses.is_dataclass(value):
+                return f"{type(value).__name__}(...)"
+            return repr(value)
         except Exception:
             return "<factory>"
     return "—"  # required
