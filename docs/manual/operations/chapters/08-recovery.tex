@@ -1,0 +1,257 @@
+% docs/manual/operations/chapters/08-recovery.tex
+% 第 8 章：故障恢复与排错
+
+\chapter{故障恢复与排错}
+
+长跑任务总会出故障：网络断、磁盘满、机器重启、OOM。本章详解每种故障下"最快回到能跑"的步骤。
+
+\section{Ctrl-C 中断}
+
+\subsection{基础}
+
+\openbench{} 在每个 task 完成时立即写 cache + 输出。Ctrl-C 中断只丢失"正在进行"的那个 task。
+
+\subsection{续跑}
+
+\begin{minted}{bash}
+openbench run config.yaml      # 自动从 cache 命中处续上
+\end{minted}
+
+如果你的 \yamlkey{project.force: false}（默认），增量缓存会跳过已完成 task。
+
+\subsection{留下半成品}
+
+正在写的 zarr / CSV / 图可能不完整。\openbench{} 没主动检测。如果重跑后某些输出缺失或报错，删那个 task 的 cache 再跑：
+
+\begin{minted}{bash}
+rm output/<run>/scratch/cache/<task_key>.json
+rm -rf output/<run>/data/<task_key>.zarr
+openbench run config.yaml
+\end{minted}
+
+\section{异常崩溃后续跑}
+
+\subsection{看 traceback}
+
+\begin{minted}{bash}
+# 看 .log 末尾
+tail -100 output/<run>/run.log
+
+# 找 traceback
+grep -A 20 "Traceback" output/<run>/run.log | tail -40
+\end{minted}
+
+定位失败的 task。
+
+\subsection{根因分类}
+
+\begin{longtable}{p{3cm} p{4cm} p{6cm}}
+  \toprule
+  根因 & 提示 & 修复 \\
+  \midrule
+  \endhead
+  OOM & 进程被 kill；no traceback & 缩 \yamlkey{num\_cores} 或区域 \\
+  磁盘满 & "No space left" & 清旧输出 \\
+  HDF5 lock & "Resource temporarily" & 见 第 6 章 \\
+  数据问题 & "KeyError"、坐标错 & 检查 NC 文件 \\
+  代码 bug & 长 traceback & 提 GitHub Issue \\
+  \bottomrule
+\end{longtable}
+
+\subsection{续跑}
+
+修了根因后：
+
+\begin{minted}{bash}
+openbench run config.yaml      # cache 自动跳已完成
+\end{minted}
+
+\section{残留 lock 文件}
+
+\subsection{HDF5 lock}
+
+\openbench{} 已禁用 HDF5 lock；很少残留。如有：
+
+\begin{minted}{bash}
+find /data/refs -name "*.lock" -delete
+find /tmp -name "*hdf5*" -mtime +1 -delete
+\end{minted}
+
+\subsection{zarr lock}
+
+zarr 写入用文件级 atomic rename，不需要 lock。若发现 \texttt{*.partial} 或 \texttt{*.tmp}：
+
+\begin{minted}{bash}
+find output/<run>/data -name "*.partial" -delete
+find output/<run>/data -name "*.tmp" -delete
+\end{minted}
+
+\section{磁盘满}
+
+\subsection{识别哪占空间}
+
+\begin{minted}{bash}
+du -sh output/* | sort -h | tail
+# 通常 data/（zarr）最大；其次 figures/
+\end{minted}
+
+\subsection{清理优先级}
+
+\begin{enumerate}
+  \item 旧 run 的 \texttt{scratch/} 与 \texttt{tmp/}（cache，可重建）
+  \item 旧 run 的 \texttt{data/}（zarr，可重建但费时）
+  \item 旧 run 的 \texttt{\_minted/}（LaTeX 中间）
+  \item 旧 run 的 \texttt{figures/}（重新生成代价不大）
+  \item 最后才动 \texttt{metrics/scores/comparisons/}（这些是结论数据）
+\end{enumerate}
+
+\subsection{预估磁盘需求}
+
+\begin{itemize}
+  \item Reference 数据：几十 GB - 几 TB（视集合）
+  \item Sim 数据：依模型 + 时段
+  \item Cache：sim + ref 的 0.5-2 倍
+  \item 输出（不含 cache）：几十 MB - 几 GB
+\end{itemize}
+
+\textbf{规划}：可用磁盘 = (sim + ref) × 3。
+
+\subsection{配额超限}
+
+HPC 上 \texttt{quota} 超限会导致写失败。先：
+
+\begin{minted}{bash}
+quota -u $USER
+df -h /scratch/$USER
+\end{minted}
+
+\section{Nested parallelism 死锁}
+
+历史问题（2026-04-03 已修主流程，但自定义脚本可能复现）：
+
+\subsection{症状}
+
+\begin{itemize}
+  \item 进程 CPU 100\% 但不出进度
+  \item py-spy 看到 joblib 内部等锁
+  \item 重启后第一个 task 也卡
+\end{itemize}
+
+\subsection{诊断}
+
+\begin{minted}{bash}
+# pip install py-spy
+sudo py-spy dump --pid $(pgrep -f 'openbench run')
+\end{minted}
+
+如果调用栈深处反复出现 \texttt{joblib} + \texttt{ThreadPool} + \texttt{Lock}，是嵌套并行死锁。
+
+\subsection{修复}
+
+\begin{minted}{bash}
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+openbench run config.yaml
+\end{minted}
+
+详见第 4 章。
+
+\section{partial 状态恢复}
+
+\openbench{} 的 \cli{run} 在某些 task 失败、其他成功时返回 \texttt{partial}。
+
+\subsection{识别}
+
+\begin{minted}{text}
+✗ Evaluation completed with errors
+  Output: output/<run>
+  - [evaluation] Latent_Heat sim=X ref=Y: ...
+  - [evaluation] Net_Radiation sim=X ref=Z: ...
+\end{minted}
+
+\subsection{重跑只失败的}
+
+最简单：直接 \cli{openbench run config.yaml}，cache 让成功的 task 跳过，失败的会重试（可能再失败如果根因没解决）。
+
+\subsection{强制全量重算}
+
+\begin{minted}{bash}
+openbench run config.yaml --cores N   # CLI 临时覆盖
+# 或
+yaml: project.force: true
+\end{minted}
+
+\section{从 cache 损坏恢复}
+
+详见第 5 章 "cache 损坏检测与修复" 部分。简言之：删损坏的 zarr + 对应 task cache，重跑。
+
+\section{升级 \openbench{} 后旧输出}
+
+升级后某些 metric 实现可能变。\textbf{当前 v3.0a1 cache key 不含版本}，所以旧 cache 会被误命中。
+
+\subsection{安全做法}
+
+\begin{minted}{bash}
+# 升级前
+pip show openbench | grep Version
+
+# 升级
+pip install -U openbench
+
+# 升级后第一次 run
+openbench run config.yaml --cores N   # 但 cache 命中可能用旧版数值
+# 或显式
+yaml: project.force: true   # 全量重算保险
+\end{minted}
+
+或干脆：
+
+\begin{minted}{bash}
+rm -rf output/<old-run>/scratch
+rm -rf output/<old-run>/data
+openbench run config.yaml
+\end{minted}
+
+\section{不可恢复的失败：重启评估}
+
+最后手段：彻底重新开始。
+
+\begin{minted}{bash}
+# 1. 备份关键产物（如有）
+cp -r output/<run>/figures /tmp/saved-figures
+cp output/<run>/run.log /tmp/saved-run.log
+
+# 2. 删整个 run 目录
+rm -rf output/<run>
+
+# 3. 重跑
+openbench run config.yaml
+\end{minted}
+
+\section{诊断 checklist 速查}
+
+按出现频率排序：
+
+\begin{enumerate}
+  \item 看 \texttt{output/<run>/run.log} 末尾 100 行 \texttt{tail -100 ...}
+  \item 找最后一个 ERROR \texttt{grep ERROR ...}
+  \item 看进程是否还活着 \texttt{pgrep -af openbench}
+  \item 看磁盘是否满 \texttt{df -h}
+  \item 看内存是否够 \texttt{free -g}
+  \item 看 SLURM 状态（如适用） \texttt{squeue -u \$USER}
+  \item 看是否有 zombie HDF5 lock \texttt{find /data -name "*.lock"}
+\end{enumerate}
+
+\section{完结}
+
+到这里你已读完运维卷全部 8 章，覆盖部署 → 安装 → 远程 → 性能 → 缓存 → 站点 → 监控 → 恢复。下一步：
+
+\begin{itemize}
+  \item 看附录 A-E 做参考查阅
+  \item 部署到生产前过一遍第 4 章"调优 checklist"
+  \item 大评估前用 SLURM + 第 7 章监控建议
+  \item 出问题先按本章诊断 checklist
+\end{itemize}
+
+谢谢使用 \openbench{} —— 也欢迎贡献你的运维经验回主仓库。
