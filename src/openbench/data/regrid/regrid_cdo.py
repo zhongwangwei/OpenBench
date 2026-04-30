@@ -1,3 +1,20 @@
+"""CDO subprocess-based regridding backend.
+
+NOTE: As of v3.0a2 this module has no live callers in the codebase. The
+groupby paths (IGBP/PFT/Climate_zone) all use the xarray-based
+``Regridder.most_common`` from ``openbench.data.regrid.regrid``. The
+``_*_class_remap_cdo`` wrapper functions that previously used this class
+were removed (commit removing dead code).
+
+This file is kept as:
+  1. Public API hook — external scripts may still import ``regridder_cdo``
+  2. Reference implementation if a CDO-accelerated backend is reintroduced
+
+If reactivated, the ``subprocess.run`` call below should be hardened with:
+  - ``timeout=`` (CDO can hang on network mounts / corrupt NCs)
+  - ``capture_output=True`` (route stderr to openbench logger, not terminal)
+  - ``shutil.which("cdo")`` pre-check (clear error when CDO missing)
+"""
 import subprocess
 
 import xarray as xr
@@ -22,9 +39,9 @@ class regridder_cdo:
            target_grid (str): Path to the target grid file (or grid description).
         """
 
-        # Use subprocess to execute CDO command
-        cmd = f"cdo remaplaf,{target_grid} {input_file} {output_file}"
-        subprocess.run(cmd, shell=True, check=True)
+        # Use subprocess to execute CDO command (list form avoids shell injection)
+        cmd = ["cdo", f"remaplaf,{target_grid}", input_file, output_file]
+        subprocess.run(cmd, check=True)
 
         # Load remapped data with xarray and properly close file handle
         with xr.open_dataset(output_file) as remapped_data:

@@ -14,7 +14,27 @@ from joblib import Parallel, delayed
 
 from openbench.util.converttype import Convert_Type
 
-from openbench.visualization import *
+from openbench.visualization import (
+    make_Correlation,
+    make_Functional_Response,
+    make_geo_plot_index,
+    make_LC_based_heat_map,
+    make_Mann_Kendall_Trend_Test,
+    make_scenarios_comparison_Diff_Plot,
+    make_scenarios_comparison_Kernel_Density_Estimate,
+    make_scenarios_comparison_parallel_coordinates,
+    make_scenarios_comparison_Portrait_Plot_seasonal,
+    make_scenarios_comparison_radar_map,
+    make_scenarios_comparison_Relative_Score,
+    make_scenarios_comparison_Ridgeline_Plot,
+    make_scenarios_comparison_Single_Model_Performance_Index,
+    make_scenarios_comparison_Target_Diagram,
+    make_scenarios_comparison_Taylor_Diagram,
+    make_scenarios_comparison_Whisker_Plot,
+    make_scenarios_scores_comparison_heat_map,
+    make_Standard_Deviation,
+    make_stn_plot_index,
+)
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
@@ -38,6 +58,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.compare_nml = {}
         # Add default weight attribute
         self.weight = self.main_nml["general"].get("weight", "none")  # Default to 'none' if not specified
+        self.time_alignment = self.main_nml["general"].get("time_alignment", "intersection")
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
         self._pft_station_warning_shown = False  # Track if PFT station data warning has been shown
 
@@ -91,40 +112,23 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         self.metrics = metrics
         self.scores = scores
 
-        # self.ref_source              =  ref_source
-        # self.sim_source              =  sim_source
+    def _ref_data_path(self, basedir, evaluation_item, ref_source, ref_varname, sim_source=None):
+        """Build path to the preprocessed ref data file.
+
+        In per_pair mode, each sim-ref pair has its own masked ref copy.
+        In intersection/strict mode, all sims share one ref file.
+        """
+        if self.time_alignment == "per_pair" and sim_source:
+            pair_path = os.path.join(
+                basedir, "data",
+                f"{evaluation_item}_ref_{ref_source}_{sim_source}_{ref_varname}.nc",
+            )
+            if os.path.exists(pair_path):
+                return pair_path
+        # Default: shared ref
+        return os.path.join(basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc")
 
     def scenarios_IGBP_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _IGBP_class_remap_cdo():
-            """
-            Compare the IGBP class of the model output data and the reference data
-            """
-            try:
-                from openbench.data.regrid import regridder_cdo
-
-                # creat a text file, record the grid information
-                nx = int(360.0 / self.compare_grid_res)
-                ny = int(180.0 / self.compare_grid_res)
-                grid_info = os.path.join(self.casedir, "comparisons", "IGBP_groupby", "grid_info.txt")
-                os.makedirs(os.path.dirname(grid_info), exist_ok=True)
-                with open(grid_info, "w") as f:
-                    f.write("gridtype = lonlat\n")
-                    f.write(f"xsize    =  {nx} \n")
-                    f.write(f"ysize    =  {ny}\n")
-                    f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                    f.write(f"xinc     =  {self.compare_grid_res}\n")
-                    f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                    f.write(f"yinc     =  {self.compare_grid_res}\n")
-                self.target_grid = grid_info
-                # Use package-relative path for IGBP data
-                package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                IGBPtype_orig = os.path.join(package_dir, "data", "IGBP.nc")
-                IGBPtype_remap = os.path.join(self.casedir, "comparisons", "IGBP_groupby", "IGBP_remap.nc")
-                regridder_cdo.largest_area_fraction_remap_cdo(self, IGBPtype_orig, IGBPtype_remap, self.target_grid)
-                self.IGBP_dir = IGBPtype_remap
-            finally:
-                gc.collect()  # Clean up memory after remapping
-
         def _IGBP_class_remap(self):
             try:
                 from openbench.data.regrid import Grid, create_regridding_dataset
@@ -204,7 +208,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             "warning: station data is not supported for IGBP class comparison"
                                         )
                                         self._igbp_station_warning_shown = True
-                                    pass
                                 else:
                                     dir_path = os.path.join(
                                         basedir, "comparisons", "IGBP_groupby", f"{sim_source}___{ref_source}"
@@ -348,33 +351,6 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
         gc.collect()  # Final cleanup for the entire method
 
     def scenarios_PFT_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _PFT_class_remap_cdo(self):
-            """
-            Compare the PFT class of the model output data and the reference data
-            """
-            from openbench.data.regrid import regridder_cdo
-
-            # creat a text file, record the grid information
-            nx = int(360.0 / self.compare_grid_res)
-            ny = int(180.0 / self.compare_grid_res)
-            grid_info = f"{self.casedir}/comparisons/PFT_groupby/PFT_info.txt"
-
-            with open(grid_info, "w") as f:
-                f.write("gridtype = lonlat\n")
-                f.write(f"xsize    =  {nx} \n")
-                f.write(f"ysize    =  {ny}\n")
-                f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                f.write(f"xinc     =  {self.compare_grid_res}\n")
-                f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                f.write(f"yinc     =  {self.compare_grid_res}\n")
-            self.target_grid = grid_info
-            # Use package-relative path for PFT data
-            package_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            PFTtype_orig = os.path.join(package_dir, "dataset", "PFT.nc")
-            PFTtype_remap = f"{self.casedir}/comparisons/PFT_groupby/PFT_remap.nc"
-            regridder_cdo.largest_area_fraction_remap_cdo(self, PFTtype_orig, PFTtype_remap, self.target_grid)
-            self.PFT_dir = PFTtype_remap
-
         def _PFT_class_remap(self):
             """
             Compare the PFT class of the model output data and the reference data using xarray
@@ -626,39 +602,32 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         logging.warning(f"Error reading station file {file}: {e}")
                                         overall_mean = np.nan
                                 else:
-                                    with xr.open_dataset(
-                                        f"{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
-                                    ) as ds_file:
-                                        ds = Convert_Type.convert_nc(ds_file.load())
+                                    score_path = f"{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
+                                    try:
+                                        with xr.open_dataset(score_path) as ds_file:
+                                            ds = Convert_Type.convert_nc(ds_file.load())
 
-                                    if self.weight.lower() == "area":
-                                        weights = np.cos(np.deg2rad(ds.lat))
-                                        overall_mean = ds[score].weighted(weights).mean(skipna=True).values
-                                    elif self.weight.lower() == "mass":
-                                        # Get reference data for flux weighting
-                                        with xr.open_dataset(
-                                            f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                        ) as o_file:
-                                            o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
+                                        if self.weight.lower() == "area":
+                                            weights = np.cos(np.deg2rad(ds.lat))
+                                            overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == "mass":
+                                            _rp = self._ref_data_path(self.casedir, evaluation_item, ref_source, ref_varname, sim_source)
+                                            with xr.open_dataset(_rp) as o_file:
+                                                o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
 
-                                        # Calculate area weights (cosine of latitude)
-                                        area_weights = np.cos(np.deg2rad(ds.lat))
+                                            area_weights = np.cos(np.deg2rad(ds.lat))
+                                            flux_weights = np.abs(o.mean("time"))
+                                            combined_weights = area_weights * flux_weights
+                                            normalized_weights = combined_weights / combined_weights.sum()
 
-                                        # Calculate absolute flux weights
-                                        flux_weights = np.abs(o.mean("time"))
-
-                                        # Combine area and flux weights
-                                        combined_weights = area_weights * flux_weights
-
-                                        # Normalize weights to sum to 1
-                                        normalized_weights = combined_weights / combined_weights.sum()
-
-                                        # Calculate weighted mean
-                                        overall_mean = (
-                                            ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                        )
-                                    else:
-                                        overall_mean = ds[score].mean(skipna=True).values
+                                            overall_mean = (
+                                                ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                            )
+                                        else:
+                                            overall_mean = ds[score].mean(skipna=True).values
+                                    except (FileNotFoundError, OSError, KeyError) as e:
+                                        logging.warning(f"HeatMap: skipping {evaluation_item}/{sim_source}/{score}: {e}")
+                                        overall_mean = np.nan
 
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 values.append(overall_mean_str)
@@ -804,6 +773,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                         logging.debug(f"correlation calculation failed: {e}")
                                                         row["correlation"] = np.nan
                                                     return row
+                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+                                                    logging.debug(f"Station {station_list['ID'][iik]} skipped in Taylor: {e}")
+                                                    return None
                                                 finally:
                                                     pass  # Memory cleanup handled at higher level
 
@@ -821,7 +793,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 for iik in range(len(station_list["ID"]))
                                             )
 
-                                            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+                                            # Replace None results with empty dicts so pd.DataFrame
+                                            # produces zero-length rows that align by ID rather than
+                                            # 0-column placeholder rows that break column alignment
+                                            # in the subsequent concat.
+                                            results_clean = [r if isinstance(r, dict) else {} for r in results]
+                                            results_df = pd.DataFrame(results_clean, index=station_list.index)
+                                            station_list = pd.concat([station_list, results_df], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
 
                                             output_stn_path = os.path.join(
@@ -850,9 +828,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             if ref_varname is None or ref_varname == "":
                                                 ref_varname = evaluation_item
 
-                                            ref_path = os.path.join(
-                                                casedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                            )
+                                            ref_path = self._ref_data_path(casedir, evaluation_item, ref_source, ref_varname, sim_source)
                                             sim_path = os.path.join(
                                                 casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                             )
@@ -1115,6 +1091,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                         logging.debug(f"rmse calculation failed: {e}")
                                                         row["rmse"] = np.nan
                                                     return row
+                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+                                                    logging.debug(f"Station {station_list['ID'][iik]} skipped in Target: {e}")
+                                                    return None
                                                 finally:
                                                     pass  # Memory cleanup handled at higher level
 
@@ -1132,7 +1111,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 for iik in range(len(station_list["ID"]))
                                             )
 
-                                            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+                                            # Replace None results with empty dicts so pd.DataFrame
+                                            # produces zero-length rows that align by ID rather than
+                                            # 0-column placeholder rows that break column alignment
+                                            # in the subsequent concat.
+                                            results_clean = [r if isinstance(r, dict) else {} for r in results]
+                                            results_df = pd.DataFrame(results_clean, index=station_list.index)
+                                            station_list = pd.concat([station_list, results_df], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
 
                                             output_stn_path = os.path.join(
@@ -1162,9 +1147,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             if ref_varname is None or ref_varname == "":
                                                 ref_varname = evaluation_item
 
-                                            ref_path = os.path.join(
-                                                casedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                            )
+                                            ref_path = self._ref_data_path(casedir, evaluation_item, ref_source, ref_varname, sim_source)
                                             sim_path = os.path.join(
                                                 casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                             )
@@ -1447,9 +1430,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                             if ref_varname is None or ref_varname == "":
                                                 ref_varname = evaluation_item
 
-                                            ref_path = os.path.join(
-                                                basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                            )
+                                            ref_path = self._ref_data_path(basedir, evaluation_item, ref_source, ref_varname, sim_source)
                                             sim_path = os.path.join(
                                                 basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                             )
@@ -1750,6 +1731,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                             s_season,
                                                             o_season,
                                                         )
+                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+                                                    logging.debug(f"Station {station_list['ID'][iik]} skipped in Portrait: {e}")
+                                                    return None
                                                 finally:
                                                     pass  # Memory cleanup handled at higher level
 
@@ -1773,7 +1757,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                             )
                                                             for iik in range(len(station_list["ID"]))
                                                         )
-                                                        results = np.array(results)
+                                                        results = np.array([r if r is not None else np.nan for r in results], dtype=float)
                                                         if results[~np.isnan(results)].shape[0] > 2:
                                                             q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
                                                             results = np.where(
@@ -1807,7 +1791,8 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                             )
                                                             for iik in range(len(station_list["ID"]))
                                                         )
-                                                        mean_value = np.nanmean(results)
+                                                        results_clean = np.array([r if r is not None else np.nan for r in results], dtype=float)
+                                                        mean_value = np.nanmean(results_clean)
                                                         kk_str = (
                                                             f"{mean_value:.2f}" if not np.isnan(mean_value) else "N/A"
                                                         )
@@ -1823,11 +1808,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                ref_path = os.path.join(
-                                                    basedir,
-                                                    "data",
-                                                    f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc",
-                                                )
+                                                ref_path = self._ref_data_path(basedir, evaluation_item, ref_source, ref_varname, sim_source)
                                                 sim_path = os.path.join(
                                                     basedir,
                                                     "data",
@@ -2207,11 +2188,16 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                                     df.set_index("ID", inplace=True)
                                                     df = df.reindex(ID)
                                                     dfs.append(df[f"{score}"])
-                                                    if not dfs:
-                                                        logging.warning(
-                                                            f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}"
-                                                        )
-                                                        continue
+                                                # Empty-list check belongs AFTER the file loop, not
+                                                # inside it (the original `if not dfs` ran after the
+                                                # first append so it was always False). When the file
+                                                # list is empty, skip the concat — otherwise
+                                                # pd.concat(axis=1, []) raises.
+                                                if not dfs:
+                                                    logging.warning(
+                                                        f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}"
+                                                    )
+                                                    continue
                                                 # Combine all dataframes
                                                 combined_df = pd.concat(dfs, axis=1)
                                                 score_mean = combined_df.mean(axis=1, skipna=True).astype("float32")
@@ -2393,23 +2379,24 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
             # Normalize by observational variance
             normalized_diff = diff_squared / obs_var
 
-            diff_squared0 = (s - o) ** 2
-            normalized_diff0 = diff_squared0 / obs_var
-
-            # Calculate SMPI
-            smpi = np.nanmean(normalized_diff)
-            smpi = np.nanmean(normalized_diff0)
+            # Calculate SMPI (climatological, consistent with grid path)
+            smpi = float(np.nanmean(normalized_diff))
 
             if smpi > 100:
                 smpi = 100
 
-            # Bootstrap for uncertainty estimation
+            # Bootstrap on time dimension for uncertainty estimation
             n_bootstrap = 100
+            n_time = len(s["time"])
             bootstrap_smpi = []
             for _ in range(n_bootstrap):
-                bootstrap_indices = np.random.choice(len(o), size=len(o), replace=True)
-                bootstrap_sample = normalized_diff0[bootstrap_indices]
-                bootstrap_smpi.append(np.nanmean(bootstrap_sample))
+                idx = np.random.choice(n_time, size=n_time, replace=True)
+                s_boot = s.isel(time=idx)
+                o_boot = o.isel(time=idx)
+                obs_var_boot = np.var(o_boot, axis=0, ddof=1)
+                diff_boot = (s_boot.mean(dim="time") - o_boot.mean(dim="time")) ** 2
+                smpi_boot = float(np.nanmean(diff_boot / obs_var_boot))
+                bootstrap_smpi.append(min(smpi_boot, 100))
 
             bootstrap_smpi = np.array(bootstrap_smpi)
             smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
@@ -2428,13 +2415,15 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
             # Calculate overall SMPI
             smpi = normalized_diff.mean().values
-            # Bootstrap for uncertainty estimation
+            # Bootstrap for uncertainty estimation — flatten to sample grid points
             n_bootstrap = 1000
+            flat_diff = normalized_diff.values.ravel()
+            flat_diff = flat_diff[~np.isnan(flat_diff)]
+            n_points = len(flat_diff)
             bootstrap_smpi = []
             for _ in range(n_bootstrap):
-                bootstrap_indices = np.random.choice(len(s_climate), size=len(s_climate), replace=True)
-                bootstrap_sample = normalized_diff[bootstrap_indices]
-                bootstrap_smpi.append(np.nanmean(bootstrap_sample))
+                bootstrap_indices = np.random.choice(n_points, size=n_points, replace=True)
+                bootstrap_smpi.append(np.nanmean(flat_diff[bootstrap_indices]))
 
             bootstrap_smpi = np.array(bootstrap_smpi)
             smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
@@ -2522,6 +2511,9 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                     o.values[mask1] = np.nan
 
                                     return calculate_smpi(s, o)
+                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
+                                    logging.debug(f"Station {station_list['ID'][iik]} skipped in SMPI: {e}")
+                                    return None
                                 finally:
                                     gc.collect()  # Clean up memory after processing
 
@@ -2538,7 +2530,11 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 )
                                 for iik in range(len(station_list["ID"]))
                             )
-                            smpi_values, lower_values, upper_values = zip(*results)
+                            valid_results = [r for r in results if r is not None]
+                            if not valid_results:
+                                logging.warning("No valid SMPI results for %s %s", evaluation_item, sim_source)
+                                continue
+                            smpi_values, lower_values, upper_values = zip(*valid_results)
                             mean_smpi = np.nanmean(smpi_values).astype("float32")
                             mean_lower = np.nanmean(lower_values).astype("float32")
                             mean_upper = np.nanmean(upper_values).astype("float32")
@@ -2551,9 +2547,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == "":
                                 ref_varname = evaluation_item
-                            o_path = os.path.join(
-                                basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                            )
+                            o_path = self._ref_data_path(basedir, evaluation_item, ref_source, ref_varname, sim_source)
                             s_path = os.path.join(
                                 basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                             )
@@ -2702,31 +2696,13 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
     def to_dict(self):
         return self.__dict__
 
-    coordinate_map = {
-        "longitude": "lon",
-        "long": "lon",
-        "lon_cama": "lon",
-        "lon0": "lon",
-        "x": "lon",
-        "lon_ucat": "lon",
-        "latitude": "lat",
-        "lat_cama": "lat",
-        "lat0": "lat",
-        "y": "lat",
-        "lat_ucat": "lat",
-        "Time": "time",
-        "TIME": "time",
-        "t": "time",
-        "T": "time",
-        "elevation": "elev",
-        "height": "elev",
-        "z": "elev",
-        "Z": "elev",
-        "h": "elev",
-        "H": "elev",
-        "ELEV": "elev",
-        "HEIGHT": "elev",
-    }
+    from openbench.data.coordinates import COORDINATE_MAP
+    coordinate_map = dict(COORDINATE_MAP)
+    coordinate_map.update({
+        "elevation": "elev", "height": "elev",
+        "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
+        "ELEV": "elev", "HEIGHT": "elev",
+    })
 
     freq_map = {
         "month": "M",
@@ -2910,9 +2886,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                         except Exception as e:
                             logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
-                    if len(sim_sources) < 2:
-                        pass
-                    else:
+                    if len(sim_sources) >= 2:
                         # Calculate pairwise differences for metrics (station data)
                         for metric in metrics:
                             for i, sim1 in enumerate(sim_sources):
@@ -3104,9 +3078,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
 
                         except Exception as e:
                             logging.error(f"Error processing ensemble calculations for score {score}: {e}")
-                    if len(sim_sources) < 2:
-                        pass
-                    else:
+                    if len(sim_sources) >= 2:
                         # Compare metrics between pairs
                         for metric in metrics:
                             for i, sim1 in enumerate(sim_sources):
@@ -3282,7 +3254,7 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                 )
                                 for iik in range(len(station_list["ID"]))
                             )
-                            basic_data = pd.concat([station_list.copy(), pd.DataFrame(results)], axis=1)
+                            basic_data = pd.concat([station_list.copy(), pd.DataFrame([r if r is not None else {} for r in results])], axis=1)
                             basic_data = Convert_Type.convert_Frame(basic_data)
                             output_path = (
                                 f"{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv"
@@ -3647,39 +3619,32 @@ class ComparisonProcessing(metrics, scores, statistics_calculate):
                                         logging.warning(f"Error reading station file {file}: {e}")
                                         overall_mean = np.nan
                                 else:
-                                    with xr.open_dataset(
-                                        f"{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
-                                    ) as ds_file:
-                                        ds = Convert_Type.convert_nc(ds_file.load())
+                                    score_path = f"{casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
+                                    try:
+                                        with xr.open_dataset(score_path) as ds_file:
+                                            ds = Convert_Type.convert_nc(ds_file.load())
 
-                                    if self.weight.lower() == "area":
-                                        weights = np.cos(np.deg2rad(ds.lat))
-                                        overall_mean = ds[score].weighted(weights).mean(skipna=True).values
-                                    elif self.weight.lower() == "mass":
-                                        # Get reference data for flux weighting
-                                        with xr.open_dataset(
-                                            f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                        ) as o_file:
-                                            o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
+                                        if self.weight.lower() == "area":
+                                            weights = np.cos(np.deg2rad(ds.lat))
+                                            overall_mean = ds[score].weighted(weights).mean(skipna=True).values
+                                        elif self.weight.lower() == "mass":
+                                            _rp = self._ref_data_path(self.casedir, evaluation_item, ref_source, ref_varname, sim_source)
+                                            with xr.open_dataset(_rp) as o_file:
+                                                o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
 
-                                        # Calculate area weights (cosine of latitude)
-                                        area_weights = np.cos(np.deg2rad(ds.lat))
+                                            area_weights = np.cos(np.deg2rad(ds.lat))
+                                            flux_weights = np.abs(o.mean("time"))
+                                            combined_weights = area_weights * flux_weights
+                                            normalized_weights = combined_weights / combined_weights.sum()
 
-                                        # Calculate absolute flux weights
-                                        flux_weights = np.abs(o.mean("time"))
-
-                                        # Combine area and flux weights
-                                        combined_weights = area_weights * flux_weights
-
-                                        # Normalize weights to sum to 1
-                                        normalized_weights = combined_weights / combined_weights.sum()
-
-                                        # Calculate weighted mean
-                                        overall_mean = (
-                                            ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
-                                        )
-                                    else:
-                                        overall_mean = ds[score].mean(skipna=True).values
+                                            overall_mean = (
+                                                ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
+                                            )
+                                        else:
+                                            overall_mean = ds[score].mean(skipna=True).values
+                                    except (FileNotFoundError, OSError, KeyError) as e:
+                                        logging.warning(f"HeatMap: skipping {evaluation_item}/{sim_source}/{score}: {e}")
+                                        overall_mean = np.nan
 
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 values.append(overall_mean_str)

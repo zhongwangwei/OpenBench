@@ -14,7 +14,30 @@ from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
 from openbench.util.converttype import Convert_Type
 
-from . import *
+from openbench.visualization import (
+    make_Correlation,
+    make_CZ_based_heat_map,
+    make_Functional_Response,
+    make_geo_plot_index,
+    make_LC_based_heat_map,
+    make_Mann_Kendall_Trend_Test,
+    make_plot_index_grid,
+    make_plot_index_stn,
+    make_scenarios_comparison_Diff_Plot,
+    make_scenarios_comparison_Kernel_Density_Estimate,
+    make_scenarios_comparison_parallel_coordinates,
+    make_scenarios_comparison_Portrait_Plot_seasonal,
+    make_scenarios_comparison_radar_map,
+    make_scenarios_comparison_Relative_Score,
+    make_scenarios_comparison_Ridgeline_Plot,
+    make_scenarios_comparison_Single_Model_Performance_Index,
+    make_scenarios_comparison_Target_Diagram,
+    make_scenarios_comparison_Taylor_Diagram,
+    make_scenarios_comparison_Whisker_Plot,
+    make_scenarios_scores_comparison_heat_map,
+    make_Standard_Deviation,
+    make_stn_plot_index,
+)
 
 # Configure logging
 logging.getLogger("xarray").setLevel(logging.WARNING)  # Suppress INFO messages from xarray
@@ -283,32 +306,6 @@ class CZ_groupby_only_drawing(metrics, scores):
         self.scores = scores
 
     def scenarios_CZ_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _CZ_class_remap_cdo(self):
-            """
-            Compare the Climate zone class of the model output data and the reference data
-            """
-            from openbench.data.regrid import regridder_cdo
-
-            # creat a text file, record the grid information
-            nx = int(360.0 / self.compare_grid_res)
-            ny = int(180.0 / self.compare_grid_res)
-            grid_info = f"{self.casedir}/comparisons/CZ_groupby/CZ_info.txt"
-
-            with open(grid_info, "w") as f:
-                f.write("gridtype = lonlat\n")
-                f.write(f"xsize    =  {nx} \n")
-                f.write(f"ysize    =  {ny}\n")
-                f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                f.write(f"xinc     =  {self.compare_grid_res}\n")
-                f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                f.write(f"yinc     =  {self.compare_grid_res}\n")
-                f.close()
-            self.target_grid = grid_info
-            CZtype_orig = "./dataset/Climate_zone.nc"
-            CZtype_remap = f"{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc"
-            regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
-            self.CZ_dir = CZtype_remap
-
         def _CZ_class_remap(self):
             """
             Compare the Climate zone class of the model output data and the reference data using xarray
@@ -878,12 +875,11 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             with open(output_file_path, "r") as file:
                                 lines = file.readlines()
                             second_row = lines[1].strip().split("\t")
-                            list = [float(x) for x in second_row[2:] if x]
-                            # ill determine the number of simulation sources
+                            values = [float(x) for x in second_row[2:] if x]
                             for i, sim_source in enumerate(sim_sources):
-                                biases = list[i * 3]
-                                rmses = list[i * 3 + 1]
-                                crmsds = list[i * 3 + 2]
+                                biases[i] = values[i * 3]
+                                rmses[i] = values[i * 3 + 1]
+                                crmsds[i] = values[i * 3 + 2]
 
                             make_scenarios_comparison_Target_Diagram(
                                 dir_path, evaluation_item, biases, rmses, crmsds, ref_source, sim_sources, option
@@ -1492,31 +1488,13 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def to_dict(self):
         return self.__dict__
 
-    coordinate_map = {
-        "longitude": "lon",
-        "long": "lon",
-        "lon_cama": "lon",
-        "lon0": "lon",
-        "x": "lon",
-        "lon_ucat": "lon",
-        "latitude": "lat",
-        "lat_cama": "lat",
-        "lat0": "lat",
-        "y": "lat",
-        "lat_ucat": "lat",
-        "Time": "time",
-        "TIME": "time",
-        "t": "time",
-        "T": "time",
-        "elevation": "elev",
-        "height": "elev",
-        "z": "elev",
-        "Z": "elev",
-        "h": "elev",
-        "H": "elev",
-        "ELEV": "elev",
-        "HEIGHT": "elev",
-    }
+    from openbench.data.coordinates import COORDINATE_MAP
+    coordinate_map = dict(COORDINATE_MAP)
+    coordinate_map.update({
+        "elevation": "elev", "height": "elev",
+        "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
+        "ELEV": "elev", "HEIGHT": "elev",
+    })
 
     freq_map = {
         "month": "M",

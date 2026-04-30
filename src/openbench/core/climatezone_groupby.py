@@ -20,8 +20,19 @@ def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
     except Exception as e:
         if kwargs.get("decode_times", True) is not False:
             logging.warning(f"Failed to open {path}: {e}. Retrying with decode_times=False")
-            return xr.open_dataset(path, decode_times=False, **kwargs)
+            retry_kwargs = {k: v for k, v in kwargs.items() if k != "decode_times"}
+            return xr.open_dataset(path, decode_times=False, **retry_kwargs)
         raise
+
+
+def _resolve_static_dataset(filename: str) -> str:
+    """Resolve a built-in static dataset path; see landcover_groupby version."""
+    env_root = os.environ.get("OPENBENCH_DATASET_DIR")
+    if env_root:
+        candidate = os.path.join(env_root, filename)
+        if os.path.exists(candidate):
+            return candidate
+    return f"./dataset/{filename}"
 
 
 class CZ_groupby(metrics, scores):
@@ -64,39 +75,13 @@ class CZ_groupby(metrics, scores):
         self.scores = scores
 
     def scenarios_CZ_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _CZ_class_remap_cdo(self):
-            """
-            Compare the Climate zone class of the model output data and the reference data
-            """
-            from openbench.data.regrid import regridder_cdo
-
-            # creat a text file, record the grid information
-            nx = int(360.0 / self.compare_grid_res)
-            ny = int(180.0 / self.compare_grid_res)
-            grid_info = f"{self.casedir}/comparisons/CZ_groupby/CZ_info.txt"
-
-            with open(grid_info, "w") as f:
-                f.write("gridtype = lonlat\n")
-                f.write(f"xsize    =  {nx} \n")
-                f.write(f"ysize    =  {ny}\n")
-                f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                f.write(f"xinc     =  {self.compare_grid_res}\n")
-                f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                f.write(f"yinc     =  {self.compare_grid_res}\n")
-                f.close()
-            self.target_grid = grid_info
-            CZtype_orig = "./dataset/Climate_zone.nc"
-            CZtype_remap = f"{self.casedir}/comparisons/CZ_groupby/CZ_remap.nc"
-            regridder_cdo.largest_area_fraction_remap_cdo(self, CZtype_orig, CZtype_remap, self.target_grid)
-            self.CZ_dir = CZtype_remap
-
         def _CZ_class_remap(self):
             """
             Compare the Climate zone class of the model output data and the reference data using xarray
             """
             from openbench.data.regrid import Grid, create_regridding_dataset
 
-            ds = _open_dataset_safe("./dataset/Climate_zone.nc", chunks={"lat": 2000, "lon": 2000})
+            ds = _open_dataset_safe(_resolve_static_dataset("Climate_zone.nc"), chunks={"lat": 2000, "lon": 2000})
             ds = ds["climate_zone"]
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})

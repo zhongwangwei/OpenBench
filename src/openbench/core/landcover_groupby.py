@@ -20,8 +20,29 @@ def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
     except Exception as e:
         if kwargs.get("decode_times", True) is not False:
             logging.warning(f"Failed to open {path}: {e}. Retrying with decode_times=False")
-            return xr.open_dataset(path, decode_times=False, **kwargs)
+            retry_kwargs = {k: v for k, v in kwargs.items() if k != "decode_times"}
+            return xr.open_dataset(path, decode_times=False, **retry_kwargs)
         raise
+
+
+def _resolve_static_dataset(filename: str) -> str:
+    """Resolve a built-in static dataset (IGBP.nc, PFT.nc, Climate_zone.nc).
+
+    Resolution order:
+      1. ``$OPENBENCH_DATASET_DIR/<filename>`` if env var is set
+      2. ``./dataset/<filename>`` (legacy CWD-relative behaviour for
+         users who run from a directory containing the dataset folder)
+
+    Returning the legacy path on miss preserves backward compatibility
+    with existing setups; downstream open_dataset will raise a clear
+    FileNotFoundError naming the missing file.
+    """
+    env_root = os.environ.get("OPENBENCH_DATASET_DIR")
+    if env_root:
+        candidate = os.path.join(env_root, filename)
+        if os.path.exists(candidate):
+            return candidate
+    return f"./dataset/{filename}"
 
 
 class LC_groupby(metrics, scores):
@@ -65,36 +86,11 @@ class LC_groupby(metrics, scores):
         self.scores = scores
 
     def scenarios_IGBP_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _IGBP_class_remap_cdo():
-            """
-            Compare the IGBP class of the model output data and the reference data
-            """
-            from openbench.data.regrid import regridder_cdo
-
-            # creat a text file, record the grid information
-            nx = int(360.0 / self.compare_grid_res)
-            ny = int(180.0 / self.compare_grid_res)
-            grid_info = f"{self.casedir}/comparisons/IGBP_groupby/grid_info.txt"
-            with open(grid_info, "w") as f:
-                f.write("gridtype = lonlat\n")
-                f.write(f"xsize    =  {nx} \n")
-                f.write(f"ysize    =  {ny}\n")
-                f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                f.write(f"xinc     =  {self.compare_grid_res}\n")
-                f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                f.write(f"yinc     =  {self.compare_grid_res}\n")
-                f.close()
-            self.target_grid = grid_info
-            IGBPtype_orig = "./dataset/IGBP.nc"
-            IGBPtype_remap = f"{self.casedir}/comparisons/IGBP_groupby/IGBP_remap.nc"
-            regridder_cdo.largest_area_fraction_remap_cdo(self, IGBPtype_orig, IGBPtype_remap, self.target_grid)
-            self.IGBP_dir = IGBPtype_remap
-
         def _IGBP_class_remap(self):
             from openbench.data.regrid import Grid, create_regridding_dataset
 
             ds = _open_dataset_safe(
-                "./dataset/IGBP.nc",
+                _resolve_static_dataset("IGBP.nc"),
                 chunks={"lat": 2000, "lon": 2000},
             )
             ds = ds["IGBP"]  # Only take the class variable.
@@ -245,6 +241,11 @@ class LC_groupby(metrics, scores):
                                     header_values.append("Overall")
                                     output_file.write("\t".join(header_values) + "\n")
 
+                                    # Cache the mass-weight reference once per
+                                    # (sim, ref) pair instead of re-opening the
+                                    # same .nc file 18 times per IGBP class.
+                                    cached_mass_ref = None
+
                                     # Calculate and print mean values
                                     for score in self.scores:
                                         score_file = f"{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
@@ -261,10 +262,14 @@ class LC_groupby(metrics, scores):
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == "mass":
-                                            # Get reference data for flux weighting
-                                            o = _open_dataset_safe(
-                                                f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                            )[f"{ref_varname}"]
+                                            # Reuse cached ref dataset across the
+                                            # 17 IGBP-class iterations below; the
+                                            # ref file does not change per score.
+                                            if cached_mass_ref is None:
+                                                cached_mass_ref = _open_dataset_safe(
+                                                    f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
+                                                )[f"{ref_varname}"].load()
+                                            o = cached_mass_ref
 
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -304,10 +309,8 @@ class LC_groupby(metrics, scores):
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == "mass":
-                                                # Get reference data for flux weighting
-                                                o = _open_dataset_safe(
-                                                    f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                                )[f"{ref_varname}"]
+                                                # cached_mass_ref reused from outer score loop
+                                                o = cached_mass_ref
 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
@@ -362,39 +365,13 @@ class LC_groupby(metrics, scores):
         _scenarios_IGBP_groupby(casedir, scores, metrics, sim_nml, ref_nml, evaluation_items)
 
     def scenarios_PFT_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        def _PFT_class_remap_cdo(self):
-            """
-            Compare the PFT class of the model output data and the reference data
-            """
-            from openbench.data.regrid import regridder_cdo
-
-            # creat a text file, record the grid information
-            nx = int(360.0 / self.compare_grid_res)
-            ny = int(180.0 / self.compare_grid_res)
-            grid_info = f"{self.casedir}/comparisons/PFT_groupby/PFT_info.txt"
-
-            with open(grid_info, "w") as f:
-                f.write("gridtype = lonlat\n")
-                f.write(f"xsize    =  {nx} \n")
-                f.write(f"ysize    =  {ny}\n")
-                f.write(f"xfirst   =  {self.min_lon + self.compare_grid_res / 2}\n")
-                f.write(f"xinc     =  {self.compare_grid_res}\n")
-                f.write(f"yfirst   =  {self.min_lat + self.compare_grid_res / 2}\n")
-                f.write(f"yinc     =  {self.compare_grid_res}\n")
-                f.close()
-            self.target_grid = grid_info
-            PFTtype_orig = "./dataset/PFT.nc"
-            PFTtype_remap = f"{self.casedir}/comparisons/PFT_groupby/PFT_remap.nc"
-            regridder_cdo.largest_area_fraction_remap_cdo(self, PFTtype_orig, PFTtype_remap, self.target_grid)
-            self.PFT_dir = PFTtype_remap
-
         def _PFT_class_remap(self):
             """
             Compare the PFT class of the model output data and the reference data using xarray
             """
             from openbench.data.regrid import Grid, create_regridding_dataset
 
-            ds = _open_dataset_safe("./dataset/PFT.nc", chunks={"lat": 2000, "lon": 2000})
+            ds = _open_dataset_safe(_resolve_static_dataset("PFT.nc"), chunks={"lat": 2000, "lon": 2000})
             ds = ds["PFT"]
             ds = ds.sortby(["lat", "lon"])
             # ds = ds.rename({"lat": "latitude", "lon": "longitude"})
@@ -542,6 +519,10 @@ class LC_groupby(metrics, scores):
                                     header_values.append("Overall")
                                     output_file.write("\t".join(header_values) + "\n")
 
+                                    # Cache mass-weight ref once per (sim, ref)
+                                    # pair; same pattern as IGBP branch above.
+                                    cached_mass_ref = None
+
                                     # Calculate and print mean values
                                     for score in self.scores:
                                         score_file = f"{self.casedir}/scores/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
@@ -559,10 +540,13 @@ class LC_groupby(metrics, scores):
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             overall_mean = ds[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == "mass":
-                                            # Get reference data for flux weighting
-                                            o = _open_dataset_safe(
-                                                f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                            )[f"{ref_varname}"]
+                                            # Reuse cached ref dataset across the
+                                            # 16 PFT-class iterations below.
+                                            if cached_mass_ref is None:
+                                                cached_mass_ref = _open_dataset_safe(
+                                                    f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
+                                                )[f"{ref_varname}"].load()
+                                            o = cached_mass_ref
 
                                             # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
@@ -602,10 +586,8 @@ class LC_groupby(metrics, scores):
                                                 weights = np.cos(np.deg2rad(ds.lat))
                                                 mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                             elif self.weight.lower() == "mass":
-                                                # Get reference data for flux weighting
-                                                o = _open_dataset_safe(
-                                                    f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                                                )[f"{ref_varname}"]
+                                                # cached_mass_ref reused from outer score loop
+                                                o = cached_mass_ref
 
                                                 # Calculate area weights (cosine of latitude)
                                                 area_weights = np.cos(np.deg2rad(ds.lat))
