@@ -15,22 +15,25 @@ RM = rm -rf
 
 all: user dev ops master
 
+# 子目录编译时显式指定 ../latexmkrc，避免落入 latexmk 的 DVI 默认模式
+SUBRC = -r ../latexmkrc
+
 user:
-	cd user && $(LATEXMK) main_user.tex
+	cd user && $(LATEXMK) $(SUBRC) main_user.tex
 
 dev:
-	cd developer && $(LATEXMK) main_developer.tex
+	cd developer && $(LATEXMK) $(SUBRC) main_developer.tex
 
 ops:
-	cd operations && $(LATEXMK) main_operations.tex
+	cd operations && $(LATEXMK) $(SUBRC) main_operations.tex
 
 master:
 	$(LATEXMK) manual.tex
 
 clean:
-	-cd user && $(LATEXMK) -C main_user.tex
-	-cd developer && $(LATEXMK) -C main_developer.tex
-	-cd operations && $(LATEXMK) -C main_operations.tex
+	-cd user && $(LATEXMK) $(SUBRC) -C main_user.tex
+	-cd developer && $(LATEXMK) $(SUBRC) -C main_developer.tex
+	-cd operations && $(LATEXMK) $(SUBRC) -C main_operations.tex
 	-$(LATEXMK) -C manual.tex
 	$(RM) user/_minted-* developer/_minted-* operations/_minted-* _minted-*
 

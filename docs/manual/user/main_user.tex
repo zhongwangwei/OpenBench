@@ -1,0 +1,32 @@
+% docs/manual/user/main_user.tex
+% 用户卷主文件；既能独立编译也能被 manual.tex \subfile{} 包含
+
+\documentclass[../manual]{subfiles}
+
+\begin{document}
+
+% --- 独立编译 vs 合订模式分支 ---
+\ifSubfilesClassLoaded{%
+  % 独立编译：完整标题页 + 目录
+  \frontmatter
+  \title{\openbench{} 用户指南\\[1ex]\large User Guide}
+  \author{OpenBench 项目组}
+  \date{\today}
+  \maketitle
+  \tableofcontents
+  \mainmatter
+}{%
+  % 合订时：插入卷分隔页（替代 \maketitle）
+  \volumedivider{第一卷}{用户指南}
+}
+
+% --- 教程部分 ---
+\volpart{教程}
+\include{chapters/00-hello}
+
+% --- 参考部分（附录）---
+\appendix
+\volpart{参考}
+\include{appendices/A-stub}
+
+\end{document}

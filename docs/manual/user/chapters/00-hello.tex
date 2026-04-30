@@ -1,0 +1,64 @@
+% docs/manual/user/chapters/00-hello.tex
+% 占位 smoke 章节；正式撰写时由 01-overview.tex 等替换
+
+\chapter{Hello, \openbench{}}
+
+\section{这是测试章节}
+
+本章存在的唯一目的是验证 LaTeX 工具链：
+xelatex 中文渲染、minted 代码高亮、tcolorbox 标注框、自定义宏命令。
+
+\section{命令测试}
+
+调用 \cli{openbench run config.yaml} 启动评估，
+其中 \yamlkey{project.years} 指定评估时段，
+\var{Evapotranspiration} 是常见评估变量；
+内部由 \modname{openbench.core.evaluation} 模块负责，
+读取的参考数据集是 \dataset{GLEAM\_v4.2a}。
+
+\section{标注框测试}
+
+\begin{noteBox}
+这是一个 Note 标注框：用于普通信息提示。
+\end{noteBox}
+
+\begin{warnBox}
+这是一个 Warning 标注框：用于陷阱与已知问题。
+\end{warnBox}
+
+\begin{tipBox}
+这是一个 Tip 标注框：用于最佳实践与省力技巧。
+\end{tipBox}
+
+\begin{exampleBox}[YAML 配置示例]
+最小可运行配置：
+\begin{minted}{yaml}
+project:
+  name: hello_world
+  output_dir: ./output
+  years: [2010, 2014]
+
+evaluation:
+  variables:
+    - Evapotranspiration
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+\end{minted}
+\end{exampleBox}
+
+\section{表格测试}
+
+\begin{table}[h]
+  \centering
+  \caption{占位表格}
+  \begin{tabular}{l l l}
+    \toprule
+    字段 & 类型 & 默认值 \\
+    \midrule
+    \yamlkey{project.name} & string & --- \\
+    \yamlkey{project.years} & list[int] & --- \\
+    \yamlkey{project.tim\_res} & enum & Month \\
+    \bottomrule
+  \end{tabular}
+\end{table}
