@@ -57,12 +57,34 @@ def test_scan_reference_directory_discovers_one_level_nested_children(tmp_path: 
     assert dataset_b.variants["LowRes"].file_count == 1
 
 
-def test_scan_reference_directory_misses_grandchildren(tmp_path: Path):
+def test_scan_reference_directory_finds_grandchildren_within_3_level_depth(tmp_path: Path):
+    """NC files two levels below dataset_dir (single chain) ARE supported.
+
+    Layout: dataset_dir/<single_subdir>/<single_subdir>/*.nc — a common
+    convention like 0p25deg/daily/file.nc or raw/data/file.nc.
+    """
     ref_root = tmp_path / "ref"
 
     deep_child = ref_root / "Grid" / "LowRes" / "Water" / "VarC" / "DatasetC"
     (deep_child / "child" / "grand").mkdir(parents=True)
-    (deep_child / "child" / "grand" / "missed.nc").write_text("")
+    (deep_child / "child" / "grand" / "found.nc").write_text("")
+
+    groups = scan_reference_directory(ref_root)
+    dataset_c = next(group for group in groups if group.base_name == "DatasetC")
+
+    assert dataset_c.variants["LowRes"].variables == {
+        "VarC": "Water/VarC/DatasetC/child/grand"
+    }
+    assert dataset_c.variants["LowRes"].file_count == 1
+
+
+def test_scan_reference_directory_misses_great_grandchildren(tmp_path: Path):
+    """NC files three levels below dataset_dir are still beyond supported depth."""
+    ref_root = tmp_path / "ref"
+
+    deeper = ref_root / "Grid" / "LowRes" / "Water" / "VarD" / "DatasetD"
+    (deeper / "a" / "b" / "c").mkdir(parents=True)
+    (deeper / "a" / "b" / "c" / "missed.nc").write_text("")
 
     groups = scan_reference_directory(ref_root)
 

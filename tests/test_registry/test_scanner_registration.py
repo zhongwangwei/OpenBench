@@ -1125,6 +1125,57 @@ def test_tim_res_detection_rejects_half_hourly_interval(tmp_path: Path):
     )
 
 
+def test_scan_uses_grandchild_dir_when_nc_files_two_levels_deep(tmp_path: Path):
+    """Verify end-to-end that 3-level NC discovery wires through to a
+    correct registration: sub_dir AND tim_res come from the level-2 dir,
+    so _inspect_nc_file actually finds the NC file (varname/years populated).
+    """
+    import numpy as np
+    import xarray as xr
+    from openbench.data.registry.scanner import (
+        scan_reference_directory,
+        register_scanned_datasets_batch,
+    )
+
+    ref_root = tmp_path / "Reference"
+    grandchild = (
+        ref_root / "Grid" / "MidRes" / "Water" / "Evapotranspiration"
+        / "DeepData" / "0p25deg" / "daily"
+    )
+    grandchild.mkdir(parents=True)
+
+    times = xr.date_range("2010-01-01", periods=365, freq="D", use_cftime=True)
+    ds = xr.Dataset(
+        {"ET_actual": (["time", "lat", "lon"], np.zeros((365, 4, 4), dtype=np.float32))},
+        coords={"time": times, "lat": np.arange(4.0), "lon": np.arange(4.0)},
+    )
+    ds["ET_actual"].attrs["units"] = "mm/day"
+    ds.to_netcdf(grandchild / "ET_2010.nc")
+
+    groups = scan_reference_directory(ref_root)
+    assert len(groups) == 1, f"Expected one group, got: {[g.base_name for g in groups]}"
+    variant = groups[0].variants["MidRes"]
+
+    # sub_dir points to level-2 (grandchild)
+    sub_dir = variant.variables["Evapotranspiration"]
+    assert sub_dir.endswith("DeepData/0p25deg/daily"), (
+        f"Expected level-2 path, got: {sub_dir!r}"
+    )
+    # tim_res detected from filename keyword in grandchild
+    assert variant.tim_res == "Day"
+
+    # Register and verify _inspect_nc_file finds the NC at level 2
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    register_scanned_datasets_batch([variant], catalog_path=catalog_path)
+
+    catalog = yaml.safe_load(catalog_path.read_text())
+    entry = catalog["DeepData_MidRes"]
+    assert entry["variables"]["Evapotranspiration"]["varname"] == "ET_actual", (
+        f"NC inspection at level 2 should populate varname, got: "
+        f"{entry['variables']['Evapotranspiration']}"
+    )
+
+
 def test_cli_scan_dry_run_does_not_write_catalog(tmp_path: Path, monkeypatch):
     """openbench data scan --dry-run lists what would be registered but
     does not modify the catalog file (or any registry state).

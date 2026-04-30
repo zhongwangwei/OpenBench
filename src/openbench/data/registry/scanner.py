@@ -319,43 +319,32 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
                     for dataset_dir in _iter_dirs(var_dir):
                         dataset_name = dataset_dir.name
 
-                        # Locate the actual NC-bearing directory.
-                        # Case A: NCs at dataset_dir/*.nc
-                        # Case B: NCs at dataset_dir/<one_child>/*.nc → use the child
-                        # Case C: NCs at dataset_dir/<multiple_children>/*.nc → ambiguous,
-                        #         skip with warning (composite/multi-variant datasets need
-                        #         a reference profile or manual register)
-                        nc_count = _count_nc(dataset_dir)
-                        nc_dir = dataset_dir
+                        # Locate the NC-bearing directory at depth ≤ 3:
+                        #   level 0: dataset_dir/*.nc
+                        #   level 1: dataset_dir/X/*.nc (single NC-bearing child)
+                        #   level 2: dataset_dir/X/Y/*.nc (single chain to NCs)
+                        #   level 3+: skip with deeper-glob warning
+                        nc_dir, nc_count, status = _find_nc_dir_with_descent(
+                            dataset_dir, max_descent=2
+                        )
 
-                        if nc_count == 0:
-                            children_with_nc = [
-                                (sub, _count_nc(sub))
-                                for sub in _iter_dirs(dataset_dir)
-                                if _count_nc(sub) > 0
-                            ]
-                            if len(children_with_nc) == 1:
-                                nc_dir, nc_count = children_with_nc[0]
-                            elif len(children_with_nc) > 1:
-                                sub_names = sorted(c[0].name for c in children_with_nc)
-                                logger.warning(
-                                    "Skipped '%s': %d NC-bearing subdirectories %s. "
-                                    "Composite/multi-variant datasets need a reference profile "
-                                    "(reference_profiles.yaml) or manual 'openbench data register'.",
-                                    dataset_dir.relative_to(ref_root),
-                                    len(children_with_nc),
-                                    sub_names,
-                                )
-                                continue
+                        if status == "ambiguous":
+                            logger.warning(
+                                "Skipped '%s': multiple NC-bearing subdirectories. "
+                                "Composite/multi-variant datasets need a reference profile "
+                                "(reference_profiles.yaml) or manual 'openbench data register'.",
+                                dataset_dir.relative_to(ref_root),
+                            )
+                            continue
 
-                        if nc_count == 0:
-                            # Warn if deeper levels have NC files (beyond supported depth)
+                        if status == "missing":
+                            # Warn if deeper levels still have NC files (beyond supported depth)
                             from openbench.data.coordinates import glob_nc as _deep_glob
                             deep_nc = _deep_glob(dataset_dir, recursive=True)
                             if deep_nc:
                                 logger.warning(
                                     "Skipped '%s': %d NC files found in deeper subdirectories "
-                                    "(beyond supported 2-level depth). Move files up or register manually.",
+                                    "(beyond supported 3-level depth). Move files up or register manually.",
                                     dataset_dir.relative_to(ref_root), len(deep_nc),
                                 )
                             continue
@@ -1064,6 +1053,64 @@ def _iter_dirs(path: Path):
     for item in sorted(path.iterdir()):
         if item.is_dir() and not item.name.startswith("."):
             yield item
+
+
+def _find_nc_dir_with_descent(start: Path, max_descent: int = 2) -> tuple[Path | None, int, str]:
+    """Descend up to ``max_descent`` levels from ``start`` to find NC files.
+
+    Search semantics at each level:
+      - If the current dir has NC files directly → return it.
+      - Else look at its child sub-directories:
+          * exactly one child contains NCs → return that child.
+          * multiple children contain NCs → return "ambiguous"
+            (composite/multi-variant layouts need a profile or manual
+            registration; merging them silently produces broken descriptors).
+          * zero children contain NCs but exactly one empty sub-dir exists →
+            descend into it for the next iteration.
+          * any other shape (no children, multiple empty children, etc.)
+            → return "missing".
+
+    With ``max_descent=2`` (default), supported NC locations are::
+
+        start/*.nc                 (level 0)
+        start/X/*.nc               (level 1)
+        start/X/Y/*.nc             (level 2, e.g., 0p25deg/daily/*.nc)
+
+    Files at level 3+ trigger the existing "deeper than supported"
+    warning at the call site.
+
+    Returns ``(nc_dir, count, status)`` where status ∈
+    ``{"found", "ambiguous", "missing"}``.
+    """
+    cur = start
+    for _depth in range(max_descent + 1):
+        cur_count = _count_nc(cur)
+        if cur_count > 0:
+            return (cur, cur_count, "found")
+
+        if _depth == max_descent:
+            # Reached the depth budget without finding NCs at this level
+            return (None, 0, "missing")
+
+        children_with_nc = [
+            (sub, _count_nc(sub))
+            for sub in _iter_dirs(cur)
+            if _count_nc(sub) > 0
+        ]
+        if len(children_with_nc) == 1:
+            sub, count = children_with_nc[0]
+            return (sub, count, "found")
+        if len(children_with_nc) > 1:
+            return (None, 0, "ambiguous")
+
+        # No NC-bearing children at this level. Descend only if there's
+        # exactly one empty sub-dir (deterministic single chain).
+        subs = list(_iter_dirs(cur))
+        if len(subs) != 1:
+            return (None, 0, "missing")
+        cur = subs[0]
+
+    return (None, 0, "missing")
 
 
 def _detect_tim_res(dataset_dir: Path) -> str:
