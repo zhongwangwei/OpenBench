@@ -1,0 +1,283 @@
+% docs/manual/operations/chapters/02-hpc-install.tex
+% 第 2 章：HPC 安装与依赖管理
+
+\chapter{HPC 安装与依赖管理}
+
+HPC 集群的 Python 环境是 \openbench{} 部署中最折磨人的一环：受限网络、共享只读、module 系统、login vs 计算节点的 Python 不一致。本章给四条可行路径，按你环境的限制选一条。
+
+\section{HPC 环境变体}
+
+主流 HPC 集群提供以下几种 Python：
+
+\begin{itemize}
+  \item \textbf{module load python}：管理员预编译；版本固定；\texttt{python --version} 是这个
+  \item \textbf{共享 conda}：管理员维护一个全局 conda env，用户激活即可
+  \item \textbf{容器（Singularity / Apptainer）}：自带完整运行时；\openbench{} 装在容器内
+  \item \textbf{用户自管}：自己装 conda / uv / pyenv 在 \texttt{\$HOME}
+\end{itemize}
+
+绝大多数集群至少有第一种与第四种。本章四节对应四种路径。
+
+\section{路径 A：module load + 用户级 venv}
+
+最常见的"轻量"方案。管理员维护 \texttt{python/3.12.x}，你自己建 venv 装 \openbench{}。
+
+\begin{minted}{bash}
+# 1. 加载 module（具体名字看你的集群文档）
+module load python/3.12.0
+
+# 2. 建 venv
+python -m venv ~/openbench-venv
+source ~/openbench-venv/bin/activate
+
+# 3. pip 装
+pip install --upgrade pip
+pip install "openbench[remote,report]"   # 注意不装 [gui]
+
+# 4. 验证
+openbench version
+\end{minted}
+
+\warninline{HPC 上 pip 可能需要 \texttt{--user} 或 venv，因为 module 加载的 site-packages 通常只读。优先 venv。}
+
+\section{路径 B：用户自管 conda}
+
+如果系统提供的 Python 版本太旧（< 3.10），用 miniforge：
+
+\begin{minted}{bash}
+# 1. 装 miniforge（社区维护，纯 conda-forge）
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b -p $HOME/miniforge3
+source $HOME/miniforge3/bin/activate
+
+# 2. 建 env
+conda create -n openbench python=3.12 -y
+conda activate openbench
+
+# 3. cartopy 系统依赖通过 conda-forge 解决（绕过 pip 编译）
+conda install -c conda-forge cartopy
+
+# 4. pip 装其余
+pip install "openbench[remote,report]"
+\end{minted}
+
+优点：依赖最稳。缺点：占空间多（~3-5 GB）。
+
+\section{路径 C：受限网络的离线安装}
+
+某些 HPC 出口网络受限，pip install 直接失败。流程：
+
+\subsection{在有网的机器上}
+
+\begin{minted}{bash}
+# 把 openbench 与全部依赖打包成 wheelhouse
+mkdir openbench-wheelhouse
+pip download "openbench[remote,report]" -d openbench-wheelhouse/
+
+# 也下载 openbench 本身（如要装本地源码）
+pip download . --no-deps -d openbench-wheelhouse/
+
+# 打包传输
+tar czf openbench-wheelhouse.tar.gz openbench-wheelhouse/
+\end{minted}
+
+\subsection{在 HPC 上}
+
+\begin{minted}{bash}
+# 1. 解包
+scp openbench-wheelhouse.tar.gz hpc:~/
+ssh hpc
+tar xzf openbench-wheelhouse.tar.gz
+
+# 2. 离线安装（不联网）
+module load python/3.12.0
+python -m venv ~/openbench-venv && source ~/openbench-venv/bin/activate
+pip install --no-index --find-links=./openbench-wheelhouse "openbench[remote,report]"
+\end{minted}
+
+\textbf{注意点}：
+
+\begin{itemize}
+  \item wheelhouse 必须用 \emph{相同 Python 版本} 与 \emph{相同平台}（manylinux2014\_x86\_64 或类似）下载
+  \item cartopy 不是 pure Python，需匹配的 wheel；conda-forge 有最全的预编译
+  \item 第一次成功安装后，可把 \texttt{\~{}/openbench-venv/} 整体打包给同事复用
+\end{itemize}
+
+\section{路径 D：容器（Singularity / Apptainer）}
+
+最隔离的方案：build 一个含 \openbench{} 与依赖的 container image，集群上用 singularity 运行。
+
+\begin{minted}{bash}
+# 在有 sudo 的机器上 build（HPC login 节点通常无 sudo）
+cat > openbench.def <<EOF
+Bootstrap: docker
+From: python:3.12-slim
+
+%post
+    apt-get update && apt-get install -y libgeos-dev libproj-dev proj-bin
+    pip install "openbench[remote,report]"
+
+%runscript
+    exec openbench "$@"
+EOF
+
+singularity build openbench.sif openbench.def
+
+# scp openbench.sif 到 HPC
+# 之后 HPC 上：
+singularity exec openbench.sif openbench run config.yaml
+\end{minted}
+
+\textbf{优点}：跨集群复用、版本完全可复现。
+\textbf{缺点}：build 阶段需要 root；容器镜像 1-2 GB。
+
+\section{共享只读环境 + 用户私有 cache}
+
+许多 HPC 倾向于"集群管理员维护一个公共 \openbench{} 安装；用户共享，但 cache 与输出走自己 \$HOME"。
+
+\subsection{管理员侧}
+
+\begin{minted}{bash}
+# /opt/openbench/3.0.0/  （只读）
+sudo mkdir -p /opt/openbench/3.0.0
+cd /opt/openbench/3.0.0
+python -m venv venv
+source venv/bin/activate
+pip install "openbench[remote,report]"
+
+# 加 module file 暴露给用户
+\end{minted}
+
+\subsection{用户侧}
+
+\begin{minted}{bash}
+module load openbench/3.0.0
+openbench version
+
+# 用户的 yaml 与输出走自己 HOME
+cd ~
+cat > openbench.yaml <<EOF
+project:
+  name: my-eval
+  output_dir: ~/openbench-output    # 写入用户目录
+  ...
+EOF
+openbench run openbench.yaml
+\end{minted}
+
+\openbench{} 的 platformdirs 会把 user-level catalog 放到 \texttt{\$HOME/.config/openbench/} 或对应位置；不污染管理员的全局安装。
+
+\warninline{Registry 的 \emph{user-level catalog} 默认位置因系统不同：macOS \texttt{\~{}/Library/Application\ Support/openbench/}，Linux \texttt{\~{}/.config/openbench/}。HPC 上如果 \$HOME 配额很紧，可设环境变量 \texttt{XDG\_CONFIG\_HOME} 重定向。}
+
+\section{Login 节点 vs 计算节点}
+
+\textbf{陷阱}：很多 HPC 的 login 节点与计算节点 Python 版本/路径不一致。在 login 装好 \openbench{}，提交到计算节点时找不到。
+
+\subsection{诊断}
+
+\begin{minted}{bash}
+# 在 login 节点
+which python
+python --version
+
+# 提交一个交互节点跑同样命令
+srun --pty bash
+which python
+python --version
+\end{minted}
+
+如果两者不同，必须改用：
+
+\begin{itemize}
+  \item Conda：把 conda activate 写到 SLURM 脚本里
+  \item 容器：用 singularity exec 一致跑
+  \item 自管 venv：用绝对路径 \texttt{/path/to/venv/bin/openbench}
+\end{itemize}
+
+\subsection{SLURM 脚本模板}
+
+\begin{minted}{bash}
+#!/bin/bash
+#SBATCH --job-name=openbench-eval
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+#SBATCH --time=24:00:00
+
+# 关键：在 SLURM job 内重新激活环境
+source ~/miniforge3/bin/activate openbench
+
+# 与 SLURM 分配核数一致
+export OPENBENCH_NUM_CORES=$SLURM_CPUS_PER_TASK
+
+cd /scratch/$USER/openbench-runs
+openbench run config.yaml --cores $SLURM_CPUS_PER_TASK
+\end{minted}
+
+\section{不要装 [gui] 的原因}
+
+GUI extra 会拉 \modname{PySide6} —— 体积大（~200 MB）+ 依赖系统级 Qt 库，HPC 上常装不上：
+
+\begin{minted}{text}
+ERROR: Failed building wheel for PySide6-Essentials
+ERROR: Could not build wheels for PySide6-Essentials
+\end{minted}
+
+即使强行装上，HPC 计算节点没有图形系统，启动 GUI 会报：
+
+\begin{minted}{text}
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb"
+\end{minted}
+
+GUI 是本地工具：在你笔记本写好 yaml，scp 到 HPC，用 CLI 跑。
+
+\section{升级 OpenBench}
+
+\begin{minted}{bash}
+source ~/openbench-venv/bin/activate
+pip install -U openbench
+
+# 升级后第一次 run 可能要清旧 cache
+rm -rf ~/openbench-output/<old-run>/scratch
+\end{minted}
+
+升级前后建议跑一次 \cli{openbench check} 确认配置仍合法（schema 变化时会有 deprecation 警告）。
+
+\section{验证安装}
+
+每次新安装后跑这套：
+
+\begin{minted}{bash}
+openbench version              # 版本号正常
+openbench --help               # 7 个子命令都列出来
+openbench data list            # registry 加载成功
+openbench model list           # model profile 21 个
+
+# 用一个最小配置跑 check
+cat > /tmp/test.yaml <<EOF
+project:
+  name: smoke
+  output_dir: /tmp/openbench-smoke
+  years: [2010, 2010]
+
+evaluation:
+  variables: [Evapotranspiration]
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+
+simulation:
+  test:
+    model: CoLM2024
+    root_dir: /nonexistent
+EOF
+
+openbench check /tmp/test.yaml
+# 预期：YAML 与 schema 验证通过；reference 解析成功；
+# 不会真去查 simulation 数据（root_dir 路径不存在不算 check 错误）
+\end{minted}
+
+如果上述命令任一失败，根据用户卷第 1 章 / 第 10 章排查。
+
+\section{下一步}
+
+下一章详解远程 SSH 执行：从笔记本提交评估到 HPC 节点的完整流程。
