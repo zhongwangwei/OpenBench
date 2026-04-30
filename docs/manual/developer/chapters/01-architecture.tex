@@ -1,0 +1,250 @@
+% docs/manual/developer/chapters/01-architecture.tex
+% 第 1 章：项目架构总览
+
+\chapter{项目架构总览}
+
+本章给开发卷读者一张全局地图：\openbench{} 的 9 个子包各自负责什么、相互之间如何依赖、端到端数据流如何贯穿。后续章节会按这张地图逐个深入。
+
+如果你只想用 \openbench{} 跑评估，请看用户卷；本章假设读者将要 \emph{修改代码}（修 bug、加新功能、贡献新可视化）。
+
+\section{高层分层}
+
+\openbench{} v3.0 的代码按 \textbf{职责单一性} 切成四层：
+
+\begin{itemize}
+  \item \textbf{接口层}：\modname{cli}（命令行）+ \modname{gui}（PySide6 向导）
+  \item \textbf{编排层}：\modname{runner}（local / remote 主流程）+ \modname{remote}（SSH 基础设施）
+  \item \textbf{业务层}：\modname{config}（schema / 加载 / 迁移）+ \modname{data}（预处理 / 缓存 / 重网格 / 站点匹配）+ \modname{core}（metrics / scores / 评估引擎 / 比较 / 统计）+ \modname{visualization}（一图一函数）
+  \item \textbf{基础层}：\modname{util}（日志 / 并行 / 内存 / 进度 / 报告 / 异常 / 接口抽象）
+\end{itemize}
+
+加上若干 registry 子模块（在 \modname{data.registry}），共 9 个公开子包。
+
+\section{子包详细职责}
+
+\begin{longtable}{l p{4cm} p{6cm}}
+  \toprule
+  子包 & 角色 & 主要内容 \\
+  \midrule
+  \endhead
+  \modname{cli} & 命令行接口 & 7 个 click 命令模块 + LazyGroup main + 解析辅助 \\
+  \modname{config} & 配置层 & dataclass schema、YAML 加载、JSON/NML 迁移、registry resolver、新→旧 adapter \\
+  \modname{data} & 数据管道 & pipeline 阶段、三层缓存、climatology、单位转换、重网格（CDO/WGS84）、站点 matcher/scanner、registry catalog \\
+  \modname{core} & 评估引擎 & metrics（25+）、scores（8）、Evaluation\_grid/stn、ModularEvaluationEngine、comparison、19 个 statistics 子模块、IGBP/PFT/climate-zone groupby \\
+  \modname{visualization} & 可视化 & 17 个 \texttt{Fig\_*.py} 模块（一图一函数）、共享 cmaps、Mod\_Only\_Drawing 重出图入口 \\
+  \modname{runner} & 编排层 & local（906 行主循环）、cache（哈希增量）、remote（SSH 桥；CLI 入口未实现） \\
+  \modname{remote} & SSH 基础设施 & ssh、credentials（加密）、connections（profile）、sync（文件传输）、storage（本地/远程抽象） \\
+  \modname{gui} & 向导 GUI & app/main\_window/controller、14 个 wizard page、widgets/dialogs、config\_manager 双向同步、progress\_parser \\
+  \modname{util} & 共享工具 & logging\_system、parallel、memory、progress、report（HTML/PDF）、exceptions、interfaces（ABC）、cache\_cleanup、converttype、output、fileio、dataset\_loader、directory \\
+  \bottomrule
+\end{longtable}
+
+\section{依赖图}
+
+\openbench{} 的子包依赖关系：
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=12mm and 16mm,
+  pkg/.style={rectangle, draw=obblue, fill=obblue!5, rounded corners, minimum width=22mm, minimum height=8mm, font=\small\sffamily},
+  optpkg/.style={rectangle, draw=obamber, fill=obamber!5, rounded corners, minimum width=22mm, minimum height=8mm, font=\small\sffamily},
+  basepkg/.style={rectangle, draw=obgray, fill=gray!10, rounded corners, minimum width=22mm, minimum height=8mm, font=\small\sffamily},
+  arr/.style={->, >=stealth, draw=obgray}
+]
+
+% 接口层
+\node[pkg] (cli) {cli};
+\node[optpkg, right=of cli] (gui) {gui};
+
+% 编排层
+\node[pkg, below=of cli] (runner) {runner};
+\node[optpkg, right=of runner] (remote) {remote};
+
+% 业务层 — 一行
+\node[pkg, below=of runner, xshift=-30mm] (config) {config};
+\node[pkg, right=of config] (data) {data};
+\node[pkg, right=of data] (core) {core};
+\node[pkg, right=of core] (viz) {visualization};
+
+% 基础层
+\node[basepkg, below=of data, xshift=20mm] (util) {util};
+
+% 边
+\draw[arr] (cli) -- (runner);
+\draw[arr] (cli) -- (config);
+\draw[arr] (cli) -- (data);
+\draw[arr] (gui) -- (cli);
+\draw[arr] (gui) -- (config);
+\draw[arr] (gui.south east) -- (remote.north);
+\draw[arr] (runner) -- (config);
+\draw[arr] (runner) -- (data);
+\draw[arr] (runner) -- (core);
+\draw[arr] (runner) -- (viz);
+\draw[arr] (runner) -- (remote);
+\draw[arr] (config) -- (data);
+\draw[arr] (data) -- (util);
+\draw[arr] (core) -- (util);
+\draw[arr] (viz) -- (util);
+\draw[arr] (runner.south) -- (util.north);
+
+\end{tikzpicture}
+
+\bigskip
+
+{\small 蓝色 = 必需；橙色 = 可选 extra；灰色 = 基础工具}
+\end{center}
+
+\textbf{关键观察}：
+
+\begin{itemize}
+  \item 依赖呈 \textbf{自顶向下} 单向流动；无循环依赖
+  \item \modname{util} 是最底层，被几乎所有其他包使用
+  \item \modname{gui} 与 \modname{remote} 是 \emph{可选的}（对应 \cli{[gui]} / \cli{[remote]} extras）；core 模块用 try-except 处理 import
+  \item \modname{core} 不依赖 \modname{config} —— 它接 evaluator 期待的 legacy 字典（adapter 在 \modname{config.adapter} 里做翻译）
+  \item \modname{visualization} 不依赖 \modname{config} 或 \modname{core}；输入纯数据
+\end{itemize}
+
+\section{端到端数据流}
+
+一次 \cli{openbench run config.yaml} 的内部数据流：
+
+\begin{enumerate}
+  \item \modname{cli.main} 的 LazyGroup 解析 \texttt{run} 子命令 → import \modname{cli.run}
+  \item \modname{cli.run} 调 \modname{config.loader.load\_config} → 读 YAML → \texttt{OpenBenchConfig} dataclass
+  \item \modname{cli.run} 调 \modname{runner.local.run\_evaluation(cfg)}
+  \item \modname{runner.local} 调 \modname{config.adapter.build\_runner\_bindings} → 把 dataclass 翻译成 evaluator 期待的 legacy namelist 字典
+  \item \modname{runner.local} 用 \modname{data.registry.manager.RegistryManager} 解析 reference 名 → 拿到数据集元信息
+  \item Per task (var × sim × ref)：
+    \begin{enumerate}
+      \item \modname{data.pipeline} 加载 NC、应用 \modname{data.unit} 单位换算
+      \item \modname{data.regrid} 重网格化到 \yamlkey{project.grid_res}
+      \item \modname{data.station\_matcher} 处理站点采样（站点评估时）
+      \item \modname{core.metrics} + \modname{core.scores} 计算
+      \item \modname{visualization.Fig\_*} 出图
+      \item \modname{runner.cache} 写增量缓存
+    \end{enumerate}
+  \item 全部 task 完成后：
+    \begin{itemize}
+      \item \modname{core.comparison} 跨 sim 合并 → portrait/radar/ranking
+      \item \modname{core.statistics} 跑 ANOVA / Mann-Kendall / KDE / 等
+      \item \modname{util.report.ReportGenerator} 渲染 HTML/PDF
+    \end{itemize}
+\end{enumerate}
+
+\section{公开 vs 内部 API}
+
+\openbench{} 没有强制访问控制（Python 没有 private），但社区规范如下：
+
+\subsection{公开 API}
+
+下面这些可以从外部脚本/Notebook 安全 import：
+
+\begin{minted}{python}
+# 顶层版本
+import openbench
+openbench.__version__
+
+# config 子包
+from openbench.config import (
+    load_config,           # 主入口
+    ConfigError,           # 异常类
+    OpenBenchConfig,       # 顶层 schema dataclass
+    ProjectConfig,
+    EvaluationConfig,
+    ReferenceConfig,
+    SimulationEntry,
+    ComparisonConfig,
+    StatisticsConfig,
+)
+
+# runner 主入口
+from openbench.runner.local import run_evaluation
+
+# registry
+from openbench.data.registry import RegistryManager
+from openbench.data.registry.manager import get_registry
+
+# core 评估类（仅当你要直接用底层 API）
+from openbench.core import (
+    metrics, scores,
+    Evaluation_grid, Evaluation_stn,
+    ModularEvaluationEngine,
+)
+\end{minted}
+
+这些在 \modname{__init__.py} 里有显式 \texttt{\_\_all\_\_} 声明（或经常被外部代码 import），破坏向后兼容会算 \textbf{breaking change}。
+
+\subsection{内部模块（不要从外部 import）}
+
+\begin{itemize}
+  \item \modname{config.adapter}：内部翻译层，签名经常变
+  \item \modname{config.legacy\_processors}：v1.x/v2.0 兼容层，将逐步删
+  \item \modname{config.resolver}：reference 解析细节
+  \item \modname{runner.cache}：缓存内部
+  \item \modname{data.pipeline} / \modname{data.processing} 的私有函数
+  \item \modname{util.\_*}：以下划线开头的全部
+\end{itemize}
+
+如果你的脚本必须 import 这些，请在 GitHub 上提 issue 申请把它们提升为公开 API。
+
+\section{设计原则}
+
+\openbench{} 的演进遵循以下原则（违反需要 spec 与讨论）：
+
+\begin{itemize}
+  \item \textbf{无 Fortran 依赖}：v3.0 全部 Python；任何对 Fortran 模块的引用都属于 v1.x 兼容残留，应清理
+  \item \textbf{Registry-driven}：reference 与 model 元信息住在 \file{data/registry/*.yaml}，代码里不硬编码数据集路径或文件名
+  \item \textbf{Optional extras}：GUI / remote / report 是 opt-in 的；core CLI 必须能在最小依赖（无 PySide6 / paramiko）下工作
+  \item \textbf{Incremental cache}：长任务必须支持续跑；缓存 key 必须涵盖所有影响输出的字段
+  \item \textbf{无声 fallback 要警告}：用了默认值 / fallback 变量 / 推断的元信息 → 至少打 logger.warning
+  \item \textbf{Type hints 全覆盖}：新代码必须有类型注解；旧代码逐步补
+\end{itemize}
+
+\section{与 v2.0 的架构差异}
+
+\begin{longtable}{p{5cm} p{8cm}}
+  \toprule
+  v2.0 & v3.0 \\
+  \midrule
+  \endhead
+  4-6 个配置文件（main + ref + sim + var + ...） & 单一 \file{openbench.yaml} \\
+  自由文本数据集名 + 路径硬编码 & registry catalog YAML + RegistryManager \\
+  Fortran 模块入口 & 全 Python；\modname{cli.main} LazyGroup \\
+  无 dataclass schema & dataclass + loader 全字段校验 \\
+  无增量缓存 & runner.cache 哈希驱动 \\
+  comparison 在主循环里 & 独立 phase，可单独 \texttt{--comparison-only} 重跑 \\
+  无标准 GUI & PySide6 wizard（14 page） \\
+  无 SSH 集成 & remote 子包（paramiko）+ GUI 入口 \\
+  visualization 与 core 紧耦合 & 17 个独立 Fig 模块，输入纯数据 \\
+  \bottomrule
+\end{longtable}
+
+\section{文件大小速查}
+
+了解模块"工作量"有助于知道哪里水深、哪里是入门级：
+
+\begin{longtable}{l r p{6cm}}
+  \toprule
+  模块 & 行数 & 备注 \\
+  \midrule
+  \endhead
+  \file{config/adapter.py} & 996 & 最大；新→旧翻译，进入须谨慎 \\
+  \file{config/legacy\_processors.py} & 909 & v1.x/v2.0 兼容；逐步缩 \\
+  \file{runner/local.py} & 906 & 主循环 + task 编排 \\
+  \file{cli/data.py} & 598 & 5 子命令（含 register 交互） \\
+  \file{util/parallel.py} & 731 & 并行抽象 \\
+  \file{runner/remote.py} & 651 & SSH 集成 \\
+  \file{util/logging\_system.py} & 581 & 日志层级与 handler \\
+  \file{data/pipeline.py} & 462 & 预处理阶段 \\
+  \file{config/migration.py} & 429 & JSON/NML → YAML \\
+  \file{config/loader.py} & 361 & YAML 加载（小但密集） \\
+  \file{config/resolver.py} & 314 & reference 名解析 \\
+  \file{config/schema.py} & 120 & dataclass schema（最薄） \\
+  \bottomrule
+\end{longtable}
+
+入门改动建议从 \file{config/schema.py} / \file{cli/} 这种小文件开始，逐步深入到大文件。
+
+\section{下一步}
+
+下一章带你搭好开发环境（fork、clone、可编辑安装、ruff、pytest、pre-commit、superpowers 工作流）。
