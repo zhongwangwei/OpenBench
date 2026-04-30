@@ -1,0 +1,272 @@
+% docs/manual/operations/chapters/04-performance.tex
+% 第 4 章：性能调优
+
+\chapter{性能调优}
+
+性能调优是运维的核心问题：什么时候 \openbench{} 跑得慢，是 CPU 在等 IO，还是内存在 swap，还是并行根本没用上？本章分类讲解三大瓶颈与对应的诊断/调优手段。
+
+\section{三大瓶颈}
+
+任何长跑任务的性能问题都落在三类之一：
+
+\begin{longtable}{p{2cm} p{4.5cm} p{6cm}}
+  \toprule
+  瓶颈 & 症状 & 工具 \\
+  \midrule
+  \endhead
+  CPU & 全核高负载，进度仍慢 & \texttt{top -H}、\texttt{htop}、py-spy \\
+  内存 & swap、OOM kill、运行越久越慢 & \texttt{free}、\texttt{/usr/bin/time -v}、\texttt{psutil} \\
+  I/O & CPU < 30\%、disk wait 高 & \texttt{iostat -x}、\texttt{iotop}、NFS 上 \texttt{nfsstat} \\
+  \bottomrule
+\end{longtable}
+
+先用 \texttt{/usr/bin/time -v openbench run config.yaml} 跑一次，看 \texttt{Elapsed (wall clock)}、\texttt{Maximum resident set size}、\texttt{Percent of CPU this job got}：CPU\% < 50\% 说明在等 IO 或并行不够。
+
+\section{num\_cores 选择}
+
+\subsection{自动检测 vs 显式指定}
+
+\begin{minted}{yaml}
+project:
+  num_cores: null    # 默认：os.cpu_count()
+  num_cores: 16      # 显式（推荐）
+\end{minted}
+
+显式优于自动的原因：
+
+\begin{itemize}
+  \item HPC 上 \texttt{os.cpu_count()} 看到的是节点全部核（如 64），但 SLURM 只分配你 16 核 → oversubscription
+  \item 笔记本上 hyperthreading 让 \texttt{cpu\_count} 翻倍 → 实际 8 物理核被当 16 用
+  \item 显式数字让性能可复现
+\end{itemize}
+
+\subsection{与 SLURM 对齐}
+
+\begin{minted}{bash}
+openbench run config.yaml --cores $SLURM_CPUS_PER_TASK
+\end{minted}
+
+或在 yaml 里：
+
+\begin{minted}{yaml}
+project:
+  num_cores: 32   # 与 #SBATCH --cpus-per-task=32 一致
+\end{minted}
+
+\subsection{选多少最佳}
+
+\begin{itemize}
+  \item I/O 密集任务（站点评估）：核数 = 物理 CPU / 2（多了 IO 拥塞抵消并行收益）
+  \item CPU 密集任务（统计模块）：核数 = 物理 CPU
+  \item 内存紧张：核数 = 总内存 / 单 task 峰值（避免 OOM）
+\end{itemize}
+
+\section{当前并行边界}
+
+\openbench{} v3.0a1 的并行实际作用范围：
+
+\subsection{已并行}
+
+\begin{itemize}
+  \item \textbf{站点级}：\modname{data.processing.DatasetProcessing} 用 \modname{joblib} 并行处理多个站点
+  \item \textbf{按年合并}：\modname{data.pipeline} 在合并多年 NC 时按年并发读
+  \item \textbf{xarray 内部 dask}：metric 计算时部分 chunked 操作走 dask
+\end{itemize}
+
+\subsection{尚未并行}
+
+\begin{itemize}
+  \item \textbf{Task 级（变量级）}：多个 (var × sim × ref) task 仍串行执行；reserved
+  \item \textbf{visualization 阶段}：图序列化生成
+  \item \textbf{Statistics 阶段}：模块串行
+\end{itemize}
+
+\warninline{这意味着 \yamlkey{num_cores: 64} 在 grid 评估上不一定比 \yamlkey{num_cores: 16} 快很多——除非你的评估有大量站点（站点级并行才放大）。task 级并行在 Plan 5 之后的版本会启用。}
+
+\section{内存监控}
+
+\subsection{util.memory 的工具}
+
+\modname{util.memory.cleanup\_memory()}：
+
+\begin{itemize}
+  \item Python 缓存（functools / importlib / linecache）
+  \item 科学库缓存（numpy / xarray / pandas / matplotlib）
+  \item \texttt{gc.collect()} 全代
+  \item 弱引用清理
+\end{itemize}
+
+主流程在 task 之间会调用它。手动用：
+
+\begin{minted}{python}
+from openbench.util.memory import cleanup_memory
+cleanup_memory(verbose=True)
+\end{minted}
+
+\subsection{psutil 监控}
+
+\begin{minted}{python}
+import psutil
+proc = psutil.Process()
+print(f"RSS: {proc.memory_info().rss / 1e9:.2f} GB")
+\end{minted}
+
+\subsection{峰值内存}
+
+\begin{minted}{bash}
+/usr/bin/time -v openbench run config.yaml 2>&1 | grep "Maximum resident"
+# Maximum resident set size (kbytes): 18234560
+\end{minted}
+
+\subsection{OOM 三种情形}
+
+\textbf{情形 A：全球 hourly + 多年 + 多 sim}：
+\begin{itemize}
+  \item 单文件可能 30 GB+（hourly × 5yr × 0.25°）
+  \item \openbench{} 默认 lazy load，但某些 metric 强制 load 全部
+  \item 缩 \yamlkey{years} 到 1 年试试
+\end{itemize}
+
+\textbf{情形 B：dask chunk 太大}：
+\begin{itemize}
+  \item \openbench{} 不直接配 dask，但 xarray 调用走 dask 默认配置
+  \item 看 \texttt{xr.open\_dataset(chunks=\{...\})} 是否合理（grid evaluator 用默认）
+  \item 可在调用前设 \texttt{xr.set\_options(chunk='auto')}
+\end{itemize}
+
+\textbf{情形 C：站点 CSV + grid 笛卡尔积}：
+\begin{itemize}
+  \item 千站点 × 全球 grid → 中间内存暴增
+  \item station\_matcher 应该按站点 streaming 处理（已实现），但某些路径会 materialize
+  \item 缩区域或减少站点列表
+\end{itemize}
+
+\section{I/O 优化}
+
+\subsection{HDF5 文件锁}
+
+\openbench{} 已自动设：
+
+\begin{minted}{python}
+os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
+\end{minted}
+
+\warninline{在 Notebook / 自定义脚本里手动调 \modname{run\_evaluation} 时，必须 \emph{在 import 前} 设这个环境变量，否则不生效。}
+
+\subsection{NFS / Lustre 上的小文件抖动}
+
+reference 数据集动辄数千个 NC 文件，每个 ~MB。NFS 上每次 \texttt{open()} 都走元数据服务器。
+
+\textbf{对策}：
+
+\begin{itemize}
+  \item 让 reference 数据放在 Lustre（HPC 标配）而非家目录 NFS
+  \item 启用 \texttt{open\_mfdataset} 一次打开多文件，减少 round trips
+  \item 把多年小文件预合并为一个大 NC（看 \cli{cdo cat *.nc merged.nc}）
+\end{itemize}
+
+\subsection{zarr cache}
+
+\openbench{} 默认在 \file{output/<run>/data/} 写 zarr 中间产物。第二次跑同 task 直接读 zarr，避开 NC 解析。
+
+\textbf{陷阱}：
+
+\begin{itemize}
+  \item 第一次跑加上 zarr 写入时间；总时间可能更长
+  \item 多个评估目录都会各自有一份 cache → 占空间。多用户共享时考虑统一 cache 目录
+\end{itemize}
+
+\section{Dask scheduler 选择}
+
+\modname{xarray} 的某些算子走 \modname{dask}。\openbench{} 不直接配 dask，但可通过环境变量影响：
+
+\begin{minted}{bash}
+export DASK_SCHEDULER="threads"     # 默认；适合多数评估
+export DASK_SCHEDULER="processes"   # 跨进程；某些 IO bound 场景更快
+\end{minted}
+
+或在 Python 里：
+
+\begin{minted}{python}
+import dask
+dask.config.set(scheduler='threads')
+\end{minted}
+
+\section{Oversubscription 风险}
+
+嵌套并行陷阱：joblib（核数 N）× MKL（核数 M）= N × M 线程，远超物理核数。
+
+\openbench{} 的处置：
+
+\begin{itemize}
+  \item 启动时设 \texttt{OMP\_NUM\_THREADS=1}（如果还没设）
+  \item joblib 用 \texttt{loky} backend，子进程独立 BLAS
+\end{itemize}
+
+\textbf{用户可做}：
+
+\begin{minted}{bash}
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+openbench run config.yaml --cores 16
+\end{minted}
+
+\section{实测建议}
+
+\subsection{先小规模 profiling}
+
+\begin{minted}{yaml}
+# 先跑 1 个变量 + 1 sim + 1 年
+project:
+  years: [2010, 2010]   # 1 年
+evaluation:
+  variables: [Evapotranspiration]   # 1 变量
+simulation:
+  test:
+    model: CoLM2024
+    root_dir: ...
+\end{minted}
+
+\begin{minted}{bash}
+/usr/bin/time -v openbench run small.yaml --cores 4 2>&1 | tee small.log
+\end{minted}
+
+得出单 task 时间与内存，再外推到完整评估。
+
+\subsection{瓶颈定位顺序}
+
+\begin{enumerate}
+  \item 看 \texttt{Percent of CPU this job got}
+    \begin{itemize}
+      \item < 50\% → IO 或并行不够
+      \item > 90\% → CPU bound
+    \end{itemize}
+  \item 看 \texttt{Maximum resident set size}
+    \begin{itemize}
+      \item > 80\% 物理内存 → 内存压力大
+      \item < 40\% 物理内存 → 可以增 \yamlkey{num_cores}
+    \end{itemize}
+  \item \texttt{iostat -x 1} 看 \%util
+    \begin{itemize}
+      \item disk \%util > 80\% → IO bound
+    \end{itemize}
+\end{enumerate}
+
+\section{调优 checklist}
+
+升级到生产前过一遍：
+
+\begin{itemize}
+  \item \yamlkey{num_cores} 显式设为合理值（不是默认 null）
+  \item 设 \texttt{OMP\_NUM\_THREADS=1} 防嵌套并行
+  \item Reference 数据放高速盘（不在家目录 NFS）
+  \item 第一次小规模 profile，记下内存/时间
+  \item 跑 \cli{check} 通过且无 warning
+  \item 用 SLURM 提交（不要在 login 节点直接跑长任务）
+  \item \yamlkey{generate_report: true} 不影响主流程速度太多但加 5-15\%；要赶时间可关
+\end{itemize}
+
+\section{下一步}
+
+下一章详解缓存策略：增量缓存、清理、多用户共享、损坏检测。
