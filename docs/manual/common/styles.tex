@@ -1,0 +1,59 @@
+% docs/manual/common/styles.tex
+% 4 种 tcolorbox 标注框样式：Note / Warning / Tip / Example
+% 由顶层 main_*.tex 在 preamble 之后 \input
+
+% Note：信息性提示
+\newtcolorbox{noteBox}{
+  enhanced,
+  colback=obblue!5,
+  colframe=obblue,
+  fonttitle=\bfseries,
+  title=注意,
+  attach boxed title to top left={xshift=4mm,yshift*=-\tcboxedtitleheight/2},
+  boxed title style={size=small,colback=obblue,colframe=obblue},
+  top=3mm, bottom=2mm, left=3mm, right=3mm,
+  arc=2mm,
+  before skip=2mm, after skip=2mm,
+}
+
+% Warning：陷阱与潜在错误
+\newtcolorbox{warnBox}{
+  enhanced,
+  colback=obred!5,
+  colframe=obred,
+  fonttitle=\bfseries,
+  title=警告,
+  attach boxed title to top left={xshift=4mm,yshift*=-\tcboxedtitleheight/2},
+  boxed title style={size=small,colback=obred,colframe=obred},
+  top=3mm, bottom=2mm, left=3mm, right=3mm,
+  arc=2mm,
+  before skip=2mm, after skip=2mm,
+}
+
+% Tip：最佳实践与省力技巧
+\newtcolorbox{tipBox}{
+  enhanced,
+  colback=obgreen!5,
+  colframe=obgreen,
+  fonttitle=\bfseries,
+  title=提示,
+  attach boxed title to top left={xshift=4mm,yshift*=-\tcboxedtitleheight/2},
+  boxed title style={size=small,colback=obgreen,colframe=obgreen},
+  top=3mm, bottom=2mm, left=3mm, right=3mm,
+  arc=2mm,
+  before skip=2mm, after skip=2mm,
+}
+
+% Example：完整可运行示例
+\newtcolorbox{exampleBox}[1][示例]{
+  enhanced,
+  colback=obamber!5,
+  colframe=obamber,
+  fonttitle=\bfseries,
+  title=#1,
+  attach boxed title to top left={xshift=4mm,yshift*=-\tcboxedtitleheight/2},
+  boxed title style={size=small,colback=obamber,colframe=obamber},
+  top=3mm, bottom=2mm, left=3mm, right=3mm,
+  arc=2mm,
+  before skip=2mm, after skip=2mm,
+}
