@@ -1,0 +1,198 @@
+% docs/manual/operations/chapters/01-deployment.tex
+% 第 1 章：部署形态选择
+
+\chapter{部署形态选择}
+
+运维卷的目标读者是 \openbench{} 的"安装者 + 运行者"——给科研团队搭好评估流水线、保证它在 HPC 上稳定跑、出问题能诊断。本卷不是"用户卷的复述"——它假设你已经知道 \openbench{} 是什么、能做什么。
+
+本章帮你回答一个根本问题：\textbf{应该把 \openbench{} 装在哪里、怎么配资源} —— 这个决定影响后续所有章节。
+
+\section{四种典型部署形态}
+
+\openbench{} 在以下四种环境都能跑，但每种的最佳配置不同：
+
+\begin{enumerate}
+  \item \textbf{笔记本（macOS / Windows / Linux Desktop）}：本地开发、写配置、看小规模结果
+  \item \textbf{工作站（高内存、多核台式机或单机服务器）}：单机做完整全球评估
+  \item \textbf{HPC 计算节点（SLURM / PBS / LSF 集群）}：大规模评估、千站点、长时段
+  \item \textbf{云 VM（AWS / GCP / Azure / 阿里云等）}：弹性扩容、临时项目
+\end{enumerate}
+
+\section{资源画像}
+
+每种部署形态典型资源：
+
+\begin{longtable}{p{2.4cm} p{2.4cm} p{2.4cm} p{2.4cm} p{2.4cm}}
+  \toprule
+  & 笔记本 & 工作站 & HPC 节点 & 云 VM \\
+  \midrule
+  \endhead
+  CPU & 4-12 核 & 16-64 核 & 32-128 核 & 弹性 \\
+  内存 & 8-32 GB & 64-512 GB & 128-1024 GB & 弹性 \\
+  本地盘 & SSD 500GB-2TB & SSD 2-20TB & 共享 NFS / Lustre & EBS / 对象 \\
+  网络 & WiFi/百兆 & 千兆 & InfiniBand 内部 & 弹性 \\
+  数据位置 & 本地 & 本地或 NAS & 共享 FS & 对象 + 本地缓存 \\
+  长时运行 & 不适合（合盖） & 适合 & 最适合 & 适合（成本有压） \\
+  GUI 可用 & 是 & 是 & 否 & 取决于配置 \\
+  \bottomrule
+\end{longtable}
+
+\section{推荐配置}
+
+\subsection{笔记本}
+
+\begin{minted}{yaml}
+project:
+  num_cores: 4              # 留一半核给系统
+  tim_res: Month            # 高分辨率 evals 跑不动
+  grid_res: 0.5
+  generate_report: true
+\end{minted}
+
+\textbf{适用}：
+
+\begin{itemize}
+  \item 学习 \openbench{} / 用 GUI 写配置
+  \item 单变量 + 单 sim + 短时段（< 5 年）的小评估
+  \item 区域评估（lat/lon range 缩小）
+\end{itemize}
+
+\textbf{不适合}：长时段 hourly 评估、多 sim 对比、千站点。
+
+\subsection{工作站}
+
+\begin{minted}{yaml}
+project:
+  num_cores: 16             # 看实际核数
+  tim_res: Month            # 或 Day
+  grid_res: 0.5
+\end{minted}
+
+\textbf{适用}：
+
+\begin{itemize}
+  \item 全球月尺度评估
+  \item 多 sim 对比（2-5 个）
+  \item 数百站点
+\end{itemize}
+
+工作站是 \openbench{} 的"甜点区"——多数科研用例都在这里。
+
+\subsection{HPC 计算节点}
+
+\begin{minted}{yaml}
+project:
+  num_cores: 32             # 与 SLURM --cpus-per-task 一致
+  tim_res: Day              # 或 Hour
+  grid_res: 0.25
+  force: false              # 增量缓存帮你
+\end{minted}
+
+\textbf{适用}：
+
+\begin{itemize}
+  \item 千站点高频评估
+  \item 全球 daily/hourly + 多年
+  \item 多模型大规模对比
+  \item 跑全部统计分析（ANOVA / 三角帽 / KDE）
+\end{itemize}
+
+\warninline{HPC 上不要装 \cli{[gui]}。GUI 是本地客户端；从笔记本生成 yaml，scp 到 HPC，CLI 跑。第 3 章详解远程提交。}
+
+\subsection{云 VM}
+
+\begin{minted}{yaml}
+project:
+  num_cores: 16
+  tim_res: Month
+  grid_res: 0.5
+\end{minted}
+
+\textbf{适用}：
+
+\begin{itemize}
+  \item 一次性项目，开机评估，关机省钱
+  \item 团队共享但不愿维护本地服务器
+  \item 数据已在云对象存储中（S3 / OSS）
+\end{itemize}
+
+\textbf{陷阱}：
+
+\begin{itemize}
+  \item 对象存储 IO 慢于本地盘 → 启用 zarr cache 把热数据搬到本地
+  \item 关机前 dump 输出到对象存储（防丢失）
+  \item 出口流量按字节收费 → 不要无脑下载所有图
+\end{itemize}
+
+\section{瓶颈分类与决策}
+
+\openbench{} 评估的性能瓶颈分三类，决定你该在 cfg 里调哪几个 knob：
+
+\begin{longtable}{p{3cm} p{4.5cm} p{6cm}}
+  \toprule
+  瓶颈 & 症状 & 应对 \\
+  \midrule
+  \endhead
+  CPU 密集 & 全核满；evaluation phase 慢 & 加 \yamlkey{num_cores}；改用更快机器 \\
+  内存密集 & 单 task OOM；进程被 kill & 缩 \yamlkey{lat_range/lon_range}；降 \yamlkey{tim_res}；减少 \yamlkey{num_cores}（每 worker 占独立内存） \\
+  I/O 密集 & CPU 利用率 < 30\%；但运行很慢 & 启用增量缓存；把数据搬到 SSD；NFS 性能不行就换 \\
+  \bottomrule
+\end{longtable}
+
+第 4 章详解每种瓶颈的诊断与调优。
+
+\section{数据位置：本地 vs 网络}
+
+\begin{itemize}
+  \item \textbf{本地 SSD}：最快，无并发限制；空间是限制
+  \item \textbf{NAS / NFS}：支持多机共享；小文件 IO 抖动；HDF5 lock 风险
+  \item \textbf{Lustre / GPFS}：HPC 标配；并发读极快；写入有时被 quota 限制
+  \item \textbf{对象存储（S3 / OSS）}：海量便宜；延迟高；OpenBench 不直接读，需要先 mount 或下载到本地
+\end{itemize}
+
+\textbf{推荐}：reference 数据集放共享只读区（或本地 SSD），simulation 输出放写入区，cache 放本地 scratch。
+
+\section{选不对会怎么样}
+
+典型失败模式：
+
+\subsection{在笔记本跑全球 hourly}
+
+\begin{minted}{text}
+[ERROR] OOMKilled at task=Latent_Heat sim=CoLM2024 ref=ERA5LAND
+\end{minted}
+
+笔记本 16 GB 内存装不下全球 hourly × 5 年 × 2 个数据集。\textbf{修法}：缩 \yamlkey{years}、缩区域、降到 monthly、或换工作站。
+
+\subsection{HPC 上 num\_cores=1}
+
+跑得慢得离谱（按月评估也要小时）。\textbf{修法}：把 \yamlkey{num_cores} 设为 SLURM 分配的核数（\texttt{\$SLURM\_CPUS\_PER\_TASK}）。
+
+\subsection{HPC 上启动 GUI}
+
+\begin{minted}{text}
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb"
+\end{minted}
+
+\textbf{修法}：HPC 不装 \cli{[gui]}。本地写配置，scp 上去，CLI 跑。
+
+\subsection{云 VM 没启用 cache}
+
+\begin{minted}{text}
+[INFO] Loading reference: GLEAM_v4.2a (from S3, est. 12 min)
+\end{minted}
+
+每次重跑都从 S3 拉数据。\textbf{修法}：把 \yamlkey{project.output_dir} 设到本地 EBS，evaluation 缓存默认开启，第二次跑直接命中。
+
+\section{决策速查}
+
+\begin{enumerate}
+  \item \textbf{数据 < 50 GB + 评估 < 1 小时}：笔记本
+  \item \textbf{数据 50-500 GB + 评估 1-12 小时 + 单机}：工作站
+  \item \textbf{数据 > 500 GB 或评估 > 12 小时或团队共享}：HPC
+  \item \textbf{临时项目 + 数据已在云上}：云 VM
+\end{enumerate}
+
+\section{下一步}
+
+下一章详解 HPC 安装的具体路径：module load、conda、uv、离线 wheelhouse、共享只读环境模式。
