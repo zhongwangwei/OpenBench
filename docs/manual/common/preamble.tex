@@ -1,0 +1,72 @@
+% docs/manual/common/preamble.tex
+% 由顶层 main_*.tex 在 \documentclass 之后 \input
+% 与 styles.tex / macros.tex 平级，但只负责宏包导入与全局配置
+
+% --- 链接与 PDF 书签 ---
+\usepackage[
+  bookmarks=true,
+  bookmarksnumbered=true,
+  bookmarksopen=true,
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black,
+  pdfencoding=auto
+]{hyperref}
+
+% --- 表格 ---
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+
+% --- 图形 ---
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,backgrounds,fit,calc}
+
+% --- 颜色 ---
+\usepackage{xcolor}
+\definecolor{obblue}{HTML}{0B5394}
+\definecolor{obamber}{HTML}{C18B00}
+\definecolor{obred}{HTML}{B23A3A}
+\definecolor{obgreen}{HTML}{2E7D32}
+\definecolor{obgray}{HTML}{4A4A4A}
+
+% --- 代码高亮 ---
+\usepackage{minted}
+\setminted{
+  fontsize=\small,
+  breaklines=true,
+  breakanywhere=true,
+  frame=lines,
+  framesep=2mm,
+  bgcolor=gray!5,
+  numbersep=5pt,
+  tabsize=2,
+  autogobble=true,
+}
+
+% --- 标注框 ---
+\usepackage[most]{tcolorbox}
+
+% --- 页眉页脚 ---
+\usepackage{fancyhdr}
+\setlength{\headheight}{14pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\thepage}
+\fancyhead[RE]{\nouppercase\rightmark}
+\fancyhead[LO]{\nouppercase\leftmark}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- subfiles（顶层 manual.tex 用，subfile 内不会重复加载） ---
+\usepackage{subfiles}
+
+% --- 元数据（PDF 属性，被各卷覆盖） ---
+\hypersetup{
+  pdftitle={OpenBench 手册},
+  pdfauthor={OpenBench 项目组},
+  pdfsubject={陆面模型评估框架},
+  pdfkeywords={OpenBench, land surface model, benchmarking, 中文}
+}
