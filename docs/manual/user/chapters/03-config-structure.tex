@@ -58,14 +58,30 @@ project:
 
 \begin{minted}{yaml}
 project:
-  tim_res: Month     # Month | Day | Hour | Year（默认按各 sim/ref 自身）
-  grid_res: 0.5      # 目标空间分辨率（度），用于重网格化
+  tim_res: Month     # Month | Day | Hour | Year（不写则按解析规则推导）
+  grid_res: 0.5      # 目标空间分辨率（度），不写则按解析规则推导
   timezone: 0        # 时区偏移（小时）
-  weight: area       # 空间加权：area | equal
+  weight: area       # 空间加权：none | area | mass（不写默认 area；详见第 7 章）
 \end{minted}
 
+\paragraph{tim\_res / grid\_res 不写时如何决定}
+
+\modname{config.resolver.derive_target_resolution_context} 按下列优先级：
+
+\begin{enumerate}
+  \item \yamlkey{project.tim_res} / \yamlkey{project.grid_res} 已写 → 直接用
+  \item 全部 simulation 的 \yamlkey{tim_res} / \yamlkey{grid_res} 一致 → 用这个共享值
+  \item 各 simulation 的值不一致 → \texttt{ConfigError}：\emph{"Reference resolution is ambiguous across simulations: simulation grid\_res values differ; set project.grid\_res explicitly"}
+\end{enumerate}
+
+如果 1、2 都不命中（项目空、所有 sim 都没写），\modname{config.adapter} 在传给引擎前会再兜底：\yamlkey{tim_res} → \texttt{Month}，\yamlkey{grid_res} → \texttt{0.5}。但这是\emph{兜底而非默认}——实际工作流应该走优先级 1 或 2。
+
+\paragraph{重网格的代价}
+
+把所有 sim/ref 数据重采样到 \yamlkey{grid_res} 是 \openbench{} 在多模型/多分辨率混合评估时统一口径的关键。但 0.25° 全球 monthly + 30 个变量 + 6 个 sim 的重网格量大约 200--400 GB 中间态。如果几乎所有数据都已经在同一分辨率，写 \yamlkey{project.grid_res} 与原生匹配可避免无谓重采样。
+
 \begin{tipBox}
-\yamlkey{tim_res} / \yamlkey{grid_res} 不写就用各 simulation/reference 自带的分辨率；写了之后 \openbench{} 会把所有数据重网格化/重采样到目标分辨率。这是多模型对比时统一比较口径的关键。
+\yamlkey{tim_res} 同样按这套规则推导。频率串支持 \texttt{Year} / \texttt{Month} / \texttt{Day} / \texttt{Hour} 以及 \texttt{3hr} / \texttt{6hr} 这种"数+单位"形式（\modname{data.processing.\_normalize\_frequency}）。
 \end{tipBox}
 
 \subsection{运行参数}

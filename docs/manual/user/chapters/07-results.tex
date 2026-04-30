@@ -143,11 +143,29 @@ scores:
 
 \section{聚合权重：\yamlkey{weight}}
 
-\yamlkey{project.weight}（默认 \texttt{none}）控制 \openbench{} 把 grid 数据"压成一个数"时如何加权。它\emph{不}影响 \file{metrics/} 与 \file{scores/} 下逐格点 metric NC 本身——这些永远是逐格点计算。它\emph{只}影响下游聚合：每张 IGBP/PFT/气候带分类表里的"Overall"列、各 class 列。
+\yamlkey{project.weight} 控制 \openbench{} 把 grid 数据"压成一个数"时如何加权。它\emph{不}影响 \file{metrics/} 与 \file{scores/} 下逐格点 metric NC 本身——这些永远是逐格点计算。它\emph{只}影响下游聚合：每张 IGBP/PFT/气候带分类表里的"Overall"列、各 class 列。
+
+\subsection{默认值的细微差别}
+
+schema 字段类型是 \texttt{Optional[str]}，Python 默认 \texttt{None}。但 \modname{config.adapter:647} 在传给引擎前做了一次替换：
+
+\begin{minted}{python}
+"weight": cfg.project.weight or "area"
+\end{minted}
+
+也就是：
+
+\begin{itemize}
+  \item YAML 不写 / 写 \yamlkey{weight: null} / \yamlkey{weight:~} → cfg.project.weight=\texttt{None} → 引擎实际用 \texttt{"area"}（cos-lat 面积权）
+  \item YAML 写 \yamlkey{weight: none} → cfg.project.weight=\texttt{"none"}（字符串）→ 引擎匹配 else 分支 → 等同算术平均
+  \item YAML 写 \yamlkey{weight: area} 或 \yamlkey{weight: mass} → 直接使用对应权重
+\end{itemize}
+
+\textbf{注意这个反直觉}：\emph{省略字段}和\emph{显式写 \texttt{none}}得到的是\emph{两种不同的}加权行为。绝大多数用户不写这个字段，就在用 \texttt{area} 加权而不自知。这是 \openbench{} 一个有意的设计选择（"不写就用对的"），但写文档时容易搞错。
 
 \subsection{三种取值}
 
-\textbf{\texttt{none}（默认）}：简单算术平均。
+\textbf{\texttt{none}（仅当显式写）}：简单算术平均。
 \begin{minted}{python}
 overall_mean = ds[score].mean(skipna=True)
 \end{minted}
@@ -173,9 +191,9 @@ overall_mean = ds[score].weighted(weights).mean(skipna=True)
 \subsection{选择建议}
 
 \begin{itemize}
-  \item \textbf{开发期 / debug}：\texttt{none}（最容易理解逐格点贡献）
-  \item \textbf{全球或区域定量评估}：\texttt{area}（正确表达面积平均）
-  \item \textbf{通量类变量发表论文}：\texttt{mass}（强调高通量区域）
+  \item \textbf{开发期 / debug}：显式写 \yamlkey{weight: none}（算术平均最容易理解逐格点贡献）
+  \item \textbf{全球或区域定量评估}：不写或写 \yamlkey{weight: area}（cos-lat 面积平均，是\emph{省略时的实际行为}）
+  \item \textbf{通量类变量发表论文}：写 \yamlkey{weight: mass}（强调高通量区域）
   \item \textbf{站点评估}：weight 不生效（站点本就是离散点，无网格面积概念）
 \end{itemize}
 

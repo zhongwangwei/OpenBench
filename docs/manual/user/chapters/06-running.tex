@@ -179,26 +179,39 @@ openbench run openbench.yaml --dump-config
 
 \subsection{触发全量重算}
 
-三种方式触发：
-
-\begin{minted}{bash}
-# 命令行临时
-openbench run openbench.yaml --cores 16
-# 注意：--cores / --variables 是 CLI override，不是 config，不计入 cache key
-
-# 配置文件持久
+\begin{minted}{yaml}
 project:
   force: true   # 每次 run 都全量重算
 \end{minted}
 
-最直接：删除 \file{output/<run>/} 整个目录。
+\textbf{重要}：\openbench{} v3.0 \cli{run} 子命令\emph{不}提供 \texttt{--force} 命令行 flag——只能通过配置文件设置。\modname{runner.local:409} 在没有显式 force 参数传入时回退读取 \yamlkey{cfg.project.force}。临时调试可用环境变量包装或临时改 yaml 后再改回。
+
+\paragraph{缓存哈希覆盖范围}
+
+\modname{runner.cache.EvaluationCache.hash_config} 把以下字段进哈希（\modname{runner.local:421--429}）：
+
+\begin{itemize}
+  \item \texttt{variable} / \texttt{sim\_source} / \texttt{ref\_source}
+  \item \texttt{metrics} 列表 / \texttt{scores} 列表
+  \item \texttt{comparisons} 列表 / \texttt{statistics} 列表
+\end{itemize}
+
+\emph{不进}哈希的：\texttt{--cores} / \texttt{--variables} CLI override、\texttt{num\_cores}、\texttt{generate\_report}、\texttt{debug\_mode}。这意味着：
+
+\begin{itemize}
+  \item 改 metric/score 列表 → 自动重算受影响的 task（即使没设 \yamlkey{force}）
+  \item 改并行核数 → 直接复用缓存，不重算
+  \item 改输出目录路径（\yamlkey{output\_dir}）→ 哈希不变但目录变，缓存路径找不到 → 实际重算
+\end{itemize}
+
+最直接的全量重算手段：删除 \file{output/<run>/} 整个目录。
 
 \subsection{何时该全量重算}
 
 \begin{itemize}
-  \item 升级 \openbench{}（metric/score 实现改变）
+  \item 升级 \openbench{}（metric/score 实现改变，但版本号没进哈希）
   \item 改了 reference catalog（数据集本身的元数据）
-  \item 怀疑缓存被污染（异常中断后）
+  \item 怀疑缓存被污染（异常中断、文件系统故障后）
 \end{itemize}
 
 \section{only\_drawing 模式：只重出图}
@@ -210,17 +223,31 @@ project:
   only_drawing: true
 \end{minted}
 
-或命令行（暂未暴露为 flag，需通过 yaml 切换）。
+CLI flag 未暴露——只能通过 yaml 切换。
 
-行为：
+\paragraph{实现}
+
+打开后 \openbench{} 切换到 \modname{visualization.Mod\_Only\_Drawing} 下的 5 个专用类：
 
 \begin{itemize}
-  \item 跳过 evaluation / comparison / statistics 计算
-  \item 重新读取已有的 metrics/scores CSV
-  \item 重新调用 visualization 模块出图
+  \item \modname{Evaluation\_grid\_only\_drawing} —— 替换 \modname{core.evaluation.Evaluation\_grid}
+  \item \modname{Evaluation\_stn\_only\_drawing} —— 替换 \modname{Evaluation\_stn}
+  \item \modname{LC\_groupby\_only\_drawing} —— 替换 \modname{core.landcover\_groupby.LC\_groupby}
+  \item \modname{CZ\_groupby\_only\_drawing} —— 替换 \modname{core.climatezone\_groupby.CZ\_groupby}
+  \item \modname{ComparisonProcessing\_only\_drawing} —— 替换 \modname{core.comparison.ComparisonProcessing}
 \end{itemize}
 
-\textbf{前提}：\file{output/<run>/} 中已有完整的 evaluation 输出。
+每个类与原版同接口，但跳过计算，直接从磁盘读 \file{metrics/}、\file{scores/}、\file{comparisons/} 下已有的 NC/CSV，调 visualization 模块重出图。
+
+\paragraph{文件依赖}
+
+\begin{itemize}
+  \item \file{output/<run>/data/<var>\_ref\_<R>\_<rv>.nc} —— 预处理后的 ref（mass weight 用）
+  \item \file{output/<run>/metrics/}、\file{scores/}、\file{comparisons/} 完整的逐 task NC
+  \item \file{output/<run>/scratch/cache/} 仅 cache 状态参考，不影响出图
+\end{itemize}
+
+任一缺失会打 \texttt{ERROR}：\emph{"File not found in only\_drawing mode: ... Please run the evaluation first (set only\_drawing=False) to generate required data files."} 并跳过该图。常见触发：先开 \yamlkey{only\_drawing} 看效果但忘了先跑过完整评估。
 
 \section{debug\_mode 与日志}
 
@@ -231,12 +258,24 @@ project:
   debug_mode: true
 \end{minted}
 
-效果：
+\textbf{准确范围}（核对自代码）：\yamlkey{debug_mode} \emph{不}是全局日志级别开关。它只影响 \modname{data.processing.DatasetProcessing} 与若干 \modname{data.custom.*\_filter}（如 HydroWeb）内部的诊断打印：
 
 \begin{itemize}
-  \item 日志级别从 \texttt{INFO} 升到 \texttt{DEBUG}
-  \item 每个阶段打印更详细的步骤（坐标系、时间窗口、文件名匹配）
-  \item 不影响计算结果，只是更多输出
+  \item \modname{processing.py:730}：缺失关键属性时打 WARNING 提示用了哪个 fallback（\yamlkey{tim_res} 替代 \yamlkey{compare_tim_res} 等）
+  \item \modname{processing.py:2402}：站点处理某个分支的额外诊断
+  \item HydroWeb / GEBA 等 custom filter：站点筛选时打印每个站的过滤理由
+\end{itemize}
+
+不影响：runner 阶段日志（\modname{runner.local}）、preprocess 进度、unified\_mask、cache hit/miss 这些都是 \texttt{logger.info} / \texttt{logger.warning} 直接走 \openbench{} 的根 logger，与 \yamlkey{debug_mode} 无关。
+
+要看运行期完整 debug 输出，应该用 Python 标准 logging 配置（开发卷第 4 章会给具体方法），或者在 CLI 加 \texttt{2>\&1 | grep DEBUG}（但这只在你已用 logging.basicConfig 设过 DEBUG 级别时有用）。
+
+\paragraph{何时打开}
+
+\begin{itemize}
+  \item 站点数据筛选结果出乎意料 → 看 custom filter 的逐站日志
+  \item \yamlkey{compare_tim_res} 等字段似乎没生效 → 看 processing 层的属性 fallback 警告
+  \item 一般 evaluation/comparison 调试：\emph{用不上 \yamlkey{debug_mode}}，直接看 \file{run.log} 已经够
 \end{itemize}
 
 \subsection{日志去向}
