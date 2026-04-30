@@ -1,0 +1,287 @@
+% docs/manual/developer/chapters/06-core-engine.tex
+% 第 6 章：core 评估引擎
+
+\chapter{core 评估引擎}
+
+\modname{core} 是 \openbench{} 的"算"层：拿到对齐好的 sim/ref 数据，算出 metrics、scores、comparison 表、各种统计。本章按子模块组织，每个关键扩展点配一个 walkthrough。
+
+\section{子系统鸟瞰}
+
+\modname{core} 包含：
+
+\begin{itemize}
+  \item \modname{metrics}：25+ 统计指标（bias、RMSE、KGE、NSE 等）
+  \item \modname{scores}：8 个归一化打分（nBiasScore、Overall\_Score 等）
+  \item \modname{evaluation}：Evaluation\_grid + Evaluation\_stn 两个评估类
+  \item \modname{evaluation\_engine}：ModularEvaluationEngine + Grid/Station 子类
+  \item \modname{comparison}：跨 simulation 合并指标
+  \item \modname{landcover\_groupby} / \modname{climatezone\_groupby}：分组统计
+  \item \modname{statistics/}：19 个 \texttt{stat\_*.py} 模块（ANOVA、相关、KDE 等）+ \modname{Mod\_Statistics} dispatcher
+\end{itemize}
+
+\section{metrics.py：统计指标}
+
+\file{metrics.py} 定义 \texttt{class metrics}，每个方法是一个指标：
+
+\begin{minted}{python}
+class metrics:
+    def __init__(self): ...
+    def bias(self, s, o): ...
+    def percent_bias(self, s, o): ...
+    def RMSE(self, s, o): ...
+    def ubRMSE(self, s, o): ...
+    def correlation(self, s, o): ...
+    def NSE(self, s, o): ...
+    def KGE(self, s, o): ...
+    # ... 25+ 个
+\end{minted}
+
+\subsection{方法约定}
+
+\begin{itemize}
+  \item 入参：\texttt{s}（simulation, numpy array）+ \texttt{o}（observation, numpy array），形状一致
+  \item 返回：标量 float（grid 评估时是空间平均后的 metric；逐像素 metric 在外面调）
+  \item NaN 处理：metric 内部用 \texttt{np.nanmean} 等 nan-aware 函数
+  \item shape mismatch：一律 raise（由 evaluator 在更高层捕获）
+  \item 不打日志（保持纯函数）
+\end{itemize}
+
+\subsection{Walkthrough：添加新 metric}
+
+假设要加 \texttt{Pearson\_R3}（Pearson 相关的三次方，纯演示）：
+
+\subsubsection{Step 1：在 metrics.py 加方法}
+
+\begin{minted}{python}
+def Pearson_R3(self, s, o):
+    """Cubed Pearson correlation; emphasizes high agreement."""
+    self._validate_inputs(s, o)
+    r = self.correlation(s, o)
+    return r ** 3
+\end{minted}
+
+\subsubsection{Step 2：加测试}
+
+\begin{minted}{python}
+# tests/test_core/test_metrics.py
+def test_pearson_r3():
+    m = metrics()
+    s = np.array([1, 2, 3])
+    o = np.array([1, 2, 3])
+    assert m.Pearson_R3(s, o) == pytest.approx(1.0)
+\end{minted}
+
+\subsubsection{Step 3：注册到默认列表（可选）}
+
+如果想让 \cli{openbench run} 默认计算它，把名字加到 \file{adapter.py} 的 default metrics 列表（或让用户在 yaml 显式指定）。
+
+\subsubsection{Step 4：文档}
+
+加到用户卷第 7 章的 metric 表 + 开发卷附录 B。
+
+\section{scores.py：归一化打分}
+
+\file{scores.py} 的 \texttt{class scores} 提供 8 个归一化打分：
+
+\begin{itemize}
+  \item \texttt{nBiasScore}：归一化偏差打分
+  \item \texttt{nRMSEScore}：归一化均方根误差打分
+  \item \texttt{nPhaseScore}：相位（季节循环）打分
+  \item \texttt{nIavScore}：年际变化打分
+  \item \texttt{nSpatialScore}：空间分布打分
+  \item \texttt{nSeasonalityScore}：季节性打分
+  \item \texttt{Overall\_Score}：综合分（其他分的加权平均）
+\end{itemize}
+
+\subsection{方法约定}
+
+与 metrics 类似，但所有方法返回 [0, 1] 区间值（1 = 完美）。
+
+\subsection{Walkthrough：添加新 score}
+
+类似 metric。重点是归一化：把无界的 metric 转换到 [0, 1]，常用映射 \texttt{exp(-x)} 或 \texttt{1/(1+x)}。
+
+\section{evaluation.py / evaluation\_engine.py}
+
+\subsection{两层结构}
+
+\begin{itemize}
+  \item \modname{evaluation}：用户级 API（\texttt{Evaluation\_grid} / \texttt{Evaluation\_stn}）
+  \item \modname{evaluation\_engine}：实现细节（\texttt{ModularEvaluationEngine} 基类 + Grid/Station 子类 + 工厂）
+\end{itemize}
+
+\subsection{ModularEvaluationEngine}
+
+设计思路：每个评估单元（一对 sim×ref）由一个 engine 实例承担，engine 内部做：
+
+\begin{enumerate}
+  \item 调 \modname{data.processing.DatasetProcessing} 加载 + 对齐
+  \item 调 \modname{metrics.metrics} 算所有指标
+  \item 调 \modname{scores.scores} 算所有打分
+  \item 写 CSV
+  \item 调 \modname{visualization} 出图
+\end{enumerate}
+
+子类 \texttt{GridEvaluationEngine} 与 \texttt{StationEvaluationEngine} 区别在于站点形态的特殊处理。
+
+\subsection{工厂函数}
+
+\begin{minted}{python}
+from openbench.core import create_evaluation_engine
+
+engine = create_evaluation_engine(
+    data_type="grid",   # 或 "stn"
+    info={...},         # legacy info dict from adapter
+)
+result = engine.evaluate()
+\end{minted}
+
+\section{comparison.py}
+
+跨 simulation 聚合：所有 sim 的 metric / score CSV 合并成对比表，输入到 portrait/radar/ranking 出图模块。
+
+\subsection{触发}
+
+仅当 \yamlkey{comparison.enabled: true}。\modname{runner.local} 在 evaluation phase 完成后调它。
+
+\subsection{产物}
+
+\begin{itemize}
+  \item \file{output/<run>/comparisons/portrait\_table.csv}：模型 × (变量, score) 矩阵
+  \item \file{output/<run>/comparisons/ranking.csv}：按 Overall\_Score 排序
+  \item 调 \modname{visualization} 出 portrait\_plot.png + radar\_plot.png + ranking\_table.png
+\end{itemize}
+
+\section{Groupby 模块}
+
+\modname{landcover\_groupby} 与 \modname{climatezone\_groupby}：
+
+\begin{itemize}
+  \item 输入：grid 评估的 metric/score 数据 + 一个分类掩码（IGBP / PFT / Köppen）
+  \item 操作：按类别分组，每组算 metric/score 平均
+  \item 输出：每分类一行的 CSV + 分类直方图（LC\_based\_heat\_map）
+\end{itemize}
+
+\subsection{触发}
+
+仅当 \yamlkey{IGBP\_groupby: true} / \yamlkey{PFT\_groupby: true} / \yamlkey{climate\_zone\_groupby: true}。
+
+\subsection{依赖外部数据}
+
+\begin{itemize}
+  \item IGBP 类掩码：\openbench{} 自带（在 \file{data/} 下）
+  \item Köppen 气候带掩码：自带
+  \item PFT 掩码：取决于具体 model（CoLM / CLM 等各有版本）
+\end{itemize}
+
+\section{statistics/：19 个统计模块}
+
+\file{core/statistics/} 下：
+
+\begin{itemize}
+  \item \modname{Mod\_Statistics}：dispatcher，按 \yamlkey{statistics.items} 分发到具体模块
+  \item \modname{stat\_anova}、\modname{stat\_correlation}、\modname{stat\_covariance}
+  \item \modname{stat\_hellinger\_distance}、\modname{stat\_kernel\_density\_estimate}
+  \item \modname{stat\_mann\_kendall\_trend\_test}、\modname{stat\_three\_cornered\_hat}
+  \item \modname{stat\_partial\_least\_squares\_regression}、\modname{stat\_functional\_response}
+  \item \modname{stat\_resample}、\modname{stat\_rolling}、\modname{stat\_standard\_deviation}、\modname{stat\_variance}
+  \item \modname{stat\_z\_score}、\modname{stat\_diff}、\modname{stat\_autocorrelation}
+  \item \modname{stat\_False\_Discovery\_Rate}、\modname{stat\_Basic}
+  \item \modname{base}：共享基类与工具
+\end{itemize}
+
+\subsection{命名约定}
+
+\begin{itemize}
+  \item 文件名：\texttt{stat\_<name>.py}（snake\_case）
+  \item 主函数名：与文件同名，例如 \texttt{stat\_anova.run\_anova(...)}
+  \item I/O：从 \texttt{info} dict 读路径，写 CSV 到 \file{output/<run>/statistics/<name>/}
+  \item 出图：调对应的 \modname{visualization.Fig\_<Name>} 模块
+\end{itemize}
+
+\subsection{Walkthrough：添加新 statistic 模块}
+
+假设要加"Theil-Sen 斜率检验"：
+
+\subsubsection{Step 1：建文件 \file{stat\_theil\_sen.py}}
+
+\begin{minted}{python}
+"""Theil-Sen non-parametric trend test."""
+from .base import BaseStatistic
+
+class TheilSenTest(BaseStatistic):
+    name = "Theil_Sen"
+
+    def compute(self, info):
+        # 加载数据 + 计算 + 返回 dict
+        ...
+
+def run_theil_sen(info):
+    return TheilSenTest().run(info)
+\end{minted}
+
+\subsubsection{Step 2：注册到 dispatcher}
+
+\file{Mod\_Statistics.py} 中加：
+
+\begin{minted}{python}
+from . import stat_theil_sen
+
+DISPATCH = {
+    # ...
+    "Theil_Sen": stat_theil_sen.run_theil_sen,
+}
+\end{minted}
+
+\subsubsection{Step 3：加 visualization}
+
+\file{visualization/Fig\_Theil\_Sen.py}：
+
+\begin{minted}{python}
+def make_Theil_Sen(info, result):
+    """Plot Theil-Sen results to figures/Theil_Sen/."""
+    ...
+\end{minted}
+
+\subsubsection{Step 4：在 yaml 中启用}
+
+\begin{minted}{yaml}
+statistics:
+  enabled: true
+  items:
+    - Theil_Sen
+\end{minted}
+
+\subsubsection{Step 5：测试}
+
+\file{tests/test\_core/test\_statistics/test\_theil\_sen.py}。
+
+\section{Evaluation 内的并行}
+
+\file{processing.py} 的 DatasetProcessing 在两个层次用 \modname{joblib} 并行：
+
+\begin{itemize}
+  \item 站点级：每个站点独立处理（用于 stn 评估）
+  \item 按年级：多年 NC 合并时按年并发（grid 评估）
+\end{itemize}
+
+变量级（task 级）并发尚未启用——这是 v3.0 的已知 backlog。
+
+\section{添加新 metric / score / statistic 的总结对照}
+
+\begin{longtable}{l p{3cm} p{6cm}}
+  \toprule
+  扩展类型 & 加在哪 & 步骤 \\
+  \midrule
+  \endhead
+  metric & \file{core/metrics.py} 内的 \texttt{class metrics} & 加 method + 加测试 + 文档（5 步） \\
+  score & \file{core/scores.py} 内的 \texttt{class scores} & 同上但返回 [0, 1] \\
+  statistic & 新建 \file{core/statistics/stat\_X.py} & 加文件 + 注册到 \modname{Mod\_Statistics} + 加 visualization + 测试 + 文档（5 步） \\
+  comparison metric & \file{core/comparison.py} & 改 portrait\_table 计算逻辑 \\
+  groupby & 新建 \file{core/<X>\_groupby.py} & 较少见；通常已有 IGBP/PFT/CZ 够用 \\
+  \bottomrule
+\end{longtable}
+
+\section{下一步}
+
+下一章详解 \modname{visualization}：17 个 Fig 模块的命名约定 + 添加新 Fig 模块的 walkthrough。
