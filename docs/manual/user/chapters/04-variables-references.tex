@@ -266,6 +266,82 @@ openbench data register MyData --root-dir /data/myref --data-type grid
 # 然后跟着提示输入 Standard variable name / NC name / unit / prefix / suffix
 \end{minted}
 
+\subsection{\cli{openbench data scan}：批量自动注册}
+
+如果你已经按 \openbench{} 约定目录布局组织了一批数据集，可以一键扫描注册：
+
+\begin{minted}{bash}
+openbench data scan /Volumes/work/Reference            # 交互式
+openbench data scan /Volumes/work/Reference --auto     # 全部自动注册
+openbench data scan /Volumes/work/Reference --dry-run  # 预览不写
+\end{minted}
+
+\paragraph{期望的目录布局（硬编码）}
+
+\openbench{} 严格按以下布局识别数据集：
+
+\begin{minted}{text}
+<ref_root>/
+├── Grid/
+│   ├── LowRes/<category>/<variable>/<dataset>/*.nc
+│   ├── MidRes/<category>/<variable>/<dataset>/*.nc
+│   └── HigRes/<category>/<variable>/<dataset>/*.nc
+└── Station/<category>/<variable>/<dataset>/*.nc
+\end{minted}
+
+\texttt{<category>} 用 \texttt{Water} / \texttt{Heat} / \texttt{Bio} / \texttt{Meteo} / \texttt{Anth} / \texttt{Composite} 等约定名（见 \modname{registry.scanner.CATEGORY_MAP}）；\texttt{<variable>} 用标准变量名（如 \var{Evapotranspiration}）；\texttt{<dataset>} 是数据集目录名（成为 registry 名的一部分）。布局不符的目录无法自动扫描——只能用 \cli{data register} 手工注册。
+
+\paragraph{支持的扫描深度（3 级）}
+
+NC 文件可以位于以下任一层级：
+
+\begin{itemize}
+  \item \texttt{<dataset>/*.nc}（最常见）
+  \item \texttt{<dataset>/<single\_subdir>/*.nc}（如 \texttt{0p25deg-daily/}）
+  \item \texttt{<dataset>/<single>/<single>/*.nc}（如 \texttt{0p25deg/daily/}）
+\end{itemize}
+
+更深的层级会触发警告并跳过（\texttt{"beyond supported 3-level depth"}）。
+
+\paragraph{多分支模糊跳过}
+
+如果 \texttt{<dataset>/} 下\emph{多个}子目录都含 NC 文件（典型：composite 数据集如 \texttt{Crop/GDHY2019ver/\{maize,soybean,wheat\}/}），扫描\emph{不会}自动合并——会打 \texttt{"multiple NC-bearing subdirectories"} 警告并跳过，提示用户写 \texttt{reference\_profiles.yaml} profile 或手工注册。
+
+\paragraph{自动从 NC 提取的字段}
+
+\begin{itemize}
+  \item \yamlkey{varname} / \yamlkey{varunit}（从 NC 第一个非坐标变量；多变量时交互式选）
+  \item \yamlkey{tim_res}（从 \texttt{time} 维步长，覆盖 Hour/3Hour/6Hour/Day/8Day/Month/Year）
+  \item \yamlkey{grid_res}（从 \texttt{lat} 维步长）
+  \item \yamlkey{data_type}（lat 或 lon 任一 >1 → grid，否则 stn）
+  \item \yamlkey{years}（从所有 NC 文件名年份正则：4 位连续数字，且\emph{不被}字母前缀如 \texttt{v2010} 污染）
+  \item \yamlkey{prefix} / \yamlkey{suffix}（按文件名年份位置自动切分）
+  \item \yamlkey{data_groupby}（按文件名日期粒度：Single / Day / Month / Year）
+\end{itemize}
+
+\paragraph{重扫安全性：保留的手编字段}
+
+每次 \cli{data scan} / \cli{data register} 重扫已有数据集时，下列\emph{用户字段}从已有 catalog 中保留，不会被自动检测覆盖：
+
+\begin{itemize}
+  \item \yamlkey{description}（自由文本，扫描永远填不出有意义的）
+  \item \yamlkey{category}（用户可能重新分类，如 Water → Water-Energy）
+  \item \yamlkey{years}（用户对年份的修正比文件名提取更可靠）
+  \item \yamlkey{timezone}（默认 0 即 UTC，但用户可改为 -8 等本地时区）
+  \item \yamlkey{fulllist}（站点列表 CSV 路径——如果指向真实存在的文件就保留，不重生成）
+  \item 每个变量的 \yamlkey{varname} / \yamlkey{varunit} / \yamlkey{prefix} / \yamlkey{suffix}
+\end{itemize}
+
+而 \yamlkey{tim_res} / \yamlkey{grid_res} / \yamlkey{data_type} 等"技术字段"会按新扫描结果覆盖（NC 内容才是事实源）。
+
+\paragraph{安全保证：写入备份与并发锁}
+
+\begin{itemize}
+  \item 写入 catalog 前自动备份到 \file{<catalog>.yaml.bak}（单槽，每次写覆盖）
+  \item Catalog 文件 YAML 损坏时硬错（\texttt{RuntimeError}）而非静默清空
+  \item 多个 \cli{data scan} 进程并发时通过 \file{<catalog>.lock} 文件 \texttt{flock} 序列化（HPC 共享 registry 场景）
+\end{itemize}
+
 \section{命令：数据下载与状态（部分未实现）}
 
 \subsection{\cli{openbench data download}}

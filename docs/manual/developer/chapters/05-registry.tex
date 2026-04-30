@@ -133,17 +133,91 @@ ref_path = get_writable_reference_catalog_path()
 
 \section{Scanner：自动元信息提取}
 
-\file{registry/scanner.py} 在 \cli{openbench data register} 中被调用，从 NC 文件自动提取：
+\file{registry/scanner.py} 是 \cli{openbench data scan} / \cli{register} / \cli{register-profile} 的实现层，约 1600 行，按 stage 与 helper 切分。从目录结构 + NC 元数据自动产出 catalog 条目。
+
+\subsection{硬编码目录布局}
+
+scanner 严格期望以下布局（\modname{scan\_reference\_directory}）：
+
+\begin{minted}{text}
+<ref_root>/
+├── Grid/
+│   └── {LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/*.nc
+└── Station/<category>/<variable>/<dataset>/*.nc
+\end{minted}
+
+类别映射 \modname{CATEGORY\_MAP} 把目录名翻译为 catalog 中的 \yamlkey{category}（\texttt{Water/Heat/Bio/Meteo/Anth/Composite}）。\texttt{Composite} 类别在 grid 路径\emph{被显式跳过}（line 308），仅 stn 路径处理。
+
+\subsection{3-level 单链下降}
+
+\modname{\_find\_nc\_dir\_with\_descent(start, max\_descent=2)} 是 grid 与 stn 路径共用的下降算法：
+
+\begin{enumerate}
+  \item 当前目录有 NC → 返回（\texttt{"found"}）
+  \item 单个 child 含 NC → 返回该 child（深度 +1）
+  \item 多个 child 含 NC → \texttt{"ambiguous"}（composite/多变体需要 profile 或手工注册，不应静默合并）
+  \item 无 child 含 NC 但有单个空子目录 → 下降一层重试
+  \item 否则 → \texttt{"missing"}
+\end{enumerate}
+
+\texttt{max\_descent=2} 给出 3 层深度（0/1/2）。这取代了之前 grid 仅 2 层、stn 路径 multi-child 累加（最后字母序赢）的两套不同实现。
+
+\subsection{Six register stages}
+
+\modname{\_register\_to\_dict} 流水线：
+
+\begin{enumerate}
+  \item \modname{\_build\_base\_descriptor}：name / description / category / data\_type / tim\_res / data\_groupby（按文件名日期粒度判断 Year/Month/Day/Single）
+  \item \modname{\_build\_variables}：每变量字典；如有 existing\_descriptor 则保留 varname/varunit/prefix/suffix；否则调 \modname{\_inspect\_nc\_file} 读 NC 元数据
+  \item \modname{\_apply\_nc\_corrections}：用 NC 实际维度修正 data\_type；用 NC 时间步长更新 tim\_res 与 grid\_res；记录 provenance（\texttt{nc} > \texttt{scan} > \texttt{default}）
+  \item \modname{\_apply\_profile\_overrides}：从 \file{reference\_profiles.yaml} 应用预知 profile（GLEAM、ERA5LAND 等知名数据集精校字段；composite 数据集变量映射）
+  \item \modname{\_finalize\_descriptor}：grid 默认 grid\_res（按 \modname{RESOLUTION\_MAP}）；station 自动生成 fulllist CSV（除非 existing 已有有效 fulllist）；写入 \texttt{\_provenance}
+  \item \modname{\_preserve\_user\_edits}：保留 existing 中的 description / category / years / timezone（rescan 安全性）
+\end{enumerate}
+
+\subsection{Provenance 字段级追踪}
+
+只有 4 个字段进 \texttt{descriptor[\_provenance]}：
 
 \begin{itemize}
-  \item 时间分辨率（看 \texttt{time} 坐标的步长）
-  \item 空间分辨率（看 \texttt{lat}/\texttt{lon} 步长）
-  \item years 范围（time 坐标首尾）
-  \item data\_type（含 \texttt{site} 或类似坐标 → stn；否则 grid）
-  \item 可用变量列表
+  \item \yamlkey{data\_type}：\texttt{nc}
+  \item \yamlkey{tim\_res}：\texttt{nc} / \texttt{scan}（关键字）/ \texttt{default}（兜底 \texttt{Month}）/ \texttt{profile}
+  \item \yamlkey{grid\_res}：\texttt{nc} / \texttt{default}（按 \modname{RESOLUTION\_MAP}）
+  \item \yamlkey{data\_groupby}：\texttt{scan} / \texttt{profile}
 \end{itemize}
 
-scanner 把推断结果写入 catalog 的 \yamlkey{\_provenance} 字段，后续 resolver 据此打 provenance 标记。
+\yamlkey{category} / \yamlkey{description} / \yamlkey{years} / \yamlkey{timezone} 不进 provenance（user-owned，由 Stage 6 处理）。下游 \modname{config.resolver:212-214} 把 5 个原始值（\texttt{profile/existing/nc/scan/default}）分到 3 档（HIGH/MEDIUM/LOW），\cli{check} 用图标 \texttt{✓ \textasciitilde\ ⚠ ✗} 显示。详见配置子系统第 3 章 §Provenance。
+
+\subsection{安全机制（v3.0a2 加固）}
+
+\paragraph{Catalog 损坏硬错}
+
+\modname{\_safe\_load\_catalog} 在 YAML 解析失败时抛 \texttt{RuntimeError} 而非静默返回 \texttt{\{\}}（避免下次写覆盖整个 catalog）。CLI \cli{register} / \cli{register-profile} / \cli{scan} 写路径都通过此 helper。
+
+\paragraph{写前备份}
+
+\modname{\_backup\_then\_write} 在每次 \modname{\_atomic\_yaml\_write} 之前 \texttt{shutil.copy2} 当前 catalog 到 \file{<catalog>.yaml.bak}（单槽，每次覆盖）。一步可回滚的恢复路径。
+
+\paragraph{并发锁}
+
+\modname{\_catalog\_write\_lock} 是 \texttt{contextlib.contextmanager}，对 \file{<catalog>.lock} 取 \texttt{fcntl.flock(LOCK\_EX)}。两个并发 scan 进程串行化 read-modify-write。Windows 与无 nlockmgr 的 NFS 优雅降级（debug 日志 + 不锁）。
+
+\paragraph{cache 失效}
+
+\modname{\_invalidate\_registry\_caches} 在所有写 API 内部调用，清 \modname{manager.\_REGISTRY\_CACHE} 与 \modname{scanner.\_REFERENCE\_PROFILES}。CLI 与 GUI 不需关心 cache 同步。
+
+\paragraph{NC 句柄}
+
+所有 \modname{netCDF4.Dataset} 使用 \texttt{with} 上下文管理器（\modname{\_detect\_data\_type\_from\_nc} / \modname{\_inspect\_nc\_file} / \modname{\_parse\_single\_station\_file}），避免中间异常导致句柄泄漏。
+
+\subsection{已知限制}
+
+\begin{itemize}
+  \item \textbf{硬编码外部布局}：不可配置；非约定布局只能 \cli{data register} 手工注册
+  \item \textbf{扫描深度 3 级}：\texttt{<dataset>/a/b/c/*.nc} 仍跳过
+  \item \textbf{多 child 自动跳过}：composite/多变体数据集需要 \file{reference\_profiles.yaml} 或手工注册
+\end{itemize}
+
 
 \section{Walkthrough A：添加新 Reference 数据集（10 步）}
 

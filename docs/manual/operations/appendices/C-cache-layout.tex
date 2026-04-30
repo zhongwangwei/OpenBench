@@ -156,3 +156,71 @@ output/<project_name>/
 \end{minted}
 
 每用户 evaluation 独立目录；共享数据走 \texttt{refs/}。
+
+\section{Registry 目录布局}
+
+除 evaluation 输出外，\openbench{} 维护一个独立的 registry 目录用于 reference 数据集元信息。位置：
+
+\begin{itemize}
+  \item \emph{包内 registry}（\modname{REGISTRY\_DIR}，可写时优先）：\file{<package>/data/registry/}
+  \item \emph{用户 registry}（包不可写时回退）：\file{\$HOME/.openbench/}
+\end{itemize}
+
+\modname{registry.manager.get\_writable\_registry\_dir} 自动选可写位置。
+
+\subsection{完整 registry 树}
+
+\begin{minted}{text}
+<registry_dir>/
+├── reference_catalog.yaml          # 主 catalog（数据集元信息）
+├── reference_catalog.yaml.bak      # 单槽备份（每次写覆盖；恢复路径）
+├── reference_catalog.yaml.lock     # flock 锁文件（并发 scan 序列化）
+├── reference_profiles.yaml         # 知名数据集精校 profile
+├── reference_profiles.yaml.bak     # 同上
+├── reference_profiles.yaml.lock    # 同上
+├── model_catalog.yaml              # 模型 profile
+├── station_lists/                  # 自动生成的 fulllist CSV
+│   ├── PLUMBER2.csv
+│   ├── FLUXNET_PLUMBER2.csv
+│   └── ...
+└── (其他 schema 元文件)
+\end{minted}
+
+\subsection{文件用途与可删性}
+
+\begin{longtable}{p{4cm} p{4cm} p{5cm}}
+  \toprule
+  文件 & 用途 & 可删？ \\
+  \midrule
+  \endhead
+  \texttt{reference\_catalog.yaml} & 数据集元信息主源 & \emph{不要删} \\
+  \texttt{*.yaml.bak} & 一步前的 catalog 状态 & 可（仅恢复用） \\
+  \texttt{*.yaml.lock} & 并发写锁 & 可（运行中存在；空闲时无所谓） \\
+  \texttt{reference\_profiles.yaml} & GLEAM/ERA5/PLUMBER 等知名数据集精校字段 & \emph{不要删} \\
+  \texttt{model\_catalog.yaml} & 模型 profile 主源 & \emph{不要删} \\
+  \texttt{station\_lists/} & \cli{data scan} 自动生成的 fulllist CSV & 可（regen 自 NC，但不要轻删用户筛选过的） \\
+  \bottomrule
+\end{longtable}
+
+\subsection{从 .bak 恢复}
+
+如果 \cli{openbench data scan} 或 \cli{register} 误覆盖了手编条目，可一步恢复：
+
+\begin{minted}{bash}
+cp <registry_dir>/reference_catalog.yaml.bak \
+   <registry_dir>/reference_catalog.yaml
+openbench data scan ...   # 或重新 register，不再写错
+\end{minted}
+
+\textbf{重要}：\texttt{.bak} 是\emph{单槽}（一次写覆盖一次）。如果连续做了多次错误的 register/scan，第二次开始就只能从最近一次 .bak 恢复，更早的状态需要 git 或外部备份。
+
+\subsection{多用户并发 scan}
+
+HPC 共享 registry（多个用户同时跑 \cli{data scan} 写同一 \file{reference\_catalog.yaml}）：
+
+\begin{itemize}
+  \item \modname{\_catalog\_write\_lock} 用 \texttt{fcntl.flock} 在 \file{<catalog>.lock} 上加排他锁
+  \item 第二个进程会\emph{阻塞}等待第一个完成 read-modify-write 整个 cycle
+  \item Lustre / GPFS 通常支持 nlockmgr，flock 工作正常
+  \item 老 NFSv3 不支持 flock 时优雅降级（debug 日志 + 不锁，存在最后写赢风险——共享 registry 时建议升级 NFS 或避免并发）
+\end{itemize}
