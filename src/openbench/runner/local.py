@@ -102,13 +102,14 @@ def _evaluate_single(task: dict[str, Any]) -> dict[str, Any]:
 
         cache = EvaluationCache(Path(cache_dir))
         if cache.is_cached(cache_key, config_hash):
-            # Verify that output files actually exist before trusting cache
+            # Verify that output files actually exist before trusting cache.
+            # Pattern MUST include ref_source — multi-ref configs have several
+            # tasks per (var, sim) and an earlier ref's outputs would otherwise
+            # let a later ref's cache check falsely pass with skipped=True even
+            # though that ref had never been evaluated. Reuse _find_existing_outputs
+            # which already encodes the correct (var, ref, sim) pattern.
             output_dir = Path(cache_dir)
-            scores_pattern = f"{var_name}*{sim_source}*"
-            has_output = (
-                any((output_dir / "scores").glob(scores_pattern))
-                or any((output_dir / "metrics").glob(scores_pattern))
-            ) if (output_dir / "scores").is_dir() or (output_dir / "metrics").is_dir() else False
+            has_output = bool(_find_existing_outputs(output_dir, task))
             if has_output:
                 logger.info("Cached, skipping %s: sim=%s ref=%s", var_name, sim_source, ref_source)
                 return {

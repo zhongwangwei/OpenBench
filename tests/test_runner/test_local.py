@@ -1564,3 +1564,63 @@ def test_preprocess_mixed_grid_and_stn_sims_with_same_grid_ref(tmp_path, monkeyp
     assert sim_dtypes_seen == {"grid", "stn"}, (
         f"ref preps should cover both sim types, got {sim_dtypes_seen}"
     )
+
+
+def test_cache_validation_pattern_includes_ref_source(tmp_path):
+    """Cache hit must verify outputs contain THIS task's ref_source.
+
+    Regression: cache validation in _evaluate_single used the glob
+    pattern f"{var_name}*{sim_source}*" which omitted ref_source. With
+    multi-ref configs, an earlier (Var, SimA, RefA) task's outputs
+    (Var_ref_RefA_sim_SimA_*.nc) would let a later (Var, SimA, RefB)
+    cache check falsely pass — RefB had never run but _evaluate_single
+    returned skipped=True. Fix reuses _find_existing_outputs which
+    correctly includes ref_source in the glob.
+    """
+    from openbench.runner.local import _evaluate_single
+    from openbench.runner.cache import EvaluationCache, make_cache_key
+
+    cache_dir = tmp_path
+    (cache_dir / "scores").mkdir()
+    (cache_dir / "metrics").mkdir()
+
+    # Simulate prior run of (Runoff, SimA, RefA) leaving files behind
+    (cache_dir / "scores" / "Runoff_ref_RefA_sim_SimA_Overall_Score.nc").touch()
+    (cache_dir / "metrics" / "Runoff_ref_RefA_sim_SimA_bias.nc").touch()
+
+    # Now check (Runoff, SimA, RefB) — DIFFERENT ref, same sim
+    cache = EvaluationCache(cache_dir)
+    refb_key = make_cache_key("Runoff", "SimA", "RefB")
+    refb_hash = "fakehash_for_RefB"
+    # Mark RefB as cached so cache.is_cached() returns True
+    cache.mark_done(refb_key, refb_hash)
+
+    # Pre-fix: this would falsely return skipped=True because the loose
+    # pattern matched RefA's files. Post-fix: pattern includes ref_source,
+    # no RefB files exist → cache treated as stale → re-evaluation triggered.
+    task = {
+        "var_name": "Runoff",
+        "sim_source": "SimA",
+        "ref_source": "RefB",      # ← different ref
+        "cache_key": refb_key,
+        "config_hash": refb_hash,
+        "use_cache": True,
+        "cache_dir": str(cache_dir),
+        "bindings": None,
+    }
+
+    # We don't run the full _evaluate_single (it requires real bindings/info),
+    # but we can directly assert the underlying pattern: _find_existing_outputs
+    # for RefB must NOT return RefA's files.
+    from openbench.runner.local import _find_existing_outputs
+
+    matches = _find_existing_outputs(cache_dir, task)
+    assert matches == [], (
+        f"_find_existing_outputs for (Runoff, SimA, RefB) should return [] "
+        f"but found {[m.name for m in matches]} — multi-ref cache validation regression"
+    )
+
+    # Sanity: RefA's lookup DOES find them
+    task_refa = dict(task, ref_source="RefA")
+    matches_a = _find_existing_outputs(cache_dir, task_refa)
+    assert len(matches_a) == 2, f"RefA should find its 2 files, got {matches_a}"
