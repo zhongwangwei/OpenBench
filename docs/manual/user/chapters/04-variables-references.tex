@@ -266,6 +266,43 @@ openbench data register MyData --root-dir /data/myref --data-type grid
 # 然后跟着提示输入 Standard variable name / NC name / unit / prefix / suffix
 \end{minted}
 
+\subsection{自定义 filter（高级）}
+
+如果你的数据集需要 \emph{compute 表达式 / prefix-suffix} 表达不了的预处理逻辑——典型如\emph{动态生成站点列表}（按多分辨率 lookup、按 CaMA-Flood 路由约定查文件、跨变量决策选站）——可以写一个 Python filter 脚本。
+
+\openbench{} 在加载数据时按以下顺序找 filter：
+
+\begin{enumerate}
+  \item 用户目录：\file{\$OPENBENCH_CUSTOM_DIR/<name>\_filter.py} 或 \file{\$HOME/.openbench/custom/<name>\_filter.py}
+  \item 包内置：\file{<package>/data/custom/<name>\_filter.py}
+\end{enumerate}
+
+\texttt{<name>} 必须与你在 \yamlkey{reference} 里引用的数据集名一致（或去掉尾部数字后的 base 名，如 \texttt{CoLM2024} 自动回退到 \texttt{CoLM}）。模块需暴露 \texttt{filter\_<name>(info, ds=None)} 函数，分两种模式工作：
+
+\begin{itemize}
+  \item \textbf{初始化模式}（\texttt{ds=None}）：生成站点列表 CSV，写到 \texttt{info.ref\_fulllist}
+  \item \textbf{运行时变量提取模式}（\texttt{ds=Dataset}）：返回 \texttt{(info, xr.DataArray)}
+\end{itemize}
+
+最简起步：
+
+\begin{minted}{bash}
+# 1. 复制内置 filter 作模板
+mkdir -p ~/.openbench/custom
+cp <openbench>/src/openbench/data/custom/GEBA_filter.py \
+   ~/.openbench/custom/MyData_filter.py
+
+# 2. 改函数名 filter_GEBA → filter_MyData
+# 3. 改数据集路径、变量名、站点维度等
+# 4. 在 reference YAML 引用 MyData
+#    reference:
+#      <Variable>: MyData
+\end{minted}
+
+完整契约（info 字段、CSV 列名、错误处理约定）+ 完整模板见开发卷第 4 章 §"custom: 用户可扩展 filter"。
+
+\warninline{filter 不要调 \texttt{sys.exit} ——会杀整个 evaluator。配置错误用 \texttt{raise ValueError(...)}，runner 会捕获并把那个 (sim, ref) 标记为失败而不影响其他任务。}
+
 \subsection{\cli{openbench data scan}：批量自动注册}
 
 如果你已经按 \openbench{} 约定目录布局组织了一批数据集，可以一键扫描注册：
