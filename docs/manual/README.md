@@ -59,6 +59,29 @@ make all
 make clean
 ```
 
+## 自动生成器
+
+部分参考章节由代码自动生成，避免手抄漂移：
+
+| 输出文件 (`_generated/`) | 数据源 | 生成器 |
+|---|---|---|
+| `reference_table.tex` | `src/openbench/data/registry/reference_catalog.yaml` | `generate_reference_table` |
+| `model_table.tex` | `src/openbench/data/registry/model_catalog.yaml` | `generate_model_table` |
+| `config_schema.tex` | `src/openbench/config/schema.py` | `generate_config_schema` |
+| `registry_schema.tex` | `src/openbench/data/registry/schema.py` | `generate_registry_schema` |
+| `internal_interfaces.tex` | `src/openbench/{util,core,data,runner}/**/*.py` (扫 ABC/Protocol) | `generate_internal_interfaces` |
+
+`make all` 会先调用 `make generated`，所以正常编译流程不需要手动跑生成器。
+单独再生：
+
+```bash
+make generated
+# 或单个
+python -m docs.manual.scripts.generate_reference_table
+```
+
+修改了源文件（schema 或 catalog）就跑 `make generated`，否则附录会过期。
+
 ## 中文字体
 
 使用 `ctexbook` 文档类，字体由 `ctex` 自动检测：
