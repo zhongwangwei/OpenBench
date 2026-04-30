@@ -1,0 +1,277 @@
+% docs/manual/developer/chapters/04-data-subsystem.tex
+% 第 4 章：data 子系统
+
+\chapter{data 子系统}
+
+\modname{data} 是 \openbench{} 的 I/O 与预处理层。它把磁盘上的 NetCDF 与 station CSV 转化为 evaluator 可消费的 numpy/xarray 数据。本章按数据流顺序：装载 → 单位 → 重网格 → 时间对齐 → 缓存 → 站点匹配。
+
+\section{子系统鸟瞰}
+
+\modname{data} 子包结构：
+
+\begin{itemize}
+  \item \modname{pipeline}：高层编排（462 行）
+  \item \modname{cache}：缓存键 + 内存/磁盘/zarr 三层
+  \item \modname{climatology}：多年平均季节循环
+  \item \modname{compute}：单变量计算辅助（如 \texttt{compute} 表达式求值）
+  \item \modname{coordinates}：坐标系探测、glob\_nc 等基础工具
+  \item \modname{file\_processing}：NC 文件级辅助
+  \item \modname{processing}：DatasetProcessing 主类
+  \item \modname{regrid}：CDO + WGS84 两条重网格路径
+  \item \modname{station\_matcher} / \modname{station\_scanner}：站点处理
+  \item \modname{time\_utils}：时间转换与对齐
+  \item \modname{unit}：单位换算
+  \item \modname{registry}：reference 与 model catalog（独立子章节，见第 5 章）
+  \item \modname{custom}：v2.0 兼容的"自定义 filter"目录（v3.0 中正在被 registry 取代）
+  \item \modname{fignml}：Fortran namelist 解析（仅 migration 用）
+\end{itemize}
+
+\section{pipeline.py：数据流编排}
+
+\file{pipeline.py} 定义 \texttt{DataPipeline} 与 task 级 entry。给定一个 task（var × sim × ref），pipeline 负责：
+
+\begin{enumerate}
+  \item 加载 reference NC（用 \texttt{xarray.open\_dataset} 或 \texttt{open\_mfdataset}）
+  \item 加载 simulation NC
+  \item 应用 model profile 中的 \texttt{compute} 表达式（如 \texttt{value * 86400 / 2.5e6}）
+  \item 调 \modname{regrid} 把两边都对齐到 \yamlkey{project.grid_res}
+  \item 调 \modname{time\_utils} 时间对齐
+  \item 应用 \yamlkey{unified_mask}
+  \item 写中间 zarr 缓存
+  \item 返回对齐好的 sim/ref 数据集
+\end{enumerate}
+
+输出会缓存到 \file{output/<run>/data/<task\_key>.zarr}，下次相同 task 直接复用。
+
+\section{cache.py：三层缓存}
+
+\modname{cache} 实现三层：
+
+\begin{itemize}
+  \item \textbf{Memory cache}：进程内 dict，单 task 多次访问同一 source NC 不重读
+  \item \textbf{Disk cache}：\file{output/<run>/data/} 下的 zarr，跨 task 共享（同一 reference 给多个 sim 用时，只读一次）
+  \item \textbf{Hash-based key}：cache key 由 task 元信息哈希；变量改一字段就 invalidate
+\end{itemize}
+
+\subsection{cache key 设计}
+
+\file{runner/cache.py:make\_cache\_key} 与 \texttt{EvaluationCache.hash\_config}：
+
+\begin{minted}{python}
+key = make_cache_key(var_name, sim_source, ref_source)
+config_hash = EvaluationCache.hash_config({
+    "variable": var_name,
+    "sim_source": sim_source,
+    "ref_source": ref_source,
+    "metrics": metric_vars,
+    "scores": score_vars,
+    "comparisons": comparison_vars,
+    "statistics": statistic_vars,
+})
+\end{minted}
+
+\textbf{决定 cache 命中的字段}：变量名、sim 标签、ref 名、metrics 列表、scores 列表、comparisons 列表、statistics 列表。
+
+\textbf{不影响 cache 的字段}：CLI 临时 \texttt{--cores} / \texttt{--variables}（这些是覆盖，不是 config）。
+
+\subsection{什么时候要清缓存}
+
+\begin{itemize}
+  \item \openbench{} 升级（metric/score 实现改了）
+  \item Reference catalog 变了（数据集元信息更新）
+  \item 异常中断后怀疑 cache 被污染
+\end{itemize}
+
+详见用户卷第 6 章。
+
+\section{regrid/：重网格化}
+
+两条独立路径：
+
+\subsection{regrid\_cdo.py：CDO 路径}
+
+调用系统的 \texttt{cdo}（Climate Data Operators）二进制。要求：
+
+\begin{itemize}
+  \item 系统有 \texttt{cdo}（\texttt{brew install cdo}/\texttt{apt install cdo}）
+  \item 源数据是规则经纬度网格
+  \item 主要支持双线性、保守、最近邻三种插值
+\end{itemize}
+
+\subsection{regrid\_wgs84.py：纯 Python 路径}
+
+不依赖外部二进制；用 numpy + scipy 实现。适用于：
+
+\begin{itemize}
+  \item 小数据 + 没装 CDO 的环境
+  \item 测试环境
+\end{itemize}
+
+\subsection{选哪条}
+
+\modname{utils} 决定逻辑：默认尝试 CDO，失败回退 WGS84。如果你的环境没装 CDO，每次都走 wgs84 会有警告。
+
+\section{unit.py：单位换算}
+
+\file{unit.py} 提供 \texttt{convert\_units(data, from\_unit, to\_unit)}。覆盖：
+
+\begin{itemize}
+  \item 长度（m / mm / cm / km）
+  \item 时间（s / min / hour / day）
+  \item 复合（kg/m²/s ↔ mm/day，需要水密度假设）
+  \item 温度（K ↔ °C）
+  \item 能量通量（W/m² ↔ J/m²/s）
+\end{itemize}
+
+\subsection{compute 表达式求值}
+
+model profile 里的 \yamlkey{compute} 字段是 Python 表达式（用 \texttt{eval}），\texttt{value} 是源变量数据：
+
+\begin{minted}{yaml}
+Evapotranspiration:
+  varname: f_lh_vap
+  varunit: W/m2
+  compute: value * 86400 / 2.5e6   # W/m2 → mm/day
+\end{minted}
+
+求值在 \file{compute.py} 完成；上下文里只暴露 \texttt{value} + numpy 函数（\texttt{np.where}、\texttt{np.maximum} 等），不能 import 任意 Python 模块（安全考虑）。
+
+\section{station\_matcher.py / station\_scanner.py}
+
+\subsection{站点匹配}
+
+当 simulation 是 grid 而 reference 是 station 时，\modname{station\_matcher} 负责：
+
+\begin{enumerate}
+  \item 从 \yamlkey{simulation.<label>.fulllist} CSV 读站点经纬度
+  \item 对每个站点位置在 grid sim 中采样（最近邻或双线性）
+  \item 输出与 station ref 同形状的"伪站点"sim 数据
+\end{enumerate}
+
+CSV 格式：必须有 \texttt{site, lat, lon} 三列（其他列被忽略，但常含 IGBP 类等元信息）。
+
+\subsection{站点扫描}
+
+\modname{station\_scanner} 是反向：从 station NC 文件批量提取站点信息（site id、lat、lon、可用变量），生成 catalog 入口。
+
+\section{time\_utils.py：时间对齐}
+
+实现 \yamlkey{time_alignment} 三种策略：
+
+\begin{itemize}
+  \item \texttt{intersection}：所有 sim×ref 的共同窗口
+  \item \texttt{per\_pair}：每对各自重叠
+  \item \texttt{strict}：精确匹配，不一致即报错
+\end{itemize}
+
+\subsection{时间分辨率}
+
+\openbench{} 处理 4 种：
+
+\begin{itemize}
+  \item \texttt{Year}：年均
+  \item \texttt{Month}：月均
+  \item \texttt{Day}：日均
+  \item \texttt{Hour}：小时（站点常用）
+\end{itemize}
+
+\modname{time\_utils} 用 \modname{xarray} 的 resample / groupby 把高分辨率降到目标分辨率。
+
+\subsection{时区与日历}
+
+\begin{itemize}
+  \item \yamlkey{project.timezone}：偏移整体时间轴
+  \item NC 文件的 \texttt{calendar} 属性（\texttt{standard} / \texttt{noleap} / \texttt{360\_day}）由 \modname{cftime} 处理
+  \item 跨日历对齐时强制转 \texttt{standard}
+\end{itemize}
+
+\section{climatology.py：季节循环}
+
+\file{climatology.py} 计算多年平均的每月/每日值。用途：
+
+\begin{itemize}
+  \item 评估 nPhaseScore（季节循环对齐）
+  \item 评估 nSeasonalityScore
+  \item 出 portrait 图前的预处理
+\end{itemize}
+
+\subsection{触发条件}
+
+仅当某 metric/score 需要 climatology 时计算（不是默认）。triggers：\texttt{nPhaseScore}、\texttt{nSeasonalityScore}、部分 statistics 模块。
+
+\section{file\_processing.py 与 coordinates.py}
+
+\subsection{file\_processing}
+
+NC 文件级辅助：检查文件是否可读、列出变量、提取元数据。被 registry scanner 与 pipeline 共用。
+
+\subsection{coordinates}
+
+\begin{itemize}
+  \item \texttt{glob\_nc(path)}：递归查找 \texttt{.nc} 文件
+  \item \texttt{detect\_data\_type}：从一个 NC 自动判断 grid / stn
+  \item \texttt{normalize\_coordinates}：处理 \texttt{lat} 反向（北→南 vs 南→北）、\texttt{lon} 0-360 vs -180-180
+\end{itemize}
+
+\section{compute.py：表达式求值}
+
+\file{compute.py} 实现安全的 \texttt{eval}：
+
+\begin{itemize}
+  \item 白名单 numpy 函数（\texttt{np.where}, \texttt{np.maximum}, \texttt{np.log}, \ldots）
+  \item 禁止 import / open / exec
+  \item \texttt{value} 是输入数据
+  \item 多变量复合时，可用 \texttt{value\_X} / \texttt{value\_Y} 引用其他变量（详见第 5 章 model profile 中的 fallback 设计）
+\end{itemize}
+
+\section{processing.py：DatasetProcessing 主类}
+
+\file{processing.py} 的 \texttt{DatasetProcessing} 是 evaluator 的"per-task 工作容器"。负责：
+
+\begin{itemize}
+  \item 加载 + 预处理（调 pipeline）
+  \item 内部并行（站点拆分、按年合并）—— 这是当前 v3.0a1 中 num\_cores 实际起作用的地方
+  \item 输出对齐好的 dataset 给 evaluator
+\end{itemize}
+
+\noteinline{用户卷第 6 章提到"变量级并行未启用"——意指 task 级别的并发还没接到 \modname{joblib}，但 \modname{processing} 内部已经在用 \modname{joblib} 跑站点级并行。}
+
+\section{custom/：v2.0 兼容残留}
+
+\file{data/custom/} 是 v2.0 的"自定义 filter" 目录。每个 \texttt{*\_filter.py} 是一个一次性数据预处理脚本（按数据集自定义）。v3.0 把这些功能逐步搬到 registry 注册表 + scanner 推断，所以 custom 目录在 v3.0 中正在缩小。
+
+\warninline{新数据集不要写 custom filter；用 \cli{openbench data register} + 在 catalog YAML 中写 prefix/suffix/compute。}
+
+\section{添加新数据预处理逻辑（流程）}
+
+假设你要加一种新的"高度坐标插值"逻辑，让 reference 数据从 6 层高度插到目标 1 层：
+
+\subsection{Step 1：在 \modname{data.compute} 加函数}
+
+\begin{minted}{python}
+def interp_height_to_layer(da, target_layer):
+    """Interpolate a multi-layer DataArray to a single layer."""
+    # ...
+\end{minted}
+
+\subsection{Step 2：暴露给 compute 表达式}
+
+把新函数加到 \modname{compute} 的白名单 namespace。
+
+\subsection{Step 3：在 model profile 用}
+
+\begin{minted}{yaml}
+variables:
+  Surface_Soil_Moisture:
+    varname: f_h2osoi
+    varunit: m3/m3
+    compute: interp_height_to_layer(value, 0)   # 只取第 0 层
+\end{minted}
+
+\subsection{Step 4：测试}
+
+\file{tests/test\_data/} 里加单元测试。
+
+\section{下一步}
+
+下一章详解 \modname{data.registry} 子系统：catalog YAML 结构、manager API、添加新 reference / 新 model 的两个完整 walkthrough。
