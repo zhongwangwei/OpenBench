@@ -21,12 +21,14 @@ simulation:     # 要评估哪些模型（可多个）
 四个之外，还有 5 个常用可选块：
 
 \begin{minted}{yaml}
-metrics:        # list[str]，None 表示用全部 25+ 个 metric
-scores:         # list[str]，None 表示用全部 normalized score
-comparison:     # 多模型对比开关与项
-statistics:     # 统计分析开关与项
+metrics:        # list[str]，省略默认 [bias, RMSE, correlation]
+scores:         # list[str]，省略默认 [Overall_Score]
+comparison:     # 多模型对比开关与图种白名单
+statistics:     # 统计分析开关与方法白名单
 options:        # （已废弃）旧的 v2.0 选项；自动迁移到 project
 \end{minted}
+
+\warninline{\yamlkey{metrics} / \yamlkey{scores} 省略时\emph{不是}用全部 25+ metric，而是 \modname{config.adapter} 给的小默认集（见 §"metrics 与 scores"）。要跑全集必须显式列出。}
 
 \noteinline{加载器会把已废弃的 \yamlkey{options} 块自动迁移到 \yamlkey{project}，并打印 deprecation 警告。新配置请直接写到 \yamlkey{project} 下。}
 
@@ -51,8 +53,10 @@ project:
 project:
   lat_range: [-90.0, 90.0]   # 默认全球
   lon_range: [-180.0, 180.0] # 默认全球
-  min_year_threshold: 3      # 模型与参考重叠不足 N 年时跳过该变量
+  min_year_threshold: 3      # 站点级过滤：可用年限不足 N 年的站点剔除（仅 stn 评估）
 \end{minted}
+
+\noteinline{\yamlkey{min_year_threshold} \emph{仅作用于站点参考}（\modname{data.station_matcher} + 各 \modname{data.custom.*\_filter}）。站点的有效跨度 = $\min(\text{站eyear}, \text{simEyear}, \text{years[1]}) - \max(\text{站syear}, \text{simSyear}, \text{years[0]})$；< 阈值则该站点剔除。\yamlkey{years} 区间窄会让更多站被剔除。详见第 4 章 §"min\_year\_threshold"。}
 
 \subsection{目标分辨率（可选，影响 evaluation/comparison/statistics 全部阶段）}
 
@@ -60,9 +64,11 @@ project:
 project:
   tim_res: Month     # Month | Day | Hour | Year（不写则按解析规则推导）
   grid_res: 0.5      # 目标空间分辨率（度），不写则按解析规则推导
-  timezone: 0        # 时区偏移（小时）
+  timezone: 0        # 时区偏移（小时；不写默认 0=UTC）
   weight: area       # 空间加权：none | area | mass（不写默认 area；详见第 7 章）
 \end{minted}
+
+\noteinline{\yamlkey{timezone} 仅在 hourly / daily 评估时有意义——它告诉 \openbench{} sim/ref 数据时间戳的时区基准，用于日界对齐。Monthly / Yearly 评估下值任意都不影响结果。多数模型输出与 ERA5 等全球 reference 都用 UTC（值 0），所以省略最常见。}
 
 \paragraph{tim\_res / grid\_res 不写时如何决定}
 
@@ -117,10 +123,10 @@ project:
 
 \begin{minted}{yaml}
 project:
-  debug_mode: false        # 详细日志
-  only_drawing: false      # 跳过计算，只重绘已有结果
-  force: false             # 忽略增量缓存，全量重算
-  strict_reference: false  # 把"低置信度元数据"警告升级为错误
+  debug_mode: false        # 仅 DatasetProcessing 内部诊断打印；不影响 runner 日志（见第 6 章）
+  only_drawing: false      # 跳过计算，只重出图（见第 6 章 §only_drawing 模式）
+  force: false             # 忽略增量缓存，全量重算（见第 6 章 §force 重算）
+  strict_reference: false  # 让 check 把 LOW provenance 升级为错误（见第 4 章 §Provenance 警告）
 \end{minted}
 
 \section{evaluation 块}
@@ -197,7 +203,25 @@ simulation:
     root_dir: /data/clm5_run
 \end{minted}
 
-每个 simulation 至少需要 \yamlkey{model} + \yamlkey{root_dir}。其余字段（\yamlkey{prefix} / \yamlkey{suffix} / \yamlkey{data_groupby} / \yamlkey{tim_res} / \yamlkey{grid_res} / \yamlkey{variables}）会从 model profile 继承默认值，可在此处局部覆盖。详见第 5 章。
+每个 simulation 至少需要 \yamlkey{model} + \yamlkey{root_dir}。其余 8 个字段都会从 model profile 继承默认值，可在此处局部覆盖：
+
+\begin{longtable}{p{3cm} p{2cm} p{8cm}}
+  \toprule
+  字段 & 默认 & 含义 \\
+  \midrule
+  \endhead
+  \yamlkey{data_type} & profile & \texttt{grid} 或 \texttt{stn}；当 sim 与 ref 的 data\_type 不同时触发"grid 抽样到站"路径 \\
+  \yamlkey{tim_res} & profile & 时间分辨率，与 \yamlkey{project.tim_res} 配合做重采样 \\
+  \yamlkey{grid_res} & profile & 空间分辨率，与 \yamlkey{project.grid_res} 配合做重网格 \\
+  \yamlkey{data_groupby} & profile & \texttt{Year} / \texttt{Month} / \texttt{Day} / \texttt{single}：sim 输出文件的拆分粒度（用 \texttt{single} 表示一个文件含全时段）\\
+  \yamlkey{prefix} & profile & 文件名前缀（如 \texttt{Case01\_hist\_}），与 \yamlkey{suffix} 一起拼出文件名模板 \\
+  \yamlkey{suffix} & profile & 文件名后缀（如 \texttt{\_h0}）\\
+  \yamlkey{fulllist} & profile & 站点列表 CSV 路径——\textbf{站点 sim 必填}（第 4 章 §"站点数据特殊配置"）\\
+  \yamlkey{variables} & profile & 嵌套 dict：\texttt{\{var\_name: \{varname, ...\}\}}，覆盖 profile 中变量级映射 \\
+  \bottomrule
+\end{longtable}
+
+详细 model profile 与字段含义见第 5 章。
 
 \subsection{\yamlkey{_defaults}：simulation 块内的默认值合并}
 
@@ -232,6 +256,110 @@ simulation:
 \end{itemize}
 
 \warninline{\yamlkey{_defaults} 仅在 \yamlkey{simulation} 块内有效。在 \yamlkey{project} / \yamlkey{evaluation} / \yamlkey{reference} 等顶层块写 \yamlkey{_defaults} 不会被识别（loader 会把它当成异常 key 拒绝）。}
+
+\section{metrics 与 scores（顶层可选列表）}
+
+\openbench{} 内置 25+ metric 与若干归一化 score。\yamlkey{metrics} / \yamlkey{scores} 是顶层 \emph{flat list}（不是块），决定本次评估算哪些：
+
+\begin{minted}{yaml}
+metrics:
+  - bias
+  - RMSE
+  - correlation
+  - KGE
+  - NSE
+
+scores:
+  - Overall_Score
+  - PercentBiasScore
+  - nRMSEScore
+\end{minted}
+
+\paragraph{省略时的默认（容易踩坑）}
+
+\modname{config.adapter:655--663} 给出小默认集，\emph{不是}全集：
+
+\begin{itemize}
+  \item \yamlkey{metrics} 省略 → \texttt{[bias, RMSE, correlation]}（3 个）
+  \item \yamlkey{scores} 省略 → \texttt{[Overall\_Score]}（1 个）
+\end{itemize}
+
+要跑全部 metric 必须\emph{显式}列出名字。可用列表见第 7 章 §"常用 metric 含义速查"与附录 D。
+
+\paragraph{大小写敏感}
+
+metric/score 名严格区分大小写。\yamlkey{rmse} 不会被识别为 \texttt{RMSE}。loader 不预校验名称——拼错或大小写错的 metric 会在 evaluation 阶段被忽略（不报错）。建议先用 \cli{openbench check} 后启动 run，但 check 当前也不验 metric 名。
+
+\section{comparison 块}
+
+\yamlkey{comparison} 控制\emph{多 sim × ref 对比图种}的产出：
+
+\begin{minted}{yaml}
+comparison:
+  enabled: true                  # 默认 false
+  items:                         # 省略默认 [Taylor_Diagram, HeatMap]
+    - Taylor_Diagram
+    - HeatMap
+    - Portrait_Plot_seasonal
+    - Single_Model_Performance_Index
+\end{minted}
+
+\paragraph{省略 \yamlkey{items} 的默认（与上面同样的坑）}
+
+\modname{config.adapter:665--668} 给的默认是\emph{两种}（Taylor + HeatMap），\emph{不是}全 14 种。要跑全部图种必须显式列出。
+
+\paragraph{完整图种清单}
+
+\begin{itemize}
+  \item \texttt{Portrait\_Plot\_seasonal}：portrait 热图（每 (item, ref, sim) 一格 × 4 季节）
+  \item \texttt{HeatMap}：所有 metric/score 跨 (sim, ref) 综合热图
+  \item \texttt{Taylor\_Diagram}：(相关, 归一化标准差) 极坐标图
+  \item \texttt{Target\_Diagram}：(bias, ubRMSE) 散点图
+  \item \texttt{Single\_Model\_Performance\_Index}：综合得分 + bootstrap 置信（ranking 数据来源）
+  \item \texttt{Kernel\_Density\_Estimate}：sim/ref 概率密度对比
+  \item \texttt{Parallel\_Coordinates}：多 metric 平行坐标图
+  \item \texttt{Whisker\_Plot}：多 metric 箱线图
+  \item \texttt{Ridgeline\_Plot}：分布脊线图
+  \item \texttt{Diff\_Plot}：sim - ref 偏差地图
+  \item \texttt{Relative\_Score}：相对评分（基线对比）
+  \item \texttt{Mann\_Kendall\_Trend\_Test}：趋势显著性
+\end{itemize}
+
+详见第 7 章 §"Comparison 输出"。
+
+\noteinline{\yamlkey{enabled: false} 时不论 \yamlkey{items} 写啥都不出 comparison 产物。1 个 sim 时虽然 enabled 也能出，但所有"跨 sim 对比"图都退化为单点/单线，意义不大。}
+
+\section{statistics 块}
+
+\yamlkey{statistics} 控制\emph{独立统计分析模块}（非对比，针对 sim/ref 各自）：
+
+\begin{minted}{yaml}
+statistics:
+  enabled: true                  # 默认 false
+  items:                         # 省略默认 [] 空集 → 即便 enabled 也不跑
+    - ANOVA
+    - Correlation
+    - Mann_Kendall_Trend_Test
+    - Hellinger_Distance
+\end{minted}
+
+\warninline{\yamlkey{statistics.enabled: true} \emph{但} \yamlkey{items} 省略 → 等同没启用（\modname{config.adapter:670--673} 默认空集）。这与 comparison 的"省略 items 走两种默认"不一致，初次配置常踩坑。\emph{要跑统计模块必须 enabled + 显式 items}。}
+
+\paragraph{常用 19 个统计模块}
+
+\begin{itemize}
+  \item \texttt{ANOVA}：方差分解
+  \item \texttt{Correlation}：相关与协方差
+  \item \texttt{Hellinger\_Distance}：分布相似度
+  \item \texttt{Kernel\_Density\_Estimate}：核密度
+  \item \texttt{Mann\_Kendall\_Trend\_Test}：趋势检验
+  \item \texttt{Three\_Cornered\_Hat}：三角帽误差分解
+  \item \texttt{Partial\_Least\_Squares\_Regression}：偏最小二乘
+  \item \texttt{Functional\_Response}：变量函数响应
+  \item ...（完整列表见开发卷第 9 章或 \modname{core.statistics}）
+\end{itemize}
+
+详见第 7 章 §"Statistics 输出"。
 
 \section{!include：跨文件拆分}
 
