@@ -7,9 +7,11 @@ and the migrated core engine.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import glob
 import logging
 import os
 from pathlib import Path
+import shutil
 from typing import Any
 
 from openbench.config.adapter import BridgeRuntimeInfo, RunnerConfig
@@ -321,10 +323,20 @@ def _make_phase_error(phase: str, message: str, **details: Any) -> dict[str, Any
 
 def _find_existing_outputs(output_dir: Path, task: dict[str, Any]) -> list[Path]:
     """Find existing evaluation outputs for comparison-only mode."""
-    pattern = f"{task['var_name']}_*{task['ref_source']}*{task['sim_source']}*"
+    var_name = glob.escape(str(task["var_name"]))
+    ref_source = glob.escape(str(task["ref_source"]))
+    sim_source = glob.escape(str(task["sim_source"]))
+    patterns = [
+        f"{var_name}_ref_{ref_source}_sim_{sim_source}_*",
+        f"{var_name}_stn_{ref_source}_{sim_source}_evaluations*",
+    ]
     matches: list[Path] = []
     for subdir in ("metrics", "scores"):
-        matches.extend((output_dir / subdir).glob(pattern))
+        output_subdir = output_dir / subdir
+        if not output_subdir.is_dir():
+            continue
+        for pattern in patterns:
+            matches.extend(output_subdir.glob(pattern))
     return matches
 
 
@@ -523,6 +535,11 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
         ref_stn_data_dirs: dict[str, str] = {}
         # ref_source -> flat ref NC path (only valid while a grid-only path lives there)
         ref_flat_paths: dict[str, str] = {}
+        # ref_source -> temporary backup of the current flat ref NC. This is
+        # refreshed whenever shared unified_mask mutates the flat file, so a
+        # later station extraction can delete the flat without losing masks.
+        ref_flat_backups: dict[str, str] = {}
+        temp_backup_paths: set[str] = set()
         # Track refs whose flat NC may need restoration because a stn-involved
         # prep deleted it but the variable also has grid×grid tasks pending.
         # extract_station_data_if_needed (processing.py) deletes the shared flat
@@ -533,6 +550,37 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
         # Remember a representative grid task per ref for end-of-loop restoration
         first_grid_task_per_ref: dict[str, dict[str, Any]] = {}
         phase_errors: list[dict[str, Any]] = []
+
+        def _backup_flat_ref(ref_source: str) -> None:
+            flat_path = ref_flat_paths.get(ref_source)
+            if not flat_path or not os.path.isfile(flat_path):
+                return
+            backup_path = f"{flat_path}.unifiedmask.bak"
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            shutil.copy2(flat_path, backup_path)
+            ref_flat_backups[ref_source] = backup_path
+            temp_backup_paths.add(backup_path)
+
+        def _restore_flat_ref_if_missing(ref_source: str) -> bool:
+            flat_path = ref_flat_paths.get(ref_source)
+            if not flat_path:
+                return False
+            if os.path.exists(flat_path):
+                return True
+            backup_path = ref_flat_backups.get(ref_source)
+            if not backup_path or not os.path.isfile(backup_path):
+                return False
+            os.makedirs(os.path.dirname(flat_path), exist_ok=True)
+            shutil.copy2(backup_path, flat_path)
+            return True
+
+        def _cleanup_flat_backups() -> None:
+            for backup_path in temp_backup_paths:
+                try:
+                    if os.path.isfile(backup_path):
+                        os.remove(backup_path)
+                except OSError:
+                    logger.debug("Could not remove temporary flat-ref backup: %s", backup_path)
 
         for task in vtasks:
             ref_source = task["ref_source"]
@@ -563,6 +611,8 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                         var_name, ref_source,
                         "stn-pair" if is_stn_path else "grid",
                     )
+                    if is_stn_path:
+                        _backup_flat_ref(ref_source)
                     processor.prepare_source("ref")
                     preproc_done.add(prep_key)
                     if is_stn_path:
@@ -581,6 +631,7 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                             info["casedir"], "data",
                             f"{var_name}_ref_{ref_source}_{ref_varname}.nc",
                         )
+                        _backup_flat_ref(ref_source)
                 elif is_stn_path and ref_source in ref_stn_data_dirs:
                     # stn×stn (same ref, second sim): symlink ref files from
                     # the first stn dir to this sim's dir so we don't re-extract
@@ -602,6 +653,8 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                                 dst = os.path.join(this_data_dir, ref_file)
                                 if not os.path.exists(dst):
                                     os.symlink(src, dst)
+                elif not is_stn_path:
+                    _restore_flat_ref_if_missing(ref_source)
 
                 # Sim: each task
                 logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
@@ -613,20 +666,23 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                         ref_file_path_for_pair = ref_flat_paths.get(ref_source)
                         if time_alignment == "per_pair" and ref_file_path_for_pair:
                             # per_pair: each sim gets its own ref copy — no cross-contamination
+                            _restore_flat_ref_if_missing(ref_source)
                             ref_varname_m = info.get("ref_varname", "")
                             pair_ref = os.path.join(
                                 info["casedir"], "data",
                                 f"{var_name}_ref_{ref_source}_{sim_source}_{ref_varname_m}.nc",
                             )
                             if not os.path.exists(pair_ref):
-                                import shutil
                                 shutil.copy2(ref_file_path_for_pair, pair_ref)
                             _apply_unified_mask(info, var_name, ref_source, sim_source, ref_override=pair_ref)
+                            _backup_flat_ref(ref_source)
                             # Record per-pair ref path so evaluation uses this copy
                             task["ref_file_override"] = pair_ref
                         else:
                             # intersection/strict: mask accumulates across sims onto shared ref
+                            _restore_flat_ref_if_missing(ref_source)
                             _apply_unified_mask(info, var_name, ref_source, sim_source)
+                            _backup_flat_ref(ref_source)
 
                 task["ref_preprocessed"] = True
 
@@ -657,11 +713,13 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
         # variable, the stn prep's extract_station_data_if_needed deleted
         # the shared flat NC at data/<var>_ref_<ref>_<varname>.nc. The
         # downstream grid evaluation reads that exact path and would crash
-        # with FileNotFoundError. Restore by re-running grid prep once per
-        # affected ref. The restored prep produces a fresh flat NC and
-        # does NOT trigger station extraction (sim is grid).
+        # with FileNotFoundError. Prefer restoring the last backed-up flat
+        # ref, which preserves accumulated unified_mask edits; fall back to
+        # re-running grid prep only if no backup is available.
         refs_needing_restore = refs_with_stn_prep & refs_with_grid_tasks
         for ref_to_restore in sorted(refs_needing_restore):
+            if _restore_flat_ref_if_missing(ref_to_restore):
+                continue
             grid_task = first_grid_task_per_ref.get(ref_to_restore)
             if grid_task is None:
                 continue
@@ -687,6 +745,7 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                     var_name, ref_to_restore,
                 )
 
+        _cleanup_flat_backups()
         return phase_errors
 
     # Dispatch preprocessing + evaluation (skip in comparison_only mode)
@@ -793,17 +852,25 @@ def _run_comparison(bindings, comparison_vars, output_dir):
         metric_vars = context.metric_vars
 
         # Filter evaluation items to only those that were successfully evaluated
-        # (i.e. have score/metric output files)
+        # (i.e. have score/metric output files).
+        #
+        # Use a precise glob with the source-type marker (ref|stn) right after
+        # the item name. Plain startswith(f"{item}_") would substring-match
+        # overlapping names: with items ["Runoff", "Runoff_2"], the glob for
+        # "Runoff" would falsely match "Runoff_2_ref_*.nc" via prefix overlap.
+        # Same shape of bug as the scanner cache pattern fixed in 3b80d20.
         scores_dir = output_dir / "scores"
         metrics_dir = output_dir / "metrics"
         all_items = context.evaluation_items
         evaluation_items = []
         for item in all_items:
+            item_escaped = glob.escape(item)
+            patterns = (f"{item_escaped}_ref_*", f"{item_escaped}_stn_*")
             has_scores = scores_dir.exists() and any(
-                f.name.startswith(f"{item}_") for f in scores_dir.iterdir() if f.is_file()
+                any(scores_dir.glob(p)) for p in patterns
             )
             has_metrics = metrics_dir.exists() and any(
-                f.name.startswith(f"{item}_") for f in metrics_dir.iterdir() if f.is_file()
+                any(metrics_dir.glob(p)) for p in patterns
             )
             if has_scores or has_metrics:
                 evaluation_items.append(item)

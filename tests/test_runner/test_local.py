@@ -1025,11 +1025,12 @@ def test_comparison_helper_uses_bindings_comparison_context(tmp_path, monkeypatc
     monkeypatch.setattr(comparison_module, "ComparisonProcessing", FakeComparisonProcessing)
 
     # _run_comparison filters items to those with score/metric output files on
-    # disk; create a dummy output for "Runoff" so the filter keeps it.
+    # disk; create a properly-named output for "Runoff" so the filter keeps it.
+    # The filter requires <item>_(ref|stn)_* per real evaluation output naming.
     case_dir = tmp_path / "case"
     scores_dir = case_dir / "scores"
     scores_dir.mkdir(parents=True)
-    (scores_dir / "Runoff_dummy_score.nc").write_text("placeholder")
+    (scores_dir / "Runoff_ref_RefA_sim_SimA_Overall_Score.nc").write_text("placeholder")
 
     errors = local_runner._run_comparison(bindings, ["HeatMap"], case_dir)
 
@@ -1444,7 +1445,7 @@ def test_preprocess_runs_for_each_ref_source(tmp_path, monkeypatch):
 
 
 def test_preprocess_mixed_grid_and_stn_sims_with_same_grid_ref(tmp_path, monkeypatch):
-    """Same grid ref reused across [SimGrid, SimStn] sims must trigger TWO ref preps.
+    """Same grid ref reused across [SimGrid, SimStn] sims must trigger THREE ref preps.
 
     Edge case: with simulation: {SimGrid: grid, SimStn: stn} and a single
     grid reference, processing.extract_station_data_if_needed runs for the
@@ -1628,6 +1629,323 @@ def test_cache_validation_pattern_includes_ref_source(tmp_path):
     assert len(matches_a) == 2, f"RefA should find its 2 files, got {matches_a}"
 
 
+def test_find_existing_outputs_does_not_match_prefix_overlap(tmp_path):
+    """Cache/output lookup must not confuse RefA with RefAB or SimA with SimAB."""
+    from openbench.runner.local import _find_existing_outputs
+
+    (tmp_path / "scores").mkdir()
+    (tmp_path / "metrics").mkdir()
+    (tmp_path / "scores" / "Runoff_ref_RefAB_sim_SimAB_Overall_Score.nc").touch()
+    (tmp_path / "metrics" / "Runoff_stn_RefAB_SimAB_evaluations.csv").touch()
+
+    task = {"var_name": "Runoff", "ref_source": "RefA", "sim_source": "SimA"}
+    matches = _find_existing_outputs(tmp_path, task)
+    assert matches == [], (
+        "Lookup for (Runoff, RefA, SimA) must not match files for "
+        f"(Runoff, RefAB, SimAB): {[m.name for m in matches]}"
+    )
+
+    exact_task = {"var_name": "Runoff", "ref_source": "RefAB", "sim_source": "SimAB"}
+    exact_matches = {m.name for m in _find_existing_outputs(tmp_path, exact_task)}
+    assert exact_matches == {
+        "Runoff_ref_RefAB_sim_SimAB_Overall_Score.nc",
+        "Runoff_stn_RefAB_SimAB_evaluations.csv",
+    }
+
+
+def test_unified_mask_persists_across_stn_prep_deletion_intersection(tmp_path, monkeypatch):
+    """Restoring a stn-deleted flat ref must preserve accumulated unified_mask."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    import xarray as xr
+
+    import openbench.config.adapter as adapter
+    import openbench.core.evaluation as evaluation
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(
+            name="case", output_dir=str(tmp_path), years=[2000, 2001],
+            generate_report=False, unified_mask=True, time_alignment="intersection",
+        ),
+        evaluation=EvaluationConfig(variables=["LH"]),
+        reference=ReferenceConfig(sources={"LH": "RefGrid"}),
+        simulation={
+            "SimGrid1": SimulationEntry(model="MG1", root_dir=str(tmp_path)),
+            "SimStn": SimulationEntry(model="MS", root_dir=str(tmp_path)),
+            "SimGrid2": SimulationEntry(model="MG2", root_dir=str(tmp_path)),
+        },
+        comparison=ComparisonConfig(enabled=False, items=[]),
+        statistics=StatisticsConfig(enabled=False, items=[]),
+    )
+
+    casedir = tmp_path / "case"
+    flat_nc = casedir / "data" / "LH_ref_RefGrid_rv.nc"
+    times = np.array(["2000-01-01", "2000-02-01"], dtype="datetime64[ns]")
+    coords = {"time": times, "lat": [10.0, 20.0], "lon": [100.0, 110.0]}
+
+    def write_ref():
+        flat_nc.parent.mkdir(parents=True, exist_ok=True)
+        xr.Dataset(
+            {"rv": (("time", "lat", "lon"), np.ones((2, 2, 2), dtype=float))},
+            coords=coords,
+        ).to_netcdf(flat_nc)
+
+    def write_sim(sim_source):
+        values = np.ones((2, 2, 2), dtype=float)
+        if sim_source == "SimGrid1":
+            values[0, 0, 0] = np.nan
+        elif sim_source == "SimGrid2":
+            values[1, 1, 1] = np.nan
+        xr.Dataset(
+            {"sv": (("time", "lat", "lon"), values)},
+            coords=coords,
+        ).to_netcdf(casedir / "data" / f"LH_sim_{sim_source}_sv.nc")
+
+    class Fig:
+        def to_fig_nml(self):
+            return {}
+
+    class GridEvidence:
+        has_grid = True
+
+    class Bindings:
+        def __init__(self):
+            self.runner_cfg = SimpleNamespace(
+                basedir=str(tmp_path),
+                basename="case",
+                general={
+                    "basename": "case",
+                    "basedir": str(tmp_path),
+                    "num_cores": 1,
+                    "unified_mask": True,
+                    "generate_report": False,
+                },
+                evaluation_items={"LH": True},
+                metrics={"bias"},
+                scores={"Overall_Score"},
+                comparisons=set(),
+                statistics=set(),
+            )
+
+        def iter_task_sources(self, variables):
+            for sim in ("SimGrid1", "SimStn", "SimGrid2"):
+                yield SimpleNamespace(var_name="LH", sim_source=sim, ref_source="RefGrid")
+
+        def build_evaluation_fig_nml(self):
+            return Fig()
+
+        def has_grid_evaluation(self, variables):
+            return GridEvidence()
+
+    def fake_info(task):
+        sim = task["sim_source"]
+        info = {
+            "casedir": str(casedir),
+            "ref_varname": "rv",
+            "sim_varname": "sv",
+            "ref_data_type": "grid",
+            "sim_data_type": "stn" if sim == "SimStn" else "grid",
+            "ref_source": task["ref_source"],
+            "sim_source": sim,
+        }
+        if task.get("ref_file_override"):
+            info["ref_file_override"] = task["ref_file_override"]
+        return info
+
+    class FakeProcessor:
+        def __init__(self, info):
+            self.info = info
+
+        def prepare_source(self, datasource):
+            if datasource == "ref":
+                write_ref()
+                if self.info["sim_data_type"] == "stn":
+                    flat_nc.unlink()
+            elif datasource == "sim" and self.info["sim_data_type"] == "grid":
+                write_sim(self.info["sim_source"])
+
+    class FakeGrid:
+        def __init__(self, info, fig_nml):
+            pass
+
+        def make_Evaluation(self):
+            pass
+
+    class FakeStn:
+        def __init__(self, info, fig_nml):
+            pass
+
+        def make_evaluation_P(self):
+            pass
+
+    monkeypatch.setattr(adapter, "build_runner_bindings", lambda cfg: Bindings())
+    monkeypatch.setattr(local_runner, "_build_bridge_runtime_info", fake_info)
+    monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessor)
+    monkeypatch.setattr(evaluation, "Evaluation_grid", FakeGrid)
+    monkeypatch.setattr(evaluation, "Evaluation_stn", FakeStn)
+    monkeypatch.setattr(local_runner, "_run_groupby", lambda *a, **k: [])
+
+    result = run_evaluation(cfg, force=True)
+    assert result["status"] == "success", result.get("errors")
+
+    with xr.open_dataset(flat_nc) as ds:
+        values = ds["rv"].values
+        assert np.isnan(values[0, 0, 0]), "Mask from SimGrid1 was lost"
+        assert np.isnan(values[1, 1, 1]), "Mask from SimGrid2 was lost"
+        assert values[0, 1, 1] == 1.0, "Valid cells should remain valid"
+
+
+def test_unified_mask_per_pair_handles_deleted_flat(tmp_path, monkeypatch):
+    """per_pair mode must restore the flat ref before copying later pair refs."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    import xarray as xr
+
+    import openbench.config.adapter as adapter
+    import openbench.core.evaluation as evaluation
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(
+            name="case", output_dir=str(tmp_path), years=[2000, 2001],
+            generate_report=False, unified_mask=True, time_alignment="per_pair",
+        ),
+        evaluation=EvaluationConfig(variables=["LH"]),
+        reference=ReferenceConfig(sources={"LH": "RefGrid"}),
+        simulation={
+            "SimGrid1": SimulationEntry(model="MG1", root_dir=str(tmp_path)),
+            "SimStn": SimulationEntry(model="MS", root_dir=str(tmp_path)),
+            "SimGrid2": SimulationEntry(model="MG2", root_dir=str(tmp_path)),
+        },
+        comparison=ComparisonConfig(enabled=False, items=[]),
+        statistics=StatisticsConfig(enabled=False, items=[]),
+    )
+
+    casedir = tmp_path / "case"
+    flat_nc = casedir / "data" / "LH_ref_RefGrid_rv.nc"
+    times = np.array(["2000-01-01", "2000-02-01"], dtype="datetime64[ns]")
+    coords = {"time": times, "lat": [10.0, 20.0], "lon": [100.0, 110.0]}
+    seen_pair_refs: dict[str, np.ndarray] = {}
+
+    def write_ref():
+        flat_nc.parent.mkdir(parents=True, exist_ok=True)
+        xr.Dataset(
+            {"rv": (("time", "lat", "lon"), np.ones((2, 2, 2), dtype=float))},
+            coords=coords,
+        ).to_netcdf(flat_nc)
+
+    def write_sim(sim_source):
+        values = np.ones((2, 2, 2), dtype=float)
+        if sim_source == "SimGrid1":
+            values[0, 0, 0] = np.nan
+        elif sim_source == "SimGrid2":
+            values[1, 1, 1] = np.nan
+        xr.Dataset(
+            {"sv": (("time", "lat", "lon"), values)},
+            coords=coords,
+        ).to_netcdf(casedir / "data" / f"LH_sim_{sim_source}_sv.nc")
+
+    class Fig:
+        def to_fig_nml(self):
+            return {}
+
+    class GridEvidence:
+        has_grid = True
+
+    class Bindings:
+        def __init__(self):
+            self.runner_cfg = SimpleNamespace(
+                basedir=str(tmp_path),
+                basename="case",
+                general={
+                    "basename": "case",
+                    "basedir": str(tmp_path),
+                    "num_cores": 1,
+                    "unified_mask": True,
+                    "generate_report": False,
+                },
+                evaluation_items={"LH": True},
+                metrics={"bias"},
+                scores={"Overall_Score"},
+                comparisons=set(),
+                statistics=set(),
+            )
+
+        def iter_task_sources(self, variables):
+            for sim in ("SimGrid1", "SimStn", "SimGrid2"):
+                yield SimpleNamespace(var_name="LH", sim_source=sim, ref_source="RefGrid")
+
+        def build_evaluation_fig_nml(self):
+            return Fig()
+
+        def has_grid_evaluation(self, variables):
+            return GridEvidence()
+
+    def fake_info(task):
+        sim = task["sim_source"]
+        info = {
+            "casedir": str(casedir),
+            "ref_varname": "rv",
+            "sim_varname": "sv",
+            "ref_data_type": "grid",
+            "sim_data_type": "stn" if sim == "SimStn" else "grid",
+            "ref_source": task["ref_source"],
+            "sim_source": sim,
+        }
+        if task.get("ref_file_override"):
+            info["ref_file_override"] = task["ref_file_override"]
+        return info
+
+    class FakeProcessor:
+        def __init__(self, info):
+            self.info = info
+
+        def prepare_source(self, datasource):
+            if datasource == "ref":
+                write_ref()
+                if self.info["sim_data_type"] == "stn":
+                    flat_nc.unlink()
+            elif datasource == "sim" and self.info["sim_data_type"] == "grid":
+                write_sim(self.info["sim_source"])
+
+    class FakeGrid:
+        def __init__(self, info, fig_nml):
+            self.info = info
+
+        def make_Evaluation(self):
+            ref_override = self.info.get("ref_file_override")
+            assert ref_override, "per_pair grid evaluation must use ref_file_override"
+            with xr.open_dataset(ref_override) as ds:
+                seen_pair_refs[self.info["sim_source"]] = ds["rv"].values.copy()
+
+    class FakeStn:
+        def __init__(self, info, fig_nml):
+            pass
+
+        def make_evaluation_P(self):
+            pass
+
+    monkeypatch.setattr(adapter, "build_runner_bindings", lambda cfg: Bindings())
+    monkeypatch.setattr(local_runner, "_build_bridge_runtime_info", fake_info)
+    monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessor)
+    monkeypatch.setattr(evaluation, "Evaluation_grid", FakeGrid)
+    monkeypatch.setattr(evaluation, "Evaluation_stn", FakeStn)
+    monkeypatch.setattr(local_runner, "_run_groupby", lambda *a, **k: [])
+
+    result = run_evaluation(cfg, force=True)
+    assert result["status"] == "success", result.get("errors")
+    assert set(seen_pair_refs) == {"SimGrid1", "SimGrid2"}
+    assert np.isnan(seen_pair_refs["SimGrid1"][0, 0, 0])
+    assert not np.isnan(seen_pair_refs["SimGrid1"][1, 1, 1])
+    assert np.isnan(seen_pair_refs["SimGrid2"][1, 1, 1])
+    assert not np.isnan(seen_pair_refs["SimGrid2"][0, 0, 0])
+
+
 def test_preprocess_grid_stn_grid_sequence_restores_deleted_flat(tmp_path, monkeypatch):
     """Grid → stn → grid sequence with same ref must end with flat NC present.
 
@@ -1778,4 +2096,60 @@ def test_preprocess_grid_stn_grid_sequence_restores_deleted_flat(tmp_path, monke
     assert len(grid_after_stn) >= 1, (
         "Expected at least one grid ref prep AFTER the stn-path prep "
         f"(restoration). Sequence: {ref_call_seq}"
+    )
+
+
+def test_run_comparison_filter_does_not_match_prefix_overlap_items(tmp_path):
+    """When the user has variables ['Runoff', 'Runoff_2'] and only Runoff_2
+    has output files, the comparison item filter for 'Runoff' must NOT pass.
+
+    Previously used startswith(f"{item}_") which substring-matched: 'Runoff_'
+    is a prefix of 'Runoff_2_*.nc', so Runoff would falsely be flagged as
+    having outputs and ComparisonProcessing would be invoked with an item
+    that has no actual data — same shape of bug as the scanner cache pattern
+    fixed in 3b80d20.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from openbench.runner.local import _run_comparison
+
+    output_dir = tmp_path
+    (output_dir / "scores").mkdir()
+    (output_dir / "metrics").mkdir()
+
+    # Only Runoff_2 has real outputs (overlapping prefix scenario)
+    (output_dir / "scores" / "Runoff_2_ref_RefA_sim_SimA_Overall_Score.nc").touch()
+    (output_dir / "metrics" / "Runoff_2_ref_RefA_sim_SimA_bias.nc").touch()
+    # Runoff has NO outputs
+
+    captured_items = {"items": None}
+
+    class FakeComparisonProcessing:
+        def __init__(self, *args, **kwargs):
+            pass
+        def scenarios_HeatMap_comparison(self, basedir, sim_nml, ref_nml, items, *args, **kwargs):
+            captured_items["items"] = list(items)
+
+    import openbench.core.comparison as comp_mod
+    orig_attr = getattr(comp_mod, "ComparisonProcessing", None)
+    comp_mod.ComparisonProcessing = FakeComparisonProcessing
+    try:
+        bindings = MagicMock()
+        bindings.build_comparison_context.return_value = SimpleNamespace(
+            namelists=SimpleNamespace(main={}, simulation={}, reference={}),
+            score_vars=["Overall_Score"],
+            metric_vars=["bias"],
+            evaluation_items=["Runoff", "Runoff_2"],
+            comparison_fig={"HeatMap": {}},
+        )
+        errors = _run_comparison(bindings, ["HeatMap"], output_dir)
+    finally:
+        if orig_attr is not None:
+            comp_mod.ComparisonProcessing = orig_attr
+
+    assert errors == [], f"Comparison should not error: {errors}"
+    # Filter must reject Runoff (no actual outputs), pass Runoff_2 only
+    assert captured_items["items"] == ["Runoff_2"], (
+        f"Expected only Runoff_2 (has outputs), got: {captured_items['items']}. "
+        "Runoff_ as substring would have falsely included Runoff."
     )
