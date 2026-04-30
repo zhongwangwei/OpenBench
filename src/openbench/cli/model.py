@@ -46,14 +46,7 @@ def show(name):
     click.echo("─" * 100)
     for var_name, mapping in sorted(m.variables.items()):
         # Determine source type and display
-        raw = m.variables[var_name]
-        # Check for compute/filter (stored in the raw YAML dict, not in VariableMapping)
-        # We need to access the raw data through the catalog
-        vn = mapping.varname
-        if isinstance(vn, list):
-            vn_str = vn[0]
-        else:
-            vn_str = str(vn)
+        vn_str = str(mapping.varname)
 
         notes_parts = []
         if mapping.fallbacks:
@@ -100,16 +93,13 @@ def register(name, data_type, grid_res, tim_res, description, variable, fallback
     """
     from pathlib import Path
 
-    from openbench.data.registry.manager import RegistryManager, get_writable_registry_dir
+    from openbench.data.registry.manager import RegistryManager, get_writable_model_catalog_path
+    from openbench.data.registry.scanner import _safe_load_catalog
 
-    registry_dir = get_writable_registry_dir()
-    catalog_path = registry_dir / "model_catalog.yaml"
+    catalog_path = get_writable_model_catalog_path()
 
-    # Load existing catalog
-    catalog = {}
-    if catalog_path.exists():
-        with open(catalog_path) as f:
-            catalog = yaml.safe_load(f) or {}
+    # Hardened load: corrupted YAML raises rather than silently resetting
+    catalog = _safe_load_catalog(catalog_path)
 
     # Load existing profile if updating
     existing = catalog.get(name, {})
@@ -140,51 +130,12 @@ def register(name, data_type, grid_res, tim_res, description, variable, fallback
     elif "tim_res" not in profile:
         profile["tim_res"] = "Month"
 
-    # Parse primary variables
+    # Parse primary variables and fallbacks
+    from openbench.cli._parsing import parse_fallbacks, parse_variables
+
     existing_vars = profile.get("variables", {})
-    new_vars = {}
-    for v in variable:
-        parts = v.split(":")
-        if len(parts) < 2:
-            click.secho(f"Invalid format: '{v}'. Use 'StdName:ncname:unit'", fg="red")
-            raise SystemExit(1)
-
-        std_name = parts[0].strip()
-        nc_name = parts[1].strip()
-        unit = parts[2].strip() if len(parts) > 2 else ""
-
-        new_vars[std_name] = {"varname": nc_name, "varunit": unit}
-
-    # Parse fallback definitions → attach to corresponding variable
-    for fb_def in fallback:
-        parts = fb_def.split(":")
-        if len(parts) < 3:
-            click.secho(f"Invalid fallback: '{fb_def}'. Use 'StdName:fallback_name:fallback_unit[:conversion]'", fg="red")
-            raise SystemExit(1)
-
-        std_name = parts[0].strip()
-        fb_name = parts[1].strip()
-        fb_unit = parts[2].strip()
-        fb_convert = parts[3].strip() if len(parts) > 3 else ""
-
-        fb_entry = {"varname": fb_name, "varunit": fb_unit}
-        if fb_convert:
-            fb_entry["convert"] = fb_convert
-
-        # Attach to the variable (create if not in new_vars, merge with existing)
-        if std_name in new_vars:
-            if "fallbacks" not in new_vars[std_name]:
-                new_vars[std_name]["fallbacks"] = []
-            new_vars[std_name]["fallbacks"].append(fb_entry)
-        elif std_name in existing_vars:
-            # Fallback for existing variable that's not being updated
-            if std_name not in new_vars:
-                new_vars[std_name] = dict(existing_vars[std_name])
-            if "fallbacks" not in new_vars[std_name]:
-                new_vars[std_name]["fallbacks"] = []
-            new_vars[std_name]["fallbacks"].append(fb_entry)
-        else:
-            click.secho(f"Warning: fallback for '{std_name}' but no primary variable defined. Use -v first.", fg="yellow")
+    new_vars = parse_variables(variable)
+    parse_fallbacks(fallback, new_vars, existing_vars)
 
     if not variable and is_new:
         # Interactive variable entry
@@ -195,11 +146,12 @@ def register(name, data_type, grid_res, tim_res, description, variable, fallback
                 break
             nc_name = click.prompt(f"  NetCDF variable name(s), comma-separated for fallback", default=std_name)
             unit = click.prompt(f"  Unit", default="")
-            if "," in nc_name:
-                varname = [n.strip() for n in nc_name.split(",")]
-            else:
-                varname = nc_name
-            new_vars[std_name] = {"varname": varname, "varunit": unit}
+            nc_names = [n.strip() for n in nc_name.split(",") if n.strip()]
+            primary = nc_names[0] if nc_names else std_name
+            entry = {"varname": primary, "varunit": unit}
+            if len(nc_names) > 1:
+                entry["fallbacks"] = [{"varname": name, "varunit": unit} for name in nc_names[1:]]
+            new_vars[std_name] = entry
 
     # Merge variables — default: overwrite existing; --append-only: skip existing
     updated_keys = []
@@ -221,8 +173,11 @@ def register(name, data_type, grid_res, tim_res, description, variable, fallback
 
     # Save
     catalog[name] = profile
-    with open(catalog_path, "w") as f:
-        yaml.dump(catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
+    # Backup previous catalog before write (recovery path) + invalidate
+    # singleton cache so subsequent get_registry() reads see the new entry.
+    _backup_then_write(catalog_path, catalog)
+    _invalidate_registry_caches()
 
     # Report
     if is_new:
@@ -248,15 +203,11 @@ def remove_var(name, variable_name):
 
     Example: openbench model remove-var CoLM2024 Snow_Depth
     """
-    from openbench.data.registry.manager import get_writable_registry_dir
+    from openbench.data.registry.manager import get_writable_model_catalog_path
+    from openbench.data.registry.scanner import _safe_load_catalog
 
-    registry_dir = get_writable_registry_dir()
-    catalog_path = registry_dir / "model_catalog.yaml"
-
-    catalog = {}
-    if catalog_path.exists():
-        with open(catalog_path) as f:
-            catalog = yaml.safe_load(f) or {}
+    catalog_path = get_writable_model_catalog_path()
+    catalog = _safe_load_catalog(catalog_path)
 
     if name not in catalog:
         click.secho(f"Model not found: {name}", fg="red")
@@ -270,7 +221,8 @@ def remove_var(name, variable_name):
     del variables[variable_name]
     catalog[name]["variables"] = variables
 
-    with open(catalog_path, "w") as f:
-        yaml.dump(catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
+    _backup_then_write(catalog_path, catalog)
+    _invalidate_registry_caches()
 
     click.secho(f"✓ Removed '{variable_name}' from {name} ({len(variables)} remaining)", fg="green")

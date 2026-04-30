@@ -13,8 +13,8 @@ from joblib import Parallel, delayed
 
 from openbench.util.converttype import Convert_Type
 
+from openbench.core.statistics import statistics_calculate
 from openbench.data.processing import BaseDatasetProcessing
-from . import *
 
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -155,13 +155,20 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         remapped_data = []
         for i, data in enumerate(data_list):
             data = self.preprocess_grid_data(data)
-            data.to_netcdf("test.nc")
             new_grid = self.create_target_grid()
+            remapped = None
             for method in remapping_methods:
                 try:
                     remapped = method(data, new_grid)
+                    break
                 except Exception as e:
                     logging.warning(f"{method.__name__} failed: {e}")
+
+            if remapped is None:
+                raise RuntimeError(
+                    f"All remapping methods failed for dataset {i}. "
+                    f"Tried: {[m.__name__ for m in remapping_methods]}"
+                )
 
             # Skip resampling for climatology mode
             compare_tim_res_lower = str(self.compare_tim_res).strip().lower()
@@ -249,7 +256,13 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
 
             cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
             subprocess.run(cmd, shell=True, check=True)
-            ds = xr.open_dataset(temp_output.name)
+            # Eagerly load and close the dataset BEFORE the surrounding `with`
+            # exits and deletes temp_output. Previously returned a lazy
+            # DataArray pointing at a deleted file — silent failure on later
+            # access. .load() materializes data into memory; .close()
+            # releases the file handle.
+            with xr.open_dataset(temp_output.name) as ds:
+                ds = ds.load()
             return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
@@ -295,31 +308,13 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             logging.info(f"Result of {method_name}: {result}")
         return output_file
 
-    coordinate_map = {
-        "longitude": "lon",
-        "long": "lon",
-        "lon_cama": "lon",
-        "lon0": "lon",
-        "x": "lon",
-        "lon_ucat": "lon",
-        "latitude": "lat",
-        "lat_cama": "lat",
-        "lat0": "lat",
-        "y": "lat",
-        "lat_ucat": "lat",
-        "Time": "time",
-        "TIME": "time",
-        "t": "time",
-        "T": "time",
-        "elevation": "elev",
-        "height": "elev",
-        "z": "elev",
-        "Z": "elev",
-        "h": "elev",
-        "H": "elev",
-        "ELEV": "elev",
-        "HEIGHT": "elev",
-    }
+    from openbench.data.coordinates import COORDINATE_MAP
+    coordinate_map = dict(COORDINATE_MAP)
+    coordinate_map.update({
+        "elevation": "elev", "height": "elev",
+        "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
+        "ELEV": "elev", "HEIGHT": "elev",
+    })
     freq_map = {
         "month": "ME",
         "mon": "ME",
@@ -343,8 +338,9 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
 
 class StatisticsProcessing(BasicProcessing):
     def __init__(self, main_nml, stats_nml, output_dir, num_cores=-1):
-        super().__init__(main_nml)
-        super().__init__(stats_nml)
+        # Merge main_nml first, then overlay stats_nml (stats takes precedence)
+        merged = {**main_nml, **stats_nml}
+        super().__init__(merged)
         self.name = "StatisticsDataHandler"
         self.version = "0.3"
         self.release = "0.3"
@@ -628,6 +624,7 @@ class StatisticsProcessing(BasicProcessing):
             make_Functional_Response(output_file, statistic_method, [source], self.main_nml["general"], option)
 
     def scenarios_False_Discovery_Rate_analysis(self, statistic_method, statistic_nml, option):
+        logging.warning("False_Discovery_Rate analysis is not yet implemented, skipping")
         return
 
     def scenarios_ANOVA_analysis(self, statistic_method, statistic_nml, option):

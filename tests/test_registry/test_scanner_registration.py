@@ -1210,6 +1210,121 @@ def test_cli_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path,
     assert catalog_path.read_text() == original
 
 
+def test_cli_model_register_creates_backup_before_overwriting(tmp_path: Path, monkeypatch):
+    """openbench model register must back up the previous catalog state, like
+    openbench data register does. Previously used bare _atomic_yaml_write
+    which left no recovery path.
+    """
+    import openbench.cli.model as cli_model
+    import openbench.data.registry.manager as mgr_mod
+
+    catalog_path = tmp_path / "model_catalog.yaml"
+    catalog_path.write_text(
+        "OldModel:\n"
+        "  name: OldModel\n"
+        "  description: Hand-edited\n"
+        "  variables:\n"
+        "    Evapotranspiration:\n"
+        "      varname: ET\n"
+    )
+
+    monkeypatch.setattr(
+        mgr_mod, "get_writable_model_catalog_path",
+        lambda: catalog_path,
+    )
+    monkeypatch.setattr(cli_model.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_model.click, "secho", lambda *a, **k: None)
+
+    cli_model.register.callback(
+        name="NewModel",
+        data_type="grid",
+        grid_res=0.5,
+        tim_res="Month",
+        description=None,
+        variable=("Latent_Heat:LE:W m-2",),
+        fallback=(),
+        append_only=False,
+    )
+
+    backup_path = Path(str(catalog_path) + ".bak")
+    assert backup_path.exists(), f"Expected .bak at {backup_path}"
+    bak_data = yaml.safe_load(backup_path.read_text())
+    assert "OldModel" in bak_data
+    new_data = yaml.safe_load(catalog_path.read_text())
+    assert "OldModel" in new_data
+    assert "NewModel" in new_data
+
+
+def test_cli_model_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path, monkeypatch):
+    """openbench model register on a corrupted model_catalog.yaml must raise
+    rather than silently overwrite. Same hardening as the data register path.
+    """
+    import pytest
+    import openbench.cli.model as cli_model
+    import openbench.data.registry.manager as mgr_mod
+
+    catalog_path = tmp_path / "model_catalog.yaml"
+    catalog_path.write_text("not: valid: ::: garbage\n[broken")
+    original = catalog_path.read_text()
+
+    monkeypatch.setattr(
+        mgr_mod, "get_writable_model_catalog_path",
+        lambda: catalog_path,
+    )
+    monkeypatch.setattr(cli_model.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_model.click, "secho", lambda *a, **k: None)
+
+    with pytest.raises(RuntimeError, match="Failed to load existing catalog"):
+        cli_model.register.callback(
+            name="NewModel",
+            data_type="grid",
+            grid_res=0.5,
+            tim_res="Month",
+            description=None,
+            variable=("Latent_Heat:LE:W m-2",),
+            fallback=(),
+            append_only=False,
+        )
+
+    assert catalog_path.read_text() == original
+
+
+def test_cli_model_remove_var_creates_backup(tmp_path: Path, monkeypatch):
+    """openbench model remove-var must back up before deleting a variable."""
+    import openbench.cli.model as cli_model
+    import openbench.data.registry.manager as mgr_mod
+
+    catalog_path = tmp_path / "model_catalog.yaml"
+    catalog_path.write_text(
+        "DemoModel:\n"
+        "  name: DemoModel\n"
+        "  variables:\n"
+        "    Evapotranspiration:\n"
+        "      varname: ET\n"
+        "    Snow_Depth:\n"
+        "      varname: SD\n"
+    )
+
+    monkeypatch.setattr(
+        mgr_mod, "get_writable_model_catalog_path",
+        lambda: catalog_path,
+    )
+    monkeypatch.setattr(cli_model.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_model.click, "secho", lambda *a, **k: None)
+
+    cli_model.remove_var.callback(name="DemoModel", variable_name="Snow_Depth")
+
+    backup_path = Path(str(catalog_path) + ".bak")
+    assert backup_path.exists()
+    bak_data = yaml.safe_load(backup_path.read_text())
+    # Backup retains BOTH variables (pre-remove state)
+    assert "Snow_Depth" in bak_data["DemoModel"]["variables"]
+    # Current file has only ET
+    new_data = yaml.safe_load(catalog_path.read_text())
+    assert "Snow_Depth" not in new_data["DemoModel"]["variables"]
+    assert "Evapotranspiration" in new_data["DemoModel"]["variables"]
+
+
 def test_rescan_preserves_user_edited_timezone(tmp_path: Path):
     """timezone must be preserved across rescans. Stage 1 always writes 0
     (UTC default); without preserve, rescan resets a user's hand-edited

@@ -4,11 +4,18 @@ Skips re-computation when config + data haven't changed.
 Uses SHA-256 hash of the evaluation parameters to detect changes.
 Cache metadata stored in output_dir/.openbench_cache.json
 
-Thread/process safe: uses atomic write (write to temp + rename).
+Thread/process safe: atomic write (temp file + rename) AND fcntl.flock
+around mark_done/invalidate so concurrent workers writing distinct keys
+don't lose each other's updates via a load-modify-save race.
+
+NOTE: fcntl.flock is advisory and may behave inconsistently on some NFS
+implementations. For local filesystems (the common OpenBench case) it
+provides full mutual exclusion across processes.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -17,7 +24,42 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+try:
+    import fcntl  # POSIX only (macOS/Linux)
+    _HAS_FCNTL = True
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+    _HAS_FCNTL = False
+
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _file_lock(lock_path: Path):
+    """Cross-platform file lock context manager.
+
+    On POSIX uses fcntl.flock(LOCK_EX). On Windows (or any platform without
+    fcntl) degrades to a no-op with a single warning logged on first use —
+    the same behaviour as the pre-fix code.
+    """
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(lock_path, "w")
+    locked = False
+    try:
+        if _HAS_FCNTL:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                locked = True
+            except OSError as e:
+                logger.debug("fcntl.flock unavailable on %s: %s", lock_path, e)
+        yield
+    finally:
+        try:
+            if locked and _HAS_FCNTL:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        f.close()
 
 
 class EvaluationCache:
@@ -26,6 +68,7 @@ class EvaluationCache:
     def __init__(self, cache_dir: Path):
         self._cache_dir = cache_dir
         self._cache_file = cache_dir / ".openbench_cache.json"
+        self._lock_file = cache_dir / ".openbench_cache.lock"
         self._cache = self._load()
 
     def _load(self) -> dict[str, str]:
@@ -34,7 +77,29 @@ class EvaluationCache:
                 with open(self._cache_file) as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
-                logger.warning("Failed to load cache file %s: %s", self._cache_file, e)
+                # Preserve the corrupted file as <cache>.corrupt for diagnostics
+                # rather than letting the next save overwrite it. Falling back
+                # to empty {} causes a silent re-evaluation of all cached
+                # tasks; preserving the broken file lets users inspect what
+                # went wrong (e.g., partial write from a crashed process).
+                try:
+                    import time
+                    corrupt_path = self._cache_file.with_suffix(
+                        f".corrupt-{int(time.time())}"
+                    )
+                    self._cache_file.rename(corrupt_path)
+                    logger.warning(
+                        "Failed to load cache file %s: %s. Renamed to %s for "
+                        "diagnostics; starting with empty cache (re-evaluation "
+                        "expected on next run).",
+                        self._cache_file, e, corrupt_path,
+                    )
+                except OSError as rename_err:
+                    logger.warning(
+                        "Failed to load cache file %s: %s. Could not preserve "
+                        "diagnostic copy (%s); starting with empty cache.",
+                        self._cache_file, e, rename_err,
+                    )
                 return {}
         return {}
 
@@ -67,22 +132,29 @@ class EvaluationCache:
         return self._cache.get(key) == config_hash
 
     def mark_done(self, key: str, config_hash: str) -> None:
-        """Mark an evaluation as completed with this config hash."""
-        # Re-load to merge with other processes' writes
-        self._cache = self._load()
-        self._cache[key] = config_hash
-        self._save()
+        """Mark an evaluation as completed with this config hash.
+
+        Uses fcntl.flock to make the reload→modify→save sequence atomic
+        across processes. Without the lock, two workers writing distinct
+        keys concurrently could lose updates via the load-modify-save race.
+        """
+        with _file_lock(self._lock_file):
+            self._cache = self._load()
+            self._cache[key] = config_hash
+            self._save()
 
     def invalidate(self, key: str) -> None:
         """Remove a cache entry."""
-        self._cache = self._load()
-        self._cache.pop(key, None)
-        self._save()
+        with _file_lock(self._lock_file):
+            self._cache = self._load()
+            self._cache.pop(key, None)
+            self._save()
 
     def clear(self) -> None:
         """Clear all cache entries."""
-        self._cache.clear()
-        self._save()
+        with _file_lock(self._lock_file):
+            self._cache.clear()
+            self._save()
 
     @staticmethod
     def hash_config(config: dict[str, Any]) -> str:

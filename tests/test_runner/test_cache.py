@@ -55,3 +55,25 @@ def test_hash_config():
 
     h3 = EvaluationCache.hash_config({"a": 1, "b": 3})  # Different content
     assert h1 != h3
+
+
+def test_load_preserves_corrupt_file_for_diagnostics(tmp_path):
+    """A corrupted JSON cache file must be renamed to <cache>.corrupt-<ts>
+    rather than silently overwritten on the next save. Preserves diagnostic
+    evidence (e.g., partial write from a crashed process) for the user.
+    """
+    cache_file = tmp_path / ".openbench_cache.json"
+    cache_file.write_text("{not valid json")
+    original = cache_file.read_text()
+
+    cache = EvaluationCache(tmp_path)
+    # Empty in-memory cache; re-evaluation expected on next run
+    assert cache._cache == {}
+    # Corrupted file renamed; original cache_file no longer exists
+    assert not cache_file.exists()
+    # Find the .corrupt sibling and verify it preserves the broken content
+    corrupt_files = list(tmp_path.glob(".openbench_cache.corrupt-*"))
+    assert len(corrupt_files) == 1, (
+        f"Expected one .corrupt-* file, found: {[f.name for f in corrupt_files]}"
+    )
+    assert corrupt_files[0].read_text() == original
