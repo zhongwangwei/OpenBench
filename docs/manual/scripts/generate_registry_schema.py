@@ -46,7 +46,7 @@ def build_registry_schema_table() -> str:
             longtable(
                 headers=["字段", "类型", "默认值", "说明"],
                 rows=rows,
-                col_spec="l l l p{5cm}",
+                col_spec="p{2.5cm} p{3.5cm} p{1.8cm} p{4.5cm}",
             )
         )
         parts.append("")
