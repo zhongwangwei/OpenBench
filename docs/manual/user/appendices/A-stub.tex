@@ -1,19 +1,8 @@
 % docs/manual/user/appendices/A-stub.tex
-% 占位附录；正式撰写时由 A-config-reference.tex 等替换
+% 占位附录：演示如何 \input 自动生成的内容（正式撰写时由 A-config-reference.tex 替换）
 
-\chapter{占位附录}
+\chapter{占位附录（含生成内容）}
 
-本附录是基础设施 plan 的占位文件，正式手册撰写时由 \file{A-config-reference.tex} 等真实参考章节替换。
+下表自动从 \file{src/openbench/config/schema.py} 抽取，由 \cli{make generated} 重新生成：
 
-\noteinline{当前用于验证 \cli{\textbackslash{}appendix} 与 \cli{\textbackslash{}part\{参考\}} 协作的 LaTeX 编号是否正确。}
-
-\begin{longtable}{l l p{6cm}}
-  \toprule
-  字段 & 类型 & 说明 \\
-  \midrule
-  \endhead
-  \yamlkey{project.name} & string & 项目名称（占位） \\
-  \yamlkey{project.years} & list[int] & 评估时段（占位） \\
-  \yamlkey{evaluation.variables} & list[str] & 评估变量列表（占位） \\
-  \bottomrule
-\end{longtable}
+\input{../_generated/config_schema}
