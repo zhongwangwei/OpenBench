@@ -644,7 +644,7 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     if not existing:
         return
 
-    # Fields where existing user edits ALWAYS win when present:
+    # Fields where existing user edits ALWAYS win when present (truthy):
     #  - description: free text, never auto-derivable
     #  - category:    scanner picks from directory name, but user may
     #                 re-categorize (e.g., split Water → Water-Energy)
@@ -658,6 +658,14 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     # fix should not be undone by a rescan.
     if existing.get("years"):
         descriptor["years"] = existing["years"]
+
+    # timezone: present-key check (NOT truthy check) — value 0 is the most
+    # common legitimate setting (UTC) and would be lost under truthy check.
+    # Preserves explicit non-zero settings the user has hand-tuned (e.g.,
+    # local-time station data needing offset). Stage 1 always writes 0;
+    # without this, every rescan resets the field.
+    if "timezone" in existing:
+        descriptor["timezone"] = existing["timezone"]
 
 
 # ---------------------------------------------------------------------------
@@ -1183,9 +1191,8 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
     try:
         import netCDF4
 
-        nc = netCDF4.Dataset(str(nc_file), "r")
-        dims = {k.lower(): nc.dimensions[k].size for k in nc.dimensions}
-        nc.close()
+        with netCDF4.Dataset(str(nc_file), "r") as nc:
+            dims = {k.lower(): nc.dimensions[k].size for k in nc.dimensions}
 
         from openbench.data.coordinates import LAT_NAMES, LON_NAMES, STN_DIM_NAMES
 
@@ -1242,62 +1249,59 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
     try:
         import netCDF4
 
-        nc = netCDF4.Dataset(str(nc_files[0]), "r")
+        with netCDF4.Dataset(str(nc_files[0]), "r") as nc:
+            # Filter out auxiliary / coordinate / metadata variables.
+            # Bounds variables and coordinate-as-variables (lat/lon/elev/station_id)
+            # are not data; they must not be picked as the dataset's primary variable.
+            skip_vars = {
+                "time_bnds", "time_bounds", "lat_bnds", "lon_bnds",
+                "lat_bounds", "lon_bounds", "crs", "spatial_ref",
+            }
+            # Coordinate / station-metadata names commonly stored as variables
+            # rather than dimensions (especially in single-station NC files where
+            # lat/lon are scalars). Compared case-insensitively below.
+            known_coord_var_names = {
+                "lat", "latitude", "lon", "longitude",
+                "x", "y", "z", "depth", "level",
+                "elev", "elevation", "altitude", "alt", "height",
+                "station", "station_id", "station_name",
+                "site", "site_id", "site_name", "id",
+            }
+            coord_names = set(nc.dimensions.keys())
 
-        # Filter out auxiliary / coordinate / metadata variables.
-        # Bounds variables and coordinate-as-variables (lat/lon/elev/station_id)
-        # are not data; they must not be picked as the dataset's primary variable.
-        skip_vars = {
-            "time_bnds", "time_bounds", "lat_bnds", "lon_bnds",
-            "lat_bounds", "lon_bounds", "crs", "spatial_ref",
-        }
-        # Coordinate / station-metadata names commonly stored as variables
-        # rather than dimensions (especially in single-station NC files where
-        # lat/lon are scalars). Compared case-insensitively below.
-        known_coord_var_names = {
-            "lat", "latitude", "lon", "longitude",
-            "x", "y", "z", "depth", "level",
-            "elev", "elevation", "altitude", "alt", "height",
-            "station", "station_id", "station_name",
-            "site", "site_id", "site_name", "id",
-        }
-        coord_names = set(nc.dimensions.keys())
+            # Minimum dimension count: grid data needs (lat, lon) at minimum (>=2).
+            # Station data is often (time,) per file — 1D is the data variable.
+            # When detection is uncertain (None), bias toward grid (>=2) to avoid
+            # false-positive picking up 1D auxiliaries on grid datasets.
+            nc_data_type = result.get("detected_data_type")
+            min_dims = 1 if nc_data_type == "stn" else 2
 
-        # Minimum dimension count: grid data needs (lat, lon) at minimum (>=2).
-        # Station data is often (time,) per file — 1D is the data variable.
-        # When detection is uncertain (None), bias toward grid (>=2) to avoid
-        # false-positive picking up 1D auxiliaries on grid datasets.
-        nc_data_type = result.get("detected_data_type")
-        min_dims = 1 if nc_data_type == "stn" else 2
+            data_vars = [
+                v for v in nc.variables
+                if v not in skip_vars
+                and v not in coord_names
+                and v.lower() not in known_coord_var_names
+                and len(nc.variables[v].dimensions) >= min_dims
+            ]
 
-        data_vars = [
-            v for v in nc.variables
-            if v not in skip_vars
-            and v not in coord_names
-            and v.lower() not in known_coord_var_names
-            and len(nc.variables[v].dimensions) >= min_dims
-        ]
+            # Store ALL data variables for multi-var detection
+            result["all_data_vars"] = []
+            for dv in data_vars:
+                var = nc.variables[dv]
+                unit = getattr(var, "units", getattr(var, "unit", ""))
+                unit = str(unit).replace(".", " ").strip() if unit else ""
+                long_name = getattr(var, "long_name", "")
+                standard_name = getattr(var, "standard_name", "")
+                result["all_data_vars"].append({
+                    "name": dv, "unit": unit, "dims": list(var.dimensions),
+                    "long_name": long_name, "standard_name": standard_name,
+                })
 
-        # Store ALL data variables for multi-var detection
-        result["all_data_vars"] = []
-        for dv in data_vars:
-            var = nc.variables[dv]
-            unit = getattr(var, "units", getattr(var, "unit", ""))
-            unit = str(unit).replace(".", " ").strip() if unit else ""
-            long_name = getattr(var, "long_name", "")
-            standard_name = getattr(var, "standard_name", "")
-            result["all_data_vars"].append({
-                "name": dv, "unit": unit, "dims": list(var.dimensions),
-                "long_name": long_name, "standard_name": standard_name,
-            })
-
-        if data_vars:
-            varname = data_vars[0]
-            varunit = result["all_data_vars"][0]["unit"]
-            result["varname"] = varname
-            result["varunit"] = varunit
-
-        nc.close()
+            if data_vars:
+                varname = data_vars[0]
+                varunit = result["all_data_vars"][0]["unit"]
+                result["varname"] = varname
+                result["varunit"] = varunit
     except Exception as e:
         logger.debug("NC inspection failed for %s: %s", nc_files[0].name, e)
 
@@ -1305,76 +1309,74 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
     try:
         import netCDF4 as _nc4
 
-        _nc = _nc4.Dataset(str(nc_files[0]), "r")
-        _time_names = ("time", "Time", "TIME", "t", "T")
-        _time_var = None
-        for _tn in _time_names:
-            if _tn in _nc.variables and _tn in _nc.dimensions:
-                _time_var = _nc.variables[_tn]
-                break
-        if _time_var is not None and len(_time_var) >= 2:
-            _diff = float(_time_var[1] - _time_var[0])
-            _units = getattr(_time_var, "units", "")
-            _detected = None
-            # Tight tolerance buckets: each candidate frequency gets a centered
-            # window so half-hourly (1800s) doesn't get bucketed as "Hour" and
-            # quarterly (~90 days) doesn't fall through into "Year".
-            if "seconds" in _units:
-                if abs(_diff - 3600) < 600:           # 1 hour ± 10 min
-                    _detected = "Hour"
-                elif abs(_diff - 10800) < 1800:       # 3 hour ± 30 min
-                    _detected = "3Hour"
-                elif abs(_diff - 21600) < 3600:       # 6 hour ± 1 hour
-                    _detected = "6Hour"
-                elif abs(_diff - 86400) < 7200:       # 1 day ± 2 hours
-                    _detected = "Day"
-                elif abs(_diff - 691200) < 86400:     # 8 day ± 1 day
-                    _detected = "8Day"
-                elif abs(_diff - 2592000) < 432000:   # 1 month ± 5 days
-                    _detected = "Month"
-                elif abs(_diff - 31536000) < 2592000: # 1 year ± 30 days
-                    _detected = "Year"
-                # else: unrecognized interval (e.g., 1800=30min, 7776000≈90d)
-                #       leave _detected = None so caller can fall to default
-            elif "hour" in _units:
-                if abs(_diff - 1) < 0.2:              # 1 hour ± 12 min
-                    _detected = "Hour"
-                elif abs(_diff - 3) < 0.5:            # 3 hour
-                    _detected = "3Hour"
-                elif abs(_diff - 6) < 1.0:            # 6 hour
-                    _detected = "6Hour"
-                elif abs(_diff - 24) < 2.0:           # 1 day
-                    _detected = "Day"
-                elif abs(_diff - 192) < 24:           # 8 day
-                    _detected = "8Day"
-                elif 696 <= _diff <= 768:             # 1 month (29-32 days × 24h)
-                    _detected = "Month"
-                elif abs(_diff - 8760) < 720:         # 1 year ± 30 days
-                    _detected = "Year"
-            elif "day" in _units:
-                if abs(_diff - 1) < 0.2:
-                    _detected = "Day"
-                elif abs(_diff - 8) < 1.0:
-                    _detected = "8Day"
-                elif 28 <= _diff <= 32:               # monthly: 28-32 days
-                    _detected = "Month"
-                elif abs(_diff - 365) < 30:
-                    _detected = "Year"
-            if _detected:
-                result["detected_tim_res"] = _detected
+        with _nc4.Dataset(str(nc_files[0]), "r") as _nc:
+            _time_names = ("time", "Time", "TIME", "t", "T")
+            _time_var = None
+            for _tn in _time_names:
+                if _tn in _nc.variables and _tn in _nc.dimensions:
+                    _time_var = _nc.variables[_tn]
+                    break
+            if _time_var is not None and len(_time_var) >= 2:
+                _diff = float(_time_var[1] - _time_var[0])
+                _units = getattr(_time_var, "units", "")
+                _detected = None
+                # Tight tolerance buckets: each candidate frequency gets a centered
+                # window so half-hourly (1800s) doesn't get bucketed as "Hour" and
+                # quarterly (~90 days) doesn't fall through into "Year".
+                if "seconds" in _units:
+                    if abs(_diff - 3600) < 600:           # 1 hour ± 10 min
+                        _detected = "Hour"
+                    elif abs(_diff - 10800) < 1800:       # 3 hour ± 30 min
+                        _detected = "3Hour"
+                    elif abs(_diff - 21600) < 3600:       # 6 hour ± 1 hour
+                        _detected = "6Hour"
+                    elif abs(_diff - 86400) < 7200:       # 1 day ± 2 hours
+                        _detected = "Day"
+                    elif abs(_diff - 691200) < 86400:     # 8 day ± 1 day
+                        _detected = "8Day"
+                    elif abs(_diff - 2592000) < 432000:   # 1 month ± 5 days
+                        _detected = "Month"
+                    elif abs(_diff - 31536000) < 2592000: # 1 year ± 30 days
+                        _detected = "Year"
+                    # else: unrecognized interval (e.g., 1800=30min, 7776000≈90d)
+                    #       leave _detected = None so caller can fall to default
+                elif "hour" in _units:
+                    if abs(_diff - 1) < 0.2:              # 1 hour ± 12 min
+                        _detected = "Hour"
+                    elif abs(_diff - 3) < 0.5:            # 3 hour
+                        _detected = "3Hour"
+                    elif abs(_diff - 6) < 1.0:            # 6 hour
+                        _detected = "6Hour"
+                    elif abs(_diff - 24) < 2.0:           # 1 day
+                        _detected = "Day"
+                    elif abs(_diff - 192) < 24:           # 8 day
+                        _detected = "8Day"
+                    elif 696 <= _diff <= 768:             # 1 month (29-32 days × 24h)
+                        _detected = "Month"
+                    elif abs(_diff - 8760) < 720:         # 1 year ± 30 days
+                        _detected = "Year"
+                elif "day" in _units:
+                    if abs(_diff - 1) < 0.2:
+                        _detected = "Day"
+                    elif abs(_diff - 8) < 1.0:
+                        _detected = "8Day"
+                    elif 28 <= _diff <= 32:               # monthly: 28-32 days
+                        _detected = "Month"
+                    elif abs(_diff - 365) < 30:
+                        _detected = "Year"
+                if _detected:
+                    result["detected_tim_res"] = _detected
 
-        # Detect grid_res from lat dimension interval
-        from openbench.data.coordinates import LAT_NAMES
+            # Detect grid_res from lat dimension interval
+            from openbench.data.coordinates import LAT_NAMES
 
-        for _lat_name in LAT_NAMES:
-            if _lat_name in _nc.variables and _lat_name in _nc.dimensions and _nc.dimensions[_lat_name].size > 1:
-                _lat_vals = _nc.variables[_lat_name][:]
-                _grid_res = round(abs(float(_lat_vals[1] - _lat_vals[0])), 4)
-                if 0.001 < _grid_res < 10:  # sanity check
-                    result["detected_grid_res"] = _grid_res
-                break
-
-        _nc.close()
+            for _lat_name in LAT_NAMES:
+                if _lat_name in _nc.variables and _lat_name in _nc.dimensions and _nc.dimensions[_lat_name].size > 1:
+                    _lat_vals = _nc.variables[_lat_name][:]
+                    _grid_res = round(abs(float(_lat_vals[1] - _lat_vals[0])), 4)
+                    if 0.001 < _grid_res < 10:  # sanity check
+                        result["detected_grid_res"] = _grid_res
+                    break
     except Exception as _e:
         logger.debug("NC tim_res/grid_res detection failed: %s", _e)
 
@@ -1480,72 +1482,70 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
         import netCDF4
         import numpy as np
 
-        nc = netCDF4.Dataset(str(nc_file), "r")
+        with netCDF4.Dataset(str(nc_file), "r") as nc:
+            # Extract station ID: NC variable/attribute first, then filename
+            station_id = None
 
-        # Extract station ID: NC variable/attribute first, then filename
-        station_id = None
-
-        # 1. Try NC variables (scalar or single-element)
-        for id_var in ("station_id", "site_id", "station_name", "site"):
-            if id_var in nc.variables:
-                val = nc.variables[id_var][:]
-                if hasattr(val, "item"):
-                    station_id = str(val.item()).strip()
-                elif hasattr(val, "__len__") and len(val) == 1:
-                    station_id = str(val[0]).strip()
-                # Multi-station file — skip (handled by _parse_merged_station_file)
-                if station_id:
-                    break
-
-        # 2. Try NC global attributes
-        if not station_id:
-            for id_attr in ("station_id", "site_id", "station_code"):
-                if id_attr in nc.ncattrs():
-                    station_id = str(nc.getncattr(id_attr)).strip()
+            # 1. Try NC variables (scalar or single-element)
+            for id_var in ("station_id", "site_id", "station_name", "site"):
+                if id_var in nc.variables:
+                    val = nc.variables[id_var][:]
+                    if hasattr(val, "item"):
+                        station_id = str(val.item()).strip()
+                    elif hasattr(val, "__len__") and len(val) == 1:
+                        station_id = str(val[0]).strip()
+                    # Multi-station file — skip (handled by _parse_merged_station_file)
                     if station_id:
                         break
 
-        # 3. Fallback: extract from filename
-        if not station_id:
+            # 2. Try NC global attributes
+            if not station_id:
+                for id_attr in ("station_id", "site_id", "station_code"):
+                    if id_attr in nc.ncattrs():
+                        station_id = str(nc.getncattr(id_attr)).strip()
+                        if station_id:
+                            break
+
+            # 3. Fallback: extract from filename
+            if not station_id:
+                stem = nc_file.stem
+                year_match = re.search(r"[_-](\d{4})[_-]", stem)
+                if year_match:
+                    station_id = stem[: year_match.start()].rstrip("_-")
+                else:
+                    station_id = stem
+
+            # Extract lat/lon using shared fallback names
+            from openbench.data.coordinates import LAT_NAMES, LON_NAMES
+
+            lat = lon = None
+            for name in LAT_NAMES:
+                if name in nc.variables:
+                    val = nc.variables[name][:]
+                    lat = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                    break
+            for name in LON_NAMES:
+                if name in nc.variables:
+                    val = nc.variables[name][:]
+                    lon = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                    break
+
+            # Extract time range from filename first (faster than reading time dim)
             stem = nc_file.stem
-            year_match = re.search(r"[_-](\d{4})[_-]", stem)
-            if year_match:
-                station_id = stem[: year_match.start()].rstrip("_-")
-            else:
-                station_id = stem
-
-        # Extract lat/lon using shared fallback names
-        from openbench.data.coordinates import LAT_NAMES, LON_NAMES
-
-        lat = lon = None
-        for name in LAT_NAMES:
-            if name in nc.variables:
-                val = nc.variables[name][:]
-                lat = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
-                break
-        for name in LON_NAMES:
-            if name in nc.variables:
-                val = nc.variables[name][:]
-                lon = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
-                break
-
-        # Extract time range from filename first (faster than reading time dim)
-        syear = eyear = ""
-        years = [int(m.group(1)) for m in re.finditer(r"(\d{4})", stem) if 1900 <= int(m.group(1)) <= 2100]
-        if years:
-            syear, eyear = min(years), max(years)
-        elif "time" in nc.dimensions and nc.dimensions["time"].size > 0:
-            # Fallback: read time variable
-            try:
-                import cftime
-                time_var = nc.variables["time"]
-                times = netCDF4.num2date(time_var[:], time_var.units, time_var.calendar if hasattr(time_var, 'calendar') else 'standard')
-                syear = times[0].year
-                eyear = times[-1].year
-            except Exception:
-                pass
-
-        nc.close()
+            syear = eyear = ""
+            years = [int(m.group(1)) for m in re.finditer(r"(\d{4})", stem) if 1900 <= int(m.group(1)) <= 2100]
+            if years:
+                syear, eyear = min(years), max(years)
+            elif "time" in nc.dimensions and nc.dimensions["time"].size > 0:
+                # Fallback: read time variable
+                try:
+                    import cftime
+                    time_var = nc.variables["time"]
+                    times = netCDF4.num2date(time_var[:], time_var.units, time_var.calendar if hasattr(time_var, 'calendar') else 'standard')
+                    syear = times[0].year
+                    eyear = times[-1].year
+                except Exception:
+                    pass
 
         if lat is not None and lon is not None:
             return [station_id, syear, eyear, lon, lat, str(nc_file)]

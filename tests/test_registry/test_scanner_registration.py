@@ -1125,6 +1125,133 @@ def test_tim_res_detection_rejects_half_hourly_interval(tmp_path: Path):
     )
 
 
+def test_cli_register_creates_backup_before_overwriting_catalog(tmp_path: Path, monkeypatch):
+    """openbench data register must back up the previous catalog state, like
+    scan does. Previously used bare _atomic_yaml_write which left no recovery
+    path if a register call overwrote a hand-edited entry by mistake.
+    """
+    import openbench.cli.data as cli_data
+    import openbench.data.registry.manager as mgr_mod
+
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    catalog_path.write_text(
+        "OldDataset:\n"
+        "  name: OldDataset\n"
+        "  category: Water\n"
+        "  description: Hand-edited description\n"
+    )
+
+    # Force the writable catalog path to our tmp location
+    monkeypatch.setattr(
+        mgr_mod, "get_writable_reference_catalog_path",
+        lambda: catalog_path,
+    )
+    # Silence click output
+    monkeypatch.setattr(cli_data.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_data.click, "secho", lambda *a, **k: None)
+
+    cli_data.register.callback(
+        name="NewDataset",
+        root_dir=str(tmp_path),
+        data_type="grid",
+        tim_res="Month",
+        grid_res=0.5,
+        category="Water",
+        years=(2010, 2020),
+        fulllist=None,
+        variable=("Evapotranspiration:ET:mm/day",),
+        fallback=(),
+    )
+
+    backup_path = Path(str(catalog_path) + ".bak")
+    assert backup_path.exists(), f"Expected .bak at {backup_path}"
+    bak_data = yaml.safe_load(backup_path.read_text())
+    assert "OldDataset" in bak_data, "Backup must contain pre-register state"
+    # New catalog has both entries (OldDataset preserved)
+    new_data = yaml.safe_load(catalog_path.read_text())
+    assert "OldDataset" in new_data
+    assert "NewDataset" in new_data
+
+
+def test_cli_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path, monkeypatch):
+    """openbench data register on a corrupted catalog must raise rather than
+    silently overwrite. Same hardening as scan path.
+    """
+    import pytest
+    import openbench.cli.data as cli_data
+    import openbench.data.registry.manager as mgr_mod
+
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    catalog_path.write_text("not: valid: ::: garbage\n[broken")
+    original = catalog_path.read_text()
+
+    monkeypatch.setattr(
+        mgr_mod, "get_writable_reference_catalog_path",
+        lambda: catalog_path,
+    )
+    monkeypatch.setattr(cli_data.click, "echo", lambda *a, **k: None)
+    monkeypatch.setattr(cli_data.click, "secho", lambda *a, **k: None)
+
+    with pytest.raises(RuntimeError, match="Failed to load existing catalog"):
+        cli_data.register.callback(
+            name="NewDataset",
+            root_dir=str(tmp_path),
+            data_type="grid",
+            tim_res="Month",
+            grid_res=0.5,
+            category="Water",
+            years=(2010, 2020),
+            fulllist=None,
+            variable=("Evapotranspiration:ET:mm/day",),
+            fallback=(),
+        )
+
+    # Original (corrupted) file untouched
+    assert catalog_path.read_text() == original
+
+
+def test_rescan_preserves_user_edited_timezone(tmp_path: Path):
+    """timezone must be preserved across rescans. Stage 1 always writes 0
+    (UTC default); without preserve, rescan resets a user's hand-edited
+    non-zero offset (e.g., -8 for Pacific local-time station data).
+    """
+    from openbench.data.registry.scanner import _register_to_dict
+
+    nc_dir = tmp_path / "Water" / "Evapotranspiration" / "Demo"
+    nc_dir.mkdir(parents=True)
+    import numpy as np
+    import xarray as xr
+    ds = xr.Dataset(
+        {"ET": (["time", "lat", "lon"], np.zeros((12, 4, 4), dtype=np.float32))},
+        coords={"time": np.arange(12), "lat": np.arange(4.0), "lon": np.arange(4.0)},
+    )
+    ds.to_netcdf(nc_dir / "ET_2004_2005.nc")
+
+    scanned = ScannedDataset(
+        name="Demo", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "Water/Evapotranspiration/Demo"},
+    )
+
+    # First registration → catalog has timezone=0
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog)
+    assert catalog["Demo_LowRes"]["timezone"] == 0  # default
+
+    # User hand-edits to -8 (Pacific Standard Time)
+    catalog["Demo_LowRes"]["timezone"] = -8
+
+    # Re-register: user's -8 must survive
+    existing = catalog["Demo_LowRes"]
+    _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["Demo_LowRes"]["timezone"] == -8, (
+        f"User-edited timezone lost on rescan. Stage 6 must preserve "
+        f"timezone explicitly (key-presence check, not truthy check, since "
+        f"timezone=0 is a legitimate value)."
+    )
+
+
 def test_stn_scan_skips_multi_year_subdirs_as_ambiguous(tmp_path: Path, caplog):
     """Station dataset organized as MyStn/2010/, MyStn/2011/, MyStn/2012/
     used to silently accumulate NC counts but record only the last child as

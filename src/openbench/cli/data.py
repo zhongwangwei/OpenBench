@@ -122,17 +122,16 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, full
         # Update existing: add a variable
         openbench data register MyData -v "Runoff:RNOF:mm day-1"
     """
-    import yaml
     from pathlib import Path
 
     from openbench.data.registry.manager import get_writable_reference_catalog_path
+    from openbench.data.registry.scanner import _safe_load_catalog
 
     catalog_path = get_writable_reference_catalog_path()
 
-    existing_catalog = {}
-    if catalog_path.exists():
-        with open(catalog_path) as f:
-            existing_catalog = yaml.safe_load(f) or {}
+    # Use the same hardened load helper as scan: corrupted catalog raises
+    # rather than silently resetting to {}, and we get a .bak before write.
+    existing_catalog = _safe_load_catalog(catalog_path)
 
     existing = existing_catalog.get(name, {})
     is_new = name not in existing_catalog
@@ -226,8 +225,12 @@ def register(name, root_dir, data_type, tim_res, grid_res, category, years, full
     descriptor["variables"] = merged_vars
 
     existing_catalog[name] = descriptor
-    from openbench.data.registry.scanner import _atomic_yaml_write
-    _atomic_yaml_write(catalog_path, existing_catalog)
+    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
+    # Backup previous catalog state before write so user can recover if this
+    # registration was a mistake. Then invalidate the singleton registry
+    # cache so subsequent get_registry() reads see the new entry.
+    _backup_then_write(catalog_path, existing_catalog)
+    _invalidate_registry_caches()
 
     if is_new:
         click.secho(f"✓ Created '{name}' ({len(merged_vars)} variables)", fg="green")
@@ -266,17 +269,13 @@ def register_profile(name, variable, tim_res, data_groupby, fulllist, descriptio
             --fulllist "../list/stations.csv" \\
             -v "Latent_Heat:Qle_cor:W m-2"
     """
-    import yaml
-
-    from openbench.data.registry.manager import clear_registry_cache, get_writable_registry_dir
-    from openbench.data.registry.scanner import clear_reference_profile_cache
+    from openbench.data.registry.manager import get_writable_registry_dir
+    from openbench.data.registry.scanner import _safe_load_catalog
 
     profile_path = get_writable_registry_dir() / "reference_profiles.yaml"
 
-    profiles = {}
-    if profile_path.exists():
-        with open(profile_path) as f:
-            profiles = yaml.safe_load(f) or {}
+    # Hardened load: corrupted YAML raises rather than silently resetting
+    profiles = _safe_load_catalog(profile_path)
 
     existing = profiles.get(name, {})
 
@@ -316,11 +315,9 @@ def register_profile(name, variable, tim_res, data_groupby, fulllist, descriptio
 
     profiles[name] = profile
 
-    from openbench.data.registry.scanner import _atomic_yaml_write
-    _atomic_yaml_write(profile_path, profiles)
-
-    clear_registry_cache()
-    clear_reference_profile_cache()
+    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
+    _backup_then_write(profile_path, profiles)
+    _invalidate_registry_caches()
 
     is_new = name not in existing or not existing
     action = "Created" if is_new else "Updated"
