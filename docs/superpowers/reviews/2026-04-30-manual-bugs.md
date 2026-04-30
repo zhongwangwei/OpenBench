@@ -24,3 +24,4 @@
 | 2026-04-30 | docs/manual/Makefile:user/dev/ops 目标 | `cd <subdir> && latexmk` 不读取上一级 `latexmkrc`，回退 DVI 模式 → 不出 PDF | 显式传 `-r ../latexmkrc`；将 `SUBRC` 变量化 | `5f1de05` |
 | 2026-04-30 | docs/manual/common/macros.tex:41 | `\volumedivider` 中"─" (U+2500) 在 lmroman10-bold 没 glyph，警告 missing character | 替换为 `\textemdash{}` | (本批次 commit) |
 | 2026-04-30 | docs/manual/manual.pdf | xdvipdfmx 警告 `Object @appendix.A already defined` —— 三卷各有 Appendix A，合订时锚点冲突 | **已知限制**：占位阶段每卷只有 1 个附录；正式撰写时每卷 5 个不同附录 A-E 仍会冲突，需在 generator/真实附录 plan 中通过 `\renewcommand{\theappendix}` 加卷前缀解决 | （留待下一份 plan 处理） |
+| 2026-04-30 | docs/manual/scripts/generate_config_schema.py + 同款 registry_schema | 生成的 longtable col_spec 是 `l l l p{5cm}`，"类型"列遇到 `Optional[list[str]]` / `dict[str, SimulationEntry]` 等长类型 → 大量 overfull \\hbox 警告（每页 6+ 个） | 改 col_spec 为 `p{2.5cm} p{3.5cm} p{2cm} p{4cm}` 或类似定宽，让 LaTeX 可换行；下一次 generator 维护时一并修 | （留待下一份 plan / 单独 follow-up） |
