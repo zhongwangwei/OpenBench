@@ -1,0 +1,84 @@
+% docs/manual/operations/appendices/A-runtime-options.tex
+% 附录 A：Runtime / Runner / Parallel 选项
+
+\chapter{Runtime 选项速查}
+
+本附录列出 \openbench{} 全部影响运行行为的 yaml 字段、CLI 选项、环境变量。
+
+\section{yaml runtime 字段}
+
+\begin{longtable}{p{4cm} p{2.5cm} p{6cm}}
+  \toprule
+  字段 & 默认 & 含义 \\
+  \midrule
+  \endhead
+  \yamlkey{project.num\_cores} & null & 并行 worker 数；null = auto \\
+  \yamlkey{project.force} & false & 跳过 cache 全量重算 \\
+  \yamlkey{project.debug\_mode} & false & DEBUG 级日志 \\
+  \yamlkey{project.only\_drawing} & false & 跳过计算只重绘 \\
+  \yamlkey{project.unified\_mask} & true & 跨 sim 统一 NaN 掩码 \\
+  \yamlkey{project.generate\_report} & true & 末尾生成 HTML/PDF \\
+  \yamlkey{project.time\_alignment} & intersection & intersection / per\_pair / strict \\
+  \yamlkey{project.strict\_reference} & false & 低置信元信息升级为错误 \\
+  \yamlkey{project.tim\_res} & null & 目标时间分辨率 Month/Day/Hour/Year \\
+  \yamlkey{project.grid\_res} & null & 目标空间分辨率 (度) \\
+  \yamlkey{project.timezone} & null & 时区偏移（小时） \\
+  \yamlkey{project.weight} & null & area / equal 空间加权 \\
+  \yamlkey{project.lat\_range} & {[-90, 90]} & 纬度范围 \\
+  \yamlkey{project.lon\_range} & {[-180, 180]} & 经度范围 \\
+  \yamlkey{project.min\_year\_threshold} & 3 & 最少重叠年数 \\
+  \yamlkey{project.IGBP\_groupby} & false & 按 IGBP 分组统计 \\
+  \yamlkey{project.PFT\_groupby} & false & 按 PFT 分组统计 \\
+  \yamlkey{project.climate\_zone\_groupby} & false & 按 Köppen 分组 \\
+  \bottomrule
+\end{longtable}
+
+\section{CLI 临时覆盖}
+
+\begin{longtable}{p{4cm} p{8cm}}
+  \toprule
+  CLI 选项 & 等价 yaml \\
+  \midrule
+  \endhead
+  \cli{--cores N} & \yamlkey{project.num\_cores: N}（仅本次运行） \\
+  \cli{--variables VAR} & 缩 \yamlkey{evaluation.variables} 列表 \\
+  \cli{--dry-run} & 不实际跑评估，只列任务 \\
+  \cli{--dump-config} & 把中间 namelist 写到 debug/ \\
+  \cli{--comparison-only} & 跳过 evaluation phase 重做 comparison \\
+  \cli{--remote HOST} & {\color{obred}NOT IMPLEMENTED} \\
+  \bottomrule
+\end{longtable}
+
+\section{环境变量}
+
+\begin{longtable}{p{5cm} p{8cm}}
+  \toprule
+  环境变量 & 用途 \\
+  \midrule
+  \endhead
+  \texttt{HDF5\_USE\_FILE\_LOCKING} & 设为 FALSE 避免站点评估死锁；\openbench{} 自动设 \\
+  \texttt{OMP\_NUM\_THREADS} & 推荐设为 1 防嵌套并行 \\
+  \texttt{MKL\_NUM\_THREADS} & 同上 \\
+  \texttt{OPENBLAS\_NUM\_THREADS} & 同上 \\
+  \texttt{DASK\_SCHEDULER} & threads（默认）/ processes \\
+  \texttt{XDG\_CONFIG\_HOME} & 重定向用户级 catalog 路径（HPC 配额受限时） \\
+  \texttt{OPENBENCH\_REF\_ROOT} & catalog 中 \texttt{\$\{OPENBENCH\_REF\_ROOT\}} 占位的实际值 \\
+  \bottomrule
+\end{longtable}
+
+\section{选项决策表}
+
+\begin{longtable}{p{4cm} p{8cm}}
+  \toprule
+  场景 & 推荐设置 \\
+  \midrule
+  \endhead
+  HPC 长任务 & num\_cores=匹配 SLURM、generate\_report 视情、debug\_mode=false \\
+  开发调试 & debug\_mode=true、only\_drawing 不开 \\
+  快速重出图 & only\_drawing=true \\
+  数据集元信息严格 & strict\_reference=true \\
+  缓存怀疑污染 & force=true \\
+  内存紧张 & 缩 num\_cores、缩 lat/lon\_range、tim\_res 改 Month \\
+  跨 sim 严格可比 & time\_alignment=intersection、unified\_mask=true \\
+  \bottomrule
+\end{longtable}

@@ -36,6 +36,12 @@
 % --- 参考部分（附录）---
 \appendix
 \volpart{参考}
+% Task 15：合订模式时给 appendix 加 U 前缀避免与 developer/operations 卷冲突
+% \theHchapter 控制 hyperref 内部 anchor，与显示编号 \thechapter 一并改
+\ifSubfilesClassLoaded{}{%
+  \renewcommand{\thechapter}{U\Alph{chapter}}%
+  \renewcommand{\theHchapter}{U\Alph{chapter}}%
+}
 \include{appendices/A-config-reference}
 \include{appendices/B-cli-reference}
 \include{appendices/C-reference-datasets}

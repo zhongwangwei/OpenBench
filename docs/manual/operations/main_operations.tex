@@ -27,6 +27,15 @@
 
 \appendix
 \volpart{参考}
-\include{appendices/A-stub}
+% Task 15：合订模式时给 appendix 加 O 前缀避免与 user/developer 卷冲突
+\ifSubfilesClassLoaded{}{%
+  \renewcommand{\thechapter}{O\Alph{chapter}}%
+  \renewcommand{\theHchapter}{O\Alph{chapter}}%
+}
+\include{appendices/A-runtime-options}
+\include{appendices/B-remote-config}
+\include{appendices/C-cache-layout}
+\include{appendices/D-performance-guidance}
+\include{appendices/E-log-index}
 
 \end{document}

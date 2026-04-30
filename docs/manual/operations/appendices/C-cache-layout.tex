@@ -1,0 +1,129 @@
+% docs/manual/operations/appendices/C-cache-layout.tex
+% 附录 C：缓存目录布局
+
+\chapter{缓存目录布局}
+
+\openbench{} 输出目录 \file{output/<run>/} 完整结构。
+
+\section{完整目录树}
+
+\begin{minted}{text}
+output/<run>/
+├── config.yaml                  # 本次评估的解析后完整配置
+├── run.log                      # 运行日志（INFO 与上）
+├── data/                        # zarr 缓存（中间数据，可重建）
+│   ├── <task_key>.zarr/         # 每 task 一个 zarr group
+│   │   ├── sim/
+│   │   ├── ref/
+│   │   ├── .zgroup
+│   │   ├── .zarray
+│   │   └── ...
+│   └── ...
+├── metrics/                     # 评估指标 CSV
+│   ├── <var>/
+│   │   ├── <sim>_metrics.csv
+│   │   └── ...
+│   └── ...
+├── scores/                      # 归一化打分
+│   └── <var>/<sim>_scores.csv
+├── figures/                     # 全部可视化（按 var × kind 子目录）
+│   └── <var>/<kind>/<sim>_<ref>.png
+├── comparisons/                 # 多 sim 对比（仅 comparison.enabled=true）
+│   ├── portrait_table.csv
+│   ├── portrait_plot.png
+│   ├── radar_plot.png
+│   ├── ranking.csv
+│   └── ranking_table.png
+├── statistics/                  # 仅 statistics.enabled=true
+│   ├── ANOVA/
+│   ├── Correlation/
+│   └── ...
+├── reports/                     # HTML/PDF 总结报告
+│   ├── report.html
+│   ├── report.pdf
+│   └── sections/                # 子报告（按变量分）
+├── scratch/                     # 任务级 cache + 临时
+│   ├── cache/
+│   │   ├── <task_key>.json
+│   │   └── ...
+│   └── ...
+├── tmp/                         # 单次运行临时（每次清）
+└── debug/                       # 仅 --dump-config
+    ├── runner_config.yaml
+    ├── main_nl.yaml
+    ├── ref_nml.yaml
+    ├── sim_nml.yaml
+    └── fig_nml.yaml
+\end{minted}
+
+\section{每层用途}
+
+\begin{longtable}{p{2.5cm} p{4cm} p{6cm}}
+  \toprule
+  目录 & 用途 & 可删？ \\
+  \midrule
+  \endhead
+  \texttt{config.yaml} & 解析后的完整配置（含默认） & 否（追溯用） \\
+  \texttt{run.log} & 完整日志 & 旧的可压缩归档 \\
+  \texttt{data/} & zarr 中间产物 & 可（重建费时） \\
+  \texttt{metrics/} & 指标 CSV & \emph{结论数据，不要删} \\
+  \texttt{scores/} & 打分 CSV & 同上 \\
+  \texttt{figures/} & PNG 图 & 可（重出图较快） \\
+  \texttt{comparisons/} & 对比表与图 & \emph{结论；最好保留} \\
+  \texttt{statistics/} & 统计输出 & \emph{结论；最好保留} \\
+  \texttt{reports/} & HTML/PDF & 可（从 metric/figure 重建） \\
+  \texttt{scratch/cache/} & task 级 hash & 可（让下次重算） \\
+  \texttt{tmp/} & 临时 & 可（每次 run 自动清） \\
+  \texttt{debug/} & 中间 namelist & 可 \\
+  \bottomrule
+\end{longtable}
+
+\section{磁盘占用经验值}
+
+以全球 monthly × 5 年 × 1 sim × 4 vars 评估为例：
+
+\begin{longtable}{p{3cm} p{3cm} p{6cm}}
+  \toprule
+  目录 & 大小 & 备注 \\
+  \midrule
+  \endhead
+  data/ & 200 MB - 2 GB & zarr 压缩；与变量数线性 \\
+  metrics/ & 几 MB & CSV 小 \\
+  scores/ & 几 MB & 同上 \\
+  figures/ & 50-200 MB & 按变量与图种数 \\
+  comparisons/ & 10-50 MB & 多 sim 时增加 \\
+  statistics/ & 50-300 MB & 统计模块多时增 \\
+  reports/ & 50-300 MB & 嵌入图 \\
+  scratch/cache/ & < 1 MB & JSON \\
+  \bottomrule
+\end{longtable}
+
+总：单次 monthly 全球评估约 500 MB - 3 GB。daily/hourly + 多 sim 可达数十 GB。
+
+\section{升级时哪些保留}
+
+\openbench{} 升级后：
+
+\begin{itemize}
+  \item \emph{保留}：metrics、scores、comparisons、statistics、figures、reports（结论数据）
+  \item \emph{清理}：data、scratch（cache 可能与新版不兼容）
+  \item \emph{重生成}：reports/figures（如果想用新版样式）
+\end{itemize}
+
+\section{多用户共享布局示例}
+
+\begin{minted}{text}
+/scratch/openbench-shared/
+├── refs/                # 共享只读 reference 数据集
+│   ├── Grid/
+│   └── Station/
+├── eval-2026-Q1/
+│   ├── alice-eval1/     # alice 的 evaluation
+│   ├── alice-eval2/
+│   ├── bob-eval1/
+│   └── ...
+└── archived/            # 旧 evaluation 归档
+    └── 2025-Q4/
+\end{minted}
+
+每用户 evaluation 独立目录；共享数据走 \texttt{refs/}。

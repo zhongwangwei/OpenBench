@@ -30,6 +30,11 @@
 
 \appendix
 \volpart{参考}
+% Task 15：合订模式时给 appendix 加 D 前缀避免与 user/operations 卷冲突
+\ifSubfilesClassLoaded{}{%
+  \renewcommand{\thechapter}{D\Alph{chapter}}%
+  \renewcommand{\theHchapter}{D\Alph{chapter}}%
+}
 \include{appendices/A-package-graph}
 \include{appendices/B-public-api}
 \include{appendices/C-registry-schema}
