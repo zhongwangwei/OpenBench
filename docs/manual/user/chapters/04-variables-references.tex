@@ -312,7 +312,20 @@ ls -la "$(openbench data path GLEAM_v4.2a_LowRes)"
 
 \subsection{数据集数量与运行时间的权衡}
 
-每个评估变量配 1 个 reference 是默认。如果给同一变量配多个 reference（用多个 simulation 各指 ref），运行时间会近似线性增加（重网格化 + metric 计算 + 出图都翻倍）。
+每个评估变量\emph{默认配 1 个 reference}，但 \openbench{} 也支持给同一变量配多个 reference（list 形式）：
+
+\begin{minted}{yaml}
+reference:
+  Evapotranspiration:           # 给一个变量配 3 个 reference
+    - GLEAM_v4.2a
+    - FLUXCOM-X-BASE
+    - ET_Xu_etal_2025
+  Latent_Heat: ERA5LAND          # 单 reference 仍可写为字符串
+\end{minted}
+
+\openbench{} 在评估时对每个变量做 (sim × ref) 笛卡尔积循环：m 个 sim × n 个 ref = m × n 个评估单元，运行时间近似线性增加（重网格化 + metric 计算 + 出图都翻倍）。
+
+\noteinline{多 reference 是从 v2.x 沿用的能力 —— 例如 Urban 类变量惯常用 \texttt{["MODIST", "TRIMS\_LST"]} 双源。v3.0a1 早期曾因 schema 简化丢失，已修复。}
 
 \subsection{Provenance 警告}
 

@@ -2,6 +2,8 @@
 
 import click
 
+from openbench.cli._reference_errors import emit_reference_resolution_error
+
 
 @click.command()
 @click.argument("config", type=click.Path(exists=True))
@@ -23,50 +25,84 @@ def check(config):
         fg="green",
     )
 
-    click.secho(f"\nReference data ({len(cfg.reference)} sources):", bold=True)
+    # Count total resolved entries (sum of single + list values per variable)
+    _n_ref_total = sum(
+        1 if isinstance(v, str) else len(v) for v in cfg.reference.sources.values()
+    )
+    _n_ref_vars = len(cfg.reference.sources)
+    _ref_summary = (
+        f"{_n_ref_total} sources for {_n_ref_vars} variables"
+        if _n_ref_total != _n_ref_vars else f"{_n_ref_vars} sources"
+    )
+    click.secho(f"\nReference data ({_ref_summary}):", bold=True)
+    from openbench.config.resolver import resolve_all_references
     from openbench.data.registry.manager import get_registry
 
     mgr = get_registry()
+    strict = cfg.project.strict_reference
     has_errors = False
 
-    # Derive target resolution for auto-resolve:
-    # User-specified comparison resolution → simulation resolution as fallback
-    target_tim_res = cfg.comparison.tim_res
-    target_grid_res = cfg.comparison.grid_res
-    if not target_tim_res:
-        for entry in cfg.simulation.values():
-            if entry.tim_res:
-                target_tim_res = entry.tim_res
-                break
-    if not target_grid_res:
-        for entry in cfg.simulation.values():
-            if entry.grid_res:
-                target_grid_res = entry.grid_res
-                break
+    try:
+        resolved = resolve_all_references(cfg, mgr, strict=strict)
+    except Exception as e:
+        emit_reference_resolution_error(str(e), prefix="  ✗ ")
+        raise SystemExit(1)
 
-    for var, source in cfg.reference.items():
-        # Always use the same resolution logic as the adapter:
-        # pass sim context so auto-resolve behaves identically
-        ref = mgr.get_reference(source, sim_tim_res=target_tim_res, sim_grid_res=target_grid_res)
-        if ref is not None:
-            if ref.name != source:
+    for r in resolved:
+        if r.status == "ok":
+            if r.resolved_name != r.source_name:
                 click.secho(
-                    f"  ✓ {var} → {source} → {ref.name} ({ref.data_type}, {ref.tim_res}, {ref.grid_res}°)",
+                    f"  ✓ {r.var_name} → {r.source_name} → {r.resolved_name} "
+                    f"({r.ref_ds.data_type}, {r.ref_ds.tim_res}, {r.ref_ds.grid_res}°)",
                     fg="cyan",
                 )
             else:
-                click.secho(f"  ✓ {var} → {source} ({ref.data_type}, {ref.tim_res})", fg="green")
-        else:
-            # Check if it's a base name with resolution variants
-            variants = mgr.get_resolution_variants(source)
-            if variants:
-                click.secho(f"  ✗ {var} → {source}", fg="red")
-                click.echo(f"    '{source}' has multiple resolutions. Please specify one:")
-                for label, v in sorted(variants.items()):
-                    click.echo(f"      {v.name}  ({v.data_type}, {v.tim_res}, {v.grid_res}°)")
-                has_errors = True
+                click.secho(
+                    f"  ✓ {r.var_name} → {r.source_name} ({r.ref_ds.data_type}, {r.ref_ds.tim_res})",
+                    fg="green",
+                )
+            # Warn about low/medium-confidence time-spatial fields
+            from openbench.config.resolver import PROVENANCE_LOW, PROVENANCE_MEDIUM
+            ds_prov = getattr(r.ref_ds, "_provenance", None) or {}
+            for fld in ("tim_res", "grid_res"):
+                source = ds_prov.get(fld)
+                if not source:
+                    continue
+                value = getattr(r.ref_ds, fld, "?")
+                if source in PROVENANCE_LOW:
+                    if strict:
+                        click.secho(
+                            f"    ✗ {fld}: {value} (unconfirmed default)",
+                            fg="red",
+                        )
+                        has_errors = True
+                    else:
+                        click.secho(
+                            f"    ⚠ {fld}: {value} (default — not confirmed from NC or profile)",
+                            fg="yellow",
+                        )
+                elif source in PROVENANCE_MEDIUM:
+                    click.secho(
+                        f"    ~ {fld}: {value} (inferred from directory structure)",
+                        fg="cyan",
+                    )
+        elif r.status == "no_variable":
+            click.secho(f"  ✗ {r.var_name} → {r.resolved_name}: {r.message}", fg="red")
+            has_errors = True
+        elif r.status == "ambiguous":
+            click.secho(f"  ✗ {r.var_name} → {r.source_name}", fg="red")
+            click.echo(f"    {r.message}")
+            has_errors = True
+        elif r.status == "not_found":
+            if r.source_name:
+                click.secho(
+                    f"  ⚠ {r.var_name} → {r.source_name} "
+                    "(not in registry, runtime will fall back to minimal defaults)",
+                    fg="yellow",
+                )
             else:
-                click.secho(f"  ⚠ {var} → {source} (not in registry, will use inline config)", fg="yellow")
+                click.secho(f"  ✗ {r.var_name}: no reference configured", fg="red")
+                has_errors = True
 
     click.secho(f"\nSimulation data ({len(cfg.simulation)} models):", bold=True)
     for label, entry in cfg.simulation.items():
@@ -78,8 +114,8 @@ def check(config):
         click.secho(f"Scores: {', '.join(cfg.scores)}", bold=True)
 
     click.secho("\nOptions:", bold=True)
-    click.secho(f"  Time alignment: {cfg.options.time_alignment}")
-    click.secho(f"  Unified mask: {cfg.options.unified_mask}")
+    click.secho(f"  Time alignment: {cfg.project.time_alignment}")
+    click.secho(f"  Unified mask: {cfg.project.unified_mask}")
     click.secho(f"  Comparison: {cfg.comparison.enabled}")
     click.secho(f"  Statistics: {cfg.statistics.enabled}")
 
@@ -87,4 +123,10 @@ def check(config):
         click.secho("\n✗ Config has errors. Please fix and re-check.", fg="red", bold=True)
         raise SystemExit(1)
 
-    click.secho("\n✓ Config valid. Ready to run.", fg="green", bold=True)
+    n_refs = len(resolved) if resolved else 0
+    n_sims = len(cfg.simulation) if cfg.simulation else 0
+    n_vars = len(cfg.evaluation.variables) if cfg.evaluation.variables else 0
+    click.secho(
+        f"\n✓ Config valid ({n_vars} variables, {n_refs} references, {n_sims} simulations). Ready to run.",
+        fg="green", bold=True,
+    )

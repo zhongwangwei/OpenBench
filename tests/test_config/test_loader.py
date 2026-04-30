@@ -14,11 +14,11 @@ def test_load_minimal():
     assert cfg.project.name == "test-minimal"
     assert cfg.project.years == [2004, 2010]
     assert cfg.evaluation.variables == ["Evapotranspiration"]
-    assert cfg.reference["Evapotranspiration"] == "GLEAM_v4.2a_LowRes"
+    assert cfg.reference.sources["Evapotranspiration"] == "GLEAM_v4.2a_LowRes"
     assert "CoLM2024" in cfg.simulation
     assert cfg.simulation["CoLM2024"].model == "CoLM2024"
     # Defaults applied
-    assert cfg.options.time_alignment == "intersection"
+    assert cfg.project.time_alignment == "intersection"
     assert cfg.comparison.enabled is False
 
 
@@ -34,8 +34,8 @@ def test_load_full():
     assert cfg.comparison.enabled is True
     assert cfg.statistics.enabled is True
     assert cfg.statistics.items == ["Z_Score", "ANOVA"]
-    assert cfg.options.num_cores == 16
-    assert cfg.options.time_alignment == "per_pair"
+    assert cfg.project.num_cores == 16
+    assert cfg.project.time_alignment == "per_pair"
 
 
 def test_load_with_defaults_merge():
@@ -50,6 +50,71 @@ def test_load_with_defaults_merge():
     assert cfg.simulation["CLM5"].data_type == "grid"
     assert cfg.simulation["CLM5"].variables is not None
     assert cfg.simulation["CLM5"].variables["Evapotranspiration"]["varname"] == "QFLX_EVAP_TOT"
+
+
+def test_load_with_defaults_deep_merges_variable_overrides():
+    """Variable overrides should preserve unspecified fields from _defaults."""
+    from openbench.config.loader import _build_config
+
+    raw = {
+        "project": {"name": "t", "output_dir": ".", "years": [2000, 2010]},
+        "evaluation": {"variables": ["Evapotranspiration", "Runoff"]},
+        "reference": {
+            "Evapotranspiration": "GLEAM_v4.2a_LowRes",
+            "Runoff": "GRDC_Monthly",
+        },
+        "simulation": {
+            "_defaults": {
+                "model": "BaseModel",
+                "root_dir": "/defaults",
+                "variables": {
+                    "Evapotranspiration": {
+                        "varname": "QVEGE",
+                        "varunit": "mm day-1",
+                        "prefix": "hist_",
+                        "fallbacks": [
+                            {
+                                "varname": "QSOIL",
+                                "varunit": "kg m-2 s-1",
+                                "convert": "value * 86400",
+                            }
+                        ],
+                    },
+                    "Runoff": {
+                        "varname": "QRUNOFF",
+                        "varunit": "mm day-1",
+                    },
+                },
+            },
+            "CaseA": {
+                "root_dir": "/case-a",
+                "variables": {
+                    "Evapotranspiration": {
+                        "varname": "QFLX_EVAP_TOT",
+                    }
+                },
+            },
+        },
+    }
+
+    cfg = _build_config(raw)
+
+    case_vars = cfg.simulation["CaseA"].variables
+    assert case_vars is not None
+    assert case_vars["Evapotranspiration"]["varname"] == "QFLX_EVAP_TOT"
+    assert case_vars["Evapotranspiration"]["varunit"] == "mm day-1"
+    assert case_vars["Evapotranspiration"]["prefix"] == "hist_"
+    assert case_vars["Evapotranspiration"]["fallbacks"] == [
+        {
+            "varname": "QSOIL",
+            "varunit": "kg m-2 s-1",
+            "convert": "value * 86400",
+        }
+    ]
+    assert case_vars["Runoff"] == {
+        "varname": "QRUNOFF",
+        "varunit": "mm day-1",
+    }
 
 
 def test_invalid_years_raises():
@@ -67,11 +132,10 @@ def test_invalid_time_alignment():
     from openbench.config.loader import _build_config
 
     raw = {
-        "project": {"name": "t", "output_dir": ".", "years": [2000, 2010]},
+        "project": {"name": "t", "output_dir": ".", "years": [2000, 2010], "time_alignment": "invalid_value"},
         "evaluation": {"variables": ["GPP"]},
         "reference": {"GPP": "FLUXCOM"},
         "simulation": {"M": {"model": "M", "root_dir": "/d"}},
-        "options": {"time_alignment": "invalid_value"},
     }
     with pytest.raises(ConfigError, match="time_alignment"):
         _build_config(raw)
@@ -105,3 +169,66 @@ def test_load_non_yaml():
         f.flush()
         with pytest.raises(ConfigError, match="YAML"):
             load_config(Path(f.name))
+
+
+# --- Multi-reference per variable (v2.x compatibility) ---
+
+def _minimal_with_reference(ref_block):
+    return {
+        "project": {"name": "test", "output_dir": "/tmp/x", "years": [2010, 2014]},
+        "evaluation": {"variables": ["Evapotranspiration"]},
+        "reference": ref_block,
+        "simulation": {"M": {"model": "M", "root_dir": "/d"}},
+    }
+
+
+def test_reference_accepts_list_value():
+    """v3 schema must accept list[str] form for ref_source (v2.x compat)."""
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_with_reference({
+        "Evapotranspiration": ["GLEAM_v4.2a", "FLUXCOM-X-BASE"],
+    })
+    cfg = _build_config(raw)
+    assert cfg.reference.sources["Evapotranspiration"] == [
+        "GLEAM_v4.2a",
+        "FLUXCOM-X-BASE",
+    ]
+
+
+def test_reference_single_item_list_collapses_to_string():
+    """A list with one element is stored as plain string for downstream simplicity."""
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_with_reference({
+        "Evapotranspiration": ["GLEAM_v4.2a"],
+    })
+    cfg = _build_config(raw)
+    assert cfg.reference.sources["Evapotranspiration"] == "GLEAM_v4.2a"
+
+
+def test_reference_comma_separated_string_splits():
+    """Comma-separated source names (legacy NML form) auto-split into list."""
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_with_reference({
+        "Evapotranspiration": "GLEAM_v4.2a,FLUXCOM",
+    })
+    cfg = _build_config(raw)
+    assert cfg.reference.sources["Evapotranspiration"] == ["GLEAM_v4.2a", "FLUXCOM"]
+
+
+def test_reference_rejects_empty_list():
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_with_reference({"Evapotranspiration": []})
+    with pytest.raises(ConfigError, match="empty list"):
+        _build_config(raw)
+
+
+def test_reference_rejects_non_string_in_list():
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_with_reference({"Evapotranspiration": ["GLEAM", 42]})
+    with pytest.raises(ConfigError, match="must be a string"):
+        _build_config(raw)

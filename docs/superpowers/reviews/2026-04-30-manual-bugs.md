@@ -29,6 +29,7 @@
 | 2026-04-30 | src/openbench/cli/init_cmd.py:148 | **真 bug**：`openbench init` 写出 `reference: {sources: {<var>: <src>}}`（嵌套），但 `loader._build_reference` 期望 `reference: {<var>: <src>}`（flat）。结果：`init` 生成的 YAML 立刻被 `check` 拒绝，报 "reference.sources must be a string (source name), got dict"。 | 改为 flat：`config["reference"] = reference`（修法 A）；加端到端回归测试 `test_init_output_is_loadable` 防止再发生 | `67acd71` |
 | 2026-04-30 | src/openbench/cli/data.py:42, 54 | `openbench data download` 与 `openbench data status` 子命令是 stub：download 打印"not yet implemented"；status 报告 registry 数量但 cache 部分写"not yet implemented"。help text 不写明 → 用户预期与实际不符 | 不算崩溃 bug，但 help text 应加 `[NOT IMPLEMENTED]` 前缀；或在 spec/Roadmap 中标注。Manual 第 4 章如实说明 | 未修（文档侧已说明） |
 | 2026-04-30 | docs/manual/user/chapters/04-variables-references.tex | 中文 body 字体（fandol）没 U+2194 (↔) glyph；日志大量 "Missing character" 警告 | 把 "变量↔数据集" 替换为 "变量到数据集" | 已修（写作期内自修）|
+| 2026-04-30 | src/openbench/config/{schema,loader,resolver,adapter}.py | **真 regression**：v3.0a1 把 reference schema 从 v2.x 的 `dict[str, str|list[str]]` 简化为 `dict[str, str]`，丢失多源能力。Urban 类变量典型 `["MODIST", "TRIMS_LST"]` 双源在 migration 后会被 loader 拒绝（`reference.X must be a string`）。引擎层（v2.x openbench.py）原本支持 list；v3.0 adapter 也只取单值。CHANGELOG 没标 breaking change | 全栈恢复多源：schema 改 `dict[str, str|list[str]]`；loader 接受 list / 自动拆 comma-separated；resolver 每变量产出多个 ResolvedReference；adapter 在 namelist 写 list 并做 (sim × ref) 笛卡尔积；含 8 个新回归测试 | 本次会话 ✅ |
 
 ## 写作期总结（用户卷完成时）
 
