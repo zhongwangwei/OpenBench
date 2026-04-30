@@ -1,0 +1,321 @@
+% docs/manual/user/chapters/04-variables-references.tex
+% 第 4 章：选择变量与参考数据集
+
+\chapter{选择变量与参考数据集}
+
+\openbench{} 的 reference 注册表内置近百个数据集，覆盖陆面模型评估的 9 大类核心变量。本章帮你回答两个问题：
+
+\begin{itemize}
+  \item \textbf{我能评估什么变量}（看变量分类）
+  \item \textbf{这个变量用哪个参考数据集}（看变量↔数据集映射）
+\end{itemize}
+
+完整数据集清单见附录 C，本章重点解释结构、用法、命令行工具。
+
+\section{变量分类：9 大类}
+
+\openbench{} 的变量按物理过程分为 9 大类：
+
+\begin{itemize}
+  \item \textbf{Bio}：生态系统结构（LAI、Biomass、Burned\_Area）
+  \item \textbf{Carbon}：碳通量（GPP、NEE、NPP、Reco、Methane、Wetland\_Methane）
+  \item \textbf{Water}：水通量与水储量（ET 系列、Runoff、Streamflow、Snow、TWS、Inundation、Precipitation）
+  \item \textbf{Energy}：能量通量（Latent\_Heat、Sensible\_Heat、Net\_Radiation、Ground\_Heat、辐射四分量、Albedo）
+  \item \textbf{Heat}：地表/土壤温度
+  \item \textbf{Meteorology}：气象驱动量（Air\_Temperature、Tmax/Tmin、Humidity、Pressure、Wind、Cloud\_Cover）
+  \item \textbf{Urban}：城市与农业（Crop、Urban、Water\_Use、Dam）
+  \item \textbf{Composite}：合成或衍生指标
+  \item \textbf{Other}：暂无固定分类
+\end{itemize}
+
+变量名严格遵守驼峰式 + 下划线（\var{Latent\_Heat} 而非 \texttt{LatentHeat} 或 \texttt{latent\_heat}）。常见标准变量名见附录 C 中数据集表的"变量"列。
+
+\section{Grid 与 Station：两种数据形态}
+
+\openbench{} 区分两种参考数据形态：
+
+\begin{itemize}
+  \item \textbf{grid}：规则经纬度网格。NetCDF 文件含 \texttt{lat}、\texttt{lon}、\texttt{time} 三个坐标。代表数据：\dataset{GLEAM\_v4.2a}（ET）、\dataset{ERA5LAND}（多变量）、\dataset{IMERG}（降水）
+  \item \textbf{stn}（station）：离散站点观测。NetCDF 文件含 \texttt{site}（或类似的站点 id）+ \texttt{time}。代表数据：\dataset{FLUXNET\_PLUMBER2}（FLUXNET）、\dataset{GRDC\_Daily}（GRDC 流量站）、\dataset{Caravan\_Daily}
+\end{itemize}
+
+\subsection{站点数据的特殊配置}
+
+如果你的 simulation 是 grid 模型而 reference 是 station，\openbench{} 会做"以站点位置抽样 grid"的处理。你需要在 \yamlkey{simulation} entry 里指定 \yamlkey{fulllist}（站点列表 CSV 路径）：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_PLUMBER2:
+    model: CoLM2024
+    root_dir: /data/colm2024
+    fulllist: /data/PLUMBER2/list/PLUMBER2.csv
+\end{minted}
+
+详见第 5 章 simulation profile 部分。
+
+\section{分辨率后缀自动解析}
+
+许多 reference 数据集提供多个分辨率版本，registry 用后缀区分：
+
+\begin{itemize}
+  \item \texttt{\_LowRes}：低分辨率（典型 0.5°）
+  \item \texttt{\_MidRes}：中分辨率（典型 0.25°）
+  \item 无后缀：原生分辨率，或单一可用版本
+\end{itemize}
+
+例如 \dataset{GLEAM\_v4.2a} 在 catalog 中实际是两个 entry：
+
+\begin{itemize}
+  \item \dataset{GLEAM\_v4.2a\_LowRes}（0.5°）
+  \item \dataset{GLEAM\_v4.2a\_MidRes}（0.25°）
+\end{itemize}
+
+你在 \yamlkey{reference} 写时，可以：
+
+\subsection{方式 1：写 base 名让 \openbench{} 自动选}
+
+\begin{minted}{yaml}
+project:
+  grid_res: 0.5    # 目标 0.5°
+
+reference:
+  Evapotranspiration: GLEAM_v4.2a   # 自动追加 _LowRes
+\end{minted}
+
+解析规则：
+
+\begin{itemize}
+  \item \yamlkey{project.grid_res} 在 [0.5, 1.0] 区间 → 优先 \texttt{\_LowRes}
+  \item \yamlkey{project.grid_res} = 0.25 → 优先 \texttt{\_MidRes}
+  \item 都不存在则尝试无后缀名
+\end{itemize}
+
+\subsection{方式 2：写完整名严格指定}
+
+\begin{minted}{yaml}
+reference:
+  Evapotranspiration: GLEAM_v4.2a_MidRes   # 强制 0.25°，即使 grid_res=0.5
+\end{minted}
+
+完整名永远精确匹配，不做后缀转换。
+
+\begin{tipBox}
+\textbf{什么时候该写完整名}：要求精确分辨率，或者多个 simulation 各用不同分辨率的同一数据源时。
+\end{tipBox}
+
+\section{命令：浏览 registry}
+
+\subsection{\cli{openbench data list}}
+
+列出所有 reference 数据集：
+
+\begin{minted}{bash}
+openbench data list
+\end{minted}
+
+\begin{exampleBox}[输出片段]
+\begin{minted}{text}
+Name                           Category   Type   Res      Years          Variables
+─────────────────────────────────────────────────────────────────────────────────
+AH4GUC_LowRes                  Urban      grid   0.5°     ?              1
+BRSC_Monthly                   Water      stn    stn      ?              1
+Beck_2017_Daily                Water      stn    stn      ?              1
+CARE_LowRes                    Energy     grid   0.5°     ?              4
+CARE_MidRes                    Energy     grid   0.25°    ?              4
+CERES_EBAF_Ed4.2_LowRes        Energy     grid   0.5°     ?              7
+...
+
+Total: 98 datasets
+\end{minted}
+\end{exampleBox}
+
+按变量过滤：
+
+\begin{minted}{bash}
+openbench data list --variable Evapotranspiration
+\end{minted}
+
+只列出含 \var{Evapotranspiration} 的数据集（GLEAM、FLUXCOM、ET\_Xu\_etal\_2025、FLUXNET 等）。
+
+\subsection{\cli{openbench data path}}
+
+查询某数据集的本地路径：
+
+\begin{minted}{bash}
+openbench data path GLEAM_v4.2a_LowRes
+\end{minted}
+
+输出：
+
+\begin{minted}{text}
+/data/openbench/refs/Grid/LowRes/Water/Evapotranspiration/GLEAM_v4.2a
+\end{minted}
+
+支持 base 名查询所有分辨率变体：
+
+\begin{minted}{bash}
+openbench data path GLEAM_v4.2a
+\end{minted}
+
+输出：
+
+\begin{minted}{text}
+GLEAM_v4.2a_LowRes: /data/openbench/refs/Grid/LowRes/...
+GLEAM_v4.2a_MidRes: /data/openbench/refs/Grid/MidRes/...
+\end{minted}
+
+\section{命令：注册新数据集}
+
+\subsection{\cli{openbench data register}}
+
+把仓库里没有的本地数据集纳入 registry。完整签名：
+
+\begin{minted}{bash}
+openbench data register NAME --root-dir /path/to/data \
+  --data-type {grid|stn} --tim-res {Month|Day|Hour|Year} \
+  --grid-res 0.5 --category Water \
+  --years 2000 2020 \
+  -v "VarName:nc_var_name:unit"  # 可重复
+\end{minted}
+
+\begin{exampleBox}[注册一个 grid 数据集]
+\begin{minted}{bash}
+openbench data register MyData \
+  --root-dir /data/myref \
+  --data-type grid --grid-res 0.5 --tim-res Month \
+  --years 2000 2020 --category Water \
+  -v "Evapotranspiration:ET:mm day-1"
+\end{minted}
+\end{exampleBox}
+
+\subsection{站点数据的特殊参数}
+
+\begin{exampleBox}[注册站点数据]
+\begin{minted}{bash}
+openbench data register PLUMBER2 \
+  --root-dir /data/PLUMBER2/dataset \
+  --data-type stn --tim-res Day \
+  --fulllist /data/PLUMBER2/list/PLUMBER2.csv \
+  -v "Latent_Heat:Qle_cor:W/m2" \
+  -v "Sensible_Heat:Qh_cor:W/m2"
+\end{minted}
+\end{exampleBox}
+
+\subsection{Fallback 与单位换算}
+
+某些数据集在不同年份/版本里同一物理量用不同变量名。用 \texttt{-f} 指定回退：
+
+\begin{exampleBox}[fallback + 单位换算]
+\begin{minted}{bash}
+openbench data register ERA5 \
+  --root-dir /data/era5 \
+  -v "Latent_Heat:slhf:W m-2" \
+  -f "Latent_Heat:surface_latent_heat_flux:J m-2:value / 3600"
+\end{minted}
+\end{exampleBox}
+
+主变量是 \texttt{slhf}；如果 NC 文件里没有 \texttt{slhf} 但有 \texttt{surface\_latent\_heat\_flux}，就用回退，并应用 \texttt{value / 3600} 把焦耳/秒累积量换算为瓦特。
+
+\subsection{交互式注册}
+
+不带 \texttt{-v} 时进入交互模式：
+
+\begin{minted}{bash}
+openbench data register MyData --root-dir /data/myref --data-type grid
+# 然后跟着提示输入 Standard variable name / NC name / unit / prefix / suffix
+\end{minted}
+
+\section{命令：数据下载与状态（部分未实现）}
+
+\subsection{\cli{openbench data download}}
+
+\warninline{当前版本 \cli{openbench data download} \emph{尚未实现}（v3.0 alpha）。运行会得到 "Dataset download not yet implemented (requires hosted data repository)."。在线托管的数据仓库还在筹建。}
+
+\textbf{替代方案}：reference 数据集需要自行从原始机构下载并放入约定路径。每个数据集 catalog 中的 \yamlkey{root_dir} 指明默认期望路径；用 \cli{openbench data path NAME} 查询。
+
+\subsection{\cli{openbench data status}}
+
+\begin{minted}{bash}
+openbench data status
+\end{minted}
+
+\warninline{当前版本只报告 "Registry: N datasets available; Local cache: not yet implemented"。本地缓存检测功能在路上。}
+
+实际可用的 fallback：
+
+\begin{minted}{bash}
+# 直接看磁盘上 reference 数据根目录
+ls -la $OPENBENCH_REF_ROOT/Grid/LowRes/
+
+# 或对单个数据集
+openbench data path GLEAM_v4.2a_LowRes
+ls -la "$(openbench data path GLEAM_v4.2a_LowRes)"
+\end{minted}
+
+\section{变量↔数据集速查（节选）}
+
+下面列出最常用 10 个变量的可选 reference。完整 56 变量的全部映射见附录 C：
+
+\begin{longtable}{l p{6cm} p{4cm}}
+  \toprule
+  变量 & Grid 数据集 & Station 数据集 \\
+  \midrule
+  \endhead
+  \var{Evapotranspiration} & GLEAM\_v4.2a, FLUXCOM-X-BASE, ET\_Xu\_etal\_2025（Low/Mid Res） & FLUXNET\_PLUMBER2, Xu\_et\_al2025\_stn \\
+  \var{Latent\_Heat} & ERA5LAND, FLUXCOM\_LowRes & FLUXNET\_PLUMBER2, FLUX\_PLUMBER2, GEBA \\
+  \var{Sensible\_Heat} & ERA5LAND, GLEAM\_v4.2a & FLUXNET\_PLUMBER2, GEBA \\
+  \var{Net\_Radiation} & CLARA\_3, CERES\_EBAF, ERA5LAND, Rn-Xu2022\_MidRes & FLUXNET\_PLUMBER2, GEBA \\
+  \var{Total\_Runoff} & GRUN\_ENSEMBLE, GRADES, GRFR, ERA5LAND & --- \\
+  \var{Streamflow} & --- & GRDC\_Daily/Monthly, Caravan\_Daily, BRSC\_Monthly, GSIM, GSHA, ... (15+ 站点源) \\
+  \var{Gross\_Primary\_Productivity} & FLUXCOM-X-BASE, GloFlux & FLUXNET\_PLUMBER2 \\
+  \var{Surface\_Soil\_Moisture} & GLEAM\_v4.2a, ERA5LAND, SMAPL3 & --- \\
+  \var{Precipitation} & GPCC, GPCPv3.2, IMERG\_v7, ERA5LAND, MSWEP, MSWX, CN05.1 & --- \\
+  \var{Surface\_Air\_Temperature} & ERA5LAND, MSWX, CRU\_TS\_4.08, CN05.1 & --- \\
+  \bottomrule
+\end{longtable}
+
+\begin{tipBox}
+\var{Streamflow} 几乎全部是 station 类（grid 数据无法采集真实河流流量）。如果你的模型输出 grid 流量，\openbench{} 会按站点位置在 grid 中采样，再与站点观测对比。
+\end{tipBox}
+
+\section{选数据集的实用建议}
+
+\subsection{优先内置数据集}
+
+内置 registry 的数据集已经做过元信息标准化（坐标系、时间约定、单位）。新加自己的数据集（\cli{data register}）需要你保证 NetCDF 兼容；遇到坐标轴反向、时间偏移、单位不一致都会出问题。新手优先用内置。
+
+\subsection{LowRes vs MidRes 选择}
+
+\begin{itemize}
+  \item 全球评估 + 月尺度：\texttt{\_LowRes}（0.5°）足够
+  \item 区域评估 + 高分辨率比较：\texttt{\_MidRes}（0.25°）
+  \item 极少需要原始（更高）分辨率，因为目标分辨率由 \yamlkey{project.grid_res} 决定，再细的源数据也会被重采样
+\end{itemize}
+
+\subsection{数据集数量与运行时间的权衡}
+
+每个评估变量配 1 个 reference 是默认。如果给同一变量配多个 reference（用多个 simulation 各指 ref），运行时间会近似线性增加（重网格化 + metric 计算 + 出图都翻倍）。
+
+\subsection{Provenance 警告}
+
+\cli{openbench check} 输出中会标注 reference 元数据的可信度：
+
+\begin{itemize}
+  \item \texttt{✓}：高置信，元数据来自数据集自身或 model profile
+  \item \texttt{⚠ default}：低置信，使用了默认值（可能不准）
+  \item \texttt{\textasciitilde inferred}：中置信，从目录结构推断
+\end{itemize}
+
+\yamlkey{project.strict_reference: true} 把低置信度警告升级为错误，强制你显式指定。
+
+\section{下一步}
+
+下一章详解 \yamlkey{simulation} 块：
+
+\begin{itemize}
+  \item 21 个内置 model profile 速览
+  \item 用 profile vs 自定义模型
+  \item 多 simulation 对比配置
+  \item time alignment 三种策略实战
+  \item 单位换算与变量映射机制
+\end{itemize}
