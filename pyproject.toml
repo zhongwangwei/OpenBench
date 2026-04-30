@@ -89,4 +89,5 @@ select = ["E", "F", "I", "W"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "." 让 docs.manual.scripts.* 可被 import（手册生成器与其测试用）
+pythonpath = ["src", "."]
