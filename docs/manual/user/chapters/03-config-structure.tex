@@ -1,0 +1,353 @@
+% docs/manual/user/chapters/03-config-structure.tex
+% 第 3 章：配置文件结构
+
+\chapter{配置文件结构}
+
+第 2 章用 \cli{openbench init} 生成了一份最小可运行配置。本章详解 \openbench{} 的 YAML 配置文件格式：顶层四块如何组织、必填与可选字段如何配合默认值、以及两个高级语法（\yamlkey{_defaults} 与 \texttt{!include}）如何把大型多模型配置拆成可维护的多个文件。
+
+完整字段参考见附录 A，本章重点解释结构与设计意图。
+
+\section{顶层四块}
+
+一个最小合法的 \file{openbench.yaml} 必须包含四个顶层 key：
+
+\begin{minted}{yaml}
+project:        # 项目元信息、时空范围、运行参数
+evaluation:     # 要评估哪些变量
+reference:      # 每个变量用哪个参考数据集
+simulation:     # 要评估哪些模型（可多个）
+\end{minted}
+
+四个之外，还有 5 个常用可选块：
+
+\begin{minted}{yaml}
+metrics:        # list[str]，None 表示用全部 25+ 个 metric
+scores:         # list[str]，None 表示用全部 normalized score
+comparison:     # 多模型对比开关与项
+statistics:     # 统计分析开关与项
+options:        # （已废弃）旧的 v2.0 选项；自动迁移到 project
+\end{minted}
+
+\noteinline{加载器会把已废弃的 \yamlkey{options} 块自动迁移到 \yamlkey{project}，并打印 deprecation 警告。新配置请直接写到 \yamlkey{project} 下。}
+
+\section{project 块}
+
+\yamlkey{project} 是配置中字段最多的一块（25+ 字段），分为五组：
+
+\subsection{身份标识（必填）}
+
+\begin{minted}{yaml}
+project:
+  name: my-evaluation       # [必填] 项目名，用作输出目录子文件夹名
+  output_dir: ./output      # [必填] 评估结果根目录（相对路径以工作目录为基）
+  years: [2010, 2014]       # [必填] 评估时段 [起始年, 结束年]，含两端
+\end{minted}
+
+\warninline{\yamlkey{years} 必须是恰好 2 个整数的列表（不是 \texttt{[2010, 2011, 2012, 2013, 2014]}）。loader 会校验长度与类型并报错。}
+
+\subsection{时空范围（可选，默认全球）}
+
+\begin{minted}{yaml}
+project:
+  lat_range: [-90.0, 90.0]   # 默认全球
+  lon_range: [-180.0, 180.0] # 默认全球
+  min_year_threshold: 3      # 模型与参考重叠不足 N 年时跳过该变量
+\end{minted}
+
+\subsection{目标分辨率（可选，影响 evaluation/comparison/statistics 全部阶段）}
+
+\begin{minted}{yaml}
+project:
+  tim_res: Month     # Month | Day | Hour | Year（默认按各 sim/ref 自身）
+  grid_res: 0.5      # 目标空间分辨率（度），用于重网格化
+  timezone: 0        # 时区偏移（小时）
+  weight: area       # 空间加权：area | equal
+\end{minted}
+
+\begin{tipBox}
+\yamlkey{tim_res} / \yamlkey{grid_res} 不写就用各 simulation/reference 自带的分辨率；写了之后 \openbench{} 会把所有数据重网格化/重采样到目标分辨率。这是多模型对比时统一比较口径的关键。
+\end{tipBox}
+
+\subsection{运行参数}
+
+\begin{minted}{yaml}
+project:
+  num_cores: 8                  # 并行核数；省略则自动检测
+  unified_mask: true            # 跨 sim 统一 NaN 掩码（保证比较公平）
+  generate_report: true         # 生成 HTML/PDF 总结
+  time_alignment: intersection  # intersection | per_pair | strict
+\end{minted}
+
+三种 \yamlkey{time_alignment} 策略：
+
+\begin{itemize}
+  \item \texttt{intersection}（默认）：所有 sim 与 ref 的共同时间窗口。安全保守
+  \item \texttt{per_pair}：每对 sim×ref 各自的重叠区间。最大化数据利用，但跨对不可比
+  \item \texttt{strict}：要求时间戳完全一致，否则报错
+\end{itemize}
+
+详见第 5 章。
+
+\subsection{Groupby 分析}
+
+\begin{minted}{yaml}
+project:
+  IGBP_groupby: false          # 按 IGBP 土地覆盖类型分组
+  PFT_groupby: false           # 按 Plant Functional Type 分组
+  climate_zone_groupby: false  # 按 Köppen 气候带分组
+\end{minted}
+
+\subsection{进阶开关}
+
+\begin{minted}{yaml}
+project:
+  debug_mode: false        # 详细日志
+  only_drawing: false      # 跳过计算，只重绘已有结果
+  force: false             # 忽略增量缓存，全量重算
+  strict_reference: false  # 把"低置信度元数据"警告升级为错误
+\end{minted}
+
+\section{evaluation 块}
+
+最简单的一块，只有一个必填字段：
+
+\begin{minted}{yaml}
+evaluation:
+  variables:
+    - Evapotranspiration
+    - Total_Runoff
+    - Latent_Heat
+\end{minted}
+
+\yamlkey{variables} 必须是非空列表。变量名必须是 \openbench{} 已知的标准命名（驼峰式，下划线分隔），全部可用变量见第 4 章与附录 C。
+
+\section{reference 块}
+
+\yamlkey{reference} 把 \yamlkey{evaluation.variables} 中的每个变量映射到一个具体的 reference 数据集名：
+
+\begin{minted}{yaml}
+reference:
+  data_root: /data/openbench/refs   # （可选）共享根目录
+  Evapotranspiration: GLEAM_v4.2a_LowRes
+  Total_Runoff: GRUN_ENSEMBLE_LowRes
+  Latent_Heat: ERA5LAND_LowRes
+\end{minted}
+
+\warninline{\textbf{语法陷阱}：reference 必须是 \emph{flat} var→source 映射，不要写嵌套的 \texttt{sources:} 子块。早期 \cli{openbench init} 曾经写出嵌套形式导致 \cli{check} 失败 —— 现已修复，但旧示例文档若你看到，请按上面的 flat 形式写。}
+
+\subsection{data\_root：共享数据根}
+
+\yamlkey{data_root} 是可选字段，不写时每个数据集用自己的 \yamlkey{root_dir}（registry 默认路径）。写了之后，grid 类数据集会用 \yamlkey{data_root} 替换 \yamlkey{root_dir}（station 类不受影响）。这在多用户共享的 HPC 环境很有用。
+
+\subsection{自动分辨率后缀解析}
+
+\yamlkey{reference} 里写 \texttt{GLEAM\_v4.2a} 时，\openbench{} 会根据 \yamlkey{project.grid_res} 自动加后缀：
+
+\begin{itemize}
+  \item \yamlkey{grid_res} >= 0.5 且 <= 1.0 → 优先尝试 \texttt{\_LowRes}
+  \item \yamlkey{grid_res} = 0.25 → 优先尝试 \texttt{\_MidRes}
+  \item 找不到对应分辨率版本时，回退到无后缀名
+\end{itemize}
+
+如果想绕过自动解析，直接写完整名（\texttt{GLEAM\_v4.2a\_MidRes}），就严格用那个分辨率。详见第 4 章。
+
+\section{simulation 块}
+
+\yamlkey{simulation} 是一个字典，key 是 \emph{标签}（你给这次评估自取的名字），value 是 simulation 元信息：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_test:                  # 标签（任意，仅用于输出目录命名）
+    model: CoLM2024               # [必填] 必须是已知 model profile 名
+    root_dir: /data/colm2024_run  # [必填] 模型输出根目录
+
+  CLM5_test:
+    model: CLM5
+    root_dir: /data/clm5_run
+\end{minted}
+
+每个 simulation 至少需要 \yamlkey{model} + \yamlkey{root_dir}。其余字段（\yamlkey{prefix} / \yamlkey{suffix} / \yamlkey{data_groupby} / \yamlkey{tim_res} / \yamlkey{grid_res} / \yamlkey{variables}）会从 model profile 继承默认值，可在此处局部覆盖。详见第 5 章。
+
+\subsection{\yamlkey{_defaults}：simulation 块内的默认值合并}
+
+如果你有多个 simulation 共享大量字段，可以用 \yamlkey{_defaults} 抽出公共部分：
+
+\begin{minted}{yaml}
+simulation:
+  _defaults:
+    data_type: grid
+    grid_res: 0.5
+    tim_res: Month
+    prefix: case_
+
+  Run_v1:
+    model: CoLM2024
+    root_dir: /data/v1
+    suffix: _hist
+
+  Run_v2:
+    model: CoLM2024
+    root_dir: /data/v2
+    suffix: _hist_v2
+\end{minted}
+
+合并语义：
+
+\begin{itemize}
+  \item 每个 simulation 的有效字段 = \yamlkey{_defaults} 字段 + entry 自身字段
+  \item entry 字段优先级高于 defaults
+  \item \yamlkey{variables} 子字段做 \emph{深合并}（按变量名）：默认有 ET 和 LAI，entry 只覆盖 ET 时 LAI 仍在
+  \item 其他字段做浅合并（覆盖式）
+\end{itemize}
+
+\warninline{\yamlkey{_defaults} 仅在 \yamlkey{simulation} 块内有效。在 \yamlkey{project} / \yamlkey{evaluation} / \yamlkey{reference} 等顶层块写 \yamlkey{_defaults} 不会被识别（loader 会把它当成异常 key 拒绝）。}
+
+\section{!include：跨文件拆分}
+
+当配置文件超过 200 行或多个团队共享部分配置时，可以把片段拆到独立 YAML 文件再 \texttt{!include} 进来。
+
+\subsection{包含单个文件}
+
+\begin{minted}{yaml}
+# openbench.yaml
+project: !include partials/project.yaml
+evaluation:
+  variables: !include partials/variables.yaml
+reference: !include partials/refs.yaml
+simulation: !include partials/sims.yaml
+\end{minted}
+
+每个被引入的文件就是一个普通 YAML：
+
+\begin{minted}{yaml}
+# partials/refs.yaml
+data_root: /data/openbench/refs
+Evapotranspiration: GLEAM_v4.2a_LowRes
+Total_Runoff: GRUN_ENSEMBLE_LowRes
+\end{minted}
+
+路径相对于 \emph{包含 \texttt{!include} 的那个 YAML 文件所在目录}。
+
+\subsection{Glob 模式包含多个文件}
+
+\begin{minted}{yaml}
+# openbench.yaml
+simulation: !include simulations/*.yaml
+\end{minted}
+
+每个 \file{simulations/*.yaml} 应当是单条 simulation 字典：
+
+\begin{minted}{yaml}
+# simulations/colm2024.yaml
+CoLM2024_test:
+  model: CoLM2024
+  root_dir: /data/colm2024_run
+\end{minted}
+
+匹配到的文件会按文件名排序后合并到同一个字典；同名 key 后加载者覆盖前加载者。
+
+\subsection{递归 \texttt{!include}}
+
+\openbench{} 的 loader 支持 \texttt{!include} 嵌套：被引入的文件里也可以有 \texttt{!include}，会递归展开。
+
+\begin{tipBox}
+\textbf{何时该用 !include}：当一个 YAML 区块在多个 project 间共享、或单个 project 的文件超过 ~150 行时；如果整体配置就 50 行，没必要拆。
+\end{tipBox}
+
+\section{完整最小示例}
+
+把上面所有部分组合起来的最小示例：
+
+\begin{minted}{yaml}
+# openbench.yaml
+project:
+  name: demo
+  output_dir: ./output
+  years: [2010, 2014]
+  tim_res: Month
+  grid_res: 0.5
+  num_cores: 8
+
+evaluation:
+  variables:
+    - Evapotranspiration
+    - Total_Runoff
+
+reference:
+  data_root: /data/openbench/refs
+  Evapotranspiration: GLEAM_v4.2a
+  Total_Runoff: GRUN_ENSEMBLE
+
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data/colm2024_run
+
+comparison:
+  enabled: true
+\end{minted}
+
+这份配置：
+\begin{itemize}
+  \item 评估 2010-2014 共 5 年的 ET 与 Runoff
+  \item 用 GLEAM v4.2a + GRUN 作 reference，因 \yamlkey{grid_res: 0.5} 自动解析为 \texttt{\_LowRes} 后缀
+  \item 用一个 CoLM2024 simulation
+  \item 启用多模型对比（即便只有 1 个 sim 也会出对比图，仅展示自身）
+\end{itemize}
+
+\section{常见配置错误与诊断}
+
+\subsection{Missing required field 错误}
+
+\begin{minted}{text}
+ConfigError: Missing required field: project.years
+\end{minted}
+
+确认 \yamlkey{project.name} / \yamlkey{output_dir} / \yamlkey{years} 三个必填字段都存在。
+
+\subsection{years 列表长度不对}
+
+\begin{minted}{text}
+ConfigError: project.years must be a list of [start_year, end_year]
+\end{minted}
+
+\yamlkey{years} 是 \texttt{[2010, 2014]}，不是 \texttt{[2010, 2011, 2012, 2013, 2014]}。
+
+\subsection{变量在 evaluation 列出但 reference 缺映射}
+
+\begin{minted}{text}
+ConfigError: Variable 'Latent_Heat' is in evaluation.variables but
+has no entry in 'reference'.
+Add: reference.Latent_Heat: <source_name>
+\end{minted}
+
+按提示在 \yamlkey{reference} 加一行映射即可。
+
+\subsection{time\_alignment 拼错}
+
+\begin{minted}{text}
+ConfigError: project.time_alignment must be one of
+{'intersection', 'per_pair', 'strict'}, got 'intersect'
+\end{minted}
+
+只有 3 个合法值，注意拼写与下划线。
+
+\subsection{simulation 缺 _defaults 之外的条目}
+
+\begin{minted}{text}
+ConfigError: 'simulation' must contain at least one simulation entry
+(not just _defaults)
+\end{minted}
+
+\yamlkey{simulation._defaults} 单独存在没意义，必须配至少一个具体 simulation。
+
+\section{下一步}
+
+下一章会详解：
+
+\begin{itemize}
+  \item 56 个评估变量按物理类别的全貌
+  \item grid 与 station 数据形态在配置上的差异
+  \item 67 个内置 reference 数据集如何浏览、下载、检查
+  \item \cli{openbench data list} / \cli{download} / \cli{status} 用法
+\end{itemize}
