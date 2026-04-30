@@ -333,22 +333,77 @@ ls -la "$(openbench data path GLEAM_v4.2a_LowRes)"
   \item 极少需要原始（更高）分辨率，因为目标分辨率由 \yamlkey{project.grid_res} 决定，再细的源数据也会被重采样
 \end{itemize}
 
-\subsection{数据集数量与运行时间的权衡}
+\section{每变量多 reference：多源对比}
 
-每个评估变量\emph{默认配 1 个 reference}，但 \openbench{} 也支持给同一变量配多个 reference（list 形式）：
+\openbench{} v3.0 schema：\yamlkey{reference.sources} 类型是 \texttt{dict[str, str | list[str]]}，每个变量可单 ref（字符串）或多 ref（列表）。
+
+\subsection{为什么多源}
+
+科学层面：单一观测产品都有偏差。Urban 与陆面温度类变量惯常双源（\texttt{["MODIST", "TRIMS\_LST"]}）；蒸散发对比常 3--4 源（\texttt{GLEAM} + \texttt{FLUXCOM-X-BASE} + \texttt{ET\_Xu\_etal\_2025}）；径流可同时对 \texttt{GRUN\_ENSEMBLE} 与 \texttt{Beck\_2017}。多 ref 评估能：
+
+\begin{itemize}
+  \item 让你看出 sim 表现是否对 ref 选择敏感（鲁棒性）
+  \item 暴露 ref 之间的不一致（不同观测产品在同一区域可能差 2$\times$）
+  \item 论文里同时给"vs 多个观测产品"的 metric 表，避免审稿人挑刺
+\end{itemize}
+
+\subsection{语法：三种等价形式}
 
 \begin{minted}{yaml}
 reference:
-  Evapotranspiration:           # 给一个变量配 3 个 reference
-    - GLEAM_v4.2a
-    - FLUXCOM-X-BASE
-    - ET_Xu_etal_2025
-  Latent_Heat: ERA5LAND          # 单 reference 仍可写为字符串
+  Land_Surface_Temperature:           # list（推荐，最清晰）
+    - MODIST
+    - TRIMS_LST
+
+  Evapotranspiration: "GLEAM_v4.2a_LowRes, FLUXCOM-X-BASE_LowRes"
+                                       # 逗号分隔字符串（loader 自动拆）
+
+  Total_Runoff: GRUN_ENSEMBLE_LowRes   # 单 ref 仍写字符串
 \end{minted}
 
-\openbench{} 在评估时对每个变量做 (sim × ref) 笛卡尔积循环：m 个 sim × n 个 ref = m × n 个评估单元，运行时间近似线性增加（重网格化 + metric 计算 + 出图都翻倍）。
+\subsection{(var × sim × ref) 笛卡尔积}
 
-\noteinline{多 reference 是从 v2.x 沿用的能力 —— 例如 Urban 类变量惯常用 \texttt{["MODIST", "TRIMS\_LST"]} 双源。v3.0a1 早期曾因 schema 简化丢失，已修复。}
+\openbench{} 对每个变量遍历 \emph{全部} (sim, ref) 组合做独立评估。例：
+
+\begin{itemize}
+  \item 3 个变量
+  \item 4 个 simulation
+  \item 变量 1 配 1 ref，变量 2 配 3 ref，变量 3 配 2 ref
+  \item → 任务总数 $= 4 \times (1 + 3 + 2) = 24$ 个独立评估
+\end{itemize}
+
+每个评估：重网格 + metric/score 计算 + 出图独立产出。
+
+\subsection{运行时间影响}
+
+近似线性放大：m 个 sim × n 个 ref = m × n 个评估单元。但有两点优化让代价低于纯线性：
+
+\begin{itemize}
+  \item Reference 预处理（重网格、时间裁剪）\textbf{每个 ref 只做一次}，跨 sim 共享
+  \item Sim 预处理\textbf{每个 sim 只做一次}，跨 ref 共享（按 v3.0 \modname{runner.local} 的 dedupe key 控制）
+  \item 真正翻倍的是 evaluation 循环本身（metric 计算 + 出图）
+\end{itemize}
+
+经验：3 sim × 3 ref vs 3 sim × 1 ref 的 wallclock 比值约 2.0--2.5×，不是 3.0×。
+
+\subsection{输出与缓存：每对独立}
+
+输出文件命名包含 ref\_source：
+
+\begin{itemize}
+  \item Grid: \file{<var>\_ref\_<R>\_sim\_<S>\_<metric|score>.nc}
+  \item Stn: \file{<var>\_stn\_<R>\_<S>\_evaluations.csv}
+\end{itemize}
+
+不同 ref 的输出绝不混淆。Cache 哈希也按 \texttt{(var, sim, ref)} 三元组建，意味着：
+
+\begin{itemize}
+  \item 改动一个 ref（换数据集、版本升级）只重算用了它的 (sim, ref) 对，不影响别的 ref
+  \item 一个 (sim, ref) 失败不会阻塞其他 (sim, ref) 继续跑
+  \item Comparison/统计阶段可单独看每个 ref 视角，也可跨 ref 平均（取决于你的 \yamlkey{comparison.items} 配置）
+\end{itemize}
+
+\noteinline{多 reference 是从 v2.x 沿用的能力 —— 例如 Urban 类变量惯常用 \texttt{["MODIST", "TRIMS\_LST"]} 双源。v3.0a1 早期曾因 schema 简化丢失，已修复（commit \texttt{c9fcbdc}）。}
 
 \subsection{Provenance 警告}
 

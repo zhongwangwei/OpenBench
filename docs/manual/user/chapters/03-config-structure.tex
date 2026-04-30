@@ -151,6 +151,26 @@ reference:
 
 \warninline{\textbf{语法陷阱}：reference 必须是 \emph{flat} var→source 映射，不要写嵌套的 \texttt{sources:} 子块。早期 \cli{openbench init} 曾经写出嵌套形式导致 \cli{check} 失败 —— 现已修复，但旧示例文档若你看到，请按上面的 flat 形式写。}
 
+\paragraph{每变量多个 reference}
+
+同一个变量可以同时配多个 reference，\openbench{} 对每个 (sim × ref) 跑独立评估。三种语法等价：
+
+\begin{minted}{yaml}
+reference:
+  # 1. List 形式（推荐，最清晰）
+  Land_Surface_Temperature:
+    - MODIST
+    - TRIMS_LST
+
+  # 2. 逗号分隔字符串（loader 会自动拆，方便从 v2.x namelist 直接迁移）
+  Evapotranspiration: "GLEAM_v4.2a_LowRes, FLUXCOM-X-BASE_LowRes"
+
+  # 3. 单 reference 仍是字符串（绝大多数变量这么写）
+  Total_Runoff: GRUN_ENSEMBLE_LowRes
+\end{minted}
+
+详见第 4 章 §"每变量多 reference：多源对比"。
+
 \subsection{data\_root：共享数据根}
 
 \yamlkey{data_root} 是可选字段，不写时每个数据集用自己的 \yamlkey{root_dir}（registry 默认路径）。写了之后，grid 类数据集会用 \yamlkey{data_root} 替换 \yamlkey{root_dir}（station 类不受影响）。这在多用户共享的 HPC 环境很有用。

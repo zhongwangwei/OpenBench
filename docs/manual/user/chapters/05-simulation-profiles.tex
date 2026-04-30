@@ -276,6 +276,40 @@ simulation 标签（key 名）会进入输出目录与图例。建议：
   \item 不用空格、特殊字符（用下划线分隔）
 \end{itemize}
 
+\subsection{混合 grid 与 stn sims 共用同一 reference}
+
+\openbench{} 支持同一 reference 被 \emph{grid 类型 sim 与 stn 类型 sim 同时使用}。例如想同时检验某变量"全球网格表现"与"站点观测匹配"：
+
+\begin{minted}{yaml}
+reference:
+  Streamflow: GRDC_Daily          # 站点 reference
+
+simulation:
+  CoLM2024_grid:                   # 模型在 grid 形态下的输出
+    model: CoLM2024
+    root_dir: /data/colm/grid
+
+  CoLM2024_stn:                    # 同模型在站点位置抽样的输出
+    model: CoLM2024
+    root_dir: /data/colm/stn
+    fulllist: /data/grdc_stations.csv
+\end{minted}
+
+\openbench{} 会按数据形态自动分流：grid sim → 网格评估，stn sim → 站点评估。\textbf{两类任务共享同一份 reference 预处理产物}（避免重复读 NC、重复重网格化）。
+
+\paragraph{内部机制（避免静默故障）}
+
+v3.0 之前混合形态在 dedupe 时只用 \yamlkey{ref\_source} 做 key，会出问题：站点预处理调用 \modname{extract_station_data_if_needed} 时\emph{会删除共享的 flat ref NC}（节省磁盘），但同一 reference 下还有 grid 任务等着读那个文件。修复后（commit \texttt{bf561bc} + 后续 backup-restore）的关键约定：
+
+\begin{itemize}
+  \item dedupe key 改为 \texttt{(ref\_source, "\_grid"|sim\_source)}：grid×grid 跨 sim 共享 prep；stn-涉及任务每对独立 prep
+  \item 在 stn prep 删除 flat NC 之前，runner 先把 flat 备份到 \texttt{<flat>.unifiedmask.bak}
+  \item 序列里下一个 grid 任务跑前发现 flat 缺失，从备份恢复（保留累积的 \yamlkey{unified\_mask}）
+  \item 循环末尾再统一确认 flat 存在；备份用完即删
+\end{itemize}
+
+用户层面无需感知。但如果你之前在 v3.0a1 上跑过混合配置发现"评估 partial 失败但日志只有 \texttt{No such file: ...\_ref\_X\_rv.nc}"——那是已修的旧 bug，升级到 v3.0a2 即可。
+
 \section{Time alignment 三种策略}
 
 当多个 simulation 与多个 reference 的时间窗口不完全一致时，\yamlkey{project.time_alignment} 决定怎么处理：
@@ -385,6 +419,20 @@ ref_data[mask] = np.nan   # 写回 ref，下个 sim 见到的就是这个
 \end{minted}
 
 发现这条警告就要去查 ref/sim 的 time 坐标是否真的能对齐。
+
+\subsection{累积态如何在 grid→stn→grid 序列下保住}
+
+\openbench{} v3.0 修复了一个隐藏的 unified\_mask 数据正确性 bug：当一个 reference 同时被 grid 和 stn 形态的 sim 使用时，stn 预处理过程会删除累积了 mask 的 flat NC，导致下一个 grid sim 看不到累积态。
+
+修复方案（\modname{runner.local} 内部 \texttt{\_backup\_flat\_ref} / \texttt{\_restore\_flat\_ref\_if\_missing}）：
+
+\begin{enumerate}
+  \item 每次 \modname{\_apply\_unified\_mask} 把累积 mask 写回 flat NC 后，runner 立即把 flat 备份到 \texttt{<flat>.unifiedmask.bak}
+  \item 任何后续操作发现 flat 缺失（典型情形：stn 预处理刚删过），从 \texttt{.bak} 恢复（保留全部累积 mask）
+  \item 整个变量处理完成后，备份文件自动清理
+\end{enumerate}
+
+用户层面：你不需要做任何事。\yamlkey{unified_mask: true} 在所有合法配置下都正确累积——包括混合 grid+stn 序列、\texttt{intersection} 与 \texttt{per_pair} 两种 \yamlkey{time_alignment}。这一段写在这里只是把"为什么不会出错"明确化，便于审稿/复现验证时引用。
 
 \section{站点 simulation：fulllist 的作用}
 
