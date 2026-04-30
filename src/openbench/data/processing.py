@@ -26,10 +26,6 @@ except ImportError:
     _HAS_PSUTIL = False
     logging.warning("psutil not available. Performance monitoring will be limited.")
 
-# Module-level set to track custom filter warnings
-_MODULE_CUSTOM_FILTER_WARNINGS = set()
-
-
 def _parse_time_offset(offset_str: str):
     """Parse a time offset string like '-15 days', '-1 months', '3 hours'.
 
@@ -68,8 +64,15 @@ except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
 from openbench.util.converttype import Convert_Type
+from openbench.data.time_utils import decode_nonstandard_time
 
+from .coordinates import COORDINATE_MAP
 from .unit import UnitProcessing
+
+
+def _get_coordinate_map() -> dict[str, str]:
+    """Return a copy of the shared coordinate mapping."""
+    return dict(COORDINATE_MAP)
 
 # Import interfaces
 try:
@@ -257,8 +260,12 @@ def performance_monitor(func: Callable = None, *, silent_on_error: bool = False)
                     memory_used = 0
 
                 if not silent_on_error:
-                    logging.error(f"Error in {f.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
-                    logging.error(str(e))
+                    if isinstance(e, (FileNotFoundError, ValueError)):
+                        # Expected errors: log at debug to avoid noisy cascaded messages
+                        logging.debug(f"Error in {f.__name__} after {execution_time:.2f}s: {e}")
+                    else:
+                        logging.error(f"Error in {f.__name__} after {execution_time:.2f}s and using {memory_used:.3f} GB:")
+                        logging.error(str(e))
                 raise
 
         return wrapper
@@ -421,19 +428,24 @@ def _get_windows_cpu_freq():
         return 0
 
 
-def calculate_optimal_chunk_size(dataset_size_gb: float, available_memory_gb: float) -> Dict[str, str]:
+def calculate_optimal_chunk_size(dataset_size_gb: float, available_memory_gb: float) -> Dict[str, Any]:
     """
     Calculate optimal chunk size based on dataset size and available memory.
-    Using 'auto' for all dimensions to let xarray handle chunking automatically.
+
+    For small datasets that fit in memory, returns no chunking (None).
+    For larger datasets, lets xarray handle chunking via 'auto'.
 
     Args:
-        dataset_size_gb (float): Size of the dataset in GB
-        available_memory_gb (float): Available memory in GB
+        dataset_size_gb: Size of the dataset in GB
+        available_memory_gb: Available memory in GB
 
     Returns:
-        dict: Dictionary containing chunk sizes for different dimensions
+        dict: Chunk sizes for time/lat/lon dimensions, or None values for no chunking.
     """
-    # Return 'auto' for all dimensions
+    if dataset_size_gb < available_memory_gb * 0.3:
+        # Dataset fits comfortably in memory — no chunking needed
+        return {"time": None, "lat": None, "lon": None}
+    # Large dataset — let xarray decide chunk sizes
     return {"time": "auto", "lat": "auto", "lon": "auto"}
 
 
@@ -535,13 +547,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             "enable_unit_conversion": config.get("enable_unit_conversion", False),
             "enable_quality_control": config.get("enable_quality_control", False),
             "validation_rules": {"required_dims": ["lat", "lon"], "check_missing": True, "check_infinite": True},
-            "coordinate_map": {
-                "latitude": "lat",
-                "longitude": "lon",
-                "lat_ucat": "lat",
-                "lon_ucat": "lon",
-                "time": "time",
-            },
+            "coordinate_map": _get_coordinate_map(),
         }
 
         # Update with user configuration
@@ -702,7 +708,11 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
         # Set default values for optional config keys before updating
         self.debug_mode = False  # Default debug_mode to False
-        self.__dict__.update(config)  # Changed this line
+        for key, value in config.items():
+            if key.startswith("__") or callable(getattr(self, key, None)):
+                logging.debug("Skipping protected/method key in config: %s", key)
+                continue
+            setattr(self, key, value)
         self.sim_varname = [self.sim_varname] if isinstance(self.sim_varname, str) else self.sim_varname
         self.ref_varname = [self.ref_varname] if isinstance(self.ref_varname, str) else self.ref_varname
         # Handle both single values and Series for use_syear and use_eyear
@@ -740,14 +750,56 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
     def setup_output_directories(self) -> None:
         if self.ref_data_type == "stn" or self.sim_data_type == "stn":
-            # Use ref_fulllist if available, otherwise use dataset-specific filename
+            # Try to load station list from multiple sources:
+            # 1. Explicit fulllist path (ref or sim)
+            # 2. Previously generated list file
+            # 3. Auto-scan sim directory (generates list on the fly)
+            stnlist_path = None
+
+            # Priority 1: explicit fulllist
             if hasattr(self, "ref_fulllist") and self.ref_fulllist and os.path.exists(self.ref_fulllist):
                 stnlist_path = self.ref_fulllist
+            elif hasattr(self, "sim_fulllist") and self.sim_fulllist and os.path.exists(self.sim_fulllist):
+                stnlist_path = self.sim_fulllist
+
+            # Priority 2: previously generated list
+            if not stnlist_path:
+                generated_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
+                if os.path.exists(generated_path):
+                    stnlist_path = generated_path
+
+            # Priority 3: auto-scan station simulation directory
+            if not stnlist_path and self.sim_data_type == "stn":
+                sim_dir = getattr(self, "sim_dir", "")
+                if sim_dir and os.path.isdir(sim_dir):
+                    stnlist_path = self._auto_generate_station_list(sim_dir)
+
+            if stnlist_path and os.path.exists(stnlist_path):
+                self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
             else:
-                stnlist_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
-            self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
+                logging.warning("No station list found; station processing may fail")
+                self.station_list = pd.DataFrame()
+
             output_dir = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}")
             os.makedirs(output_dir, exist_ok=True)
+
+    def _auto_generate_station_list(self, sim_dir: str) -> str | None:
+        """Auto-scan a station simulation directory and generate a station list CSV."""
+        try:
+            from openbench.data.station_scanner import scan_station_sim_dir
+
+            merge_dir = os.path.join(self.casedir, "scratch", f"merged_{self.sim_source}")
+            df = scan_station_sim_dir(sim_dir, output_dir=merge_dir)
+
+            # Save as CSV for reuse
+            list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
+            os.makedirs(os.path.dirname(list_path), exist_ok=True)
+            df.to_csv(list_path, index=False)
+            logging.info("Auto-generated station list: %s (%d stations)", list_path, len(df))
+            return list_path
+        except Exception as e:
+            logging.warning("Failed to auto-generate station list from %s: %s", sim_dir, e)
+            return None
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
         # Note: prefix_fallback is read directly from instance attributes
@@ -764,30 +816,29 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             "data_type": getattr(self, f"{datasource}_data_type"),
             "syear": getattr(self, f"{datasource}_syear"),
             "eyear": getattr(self, f"{datasource}_eyear"),
+            "convert": getattr(self, f"{datasource}_convert", ""),
         }
 
     @performance_monitor
-    def process(self, data: Union[str, xr.Dataset] = None, **kwargs) -> xr.Dataset:
+    def prepare_source(self, datasource: str) -> None:
+        """Prepare one configured datasource label for runner execution."""
+        logging.debug(f"Processing {datasource} data")
+        self._preprocess(datasource)
+        logging.debug(f"{datasource.capitalize()} data prepared!")
+
+    @performance_monitor
+    def process(self, data: xr.Dataset = None, **kwargs) -> xr.Dataset:
         """
-        Process data according to interface or legacy mode.
+        Process an xarray Dataset through the in-memory processing pipeline.
 
         Args:
-            data: Either datasource string (legacy) or xr.Dataset (interface mode)
+            data: Input xarray Dataset
             **kwargs: Additional parameters
 
         Returns:
-            Processed dataset (interface mode) or None (legacy mode)
+            Processed dataset
         """
-        # Legacy mode - data is datasource string
-        if isinstance(data, str):
-            datasource = data
-            logging.debug(f"Processing {datasource} data")
-            self._preprocess(datasource)
-            logging.debug(f"{datasource.capitalize()} data prepared!")
-            return None
-
-        # Interface mode - data is xr.Dataset
-        elif isinstance(data, xr.Dataset):
+        if isinstance(data, xr.Dataset):
             # Use enhanced pipeline if available
             if _HAS_PIPELINE and self.pipeline:
                 try:
@@ -808,17 +859,16 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             return processed_data
 
-        # Backward compatibility - no arguments provided
-        else:
-            raise ValueError("Either datasource string or xr.Dataset must be provided")
-
-    def process_legacy(self, datasource: str) -> None:
-        """Legacy processing method for backward compatibility."""
-        return self.process(datasource)
+        raise ValueError("process() expects an xarray.Dataset; use prepare_source() for runner datasource labels")
 
     @performance_monitor
     def _preprocess(self, datasource: str) -> None:
         data_params = self.get_data_params(datasource)
+
+        # Propagate adapter-resolved convert expression so select_var can apply it
+        convert_expr = data_params.get("convert", "")
+        if convert_expr:
+            setattr(self, f"_fb_convert_{datasource}", convert_expr)
 
         if data_params["data_type"] != "stn":
             logging.debug(f"Processing {data_params['data_type']} data")
@@ -838,9 +888,13 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return input_units_list == target_units_list
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
-        for coord in ds.coords:
-            if coord in self.coordinate_map:
-                ds = ds.rename({coord: self.coordinate_map[coord]})
+        # Rename both coordinates and dimensions (e.g., WRF south_north → lat)
+        rename_map = {}
+        for name in set(list(ds.coords) + list(ds.dims)):
+            if name in self.coordinate_map and self.coordinate_map[name] not in ds:
+                rename_map[name] = self.coordinate_map[name]
+        if rename_map:
+            ds = ds.rename(rename_map)
         # if the longitude is not between -180 and 180, convert it to the equivalent value between -180 and 180
         if "lon" in ds.coords:
             lon_vals = ds["lon"].values
@@ -863,7 +917,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         eyear = self.validate_year(eyear, default=2020)
 
         if "time" not in ds.coords:
-            print("The dataset does not contain a 'time' coordinate.")
+            logging.warning("The dataset does not contain a 'time' coordinate.")
             # Based on the syear and eyear, create a time index
             lon = ds.lon.values
             lat = ds.lat.values
@@ -926,16 +980,20 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
         # Ensure time is sorted
         ds = ds.sortby("time")
+        var_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(ds.data_vars), None)
         try:
-            return ds.transpose("time", "lat", "lon")[f"{ds.name}"]
+            result = ds.transpose("time", "lat", "lon")
         except (ValueError, KeyError):
             try:
-                return ds.transpose("time", "lat", "lon")
+                result = ds.transpose("time", "lon", "lat")
             except (ValueError, KeyError):
-                try:
-                    return ds.transpose("time", "lon", "lat")
-                except (ValueError, KeyError):
-                    return ds.squeeze()
+                result = ds.squeeze()
+        # Ensure we always return a DataArray
+        if isinstance(result, xr.Dataset) and var_name and var_name in result:
+            return result[var_name]
+        elif isinstance(result, xr.Dataset):
+            return next(iter(result.data_vars.values()))
+        return result
 
     @performance_monitor
     # NOTE: @cached removed - cache key collisions caused race conditions
@@ -1150,6 +1208,15 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             if len(missing_times) > 0 and len(missing_times) < len(time_var):
                 logging.warning("Time series is not complete. Missing time values found.")
                 logging.info("Filling missing time values with np.nan")
+                # Cast integer-typed data variables to float before reindex
+                # so np.nan can actually be stored. xarray silently coerces
+                # NaN → 0 when assigning to int dtype, corrupting fills.
+                if hasattr(ds, "data_vars"):
+                    for vname, var in list(ds.data_vars.items()):
+                        if np.issubdtype(var.dtype, np.integer):
+                            ds[vname] = var.astype("float64")
+                elif np.issubdtype(getattr(ds, "dtype", np.dtype("O")), np.integer):
+                    ds = ds.astype("float64")
                 # Fill missing time values with np.nan
                 ds = ds.reindex(time=time_index)
                 ds = ds.where(ds.time.isin(time_values), np.nan)
@@ -1177,10 +1244,19 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             logging.debug("Time normalization skipped for %s", model)
 
         # Step 2: apply model-specific time offset from profile
+        #
+        # time_offset YAML structure:
+        #   default:           # applies to all files
+        #     Month: "-1 months"
+        #     Day: "-1 days"
+        #   _cama_:            # applies when file path contains "_cama_"
+        #     Day: "-1 days"
+        #
+        # Resolution priority: file-path pattern match > default
         try:
-            from openbench.data.registry import RegistryManager
+            from openbench.data.registry.manager import get_registry
 
-            mgr = RegistryManager()
+            mgr = get_registry()
             profile = mgr.get_model(model)
             if profile and profile.time_offset:
                 match = re.match(r"(\d*)\s*([a-zA-Z]+)", tim_res)
@@ -1192,22 +1268,34 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                         "h": "Hour", "hour": "Hour",
                         "y": "Year", "year": "Year",
                     }
-                    offset_key = key_map.get(time_unit.lower(), "")
-                    offset_value = profile.time_offset.get(offset_key, "0")
+                    res_key = key_map.get(time_unit.lower(), "")
 
-                    # Resolve offset — can be a simple string or a per-variable dict
-                    if isinstance(offset_value, dict):
-                        # Per-variable offset: {"default": "0", "Streamflow,Dam_Inflow,...": "-15 days"}
-                        item = getattr(self, "item", "")
-                        offset_str = offset_value.get("default", "0")
-                        for var_list_str, var_offset in offset_value.items():
-                            if var_list_str == "default":
-                                continue
-                            if item in [v.strip() for v in var_list_str.split(",")]:
-                                offset_str = var_offset
-                                break
+                    # Build file context string for pattern matching
+                    current_prefix = getattr(self, f"{datasource}_prefix", "")
+                    current_dir = getattr(self, f"{datasource}_dir", "")
+                    file_context = f"{current_dir}/{current_prefix}"
+
+                    # Find matching offset group:
+                    # 1. File-path pattern (e.g., "_cama_" matches in file_context)
+                    # 2. Fallback to "default"
+                    offset_group = None
+                    for group_key, group_val in profile.time_offset.items():
+                        if group_key == "default":
+                            continue
+                        if isinstance(group_val, dict) and group_key in file_context:
+                            offset_group = group_val
+                            logging.debug("Time offset: matched file pattern '%s' in '%s'", group_key, file_context)
+                            break
+                    if offset_group is None:
+                        offset_group = profile.time_offset.get("default")
+
+                    # Extract offset string for the current time resolution
+                    if isinstance(offset_group, dict) and res_key:
+                        offset_str = str(offset_group.get(res_key, "0"))
+                    elif isinstance(offset_group, str):
+                        offset_str = offset_group
                     else:
-                        offset_str = str(offset_value)
+                        offset_str = "0"
 
                     if offset_str and offset_str != "0":
                         offset = _parse_time_offset(offset_str)
@@ -1215,7 +1303,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                             ds["time"] = pd.DatetimeIndex(ds["time"].values) + offset
                             logging.debug(
                                 "Applied time offset %s for %s/%s (%s)",
-                                offset_str, model, getattr(self, "item", "?"), offset_key,
+                                offset_str, model, getattr(self, "item", "?"), res_key,
                             )
         except Exception as e:
             logging.debug("Time offset skipped for %s: %s", model, e)
@@ -1223,19 +1311,33 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return ds
 
     def select_var(
-        self, syear: int, eyear: int, tim_res: str, VarFile: str, varname: List[str], datasource: str
+        self, syear: int, eyear: int, tim_res: str, VarFile, varname: List[str], datasource: str
     ) -> xr.Dataset:
+        # Track the original file-backed dataset separately from the derived
+        # `ds` so we can close the source handle before returning. Without
+        # this, every call leaks an open NetCDF/HDF5 handle — which under
+        # joblib.Parallel turns into HDF5 lock errors on the next call.
+        src_ds = None
         ds = None
         try:
-            try:
-                ds = xr.open_dataset(VarFile)  # .squeeze()
-            except (ValueError, OSError):
-                ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
+            if isinstance(VarFile, list):
+                try:
+                    src_ds = xr.open_mfdataset(VarFile, combine="by_coords")
+                except (ValueError, OSError):
+                    src_ds = xr.open_mfdataset(VarFile, combine="by_coords", decode_times=False)
+                    src_ds = decode_nonstandard_time(src_ds)
+            else:
+                try:
+                    src_ds = xr.open_dataset(VarFile)  # .squeeze()
+                except (ValueError, OSError):
+                    src_ds = xr.open_dataset(VarFile, decode_times=False)  # .squeeze()
+                    src_ds = decode_nonstandard_time(src_ds)
+            ds = src_ds
         except Exception as e:
             logging.error(f"Failed to open dataset: {VarFile}")
             logging.error(f"Error: {str(e)}")
-            if ds is not None:
-                ds.close()
+            if src_ds is not None:
+                src_ds.close()
             raise
 
         try:
@@ -1247,17 +1349,16 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                 logging.error("Variable name list is empty")
                 raise ValueError("Variable name list cannot be empty")
 
-            # Check if variable exists in dataset; if not, try fallback varnames from model profile
+            # Check if variable exists in dataset; if not, try normalized fallback varnames from model profile
             target_var = varname[0]
             if target_var not in ds:
-                # Try to find a fallback from the model profile
                 fallback_found = False
                 try:
                     source = getattr(self, f"{datasource}_source", "")
                     model = getattr(self, f"{source}_model", source)
-                    from openbench.data.registry import RegistryManager
+                    from openbench.data.registry.manager import get_registry
 
-                    mgr = RegistryManager()
+                    mgr = get_registry()
                     profile = mgr.get_model(model)
                     item = getattr(self, "item", "")
                     if profile and item in profile.variables:
@@ -1274,18 +1375,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                                     setattr(self, f"{datasource}_varname", [target_var])
                                     if fb.varunit:
                                         setattr(self, f"{datasource}_varunit", fb.varunit)
-                                    fallback_found = True
-                                    break
-                        # Try legacy list fallback
-                        if not fallback_found and isinstance(var_mapping.varname, list):
-                            for vn in var_mapping.varname:
-                                if vn in ds and vn != target_var:
-                                    logging.warning(
-                                        "Variable '%s' not found, using fallback '%s'",
-                                        target_var, vn,
-                                    )
-                                    target_var = vn
-                                    setattr(self, f"{datasource}_varname", [target_var])
+                                    # Apply conversion expression if defined
+                                    if fb.convert:
+                                        setattr(self, f"_fb_convert_{datasource}", fb.convert)
                                     fallback_found = True
                                     break
                 except Exception as e:
@@ -1297,43 +1389,89 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
                     logging.error(f"Available variables: {available_vars}")
                     raise KeyError(f"Variable '{varname[0]}' not in dataset")
 
+            # Keep full dataset reference for multi-variable convert expressions
+            full_ds = ds
             ds = Convert_Type.convert_nc(ds[target_var])
+
+        # Apply fallback conversion expression if set (from adapter or runtime fallback)
+        # The expression can reference 'value' (current variable) and any other
+        # variable in the NC file by name (e.g., 'f_assim', 'f_respc').
+        # NOTE: This must be outside the except block so it runs even when the
+        # primary varname is found without error (adapter-resolved fallbacks).
+        fb_convert = getattr(self, f"_fb_convert_{datasource}", None)
+        if fb_convert:
+            try:
+                from openbench.data.compute import _validate_expression
+                import numpy as np
+                _validate_expression(fb_convert)
+                value = ds.values
+                ns = {"value": value, "np": np}
+                ds.values = eval(fb_convert, {"__builtins__": {}}, ns)  # noqa: S307
+                logging.info("Applied fallback conversion: %s", fb_convert)
+            except Exception as e:
+                logging.warning("Fallback conversion '%s' failed: %s", fb_convert, e)
+
+        # Materialise data into memory so we can close the source file
+        # handle. Returning a lazy, file-backed Dataset would cause every
+        # caller (preprocess_*_files, Mod_Statistics.process_*) to hold an
+        # open NetCDF descriptor for the lifetime of the result.
+        try:
+            if hasattr(ds, "load"):
+                ds = ds.load()
+        except Exception as e:
+            logging.debug("select_var: ds.load() failed, returning lazy dataset: %s", e)
+        finally:
+            if src_ds is not None and src_ds is not ds:
+                try:
+                    src_ds.close()
+                except Exception:
+                    pass
+
         return ds
 
-    def _try_compute_from_profile(self, model: str, ds, datasource: str):
-        """Try to compute a derived variable using model profile's compute expression.
+    def _try_compute_from_profile(self, source_name: str, ds, datasource: str):
+        """Try to compute a derived variable using a compute expression.
 
+        Checks model profiles first, then reference datasets.
         Returns computed DataArray, or None if no compute expression applies.
         """
         try:
-            from openbench.data.registry import RegistryManager
+            from openbench.data.registry.manager import get_registry
 
-            mgr = RegistryManager()
-            profile = mgr.get_model(model)
-            if not profile:
-                return None
-
+            mgr = get_registry()
             item = getattr(self, "item", "")
-            if not item or item not in profile.variables:
+            if not item:
                 return None
 
-            var_mapping = profile.variables[item]
-            if not var_mapping.compute:
+            # Check model profile first, then reference dataset
+            var_mapping = None
+            profile = mgr.get_model(source_name)
+            if profile and item in profile.variables and profile.variables[item].compute:
+                var_mapping = profile.variables[item]
+
+            if var_mapping is None:
+                ref = mgr.get_reference(source_name)
+                if ref and item in ref.variables and ref.variables[item].compute:
+                    var_mapping = ref.variables[item]
+
+            if var_mapping is None:
                 return None
 
-            logging.info(f"Computing {item} from model profile expression")
+            logging.info("Computing %s via catalog compute expression", item)
             from openbench.data.compute import execute_compute
 
             result = execute_compute(ds, var_mapping.compute, item)
 
-            # Update info with the computed variable name and unit
+            if hasattr(result, "name"):
+                result.name = item
+
             setattr(self, f"{datasource}_varname", [item])
             setattr(self, f"{datasource}_varunit", var_mapping.varunit)
 
             return result
 
         except Exception as e:
-            logging.debug(f"Compute from profile failed for {model}/{getattr(self, 'item', '?')}: {e}")
+            logging.debug(f"Compute from profile failed for {source_name}/{getattr(self, 'item', '?')}: {e}")
             return None
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
@@ -1349,14 +1487,15 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
             return ds[varname[0]]
         else:
-            # Get model name from _model attribute (e.g., TE-routing_model = "TE")
-            source = self.sim_source if datasource == "sim" else self.ref_source
+            # Resolve source name (model name for sim, dataset name for ref)
+            source_key = self.sim_source if datasource == "sim" else self.ref_source
             try:
-                model = getattr(self, f"{source}_model")
+                source_name = getattr(self, f"{source_key}_model")
             except AttributeError:
-                model = source
-            # Priority 1: compute expression from model profile YAML
-            computed = self._try_compute_from_profile(model, ds, datasource)
+                source_name = source_key
+
+            # Priority 1: compute expression from catalog YAML (model or reference)
+            computed = self._try_compute_from_profile(source_name, ds, datasource)
             if computed is not None:
                 return computed
 
@@ -1364,21 +1503,31 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             try:
                 from openbench.data.custom import load_filter
 
-                filter_module = load_filter(model)
+                filter_module = load_filter(source_name)
+                filter_func = None
                 if filter_module:
-                    filter_func = getattr(filter_module, f"filter_{model}", None)
-                    if filter_func:
-                        logging.info(f"Applying filter for {model}")
-                        self, ds_or_da = filter_func(self, ds)
-                        if isinstance(ds_or_da, xr.Dataset):
-                            current_varname = getattr(self, f"{datasource}_varname")
-                            var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
-                            if var_to_extract in ds_or_da:
-                                return ds_or_da[var_to_extract]
-                        elif ds_or_da is not None:
-                            return ds_or_da
+                    filter_func = getattr(filter_module, f"filter_{source_name}", None)
+                # Fallback: strip version suffix (CoLM2024 → CoLM)
+                if filter_func is None:
+                    import re as _re
+                    base_name = _re.sub(r'[\d.]+$', '', source_name)
+                    if base_name and base_name != source_name:
+                        filter_module = filter_module or load_filter(base_name)
+                        if filter_module:
+                            filter_func = getattr(filter_module, f"filter_{base_name}", None)
+                if filter_module and filter_func:
+                    logging.info("Applying filter for %s", source_name)
+                    result = filter_func(self, ds)
+                    ds_or_da = result[1] if isinstance(result, tuple) else result
+                    if isinstance(ds_or_da, xr.Dataset):
+                        current_varname = getattr(self, f"{datasource}_varname")
+                        var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
+                        if var_to_extract in ds_or_da:
+                            return ds_or_da[var_to_extract]
+                    elif ds_or_da is not None:
+                        return ds_or_da
             except Exception as e:
-                logging.debug(f"Filter failed for {model}: {e}")
+                logging.debug("Filter failed for %s: %s", source_name, e)
 
             # Priority 3: direct extraction
             current_varname = getattr(self, f"{datasource}_varname")
@@ -1427,7 +1576,7 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
         # Build frequency string
         freq_str = f"{value}{freq}"
-        time_index = pd.date_range(start=f"{startx}-01-01T00:00:00", end=f"{endx}-12-31T59:59:59", freq=freq_str)
+        time_index = pd.date_range(start=f"{startx}-01-01T00:00:00", end=f"{endx}-12-31T23:59:59", freq=freq_str)
         ds = xr.Dataset({"data": ("time", np.nan * np.ones(len(time_index)))}, coords={"time": time_index})
         orig_ds_reindexed = dfx1.reindex(time=ds.time)
         return xr.merge([ds, orig_ds_reindexed]).drop_vars("data")
@@ -1482,9 +1631,10 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
 
         # Verify files were found
         if not var_files:
-            logging.error(f"No files found for year {year} with prefix '{prefix}' and suffix '{suffix}'")
-            logging.error(f"Searched in: {dirx}")
-            raise FileNotFoundError(f"No data files found for year {year}")
+            raise FileNotFoundError(
+                f"No data files found for year {year} in {dirx} "
+                f"(prefix='{prefix}', suffix='{suffix}')"
+            )
 
         datasets = []
         try:
@@ -1533,16 +1683,16 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         return prefixes
 
     def _find_single_file(self, dirx: str, prefix: str, suffix: str, datasource: str = "sim") -> str:
-        """Find a single data file, trying prefix fallbacks."""
+        """Find a single data file, trying prefix fallbacks and .nc/.nc4 extensions."""
         for try_prefix in self._get_prefix_fallback_list(prefix, datasource):
-            path = os.path.join(dirx, f"{try_prefix}{suffix}.nc")
-            if os.path.exists(path):
-                if try_prefix != prefix:
-                    logging.info(f"Using fallback prefix '{try_prefix}' for single file")
-                return path
-        # Raise with useful error
+            for ext in (".nc", ".nc4"):
+                path = os.path.join(dirx, f"{try_prefix}{suffix}{ext}")
+                if os.path.exists(path):
+                    if try_prefix != prefix:
+                        logging.info(f"Using fallback prefix '{try_prefix}' for single file")
+                    return path
         raise FileNotFoundError(
-            f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc')}"
+            f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc[4]')}"
         )
 
     def _find_data_files(self, dirx: str, prefix: str, year: int, suffix: str, datasource: str = "sim") -> list:
@@ -1557,18 +1707,28 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
             2. Fallback prefixes (e.g., "Case01_hist_cama_", "Case01_hist_unitcat_")
         """
         for try_prefix in self._get_prefix_fallback_list(prefix, datasource):
-            # Try primary path
-            var_files = cached_glob(os.path.join(dirx, f"{try_prefix}{year}*{suffix}.nc"))
+            # Escape glob metacharacters in user-supplied prefix/suffix. Without
+            # this, a prefix or suffix containing '[', '?', or '*' would be
+            # interpreted as a wildcard and either match the wrong files or fail
+            # entirely. The intentional wildcard is between {year} and {suffix}.
+            escaped_prefix = glob.escape(try_prefix)
+            escaped_suffix = glob.escape(suffix)
+            # Try primary path (.nc and .nc4)
+            var_files = cached_glob(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
+            if not var_files:
+                var_files = cached_glob(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc4"))
             # Try subdirectory path
             if not var_files:
-                var_files = cached_glob(os.path.join(dirx, str(year), f"{try_prefix}{year}*{suffix}.nc"))
+                var_files = cached_glob(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
+            if not var_files:
+                var_files = cached_glob(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc4"))
 
             # Filter: only keep files where part between prefix+year and suffix has no letters
             if var_files:
                 filtered = []
                 prefix_escaped = re.escape(try_prefix)
                 suffix_escaped = re.escape(suffix) if suffix else ""
-                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc$")
+                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc4?$")
                 for f in var_files:
                     if pattern.match(os.path.basename(f)):
                         filtered.append(f)
@@ -1675,7 +1835,9 @@ class BaseDatasetProcessing(BaseProcessor if _HAS_INTERFACES else object):
         found_files = self._find_data_files(dirx, prefix, syear, suffix, datasource)
         if not found_files:
             raise FileNotFoundError(f"No data files found for year {syear} with prefix '{prefix}'")
-        varfiles = found_files[0]
+        if len(found_files) > 1:
+            logging.info(f"Found {len(found_files)} files for year {syear}, merging with open_mfdataset")
+        varfiles = found_files[0] if len(found_files) == 1 else found_files
         ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
@@ -1778,15 +1940,14 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             # Check if the variable exists in the dataset
             if current_var_list[0] not in stn_data:
                 # Try to apply custom filter for variable fallback
-                # Get model name from _model attribute (e.g., TE-routing_model = "TE")
-                source = self.sim_source if datasource == "sim" else self.ref_source
+                source_key = self.sim_source if datasource == "sim" else self.ref_source
                 try:
-                    model = getattr(self, f"{source}_model")
+                    source_name = getattr(self, f"{source_key}_model")
                 except AttributeError:
-                    model = source
+                    source_name = source_key
                 # Same priority: compute → filter → direct
                 # Priority 1: compute
-                computed = self._try_compute_from_profile(model, stn_data, datasource)
+                computed = self._try_compute_from_profile(source_name, stn_data, datasource)
                 if computed is not None:
                     current_var_list = [getattr(self, "item", current_var_list[0])]
                     ds = computed
@@ -1795,28 +1956,52 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     try:
                         from openbench.data.custom import load_filter
 
-                        stn_module = load_filter(model)
+                        stn_module = load_filter(source_name)
+                        filter_func = None
                         if stn_module:
-                            filter_func = getattr(stn_module, f"filter_{model}", None)
-                            if filter_func:
-                                logging.info(f"Applying station filter for {model}")
-                                updated_self, filtered_data = filter_func(self, stn_data)
-                                if updated_self is not None and filtered_data is not None:
-                                    new_var_attr = getattr(self, f"{datasource}_varname")
-                                    current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
-                                    ds = filtered_data
-                                else:
-                                    raise ValueError(f"Station filter returned None for {model}")
+                            filter_func = getattr(stn_module, f"filter_{source_name}", None)
+                        if filter_func is None:
+                            import re as _re
+                            base_name = _re.sub(r'[\d.]+$', '', source_name)
+                            if base_name and base_name != source_name:
+                                stn_module = stn_module or load_filter(base_name)
+                                if stn_module:
+                                    filter_func = getattr(stn_module, f"filter_{base_name}", None)
+                        if stn_module and filter_func:
+                            logging.info("Applying station filter for %s", source_name)
+                            updated_self, filtered_data = filter_func(self, stn_data)
+                            if updated_self is not None and filtered_data is not None:
+                                new_var_attr = getattr(self, f"{datasource}_varname")
+                                current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                                ds = filtered_data
                             else:
-                                raise ImportError(f"No filter function for {model}")
+                                raise ValueError(f"Station filter returned None for {source_name}")
                         else:
-                            raise ImportError(f"No station filter for {model}")
+                            raise ImportError(f"No filter function for {source_name}")
                     except (ImportError, AttributeError, ValueError):
                         available_vars = list(stn_data.data_vars) + list(stn_data.coords)
                         logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
                         raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
                 ds = stn_data[current_var_list[0]]
+
+            # Apply fallback conversion expression if set (e.g., mol→g for GPP)
+            # Supports multi-variable expressions: 'value' is current var,
+            # other NC variables are accessible by name (e.g., f_assim).
+            fb_convert = getattr(self, f"_fb_convert_{datasource}", None)
+            if fb_convert:
+                try:
+                    from openbench.data.compute import _validate_expression
+                    _validate_expression(fb_convert)
+                    value = ds.values
+                    ns = {"value": value, "np": np}
+                    for vn in stn_data.data_vars:
+                        if vn != current_var_list[0]:
+                            ns[vn] = stn_data[vn].values
+                    ds.values = eval(fb_convert, {"__builtins__": {}}, ns)  # noqa: S307
+                    logging.info("Applied station fallback conversion: %s", fb_convert)
+                except Exception as e:
+                    logging.warning("Station fallback conversion '%s' failed: %s", fb_convert, e)
 
             # Check the time dimension
             if "time" not in ds.dims:
@@ -1830,13 +2015,14 @@ class StationDatasetProcessing(BaseDatasetProcessing):
             # Select the time range before resampling
             ds = ds.sel(time=slice(f"{start_year}-01-01", f"{end_year}-12-31"))
 
-            # Resample only if there's data in the selected time range
-            # Skip resampling for climatology mode - handled by Mod_Climatology
-            if len(ds.time) > 0 and not self._is_climatology_mode():
-                ds = ds.resample(time=self.compare_tim_res).mean()
-            else:
+            # Check if there's data in the selected time range
+            if len(ds.time) == 0:
                 logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-                return None  # or return an empty dataset with the correct structure
+                return None
+
+            # Resample to compare_tim_res (skip for climatology — handled by Mod_Climatology)
+            if not self._is_climatology_mode():
+                ds = ds.resample(time=self.compare_tim_res).mean()
 
             # ds = ds.resample(time=self.compare_tim_res).mean()
             ds = self.check_coordinate(ds)
@@ -1882,6 +2068,10 @@ class StationDatasetProcessing(BaseDatasetProcessing):
                     logging.info(f"Skipping station {station['ID']} ({datasource}) - no valid data after processing")
                     return
                 self.save_station_data(processed_data, station, datasource)
+        except (KeyError, FileNotFoundError, ValueError) as e:
+            # Skip individual stations that fail (missing variable, file, or bad data)
+            station_id = station_list.iloc[index].get("ID", f"index-{index}") if index < len(station_list) else f"index-{index}"
+            logging.warning(f"Skipping station {station_id} ({datasource}): {e}")
         finally:
             gc.collect()
 
@@ -1976,8 +2166,10 @@ class StationDatasetProcessing(BaseDatasetProcessing):
         target_lat = float(station[lat_key])
         target_lon = float(station[lon_key])
 
-        lon_coord = "lon" if "lon" in dataset.coords else "x"
-        lat_coord = "lat" if "lat" in dataset.coords else "y"
+        from openbench.data.coordinates import find_lat_name, find_lon_name
+        all_names = set(dataset.coords) | set(dataset.dims)
+        lat_coord = find_lat_name(all_names) or "lat"
+        lon_coord = find_lon_name(all_names) or "lon"
 
         try:
             return dataset.sel({lat_coord: [target_lat], lon_coord: [target_lon]}, method="nearest")
@@ -2196,14 +2388,25 @@ class GridDatasetProcessing(BaseDatasetProcessing):
 
     def extract_station_data(self, data_params: Dict[str, Any]) -> None:
         output_file = self.get_output_filename(data_params)
-        with xr.open_dataset(output_file) as ds:
-            ds = Convert_Type.convert_nc(ds)
-            Parallel(n_jobs=-1)(
-                delayed(self._extract_stn_parallel)(data_params["datasource"], ds, self.station_list, i)
-                for i in range(len(self.station_list["ID"]))
-            )
-            gc.collect()  # Add garbage collection after extracting station data
-        os.remove(output_file)
+        try:
+            with xr.open_dataset(output_file) as ds:
+                ds = Convert_Type.convert_nc(ds)
+                Parallel(n_jobs=-1)(
+                    delayed(self._extract_stn_parallel)(data_params["datasource"], ds, self.station_list, i)
+                    for i in range(len(self.station_list["ID"]))
+                )
+                gc.collect()  # Add garbage collection after extracting station data
+        finally:
+            # Remove the consumed flat NC even if station extraction raised mid-loop.
+            # Without this, a partial extraction leaves the flat behind and the next
+            # rescan thinks the prep is done. The runner-side backup-restore (in
+            # runner.local._catalog_write_lock + _backup_then_write) preserves the
+            # flat across this consumption when needed for downstream grid eval.
+            try:
+                if os.path.exists(output_file):
+                    os.remove(output_file)
+            except OSError as e:
+                logging.debug("Could not remove flat NC %s: %s", output_file, e)
 
     @performance_monitor
     def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
@@ -2220,6 +2423,23 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             with xr.open_dataset(var_file) as data:
                 data = Convert_Type.convert_nc(data)
                 data = self.preprocess_grid_data(data)
+                # 1. Clip to evaluation region to reduce memory
+                from openbench.data.coordinates import find_lat_name, find_lon_name
+                lat_name = find_lat_name(data.dims) or find_lat_name(data.coords) or "lat"
+                lon_name = find_lon_name(data.dims) or find_lon_name(data.coords) or "lon"
+                if lat_name in data and len(data[lat_name]) > 1:
+                    lat_vals = data[lat_name].values
+                    if lat_vals[0] > lat_vals[-1]:
+                        data = data.sel({lat_name: slice(self.max_lat + 1, self.min_lat - 1)})
+                    else:
+                        data = data.sel({lat_name: slice(self.min_lat - 1, self.max_lat + 1)})
+                if lon_name in data:
+                    data = data.sel({lon_name: slice(self.min_lon - 1, self.max_lon + 1)})
+                # 2. Resample BEFORE remap: e.g. daily→monthly first, then remap
+                #    much cheaper than remap daily then resample
+                if not self._is_climatology_mode():
+                    data = data.resample(time=self.compare_tim_res).mean()
+                # 3. Remap to target grid
                 remapped_data = self.remap_data(data)
                 self.save_remapped_data(remapped_data, data_source, year)
         finally:
@@ -2232,12 +2452,12 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         data = self.check_coordinate(data)
         if data["lon"].ndim == 2 and data["lat"].ndim == 2:
             try:
-                from regrid.regrid_wgs84 import convert_to_wgs84_xesmf
+                from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
 
                 data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
             except (ImportError, ValueError, RuntimeError) as e:
                 logging.debug(f"xesmf regridding failed, falling back to scipy: {e}")
-                from regrid.regrid_wgs84 import convert_to_wgs84_scipy
+                from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_scipy
 
                 data = convert_to_wgs84_scipy(data, self.compare_grid_res)
 
@@ -2282,12 +2502,10 @@ class GridDatasetProcessing(BaseDatasetProcessing):
         except Exception as e:
             errors.append(f"remap_basic_interpolation: {e}")
 
-        # All methods failed - now report all errors
-        logging.error("All remapping methods failed:")
-        for error in errors:
-            logging.error(f"  - {error}")
-        logging.warning("Returning original data without remapping")
-        return data
+        # All methods failed - raise with details
+        msg = "All remapping methods failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        logging.error(msg)
+        raise RuntimeError(msg)
 
     @performance_monitor
     @cached(key_prefix="create_target_grid", ttl=7200)  # Cache for 2 hours (grid rarely changes)
@@ -2370,9 +2588,11 @@ class GridDatasetProcessing(BaseDatasetProcessing):
             # Create target grid file
             self.create_target_grid_file(temp_grid_name, new_grid)
 
-            # Use remapcon (conservative remapping) - CDO's standard conservative method
-            cmd = f"cdo -s remapcon,{temp_grid_name} {temp_input_name} {temp_output_name}"
-            subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+            # Use remapcon (conservative remapping) — CDO's standard conservative method.
+            # List form (shell=False default) avoids shell injection on paths and
+            # bypasses an unnecessary shell parse layer.
+            cmd = ["cdo", "-s", f"remapcon,{temp_grid_name}", temp_input_name, temp_output_name]
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
 
             # Read result and load into memory before cleanup
             with xr.open_dataset(temp_output_name) as result_ds:
@@ -2405,10 +2625,8 @@ class GridDatasetProcessing(BaseDatasetProcessing):
                 logging.warning(f"No data to save for {data_source} year {year} - all regrid methods failed")
                 return
 
-            # Convert sparse arrays to dense arrays
-            # Skip resampling for climatology mode - handled by Mod_Climatology
-            if not self._is_climatology_mode():
-                data = data.resample(time=self.compare_tim_res).mean()
+            # Time resampling is now done before remap in _make_grid_parallel
+            # (resample before remap is much more efficient for high-frequency data)
             data = data.sel(time=slice(f"{year}-01-01T00:00:00", f"{year}-12-31T23:59:59"))
 
             varname = self.ref_varname[0] if data_source == "ref" else self.sim_varname[0]
@@ -2442,6 +2660,6 @@ class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
                 raise RuntimeError(f"CacheSystem initialization failed: {e}")
         return self.cache_manager
 
-    def process(self, datasource: str) -> None:
-        super().process(datasource)
+    def prepare_source(self, datasource: str) -> None:
+        super().prepare_source(datasource)
         # Add any additional processing specific to this class if needed

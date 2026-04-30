@@ -254,8 +254,9 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             data.to_netcdf(temp_input.name)
             self.create_target_grid_file(temp_grid.name, new_grid)
 
-            cmd = f"cdo -s remapcon,{temp_grid.name} {temp_input.name} {temp_output.name}"
-            subprocess.run(cmd, shell=True, check=True)
+            # List form (shell=False default) avoids shell injection on paths
+            cmd = ["cdo", "-s", f"remapcon,{temp_grid.name}", temp_input.name, temp_output.name]
+            subprocess.run(cmd, check=True)
             # Eagerly load and close the dataset BEFORE the surrounding `with`
             # exits and deletes temp_output. Previously returned a lazy
             # DataArray pointing at a deleted file — silent failure on later
