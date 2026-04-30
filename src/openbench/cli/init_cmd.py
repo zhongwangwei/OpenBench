@@ -54,7 +54,18 @@ def init_cmd(output):
     if selection.strip().lower() == "all":
         selected_vars = var_list
     else:
-        indices = [int(x.strip()) - 1 for x in selection.split(",") if x.strip().isdigit()]
+        # Reject "0" and any negative input — int("0") - 1 = -1 would silently
+        # select the last item via Python negative indexing.
+        indices = []
+        for x in selection.split(","):
+            s = x.strip()
+            if not s.isdigit():
+                continue
+            n = int(s)
+            if n < 1:
+                click.secho(f"  Ignoring out-of-range selection: {s}", fg="yellow")
+                continue
+            indices.append(n - 1)
         selected_vars = [var_list[i] for i in indices if 0 <= i < len(var_list)]
 
     if not selected_vars:
@@ -127,6 +138,8 @@ def init_cmd(output):
     statistics = click.confirm("  Enable statistics?", default=False)
 
     # Build config
+    # NOTE: reference uses flat var→source mapping (matches loader._build_reference);
+    # not {"sources": {...}} which loader rejects as "reference.sources must be a string".
     config = {
         "project": {
             "name": name,
