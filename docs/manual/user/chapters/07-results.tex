@@ -141,6 +141,108 @@ scores:
   - Overall_Score
 \end{minted}
 
+\section{聚合权重：\yamlkey{weight}}
+
+\yamlkey{project.weight}（默认 \texttt{none}）控制 \openbench{} 把 grid 数据"压成一个数"时如何加权。它\emph{不}影响 \file{metrics/} 与 \file{scores/} 下逐格点 metric NC 本身——这些永远是逐格点计算。它\emph{只}影响下游聚合：每张 IGBP/PFT/气候带分类表里的"Overall"列、各 class 列。
+
+\subsection{三种取值}
+
+\textbf{\texttt{none}（默认）}：简单算术平均。
+\begin{minted}{python}
+overall_mean = ds[score].mean(skipna=True)
+\end{minted}
+所有有效格点等权——南极的格点和赤道格点权重一样。最容易理解，但有偏差：高纬区域格点面积更小（cos $\phi$ 因子），算术平均高估了高纬区域的影响。
+
+\textbf{\texttt{area}}：余弦纬度面积权。
+\begin{minted}{python}
+weights = np.cos(np.deg2rad(ds.lat))
+overall_mean = ds[score].weighted(weights).mean(skipna=True)
+\end{minted}
+对应 grid cell 的真实面积。\textbf{这是大多数全球或区域评估的正确选择}——你想表达"全球平均"时，就该用面积权重。
+
+\textbf{\texttt{mass}}：面积权 $\times$ 通量权。
+\begin{minted}{python}
+area_weights = np.cos(np.deg2rad(ds.lat))
+flux_weights = np.abs(ref_data.mean("time"))
+combined = area_weights * flux_weights
+weights = combined / combined.sum()
+overall_mean = ds[score].weighted(weights).mean(skipna=True)
+\end{minted}
+让"哪里通量大"决定权重——对 ET、GPP、降水这类\emph{通量}变量，把热带、降水带这种"高活跃区"的 score 加权放大。\openbench{} 用 reference 数据（不是 sim）计算 flux\_weights，避免不同 sim 引入不同权重。
+
+\subsection{选择建议}
+
+\begin{itemize}
+  \item \textbf{开发期 / debug}：\texttt{none}（最容易理解逐格点贡献）
+  \item \textbf{全球或区域定量评估}：\texttt{area}（正确表达面积平均）
+  \item \textbf{通量类变量发表论文}：\texttt{mass}（强调高通量区域）
+  \item \textbf{站点评估}：weight 不生效（站点本就是离散点，无网格面积概念）
+\end{itemize}
+
+\subsection{陷阱：schema 注释和实际取值不一致}
+
+代码 \modname{config/schema.py:31} 注释写 \texttt{area | equal}，但 \openbench{} 引擎 \modname{core/landcover_groupby.py} 实际识别的字符串是 \texttt{area} 与 \texttt{mass}。任何其他值（包括 \texttt{equal}）都走 \texttt{else} 分支等同于 \texttt{none}。这是 schema 注释还没跟上实现的轻微脱节，写配置时认实现，别认注释。
+
+\section{按区域分类聚合（IGBP / PFT / 气候带 groupby）}
+
+\openbench{} 内置三种"按地表/气候属性切片"的分类聚合，开关分别是 \yamlkey{project.IGBP_groupby} / \yamlkey{project.PFT_groupby} / \yamlkey{project.climate_zone_groupby}（都是 \texttt{bool}，默认 \texttt{false}）。它们共用一套机制：
+
+\begin{enumerate}
+  \item 加载内置静态分类图（\file{IGBP.nc} / \file{PFT.nc} / \file{Climate\_zone.nc}）
+  \item 用 CDO \texttt{largest\_area\_fraction\_remap} 重网格到 \yamlkey{project.grid_res}
+  \item 对每个 metric/score grid，按 class id 切片：\code{ds.where(IGBPtype == i)}
+  \item 在每个切片内计算\textbf{中位数（metric）和（加权）平均（score）}
+  \item 输出三件套：每 class 一个 NC + 一张总览 CSV + 一张 LC\_based\_heat\_map PNG
+\end{enumerate}
+
+\subsection{三种分类的差别}
+
+\begin{center}
+\begin{tabular}{|l|c|p{4cm}|p{4cm}|}
+\hline
+\textbf{分类} & \textbf{class 数} & \textbf{含义} & \textbf{何时用} \\
+\hline
+\texttt{IGBP\_groupby} & 17 & MODIS 地表覆盖 & 区分常绿林/草地/作物/城市/水体 \\
+\hline
+\texttt{PFT\_groupby}  & 16 & 植物功能型 & 模型 PFT 评估（CoLM、CLM 等） \\
+\hline
+\texttt{climate\_zone\_groupby} & 5--12 & K\"oppen 气候带 & 分热带/干旱/温带/极地评估 \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{输出位置}
+
+\file{<output\_dir>/<project\_name>/comparisons/<groupby\_name>/<sim>\_\_\_<ref>/}
+
+下列产物（以 IGBP 为例）：
+
+\begin{itemize}
+  \item \file{<var>\_ref\_<R>\_sim\_<S>\_<metric>\_IGBP\_<className>.nc}：每 class 切片
+  \item \file{<var>\_<sim>\_\_\_<ref>\_metrics.csv}：行=metric，列=每 class + Overall
+  \item \file{<var>\_<sim>\_\_\_<ref>\_scores.csv}：行=score，列同上
+  \item \file{<var>\_<groupby\_name>\_heatmap\_metrics.png}：可视化
+\end{itemize}
+
+\subsection{静态数据的查找路径}
+
+三个分类文件按以下顺序查找（\modname{core.landcover_groupby._resolve_static_dataset}）：
+
+\begin{enumerate}
+  \item \env{OPENBENCH\_DATASET\_DIR}\code{/<filename>} 若环境变量已设
+  \item \file{./dataset/<filename>}（cwd 相对，向后兼容老布局）
+\end{enumerate}
+
+\textbf{常见错误}：在容器或 SLURM 作业里跑而 cwd 不是项目根，又没设 \env{OPENBENCH\_DATASET\_DIR}，会得到 \texttt{FileNotFoundError: ./dataset/IGBP.nc}。建议在 \texttt{.env} 或 \cli{run} 前 \texttt{export} 一次。
+
+\subsection{三个 groupby 都开还是只开一个}
+
+\begin{itemize}
+  \item 只开你真要看的那一个：每个 groupby 都触发一次 CDO 重网格 + 全 metric 全 class 切片，开三个会把 \file{comparisons/} 阶段时间拉到 3×
+  \item 站点评估下：groupby 仍可工作（按站点所在 class 分组），但样本量更敏感——少 class 可能只有 1-2 个站，统计意义有限
+  \item 与 \yamlkey{weight} 联动：groupby 输出 CSV 里的 \texttt{Overall} 那列就用 \yamlkey{weight} 指定的方法聚合（\texttt{none/area/mass}）
+\end{itemize}
+
 \section{Comparison 输出（多模型对比）}
 
 \yamlkey{comparison.enabled: true} 时，\file{comparisons/} 下会有：

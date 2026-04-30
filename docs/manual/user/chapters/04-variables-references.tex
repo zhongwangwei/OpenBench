@@ -71,6 +71,29 @@ simulation:
 
 如果两边都是 stn（同站点列表的两个 dataset 直接对比），\yamlkey{fulllist} 仍可指定，但通常省略 —— \openbench{} 会自动扫描 sim 目录提取站点列表。详见第 5 章。
 
+\subsection{min\_year\_threshold：站点最小数据长度过滤}
+
+\yamlkey{project.min_year_threshold}（默认 \texttt{3}，单位：年）只对站点参考数据生效，是\emph{站点级}过滤器：
+
+\begin{enumerate}
+  \item \openbench{} 读站点 NC 后，对每个站逐一计算其有效数据时间跨度 = $\min(\text{站结束年}, \text{sim结束年}, \text{eyear}) - \max(\text{站开始年}, \text{sim开始年}, \text{syear})$
+  \item 若该跨度 \texttt{<} \yamlkey{min_year_threshold}，整个站被剔除（不进入 station list）
+  \item 通过的站才进入 evaluation 阶段
+\end{enumerate}
+
+实现位置：\modname{data.station_matcher} 与各 \modname{data.custom.*\_filter} 模块（如 GRDC、HydroWeb、ResOpsUS）。
+
+\subsection*{挑值的指引}
+
+\begin{itemize}
+  \item \textbf{默认 3}：跨年间变率 metrics（KGE、相关性）所需的最低样本量经验值
+  \item \textbf{设 1}：你正在做单年度评估或纯空间分析，不在意跨年统计稳健性
+  \item \textbf{设 5--10}：发表论文中的 trend / 趋势 metric，希望排除短记录站点
+  \item 注意 \emph{这个阈值与 \yamlkey{years} 一起作用}：缩小 \yamlkey{years} 区间会减少每个站的可用跨度，可能让原本通过的站被剔除
+\end{itemize}
+
+\textbf{陷阱}：\cli{check} 不会提前告诉你这个过滤器会剔除多少站；只在 run 阶段日志看到 \texttt{[INFO] Selected N stations} 与原始站数对比。如果选出的站数远低于预期，先把这个阈值调小再排查。
+
 \section{分辨率后缀自动解析}
 
 许多 reference 数据集提供多个分辨率版本，registry 用后缀区分：
