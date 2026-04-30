@@ -1,0 +1,223 @@
+% docs/manual/developer/chapters/09-gui-extension.tex
+% 第 9 章：GUI 扩展
+
+\chapter{GUI 扩展}
+
+\modname{gui} 子包基于 \modname{PySide6}（Qt 6 Python 绑定），实现 14 步向导式配置生成器 + 运行监控 + 远程提交。本章给开发者：架构总览、关键文件、添加新 wizard page 的 walkthrough。
+
+\warninline{GUI 在无图形系统的 HPC 节点上无法启动。开发 GUI 时需要本地 macOS / Linux Desktop / Windows 环境。}
+
+\section{文件结构}
+
+\file{src/openbench/gui/}：
+
+\begin{itemize}
+  \item \modname{app}：应用 bootstrap，QApplication 启动
+  \item \modname{main\_window}：主窗口（侧栏 + 中心 wizard 区）
+  \item \modname{controller}：wizard 控制器（页面切换、状态聚合）
+  \item \modname{config\_manager}：schema dataclass ↔ GUI 状态双向同步
+  \item \modname{validation} / \modname{data\_validator}：实时校验
+  \item \modname{runner}：本地评估运行器（包装 \modname{runner.local}）
+  \item \modname{remote\_runner}：SSH 远程运行
+  \item \modname{progress\_parser}：把 \cli{run} 输出解析为 GUI 进度事件
+  \item \modname{path\_utils}：路径工具
+  \item \modname{wizard\_config}：wizard 配置
+  \item \modname{pages/}：14 个 wizard page + base\_page
+  \item \modname{widgets/}：复用部件（数据源编辑器、模型定义编辑器、远程配置等）
+  \item \modname{dialogs/}：弹窗（scan\_confirm 等）
+  \item \modname{styles/}：QSS 样式表
+\end{itemize}
+
+\section{Qt 架构基础}
+
+\openbench{} GUI 用经典 Qt 模式：
+
+\begin{itemize}
+  \item \textbf{Signal/Slot}：组件通信。每个 page 暴露 \texttt{configChanged} 信号；controller 连接到 \texttt{config\_manager} 的 update slot
+  \item \textbf{Model/View}（部分 page 用）：QAbstractItemModel + QTableView
+  \item \textbf{Async via QThread}：长任务（evaluation run）在子线程，主线程发 UI 事件
+\end{itemize}
+
+\subsection{开发用 PySide6 而非 PyQt}
+
+PySide6 是 Qt 公司官方 Python 绑定（LGPL）。PyQt 是 Riverbank 商用替代。两者 API 99\% 兼容。\openbench{} 选 PySide6 是因为 LGPL 友好。
+
+\section{14 个 wizard page}
+
+\file{gui/pages/}：
+
+\begin{longtable}{l p{4cm} p{5cm}}
+  \toprule
+  page 文件 & schema 对应 & 主要 widget \\
+  \midrule
+  \endhead
+  \modname{page\_general} & project 标识 + 时空 & 文本/数字输入 \\
+  \modname{page\_variables} & evaluation.variables & checkable tree（按 category） \\
+  \modname{page\_ref\_data} & reference.sources & per-variable 下拉 \\
+  \modname{page\_sim\_data} & simulation 字典 & 表格 + entry 编辑器（widgets/data\_source\_editor） \\
+  \modname{page\_evaluation} & project 评估开关 & checkbox 组 \\
+  \modname{page\_metrics} & metrics list & checkable list \\
+  \modname{page\_scores} & scores list & checkable list \\
+  \modname{page\_comparisons} & comparison.\{enabled,items\} & checkbox + list \\
+  \modname{page\_statistics} & statistics.\{enabled,items\} & 同上 \\
+  \modname{page\_runtime} & project.\{num\_cores,force,debug\_mode,...\} & slider + checkbox \\
+  \modname{page\_registry} & 浏览/编辑 catalog & 表格 + register 表单 \\
+  \modname{page\_options} & project 高级 & 杂项输入 \\
+  \modname{page\_preview} & 综合 yaml 预览 + check & 文本 + 状态 \\
+  \modname{page\_run\_monitor} & 运行进度 + 日志 & 进度条 + 日志窗 \\
+  \bottomrule
+\end{longtable}
+
+\section{base\_page：所有 page 的基类}
+
+\file{gui/pages/base\_page.py}：
+
+\begin{minted}{python}
+class BasePage(QWidget):
+    """所有 wizard page 的基类。"""
+
+    configChanged = Signal()  # 子类发出此信号
+
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """子类 override 创建 widget 树。"""
+        raise NotImplementedError
+
+    def load_config(self, cfg: OpenBenchConfig):
+        """从 schema 加载到 widget。"""
+        raise NotImplementedError
+
+    def save_to_config(self, cfg: OpenBenchConfig):
+        """从 widget 写回 schema。"""
+        raise NotImplementedError
+
+    def validate(self) -> list[str]:
+        """返回错误消息列表（空表示通过）。"""
+        return []
+\end{minted}
+
+\section{config\_manager：双向同步}
+
+\file{gui/config\_manager.py} 是 schema ↔ widget 状态的中介：
+
+\begin{itemize}
+  \item 持有当前 \texttt{OpenBenchConfig} 实例
+  \item 监听各 page 的 \texttt{configChanged}，调每个 page 的 \texttt{save\_to\_config}
+  \item 提供 \texttt{load\_yaml(path)} / \texttt{save\_yaml(path)}
+  \item Preview page 通过它拿"含默认值的完整 yaml 字符串"
+\end{itemize}
+
+\subsection{何时同步}
+
+\begin{itemize}
+  \item 用户切 page（next / back）→ 立刻保存当前 page 状态
+  \item 编辑某 widget → 发 \texttt{configChanged}，但不立刻保存（避免每个键击都序列化）
+  \item File → Save → 强制全部 page 保存 + 写盘
+\end{itemize}
+
+\section{progress\_parser：CLI 输出 → GUI 事件}
+
+\openbench{} GUI 的 Run Monitor 不直接调 Python API（避免阻塞主线程），而是 fork \cli{openbench run} 子进程，通过管道读 stderr。
+
+\modname{progress\_parser} 解析每行：
+
+\begin{itemize}
+  \item \texttt{Phase: ...} → 切换阶段标签
+  \item \texttt{Queued <var>: sim=X ref=Y} → 增加任务计数
+  \item \texttt{Cache hit / Output written} → 更新进度条
+  \item \texttt{ERROR / WARN} → 在日志窗口高亮
+\end{itemize}
+
+\noteinline{这种基于文本解析的设计有缺点：CLI 输出格式变了 GUI 进度可能错。但解耦换来稳定性——GUI 不依赖 \openbench{} 内部 API。}
+
+\section{Walkthrough：添加新 wizard page}
+
+假设要加一个"Performance Benchmark page"（让用户预估评估耗时）：
+
+\subsection{Step 1：建文件 \file{gui/pages/page\_performance.py}}
+
+\begin{minted}{python}
+from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton
+from .base_page import BasePage
+
+
+class PerformancePage(BasePage):
+    title = "Performance"
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        self.estimate_label = QLabel("Estimated runtime: --")
+        self.run_estimate_btn = QPushButton("Estimate")
+        self.run_estimate_btn.clicked.connect(self._estimate)
+        layout.addWidget(self.estimate_label)
+        layout.addWidget(self.run_estimate_btn)
+
+    def _estimate(self):
+        cfg = self.controller.current_config
+        # 简单估算：variables × sims × refs × time_factor
+        n_var = len(cfg.evaluation.variables)
+        n_sim = len(cfg.simulation)
+        n_yr = cfg.project.years[1] - cfg.project.years[0] + 1
+        seconds = n_var * n_sim * n_yr * 8
+        self.estimate_label.setText(f"Estimated runtime: ~{seconds // 60} min")
+
+    def load_config(self, cfg):
+        pass  # 此 page 无持久状态
+
+    def save_to_config(self, cfg):
+        pass
+
+    def validate(self):
+        return []
+\end{minted}
+
+\subsection{Step 2：注册到 main\_window}
+
+\file{gui/main\_window.py}：
+
+\begin{minted}{python}
+from .pages.page_performance import PerformancePage
+
+# 在 _setup_pages() 中：
+self.pages.append(PerformancePage(self.controller))
+\end{minted}
+
+\subsection{Step 3：调整 page 顺序}
+
+按用户工作流插入到合理位置（例如 runtime 之后、preview 之前）。
+
+\subsection{Step 4：测试}
+
+GUI 测试目前主要靠人工。建议至少：
+
+\begin{itemize}
+  \item 启动 GUI 看新 page 出现
+  \item 切到该 page 不报错
+  \item 点 Estimate 按钮看显示更新
+\end{itemize}
+
+如要自动化，参考 \href{https://pytest-qt.readthedocs.io}{pytest-qt}（headless 测试 Qt 应用）。
+
+\subsection{Step 5：文档}
+
+加到用户卷第 8 章 GUI page 列表。
+
+\section{GUI 测试现状}
+
+\openbench{} 的 GUI 部分目前没有自动测试（headless 环境难以渲染 Qt）。开发 GUI 时主要靠：
+
+\begin{itemize}
+  \item 手动测试启动 + 切 page + 编辑 + 保存
+  \item Qt 内部 layout 用 QSS 调整时可视化检查
+  \item 进度条 / 日志解析的 \modname{progress\_parser} 可以离线 unit test
+\end{itemize}
+
+未来想加 pytest-qt 自动测试，欢迎贡献。
+
+\section{下一步}
+
+下一章详解测试与 CI。

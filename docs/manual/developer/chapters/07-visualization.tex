@@ -1,0 +1,184 @@
+% docs/manual/developer/chapters/07-visualization.tex
+% 第 7 章：visualization
+
+\chapter{visualization}
+
+\modname{visualization} 是 \openbench{} 的图形输出层。设计哲学："一图一模块、一函数"——每种图占一个 \texttt{Fig\_*.py} 文件，文件内一个公开函数完成绘制 + 写盘。这让出图独立可测、易于复用，也方便添加新图种。
+
+\section{17 个 Fig 模块速查}
+
+\file{src/openbench/visualization/} 下：
+
+\begin{longtable}{l p{8cm}}
+  \toprule
+  模块 & 用途 \\
+  \midrule
+  \endhead
+  \modname{Fig\_geo\_plot\_index} & 通用 geo 渲染基础（被多个模块复用） \\
+  \modname{Fig\_stn\_plot\_index} & 站点散点 geo 渲染 \\
+  \modname{Fig\_Basic\_Plot} & 基础线图 / 时间序列 \\
+  \modname{Fig\_Correlation} & 散点与相关系数图 \\
+  \modname{Fig\_Diff\_Plot} & sim - ref 差异图 \\
+  \modname{Fig\_heatmap} & 多变量热图 \\
+  \modname{Fig\_LC\_based\_heat\_map} & 按 IGBP 类的热图（含 CZ 版本） \\
+  \modname{Fig\_radarmap} & 雷达图 \\
+  \modname{Fig\_portrait\_plot\_seasonal} & portrait plot（季节版） \\
+  \modname{Fig\_parallel\_coordinates} & 平行坐标多变量比较 \\
+  \modname{Fig\_kernel\_density\_estimate} & KDE 概率密度对比 \\
+  \modname{Fig\_Ridgeline\_Plot} & 脊线图 \\
+  \modname{Fig\_Whisker\_Plot} & 箱线图 \\
+  \modname{Fig\_target\_diagram} & target diagram \\
+  \modname{Fig\_taylor\_diagram} & Taylor diagram \\
+  \modname{Fig\_ANOVA} & ANOVA 结果可视化 \\
+  \modname{Fig\_Hellinger\_Distance} & Hellinger 距离热图 \\
+  \modname{Fig\_Mann\_Kendall\_Trend\_Test} & MK 趋势显著性图 \\
+  \modname{Fig\_Three\_Cornered\_Hat} & 三角帽误差图 \\
+  \modname{Fig\_Partial\_Least\_Squares\_Regression} & PLSR 系数图 \\
+  \modname{Fig\_Functional\_Response} & 功能响应曲线 \\
+  \modname{Fig\_Standard\_Deviation} / \modname{Fig\_Z\_Score} & 标准差 / Z 分数图 \\
+  \modname{Fig\_Relative\_Score} & 相对打分图 \\
+  \modname{Fig\_Single\_Model\_Performance\_Index} & 单模型综合指数 \\
+  \bottomrule
+\end{longtable}
+
+\modname{Mod\_Only\_Drawing} 是 only\_drawing 模式的入口（重出图不重算）。
+
+\section{命名约定}
+
+\begin{itemize}
+  \item \textbf{文件名}：\texttt{Fig\_<KIND>.py}（驼峰式 + 下划线）
+  \item \textbf{函数名}：\texttt{make\_<KIND>(info, ...)} 或 \texttt{make\_scenarios\_comparison\_<KIND>(...)}
+  \item \textbf{所有出图函数 \emph{接收 info dict}}（来自 adapter）+ \emph{对齐好的数据}
+  \item \textbf{输出路径}：\file{output/<run>/figures/<var>/<kind>/<sim>\_<ref>.png}
+\end{itemize}
+
+\subsection{__init__.py 公开 API}
+
+\file{visualization/\_\_init\_\_.py} 显式 import 每个模块的公开函数（见包初始化代码），所以外部代码可：
+
+\begin{minted}{python}
+from openbench.visualization import (
+    make_geo_plot_index,
+    make_scenarios_comparison_radar_map,
+    make_ANOVA,
+    # ...
+)
+\end{minted}
+
+\section{cmaps}
+
+\file{visualization/cmaps/} 集中管理 colormap：
+
+\begin{itemize}
+  \item 自定义 colormap（基于 cmasher / matplotlib 派生）
+  \item 物理量约定（ET 用蓝-绿、温度用红-蓝、bias 用 RdBu 中心化等）
+  \item 加新 colormap 只需放 \texttt{.py} 文件然后 import
+\end{itemize}
+
+\section{字体与样式约定}
+
+\begin{itemize}
+  \item 默认字体：matplotlib 默认（DejaVu Sans）
+  \item 中文标签需手动 \texttt{plt.rcParams['font.family'] = 'Songti SC'}（OpenBench 默认不强制中文标签——避免 PDF 渲染问题）
+  \item DPI：\texttt{dpi=300}（论文级）
+  \item 文件大小通常控制在 < 500 KB
+\end{itemize}
+
+\section{Fig\_geo\_plot\_index：通用基础}
+
+许多 Fig 模块复用 \modname{Fig\_geo\_plot\_index} 作为底图渲染：
+
+\begin{minted}{python}
+from .Fig_geo_plot_index import make_geo_plot_index
+
+# 在你的新 Fig_X 中：
+make_geo_plot_index(
+    data, lat, lon,
+    cmap='RdBu_r',
+    vmin=-1, vmax=1,
+    title='Bias',
+    output_path='figures/X/...',
+)
+\end{minted}
+
+复用基础图比手撸 \modname{cartopy} 代码省 10x 时间。
+
+\section{Walkthrough：添加新 Fig 模块}
+
+假设要加"Climatology Cycle Plot"（每月一个 box，多模型并列）：
+
+\subsection{Step 1：建文件 \file{Fig\_Climatology\_Cycle.py}}
+
+\begin{minted}{python}
+"""Climatology cycle plot — monthly seasonal cycle across simulations."""
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+
+def make_Climatology_Cycle(info, sims_data):
+    """
+    Plot monthly climatology with one line per simulation.
+
+    Parameters
+    ----------
+    info : dict
+        Adapter-produced runtime info (contains output_dir, var_name, etc.)
+    sims_data : dict
+        {sim_label: monthly_climatology_array_shape_12}
+    """
+    fig, ax = plt.subplots(figsize=(8, 5))
+    months = np.arange(1, 13)
+    for label, data in sims_data.items():
+        ax.plot(months, data, marker='o', label=label)
+    ax.set_xlabel('Month')
+    ax.set_ylabel(info['var_name'])
+    ax.set_xticks(months)
+    ax.legend()
+
+    out_dir = os.path.join(
+        info['output_dir'], 'figures', info['var_name'], 'climatology_cycle'
+    )
+    os.makedirs(out_dir, exist_ok=True)
+    fig.savefig(os.path.join(out_dir, 'cycle.png'), dpi=300, bbox_inches='tight')
+    plt.close(fig)
+\end{minted}
+
+\subsection{Step 2：在 __init__.py 暴露}
+
+\begin{minted}{python}
+from .Fig_Climatology_Cycle import make_Climatology_Cycle
+
+__all__ += ['make_Climatology_Cycle']
+\end{minted}
+
+\subsection{Step 3：触发条件}
+
+决定何时调它。两条路径：
+
+\begin{itemize}
+  \item Evaluation 阶段（per-sim）：在 \modname{evaluation\_engine} 出图阶段加调用
+  \item Comparison 阶段（多 sim 一图）：在 \modname{runner.\_run\_comparison} 中加
+\end{itemize}
+
+\subsection{Step 4：测试}
+
+\file{tests/test\_visualization/test\_climatology\_cycle.py} 用 mock 数据验证文件产出 + 不报错。
+
+\subsection{Step 5：文档}
+
+加到用户卷第 7 章 figures 子目录列表。
+
+\section{visualization 与 only\_drawing 的契约}
+
+\yamlkey{only_drawing: true} 时，\openbench{} 只调 visualization 模块（不再算 metric/score）。这要求每个 Fig 模块：
+
+\begin{itemize}
+  \item 输入数据已 \emph{在 only\_drawing 之前生成} 并落盘
+  \item Fig 模块从 CSV / NC 读取，不依赖运行时计算
+\end{itemize}
+
+\modname{Mod\_Only\_Drawing} 是入口，它扫 \file{output/<run>/} 找到已有结果，按 visualization 列表重出图。
+
+\section{下一步}
+
+下一章详解 \modname{runner} 与 \modname{cli} 子系统，含添加新 CLI 命令的 walkthrough。

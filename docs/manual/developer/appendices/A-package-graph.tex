@@ -1,0 +1,192 @@
+% docs/manual/developer/appendices/A-package-graph.tex
+% 附录 A：包结构与依赖图
+
+\chapter{包结构与依赖图}
+
+第 1 章给出了简略架构图。本附录提供更详细的依赖关系与文件级速查。
+
+\section{完整包依赖图}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=10mm and 14mm,
+  pkg/.style={rectangle, draw=obblue, fill=obblue!5, rounded corners, minimum width=24mm, minimum height=8mm, font=\small\sffamily},
+  optpkg/.style={rectangle, draw=obamber, fill=obamber!5, rounded corners, minimum width=24mm, minimum height=8mm, font=\small\sffamily},
+  basepkg/.style={rectangle, draw=obgray, fill=gray!10, rounded corners, minimum width=24mm, minimum height=8mm, font=\small\sffamily},
+  arr/.style={->, >=stealth, draw=obgray, thick}
+]
+
+\node[pkg] (cli) {cli};
+\node[optpkg, right=of cli] (gui) {gui};
+\node[pkg, below=of cli] (runner) {runner};
+\node[optpkg, right=of runner] (remote) {remote};
+\node[pkg, below=of runner, xshift=-30mm] (config) {config};
+\node[pkg, right=of config] (data) {data};
+\node[pkg, right=of data] (core) {core};
+\node[pkg, right=of core] (viz) {visualization};
+\node[basepkg, below=of data, xshift=20mm] (util) {util};
+
+\draw[arr] (cli) -- (runner);
+\draw[arr] (cli) -- (config);
+\draw[arr] (cli.east) -- (data.north);
+\draw[arr] (gui) -- (cli);
+\draw[arr] (gui) -- (config);
+\draw[arr] (gui) -- (remote);
+\draw[arr] (runner) -- (config);
+\draw[arr] (runner) -- (data);
+\draw[arr] (runner) -- (core);
+\draw[arr] (runner) -- (viz);
+\draw[arr] (runner.east) -- (remote.south);
+\draw[arr] (config) -- (data);
+\draw[arr] (data) -- (util);
+\draw[arr] (core) -- (util);
+\draw[arr] (viz) -- (util);
+\draw[arr] (runner.south) -- (util.north);
+
+\end{tikzpicture}
+
+\bigskip
+{\small 蓝色 = 必需子包；橙色 = 可选 extra；灰色 = 基础工具层；箭头方向 = "依赖于"}
+\end{center}
+
+\section{公开 vs 内部模块}
+
+\subsection{公开（可外部 import）}
+
+\begin{itemize}
+  \item \modname{openbench}: \texttt{\_\_version\_\_}
+  \item \modname{openbench.config}: \texttt{load\_config}, \texttt{ConfigError}, 7 个 dataclass
+  \item \modname{openbench.runner.local}: \texttt{run\_evaluation}
+  \item \modname{openbench.data.registry}: \texttt{RegistryManager}
+  \item \modname{openbench.data.registry.manager}: \texttt{get\_registry}
+  \item \modname{openbench.core}: \texttt{metrics}, \texttt{scores}, \texttt{Evaluation\_grid}, \texttt{Evaluation\_stn}, \texttt{ModularEvaluationEngine}, \texttt{create\_evaluation\_engine}, \texttt{evaluate\_datasets}
+  \item \modname{openbench.visualization}: 各 \texttt{make\_*} 函数
+\end{itemize}
+
+\subsection{内部（不要外部 import）}
+
+\begin{itemize}
+  \item \modname{openbench.config.adapter} —— 内部翻译，签名常变
+  \item \modname{openbench.config.legacy\_processors} —— 兼容层
+  \item \modname{openbench.config.resolver} —— 解析细节
+  \item \modname{openbench.runner.cache} —— 缓存内部
+  \item \modname{openbench.data.pipeline} —— 仅 runner 用
+  \item \modname{openbench.data.processing} —— 仅 evaluator 用
+  \item 所有 \modname{\_*} 私有名
+\end{itemize}
+
+\section{文件级速查}
+
+\subsection{config/}
+
+\begin{longtable}{l r p{6cm}}
+  \toprule
+  文件 & 行 & 备注 \\
+  \midrule
+  \endhead
+  \file{schema.py} & 120 & dataclass schema \\
+  \file{loader.py} & 361 & YAML 加载与校验 \\
+  \file{adapter.py} & 996 & dataclass → legacy dict \\
+  \file{migration.py} & 429 & JSON/NML → YAML \\
+  \file{legacy\_processors.py} & 909 & v1.x/v2.0 兼容 \\
+  \file{resolver.py} & 314 & reference 解析 \\
+  \bottomrule
+\end{longtable}
+
+\subsection{data/}
+
+\begin{longtable}{l p{8cm}}
+  \toprule
+  文件 & 备注 \\
+  \midrule
+  \endhead
+  \file{pipeline.py} & 462 行，task 编排主流程 \\
+  \file{cache.py} & 三层缓存 \\
+  \file{climatology.py} & 多年平均季节循环 \\
+  \file{compute.py} & 安全 eval（compute 表达式） \\
+  \file{coordinates.py} & 坐标系工具 \\
+  \file{file\_processing.py} & NC 文件辅助 \\
+  \file{processing.py} & DatasetProcessing 主类 \\
+  \file{regrid/regrid\_cdo.py} & CDO 路径 \\
+  \file{regrid/regrid\_wgs84.py} & 纯 Python 路径 \\
+  \file{station\_matcher.py} & 站点匹配 \\
+  \file{station\_scanner.py} & 站点扫描 \\
+  \file{time\_utils.py} & 时间对齐 \\
+  \file{unit.py} & 单位换算 \\
+  \file{registry/manager.py} & RegistryManager \\
+  \file{registry/scanner.py} & catalog scanner \\
+  \file{registry/converter.py} & catalog 升级 \\
+  \file{registry/schema.py} & catalog dataclass \\
+  \bottomrule
+\end{longtable}
+
+\subsection{core/}
+
+\begin{longtable}{l p{8cm}}
+  \toprule
+  文件 & 备注 \\
+  \midrule
+  \endhead
+  \file{metrics.py} & 25+ 指标 \\
+  \file{scores.py} & 8 个归一化打分 \\
+  \file{evaluation.py} & 746 行，Evaluation\_grid + Evaluation\_stn \\
+  \file{evaluation\_engine.py} & 496 行，ModularEvaluationEngine \\
+  \file{comparison.py} & 跨 sim 聚合 \\
+  \file{landcover\_groupby.py} / \file{climatezone\_groupby.py} & 分组 \\
+  \file{statistics/Mod\_Statistics.py} & dispatcher \\
+  \file{statistics/stat\_*.py} & 19 个统计模块 \\
+  \bottomrule
+\end{longtable}
+
+\subsection{cli/}
+
+\begin{itemize}
+  \item \file{main.py}：LazyGroup 入口
+  \item \file{run.py}, \file{check.py}, \file{init\_cmd.py}, \file{data.py}, \file{model.py}, \file{migrate.py}, \file{gui.py}：7 主命令
+  \item \file{\_parsing.py}, \file{\_reference\_errors.py}：辅助
+\end{itemize}
+
+\subsection{runner/ \& remote/}
+
+\begin{itemize}
+  \item \file{runner/local.py}：906 行主循环
+  \item \file{runner/cache.py}：增量缓存
+  \item \file{runner/remote.py}：651 行 SSH（CLI 入口待实现）
+  \item \file{remote/ssh.py}, \file{credentials.py}, \file{connections.py}, \file{sync.py}, \file{storage.py}：SSH 基础设施
+\end{itemize}
+
+\subsection{gui/}
+
+\begin{itemize}
+  \item \file{app.py}, \file{main\_window.py}, \file{controller.py}：核心
+  \item \file{config\_manager.py}, \file{validation.py}, \file{data\_validator.py}：配置同步与校验
+  \item \file{runner.py}, \file{remote\_runner.py}, \file{progress\_parser.py}：运行
+  \item \file{pages/}：14 wizard pages
+  \item \file{widgets/}, \file{dialogs/}, \file{styles/}：UI 部件
+\end{itemize}
+
+\subsection{util/}
+
+\begin{itemize}
+  \item \file{logging\_system.py}（581）, \file{parallel.py}（731）：基础设施
+  \item \file{memory.py}, \file{progress.py}, \file{report.py}, \file{output.py}, \file{fileio.py}
+  \item \file{exceptions.py}, \file{interfaces.py}（ABC）, \file{converttype.py}, \file{cache\_cleanup.py}, \file{config\_check.py}, \file{dataset\_loader.py}, \file{directory.py}
+\end{itemize}
+
+\section{快速定位常见任务}
+
+\begin{longtable}{p{6cm} p{8cm}}
+  \toprule
+  我想做什么 & 看哪 \\
+  \midrule
+  \endhead
+  改 schema 字段 & \file{config/schema.py} + \file{config/loader.py} + 测试 \\
+  改某个 metric & \file{core/metrics.py} 内的 method \\
+  加新 reference 数据集 & 用 \cli{openbench data register} 或编辑 \file{data/registry/reference\_catalog.yaml} \\
+  改 comparison 行为 & \file{core/comparison.py} + \file{runner/local.py:\_run\_comparison} \\
+  改 GUI 某 page & \file{gui/pages/page\_<name>.py} \\
+  改 CLI 某命令 & \file{cli/<name>.py} \\
+  改重网格 & \file{data/regrid/} \\
+  调日志格式 & \file{util/logging\_system.py} \\
+  \bottomrule
+\end{longtable}

@@ -1,0 +1,233 @@
+% docs/manual/developer/chapters/11-contributing.tex
+% 第 11 章：贡献流程
+
+\chapter{贡献流程}
+
+本章总结向 \openbench{} 主仓库贡献代码的完整流程：从准备改动到 PR 合入到 release。
+
+\section{贡献前：选要做什么}
+
+三类常见贡献：
+
+\begin{itemize}
+  \item \textbf{修 bug}：从 GitHub Issues 选 \texttt{good first issue} 或自己遇到的
+  \item \textbf{加新功能}：先开 Issue 讨论，避免无用功
+  \item \textbf{改文档}：低门槛入门，欢迎从 typo 修复开始
+\end{itemize}
+
+\section{Fork → Branch → PR}
+
+标准流程：
+
+\begin{minted}{bash}
+# 1. fork on GitHub, then clone
+git clone https://github.com/<YOU>/OpenBench.git
+cd OpenBench
+git remote add upstream https://github.com/CoLM-SYSU/OpenBench.git
+
+# 2. 同步 upstream
+git fetch upstream && git checkout main && git merge upstream/main
+
+# 3. 开 feature branch
+git checkout -b fix/issue-123-some-bug
+
+# 4. 写代码 + 测试
+
+# 5. ruff 干净 + 测试通过
+ruff check src tests && ruff format --check src tests && pytest
+
+# 6. commit
+git add <changed files>
+git commit -m "fix: short description (#123)"
+
+# 7. push
+git push origin fix/issue-123-some-bug
+
+# 8. 在 GitHub 上开 PR
+\end{minted}
+
+\section{Commit 信息约定}
+
+参考 \href{https://www.conventionalcommits.org}{Conventional Commits}：
+
+\begin{itemize}
+  \item \texttt{feat:} 新功能
+  \item \texttt{fix:} 修 bug
+  \item \texttt{docs:} 文档
+  \item \texttt{refactor:} 不改行为的重构
+  \item \texttt{test:} 测试
+  \item \texttt{chore:} 杂项（依赖更新、CI 调整）
+  \item \texttt{build:} 构建相关
+\end{itemize}
+
+\subsection{Scope}
+
+加 scope 表明影响范围：
+
+\begin{itemize}
+  \item \texttt{feat(cli):}
+  \item \texttt{fix(config):}
+  \item \texttt{docs(user):} / \texttt{docs(dev):}
+\end{itemize}
+
+\subsection{消息格式}
+
+\begin{minted}{text}
+<type>(<scope>): <subject>
+
+<body — optional, multi-line>
+
+<footer — optional, e.g., "Closes #123">
+\end{minted}
+
+示例（取自仓库）：
+
+\begin{itemize}
+  \item \texttt{fix(cli): init writes flat reference mapping (loader compat)}
+  \item \texttt{docs(user): write chapter 1 — overview and installation}
+  \item \texttt{feat(manual): add latex\_escape utility with TDD}
+\end{itemize}
+
+\section{PR 流程}
+
+\subsection{PR 模板}
+
+\openbench{} 的 PR 描述应包含：
+
+\begin{itemize}
+  \item \textbf{What}：改了什么（一句话总结）
+  \item \textbf{Why}：为什么（链接到 Issue 或描述场景）
+  \item \textbf{How}：怎么改（重点设计决定，不要复述 diff）
+  \item \textbf{Testing}：怎么验证（手动 / 自动测试）
+  \item \textbf{Closes}：\texttt{Closes \#123}
+\end{itemize}
+
+\subsection{Review checklist}
+
+reviewer 会看：
+
+\begin{itemize}
+  \item Tests pass + 新代码有测试
+  \item ruff lint + format 干净
+  \item commit 消息符合约定
+  \item 文档更新（CHANGELOG + 相关章节）
+  \item 没引入无关改动
+  \item 设计与 spec 一致（如果有 spec）
+\end{itemize}
+
+\subsection{Review 来回}
+
+\begin{itemize}
+  \item Reviewer 留 comment → contributor 修 → push 到同 branch
+  \item 不要 force-push（除非 reviewer 要求）
+  \item Approved 后由 maintainer 合并
+\end{itemize}
+
+\section{Superpowers 工作流：何时使用}
+
+中大型改动用 \modname{superpowers}：
+
+\begin{enumerate}
+  \item Spec：\file{docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md}
+  \item Plan：\file{docs/superpowers/plans/YYYY-MM-DD-<topic>.md}
+  \item Execute：按 plan 提交 commits
+  \item Review：\file{docs/superpowers/reviews/YYYY-MM-DD-<topic>.md}（Bug 与决议）
+\end{enumerate}
+
+\subsection{用与不用}
+
+\textbf{用}：
+
+\begin{itemize}
+  \item 新功能（新 metric、新 GUI page、新统计模块）
+  \item 架构改动（schema 重命名、API 重组）
+  \item 大文档项目（如本手册）
+\end{itemize}
+
+\textbf{不用}：
+
+\begin{itemize}
+  \item 单 commit bug 修复
+  \item Typo / docstring 改动
+  \item 已有功能加测试
+\end{itemize}
+
+\subsection{文档命名}
+
+\begin{itemize}
+  \item Spec / Plan / Review 同一 topic 用相同日期 + 简称
+  \item 一个项目可能多个 plan（如 manual：infrastructure / generators / volume-user / volume-developer / volume-operations）
+\end{itemize}
+
+\section{文档更新}
+
+每次代码改动如影响：
+
+\begin{itemize}
+  \item 用户可见行为 → 改用户卷对应章节 + 用户卷附录
+  \item 内部架构 → 改开发卷对应章节 + 开发卷附录
+  \item HPC / 远程 → 改运维卷
+\end{itemize}
+
+参考字段、CLI、metrics 等 \emph{自动生成} 的部分，运行 \cli{cd docs/manual \&\& make generated} 让它们自动刷新。
+
+\section{CHANGELOG.md}
+
+每次 release 前更新 \file{CHANGELOG.md}：
+
+\begin{minted}{markdown}
+# Changelog
+
+## [3.0.0a1] - 2026-04-30
+
+### Added
+- Unified YAML config format (replaces v2.0 multi-file)
+- ...
+
+### Fixed
+- init_cmd reference shape mismatch with loader (#123)
+- ...
+
+### Changed
+- ...
+\end{minted}
+
+\section{Release 流程（仅 maintainer）}
+
+\begin{enumerate}
+  \item 在 main 上确认所有目标 PR 已合
+  \item Bump version：\file{src/openbench/\_\_init\_\_.py:\_\_version\_\_}
+  \item 更新 CHANGELOG.md
+  \item Tag：\texttt{git tag v3.0.0 \&\& git push --tags}
+  \item GitHub Release：从 tag 创建，附 changelog
+  \item PyPI：\texttt{python -m build \&\& twine upload dist/*}（需 maintainer 凭据）
+\end{enumerate}
+
+\section{社区行为}
+
+\begin{itemize}
+  \item Issues 与 PR 中保持友好建设性
+  \item 给批评 reviewer 时间响应（通常 2 周）
+  \item 不要把 GitHub Issue 当成 chat（用 GitHub Discussions / 邮件）
+  \item 中英文都欢迎；维护者用英文为主以便国际协作
+\end{itemize}
+
+\section{常用资源}
+
+\begin{itemize}
+  \item GitHub: \href{https://github.com/CoLM-SYSU/OpenBench}{CoLM-SYSU/OpenBench}
+  \item Documentation: \href{https://openbench.readthedocs.io}{openbench.readthedocs.io}（待发布）
+  \item 论文（撰写中）：链接 TBD
+\end{itemize}
+
+\section{完结}
+
+到此你已读完开发卷全部 11 章，覆盖架构、开发环境、5 个子系统、运行、GUI、测试、贡献流程。下一步：
+
+\begin{itemize}
+  \item 看附录 A-E 做参考查阅
+  \item 找一个 \texttt{good first issue} 实战
+  \item 对架构有想法 → 写 spec 提 Issue 讨论
+\end{itemize}
+
+谢谢你愿意贡献 \openbench{}。

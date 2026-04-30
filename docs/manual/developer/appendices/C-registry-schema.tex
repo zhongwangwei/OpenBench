@@ -1,0 +1,16 @@
+% docs/manual/developer/appendices/C-registry-schema.tex
+% 附录 C：Registry YAML schema
+
+\chapter{Registry YAML schema}
+
+本附录列出 \openbench{} registry catalog（reference 与 model）所有 dataclass 字段。表格内容由 \cli{make generated} 从 \file{src/openbench/data/registry/schema.py} 自动产出，与代码同步。
+
+如修改源码后表格未更新，运行：
+
+\begin{minted}{bash}
+cd docs/manual && make generated
+\end{minted}
+
+具体 catalog YAML 写法见用户卷第 4 章；完整 walkthrough 见开发卷第 5 章。
+
+\input{../_generated/registry_schema}
