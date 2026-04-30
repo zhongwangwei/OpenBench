@@ -1,0 +1,13 @@
+% docs/manual/operations/chapters/00-hello.tex
+\chapter{Hello, Ops}
+
+\section{占位章节}
+
+本章为运维卷基础设施验收占位，正式撰写时由 \file{01-deployment.tex} 替换。
+
+\noteinline{后续 plan 将填充：部署形态、HPC 安装、SSH 远程、性能调优、缓存策略、站点评估、监控、故障恢复。}
+
+\begin{minted}{bash}
+# 示例：HPC 上启动远程评估
+openbench run config.yaml --remote-profile hpc01
+\end{minted}

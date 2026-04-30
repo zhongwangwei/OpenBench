@@ -1,0 +1,25 @@
+% docs/manual/operations/main_operations.tex
+\documentclass[../manual]{subfiles}
+
+\begin{document}
+
+\ifSubfilesClassLoaded{%
+  \frontmatter
+  \title{\openbench{} 运维指南\\[1ex]\large Operations Guide}
+  \author{OpenBench 项目组}
+  \date{\today}
+  \maketitle
+  \tableofcontents
+  \mainmatter
+}{%
+  \volumedivider{第三卷}{运维指南}
+}
+
+\volpart{教程}
+\include{chapters/00-hello}
+
+\appendix
+\volpart{参考}
+\include{appendices/A-stub}
+
+\end{document}
