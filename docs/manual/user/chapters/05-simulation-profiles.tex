@@ -1,0 +1,420 @@
+% docs/manual/user/chapters/05-simulation-profiles.tex
+% 第 5 章：配置 simulation 与模型 profile
+
+\chapter{配置 simulation 与模型 profile}
+
+第 3 章介绍了 \yamlkey{simulation} 块的整体结构。本章深入：内置 model profile 是什么、如何用 profile、如何不用 profile（自定义）、如何配置多 simulation 对比，以及 \yamlkey{time_alignment} 三种时间对齐策略的实战权衡。
+
+\section{什么是 model profile}
+
+一个陆面模型的输出 NetCDF 文件中，物理变量名是模型私有命名（CoLM2024 把 ET 叫 \texttt{f\_lh\_vap}，CLM5 叫 \texttt{QFLX\_EVAP\_TOT}，ERA5LAND 叫 \texttt{e}）。\openbench{} 用统一的标准变量名（\var{Evapotranspiration}）做评估，因此需要在两者之间建立映射。
+
+\textbf{model profile} 就是这层映射的封装：
+
+\begin{itemize}
+  \item 模型名（如 \texttt{CoLM2024}）
+  \item 数据形态（grid/stn）、默认时空分辨率
+  \item 标准变量名 → NC 内变量名 + 单位 + 文件命名约定
+  \item 可选的 fallback（同义变量替代）与单位换算表达式
+\end{itemize}
+
+profile 让用户的 \yamlkey{simulation} 配置极简：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_test:
+    model: CoLM2024            # 引用 profile 名
+    root_dir: /data/colm2024   # 我的 NC 文件在哪
+\end{minted}
+
+只两行 + profile 自动补全其它细节。
+
+\section{浏览内置 profile}
+
+\subsection{\cli{openbench model list}}
+
+\begin{minted}{bash}
+openbench model list
+\end{minted}
+
+\begin{exampleBox}[输出]
+\begin{minted}{text}
+Name                 Type   Res      Variables
+────────────────────────────────────────────────────────────
+BCC_AVIM             grid   ?        7
+CABLE                grid   1.875°   12
+CLM5                 grid   1.25°    12
+CoLM2014             grid   0.5°     11
+CoLM2024             grid   0.5°     12
+ERA5-Land            grid   0.1°     14
+JULES                grid   1.875°   11
+NOAH                 grid   0.25°    9
+ORCHIDEE             grid   1.875°   10
+PLUMBER2-EXP         stn    ?        9
+...
+
+Total: 21 model profiles
+\end{minted}
+\end{exampleBox}
+
+\subsection{\cli{openbench model show MODEL}}
+
+查看某 profile 的完整变量映射：
+
+\begin{minted}{bash}
+openbench model show CoLM2024
+\end{minted}
+
+\begin{exampleBox}[输出片段]
+\begin{minted}{text}
+CoLM2024
+Description: Common Land Model 2024
+Type: grid, Resolution: 0.5°, Time: Month
+
+Variable                            Source            Unit            Notes
+────────────────────────────────────────────────────────────────────────────
+Evapotranspiration                  f_lh_vap          W/m2            compute: value * 86400 / 2.5e6
+Gross_Primary_Productivity          f_gpp             g m-2 s-1
+Latent_Heat                         f_lh              W/m2
+Sensible_Heat                       f_sh              W/m2
+Net_Radiation                       f_rnet            W/m2
+Surface_Soil_Moisture               f_h2osoi[0]       m3/m3           compute: layer 0
+Total_Runoff                        f_rnof            mm/s            compute: value * 86400
+...
+\end{minted}
+\end{exampleBox}
+
+\textbf{Notes 列含义}：
+
+\begin{itemize}
+  \item \texttt{compute: <expr>}：单位换算或层选择表达式（\texttt{value} 是源变量数据）
+  \item \texttt{fallback: <name> [<unit>]}：找不到主变量时使用的备选变量
+  \item \texttt{file: *<pattern>*}：文件名匹配模式
+\end{itemize}
+
+\section{使用 profile 的最小配置}
+
+profile 配上 \yamlkey{root_dir} 即可工作：
+
+\begin{minted}{yaml}
+simulation:
+  MyRun:
+    model: CoLM2024
+    root_dir: /data/my_colm2024_run
+\end{minted}
+
+\openbench{} 自动从 profile 读：
+\begin{itemize}
+  \item \yamlkey{data_type}: \texttt{grid}
+  \item \yamlkey{tim_res}: \texttt{Month}
+  \item \yamlkey{grid_res}: \texttt{0.5}
+  \item \yamlkey{variables}: profile 中所有变量映射
+\end{itemize}
+
+只要 \file{/data/my\_colm2024\_run/} 下的 NC 文件命名遵循 profile 约定（默认 \texttt{<varname>\_<year>\_*.nc} 或 \texttt{*.nc}，多年合并），评估即可启动。
+
+\section{字段覆盖：profile + 局部修改}
+
+profile 的字段都可在 simulation entry 局部覆盖：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_HiRes:
+    model: CoLM2024
+    root_dir: /data/colm2024_hires
+    grid_res: 0.25       # 覆盖 profile 默认 0.5
+    prefix: case01_      # 文件名前缀（如果有）
+    suffix: _hist        # 文件名后缀
+    data_groupby: Year   # 按年分文件 vs 单文件包全部
+\end{minted}
+
+\subsection{覆盖单个变量映射}
+
+如果你的 NC 把 \var{Latent\_Heat} 叫 \texttt{lhf}（不是 profile 默认的 \texttt{f\_lh}），可以单独覆盖那一个变量：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_custom:
+    model: CoLM2024
+    root_dir: /data/run
+    variables:
+      Latent_Heat:
+        varname: lhf       # 覆盖 NC 内变量名
+        varunit: W/m2
+\end{minted}
+
+profile 中其他变量（GPP、ET 等）保持默认。这是 \emph{深合并}：profile.variables 与 entry.variables 按变量名 key 合并，而不是整体替换。
+
+\section{自定义模型（不用 profile）}
+
+如果你的模型不在 21 个内置之列，有两条路：
+
+\subsection{方式 1：现场内联定义}
+
+在 simulation entry 直接写完整变量映射，不引用任何 profile：
+
+\begin{minted}{yaml}
+simulation:
+  MyCustomModel:
+    model: MyCustomModel       # 名字仅用于标识；不需要在 registry 里
+    root_dir: /data/mymodel
+    data_type: grid
+    grid_res: 1.0
+    tim_res: Month
+    data_groupby: Year
+    variables:
+      Evapotranspiration:
+        varname: my_et
+        varunit: kg/m2/s
+        compute: value * 86400 / 2.5e6   # → mm/day
+      Latent_Heat:
+        varname: my_lh
+        varunit: W/m2
+\end{minted}
+
+\subsection{方式 2：注册成新 profile（推荐）}
+
+\begin{minted}{bash}
+openbench model register MyCustomModel \
+  --data-type grid --grid-res 1.0 --tim-res Month \
+  -v "Evapotranspiration:my_et:kg/m2/s" \
+  -v "Latent_Heat:my_lh:W/m2"
+\end{minted}
+
+之后可以像内置 profile 一样在 yaml 中引用：
+
+\begin{minted}{yaml}
+simulation:
+  Run_v1:
+    model: MyCustomModel
+    root_dir: /data/v1
+\end{minted}
+
+profile 注册到用户级 catalog（\texttt{\$HOME/.config/openbench/} 或 platformdirs 默认）。后续多个 evaluation 复用。
+
+\subsection{Fallback 与单位换算}
+
+模型不同版本可能用不同变量名。注册带 fallback：
+
+\begin{minted}{bash}
+openbench model register CoLM2024 \
+  -v "Gross_Primary_Productivity:f_gpp:g m-2 s-1" \
+  -f "Gross_Primary_Productivity:f_assim:mol m-2 s-1:value * 12.011"
+\end{minted}
+
+主变量是 \texttt{f\_gpp}；找不到时回退到 \texttt{f\_assim} 并应用 \texttt{value * 12.011} 把 mol/m²/s 换算到 g C/m²/s。
+
+\subsection{修改与移除 profile 内变量}
+
+\begin{minted}{bash}
+# 改变量映射（同 register，按名覆盖）
+openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
+
+# 加新变量但不动已有变量（仅追加）
+openbench model register CoLM2024 --append-only \
+  -v "New_Var:nc_name:unit"
+
+# 删某变量
+openbench model remove-var CoLM2024 Old_Var
+\end{minted}
+
+\section{多 simulation 对比}
+
+\openbench{} 的核心场景之一是同一参考数据下对比多个模型。给 \yamlkey{simulation} 加多个 entry：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_v1:
+    model: CoLM2024
+    root_dir: /data/colm2024_v1
+
+  CoLM2024_v2:
+    model: CoLM2024
+    root_dir: /data/colm2024_v2
+
+  CLM5_baseline:
+    model: CLM5
+    root_dir: /data/clm5
+
+comparison:
+  enabled: true
+\end{minted}
+
+每个 simulation 独立做评估（写到 \file{output/<run>/evaluation/<sim>/...}），然后 \yamlkey{comparison} 阶段把所有 simulation 的结果合并成对比表与对比图（portrait plot、radar 等）。
+
+\subsection{用 \yamlkey{_defaults} 简化重复配置}
+
+多 simulation 共享大量字段时：
+
+\begin{minted}{yaml}
+simulation:
+  _defaults:
+    model: CoLM2024
+    data_groupby: Year
+    prefix: case_
+
+  v1:
+    root_dir: /data/v1
+    suffix: _hist_v1
+
+  v2:
+    root_dir: /data/v2
+    suffix: _hist_v2
+
+  v3:
+    root_dir: /data/v3
+    suffix: _hist_v3
+\end{minted}
+
+\subsection{标签命名建议}
+
+simulation 标签（key 名）会进入输出目录与图例。建议：
+
+\begin{itemize}
+  \item 包含模型名 + 实验标识：\texttt{CoLM2024\_default}、\texttt{CoLM2024\_2xCO2}
+  \item 不超过 ~15 字符（图例显示更清爽）
+  \item 不用空格、特殊字符（用下划线分隔）
+\end{itemize}
+
+\section{Time alignment 三种策略}
+
+当多个 simulation 与多个 reference 的时间窗口不完全一致时，\yamlkey{project.time_alignment} 决定怎么处理：
+
+\subsection{intersection（默认，推荐）}
+
+取所有 sim × ref 的 \emph{共同} 时间窗口：
+
+\begin{itemize}
+  \item Sim A: 2000-2014
+  \item Sim B: 2005-2018
+  \item Ref X: 2003-2016
+  \item 实际评估：max(2000, 2005, 2003) -- min(2014, 2018, 2016) = 2005-2014
+\end{itemize}
+
+优点：所有 sim×ref 比较口径完全一致，跨对可比。
+缺点：浪费数据；任一 sim 时段短就拖累全局。
+
+\subsection{per\_pair}
+
+每对 sim×ref 各算各的重叠：
+
+\begin{itemize}
+  \item (Sim A, Ref X)：max(2000, 2003) -- min(2014, 2016) = 2003-2014
+  \item (Sim B, Ref X)：max(2005, 2003) -- min(2018, 2016) = 2005-2016
+\end{itemize}
+
+优点：最大化数据利用，每对 metric 用了各自最长可用区间。
+缺点：跨对 metric 不严格可比（窗口不同）；comparison 表格中要标注。
+
+\subsection{strict}
+
+要求 sim 与 ref 时间戳逐一精确匹配，否则报错：
+
+\begin{itemize}
+  \item 适合"完全相同年月、完全相同时间步"的对照实验
+  \item 一旦窗口或频率不一致直接退出
+\end{itemize}
+
+\subsection{选择建议}
+
+\begin{itemize}
+  \item 多模型 \emph{科学比较} → \texttt{intersection}（保证可比性）
+  \item 单模型评估 + 想用全部可用 reference → \texttt{per_pair}
+  \item 受控对比实验（同启动、同时长） → \texttt{strict}
+\end{itemize}
+
+\section{站点 simulation：fulllist 的作用}
+
+如果你的 simulation 是 grid 模型而 reference 是 station，\openbench{} 需要知道在 grid 中哪些点要采样。这通过 \yamlkey{fulllist} 指定：
+
+\begin{minted}{yaml}
+simulation:
+  CoLM2024_PLUMBER:
+    model: CoLM2024
+    root_dir: /data/colm2024
+    fulllist: /data/PLUMBER2/list/PLUMBER2.csv  # 站点列表
+\end{minted}
+
+CSV 格式（必含 \texttt{site, lat, lon}）：
+
+\begin{minted}{text}
+site,lat,lon,IGBP
+US-Ha1,42.5378,-72.1715,DBF
+US-MMS,39.3232,-86.4131,DBF
+DE-Tha,50.9624,13.5651,ENF
+...
+\end{minted}
+
+\openbench{} 在 grid 输出中按这些经纬度做最近邻或双线性采样，得到站点位置的伪观测，再与 reference 站点观测对比。
+
+如果 simulation 自身就是 station 数据（\yamlkey{data_type: stn}），\yamlkey{fulllist} 来自 simulation NC 文件的元数据，无需手动指定。
+
+\section{完整多模型对比示例}
+
+\begin{minted}{yaml}
+project:
+  name: colm-vs-clm5
+  output_dir: ./output
+  years: [2010, 2014]
+  tim_res: Month
+  grid_res: 0.5
+  num_cores: 16
+  time_alignment: intersection
+  unified_mask: true
+
+evaluation:
+  variables:
+    - Evapotranspiration
+    - Latent_Heat
+    - Sensible_Heat
+    - Net_Radiation
+
+reference:
+  data_root: /data/openbench/refs
+  Evapotranspiration: GLEAM_v4.2a
+  Latent_Heat: ERA5LAND
+  Sensible_Heat: ERA5LAND
+  Net_Radiation: CERES_EBAF_Ed4.2
+
+simulation:
+  _defaults:
+    data_groupby: Year
+
+  CoLM2024_default:
+    model: CoLM2024
+    root_dir: /data/colm2024_def
+
+  CoLM2024_newPhys:
+    model: CoLM2024
+    root_dir: /data/colm2024_newphys
+
+  CLM5_baseline:
+    model: CLM5
+    root_dir: /data/clm5_base
+
+comparison:
+  enabled: true
+
+statistics:
+  enabled: true
+\end{minted}
+
+这份配置：
+\begin{itemize}
+  \item 4 变量 × 4 reference × 3 simulation = 12 个 sim×ref 评估单元
+  \item 用 5 年（2010-2014）月尺度 0.5° 数据
+  \item 启用 comparison 自动生成 portrait / radar 多模型对比图
+  \item 启用 statistics 加 ANOVA、相关、KDE 等统计分析
+\end{itemize}
+
+\section{下一步}
+
+下一章详解评估的运行：
+
+\begin{itemize}
+  \item \cli{openbench check} 的全部检查项
+  \item \cli{openbench run} 的 6 个内部阶段
+  \item zarr 增量缓存机制与 \texttt{--force} 全量重算
+  \item \texttt{only\_drawing} 模式只重出图
+  \item debug\_mode 与日志级别
+\end{itemize}
