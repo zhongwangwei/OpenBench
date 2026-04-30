@@ -1,0 +1,211 @@
+% docs/manual/operations/chapters/05-cache.tex
+% 第 5 章：缓存策略
+
+\chapter{缓存策略}
+
+缓存是 \openbench{} 演进中"省时间"的关键设计。本章详解三层缓存的协作、多用户共享、清理时机、损坏检测。
+
+\section{三层缓存回顾}
+
+用户卷第 6 章已概念性介绍。运维视角补充：
+
+\begin{longtable}{p{2.5cm} p{4cm} p{6.5cm}}
+  \toprule
+  层 & 存活时长 & 覆盖范围 \\
+  \midrule
+  \endhead
+  Memory & 单次 \cli{run} 进程内 & 本进程访问的 NC 文件 + 中间数组 \\
+  Disk (zarr) & \file{output/<run>/data/} 持久 & 预处理后对齐的 sim/ref 数据 \\
+  Task cache & \file{output/<run>/scratch/cache/} & 任务级 hash → 输出文件清单 \\
+  \bottomrule
+\end{longtable}
+
+三层独立失效：memory 跨 run 不保留；disk zarr 跨 run 命中（如配置一致）；task cache 跨 run 命中（如配置一致），但在 cache 丢但 zarr 还在时仅省 metric 计算。
+
+\section{Cache key 算法}
+
+\file{runner/cache.py:make\_cache\_key} + \texttt{EvaluationCache.hash\_config}：
+
+\begin{minted}{python}
+import hashlib
+import json
+
+def hash_config(d: dict) -> str:
+    canonical = json.dumps(d, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+\end{minted}
+
+\textbf{覆盖 cache 的字段}（变 → invalidate）：
+
+\begin{itemize}
+  \item \texttt{variable}：变量名
+  \item \texttt{sim\_source}：sim 标签
+  \item \texttt{ref\_source}：ref 名
+  \item \texttt{metrics}：指标列表
+  \item \texttt{scores}：打分列表
+  \item \texttt{comparisons}：comparison item 列表
+  \item \texttt{statistics}：statistic item 列表
+\end{itemize}
+
+\textbf{不覆盖 cache 的字段}：
+
+\begin{itemize}
+  \item CLI 临时 \cli{--cores}（不影响输出值）
+  \item CLI 临时 \cli{--variables}（缩 task 列表，不改单 task 行为）
+  \item \yamlkey{num\_cores}（同上）
+  \item \yamlkey{debug\_mode}
+\end{itemize}
+
+\warninline{\textbf{潜在 bug}：如果 \openbench{} 升级，metric 算法可能变；但 cache key 不含 \openbench{} 版本，旧 cache 会被误命中产出旧版数值。\emph{每次升级建议手动清 cache 或加 \yamlkey{force: true}}。这是 v3.0 待优化点。}
+
+\section{多用户共享 cache}
+
+HPC 上同一个 reference 数据集可能被多个用户/项目反复评估。共享 cache 能省大量时间。
+
+\subsection{共享方案 A：共享 zarr 但独立 task cache}
+
+\begin{minted}{yaml}
+project:
+  output_dir: /scratch/shared/openbench/eval-${USER}-${DATE}
+\end{minted}
+
+每个用户独立输出目录，但底层 zarr 数据可以共享一个目录（通过软链接或共享 \texttt{data/}）。
+
+\subsection{共享方案 B：完全独立但 reference 数据指向共享路径}
+
+\openbench{} 默认每次 run 在自己目录写 zarr。要让多次 run 共享，把 reference 数据集本身放在共享只读区，让 \texttt{registry.root\_dir} 指向共享路径。\openbench{} 直接读 NC，不重复写 zarr（如果 zarr 也是共享的）。
+
+\subsection{并发写冲突}
+
+\openbench{} 的 cache 写是 \emph{atomic}（先写 \texttt{.tmp}，rename 替换）。两个用户同时写同名 cache 文件时：
+
+\begin{itemize}
+  \item 文件级原子：要么 A 的版本，要么 B 的，不会损坏
+  \item 不阻塞：先到先得，后者覆盖前者
+  \item \emph{结果}：如果 A 与 B 配置一致，cache 内容一致，无问题；不一致则后写者胜
+\end{itemize}
+
+\section{cache\_cleanup.py：自动清理}
+
+\file{util/cache\_cleanup.py}（216 行）提供清理工具。
+
+\subsection{LRU + 大小限制}
+
+模块支持基于最近访问时间的清理：
+
+\begin{minted}{python}
+from openbench.util.cache_cleanup import cleanup_cache
+
+cleanup_cache(
+    cache_dir="output/eval-2026/scratch",
+    max_size_gb=50,      # 总大小限额
+    max_age_days=30,     # 最大保留天数
+)
+\end{minted}
+
+实际策略：
+
+\begin{itemize}
+  \item 删除超过 \texttt{max\_age\_days} 的 task cache
+  \item 然后按 LRU 删除直到总大小 ≤ \texttt{max\_size\_gb}
+  \item 写日志记录每次清理
+\end{itemize}
+
+\subsection{手动触发}
+
+当前 v3.0a1 没有 \cli{openbench cache clean} 命令；用 Python 脚本：
+
+\begin{minted}{python}
+# clean_old_caches.py
+from openbench.util.cache_cleanup import cleanup_cache
+from pathlib import Path
+
+for run_dir in Path("/scratch/shared/openbench").iterdir():
+    if (run_dir / "scratch").exists():
+        cleanup_cache(
+            str(run_dir / "scratch"),
+            max_size_gb=20,
+            max_age_days=14,
+        )
+\end{minted}
+
+\section{何时该清缓存}
+
+\begin{longtable}{p{5cm} p{8cm}}
+  \toprule
+  情形 & 清什么 \\
+  \midrule
+  \endhead
+  \openbench{} 升级 & 全部 cache（metric 实现可能变） \\
+  Reference catalog 改 & 受影响 reference 的 zarr + task cache \\
+  发现某次 run 数值异常 & 该 run 的 \texttt{scratch/} \\
+  磁盘配额超限 & 旧的 run 整个目录 \\
+  异常断电 / Ctrl-C 频繁 & 怀疑的 task 的 cache 文件 \\
+  从 partial 状态重跑 & 失败 task 的 cache（让它重新计算） \\
+  \bottomrule
+\end{longtable}
+
+\section{zarr 格式细节}
+
+\openbench{} 内部用 \modname{xarray.to\_zarr}。每个 task 的 zarr 包含：
+
+\begin{itemize}
+  \item \texttt{sim}：simulation 数据 array
+  \item \texttt{ref}：reference 数据 array
+  \item 元信息（坐标、单位、标识）
+\end{itemize}
+
+\subsection{Chunking}
+
+默认 chunk 由 xarray/dask 决定。grid 评估典型 chunk：\texttt{(time=12, lat=180, lon=360)}。改 chunk 影响内存与读速度。
+
+\subsection{压缩}
+
+zarr 默认 blosc 压缩。压缩比通常 5-10x。
+
+\subsection{跨版本兼容}
+
+\openbench{} 内部 zarr schema 可能在大版本间变化。\textbf{不保证跨大版本兼容}。升级后清旧 zarr 是安全做法。
+
+\section{cache 损坏检测与修复}
+
+\subsection{症状}
+
+\begin{itemize}
+  \item 某 task 反复失败但其他 task 正常
+  \item zarr 读取时报 \texttt{KeyError} 或 \texttt{InvalidArrayError}
+  \item 中断后 zarr 写入半截
+\end{itemize}
+
+\subsection{诊断}
+
+\begin{minted}{bash}
+# 看 zarr 元数据
+python -c "
+import zarr
+g = zarr.open('output/<run>/data/<task>.zarr', mode='r')
+print(g.tree())
+print(list(g.array_keys()))
+"
+\end{minted}
+
+如果报错，cache 损坏。
+
+\subsection{修复}
+
+\begin{minted}{bash}
+# 删损坏的 zarr
+rm -rf output/<run>/data/<task>.zarr
+
+# 删对应的 task cache
+rm output/<run>/scratch/cache/<task_key>.json
+
+# 重跑：会重新生成
+openbench run config.yaml
+\end{minted}
+
+\openbench{} 的 cache 检测当前 \emph{依赖损坏时报错}，没有主动 checksum 验证。如果担心静默损坏，定期 \texttt{rm -rf output/<run>/data} 强制重建。
+
+\section{下一步}
+
+下一章详解大规模站点评估实战：千站点资源预算、HDF5 lock 历史与现状、失败站点诊断。
