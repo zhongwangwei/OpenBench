@@ -11,8 +11,8 @@ from openbench.config.schema import (
     ComparisonConfig,
     EvaluationConfig,
     OpenBenchConfig,
-    OptionsConfig,
     ProjectConfig,
+    ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
 )
@@ -23,8 +23,8 @@ __all__ = [
     "OpenBenchConfig",
     "ProjectConfig",
     "EvaluationConfig",
+    "ReferenceConfig",
     "SimulationEntry",
     "ComparisonConfig",
     "StatisticsConfig",
-    "OptionsConfig",
 ]

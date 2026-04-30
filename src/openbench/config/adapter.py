@@ -16,6 +16,14 @@ from openbench.config.schema import OpenBenchConfig
 logger = logging.getLogger(__name__)
 
 
+def _resolve_root_relative_path(path_value: str, root_dir: str | None) -> str:
+    """Resolve relative catalog paths against their dataset root_dir."""
+    expanded = os.path.expanduser(os.path.expandvars(str(path_value)))
+    if os.path.isabs(expanded) or not root_dir:
+        return expanded
+    return os.path.join(root_dir, expanded)
+
+
 LEGACY_GENERAL_KEYS = {
     "basename",
     "basedir",
@@ -884,9 +892,15 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
 
             # Optional station-related fields
             if var_map.fulllist:
-                section[f"{prefix}_fulllist"] = var_map.fulllist
+                section[f"{prefix}_fulllist"] = _resolve_root_relative_path(
+                    var_map.fulllist,
+                    ref_ds.root_dir or data_root,
+                )
             elif ref_ds.fulllist:
-                section[f"{prefix}_fulllist"] = ref_ds.fulllist
+                section[f"{prefix}_fulllist"] = _resolve_root_relative_path(
+                    ref_ds.fulllist,
+                    ref_ds.root_dir or data_root,
+                )
             if var_map.max_uparea is not None:
                 section[f"{prefix}_max_uparea"] = var_map.max_uparea
             if var_map.min_uparea is not None:

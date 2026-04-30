@@ -1031,6 +1031,186 @@ def test_year_regex_excludes_version_prefix(tmp_path: Path):
     assert info.get("suffix") == ""
 
 
+def test_year_regex_accepts_undelimited_year_after_variable_prefix(tmp_path: Path):
+    """Common files like ro2001.nc / ro2002.nc must split at the year.
+
+    The version-marker fix must not require an underscore before the year:
+    processing searches prefix + year + suffix, so prefix="ro2001" would later
+    look for ro20012001.nc and fail.
+    """
+    import numpy as np
+    import xarray as xr
+    from openbench.data.registry.scanner import _inspect_nc_file
+
+    for year in (2001, 2002):
+        ds = xr.Dataset(
+            {"ro": (["time", "lat", "lon"], np.zeros((1, 2, 2), dtype=np.float32))},
+            coords={
+                "time": np.array([f"{year}-01-01"], dtype="datetime64[ns]"),
+                "lat": [0.0, 1.0],
+                "lon": [0.0, 1.0],
+            },
+        )
+        ds.to_netcdf(tmp_path / f"ro{year}.nc")
+
+    info = _inspect_nc_file(tmp_path)
+    assert info["prefix"] == "ro"
+    assert info.get("suffix", "") == ""
+    assert info["syear"] == 2001
+    assert info["eyear"] == 2002
+
+
+def test_monthly_prefix_suffix_uses_full_date_token(tmp_path: Path):
+    """Monthly files must not bake the first month into suffix.
+
+    ET_2010_01.nc / ET_2010_02.nc should yield prefix="ET_", suffix="",
+    so processing's prefix+year wildcard can pick up all months.
+    """
+    import numpy as np
+    import xarray as xr
+    from openbench.data.registry.scanner import _inspect_nc_file
+
+    for month in (1, 2):
+        ds = xr.Dataset(
+            {"ET": (["time", "lat", "lon"], np.zeros((1, 2, 2), dtype=np.float32))},
+            coords={
+                "time": np.array([f"2010-{month:02d}-01"], dtype="datetime64[ns]"),
+                "lat": [0.0, 1.0],
+                "lon": [0.0, 1.0],
+            },
+        )
+        ds.to_netcdf(tmp_path / f"ET_2010_{month:02d}.nc")
+
+    info = _inspect_nc_file(tmp_path)
+    assert info["prefix"] == "ET_"
+    assert info.get("suffix", "") == ""
+    assert info["syear"] == 2010
+    assert info["eyear"] == 2010
+
+
+def test_reference_profile_matches_registry_name_and_applies_metadata(monkeypatch, tmp_path: Path):
+    """Variant-specific profiles (Demo_LowRes) should apply during scan registration."""
+    from openbench.data.registry.scanner import _register_to_dict
+
+    monkeypatch.setattr(
+        scanner_module,
+        "_REFERENCE_PROFILES",
+        {
+            "Demo_LowRes": {
+                "description": "variant profile description",
+                "tim_res": "Day",
+                "data_groupby": "single",
+                "variables": {
+                    "Runoff": {"varname": "Q", "varunit": "m3 s-1"},
+                },
+            },
+        },
+    )
+    scanned = ScannedDataset(
+        name="Demo",
+        resolution="LowRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path),
+        variables={"Runoff": "."},
+    )
+
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog)
+    entry = catalog["Demo_LowRes"]
+
+    assert entry["description"] == "variant profile description"
+    assert entry["tim_res"] == "Day"
+    assert entry["data_groupby"] == "single"
+    assert entry["variables"]["Runoff"]["varname"] == "Q"
+    assert entry["variables"]["Runoff"]["varunit"] == "m3 s-1"
+
+
+def test_reference_profile_fulllist_is_applied_for_station(monkeypatch, tmp_path: Path):
+    """register-profile --fulllist must survive rescan into the descriptor."""
+    from openbench.data.registry.scanner import _register_to_dict
+
+    monkeypatch.setattr(
+        scanner_module,
+        "_REFERENCE_PROFILES",
+        {
+            "DemoStn": {
+                "tim_res": "Day",
+                "fulllist": "list/subset.csv",
+                "variables": {
+                    "Runoff": {"varname": "Q", "varunit": "m3 s-1"},
+                },
+            },
+        },
+    )
+    scanned = ScannedDataset(
+        name="DemoStn",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Runoff": "."},
+    )
+
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog)
+
+    assert catalog["DemoStn"]["fulllist"] == "list/subset.csv"
+
+
+def test_existing_root_relative_fulllist_is_preserved_on_rescan(tmp_path: Path):
+    """Existing fulllist paths may be root_dir-relative, matching CLI docs."""
+    from openbench.data.registry.scanner import _register_to_dict
+
+    custom_list = tmp_path / "list" / "subset.csv"
+    custom_list.parent.mkdir()
+    custom_list.write_text("ID,SYEAR,EYEAR,LON,LAT,DIR\nS1,2001,2002,1,2,S1.nc\n")
+
+    scanned = ScannedDataset(
+        name="DemoStn",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Runoff": "."},
+    )
+    existing = {
+        "fulllist": "list/subset.csv",
+        "root_dir": str(tmp_path),
+        "variables": {"Runoff": {"varname": "Q", "varunit": "m3 s-1"}},
+    }
+
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["DemoStn"]["fulllist"] == "list/subset.csv"
+
+
+def test_generate_station_list_handles_scalar_lat_lon(tmp_path: Path):
+    """Single-station NC files commonly store lat/lon as scalar variables."""
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+    from openbench.data.registry.scanner import generate_station_list
+
+    ds = xr.Dataset(
+        {
+            "Q": (["time"], np.array([1.0, 2.0], dtype=np.float32)),
+            "lat": ((), 2.0),
+            "lon": ((), 1.0),
+        },
+        coords={"time": np.array(["2001-01-01", "2002-01-01"], dtype="datetime64[ns]")},
+    )
+    ds.to_netcdf(tmp_path / "S1.nc")
+
+    out = generate_station_list(tmp_path, tmp_path / "stations.csv")
+    rows = pd.read_csv(out)
+
+    assert rows.loc[0, "ID"] == "S1"
+    assert rows.loc[0, "LAT"] == 2.0
+    assert rows.loc[0, "LON"] == 1.0
+
+
 # ---------------------------------------------------------------------------
 # Regression tests for batch 3 (concurrency lock, edge-case detections,
 # dry-run preview).

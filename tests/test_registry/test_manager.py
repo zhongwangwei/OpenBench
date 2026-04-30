@@ -1,5 +1,6 @@
 """Tests for RegistryManager."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import openbench.config as config_module
@@ -12,6 +13,7 @@ from openbench.config.schema import (
     EvaluationConfig,
     OpenBenchConfig,
     ProjectConfig,
+    ReferenceConfig,
     SimulationEntry,
 )
 from openbench.data.registry.manager import RegistryManager, _auto_resolve_variant
@@ -35,6 +37,26 @@ def test_get_reference_exact():
     assert ref.data_type == "grid"
     assert "Evapotranspiration" in ref.variables
     assert ref.variables["Evapotranspiration"].varname == "E"
+
+
+def test_fluxnet_plumber2_registry_preserves_legacy_tim_res_and_units():
+    mgr = RegistryManager()
+    ref = mgr.get_reference("FLUXNET_PLUMBER2")
+    assert ref is not None
+    assert ref.tim_res == "Hour"
+    assert ref.variables["Surface_Upward_LW_Radiation"].varname == "LWup"
+    assert ref.variables["Gross_Primary_Productivity"].varunit == "mumolCO2 m-2 s-1"
+    assert ref.variables["Net_Ecosystem_Exchange"].varunit == "mumolCO2 m-2 s-1"
+    assert "Ecosystem_Respiration" not in ref.variables
+
+
+def test_plumber2s_registry_preserves_legacy_carbon_flux_units():
+    mgr = RegistryManager()
+    ref = mgr.get_reference("PLUMBER2S")
+    assert ref is not None
+    assert ref.variables["Surface_Upward_LW_Radiation"].varname == "LWup"
+    assert ref.variables["Gross_Primary_Productivity"].varunit == "mumolCO2 m-2 s-1"
+    assert ref.variables["Net_Ecosystem_Exchange"].varunit == "mumolCO2 m-2 s-1"
 
 
 def test_get_reference_auto_resolve():
@@ -111,7 +133,7 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="fallback", output_dir="/out", years=[2000, 2001]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference={"Evapotranspiration": "CARE"},
+        reference=ReferenceConfig(sources={"Evapotranspiration": "CARE"}),
         simulation={
             "First": SimulationEntry(model="FirstModel", root_dir="/s1"),
             "Second": SimulationEntry(
@@ -134,6 +156,7 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
                 data_type="grid",
                 tim_res=sim_tim_res,
                 grid_res=sim_grid_res,
+                variables={"Evapotranspiration": SimpleNamespace(varname="E", varunit="mm")},
             )
 
         def get_resolution_variants(self, name):
@@ -145,6 +168,9 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
         def get_reference(self, name, sim_tim_res=None, sim_grid_res=None):
             adapter_calls.append((name, sim_tim_res, sim_grid_res))
             return None
+
+        def get_resolution_variants(self, name):
+            return {}
 
         def get_model(self, name):
             return None
@@ -173,7 +199,8 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
     assert check_calls == [
         ("CARE", "Month", 0.25),
     ]
-    assert adapter_calls == [("CARE", None, None)]
+    # After unification, adapter uses the same resolver as check — same resolution context
+    assert adapter_calls == [("CARE", "Month", 0.25)]
     assert ref_nml["general"]["Evapotranspiration_ref_source"] == "CARE"
     assert sim_nml["Evapotranspiration"]["First_varname"] == "Evapotranspiration"
     assert main_nl["general"]["basename"] == "fallback"
@@ -219,9 +246,10 @@ def test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_wa
         ),
     }
 
-    ref = _auto_resolve_variant(variants, sim_tim_res="Day", sim_grid_res=0.25)
+    ref, reason = _auto_resolve_variant(variants, sim_tim_res="Day", sim_grid_res=0.25)
     assert ref is not None
     assert ref.name == "Demo_HigRes"
+    assert reason  # should contain decision trace
 
 
 def test_get_reference_not_found():
@@ -246,6 +274,59 @@ def test_get_model():
     assert model.name == "CoLM2024"
     assert "Evapotranspiration" in model.variables
     assert model.variables["Evapotranspiration"].varname == "f_fevpa"
+
+
+def test_registry_manager_normalizes_legacy_list_varnames_into_fallbacks(tmp_path: Path):
+    # RegistryManager looks for user models at user_dir/models/model_catalog.yaml
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    catalog = models_dir / "model_catalog.yaml"
+    catalog.write_text(
+        """
+LegacyModel:
+  name: LegacyModel
+  description: legacy list varname test
+  data_type: grid
+  grid_res: 0.5
+  tim_res: Month
+  variables:
+    Runoff:
+      varname:
+        - runoff_primary
+        - runoff_fallback
+      varunit: mm day-1
+""".strip()
+    )
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    model = mgr.get_model("LegacyModel")
+
+    assert model is not None
+    assert model.variables["Runoff"].varname == "runoff_primary"
+    assert model.variables["Runoff"].fallbacks is not None
+    assert [fb.varname for fb in model.variables["Runoff"].fallbacks] == ["runoff_fallback"]
+    assert model.variables["Runoff"].fallbacks[0].varunit == "mm day-1"
+
+
+def test_clm5_model_preserves_legacy_carbon_flux_mappings():
+    mgr = RegistryManager()
+    model = mgr.get_model("CLM5")
+    assert model is not None
+    assert model.variables["Gross_Primary_Productivity"].varunit == "g m-2 s-1"
+    assert model.variables["Net_Ecosystem_Exchange"].varname == "NEE"
+    assert model.variables["Net_Ecosystem_Exchange"].varunit == "g m-2 s-1"
+    assert model.variables["Ecosystem_Respiration"].varname == "ER"
+    assert model.variables["Ecosystem_Respiration"].varunit == "g m-2 s-1"
+
+
+def test_bcc_avim_model_preserves_legacy_carbon_flux_placeholders():
+    mgr = RegistryManager()
+    model = mgr.get_model("BCC_AVIM")
+    assert model is not None
+    assert model.variables["Gross_Primary_Productivity"].varname == ""
+    assert model.variables["Gross_Primary_Productivity"].varunit == "g m-2 s-1"
+    assert model.variables["Ecosystem_Respiration"].varname == ""
+    assert model.variables["Ecosystem_Respiration"].varunit == "mol m-2 s-1"
 
 
 def test_get_model_not_found():

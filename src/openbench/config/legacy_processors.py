@@ -16,6 +16,8 @@ import os
 import re
 from typing import Any, Dict, Tuple
 
+from openbench.util.exceptions import ConfigurationError
+
 # Heavy dependencies for data processing
 try:
     import numpy as np
@@ -27,16 +29,6 @@ try:
 except ImportError:
     _HAS_DATA_LIBS = False
     logging.warning("Data processing libraries (numpy, pandas, xarray, joblib) not available")
-
-try:
-    from .legacy_manager import ConfigurationError
-    from .legacy_readers import NamelistReader
-except ImportError:
-    from legacy_readers import NamelistReader
-
-    class ConfigurationError(Exception):
-        pass
-
 
 # Import caching - CacheSystem is mandatory for data processing modules
 try:
@@ -54,7 +46,7 @@ except ImportError:
         return decorator
 
 
-class GeneralInfoReader(NamelistReader):
+class GeneralInfoReader:
     """
     Advanced configuration processor for OpenBench evaluation information.
 
@@ -62,9 +54,20 @@ class GeneralInfoReader(NamelistReader):
     normalization, station data filtering, and evaluation parameter processing.
     """
 
-    # Class-level sets to track which warnings have already been shown
-    _custom_filter_warnings_shown = set()
-    _time_resolution_warning_shown = False
+    # Keys that must never be overwritten by namelist data
+    _PROTECTED_KEYS = frozenset({
+        "__class__", "__dict__", "__doc__", "__module__",
+        "_safe_update", "_PROTECTED_KEYS",
+        "_custom_filter_warnings_shown", "_time_resolution_warning_shown",
+    })
+
+    def _safe_update(self, data: dict) -> None:
+        """Update instance attributes from dict, skipping protected/method names."""
+        for key, value in data.items():
+            if key.startswith("__") or key in self._PROTECTED_KEYS or callable(getattr(self, key, None)):
+                logging.debug("Skipping protected/method key in namelist: %s", key)
+                continue
+            setattr(self, key, value)
 
     def __init__(
         self,
@@ -97,9 +100,14 @@ class GeneralInfoReader(NamelistReader):
         if not _HAS_DATA_LIBS:
             raise ConfigurationError("Data processing libraries required for GeneralInfoReader are not available")
 
-        super().__init__()
-
         self.name = self.__class__.__name__
+
+        # Per-instance warning dedupe state. Previously these were class
+        # attributes which persisted for the lifetime of the Python process,
+        # silently suppressing real configuration warnings on the second
+        # and subsequent evaluations in GUI / test / multi-eval contexts.
+        self._custom_filter_warnings_shown: set = set()
+        self._time_resolution_warning_shown: bool = False
 
         # Frequency mapping for time resolution normalization
         self.freq_map = {
@@ -122,37 +130,15 @@ class GeneralInfoReader(NamelistReader):
             "weekly": "W",
         }
 
-        # Coordinate mapping for standardization
-        self.coordinate_map = {
-            "longitude": "lon",
-            "long": "lon",
-            "lon_cama": "lon",
-            "lon0": "lon",
-            "x": "lon",
-            "X": "lon",
-            "XLONG": "lon",
-            "lon_ucat": "lon",
-            "latitude": "lat",
-            "lat_cama": "lat",
-            "lat0": "lat",
-            "y": "lat",
-            "Y": "lat",
-            "XLAT": "lat",
-            "lat_ucat": "lat",
-            "Time": "time",
-            "TIME": "time",
+        # Coordinate mapping for standardization (shared + local extensions)
+        from openbench.data.coordinates import COORDINATE_MAP
+        self.coordinate_map = dict(COORDINATE_MAP)
+        self.coordinate_map.update({
             "XTIME": "time",
-            "t": "time",
-            "T": "time",
-            "elevation": "elev",
-            "height": "elev",
-            "z": "elev",
-            "Z": "elev",
-            "h": "elev",
-            "H": "elev",
-            "ELEV": "elev",
-            "HEIGHT": "elev",
-        }
+            "elevation": "elev", "height": "elev",
+            "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
+            "ELEV": "elev", "HEIGHT": "elev",
+        })
 
         self.sim_source = sim_source
         self.ref_source = ref_source
@@ -185,9 +171,9 @@ class GeneralInfoReader(NamelistReader):
         ref_source: str,
     ):
         """Initialize class attributes from namelists."""
-        self.__dict__.update(main_nl["general"])
-        self.__dict__.update(ref_nml[item])
-        self.__dict__.update(sim_nml[item])
+        self._safe_update(main_nl["general"])
+        self._safe_update(ref_nml.get(item, {}))
+        self._safe_update(sim_nml.get(item, {}))
         self.casedir = os.path.join(self.basedir, self.basename)
         self.sim_nml, self.ref_nml, self.item = sim_nml, ref_nml, item
         self._set_source_attributes(sim_nml, ref_nml, item, sim_source, ref_source)
@@ -217,10 +203,21 @@ class GeneralInfoReader(NamelistReader):
                 "grid_res",
                 "syear",
                 "eyear",
+                "convert",
             ]
+            # Preserve native numeric types for attributes used arithmetically
+            # downstream (year ranges, grid resolution). Coercing them to str
+            # turned `max(ref_syear, sim_syear)` into lexicographic comparison
+            # and `float(ref_grid_res)` into a runtime ValueError.
+            numeric_attrs = {"syear", "eyear", "grid_res"}
             for attr in attributes:
                 value = nml[item].get(f"{source}_{attr}")
-                setattr(self, f"{source_type}_{attr}", str(value) if value is not None else "")
+                if value is None:
+                    setattr(self, f"{source_type}_{attr}", "")
+                elif attr in numeric_attrs and isinstance(value, (int, float, bool)):
+                    setattr(self, f"{source_type}_{attr}", value)
+                else:
+                    setattr(self, f"{source_type}_{attr}", str(value))
 
             # Handle suffix and prefix separately to ensure they're always strings
             for attr in ["suffix", "prefix"]:
@@ -228,7 +225,7 @@ class GeneralInfoReader(NamelistReader):
                 setattr(self, f"{source_type}_{attr}", str(value) if value is not None else "")
 
             # Handle station data
-            if nml[item][f"{source}_data_type"] == "stn":
+            if nml[item].get(f"{source}_data_type") == "stn":
                 try:
                     setattr(self, f"{source_type}_fulllist", str(nml[item][f"{source}_fulllist"]))
                 except (KeyError, TypeError):
@@ -307,10 +304,10 @@ class GeneralInfoReader(NamelistReader):
                 ref_td = self._resolution_to_timedelta(self.ref_freq)
                 sim_td = self._resolution_to_timedelta(self.sim_freq)
                 if ref_td != sim_td:
-                    # Only show warning once
-                    if not GeneralInfoReader._time_resolution_warning_shown:
+                    # Only show warning once per instance
+                    if not self._time_resolution_warning_shown:
                         logging.warning("Time resolution mismatch may cause alignment issues")
-                        GeneralInfoReader._time_resolution_warning_shown = True
+                        self._time_resolution_warning_shown = True
             except (ValueError, AttributeError, TypeError) as e:
                 logging.warning(f"Could not compare time resolutions: {self.ref_freq} vs {self.sim_freq} ({e})")
 
@@ -355,6 +352,11 @@ class GeneralInfoReader(NamelistReader):
             try:
                 self._read_and_merge_station_lists()
             except Exception as e:
+                # Preserve the original I/O / parse error in self for the
+                # downstream "No stations selected" raise so the user sees
+                # the real cause (missing file, bad CSV, mismatched columns)
+                # rather than a misleading empty-list message.
+                self._station_list_error = e
                 logging.error(f"Error processing station data: {e}")
                 # Set empty dataframe as fallback
                 self.stn_list = pd.DataFrame()
@@ -380,7 +382,11 @@ class GeneralInfoReader(NamelistReader):
                 self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
                 self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns()
-                self.stn_list = pd.merge(self.sim_stn_list, self.ref_stn_list, how="inner", on="ID")
+                sim_root = getattr(self, "sim_dir", "")
+                ref_root = getattr(self, "ref_dir", "")
+                self._resolve_relative_paths(self.sim_stn_list, "sim_dir", self.sim_fulllist, sim_root)
+                self._resolve_relative_paths(self.ref_stn_list, "ref_dir", self.ref_fulllist, ref_root)
+                self.stn_list = self._match_station_lists(self.sim_stn_list, self.ref_stn_list)
             else:
                 # Empty fulllist - rely on custom filter to populate station list
                 logging.debug("fulllist is empty, will rely on custom filter to populate station list")
@@ -390,22 +396,133 @@ class GeneralInfoReader(NamelistReader):
             if self.sim_fulllist:
                 self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
                 self._rename_station_columns(sim_only=True)
+                sim_root = getattr(self, "sim_dir", "")
+                self._resolve_relative_paths(self.sim_stn_list, "sim_dir", self.sim_fulllist, sim_root)
                 self.stn_list = self.sim_stn_list
             else:
                 logging.debug("sim fulllist is empty, will rely on custom filter to populate station list")
                 self.stn_list = pd.DataFrame()
         elif self.ref_data_type == "stn":
-            # Only ref is station data
+            # Only ref is station data (stn×grid case)
             if self.ref_fulllist:
                 self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns(ref_only=True)
+                ref_root = getattr(self, "ref_dir", "")
+                self._resolve_relative_paths(self.ref_stn_list, "ref_dir", self.ref_fulllist, ref_root)
                 self.stn_list = self.ref_stn_list
-                self.stn_list["use_syear"] = self.stn_list["ref_syear"]
-                self.stn_list["use_eyear"] = self.stn_list["ref_eyear"]
-                self.stn_list["Flag"] = False
+                # use_syear/use_eyear will be computed by _apply_default_filter()
+                # Preserve Flag from CSV; default to True if missing
+                if "Flag" not in self.stn_list.columns:
+                    self.stn_list["Flag"] = True
             else:
                 logging.debug("ref fulllist is empty, will rely on custom filter to populate station list")
                 self.stn_list = pd.DataFrame()
+
+    @staticmethod
+    def _match_station_lists(sim_stn: pd.DataFrame, ref_stn: pd.DataFrame,
+                              spatial_threshold_deg: float = 0.01) -> pd.DataFrame:
+        """Match two station lists for stn×stn evaluation.
+
+        Strategy:
+        1. Inner join on ID (exact match) — standard, fast
+        2. If ID match yields nothing, fall back to nearest-neighbor spatial matching
+           within `spatial_threshold_deg` (~1 km at equator)
+
+        Returns merged DataFrame with both sim and ref columns.
+        """
+        # 1. Try ID match
+        merged = pd.merge(sim_stn, ref_stn, how="inner", on="ID")
+        if len(merged) > 0:
+            n_sim = len(sim_stn)
+            n_ref = len(ref_stn)
+            logging.info(
+                "Station matching by ID: %d matches (sim=%d, ref=%d)",
+                len(merged), n_sim, n_ref,
+            )
+            return merged
+
+        # 2. Fallback: spatial nearest-neighbor matching
+        logging.warning(
+            "No ID matches between sim (%d stations) and ref (%d stations). "
+            "Attempting spatial matching (threshold=%.4f°)...",
+            len(sim_stn), len(ref_stn), spatial_threshold_deg,
+        )
+
+        # Find lat/lon columns
+        sim_lat = sim_stn.get("sim_lat", sim_stn.get("lat"))
+        sim_lon = sim_stn.get("sim_lon", sim_stn.get("lon"))
+        ref_lat = ref_stn.get("ref_lat", ref_stn.get("lat"))
+        ref_lon = ref_stn.get("ref_lon", ref_stn.get("lon"))
+
+        if sim_lat is None or sim_lon is None or ref_lat is None or ref_lon is None:
+            logging.error("Cannot perform spatial matching: lat/lon columns missing")
+            return pd.DataFrame()
+
+        import numpy as np
+        rows = []
+        ref_lats = ref_lat.values.astype(float)
+        ref_lons = ref_lon.values.astype(float)
+
+        for idx, sim_row in sim_stn.iterrows():
+            slat = float(sim_row.get("sim_lat", sim_row.get("lat", np.nan)))
+            slon = float(sim_row.get("sim_lon", sim_row.get("lon", np.nan)))
+            if np.isnan(slat) or np.isnan(slon):
+                continue
+
+            # Distance in degrees (approximate, fast)
+            dist = np.sqrt((ref_lats - slat) ** 2 + (ref_lons - slon) ** 2)
+            min_idx = np.argmin(dist)
+            min_dist = dist[min_idx]
+
+            if min_dist <= spatial_threshold_deg:
+                # Merge sim and ref rows
+                ref_row = ref_stn.iloc[min_idx]
+                combined = {}
+                combined["ID"] = sim_row.get("ID", ref_row.get("ID", f"stn_{len(rows)}"))
+                for col in sim_stn.columns:
+                    if col != "ID":
+                        combined[col] = sim_row[col]
+                for col in ref_stn.columns:
+                    if col != "ID" and col not in combined:
+                        combined[col] = ref_row[col]
+                rows.append(combined)
+
+        if rows:
+            result = pd.DataFrame(rows)
+            logging.info("Spatial matching: %d matches found", len(result))
+            return result
+        else:
+            logging.warning("Spatial matching found no matches within threshold")
+            return pd.DataFrame()
+
+    @staticmethod
+    def _resolve_relative_paths(df: pd.DataFrame, col: str, csv_path: str, root_dir: str = "") -> None:
+        """Resolve relative paths in a DataFrame column.
+
+        Strategy: if the path is relative, try to find the file by:
+        1. Resolving against the CSV directory
+        2. If not found, use root_dir + basename (station files are often directly in root_dir)
+        """
+        if col not in df.columns or not csv_path:
+            return
+        csv_dir = os.path.dirname(os.path.abspath(csv_path))
+
+        def _resolve(p):
+            if pd.isna(p) or os.path.isabs(str(p)):
+                return p
+            # Try 1: resolve against CSV dir
+            resolved = os.path.normpath(os.path.join(csv_dir, p))
+            if os.path.exists(resolved):
+                return resolved
+            # Try 2: root_dir + basename
+            if root_dir:
+                resolved2 = os.path.join(root_dir, os.path.basename(p))
+                if os.path.exists(resolved2):
+                    return resolved2
+            # Fallback: return the CSV-dir resolution (will fail later with clear error)
+            return resolved
+
+        df[col] = df[col].apply(_resolve)
 
     def _rename_station_columns(self, sim_only=False, ref_only=False):
         """Rename station columns to standard names."""
@@ -509,68 +626,109 @@ class GeneralInfoReader(NamelistReader):
             logging.info(f"Station filtering: {initial_count} -> {final_count} stations")
 
     def _get_custom_filter(self):
-        """Get custom filter function for the reference source."""
+        """Get custom filter function for the reference source.
+
+        Priority:
+        1. station_matching config in reference_catalog.yaml → StationMatcher engine
+        2. Python filter file (built-in or user ~/.openbench/custom/)
+        3. None → default filter
+        """
+        # Priority 1: station_matching config from reference catalog
         try:
-            custom_module = importlib.import_module(f"openbench.data.custom.{self.ref_source}_filter")
-            return getattr(custom_module, f"filter_{self.ref_source}")
-        except (ImportError, AttributeError):
-            # Only show warning once per ref_source
-            if self.ref_source not in GeneralInfoReader._custom_filter_warnings_shown:
-                logging.warning(f"Custom filter for {self.ref_source} not available. Using default filter.")
-                GeneralInfoReader._custom_filter_warnings_shown.add(self.ref_source)
-            return None
+            from openbench.data.registry.manager import get_registry
+            mgr = get_registry()
+            ref = mgr.get_reference(self.ref_source)
+            if ref and ref.station_matching:
+                sm = ref.station_matching
+                def _station_matcher_filter(info):
+                    from pathlib import Path
+                    from openbench.data.station_matcher import run_station_matching
+                    dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
+                    run_station_matching(
+                        info, dataset_path,
+                        method=sm.method,
+                        station_id_var=sm.station_id_var,
+                        lon_var=sm.lon_var,
+                        lat_var=sm.lat_var,
+                        area_var=sm.area_var,
+                        discharge_var=sm.discharge_var,
+                        time_var=sm.time_var,
+                        area_error_threshold=sm.area_error_threshold,
+                        min_uparea=sm.min_uparea,
+                        max_uparea=sm.max_uparea,
+                        time_format=sm.time_format,
+                    )
+                return _station_matcher_filter
+        except Exception as e:
+            logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)
+
+        # Priority 2: Python filter file
+        try:
+            from openbench.data.custom import load_filter
+            filter_module = load_filter(self.ref_source)
+            if filter_module:
+                func = getattr(filter_module, f"filter_{self.ref_source}", None)
+                if func:
+                    return func
+        except Exception:
+            pass
+
+        # Priority 3: no filter (warn once per instance per ref_source)
+        if self.ref_source not in self._custom_filter_warnings_shown:
+            logging.warning(f"Custom filter for {self.ref_source} not available. Using default filter.")
+            self._custom_filter_warnings_shown.add(self.ref_source)
+        return None
 
     def _apply_default_filter(self):
-        """Apply default station filtering criteria."""
+        """Apply default station filtering criteria.
+
+        Station data always uses per-station time intersection (max starts,
+        min ends) — the time_alignment option only affects grid evaluations.
+        """
         if not hasattr(self, "stn_list") or self.stn_list.empty:
             return
 
-        # Get default year values with fallbacks
         default_syear = self._safe_int(self.syear, 1990)
         default_eyear = self._safe_int(self.eyear, 2020)
+        n = len(self.stn_list)
 
-        # Apply default time filtering logic
         if self.ref_data_type == "stn" and self.sim_data_type == "stn":
-            # Both are station data
             sim_years = pd.to_numeric(self.stn_list["sim_syear"], errors="coerce")
             ref_years = pd.to_numeric(self.stn_list["ref_syear"], errors="coerce")
-            syear_series = pd.Series([default_syear] * len(self.stn_list))
+            syear_series = pd.Series([default_syear] * n)
             self.use_syear = pd.concat([sim_years, ref_years, syear_series], axis=1).max(axis=1)
 
             sim_eyears = pd.to_numeric(self.stn_list["sim_eyear"], errors="coerce")
             ref_eyears = pd.to_numeric(self.stn_list["ref_eyear"], errors="coerce")
-            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
+            eyear_series = pd.Series([default_eyear] * n)
             self.use_eyear = pd.concat([sim_eyears, ref_eyears, eyear_series], axis=1).min(axis=1)
 
         elif self.sim_data_type == "stn":
-            # Only sim is station data
             sim_years = pd.to_numeric(self.stn_list["sim_syear"], errors="coerce")
             ref_syear_val = self._safe_int(self.ref_syear, default_syear)
-            ref_syear = pd.Series([ref_syear_val] * len(self.stn_list))
-            syear_series = pd.Series([default_syear] * len(self.stn_list))
+            ref_syear = pd.Series([ref_syear_val] * n)
+            syear_series = pd.Series([default_syear] * n)
             self.use_syear = pd.concat([sim_years, ref_syear, syear_series], axis=1).max(axis=1)
 
             sim_eyears = pd.to_numeric(self.stn_list["sim_eyear"], errors="coerce")
             ref_eyear_val = self._safe_int(self.ref_eyear, default_eyear)
-            ref_eyear = pd.Series([ref_eyear_val] * len(self.stn_list))
-            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
+            ref_eyear = pd.Series([ref_eyear_val] * n)
+            eyear_series = pd.Series([default_eyear] * n)
             self.use_eyear = pd.concat([sim_eyears, ref_eyear, eyear_series], axis=1).min(axis=1)
 
         elif self.ref_data_type == "stn":
-            # Only ref is station data
             ref_years = pd.to_numeric(self.stn_list["ref_syear"], errors="coerce")
             sim_syear_val = self._safe_int(self.sim_syear, default_syear)
-            sim_syear = pd.Series([sim_syear_val] * len(self.stn_list))
-            syear_series = pd.Series([default_syear] * len(self.stn_list))
+            sim_syear = pd.Series([sim_syear_val] * n)
+            syear_series = pd.Series([default_syear] * n)
             self.use_syear = pd.concat([ref_years, sim_syear, syear_series], axis=1).max(axis=1)
 
             ref_eyears = pd.to_numeric(self.stn_list["ref_eyear"], errors="coerce")
             sim_eyear_val = self._safe_int(self.sim_eyear, default_eyear)
-            sim_eyear = pd.Series([sim_eyear_val] * len(self.stn_list))
-            eyear_series = pd.Series([default_eyear] * len(self.stn_list))
+            sim_eyear = pd.Series([sim_eyear_val] * n)
+            eyear_series = pd.Series([default_eyear] * n)
             self.use_eyear = pd.concat([ref_eyears, sim_eyear, eyear_series], axis=1).min(axis=1)
 
-        # Set the calculated years
         self.stn_list["use_syear"] = self.use_syear
         self.stn_list["use_eyear"] = self.use_eyear
 
@@ -662,8 +820,16 @@ class GeneralInfoReader(NamelistReader):
             return default
 
     def _set_use_years(self):
-        """Set the use years based on the evaluation timeframe."""
-        # Use safe conversion with fallbacks
+        """Set the use years based on the evaluation timeframe and time_alignment mode.
+
+        Modes:
+          - intersection (default): max(starts), min(ends) across ref, sim, config
+          - per_pair: ref∩sim∩config for this specific pair (same formula, but the
+            result is per-pair because each sim has its own syear/eyear)
+          - strict: use config years exactly; warn if ref or sim doesn't fully cover
+        """
+        time_alignment = getattr(self, "time_alignment", "intersection")
+
         ref_sy = self._safe_int(self.ref_syear)
         sim_sy = self._safe_int(self.sim_syear)
         gen_sy = self._safe_int(self.syear, 1990)
@@ -672,19 +838,34 @@ class GeneralInfoReader(NamelistReader):
         sim_ey = self._safe_int(self.sim_eyear)
         gen_ey = self._safe_int(self.eyear, 2020)
 
-        # Filter out None values and calculate
-        syear_values = [v for v in [ref_sy, sim_sy, gen_sy] if v is not None]
-        eyear_values = [v for v in [ref_ey, sim_ey, gen_ey] if v is not None]
-
-        if syear_values:
-            self.use_syear = max(syear_values)
+        if time_alignment == "strict":
+            # Use config years exactly; validate coverage
+            self.use_syear = gen_sy
+            self.use_eyear = gen_ey
+            if ref_sy is not None and ref_sy > gen_sy:
+                logging.warning(
+                    "strict mode: ref starts at %d but config requires %d", ref_sy, gen_sy)
+            if ref_ey is not None and ref_ey < gen_ey:
+                logging.warning(
+                    "strict mode: ref ends at %d but config requires %d", ref_ey, gen_ey)
+            if sim_sy is not None and sim_sy > gen_sy:
+                logging.warning(
+                    "strict mode: sim starts at %d but config requires %d", sim_sy, gen_sy)
+            if sim_ey is not None and sim_ey < gen_ey:
+                logging.warning(
+                    "strict mode: sim ends at %d but config requires %d", sim_ey, gen_ey)
         else:
-            self.use_syear = 1990  # Default fallback
+            # intersection and per_pair: same formula (max starts, min ends)
+            # For per_pair the difference is that the runner calls this once per
+            # sim-ref pair with that pair's own syear/eyear, so the result is
+            # naturally per-pair.  For intersection across multiple sims, the
+            # runner's _preprocess_variable iterates serially and the minyear/
+            # maxyear from the first pair is reused (existing behaviour).
+            syear_values = [v for v in [ref_sy, sim_sy, gen_sy] if v is not None]
+            eyear_values = [v for v in [ref_ey, sim_ey, gen_ey] if v is not None]
 
-        if eyear_values:
-            self.use_eyear = min(eyear_values)
-        else:
-            self.use_eyear = 2020  # Default fallback
+            self.use_syear = max(syear_values) if syear_values else 1990
+            self.use_eyear = min(eyear_values) if eyear_values else 2020
 
     def to_dict(self):
         """Convert the instance attributes to a dictionary."""

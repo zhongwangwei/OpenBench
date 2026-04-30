@@ -699,15 +699,49 @@ def _build_base_descriptor(scanned, prov: dict) -> dict:
     }
 
 
-# Date patterns at filename position boundaries.
-# Use lookarounds (?<![a-zA-Z\d]) / (?![a-zA-Z\d]) to require a non-alphanumeric
-# delimiter (or string boundary), so version tokens like "v20240315" don't
-# count as YYYYMMDD and "ERA5LAND" doesn't bleed into year detection.
-_DATE_PATTERNS = {
-    "day":   re.compile(r"(?<![a-zA-Z\d])(?:\d{4}[-_/]\d{2}[-_/]\d{2}|\d{8})(?!\d)"),
-    "month": re.compile(r"(?<![a-zA-Z\d])(?:\d{4}[-_/]\d{2}|\d{6})(?!\d)"),
-    "year":  re.compile(r"(?<![a-zA-Z\d])\d{4}(?![-_/\d])"),
-}
+# Date tokens in filenames.
+#
+# Allow common no-separator data names such as ro2001.nc, tas201001.nc,
+# and pr20100101.nc. Exclude version-ish tokens where the date is directly
+# prefixed by a standalone "v" or "r" marker, e.g. ET_v2010.nc or MOD_r2050.nc.
+_DATE_TOKEN = re.compile(
+    r"(?<!\d)"
+    r"(?P<token>"
+    r"(?P<year>(?:19|20)\d{2})"
+    r"(?:[-_/]?(?P<month>0[1-9]|1[0-2])"
+    r"(?:[-_/]?(?P<day>0[1-9]|[12]\d|3[01]))?"
+    r")?"
+    r")"
+    r"(?!\d)"
+)
+
+
+def _is_version_prefixed_date(stem: str, start: int) -> bool:
+    """Return True for date tokens like v2010 or _r2050."""
+    if start <= 0:
+        return False
+    marker = stem[start - 1].lower()
+    if marker not in {"v", "r"}:
+        return False
+    if start == 1:
+        return True
+    return not stem[start - 2].isalnum()
+
+
+def _iter_date_tokens(stem: str):
+    """Yield non-version date regex matches from a filename stem."""
+    for match in _DATE_TOKEN.finditer(stem):
+        if _is_version_prefixed_date(stem, match.start("token")):
+            continue
+        yield match
+
+
+def _date_granularity(match) -> str:
+    if match.group("day"):
+        return "day"
+    if match.group("month"):
+        return "month"
+    return "year"
 
 
 def _classify_filename_date(stem: str) -> str:
@@ -716,13 +750,13 @@ def _classify_filename_date(stem: str) -> str:
     Order: day > month > year > none. Tokens preceded by letters (e.g., the
     "v" in "v2010") are excluded so version markers don't masquerade as years.
     """
-    if _DATE_PATTERNS["day"].search(stem):
-        return "day"
-    if _DATE_PATTERNS["month"].search(stem):
-        return "month"
-    if _DATE_PATTERNS["year"].search(stem):
-        return "year"
-    return "none"
+    best = "none"
+    rank = {"none": 0, "year": 1, "month": 2, "day": 3}
+    for match in _iter_date_tokens(stem):
+        granularity = _date_granularity(match)
+        if rank[granularity] > rank[best]:
+            best = granularity
+    return best
 
 
 def _detect_data_groupby(scanned) -> str:
@@ -917,17 +951,21 @@ def _apply_profile_overrides(scanned, descriptor: dict, variables: dict, prov: d
 
     Returns the (possibly replaced) variables dict.
     """
-    profile = get_reference_profile(scanned.name)
+    profile = get_reference_profile(scanned.registry_name) or get_reference_profile(scanned.name)
     if profile:
         profile_vars = profile.get("variables", {})
 
         # Override metadata from profile (authoritative, except nc-detected tim_res)
+        if profile.get("description"):
+            descriptor["description"] = profile["description"]
         if profile.get("tim_res") and prov.get("tim_res") != "nc":
             descriptor["tim_res"] = profile["tim_res"]
             prov["tim_res"] = "profile"
         if profile.get("data_groupby"):
             descriptor["data_groupby"] = profile["data_groupby"]
             prov["data_groupby"] = "profile"
+        if profile.get("fulllist"):
+            descriptor["fulllist"] = profile["fulllist"]
 
         if profile_vars:
             scanned_matches_profile = any(vn in profile_vars for vn in variables)
@@ -984,11 +1022,20 @@ def _finalize_descriptor(scanned, descriptor: dict, prov: dict, existing_descrip
 
     descriptor["_provenance"] = prov
 
-    # Auto-generate fulllist for station datasets — UNLESS the user already
-    # has a hand-edited fulllist pointing to an existing file.
+    # Auto-generate fulllist for station datasets — UNLESS a profile already
+    # supplied one, or the user already has a hand-edited fulllist pointing to
+    # an existing file. Existing relative paths are interpreted relative to
+    # root_dir, matching the register-profile CLI docs.
     if final_dtype == "stn":
+        if descriptor.get("fulllist"):
+            return
+
         existing_fulllist = (existing_descriptor or {}).get("fulllist")
-        if existing_fulllist and Path(existing_fulllist).exists():
+        if existing_fulllist and _fulllist_path_exists(
+            existing_fulllist,
+            descriptor.get("root_dir") or scanned.root_dir,
+            (existing_descriptor or {}).get("root_dir"),
+        ):
             descriptor["fulllist"] = existing_fulllist
             return
 
@@ -1014,6 +1061,19 @@ def _finalize_descriptor(scanned, descriptor: dict, prov: dict, existing_descrip
                 descriptor["fulllist"] = str(output_csv)
             except Exception as e:
                 logger.debug("Failed to generate station list for %s: %s", scanned.name, e)
+
+
+def _fulllist_path_exists(path_value: str, *roots: str | None) -> bool:
+    """Check absolute or root_dir-relative fulllist paths."""
+    path = Path(path_value)
+    if path.exists():
+        return True
+    if path.is_absolute():
+        return False
+    for root in roots:
+        if root and (Path(root) / path).exists():
+            return True
+    return False
 
 
 # Frequency hierarchy: higher rank = higher frequency
@@ -1380,26 +1440,15 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
     except Exception as _e:
         logger.debug("NC tim_res/grid_res detection failed: %s", _e)
 
-    # Extract prefix and suffix from filename pattern
-    # Pattern: <prefix><year><suffix>.nc
-    # E.g., "E_2004_GLEAM_v4.2a.nc" → prefix="E_", suffix="_GLEAM_v4.2a"
-    #
-    # Year token rule: 4 consecutive digits NOT preceded by a letter or digit
-    # and NOT followed by a digit. This excludes version markers like "v2010"
-    # (preceded by "v") and longer numeric IDs like "200504" (would partially
-    # match "2005" but it's followed by digits).
-    _YEAR_TOKEN = re.compile(r"(?<![a-zA-Z\d])(\d{4})(?!\d)")
-
+    # Extract prefix and suffix from filename pattern. Use the full date token
+    # (YYYY, YYYYMM, YYYYMMDD, or delimited variants) so monthly/daily files
+    # do not bake the first month/day into suffix.
     fname = nc_files[0].stem  # Without .nc
-    year_match = _YEAR_TOKEN.search(fname)
-    if year_match:
-        year_str = year_match.group(1)
-        # Use match start (not .index) so we get the same position the regex
-        # actually matched, even if the same 4-digit substring appears earlier
-        # preceded by a letter (excluded by lookbehind).
-        idx = year_match.start(1)
+    date_match = next(_iter_date_tokens(fname), None)
+    if date_match:
+        idx = date_match.start("token")
         prefix = fname[:idx]
-        suffix = fname[idx + len(year_str):]
+        suffix = fname[date_match.end("token"):]
         result["prefix"] = prefix
         result["suffix"] = suffix
     else:
@@ -1407,11 +1456,11 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
         result["prefix"] = fname
         result["suffix"] = ""
 
-    # Detect year range from all filenames using the same token rule
+    # Detect year range from all filenames using the same date-token rule
     years = []
     for f in nc_files:
-        for m in _YEAR_TOKEN.finditer(f.stem):
-            y = int(m.group(1))
+        for m in _iter_date_tokens(f.stem):
+            y = int(m.group("year"))
             if 1900 <= y <= 2100:
                 years.append(y)
     if years:
@@ -1476,6 +1525,16 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
     return output_csv
 
 
+def _numeric_scalar_or_mean(value) -> float:
+    """Convert scalar or array-like NetCDF values to one representative float."""
+    import numpy as np
+
+    arr = np.asarray(value)
+    if arr.shape == ():
+        return float(arr)
+    return float(np.nanmean(arr)) if arr.size > 0 else float("nan")
+
+
 def _parse_single_station_file(nc_file: Path) -> list | None:
     """Extract station info from a single-station NC file (fast, metadata only)."""
     try:
@@ -1522,12 +1581,12 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
             for name in LAT_NAMES:
                 if name in nc.variables:
                     val = nc.variables[name][:]
-                    lat = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                    lat = _numeric_scalar_or_mean(val)
                     break
             for name in LON_NAMES:
                 if name in nc.variables:
                     val = nc.variables[name][:]
-                    lon = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                    lon = _numeric_scalar_or_mean(val)
                     break
 
             # Extract time range from filename first (faster than reading time dim)
