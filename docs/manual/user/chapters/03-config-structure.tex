@@ -139,37 +139,32 @@ evaluation:
 
 \section{reference 块}
 
-\yamlkey{reference} 把 \yamlkey{evaluation.variables} 中的每个变量映射到一个具体的 reference 数据集名：
+\yamlkey{reference} 把 \yamlkey{evaluation.variables} 中的每个变量映射到\emph{一个或多个} reference 数据集名。Schema 类型是 \texttt{dict[str, str | list[str]]}，所以同一变量可单源（最常见）或多源（科学对比时）：
 
 \begin{minted}{yaml}
 reference:
-  data_root: /data/openbench/refs   # （可选）共享根目录
-  Evapotranspiration: GLEAM_v4.2a_LowRes
+  data_root: /data/openbench/refs           # （可选）共享根目录
+
+  # 单源（一个字符串）
   Total_Runoff: GRUN_ENSEMBLE_LowRes
-  Latent_Heat: ERA5LAND_LowRes
-\end{minted}
 
-\warninline{\textbf{语法陷阱}：reference 必须是 \emph{flat} var→source 映射，不要写嵌套的 \texttt{sources:} 子块。早期 \cli{openbench init} 曾经写出嵌套形式导致 \cli{check} 失败 —— 现已修复，但旧示例文档若你看到，请按上面的 flat 形式写。}
-
-\paragraph{每变量多个 reference}
-
-同一个变量可以同时配多个 reference，\openbench{} 对每个 (sim × ref) 跑独立评估。三种语法等价：
-
-\begin{minted}{yaml}
-reference:
-  # 1. List 形式（推荐，最清晰）
+  # 多源（list 形式，推荐写法）
   Land_Surface_Temperature:
     - MODIST
     - TRIMS_LST
 
-  # 2. 逗号分隔字符串（loader 会自动拆，方便从 v2.x namelist 直接迁移）
+  # 多源（逗号分隔字符串，loader 自动拆；便于从 v2.x namelist 直接迁移）
   Evapotranspiration: "GLEAM_v4.2a_LowRes, FLUXCOM-X-BASE_LowRes"
 
-  # 3. 单 reference 仍是字符串（绝大多数变量这么写）
-  Total_Runoff: GRUN_ENSEMBLE_LowRes
+  # 单源仍可写字符串（绝大多数情形）
+  Latent_Heat: ERA5LAND_LowRes
 \end{minted}
 
-详见第 4 章 §"每变量多 reference：多源对比"。
+多源时 \openbench{} 对每个 \texttt{(sim, ref)} 笛卡尔对独立跑评估、独立缓存、独立出图——详见第 4 章 §"每变量多 reference：多源对比"。
+
+\warninline{\textbf{语法陷阱}：reference 必须是 \emph{flat} 字典（key 是变量名，value 是字符串或 list）。\textbf{不要}写成嵌套的 \texttt{sources:} 子块——早期 \cli{openbench init} 曾因此 bug 写出过嵌套形式导致 \cli{check} 失败（已修复，但若看到旧示例，按上面 flat 写）。}
+
+\noteinline{单元素 list（\texttt{Total\_Runoff: [GRUN]}）由 loader 自动展平为字符串 \texttt{GRUN}（\modname{config.loader.\_build\_reference}），不会被当多源处理。同理，逗号分隔的单值字符串（\texttt{"GRUN"}）也展平。所以"误写成 list"无副作用。}
 
 \subsection{data\_root：共享数据根}
 
