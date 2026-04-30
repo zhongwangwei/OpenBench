@@ -1,0 +1,12 @@
+# docs/manual/latexmkrc — latexmk 配置
+# - 使用 xelatex（中文支持）
+# - 启用 -shell-escape（minted 需要）
+# - synctex=1（PDF 反查源码定位）
+
+$pdf_mode = 5;  # 5 = xelatex
+$xelatex = 'xelatex -shell-escape -interaction=nonstopmode -synctex=1 %O %S';
+$pdflatex = $xelatex;
+
+# 额外清理的扩展名
+push @generated_exts, 'synctex.gz', 'thm', 'pyg';
+$clean_ext .= ' %R-blx.bib %R.run.xml %R.bcf';
