@@ -39,6 +39,11 @@ def test_scan_reference_directory_skips_composite(tmp_path: Path):
 
 
 def test_scan_reference_directory_discovers_one_level_nested_children(tmp_path: Path):
+    """When NC files live one level deeper (single child), sub_dir must point
+    to that child so the registration step's _inspect_nc_file finds the actual
+    NCs (previously this recorded the parent path, leaving inspect to find no
+    NCs and returning empty varname/prefix/suffix).
+    """
     ref_root = tmp_path / "ref"
 
     one_level = ref_root / "Grid" / "LowRes" / "Water" / "VarB" / "DatasetB"
@@ -48,7 +53,7 @@ def test_scan_reference_directory_discovers_one_level_nested_children(tmp_path: 
     groups = scan_reference_directory(ref_root)
     dataset_b = next(group for group in groups if group.base_name == "DatasetB")
 
-    assert dataset_b.variants["LowRes"].variables == {"VarB": "Water/VarB/DatasetB"}
+    assert dataset_b.variants["LowRes"].variables == {"VarB": "Water/VarB/DatasetB/child"}
     assert dataset_b.variants["LowRes"].file_count == 1
 
 

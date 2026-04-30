@@ -23,6 +23,128 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+# NetCDF file discovery — supports .nc and .nc4
+from openbench.data.coordinates import glob_nc as _glob_nc
+
+
+def _count_nc(directory: Path) -> int:
+    """Count NetCDF files (.nc + .nc4) in a directory."""
+    return len(_glob_nc(directory))
+
+
+def _atomic_yaml_write(path: Path, data: dict) -> None:
+    """Write YAML atomically via tempfile + rename to prevent corruption."""
+    import tempfile
+    path = Path(path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _safe_load_catalog(catalog_path: Path) -> dict:
+    """Load existing catalog. Refuse to proceed (raise) if file is corrupted.
+
+    Previous behavior silently swallowed YAML errors and returned {}; the
+    next write would then overwrite the entire catalog with just the new
+    entry, deleting all previously registered datasets.
+    """
+    if not catalog_path.exists():
+        return {}
+    try:
+        with open(catalog_path) as f:
+            return yaml.safe_load(f) or {}
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load existing catalog at {catalog_path}: {e}\n"
+            f"Refusing to overwrite — this would silently delete all previously "
+            f"registered datasets. Manually fix the YAML or restore from a backup. "
+            f"If unrecoverable, delete the file before re-running scan/register."
+        ) from e
+
+
+def _backup_then_write(catalog_path: Path, data: dict) -> None:
+    """Backup the previous catalog (if any) before atomic-writing the new one.
+
+    Creates a single-slot backup at ``<catalog>.bak``. The backup is the
+    catalog state immediately before this write — useful when a buggy
+    rescan overwrites hand-edited fields and the user wants to recover.
+    """
+    if catalog_path.exists():
+        import shutil
+        backup_path = Path(str(catalog_path) + ".bak")
+        try:
+            shutil.copy2(catalog_path, backup_path)
+        except OSError as e:
+            logger.warning("Could not create catalog backup at %s: %s", backup_path, e)
+    _atomic_yaml_write(catalog_path, data)
+
+
+# Lazy-loaded reference profiles (like model_catalog for references)
+_REFERENCE_PROFILES: dict | None = None
+
+
+def clear_reference_profile_cache() -> None:
+    """Clear cached reference profiles after profile updates."""
+    global _REFERENCE_PROFILES
+    _REFERENCE_PROFILES = None
+
+
+def _load_reference_profiles() -> dict:
+    """Load reference dataset profiles from reference_profiles.yaml."""
+    global _REFERENCE_PROFILES
+    if _REFERENCE_PROFILES is None:
+        from openbench.data.registry.manager import get_writable_registry_dir
+
+        profiles: dict[str, Any] = {}
+        profile_paths = [Path(__file__).parent / "reference_profiles.yaml"]
+
+        writable_profile = get_writable_registry_dir() / "reference_profiles.yaml"
+        if writable_profile not in profile_paths:
+            profile_paths.append(writable_profile)
+
+        for profile_path in profile_paths:
+            if not profile_path.exists():
+                continue
+            try:
+                with open(profile_path) as f:
+                    loaded = yaml.safe_load(f) or {}
+                profiles.update(loaded)
+            except Exception:
+                continue
+
+        _REFERENCE_PROFILES = profiles
+    return _REFERENCE_PROFILES
+
+
+def get_reference_profile(dataset_name: str) -> dict | None:
+    """Look up a reference profile by exact name or base name (without resolution suffix).
+
+    Matching order:
+    1. Exact match: "GLEAM_v4.2a_LowRes" → profile["GLEAM_v4.2a_LowRes"]
+    2. Base name:   "GLEAM_v4.2a_LowRes" → strip "_LowRes" → profile["GLEAM_v4.2a"]
+
+    Returns profile dict or None.
+    """
+    profiles = _load_reference_profiles()
+    # 1. Exact match
+    if dataset_name in profiles:
+        return profiles[dataset_name]
+    # 2. Strip resolution suffix and try base name
+    for suffix in ("_LowRes", "_MidRes", "_HigRes"):
+        if dataset_name.endswith(suffix):
+            base = dataset_name[: -len(suffix)]
+            if base in profiles:
+                return profiles[base]
+    return None
+
 # Map directory names to categories
 CATEGORY_MAP = {
     "Water": "Water",
@@ -127,21 +249,50 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
                     for dataset_dir in _iter_dirs(var_dir):
                         dataset_name = dataset_dir.name
 
-                        # Check for NC files directly in this dir
-                        nc_count = len(list(dataset_dir.glob("*.nc")))
+                        # Locate the actual NC-bearing directory.
+                        # Case A: NCs at dataset_dir/*.nc
+                        # Case B: NCs at dataset_dir/<one_child>/*.nc → use the child
+                        # Case C: NCs at dataset_dir/<multiple_children>/*.nc → ambiguous,
+                        #         skip with warning (composite/multi-variant datasets need
+                        #         a reference profile or manual register)
+                        nc_count = _count_nc(dataset_dir)
+                        nc_dir = dataset_dir
 
-                        # Also check one level deeper (e.g., Crop/GDHY2019ver/maize/)
                         if nc_count == 0:
-                            for sub in _iter_dirs(dataset_dir):
-                                sub_nc = len(list(sub.glob("*.nc")))
-                                if sub_nc > 0:
-                                    nc_count += sub_nc
+                            children_with_nc = [
+                                (sub, _count_nc(sub))
+                                for sub in _iter_dirs(dataset_dir)
+                                if _count_nc(sub) > 0
+                            ]
+                            if len(children_with_nc) == 1:
+                                nc_dir, nc_count = children_with_nc[0]
+                            elif len(children_with_nc) > 1:
+                                sub_names = sorted(c[0].name for c in children_with_nc)
+                                logger.warning(
+                                    "Skipped '%s': %d NC-bearing subdirectories %s. "
+                                    "Composite/multi-variant datasets need a reference profile "
+                                    "(reference_profiles.yaml) or manual 'openbench data register'.",
+                                    dataset_dir.relative_to(ref_root),
+                                    len(children_with_nc),
+                                    sub_names,
+                                )
+                                continue
 
                         if nc_count == 0:
+                            # Warn if deeper levels have NC files (beyond supported depth)
+                            from openbench.data.coordinates import glob_nc as _deep_glob
+                            deep_nc = _deep_glob(dataset_dir, recursive=True)
+                            if deep_nc:
+                                logger.warning(
+                                    "Skipped '%s': %d NC files found in deeper subdirectories "
+                                    "(beyond supported 2-level depth). Move files up or register manually.",
+                                    dataset_dir.relative_to(ref_root), len(deep_nc),
+                                )
                             continue
 
-                        tim_res = _detect_tim_res(dataset_dir)
-                        sub_dir = str(dataset_dir.relative_to(res_dir))
+                        # Detect tim_res and record sub_dir from the actual NC location
+                        tim_res = _detect_tim_res(nc_dir)
+                        sub_dir = str(nc_dir.relative_to(res_dir))
 
                         if dataset_name not in groups:
                             groups[dataset_name] = DatasetGroup(base_name=dataset_name)
@@ -162,6 +313,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
                             scanned.file_count += nc_count
 
     # Scan station data: Station/<category>/<variable>/<dataset>/
+    # Also handles Composite layout: Station/Composite/<dataset>/dataset/*.nc
     stn_dir = ref_root / "Station"
     if stn_dir.exists():
         if on_progress:
@@ -175,9 +327,36 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
 
                 for dataset_dir in _iter_dirs(var_dir):
                     dataset_name = dataset_dir.name
-                    nc_count = len(list(dataset_dir.glob("*.nc")))
+                    nc_dir = dataset_dir  # where NC files live
+                    nc_count = _count_nc(dataset_dir)
+
+                    # Check one level deeper if no NCs at this level
+                    # Handles Composite layout: Composite/FLUXNET_PLUMBER2/dataset/*.nc
                     if nc_count == 0:
+                        for child in _iter_dirs(dataset_dir):
+                            child_nc = _count_nc(child)
+                            if child_nc > 0:
+                                nc_count += child_nc
+                                nc_dir = child
+                    if nc_count == 0:
+                        from openbench.data.coordinates import glob_nc as _deep_glob
+                        deep_nc = _deep_glob(dataset_dir, recursive=True)
+                        if deep_nc:
+                            logger.warning(
+                                "Skipped '%s': %d NC files found in deeper subdirectories "
+                                "(beyond supported 2-level depth). Move files up or register manually.",
+                                dataset_dir.relative_to(ref_root), len(deep_nc),
+                            )
                         continue
+
+                    # Composite layout: NC files live in a "dataset/" or "data/" subdir
+                    # → the real dataset name is the parent (var_dir.name)
+                    is_composite = dataset_name in ("dataset", "data")
+                    if is_composite:
+                        dataset_name = var_name  # e.g., FLUXNET_PLUMBER2
+                        ds_root = str(nc_dir)    # points directly to NC directory
+                    else:
+                        ds_root = str(category_dir.parent)
 
                     if dataset_name not in groups:
                         groups[dataset_name] = DatasetGroup(base_name=dataset_name)
@@ -188,11 +367,16 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None) -> list[Dat
                             resolution="Station",
                             category=category,
                             data_type="stn",
-                            root_dir=str(category_dir.parent),
+                            root_dir=ds_root,
                         )
 
                     scanned = groups[dataset_name].variants["Station"]
-                    scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
+                    if is_composite:
+                        # Placeholder: profile will supply real variable mappings
+                        if dataset_name not in scanned.variables:
+                            scanned.variables[dataset_name] = ""
+                    else:
+                        scanned.variables[var_name] = str(dataset_dir.relative_to(category_dir.parent))
                     scanned.file_count += nc_count
 
     return sorted(groups.values(), key=lambda g: g.base_name)
@@ -221,14 +405,22 @@ def find_new_datasets(
     all_groups = scan_reference_directory(ref_root, on_progress=on_progress)
     new_groups = []
 
+    # Filter at variant granularity, not group: when only some resolutions of
+    # a dataset are new, return a group containing JUST the new variants.
+    # Otherwise the CLI/GUI re-registers already-existing variants and silently
+    # overwrites top-level descriptor fields (category, fulllist, _provenance,
+    # etc.) that the user may have hand-edited.
     for group in all_groups:
-        has_new = False
-        for res, variant in group.variants.items():
-            if variant.registry_name not in existing_names:
-                has_new = True
-                break
-        if has_new:
-            new_groups.append(group)
+        new_variants = {
+            res: variant
+            for res, variant in group.variants.items()
+            if variant.registry_name not in existing_names
+        }
+        if new_variants:
+            new_groups.append(DatasetGroup(
+                base_name=group.base_name,
+                variants=new_variants,
+            ))
 
     return new_groups
 
@@ -257,49 +449,155 @@ def register_scanned_dataset(
         Path to the catalog file.
     """
     if catalog_path is None:
-        from openbench.data.registry.manager import get_writable_registry_dir
+        from openbench.data.registry.manager import get_writable_reference_catalog_path
 
-        catalog_path = get_writable_registry_dir() / "reference_catalog.yaml"
+        catalog_path = get_writable_reference_catalog_path()
 
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build descriptor — mark fields that are defaults (not verified from data)
-    unverified = []  # Track which fields are guessed defaults
+    catalog = _safe_load_catalog(catalog_path)
 
-    tim_res = scanned.tim_res
-    if not tim_res:
-        tim_res = "Month"
-        unverified.append("tim_res")
+    _register_to_dict(scanned, catalog, existing_descriptor=existing_descriptor, on_multi_var=on_multi_var)
 
-    descriptor = {
+    _backup_then_write(catalog_path, catalog)
+
+    return catalog_path
+
+
+def register_scanned_datasets_batch(
+    datasets: list,
+    catalog_path: Optional[Path] = None,
+    on_multi_var=None,
+    on_progress=None,
+) -> Path:
+    """Register multiple scanned datasets in one pass (avoids O(n²) YAML I/O).
+
+    Args:
+        datasets: List of ScannedDataset objects.
+        catalog_path: Path to catalog YAML. Defaults to writable registry dir.
+        on_multi_var: Optional callback for multi-variable NC selection.
+        on_progress: Optional callback(str) for progress updates.
+
+    Returns:
+        Path to the catalog file.
+    """
+    if catalog_path is None:
+        from openbench.data.registry.manager import get_writable_reference_catalog_path
+
+        catalog_path = get_writable_reference_catalog_path()
+
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
+
+    catalog = _safe_load_catalog(catalog_path)
+
+    # Build all descriptors (this is where NC inspection happens)
+    for i, scanned in enumerate(datasets):
+        if on_progress:
+            on_progress(f"  [{i + 1}/{len(datasets)}] {scanned.registry_name}")
+
+        # Merge with existing descriptor to preserve hand-edited fields
+        existing = catalog.get(scanned.registry_name)
+        _register_to_dict(scanned, catalog, existing_descriptor=existing, on_multi_var=on_multi_var)
+
+    # Write once (atomic, with backup of previous state)
+    _backup_then_write(catalog_path, catalog)
+
+    return catalog_path
+
+
+def _register_to_dict(
+    scanned,
+    catalog: dict,
+    existing_descriptor: Optional[dict] = None,
+    on_multi_var=None,
+) -> None:
+    """Build descriptor and add to catalog dict (no file I/O except fulllist).
+
+    Stages:
+      1. _build_base_descriptor    — base fields + data_groupby from file counts
+      2. _build_variables          — per-variable entries (existing merge or NC inspect)
+      3. _apply_nc_corrections     — data_type / tim_res / grid_res from NC findings
+      4. _apply_profile_overrides  — reference_profiles.yaml metadata + variables
+      5. _finalize_descriptor      — grid_res default, provenance, station fulllist
+    """
+    prov: dict[str, str] = {}
+
+    # Stage 1: base descriptor
+    descriptor = _build_base_descriptor(scanned, prov)
+
+    # Stage 2: build variable entries
+    variables = _build_variables(scanned, descriptor, existing_descriptor, on_multi_var)
+
+    # Stage 3: apply NC-detected corrections
+    _apply_nc_corrections(scanned, descriptor, variables, prov)
+
+    # Stage 4: apply reference profile overrides
+    variables = _apply_profile_overrides(scanned, descriptor, variables, prov)
+
+    # Stage 5: finalize (grid_res, provenance, fulllist)
+    descriptor["variables"] = variables
+    _finalize_descriptor(scanned, descriptor, prov)
+
+    catalog[scanned.registry_name] = descriptor
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build base descriptor
+# ---------------------------------------------------------------------------
+
+def _build_base_descriptor(scanned, prov: dict) -> dict:
+    """Build the initial descriptor from scanned metadata.
+
+    Detects data_groupby by checking whether each variable directory
+    contains a single NC file or multiple files.
+    """
+    tim_res = scanned.tim_res or ""
+
+    data_groupby = "Year"
+    if scanned.variables:
+        all_single = True
+        for _vn, sub_dir in scanned.variables.items():
+            var_path = Path(scanned.root_dir) / sub_dir
+            if var_path.is_dir():
+                nc_count = _count_nc(var_path)
+                if nc_count == 0:
+                    for child in _iter_dirs(var_path):
+                        nc_count += _count_nc(child)
+                if nc_count > 1:
+                    all_single = False
+                    break
+        if all_single:
+            data_groupby = "Single"
+    prov["data_groupby"] = "scan"
+
+    return {
         "name": scanned.registry_name,
         "description": f"{scanned.name} reference dataset ({scanned.resolution})",
         "category": scanned.category,
         "data_type": scanned.data_type,
         "tim_res": tim_res,
-        "data_groupby": "Year",
+        "data_groupby": data_groupby,
         "timezone": 0,
         "root_dir": scanned.root_dir,
     }
 
-    # Year range: only set if detected from NC files (not hardcoded default)
-    # Will be updated per-variable below from _inspect_nc_file if detected
 
-    if scanned.data_type == "grid":
-        res_info = RESOLUTION_MAP.get(scanned.resolution, {})
-        descriptor["grid_res"] = res_info.get("typical_grid_res", 0.25)
-        unverified.append("grid_res")
+# ---------------------------------------------------------------------------
+# Stage 2: Build variable entries (merge existing or inspect NC)
+# ---------------------------------------------------------------------------
 
-    if unverified:
-        descriptor["_unverified"] = unverified
+def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_var) -> dict:
+    """Build per-variable entries.
 
-    # Build variables section
-    # Priority: existing_descriptor > NC file inspection > directory name fallback
+    For each scanned variable, either merge from an existing descriptor
+    (preserving hand-edited fields) or inspect the NC file for metadata.
+    NC-detected fields (_detected_data_type, _nc_tim_res, _nc_grid_res) are
+    stored as temporary keys on var entries for Stage 3 to consume.
+    """
     variables = {}
     for var_name, sub_dir in scanned.variables.items():
-        var_entry: dict[str, Any] = {"varname": var_name, "varunit": "", "sub_dir": sub_dir}
+        var_entry: dict = {"varname": var_name, "varunit": "", "sub_dir": sub_dir}
 
-        # 1. Try existing descriptor (hand-curated, most reliable)
         merged_from_existing = False
         if existing_descriptor:
             existing_vars = existing_descriptor.get("variables", {})
@@ -313,19 +611,16 @@ def register_scanned_dataset(
                     var_entry["suffix"] = ev["suffix"]
                 merged_from_existing = True
 
-        # 2. If no existing descriptor, inspect NC file for varname/unit/prefix/suffix
         if not merged_from_existing:
             dataset_path = Path(scanned.root_dir) / sub_dir
             if dataset_path.is_dir():
                 nc_info = _inspect_nc_file(dataset_path)
 
-                # Multi-variable: if NC has 2+ data vars, ask user to confirm
                 all_vars = nc_info.get("all_data_vars", [])
                 if len(all_vars) > 1 and on_multi_var:
                     chosen = on_multi_var(var_name, sub_dir, all_vars)
                     if chosen:
                         nc_info["varname"] = chosen
-                        # Find unit for chosen var
                         for av in all_vars:
                             if av["name"] == chosen:
                                 nc_info["varunit"] = av["unit"]
@@ -339,29 +634,174 @@ def register_scanned_dataset(
                     var_entry["prefix"] = nc_info["prefix"]
                 if nc_info.get("suffix"):
                     var_entry["suffix"] = nc_info["suffix"]
-                # Update year range if detected
                 if nc_info.get("syear"):
                     descriptor["years"] = [nc_info["syear"], nc_info.get("eyear", nc_info["syear"])]
+                if nc_info.get("detected_data_type"):
+                    var_entry["_detected_data_type"] = nc_info["detected_data_type"]
+                if nc_info.get("detected_tim_res"):
+                    var_entry["_nc_tim_res"] = nc_info["detected_tim_res"]
+                if nc_info.get("detected_grid_res"):
+                    var_entry["_nc_grid_res"] = nc_info["detected_grid_res"]
 
         variables[var_name] = var_entry
 
-    descriptor["variables"] = variables
+    return variables
 
-    # Load existing catalog, append, write back
-    catalog = {}
-    if catalog_path.exists():
-        try:
-            with open(catalog_path) as f:
-                catalog = yaml.safe_load(f) or {}
-        except Exception:
-            catalog = {}
 
-    catalog[scanned.registry_name] = descriptor
+# ---------------------------------------------------------------------------
+# Stage 3: Apply NC-detected corrections (data_type, tim_res, grid_res)
+# ---------------------------------------------------------------------------
 
-    with open(catalog_path, "w") as f:
-        yaml.dump(catalog, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+def _apply_nc_corrections(scanned, descriptor: dict, variables: dict, prov: dict) -> None:
+    """Consume temporary NC fields from variable entries and update descriptor.
 
-    return catalog_path
+    Priority for tim_res: nc > scan > default.
+    NC-detected data_type overrides directory-inferred data_type.
+    NC-detected grid_res is recorded directly.
+    """
+    # Validate data_type against NC content (first variable with detection result)
+    for _vn, v in variables.items():
+        nc_dtype = v.pop("_detected_data_type", None) if isinstance(v, dict) else None
+        if nc_dtype and nc_dtype != descriptor["data_type"]:
+            logger.warning(
+                "Dataset '%s': directory says data_type='%s' but NC content looks like '%s'. "
+                "Using NC-detected type.",
+                scanned.registry_name, descriptor["data_type"], nc_dtype,
+            )
+            descriptor["data_type"] = nc_dtype
+            prov["data_type"] = "nc"
+            break
+
+    # Collect NC-detected tim_res and grid_res from first inspected variable
+    nc_tim_res = None
+    nc_grid_res = None
+    for _vn, v in variables.items():
+        if isinstance(v, dict):
+            if v.get("_nc_tim_res"):
+                nc_tim_res = v.pop("_nc_tim_res")
+            if v.get("_nc_grid_res"):
+                nc_grid_res = v.pop("_nc_grid_res")
+            if nc_tim_res or nc_grid_res:
+                break
+
+    # tim_res priority: nc > scan > default
+    scan_tim_res = descriptor["tim_res"]  # from scanned.tim_res via Stage 1
+    if nc_tim_res:
+        descriptor["tim_res"] = nc_tim_res
+        prov["tim_res"] = "nc"
+    elif scan_tim_res:
+        descriptor["tim_res"] = scan_tim_res
+        prov["tim_res"] = "scan"
+    else:
+        descriptor["tim_res"] = "Month"
+        prov["tim_res"] = "default"
+
+    if nc_grid_res:
+        descriptor["grid_res"] = nc_grid_res
+        prov["grid_res"] = "nc"
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: Apply reference profile overrides
+# ---------------------------------------------------------------------------
+
+def _apply_profile_overrides(scanned, descriptor: dict, variables: dict, prov: dict) -> dict:
+    """Apply reference_profiles.yaml overrides to descriptor and variables.
+
+    Profile override rules:
+      - tim_res:      profile overrides scan/default, but NOT nc-detected
+      - data_groupby: profile always overrides
+      - variables:    standard datasets get varname/varunit merged;
+                      composite datasets get variables replaced entirely
+
+    Returns the (possibly replaced) variables dict.
+    """
+    profile = get_reference_profile(scanned.name)
+    if profile:
+        profile_vars = profile.get("variables", {})
+
+        # Override metadata from profile (authoritative, except nc-detected tim_res)
+        if profile.get("tim_res") and prov.get("tim_res") != "nc":
+            descriptor["tim_res"] = profile["tim_res"]
+            prov["tim_res"] = "profile"
+        if profile.get("data_groupby"):
+            descriptor["data_groupby"] = profile["data_groupby"]
+            prov["data_groupby"] = "profile"
+
+        if profile_vars:
+            scanned_matches_profile = any(vn in profile_vars for vn in variables)
+
+            if scanned_matches_profile:
+                # Standard dataset: merge varname/varunit from profile
+                for vn, pv in profile_vars.items():
+                    if vn in variables:
+                        variables[vn]["varname"] = pv["varname"]
+                        variables[vn]["varunit"] = pv.get("varunit", "")
+            else:
+                # Composite dataset: scanned "variables" are directory names
+                # Replace entirely with profile variable mappings
+                variables = {}
+                for vn, pv in profile_vars.items():
+                    variables[vn] = {"varname": pv["varname"], "varunit": pv.get("varunit", "")}
+    else:
+        # No profile found — warn for datasets with no variable mapping
+        has_real_varnames = any(
+            v.get("varname") and v["varname"] != var_name
+            for var_name, v in variables.items()
+        )
+        if not has_real_varnames and variables:
+            logger.info(
+                "No reference profile for '%s'. Register with:\n"
+                "  openbench data register-profile %s -v \"VarName:ncname:unit\"",
+                scanned.name, scanned.name,
+            )
+
+    return variables
+
+
+# ---------------------------------------------------------------------------
+# Stage 5: Finalize descriptor (grid_res default, provenance, fulllist)
+# ---------------------------------------------------------------------------
+
+def _finalize_descriptor(scanned, descriptor: dict, prov: dict) -> None:
+    """Set data_type-dependent fields, record provenance, generate station fulllist."""
+    final_dtype = descriptor["data_type"]
+
+    if final_dtype == "grid" and "grid_res" not in descriptor:
+        res_info = RESOLUTION_MAP.get(scanned.resolution, {})
+        descriptor["grid_res"] = res_info.get("typical_grid_res", 0.25)
+        prov["grid_res"] = "default"
+    elif final_dtype == "stn":
+        # Remove grid_res if data_type was corrected from grid to stn
+        descriptor.pop("grid_res", None)
+        prov.pop("grid_res", None)
+
+    descriptor["_provenance"] = prov
+
+    # Auto-generate fulllist for station datasets
+    if final_dtype == "stn":
+        nc_dir = Path(scanned.root_dir)
+        if scanned.variables:
+            first_sub = next(iter(scanned.variables.values()), "")
+            candidate = Path(scanned.root_dir) / first_sub
+            if candidate.is_dir():
+                if _glob_nc(candidate):
+                    nc_dir = candidate
+                else:
+                    ds_sub = candidate / "dataset"
+                    if ds_sub.is_dir() and _glob_nc(ds_sub):
+                        nc_dir = ds_sub
+        if _glob_nc(nc_dir):
+            try:
+                from openbench.data.registry.manager import get_writable_registry_dir
+                registry_dir = get_writable_registry_dir()
+                lists_dir = registry_dir / "station_lists"
+                lists_dir.mkdir(parents=True, exist_ok=True)
+                output_csv = lists_dir / f"{scanned.registry_name}.csv"
+                generate_station_list(nc_dir, output_csv)
+                descriptor["fulllist"] = str(output_csv)
+            except Exception as e:
+                logger.debug("Failed to generate station list for %s: %s", scanned.name, e)
 
 
 # Frequency hierarchy: higher rank = higher frequency
@@ -433,7 +873,7 @@ def _iter_dirs(path: Path):
 
 def _detect_tim_res(dataset_dir: Path) -> str:
     """Detect time resolution from filename patterns."""
-    nc_files = list(dataset_dir.glob("*.nc"))
+    nc_files = _glob_nc(dataset_dir)
     if not nc_files:
         return ""
 
@@ -458,6 +898,51 @@ def _detect_tim_res(dataset_dir: Path) -> str:
     return "Month"  # Default assumption
 
 
+def _detect_data_type_from_nc(nc_file: Path) -> str | None:
+    """Detect whether a NC file contains gridded or station data.
+
+    Rules:
+      - Grid: has lat and lon dimensions, both size > 1
+      - Station: has a station/site dimension, or lat/lon dims with size == 1
+      - None: cannot determine
+
+    Returns "grid", "stn", or None.
+    """
+    try:
+        import netCDF4
+
+        nc = netCDF4.Dataset(str(nc_file), "r")
+        dims = {k.lower(): nc.dimensions[k].size for k in nc.dimensions}
+        nc.close()
+
+        from openbench.data.coordinates import LAT_NAMES, LON_NAMES, STN_DIM_NAMES
+
+        # Check for station-like dimensions
+        if STN_DIM_NAMES & set(dims.keys()):
+            return "stn"
+
+        # Check lat/lon using shared fallback names
+        lat_size = 0
+        for name in LAT_NAMES:
+            if name.lower() in dims:
+                lat_size = dims[name.lower()]
+                break
+        lon_size = 0
+        for name in LON_NAMES:
+            if name.lower() in dims:
+                lon_size = dims[name.lower()]
+                break
+
+        if lat_size > 1 and lon_size > 1:
+            return "grid"
+        if lat_size <= 1 and lon_size <= 1:
+            return "stn"  # single point or no spatial dims
+
+        return None
+    except Exception:
+        return None
+
+
 def _inspect_nc_file(dataset_dir: Path) -> dict:
     """Inspect a NetCDF file to extract variable name, unit, prefix, suffix.
 
@@ -466,38 +951,69 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
     Also parses the filename to detect prefix and suffix patterns.
 
     Returns:
-        {"varname": str, "varunit": str, "prefix": str, "suffix": str}
+        {"varname": str, "varunit": str, "prefix": str, "suffix": str,
+         "detected_data_type": "grid"|"stn"|None}
         or empty dict if inspection fails.
     """
-    nc_files = sorted(dataset_dir.glob("*.nc"))
+    nc_files = _glob_nc(dataset_dir)
     if not nc_files:
         return {}
 
     result = {}
 
-    # Extract varname and unit from NC contents
+    # Detect data_type from NC dimensions
+    result["detected_data_type"] = _detect_data_type_from_nc(nc_files[0])
+
+    # Extract varname and unit from NC contents (metadata only, no data loading)
     try:
-        import xarray as xr
+        import netCDF4
 
-        ds = xr.open_dataset(nc_files[0], engine="netcdf4")
+        nc = netCDF4.Dataset(str(nc_files[0]), "r")
 
-        # Filter out auxiliary variables
+        # Filter out auxiliary / coordinate / metadata variables.
+        # Bounds variables and coordinate-as-variables (lat/lon/elev/station_id)
+        # are not data; they must not be picked as the dataset's primary variable.
         skip_vars = {
             "time_bnds", "time_bounds", "lat_bnds", "lon_bnds",
             "lat_bounds", "lon_bounds", "crs", "spatial_ref",
         }
-        data_vars = [v for v in ds.data_vars if v not in skip_vars and len(ds[v].dims) >= 2]
+        # Coordinate / station-metadata names commonly stored as variables
+        # rather than dimensions (especially in single-station NC files where
+        # lat/lon are scalars). Compared case-insensitively below.
+        known_coord_var_names = {
+            "lat", "latitude", "lon", "longitude",
+            "x", "y", "z", "depth", "level",
+            "elev", "elevation", "altitude", "alt", "height",
+            "station", "station_id", "station_name",
+            "site", "site_id", "site_name", "id",
+        }
+        coord_names = set(nc.dimensions.keys())
+
+        # Minimum dimension count: grid data needs (lat, lon) at minimum (>=2).
+        # Station data is often (time,) per file — 1D is the data variable.
+        # When detection is uncertain (None), bias toward grid (>=2) to avoid
+        # false-positive picking up 1D auxiliaries on grid datasets.
+        nc_data_type = result.get("detected_data_type")
+        min_dims = 1 if nc_data_type == "stn" else 2
+
+        data_vars = [
+            v for v in nc.variables
+            if v not in skip_vars
+            and v not in coord_names
+            and v.lower() not in known_coord_var_names
+            and len(nc.variables[v].dimensions) >= min_dims
+        ]
 
         # Store ALL data variables for multi-var detection
         result["all_data_vars"] = []
         for dv in data_vars:
-            da = ds[dv]
-            unit = da.attrs.get("units", da.attrs.get("unit", ""))
+            var = nc.variables[dv]
+            unit = getattr(var, "units", getattr(var, "unit", ""))
             unit = str(unit).replace(".", " ").strip() if unit else ""
-            long_name = da.attrs.get("long_name", "")
-            standard_name = da.attrs.get("standard_name", "")
+            long_name = getattr(var, "long_name", "")
+            standard_name = getattr(var, "standard_name", "")
             result["all_data_vars"].append({
-                "name": dv, "unit": unit, "dims": list(da.dims),
+                "name": dv, "unit": unit, "dims": list(var.dimensions),
                 "long_name": long_name, "standard_name": standard_name,
             })
 
@@ -507,9 +1023,77 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
             result["varname"] = varname
             result["varunit"] = varunit
 
-        ds.close()
+        nc.close()
     except Exception as e:
         logger.debug("NC inspection failed for %s: %s", nc_files[0].name, e)
+
+    # Detect tim_res from time dimension interval and grid_res from lat interval
+    try:
+        import netCDF4 as _nc4
+
+        _nc = _nc4.Dataset(str(nc_files[0]), "r")
+        _time_names = ("time", "Time", "TIME", "t", "T")
+        _time_var = None
+        for _tn in _time_names:
+            if _tn in _nc.variables and _tn in _nc.dimensions:
+                _time_var = _nc.variables[_tn]
+                break
+        if _time_var is not None and len(_time_var) >= 2:
+            _diff = float(_time_var[1] - _time_var[0])
+            _units = getattr(_time_var, "units", "")
+            _detected = None
+            if "seconds" in _units:
+                if _diff <= 5400:
+                    _detected = "Hour"
+                elif _diff <= 14400:
+                    _detected = "3Hour"
+                elif _diff <= 28800:
+                    _detected = "6Hour"
+                elif _diff <= 90000:
+                    _detected = "Day"
+                elif _diff <= 2700000:
+                    _detected = "Month"
+                else:
+                    _detected = "Year"
+            elif "hour" in _units:
+                if _diff <= 1.5:
+                    _detected = "Hour"
+                elif _diff <= 4:
+                    _detected = "3Hour"
+                elif _diff <= 8:
+                    _detected = "6Hour"
+                elif _diff <= 24:
+                    _detected = "Day"
+                elif _diff <= 750:
+                    _detected = "Month"
+                else:
+                    _detected = "Year"
+            elif "day" in _units:
+                if _diff <= 1.5:
+                    _detected = "Day"
+                elif _diff <= 9:
+                    _detected = "8Day"
+                elif _diff <= 32:
+                    _detected = "Month"
+                else:
+                    _detected = "Year"
+            if _detected:
+                result["detected_tim_res"] = _detected
+
+        # Detect grid_res from lat dimension interval
+        from openbench.data.coordinates import LAT_NAMES
+
+        for _lat_name in LAT_NAMES:
+            if _lat_name in _nc.variables and _lat_name in _nc.dimensions and _nc.dimensions[_lat_name].size > 1:
+                _lat_vals = _nc.variables[_lat_name][:]
+                _grid_res = round(abs(float(_lat_vals[1] - _lat_vals[0])), 4)
+                if 0.001 < _grid_res < 10:  # sanity check
+                    result["detected_grid_res"] = _grid_res
+                break
+
+        _nc.close()
+    except Exception as _e:
+        logger.debug("NC tim_res/grid_res detection failed: %s", _e)
 
     # Extract prefix and suffix from filename pattern
     # Pattern: <prefix><year><suffix>.nc
@@ -525,7 +1109,8 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
         result["prefix"] = prefix
         result["suffix"] = suffix
     else:
-        result["prefix"] = ""
+        # Single file (no year in filename): use full stem as prefix
+        result["prefix"] = fname
         result["suffix"] = ""
 
     # Detect year range from all filenames
@@ -565,7 +1150,7 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
     if output_csv is None:
         output_csv = dataset_dir / "station_list.csv"
 
-    nc_files = sorted(dataset_dir.glob("*.nc"))
+    nc_files = _glob_nc(dataset_dir)
     if not nc_files:
         raise FileNotFoundError(f"No NC files found in {dataset_dir}")
 
@@ -598,36 +1183,77 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
 
 
 def _parse_single_station_file(nc_file: Path) -> list | None:
-    """Extract station info from a single-station NC file."""
+    """Extract station info from a single-station NC file (fast, metadata only)."""
     try:
-        import pandas as pd
-        import xarray as xr
+        import netCDF4
+        import numpy as np
 
-        ds = xr.open_dataset(nc_file)
+        nc = netCDF4.Dataset(str(nc_file), "r")
 
-        # Extract station ID from filename
-        # Pattern: AU-How_2004-2005_OzFlux_Flux.nc → ID=AU-How
-        stem = nc_file.stem
-        station_id = stem.split("_")[0]
+        # Extract station ID: NC variable/attribute first, then filename
+        station_id = None
 
-        # Extract lat/lon
-        lat = _extract_scalar(ds, ["latitude", "lat", "LAT", "Latitude"])
-        lon = _extract_scalar(ds, ["longitude", "lon", "LON", "Longitude"])
+        # 1. Try NC variables (scalar or single-element)
+        for id_var in ("station_id", "site_id", "station_name", "site"):
+            if id_var in nc.variables:
+                val = nc.variables[id_var][:]
+                if hasattr(val, "item"):
+                    station_id = str(val.item()).strip()
+                elif hasattr(val, "__len__") and len(val) == 1:
+                    station_id = str(val[0]).strip()
+                # Multi-station file — skip (handled by _parse_merged_station_file)
+                if station_id:
+                    break
 
-        # Extract time range
-        if "time" in ds.dims and len(ds.time) > 0:
-            time_vals = ds.time.values
+        # 2. Try NC global attributes
+        if not station_id:
+            for id_attr in ("station_id", "site_id", "station_code"):
+                if id_attr in nc.ncattrs():
+                    station_id = str(nc.getncattr(id_attr)).strip()
+                    if station_id:
+                        break
+
+        # 3. Fallback: extract from filename
+        if not station_id:
+            stem = nc_file.stem
+            year_match = re.search(r"[_-](\d{4})[_-]", stem)
+            if year_match:
+                station_id = stem[: year_match.start()].rstrip("_-")
+            else:
+                station_id = stem
+
+        # Extract lat/lon using shared fallback names
+        from openbench.data.coordinates import LAT_NAMES, LON_NAMES
+
+        lat = lon = None
+        for name in LAT_NAMES:
+            if name in nc.variables:
+                val = nc.variables[name][:]
+                lat = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                break
+        for name in LON_NAMES:
+            if name in nc.variables:
+                val = nc.variables[name][:]
+                lon = float(np.nanmean(val)) if hasattr(val, '__len__') and len(val) > 0 else float(val)
+                break
+
+        # Extract time range from filename first (faster than reading time dim)
+        syear = eyear = ""
+        years = [int(m.group(1)) for m in re.finditer(r"(\d{4})", stem) if 1900 <= int(m.group(1)) <= 2100]
+        if years:
+            syear, eyear = min(years), max(years)
+        elif "time" in nc.dimensions and nc.dimensions["time"].size > 0:
+            # Fallback: read time variable
             try:
-                syear = int(pd.Timestamp(time_vals[0]).year)
-                eyear = int(pd.Timestamp(time_vals[-1]).year)
+                import cftime
+                time_var = nc.variables["time"]
+                times = netCDF4.num2date(time_var[:], time_var.units, time_var.calendar if hasattr(time_var, 'calendar') else 'standard')
+                syear = times[0].year
+                eyear = times[-1].year
             except Exception:
-                syear = ""
-                eyear = ""
-        else:
-            syear = ""
-            eyear = ""
+                pass
 
-        ds.close()
+        nc.close()
 
         if lat is not None and lon is not None:
             return [station_id, syear, eyear, lon, lat, str(nc_file)]
@@ -660,9 +1286,11 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
             ds.close()
             return rows
 
+        from openbench.data.coordinates import LAT_NAMES, LON_NAMES
+
         n_stations = ds.sizes[stn_dim]
-        lat_var = _find_var(ds, ["Lat", "lat", "LAT", "latitude", "Latitude"])
-        lon_var = _find_var(ds, ["Lon", "lon", "LON", "longitude", "Longitude"])
+        lat_var = _find_var(ds, LAT_NAMES)
+        lon_var = _find_var(ds, LON_NAMES)
 
         # Time range (case-insensitive dim name)
         syear = ""
