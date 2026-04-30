@@ -22,6 +22,20 @@
 
 先用 \texttt{/usr/bin/time -v openbench run config.yaml} 跑一次，看 \texttt{Elapsed (wall clock)}、\texttt{Maximum resident set size}、\texttt{Percent of CPU this job got}：CPU\% < 50\% 说明在等 IO 或并行不够。
 
+\paragraph{规模估算：(var × sim × ref) 笛卡尔积}
+
+\openbench{} 任务总数 = $\sum_v |\text{sims}| \times |\text{refs}_v|$，其中 $|\text{refs}_v|$ 因变量而异（多 ref 配置下）。例：
+
+\begin{itemize}
+  \item 5 vars × 3 sims × 1 ref = 15 任务
+  \item 5 vars × 3 sims × 2 refs = 30 任务
+  \item 10 vars 中 3 个配 3 ref + 7 个配 1 ref，× 5 sims = 80 任务
+\end{itemize}
+
+每任务包括：预处理（每 (var, sim) 与每 (var, ref) 各一次，跨任务共享）+ 评估（每对独立）+ 出图（每对独立）。Wallclock $\approx$ 任务数 / 有效并行度 × 单任务时间。
+
+\textbf{优化记忆点}：单任务时间（重网格 + metric 计算 + 出图）通常 1--10 分钟；并行度受 \modname{DatasetProcessing} 内部限制约 4--8。所以 80 任务在 16 核机器上约 30 分钟到几小时。
+
 \section{num\_cores 选择}
 
 \subsection{自动检测 vs 显式指定}

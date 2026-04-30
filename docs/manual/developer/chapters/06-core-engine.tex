@@ -138,19 +138,46 @@ result = engine.evaluate()
 
 \section{comparison.py}
 
-跨 simulation 聚合：所有 sim 的 metric / score CSV 合并成对比表，输入到 portrait/radar/ranking 出图模块。
+跨 simulation × reference 聚合：扫描所有 (sim, ref) 对的 metric / score 文件，调 14 个图种各自的 \texttt{scenarios\_*\_comparison} 方法。
 
 \subsection{触发}
 
 仅当 \yamlkey{comparison.enabled: true}。\modname{runner.local} 在 evaluation phase 完成后调它。
 
-\subsection{产物}
+\subsection{14 个图种}
+
+每个图种实例化 \modname{ComparisonProcessing}，调用对应方法：
 
 \begin{itemize}
-  \item \file{output/<run>/comparisons/portrait\_table.csv}：模型 × (变量, score) 矩阵
-  \item \file{output/<run>/comparisons/ranking.csv}：按 Overall\_Score 排序
-  \item 调 \modname{visualization} 出 portrait\_plot.png + radar\_plot.png + ranking\_table.png
+  \item \texttt{scenarios\_Portrait\_Plot\_seasonal\_comparison} → \file{Portrait\_Plot\_seasonal/}
+  \item \texttt{scenarios\_HeatMap\_comparison} → \file{HeatMap/}
+  \item \texttt{scenarios\_Taylor\_Diagram\_comparison} → \file{Taylor\_Diagram/}
+  \item \texttt{scenarios\_Target\_Diagram\_comparison} → \file{Target\_Diagram/}
+  \item \texttt{scenarios\_Single\_Model\_Performance\_Index\_comparison} → \file{Single\_Model\_Performance\_Index/}（这是 ranking 的实际数据来源；不存在 \file{ranking.csv}）
+  \item \texttt{scenarios\_Kernel\_Density\_Estimate\_comparison} → \file{Kernel\_Density\_Estimate/}
+  \item \texttt{scenarios\_Parallel\_Coordinates\_comparison} → \file{Parallel\_Coordinates/}
+  \item \texttt{scenarios\_Whisker\_Plot\_comparison} → \file{Whisker\_Plot/}
+  \item \texttt{scenarios\_Ridgeline\_Plot\_comparison} → \file{Ridgeline\_Plot/}
+  \item \texttt{scenarios\_Diff\_Plot\_comparison} → \file{Diff\_Plot/}
+  \item \texttt{scenarios\_Relative\_Score\_comparison} → \file{Relative\_Score/}
+  \item \texttt{scenarios\_Mann\_Kendall\_Trend\_Test\_comparison} → \file{Mann\_Kendall\_Trend\_Test/}
+  \item \texttt{scenarios\_RadarMap\_comparison} → 内嵌在 SMPI 图组
+  \item Groupby 三种（IGBP/PFT/CZ）：仅当对应开关 \texttt{true}
 \end{itemize}
+
+\subsection{每图种产物结构}
+
+通用三件套：
+
+\begin{itemize}
+  \item \file{<comparison\_name>.csv}：聚合表，每 (item, ref, sim) 一行
+  \item \file{<item>\_ref\_<R>\_sim\_<S>\_<metric>.nc}：每对一份逐图 NC（数据可重出图）
+  \item \file{<comparison\_name>.png}：最终拼图
+\end{itemize}
+
+\subsection{多 ref 处理}
+
+\modname{comparison.py:223,470,1689} 等多处一致约定：读 \texttt{ref\_nml["general"][f"\{item\}\_ref\_source"]}，若是字符串则包成单元素 list，再对每个 ref\_source 跑一次内层循环。多 ref 配置下相当于嵌套循环 \texttt{for ref in refs: for sim in sims:}，每对独立产出。聚合 CSV 拼接所有 (item, ref, sim) 行；图种自己决定如何在 PNG 中布局（heatmap 把 ref 作为额外行；Taylor 把每对当独立点叠合）。
 
 \section{Groupby 模块}
 

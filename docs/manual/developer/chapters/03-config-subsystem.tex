@@ -106,7 +106,7 @@ migration 是侧路（一次性把旧 config 转成新 YAML）。legacy\_process
 \begin{itemize}
   \item \texttt{\_build\_project}：必填三字段 + years 列表校验 + time\_alignment 枚举校验
   \item \texttt{\_build\_evaluation}：variables 必须非空 list
-  \item \texttt{\_build\_reference}：strip data\_root + 剩下的 key 必须是 var→str 映射
+  \item \texttt{\_build\_reference}：strip data\_root + 剩下的 key 必须是 \texttt{var → str | list[str]} 映射；字符串自动按逗号拆为 list（loader.py:174 那段从 v2.x namelist 直接迁移友好）。schema 字段 \texttt{ReferenceConfig.sources: dict[str, str | list[str]]} 反映了这个多源能力
   \item \texttt{\_build\_simulation}：处理 \_defaults 合并 + 每 entry 必须 model + root\_dir
   \item \texttt{\_build\_comparison} / \texttt{\_build\_statistics}：可选 dict
 \end{itemize}
@@ -124,9 +124,15 @@ migration 是侧路（一次性把旧 config 转成新 YAML）。legacy\_process
 
 \file{resolver.py} 是 \emph{单一事实源}：所有入口（\cli{check}、adapter、GUI）都调它做 reference 名解析，避免"check 通过但运行时绑定不一致"。
 
+\subsection{多 ref 展开：N ResolvedReference per variable}
+
+\modname{resolve_all_references(cfg)} 接收 \texttt{cfg.reference.sources} 字典——值可能是字符串（单源）或 list[str]（多源）——展开后为\emph{每个 (var, source) 对}产生一个 \texttt{ResolvedReference}。所以多 ref 配置下输出列表长度大于变量数。
+
+\modname{config.adapter.iter_task_sources} 拿到 resolved 列表后再做 (sim × ref) 笛卡尔积，让 \modname{runner.local} 看到完整的 (var, sim, ref) 三元组任务集。
+
 \subsection{ResolvedReference}
 
-每个变量一个解析结果：
+每个 \emph{(变量, 源)} 对一个解析结果：
 
 \begin{minted}{python}
 @dataclass

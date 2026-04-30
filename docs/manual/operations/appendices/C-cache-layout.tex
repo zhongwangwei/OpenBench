@@ -8,53 +8,67 @@
 \section{完整目录树}
 
 \begin{minted}{text}
-output/<run>/
-├── config.yaml                  # 本次评估的解析后完整配置
-├── run.log                      # 运行日志（INFO 与上）
-├── data/                        # zarr 缓存（中间数据，可重建）
-│   ├── <task_key>.zarr/         # 每 task 一个 zarr group
-│   │   ├── sim/
-│   │   ├── ref/
-│   │   ├── .zgroup
-│   │   ├── .zarray
-│   │   └── ...
-│   └── ...
-├── metrics/                     # 评估指标 CSV
-│   ├── <var>/
-│   │   ├── <sim>_metrics.csv
-│   │   └── ...
-│   └── ...
-├── scores/                      # 归一化打分
-│   └── <var>/<sim>_scores.csv
-├── figures/                     # 全部可视化（按 var × kind 子目录）
-│   └── <var>/<kind>/<sim>_<ref>.png
-├── comparisons/                 # 多 sim 对比（仅 comparison.enabled=true）
-│   ├── portrait_table.csv
-│   ├── portrait_plot.png
-│   ├── radar_plot.png
-│   ├── ranking.csv
-│   └── ranking_table.png
-├── statistics/                  # 仅 statistics.enabled=true
-│   ├── ANOVA/
-│   ├── Correlation/
-│   └── ...
-├── reports/                     # HTML/PDF 总结报告
+output/<project_name>/
+├── config.yaml                                      # 解析后的完整配置
+├── run.log                                          # 运行日志
+├── data/                                            # 预处理后的 sim/ref NC
+│   ├── <var>_ref_<R>_<rv>.nc                        # 共享 grid ref（unified_mask 累积写入此处）
+│   ├── <var>_ref_<R>_<rv>.nc.unifiedmask.bak        # 临时备份（仅混合 grid+stn 时存在，循环末清理）
+│   ├── <var>_sim_<S>_<sv>.nc                        # 每 sim 一份预处理 NC
+│   ├── <var>_ref_<R>_<S>_<rv>.nc                    # per_pair 模式下，每 sim 一份 ref 副本
+│   └── stn_<R>_<S>/                                 # 站点抽样 NC 目录（任一边 stn 时）
+├── metrics/                                         # 逐 (var, sim, ref) 评估指标
+│   ├── <var>_ref_<R>_sim_<S>_<metric>.nc            # grid×grid：每 metric 一个 NC
+│   └── <var>_stn_<R>_<S>_evaluations.csv            # 任一边 stn：聚合 CSV（一行一站）
+├── scores/                                          # 同 metrics 命名规则
+│   ├── <var>_ref_<R>_sim_<S>_<score>.nc
+│   └── <var>_stn_<R>_<S>_evaluations.csv
+├── figures/                                         # 全部可视化（PNG）
+├── comparisons/                                     # 多 sim × ref 对比
+│   ├── Portrait_Plot_seasonal/
+│   │   ├── Portrait_Plot_seasonal.csv               # 全部 (item, ref, sim) 一行一条
+│   │   ├── <item>_ref_<R>_sim_<S>_<metric>.nc       # 每对一份逐图数据
+│   │   └── Portrait_Plot_seasonal.png
+│   ├── HeatMap/
+│   ├── Taylor_Diagram/
+│   ├── Target_Diagram/
+│   ├── Single_Model_Performance_Index/              # ranking 实际数据来源（SMPI.csv）
+│   ├── Kernel_Density_Estimate/
+│   ├── Parallel_Coordinates/
+│   ├── Whisker_Plot/
+│   ├── Ridgeline_Plot/
+│   ├── Diff_Plot/
+│   ├── Relative_Score/
+│   ├── Mann_Kendall_Trend_Test/
+│   ├── IGBP_groupby/<sim>___<ref>/                  # 仅 IGBP_groupby=true
+│   ├── PFT_groupby/<sim>___<ref>/                   # 仅 PFT_groupby=true
+│   └── Climate_zone_groupby/<sim>___<ref>/          # 仅 climate_zone_groupby=true
+├── statistics/                                      # 仅 statistics.enabled=true
+│   ├── ANOVA/, Correlation/, Mann_Kendall_Trend_Test/, ...
+├── reports/                                         # HTML/PDF 总结
 │   ├── report.html
 │   ├── report.pdf
-│   └── sections/                # 子报告（按变量分）
-├── scratch/                     # 任务级 cache + 临时
-│   ├── cache/
-│   │   ├── <task_key>.json
-│   │   └── ...
-│   └── ...
-├── tmp/                         # 单次运行临时（每次清）
-└── debug/                       # 仅 --dump-config
+│   └── sections/
+├── scratch/                                         # 任务级 cache
+│   └── cache/<task_key>.json                        # 每 (var, sim, ref) 一份哈希
+├── tmp/                                             # 临时（每次清）
+└── debug/                                           # 仅 --dump-config 时存在
     ├── runner_config.yaml
     ├── main_nl.yaml
     ├── ref_nml.yaml
     ├── sim_nml.yaml
     └── fig_nml.yaml
 \end{minted}
+
+\paragraph{为何文件名要带 \texttt{ref\_X\_sim\_Y}}
+
+让 (var × sim × ref) 笛卡尔积下每对都有独立产物，互不覆盖。多 ref 配置下：
+
+\begin{itemize}
+  \item 一个变量配 2 ref + 3 sim → metrics/ 下每 metric 6 个独立 NC
+  \item Cache key 也是 \texttt{(var, sim, ref)} 三元组：单 ref 失败/重算不影响其他 ref
+  \item 评估并行性建立在这个独立性上：(sim, ref) 对之间无依赖
+\end{itemize}
 
 \section{每层用途}
 
@@ -80,25 +94,40 @@ output/<run>/
 
 \section{磁盘占用经验值}
 
-以全球 monthly × 5 年 × 1 sim × 4 vars 评估为例：
+以全球 monthly × 5 年 × 1 sim × 4 vars × 1 ref 评估为基准：
 
 \begin{longtable}{p{3cm} p{3cm} p{6cm}}
   \toprule
   目录 & 大小 & 备注 \\
   \midrule
   \endhead
-  data/ & 200 MB - 2 GB & zarr 压缩；与变量数线性 \\
-  metrics/ & 几 MB & CSV 小 \\
-  scores/ & 几 MB & 同上 \\
-  figures/ & 50-200 MB & 按变量与图种数 \\
-  comparisons/ & 10-50 MB & 多 sim 时增加 \\
+  data/ & 200 MB - 2 GB & 预处理后的 NC；与变量数 + ref 数线性 \\
+  metrics/ & 几十 MB - 500 MB & 每 metric 一个全球 grid NC（grid 评估）；stn 评估则 < 几 MB \\
+  scores/ & 几十 MB - 500 MB & 同 metrics \\
+  figures/ & 50-200 MB & 按 (var × kind × sim × ref) 增长 \\
+  comparisons/ & 10-200 MB & 14 个图种；每个 (sim, ref) 一份 NC \\
   statistics/ & 50-300 MB & 统计模块多时增 \\
   reports/ & 50-300 MB & 嵌入图 \\
-  scratch/cache/ & < 1 MB & JSON \\
+  scratch/cache/ & < 1 MB & JSON，每 (var, sim, ref) 一份 \\
   \bottomrule
 \end{longtable}
 
-总：单次 monthly 全球评估约 500 MB - 3 GB。daily/hourly + 多 sim 可达数十 GB。
+\paragraph{多 ref 与多 sim 的放大}
+
+\begin{itemize}
+  \item \textbf{多 sim}：m sim → \file{data/} 中 sim NC 数 ×m；\file{metrics/}/\file{scores/}/\file{comparisons/} 各项 ×m
+  \item \textbf{多 ref}：n ref → \file{data/} 中 ref NC 数 ×n；\file{metrics/}/\file{scores/} ×n；\file{comparisons/} ×n
+  \item \textbf{组合}：m sim × n ref 的总产物量是基准 × m × n（近似线性）
+\end{itemize}
+
+\paragraph{总量经验值}
+
+\begin{itemize}
+  \item 单次 monthly 全球评估（1 sim × 1 ref）：500 MB - 3 GB
+  \item 同上 + 多 sim（5 sim × 1 ref）：3-15 GB
+  \item 同上 + 多 ref（5 sim × 3 ref）：10-40 GB
+  \item Daily / hourly + 多 sim + 多 ref：数十到数百 GB
+\end{itemize}
 
 \section{升级时哪些保留}
 

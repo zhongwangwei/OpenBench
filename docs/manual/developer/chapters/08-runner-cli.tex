@@ -43,8 +43,59 @@ task = {
 \begin{enumerate}
   \item Per-task：算 \texttt{config\_hash}（覆盖 var/sim/ref/metrics/scores 等）
   \item 查 \file{output/<run>/scratch/cache/<cache\_key>.json}
-  \item Hash 一致 → 跳过 task（拷贝旧输出到新位置即可）
-  \item Hash 不一致 → 重新计算 + 写新 cache
+  \item Hash 一致 → 通过 \modname{\_find\_existing\_outputs} 检查输出文件确实存在
+  \item Hash 不一致或输出缺失 → 重新计算 + 写新 cache
+\end{enumerate}
+
+\subsection{cache 失效的精确度（多 ref 关键）}
+
+\texttt{cache\_key = make\_cache\_key(var, sim, ref)} 是 \emph{三元组}。\modname{\_find\_existing\_outputs} 用精确前缀 glob：
+
+\begin{minted}{python}
+patterns = [
+    f"{glob.escape(var)}_ref_{glob.escape(ref)}_sim_{glob.escape(sim)}_*",
+    f"{glob.escape(var)}_stn_{glob.escape(ref)}_{glob.escape(sim)}_evaluations*",
+]
+\end{minted}
+
+历史问题：早期 pattern 是 \texttt{\{var\}\_*\{ref\}*\{sim\}*}，子串通配会让 \texttt{RefA} 误匹配 \texttt{RefAB} 的输出。修复后多 ref 配置下不同 ref 的 cache 失效彼此独立。
+
+\subsection{\_preprocess\_variable：dedupe 与 unified\_mask 备份}
+
+\modname{runner.local.\_preprocess\_variable}（约 200 行）是多 ref / 多 sim 正确性的核心。每变量调用一次，按以下规则跑预处理：
+
+\begin{itemize}
+  \item \textbf{Dedupe key} = \texttt{(ref\_source, "\_grid" if both grid else sim\_source)}
+  \begin{itemize}
+    \item Grid×grid：跨 sim 共享 ref 预处理（写一份 flat NC）
+    \item 任一边 stn：每对独立，因为 \modname{processing.extract\_station\_data\_if\_needed} 会 \emph{删除} flat NC
+  \end{itemize}
+  \item \textbf{Flat NC backup-restore}（保护 unified\_mask 累积态）：
+  \begin{itemize}
+    \item Grid prep 完成 / unified\_mask 写回后立即 \texttt{shutil.copy2} 到 \texttt{<flat>.unifiedmask.bak}
+    \item Stn prep 之前再次备份（防止删除前没存）
+    \item 后续 grid 任务发现 flat 缺失 → 从 .bak 恢复（保留累积 mask）
+    \item 循环末尾：若仍有缺失，从 .bak 恢复；最终清理 .bak
+  \end{itemize}
+  \item \textbf{Stn×stn 优化}：同 ref + 第二个 stn sim 时，符号链接 ref 文件而非重新抽样
+\end{itemize}
+
+历史 bug：早期 \texttt{refs\_done: bool} 让多 ref 中只第一个被预处理（\texttt{c9fcbdc} 后修为 \texttt{set[str]}）；\texttt{has\_grid\_evaluation} 仅检查 \texttt{sim\_sources[0]} 让混合类型评估错跳过 phase（\texttt{48bee6f} 改完整笛卡尔积）。
+
+\subsection{评估阶段任务循环}
+
+\modname{run\_evaluation} 主循环：
+
+\begin{enumerate}
+  \item 调 \modname{\_preprocess\_variable} 处理每个变量的全部 (sim, ref)
+  \item 对每个 task 调 \modname{\_evaluate\_single}：
+  \begin{enumerate}
+    \item Cache 检查（hash + 输出文件存在）→ 命中即返回 \texttt{skipped=True}
+    \item 创建 \modname{Evaluation\_grid} 或 \modname{Evaluation\_stn} 实例
+    \item 调 \texttt{make\_Evaluation()} / \texttt{make\_evaluation\_P()} 运行
+    \item 写新 cache
+  \end{enumerate}
+  \item 按 \yamlkey{num\_cores} 决定串行 or 并行（当前 \modname{runner} 层未启用变量级并行；并行在 \modname{DatasetProcessing} 内部）
 \end{enumerate}
 
 \subsection{错误传播}
