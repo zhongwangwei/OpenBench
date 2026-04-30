@@ -1,0 +1,374 @@
+% docs/manual/user/chapters/10-troubleshooting.tex
+% 第 10 章：常见问题与排错
+
+\chapter{常见问题与排错}
+
+本章按"症状 → 诊断 → 修复"格式整理用户最常遇到的问题。如果你的具体错误消息没在这里出现，附录 E 有完整的错误消息索引。
+
+\section{安装类}
+
+\subsection{\texttt{cartopy} 编译失败}
+
+\textbf{症状}：\cli{pip install openbench} 报 \texttt{Failed building wheel for cartopy}。
+
+\textbf{诊断}：\modname{cartopy} 需要系统级 GEOS / PROJ 库。
+
+\textbf{修复}：
+
+\begin{minted}{bash}
+# macOS
+brew install geos proj
+pip install openbench
+
+# Ubuntu/Debian
+sudo apt install libgeos-dev libproj-dev proj-data proj-bin
+pip install openbench
+
+# Conda 路径（绕过编译）
+conda install -c conda-forge cartopy
+pip install openbench
+\end{minted}
+
+\subsection{\texttt{PySide6} 装不上（HPC）}
+
+\textbf{症状}：在 HPC 节点 \cli{pip install "openbench[gui]"} 报缺少图形库。
+
+\textbf{修复}：HPC 上不要装 \cli{[gui]}，GUI 是本地客户端：
+
+\begin{minted}{bash}
+pip install openbench           # core only
+pip install "openbench[remote]" # 如需远程 SSH
+\end{minted}
+
+\subsection{\texttt{ImportError: openbench[gui] not installed}}
+
+\textbf{症状}：执行 \cli{openbench gui} 报 ImportError。
+
+\textbf{修复}：装上 GUI extra：
+
+\begin{minted}{bash}
+pip install "openbench[gui]"
+\end{minted}
+
+\section{配置类}
+
+\subsection{\texttt{Missing required section}}
+
+\textbf{症状}：
+
+\begin{minted}{text}
+ConfigError: Missing required section: 'project'
+\end{minted}
+
+\textbf{修复}：四个必填顶层块（\yamlkey{project} / \yamlkey{evaluation} / \yamlkey{reference} / \yamlkey{simulation}）至少要有。详见第 3 章。
+
+\subsection{\texttt{years must be a list of [start\_year, end\_year]}}
+
+\textbf{症状}：YAML 写成 \yamlkey{years: 2010} 或 \yamlkey{years: [2010, 2011, 2012, 2013, 2014]}。
+
+\textbf{修复}：必须恰好两个整数：
+
+\begin{minted}{yaml}
+project:
+  years: [2010, 2014]   # ✓
+\end{minted}
+
+\subsection{\texttt{Variable 'X' has no entry in 'reference'}}
+
+\textbf{症状}：\yamlkey{evaluation.variables} 列了变量，\yamlkey{reference} 没映射。
+
+\textbf{修复}：
+
+\begin{minted}{yaml}
+evaluation:
+  variables:
+    - Latent_Heat        # 这个
+
+reference:
+  Latent_Heat: ERA5LAND  # 必须有这一行
+\end{minted}
+
+\subsection{\texttt{reference.sources must be a string}}
+
+\textbf{症状}：写成嵌套形式 \yamlkey{reference.sources.<var>: ...}。
+
+\textbf{修复}：第 3 章详解；reference 是 flat var→source 映射：
+
+\begin{minted}{yaml}
+# ✗
+reference:
+  sources:
+    Evapotranspiration: GLEAM_v4.2a
+
+# ✓
+reference:
+  Evapotranspiration: GLEAM_v4.2a
+\end{minted}
+
+\section{数据类}
+
+\subsection{\texttt{Reference dataset not found}}
+
+\textbf{症状}：\cli{check} 报 \texttt{not in registry}。
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# 看 catalog 里实际有哪些
+openbench data list | grep -i gleam
+
+# 检查 _LowRes / _MidRes 后缀解析
+openbench data list --variable Evapotranspiration
+\end{minted}
+
+\textbf{修复}：用完整名（带 \texttt{\_LowRes} / \texttt{\_MidRes} 后缀）或调整 \yamlkey{project.grid_res} 让自动解析命中。
+
+\subsection{Sim NC 文件找不到}
+
+\textbf{症状}：run 时报 \texttt{No NC files matching pattern in /data/...}。
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# 实际的 NC 文件名是什么
+ls /data/colm2024_run/ | head
+
+# profile 期望的文件名模式
+openbench model show CoLM2024
+\end{minted}
+
+\textbf{修复}：调整 \yamlkey{simulation.<label>.prefix} / \yamlkey{suffix}，或在 \yamlkey{variables} 里覆盖文件名模式。
+
+\subsection{时间维度异常}
+
+\textbf{症状}：评估突然 NaN 或维度错配。
+
+\textbf{诊断}：\cli{ncdump -h <file.nc>} 看时间坐标的属性（\texttt{units}、\texttt{calendar}），与 catalog 中声明对照。
+
+\textbf{常见根因}：
+
+\begin{itemize}
+  \item \texttt{calendar=noleap} vs \texttt{standard} 的混用
+  \item \texttt{time} 单位是 \texttt{days since 1850-01-01} vs \texttt{seconds since 1970-01-01}
+  \item \openbench{} 用 \modname{xarray} + \modname{cftime} 处理大多数情况；极端情况下需在 simulation entry 里手动指定时间偏移
+\end{itemize}
+
+\section{运行类}
+
+\subsection{Out of memory}
+
+\textbf{症状}：进程被 OOM killer 杀掉，\cli{run} 中途退出无清晰错误。
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# Linux
+dmesg | grep -i "out of memory" | tail -5
+
+# 看进程峰值
+/usr/bin/time -v openbench run openbench.yaml
+\end{minted}
+
+\textbf{修复}：
+
+\begin{itemize}
+  \item 减小 \yamlkey{project.num_cores}（每 worker 占内存独立）
+  \item 缩小 \yamlkey{lat_range} / \yamlkey{lon_range}（区域评估）
+  \item 缩小 \yamlkey{years} 时段
+  \item 用 \texttt{tim\_res: Month} 而非 \texttt{Day} / \texttt{Hour}（数据量降两个数量级）
+\end{itemize}
+
+\subsection{HDF5 lock error}
+
+\textbf{症状}：
+
+\begin{minted}{text}
+OSError: Unable to open file (unable to lock file, errno = 11,
+error message = 'Resource temporarily unavailable')
+\end{minted}
+
+\textbf{诊断}：HDF5 ≥ 1.14 默认对只读文件加锁；多 worker 同时读同一 reference NC 触发。
+
+\textbf{修复}：\openbench{} 在 \cli{run} 启动时已设 \texttt{HDF5\_USE\_FILE\_LOCKING=FALSE}。如果你在脚本/Notebook 里手动调用 \modname{run\_evaluation}，自己设这个环境变量：
+
+\begin{minted}{python}
+import os
+os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
+from openbench.runner.local import run_evaluation
+\end{minted}
+
+\subsection{运行卡住不动}
+
+\textbf{诊断步骤}：
+
+\begin{enumerate}
+  \item 看 \file{output/<run>/run.log} 最后 30 行，确认是 \texttt{[INFO]} 卡住还是 \texttt{[DEBUG]} 还在动
+  \item 用 \texttt{py-spy dump --pid \$(pgrep -f 'openbench run')} 看 Python 调用栈
+  \item 看 CPU 与 IO：\texttt{top} / \texttt{iostat}。CPU = 0 + IO 不动 → 可能 NFS 挂掉；CPU 100\% + 一直跑 → 计算密集，等待
+\end{enumerate}
+
+\textbf{真正死锁较少见}，常见是大型 task 的真实计算时间被低估。
+
+\subsection{时间对齐失败}
+
+\textbf{症状}：
+
+\begin{minted}{text}
+TimeAlignmentError: No common time window between sim and ref
+\end{minted}
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# Sim 的时段
+ncdump -h /data/sim/file.nc | grep time
+
+# Ref 的时段
+ncdump -h /data/ref/file.nc | grep time
+\end{minted}
+
+\textbf{修复}：
+
+\begin{itemize}
+  \item 改 \yamlkey{project.years} 让窗口落在两者共有时段
+  \item 切换 \yamlkey{time_alignment: per_pair} 让每对各算自己重叠
+  \item 检查 \yamlkey{min_year_threshold}，如果重叠不足该值会被跳过
+\end{itemize}
+
+\section{站点类}
+
+\subsection{站点匹配为空}
+
+\textbf{症状}：站点评估报 \texttt{No matching stations}。
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# 查看站点列表
+head /data/PLUMBER2/list/PLUMBER2.csv
+
+# 站点经纬度是否落在 sim 的 lat/lon range
+\end{minted}
+
+\textbf{修复}：
+
+\begin{itemize}
+  \item 扩大 \yamlkey{lat_range} / \yamlkey{lon_range}
+  \item 检查 fulllist CSV 的列名（必须有 \texttt{site, lat, lon}）
+  \item 检查站点 NC 文件是否完整（缺站点会被跳过）
+\end{itemize}
+
+\subsection{HDF5 lock 在站点评估更明显}
+
+站点评估 IO 模式是"打开同一文件 N 次拿不同站点切片"，比 grid 评估更容易触发 HDF5 lock。如果只在站点评估时报 lock 错误，几乎肯定是 \texttt{HDF5\_USE\_FILE\_LOCKING} 没设上。
+
+\section{远程类}
+
+\subsection{\cli{--remote} 立刻退出}
+
+\textbf{症状}：
+
+\begin{minted}{text}
+Remote execution not yet implemented.
+Install openbench[remote] and use openbench gui for remote execution.
+\end{minted}
+
+\textbf{当前状态}：v3.0a1 的 \cli{openbench run --remote} CLI 入口尚未实现。远程执行通过 GUI 提交。详见运维卷第 3 章。
+
+\subsection{SSH 连接失败}
+
+\textbf{症状}：GUI 中"Test connection"红色失败。
+
+\textbf{诊断}：
+
+\begin{minted}{bash}
+# 在终端用同样的密钥手动 SSH
+ssh -i ~/.ssh/my_key user@hpc01.example.edu
+\end{minted}
+
+\textbf{常见根因}：
+
+\begin{itemize}
+  \item 密钥权限不对（\texttt{chmod 600 \textasciitilde/.ssh/my\_key}）
+  \item 主机 fingerprint 没接受过（先手动 SSH 一次）
+  \item 防火墙 / VPN 隔离
+\end{itemize}
+
+\section{GUI 类}
+
+\subsection{GUI 不启动}
+
+第 8 章已详解。要点：
+
+\begin{itemize}
+  \item 装了 \cli{[gui]} extra
+  \item 不在远程 SSH 无 X11 环境
+  \item Linux 上设 \texttt{QT\_QPA\_PLATFORM=xcb}
+\end{itemize}
+
+\subsection{GUI 卡顿 / 无响应}
+
+\textbf{诊断}：
+
+\begin{itemize}
+  \item Run Monitor 卡住通常是后端计算的事，不是 GUI 卡；等几分钟看进度条
+  \item 配置页面卡顿可能是 registry 加载慢，看终端日志
+\end{itemize}
+
+\section{一般诊断流程}
+
+遇到没在以上列出的错误，按以下顺序：
+
+\subsection{Step 1：开 debug\_mode}
+
+\begin{minted}{yaml}
+project:
+  debug_mode: true
+\end{minted}
+
+或临时：
+
+\begin{minted}{bash}
+PYTHONUNBUFFERED=1 openbench run openbench.yaml 2>&1 | tee debug.log
+\end{minted}
+
+\subsection{Step 2：看完整 log}
+
+\begin{minted}{bash}
+less +G output/<run>/run.log     # 跳到末尾
+grep -i "error\|warn" debug.log
+\end{minted}
+
+\subsection{Step 3：缩小复现范围}
+
+把 \yamlkey{evaluation.variables} 砍到 1 个、\yamlkey{years} 缩到 1 年、\yamlkey{simulation} 砍到 1 个。
+
+\subsection{Step 4：dry-run + dump-config}
+
+\begin{minted}{bash}
+openbench run openbench.yaml --dry-run --dump-config
+ls output/<run>/debug/
+\end{minted}
+
+\file{output/<run>/debug/} 下的中间 namelist 会暴露 v3.0 schema → legacy 翻译过程中的细节。
+
+\subsection{Step 5：报告 Issue}
+
+如果以上都没解决：
+
+\begin{enumerate}
+  \item 收集：\file{openbench.yaml}、\file{run.log}（关键段）、\cli{openbench version}、\cli{python --version}、OS
+  \item 在 \href{https://github.com/CoLM-SYSU/OpenBench/issues}{GitHub Issues} 提交，附上以上信息
+  \item 标注是 v3.0 用户、是否从 v2.0 迁移
+\end{enumerate}
+
+\section{完结}
+
+到这里你已经完整走完用户卷的教程部分。后面的 5 个附录是参考性内容（配置项、CLI、数据集、模型、错误消息），按需查阅即可。
+
+如果要更深入理解 \openbench{} 内部、添加新功能、或运维 HPC 部署，请参看：
+
+\begin{itemize}
+  \item \textbf{开发卷}（Developer Guide）：架构、扩展点、贡献流程
+  \item \textbf{运维卷}（Operations Guide）：HPC 部署、远程 SSH、性能调优
+\end{itemize}
