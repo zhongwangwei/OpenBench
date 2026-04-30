@@ -42,3 +42,148 @@
 - UX/Roadmap 问题 2 个（CLI `--remote` 未实现、`data download/status` stub）：未修，文档侧如实说明
 - LaTeX/字体/工具链问题 5 个：`fandol` fontset、`-r ../latexmkrc`、`underscore` 包、`Menlo` monofont、`↔` 缺字；全部已修
 - 写作错字 4 个：`\end{itemize>` / `\end{enumerate>` / `\end{minted>`；写完即修
+
+---
+
+## Audit 期（写作期之后）
+
+写作期发现 multi-reference 漏修 2 处（commit `48bee6f`、`bf561bc`、`27877e5`、`ae69422`）后转为系统审计。按子系统分批审 + 修。每个子系统单独一节，时间 2026-04-30 内。
+
+### Multi-ref / Runtime（runner.local）
+
+| 模块 / 文件:行 | 症状 | 决议 | commit |
+|---|---|---|---|
+| `runner/local.py:_apply_unified_mask` + flat NC 备份 | grid→stn→grid 序列下 unified\_mask 累积态丢失 + per\_pair shutil.copy2 因 stn prep 删除源文件 FNF | `_backup_flat_ref` / `_restore_flat_ref_if_missing` / `_cleanup_flat_backups` 三 helper；intersection + per\_pair 都备份；end-of-loop 优先恢复备份 | (用户自修，非编号) |
+| `runner/local.py:324` glob | `f"{var}_*{ref}*{sim}*"` 子串通配匹配 RefAB / SimAB 等前缀重叠名 | 改 `glob.escape()` + 双精确前缀（`{var}_ref_{R}_sim_{S}_*` / `{var}_stn_{R}_{S}_evaluations*`）；加 `output_subdir.is_dir()` 守卫 | (同上) |
+| `tests/test_runner/test_local.py:1447` | docstring "TWO ref preps" 与断言 3 不一致；测试 mock `_apply_unified_mask` 无法捕获累积态 bug | 改 docstring + 5 个真 NaN 注入测试（不 mock unified\_mask）| (同上) |
+| `runner/local.py:_run_comparison` 条目过滤 | `startswith(f"{item}_")` 子串前缀匹配；items=[Runoff, Runoff\_2] 时 Runoff 误命中 Runoff\_2 文件 | 改 `glob.escape(item)` + `f"{item}_ref_*"` / `f"{item}_stn_*"` 精确 glob | `ec2f1db` |
+
+### 配置与 Manual 内容（c9fcbdc 后续 + 文档同步）
+
+| 模块 | 症状 | 决议 | commit |
+|---|---|---|---|
+| `cfg.project.weight` 默认 | adapter `cfg.project.weight or "area"` 把 None 替换成 "area"，但 manual / schema 注释说 "none" | manual 修正：省略字段 = area 加权；schema 注释更新 | `915b75c` / `3d1840a` |
+| `metrics`/`scores` 默认 | adapter 默认 `[bias, RMSE, correlation]` / `[Overall_Score]`，manual 称 "全部 25+/normalized" | manual + schema 注释修正 | `d6ee362` / `3d1840a` |
+| `min_year_threshold` 描述 | manual 称"模型与参考重叠不足 N 年时跳过该变量"，实际是站点级过滤 | 修正为"站点级，仅 stn ref" | `8521c67` |
+| `data_groupby` 检测 | scanner 只输出 `Year`/`Single`，处理 Month/Day 数据时下游错乱 | scanner 新增 `_detect_data_groupby` + `_classify_filename_date`，按文件名日期粒度判 4 种 | `fe452df` |
+| Provenance 双层语义 | manual 把 `ResolvedReference.provenance`（registry/fallback）与 `ref_ds._provenance[field]`（5 值→3 档）混淆 | 拆开，加 check 图标说明 | `cb72844` |
+| 多 ref/多 sim 内容 | Manual 仅一行注释，`(var × sim × ref)` Cartesian 未提；混合 grid+stn 共用 ref 的特殊处理未提 | user ch3-5 + dev ch3,8 + ops App C 加完整说明 | `5108d68` / `bf35970` / `5399d75` |
+| Schema 字段 inline 注释 | 19 个字段无注释，3 个错（`weight`/`metrics`/`scores`）→ appendix A 说明列空 | schema.py 注释批量补正；generator `_format_default` 缩短 dataclass repr | `3d1840a` |
+
+### Scanner / Registry / CLI（scanner.py + cli/data.py）
+
+完整审计：scanner 11 bug + 1 design feat + 1 stn 累加。按严重度分 4 批。
+
+| 严重度 | bug | 决议 | commit |
+|---|---|---|---|
+| CRITICAL | catalog 损坏被静默吞 → 下次写清空全部 | `_safe_load_catalog` raise；`_backup_then_write` 加 `.bak` | `3b80d20` |
+| HIGH | 一层嵌套 sub_dir 错位 → 不可运行 descriptor | `_find_nc_dir_with_descent` 替代 inline | `3b80d20` |
+| HIGH | partial-new variant 拖累已注册 variant 重写 | `find_new_datasets` 改 variant-级过滤 | `3b80d20` |
+| HIGH | 1D 站点变量被 `>=2` 维度过滤掉 | `min_dims = 1 if dtype=="stn" else 2` + `KNOWN_COORD_VAR_NAMES` | `3b80d20` |
+| HIGH | rescan 覆盖手编 description/category/years/timezone | Stage 6 `_preserve_user_edits` | `fe452df` |
+| HIGH | rescan 重生成 fulllist 覆盖手编 | `_finalize_descriptor` 看 existing.fulllist 是否存在 | `fe452df` |
+| HIGH | data_groupby 只输出 Year/Single | 新 `_detect_data_groupby` + `_classify_filename_date` | `fe452df` |
+| MEDIUM | tim_res provenance "scan" 撒谎（默认 Month 标 scan）| `_detect_tim_res` 无证据返回 ""，落 default | `fe452df` |
+| MEDIUM | 写 API 不清 registry singleton cache | `_invalidate_registry_caches` helper | `fe452df` |
+| MEDIUM | year regex 被 `v2010` 版本号污染 | `_YEAR_TOKEN` 加 lookaround | `fe452df` |
+| MEDIUM | 并发 register race | `_catalog_write_lock` 用 fcntl.flock | `5471ea2` |
+| LOW | `_detect_data_type_from_nc` 1D profile 返回 None | 改"任一空间轴 >1 → grid" | `5471ea2` |
+| LOW | tim_res 间隔 buckets 太松（30min → Hour）| 中心化容差窗口；未匹配返回 None | `5471ea2` |
+| DESIGN | 无 dry-run 预览 | `openbench data scan --dry-run` flag | `5471ea2` |
+| feat | 扫描深度 2 → 3 级 | `_find_nc_dir_with_descent(max_descent=2)` | `e3198ed` |
+| HIGH | stn 路径 multi-child 累加 + nc_dir 字母序最后 | 套用 `_find_nc_dir_with_descent` + 修 sub_dir 记录 | `6b62215` |
+| HIGH | `cli/data.py` register / register-profile 不走安全 helper | 改用 `_safe_load_catalog` + `_backup_then_write` | `ff50543` |
+| LOW | `_preserve_user_edits` 漏 timezone（key-presence 而非 truthy）| 加 `if "timezone" in existing` | `ff50543` |
+| LOW | 4 处 NC 句柄手写 close（异常时泄漏）| 全改 `with netCDF4.Dataset(...)` | `ff50543` |
+
+### 跨子系统（cli/model + Mod_Statistics + cache）
+
+| 模块 | 症状 | 决议 | commit |
+|---|---|---|---|
+| `cli/model.py register / remove_var` | 同 cli/data.py 漏 hardening | 改用 `_safe_load_catalog` + `_backup_then_write` + `_invalidate_registry_caches` | `2c0c451` |
+| `core/statistics/Mod_Statistics.py:remap_cdo` | 在 tempfile `with` 内 `xr.open_dataset` 后返回懒 DataArray，外层退出删除 temp file → 后续访问数据时空指 | 用 `with xr.open_dataset(...) as ds: ds = ds.load()` 提前完整加载 | `2c0c451` |
+| `runner/cache.py:_load` | corrupted JSON cache 被静默改 `{}` 后下次 mark_done 覆盖丢失诊断 | rename 到 `<cache>.corrupt-<ts>` 保留诊断 | `2c0c451` |
+
+### `data/regrid/` 死代码
+
+| 项 | 范围 | 决议 | commit |
+|---|---|---|---|
+| 5 处 `_*_class_remap_cdo` 嵌套函数 | 都定义未调；`regridder_cdo` 除自身外无 caller；~125 LOC | 删除嵌套函数；`regrid_cdo.py` 加 deprecated docstring 保留作 hook | `b8f5439` |
+| `regrid_wgs84.py:107` | `coords={"time": None}` 当无 time 时静默写 None coord 破坏 sortby | 仅在 ds 有 time 时加 coord | `b8f5439` |
+| `regrid_wgs84.py:96` | `print` 而非 logger | 改 `logger.info` | `b8f5439` |
+
+### `data/processing.py` + `Mod_Statistics`
+
+| 模块:行 | 症状 | 决议 | commit |
+|---|---|---|---|
+| `processing.py:2576` + `Mod_Statistics.py:258` | `subprocess.run(cmd, shell=True)` + f-string 拼路径，shell injection 风险（实际接近零）| 改 list 形式（与 `regrid_cdo.py:44` 一致）| `fa9c604` |
+| `processing.py:extract_station_data:2392` | `os.remove` 不在 try/finally：Parallel 抛异常时 flat NC 残留 | 移到 finally + 子 try/except | `fa9c604` |
+| `processing.py:_find_data_files:1711` | glob 不 escape prefix/suffix；含 `[/?/*` 时被错误解释为通配 | `glob.escape(prefix)` + `glob.escape(suffix)` | `fa9c604` |
+
+### `util/` 死代码清理
+
+| 模块 | LOC | 决议 | commit |
+|---|---|---|---|
+| `cache_cleanup.py` | 216 | 0 caller，删除 | `c623b31` |
+| `directory.py` | 153 | 0 caller，删除 | `c623b31` |
+| `fileio.py` | 466 | 0 caller，删除 | `c623b31` |
+| `memory.py` | 326 | 0 caller，删除 | `c623b31` |
+| `progress.py` | 278 | 0 caller，删除 | `c623b31` |
+
+合计 1394 LOC 删除，5 个 regression test 加入 `test_dead_code_cleanup.py` 防止再生。
+
+### `data/custom/` filter
+
+| 模块 | 症状 | 决议 | commit |
+|---|---|---|---|
+| `HydroWeb_filter.py` | 5 处 `sys.exit(1)` 杀整个 runner 进程 | 改为 `raise ValueError(...)`，由 `_preprocess_variable` 的 phase_errors 捕获 | `76be0af` |
+| `HydroWeb_filter.py:21,66` | tim_res 检查不一致：line 21 `=="1d"`，line 66 `!="d"`；实际值 `"D"` 让 line 21 永不匹配 → 全站点 Flag=False | 都改为 `=="d"`/`!="d"` | `76be0af` |
+| `HydroWeb_filter.py:20` | `print(station["ID"])` 每站点污染 stdout | 删除；其余 `logging.X(f"...")` 改用 module logger + %-style | `76be0af` |
+| 其他 4 个 filter | GEBA / CH4_FluxnetANN / LAI_Yuan2011 / ResOpsUS：均 clean，作为 gold standard | 不动 | — |
+
+### Manual：自定义 filter 文档矛盾
+
+| 文档 | 症状 | 决议 | commit |
+|---|---|---|---|
+| dev ch4 | "deprecated, don't write new custom filter" | 与代码 `data/custom/__init__.py:32-87` 公开支持用户 filter 矛盾 | `254d494` |
+
+dev ch4 重写为完整 §"custom：用户可扩展 filter"（搜索路径 + 函数契约 + info 字段表 + 错误处理 + 完整模板 + 5 现有 filter 速览）；user ch4 加 §"自定义 filter（高级）"作为简短引导。
+
+---
+
+## Audit 阶段总结（2026-04-30 全天）
+
+按子系统：
+
+| 子系统 | 真 bug | 死代码删除 | 测试新增 |
+|---|---|---|---|
+| Scanner / Registry / CLI | 17 | — | 28 |
+| 跨子系统（model/stats/cache）| 3 | — | 4 |
+| Regrid | 2 | 5 函数 + 1 LOC 重复 | — |
+| Processing + Mod_Statistics | 4 | — | 1 |
+| Runner.local 余下 | 1 | — | 1 |
+| Util 模块 | — | 5 模块 (1394 LOC) | 5 |
+| Custom filters | 3 | — | 3 |
+| **合计** | **30** | **5 模块 + ~125 LOC 嵌套函数** | **42** |
+
+按严重度：
+
+- CRITICAL: 1（catalog 损坏吞）
+- HIGH: 14（多 ref / scanner / cli / runner / custom）
+- MEDIUM: 9（provenance / cache / regex / 并发 / shell=True / processing 各项）
+- LOW: 5（边缘检测 / 时间间隔 / NC 句柄 / glob escape / etc.）
+- DESIGN: 1（dry-run）+ 1 feat（3 级深度）
+- 死代码: 5 模块 + 5 嵌套函数
+
+Manual 同步同期完成（commit `7196ed2` + `5108d68` + `bf35970` + `5399d75` + `f4ce622` + `d6ee362` + `cb72844` + `b8f5439` 顺带 + `254d494` filter guide）。三卷总页数：
+
+| 卷 | 写作期末 | Audit 期末 |
+|---|---|---|
+| user | 134 | 109 |
+| developer | 147 | 103 |
+| operations | 98 | 70 |
+| **合计** | **379** | **282** |
+
+注：页数下降是 layout 紧化 (`78d766f` -34%) + audit 期间事实修正去除冗长说明的综合效果。
+
+未审子系统：`gui/`、`visualization/` 31 个 Fig*.py。按当前发现密度估算各自仍有 3-8 个 medium 级问题积压。
