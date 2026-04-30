@@ -28,3 +28,11 @@
 | 2026-04-30 | src/openbench/cli/run.py:15,63-66 | `--remote` 标志 help text "Remote host or saved profile name" 与运行时行为脱节：传入后立刻 SystemExit(1) 且提示"Remote execution not yet implemented. Install openbench[remote] and use openbench gui"。脚本化使用会困惑 | UX bug，建议任一：(a) 在 help text 加 "[NOT IMPLEMENTED]" 前缀；(b) 隐藏标志直到 CLI 远程实现；(c) 真正实现 CLI 远程（可能在 runner/remote.py 已有底层）。Plan 5 (Operations) 时再统一审 | 未修 |
 | 2026-04-30 | src/openbench/cli/init_cmd.py:148 | **真 bug**：`openbench init` 写出 `reference: {sources: {<var>: <src>}}`（嵌套），但 `loader._build_reference` 期望 `reference: {<var>: <src>}`（flat）。结果：`init` 生成的 YAML 立刻被 `check` 拒绝，报 "reference.sources must be a string (source name), got dict"。 | 改为 flat：`config["reference"] = reference`（修法 A）；加端到端回归测试 `test_init_output_is_loadable` 防止再发生 | `67acd71` |
 | 2026-04-30 | src/openbench/cli/data.py:42, 54 | `openbench data download` 与 `openbench data status` 子命令是 stub：download 打印"not yet implemented"；status 报告 registry 数量但 cache 部分写"not yet implemented"。help text 不写明 → 用户预期与实际不符 | 不算崩溃 bug，但 help text 应加 `[NOT IMPLEMENTED]` 前缀；或在 spec/Roadmap 中标注。Manual 第 4 章如实说明 | 未修（文档侧已说明） |
+| 2026-04-30 | docs/manual/user/chapters/04-variables-references.tex | 中文 body 字体（fandol）没 U+2194 (↔) glyph；日志大量 "Missing character" 警告 | 把 "变量↔数据集" 替换为 "变量到数据集" | 已修（写作期内自修）|
+
+## 写作期总结（用户卷完成时）
+
+- 真 bug 1 个：`init_cmd.py` 写出的 reference 嵌套结构与 loader 不兼容 → 已修 + 加端到端回归测试 (`67acd71`)
+- UX/Roadmap 问题 2 个（CLI `--remote` 未实现、`data download/status` stub）：未修，文档侧如实说明
+- LaTeX/字体/工具链问题 5 个：`fandol` fontset、`-r ../latexmkrc`、`underscore` 包、`Menlo` monofont、`↔` 缺字；全部已修
+- 写作错字 4 个：`\end{itemize>` / `\end{enumerate>` / `\end{minted>`；写完即修

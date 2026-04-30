@@ -1,0 +1,226 @@
+% docs/manual/user/appendices/E-error-messages.tex
+% 附录 E：错误信息与日志参考
+
+\chapter{错误信息与日志参考}
+
+本附录按来源分组列出 \openbench{} 关键错误与警告消息：含义、可能原因、建议处置。完整的诊断流程见第 10 章。
+
+\noteinline{此附录目前由人工编纂。未来可能引入半自动生成（扫描 \modname{logging\_system.py} 与 \modname{exceptions.py} 的调用点）。}
+
+\section{Config 加载（\modname{config.loader}）}
+
+\subsection{\texttt{Missing required section}}
+
+\textbf{级别}：ERROR\quad \textbf{抛异常}：\modname{ConfigError}
+
+\textbf{消息}：\texttt{Missing required section: 'X'} （X 取自 \texttt{project} / \texttt{evaluation} / \texttt{reference} / \texttt{simulation}）
+
+\textbf{含义}：YAML 顶层缺必填块。
+
+\textbf{处置}：第 3 章列出四个必填块，至少要有。
+
+\subsection{\texttt{Missing required field}}
+
+\textbf{消息}：\texttt{Missing required field: project.X}
+
+\textbf{含义}：\yamlkey{project} 缺 \yamlkey{name} / \yamlkey{output_dir} / \yamlkey{years}。
+
+\subsection{\texttt{years must be a list of [start\_year, end\_year]}}
+
+\textbf{含义}：\yamlkey{years} 不是 2 个整数的列表。
+
+\textbf{处置}：写 \yamlkey{years: [2010, 2014]} 不要 \yamlkey{years: 2010} 或全部年份枚举。
+
+\subsection{\texttt{years must be integers}}
+
+\textbf{含义}：\yamlkey{years} 含浮点或字符串。
+
+\subsection{\texttt{start year must be <= end year}}
+
+\textbf{处置}：检查 yaml 是否写反了。
+
+\subsection{\texttt{time\_alignment must be one of ...}}
+
+\textbf{含义}：\yamlkey{project.time_alignment} 拼错或无效值。
+
+\textbf{处置}：合法值仅 \texttt{intersection} / \texttt{per\_pair} / \texttt{strict}。注意下划线。
+
+\subsection{\texttt{Variable 'X' is in evaluation.variables but has no entry in 'reference'}}
+
+\textbf{含义}：\yamlkey{evaluation.variables} 列了 X 但 \yamlkey{reference} 没映射。
+
+\textbf{处置}：在 \yamlkey{reference} 加一行 \yamlkey{X: <source\_name>}。
+
+\subsection{\texttt{reference.X must be a string (source name), got dict}}
+
+\textbf{含义}：\yamlkey{reference} 写成了嵌套结构（如 \yamlkey{sources: ...}）。
+
+\textbf{处置}：\yamlkey{reference} 必须是 flat var→source string 映射。详见第 3 章。
+
+\subsection{\texttt{simulation.X must be a mapping}}
+
+\textbf{含义}：某 simulation entry 不是 dict（写成了字符串或列表）。
+
+\subsection{\texttt{simulation.X must have a 'model' field}}
+
+\textbf{处置}：每个 simulation 至少要 \yamlkey{model} + \yamlkey{root_dir}。
+
+\subsection{\texttt{!include file not found}}
+
+\textbf{含义}：\texttt{!include} 引用的文件不存在（路径相对于父 yaml 所在目录）。
+
+\subsection{\texttt{!include pattern matched no files}}
+
+\textbf{含义}：glob 匹配 \texttt{!include sim/*.yaml} 没找到任何文件。
+
+\section{Reference 解析（\modname{config.resolver}）}
+
+\subsection{\texttt{Reference 'X' not in registry}}
+
+\textbf{含义}：\yamlkey{reference.<var>} 指定的数据集名在 catalog 中找不到（含 \texttt{\_LowRes}/\texttt{\_MidRes} 后缀解析失败）。
+
+\textbf{处置}：\cli{openbench data list --variable <var>} 看可用名。
+
+\subsection{\texttt{Multiple matches for X}}
+
+\textbf{含义}：base 名解析为多个候选（如 GLEAM\_v4.2a 同时存在 LowRes 与 MidRes 而 \yamlkey{project.grid_res} 又不能消歧）。
+
+\textbf{处置}：写完整名（带后缀）。
+
+\subsection{\texttt{tim\_res / grid\_res default — not confirmed}}
+
+\textbf{级别}：WARN（\yamlkey{strict_reference: true} 时升级为 ERROR）
+
+\textbf{含义}：catalog 中该字段是默认值而非显式声明。可能不准确。
+
+\textbf{处置}：如果你确认元数据，把值显式写入数据集 catalog；或接受默认。
+
+\section{Runner（\modname{runner.local}）}
+
+\subsection{\texttt{Resource temporarily unavailable}（HDF5 lock）}
+
+\textbf{含义}：HDF5 ≥ 1.14 锁了文件。
+
+\textbf{处置}：\cli{openbench run} 已自动设 \texttt{HDF5\_USE\_FILE\_LOCKING=FALSE}；其他场景见第 10 章。
+
+\subsection{\texttt{TimeAlignmentError: No common time window}}
+
+\textbf{含义}：sim 与 ref 时间窗口无重叠。
+
+\textbf{处置}：调 \yamlkey{years}、改 \yamlkey{time_alignment}、或排查输入数据时段。
+
+\subsection{\texttt{No NC files matching pattern}}
+
+\textbf{含义}：simulation entry 的 \yamlkey{root_dir} 下找不到符合 profile 文件名约定的 NC。
+
+\textbf{处置}：\cli{ls <root\_dir>} 看实际文件名；调 \yamlkey{prefix}/\yamlkey{suffix}。
+
+\subsection{\texttt{Variable X not found in NC file}}
+
+\textbf{含义}：profile 期望的 NC 内变量名（\yamlkey{varname}）在文件里没有。
+
+\textbf{处置}：\cli{ncdump -h file.nc} 看实际变量名；在 simulation entry 里覆盖 \yamlkey{variables.X.varname}；或注册 fallback。
+
+\subsection{\texttt{Insufficient overlap years}}
+
+\textbf{含义}：sim×ref 重叠年数 < \yamlkey{min_year_threshold}（默认 3）。
+
+\textbf{处置}：减小阈值，或扩大 sim 时段。
+
+\section{Data Pipeline（\modname{data.pipeline} 与 \modname{data.regrid}）}
+
+\subsection{\texttt{Source CRS detection failed}}
+
+\textbf{含义}：reference NC 缺标准坐标系元数据，\openbench{} 无法判断经纬度方向。
+
+\textbf{处置}：手动用 \cli{ncatted} 加 CF 标准属性。
+
+\subsection{\texttt{Regridding failed: target res too fine}}
+
+\textbf{含义}：\yamlkey{project.grid_res} 比 source 还细，\openbench{} 默认不做"上采样"（避免假精度）。
+
+\textbf{处置}：调高 \yamlkey{grid_res}。
+
+\subsection{\texttt{No matching stations in fulllist}}
+
+\textbf{含义}：fulllist CSV 中的站点经纬度都落在 \yamlkey{lat_range}/\yamlkey{lon_range} 之外。
+
+\textbf{处置}：扩大范围或换站点列表。
+
+\section{Visualization（\modname{visualization.Fig\_*}）}
+
+\subsection{\texttt{Could not generate figure: empty dataset}}
+
+\textbf{级别}：WARN（不阻断）
+
+\textbf{含义}：传给 Fig 模块的数据全为 NaN。
+
+\textbf{处置}：上溯到 metric 计算，常常是数据预处理出了问题。
+
+\subsection{\texttt{cartopy crs initialization failed}}
+
+\textbf{含义}：\modname{cartopy} 系统库缺失。
+
+\textbf{处置}：见第 1 章安装。
+
+\section{Report（\modname{util.report}）}
+
+\subsection{\texttt{PDF generation skipped (xhtml2pdf not installed)}}
+
+\textbf{级别}：INFO（不算错）
+
+\textbf{含义}：\cli{[report]} extra 没装；HTML 仍正常生成。
+
+\subsection{\texttt{Report template not found}}
+
+\textbf{含义}：jinja2 模板缺失（罕见，通常是开发环境装错）。
+
+\textbf{处置}：重新 \cli{pip install --force-reinstall openbench}。
+
+\section{GUI（\modname{gui.*}）}
+
+\subsection{\texttt{Could not load Qt platform plugin}}
+
+\textbf{含义}：在无图形系统的环境（HPC、纯 SSH）启动了 GUI。
+
+\textbf{处置}：GUI 是本地客户端，不要在远程服务器跑。第 8 章详解。
+
+\subsection{\texttt{ImportError: openbench[gui] not installed}}
+
+\textbf{处置}：\cli{pip install "openbench[gui]"}。
+
+\section{Migration（\modname{config.migration}）}
+
+\subsection{\texttt{Migration failed: ...}}
+
+\textbf{常见根因}：
+
+\begin{itemize}
+  \item 旧 namelist 格式不规范
+  \item 引用的 sub-config 文件路径相对解析错
+  \item 字段类型不一致（v1.x 把 year 写成字符串）
+\end{itemize}
+
+\textbf{处置}：先手动检查老 config 的语法，再跑 migrate。
+
+\section{INFO 级别的关键消息}
+
+下列消息不是错误，但常用于 debug：
+
+\begin{itemize}
+  \item \texttt{Starting evaluation: <name>}：run 阶段开始
+  \item \texttt{Queued <var>: sim=X ref=Y}：task 入队（每对都打一条）
+  \item \texttt{Cache hit: skipping <task\_key>}：增量缓存命中
+  \item \texttt{Phase: preprocess / evaluation / comparison / statistics / report}：阶段切换
+  \item \texttt{Output written: <file>}：每个产出写入
+\end{itemize}
+
+\section{获取更多帮助}
+
+如果错误消息不在本附录：
+
+\begin{enumerate}
+  \item 用 \cli{openbench --help} / \cli{openbench <cmd> --help} 查 CLI 文档
+  \item 第 10 章的"一般诊断流程"
+  \item GitHub Issues 提交问题，附带 \cli{openbench version} 与日志摘要
+\end{enumerate}

@@ -1,0 +1,16 @@
+% docs/manual/user/appendices/C-reference-datasets.tex
+% 附录 C：Reference 数据集清单（自动生成）
+
+\chapter{Reference 数据集清单}
+
+本附录列出 \openbench{} registry 中全部已注册的 reference 数据集，按物理类别分组。
+
+表内容由 \cli{make generated} 从 \file{src/openbench/data/registry/reference\_catalog.yaml} 自动产出。要更新表格：
+
+\begin{minted}{bash}
+cd docs/manual && make generated
+\end{minted}
+
+\noteinline{某些数据集（如 GLEAM\_v4.2a、ERA5LAND）有 \texttt{\_LowRes} 与 \texttt{\_MidRes} 两个分辨率版本，列在不同行。详见用户卷第 4 章的"分辨率后缀自动解析"部分。}
+
+\input{../_generated/reference_table}

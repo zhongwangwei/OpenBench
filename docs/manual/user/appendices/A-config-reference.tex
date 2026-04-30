@@ -1,0 +1,14 @@
+% docs/manual/user/appendices/A-config-reference.tex
+% 附录 A：完整配置项参考（自动生成）
+
+\chapter{完整配置项参考}
+
+本附录列出 \openbench{} 配置文件 \file{openbench.yaml} 全部字段：每个 dataclass、每个字段的类型、默认值、内联说明。
+
+下表内容由 \cli{make generated} 从 \file{src/openbench/config/schema.py} 自动产出，与代码同步。如修改源码后表格未更新，运行：
+
+\begin{minted}{bash}
+cd docs/manual && make generated
+\end{minted}
+
+\input{../_generated/config_schema}

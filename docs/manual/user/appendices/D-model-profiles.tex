@@ -1,0 +1,12 @@
+% docs/manual/user/appendices/D-model-profiles.tex
+% 附录 D：Model Profile 清单（自动生成）
+
+\chapter{Model Profile 清单}
+
+本附录列出 \openbench{} registry 中全部已注册的 model profile。每个 profile 包含一组标准变量名到模型私有 NC 变量名的映射。
+
+表内容由 \cli{make generated} 从 \file{src/openbench/data/registry/model\_catalog.yaml} 自动产出。
+
+\noteinline{要查看某个 profile 的完整变量映射（含单位、文件名模式、fallback、单位换算表达式），用 \cli{openbench model show MODEL\_NAME}。详见用户卷第 5 章。}
+
+\input{../_generated/model_table}
