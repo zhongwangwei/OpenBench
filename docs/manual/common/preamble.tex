@@ -14,6 +14,20 @@
   pdfencoding=auto
 ]{hyperref}
 
+% --- 紧凑页面布局（节约页数）---
+\usepackage[a4paper, top=2.2cm, bottom=2.2cm, left=2cm, right=2cm, headheight=14pt]{geometry}
+
+% --- 紧凑章节首页（titlesec 与 ctex 兼容）---
+\usepackage[compact]{titlesec}
+\titleformat{\chapter}[hang]
+  {\Huge\bfseries}      % 字号样式
+  {\thechapter\quad}    % 编号
+  {0pt}                 % 编号与标题间距
+  {\Huge}               % 标题前置
+\titlespacing*{\chapter}{0pt}{-20pt}{16pt}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
 % --- 文本模式下让下划线 _ 不再触发 math subscript 报错 ---
 % 写 \yamlkey{strict_reference} 这类带 _ 的字段时不必手动 \_ 转义
 \usepackage{underscore}

@@ -3,7 +3,8 @@
 
 % fontset=fandol：使用 ctex 内置的 fandol 中文字体，跨平台保底
 % 如要使用系统字体（macOS Songti SC / Linux Noto CJK），改为 fontset=none + \setCJKmainfont
-\documentclass[UTF8,fontset=fandol]{ctexbook}
+% oneside,openany：单面打印 + 章节就近开页（不强制奇数页，省大量空白页）
+\documentclass[UTF8,fontset=fandol,oneside,openany]{ctexbook}
 
 % 共享配置
 \input{common/preamble}
