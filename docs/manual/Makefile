@@ -11,9 +11,15 @@
 LATEXMK = latexmk
 RM = rm -rf
 
-.PHONY: all user dev ops master clean probe
+.PHONY: all user dev ops master clean probe generated
 
-all: user dev ops master
+all: generated user dev ops master
+
+# 自动生成 LaTeX 片段（参考章节）
+# 必须从 repo root 执行才能 import docs.manual.scripts.*
+generated:
+	cd ../.. && python -m docs.manual.scripts.run_all
+
 
 # 子目录编译时显式指定 ../latexmkrc，避免落入 latexmk 的 DVI 默认模式
 SUBRC = -r ../latexmkrc
