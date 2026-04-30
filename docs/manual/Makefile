@@ -41,7 +41,8 @@ clean:
 	-cd developer && $(LATEXMK) $(SUBRC) -C main_developer.tex
 	-cd operations && $(LATEXMK) $(SUBRC) -C main_operations.tex
 	-$(LATEXMK) -C manual.tex
-	$(RM) user/_minted-* developer/_minted-* operations/_minted-* _minted-*
+	$(RM) user/_minted user/_minted-* developer/_minted developer/_minted-* operations/_minted operations/_minted-* _minted _minted-*
+	$(RM) user/*.xdv developer/*.xdv operations/*.xdv *.xdv
 
 probe:
 	@echo "=== xelatex ==="
