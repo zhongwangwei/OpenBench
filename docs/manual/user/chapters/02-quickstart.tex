@@ -1,0 +1,278 @@
+% docs/manual/user/chapters/02-quickstart.tex
+% 第 2 章：Quick Start
+
+\chapter{Quick Start}
+
+本章用 10 分钟带你跑通第一个完整评估：从无到有生成一份配置文件、验证它、启动评估、看输出。后续章节会逐项深入；本章只关心"先把流水线跑起来"。
+
+\section{工作流总览}
+
+\openbench{} 的标准工作流是三个命令：
+
+\begin{enumerate}
+  \item \cli{openbench init}\quad 交互式向导生成 \file{openbench.yaml}
+  \item \cli{openbench check openbench.yaml}\quad 验证配置 + 检查数据
+  \item \cli{openbench run openbench.yaml}\quad 启动评估
+\end{enumerate}
+
+\begin{tipBox}
+如果你已经有现成的配置文件（来自队友、模板、或前一次评估），可以跳过 \cli{init} 直接进入 \cli{check}。
+\end{tipBox}
+
+\section{步骤 1：生成最小配置（\cli{openbench init}）}
+
+启动向导：
+
+\begin{minted}{bash}
+openbench init
+\end{minted}
+
+向导会按 5 个章节交互式询问，所有问题都有合理默认值，回车即可接受：
+
+\begin{exampleBox}[向导对话示例]
+\begin{minted}{text}
+OpenBench Configuration Wizard
+
+1. Project Settings
+  Project name [my-evaluation]: demo
+  Output directory [./output]:
+  Start year [2004]: 2010
+  End year [2010]: 2014
+
+2. Evaluation Variables
+  Available variables (by category):
+  Bio:
+    [1] Burned_Area
+    [2] Gross_Primary_Productivity
+    ...
+  Water:
+    [10] Evapotranspiration
+    [11] Total_Runoff
+    ...
+  Select variables (comma-separated numbers, or 'all') [all]: 10,11
+
+3. Reference Data Sources
+  Evapotranspiration - available sources:
+    [1] GLEAM_v4.2a_LowRes (grid, Month)
+    [2] FLUXCOM-X-BASE_LowRes (grid, Month)
+  Select for Evapotranspiration [1]:
+  Total_Runoff - available sources:
+    [1] GRUN_ENSEMBLE_LowRes (grid, Month)
+  Select for Total_Runoff [1]:
+
+4. Simulation Models
+  Known models:
+    [1] BCC_AVIM (10 variables)
+    [2] CLM5 (12 variables)
+    [3] CoLM2024 (10 variables)
+    ...
+  Model name (or number from list, empty to finish): 3
+  Data root directory for CoLM2024: /data/colm2024
+  Label for this run [CoLM2024]:
+  Added: CoLM2024
+  Model name (or number from list, empty to finish):
+
+5. Options
+  Enable comparison? [Y/n]:
+  Enable statistics? [y/N]:
+
+Generated openbench.yaml
+  Next: openbench check openbench.yaml
+\end{minted}
+\end{exampleBox}
+
+\subsection{产出的 YAML}
+
+向导写出的 \file{openbench.yaml} 形如：
+
+\begin{minted}{yaml}
+project:
+  name: demo
+  output_dir: ./output
+  years:
+  - 2010
+  - 2014
+evaluation:
+  variables:
+  - Evapotranspiration
+  - Total_Runoff
+reference:
+  sources:
+    Evapotranspiration: GLEAM_v4.2a_LowRes
+    Total_Runoff: GRUN_ENSEMBLE_LowRes
+simulation:
+  CoLM2024:
+    model: CoLM2024
+    root_dir: /data/colm2024
+comparison:
+  enabled: true
+\end{minted}
+
+这就是 \openbench{} 配置的最小可运行结构：4 个顶层 key（\yamlkey{project} / \yamlkey{evaluation} / \yamlkey{reference} / \yamlkey{simulation}）+ 1 个可选 \yamlkey{comparison}。所有未列出的字段使用 \yamlkey{schema} 默认值（详见用户卷附录 A）。
+
+\begin{noteBox}
+向导只产出"最小骨架"。要利用 \openbench{} 的全部能力（自定义指标、统计、远程运行、IGBP/PFT 分组等），需要手动编辑配置文件加字段，详见第 3-7 章。
+\end{noteBox}
+
+\section{步骤 2：检查配置（\cli{openbench check}）}
+
+\begin{minted}{bash}
+openbench check openbench.yaml
+\end{minted}
+
+这一步**不读任何模型/参考数据本身**，只做以下校验：
+
+\begin{itemize}
+  \item YAML 语法正确
+  \item 必填字段齐全（schema 校验）
+  \item \yamlkey{project.years} 范围合法（start <= end）
+  \item Reference 数据集名能在 registry 里找到（含 \texttt{\_LowRes} / \texttt{\_MidRes} 后缀自动解析）
+  \item 解析过程中标注 provenance（数据集元信息的可信度）
+\end{itemize}
+
+成功输出：
+
+\begin{exampleBox}[check 通过的输出]
+\begin{minted}{text}
+Config validation:
+  ✓ YAML syntax valid
+  ✓ Schema validation passed
+  ✓ Year range [2010, 2014] valid
+
+Reference data (2 sources):
+  ✓ Evapotranspiration → GLEAM_v4.2a_LowRes (grid, Month, 0.5°)
+  ✓ Total_Runoff → GRUN_ENSEMBLE_LowRes (grid, Month, 0.5°)
+
+Simulation data (1 models):
+  ✓ CoLM2024 (model: CoLM2024, root: /data/colm2024)
+
+Options:
+  Time alignment: intersection
+  Unified mask: True
+  Comparison: True
+  Statistics: False
+
+✓ Config valid (2 variables, 2 references, 1 simulations). Ready to run.
+\end{minted}
+\end{exampleBox}
+
+\subsection{常见 check 失败}
+
+\textbf{Reference 数据集找不到}：
+
+\begin{minted}{text}
+  ✗ Evapotranspiration → GLEAM_v999: not in registry
+\end{minted}
+
+修法：用 \cli{openbench data list} 查看可用名称，或检查 \texttt{\_LowRes}/\texttt{\_MidRes} 后缀。
+
+\textbf{Provenance 警告}：
+
+\begin{minted}{text}
+  ✓ Evapotranspiration → GLEAM_v4.2a_LowRes
+    ⚠ tim_res: Month (default — not confirmed from NC or profile)
+\end{minted}
+
+意思是注册表里数据集的"时间分辨率"字段是默认假设值，没在元数据里被验证。如果你启用 \yamlkey{project.strict_reference: true}，这种警告会变成错误。详见第 6 章。
+
+\textbf{歧义解析}：
+
+\begin{minted}{text}
+  ✗ Soil_Moisture → ESA_CCI_SM
+    Multiple matches: ESA_CCI_SM_v9.0_LowRes, ESA_CCI_SM_v9.0_MidRes
+\end{minted}
+
+修法：把 \yamlkey{reference.sources} 里的简称改为完整的 \texttt{\_LowRes} 或 \texttt{\_MidRes} 全名。
+
+\section{步骤 3：运行评估（\cli{openbench run}）}
+
+\begin{minted}{bash}
+openbench run openbench.yaml
+\end{minted}
+
+这是真正读数据、做计算、出图的命令。典型输出：
+
+\begin{exampleBox}[run 成功的输出]
+\begin{minted}{text}
+Running evaluation: demo
+  Phase: preprocess
+    Loading reference: GLEAM_v4.2a_LowRes
+    Regridding to 0.5° ...
+    ...
+  Phase: evaluation
+    Computing metrics for Evapotranspiration ...
+    Computing metrics for Total_Runoff ...
+  Phase: comparison
+    Cross-model comparison enabled, 1 model(s)
+  Phase: visualization
+    Writing 23 figures to output/demo/figures/
+  Phase: report
+    Generated output/demo/report.html
+
+✓ Evaluation complete
+  Output: output/demo
+  Variables: 2
+  Simulations: 1
+\end{minted}
+\end{exampleBox}
+
+\subsection{常用运行选项}
+
+\begin{minted}{bash}
+# 先做一次 dry-run（验证 + 不实际计算）
+openbench run openbench.yaml --dry-run
+
+# 限制只跑某几个变量（覆盖配置文件）
+openbench run openbench.yaml --variables Evapotranspiration
+
+# 覆盖并行核数（覆盖配置文件 project.num_cores）
+openbench run openbench.yaml --cores 8
+
+# 只重做 comparison 阶段，跳过评估（前提：评估输出已存在）
+openbench run openbench.yaml --comparison-only
+
+# 输出中间 runner / namelist 配置到 output/<run>/debug/
+openbench run openbench.yaml --dump-config
+\end{minted}
+
+\warninline{\cli{--remote} 标志当前在 CLI 中尚未实现，传入会立刻退出并提示用 GUI。运维卷第 3 章会详细介绍远程执行的现状与替代方案。}
+
+\section{步骤 4：看输出目录}
+
+评估完成后，\file{output/demo/} 大致结构：
+
+\begin{minted}{text}
+output/demo/
+├── config.yaml              # 本次评估使用的完整配置（含解析后默认值）
+├── debug/                   # 仅当 --dump-config 时存在
+│   ├── runner_config.yaml
+│   ├── main_nl.yaml
+│   ├── ref_nml.yaml
+│   ├── sim_nml.yaml
+│   └── fig_nml.yaml
+├── data/                    # 预处理后的中间数据（zarr 缓存）
+├── evaluation/
+│   ├── Evapotranspiration/
+│   │   ├── CoLM2024_metrics.csv
+│   │   ├── CoLM2024_scores.csv
+│   │   └── ...
+│   └── Total_Runoff/...
+├── comparison/              # 多模型对比表（>= 2 个 simulation 时）
+├── figures/                 # 全部可视化产出
+│   ├── geo/                 # 地理分布图
+│   ├── portrait/            # portrait plot
+│   ├── radar/               # 雷达图
+│   └── ...
+└── report.html              # 总结报告（[report] extra 启用时）
+\end{minted}
+
+第 7 章会逐项解释这些目录的内容。
+
+\section{下一步}
+
+\begin{itemize}
+  \item 想了解配置文件的全部字段：去第 3 章
+  \item 想看 56 个评估变量与 67 个 reference 数据集的全貌：去第 4 章
+  \item 想知道 \openbench{} 在每个阶段做什么：去第 6 章
+  \item 想用 GUI 而非命令行：去第 8 章
+\end{itemize}

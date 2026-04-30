@@ -14,6 +14,10 @@
   pdfencoding=auto
 ]{hyperref}
 
+% --- 文本模式下让下划线 _ 不再触发 math subscript 报错 ---
+% 写 \yamlkey{strict_reference} 这类带 _ 的字段时不必手动 \_ 转义
+\usepackage{underscore}
+
 % --- 表格 ---
 \usepackage{booktabs}
 \usepackage{longtable}
@@ -32,6 +36,16 @@
 \definecolor{obred}{HTML}{B23A3A}
 \definecolor{obgreen}{HTML}{2E7D32}
 \definecolor{obgray}{HTML}{4A4A4A}
+
+% --- 等宽字体（minted 默认 lmmono 没有 ✓✗ 等 Unicode glyph，换 Menlo/DejaVu 兜底）---
+\usepackage{fontspec}
+\IfFontExistsTF{Menlo}{%
+  \setmonofont{Menlo}[Scale=0.85]
+}{%
+  \IfFontExistsTF{DejaVu Sans Mono}{%
+    \setmonofont{DejaVu Sans Mono}[Scale=0.85]
+  }{}%
+}
 
 % --- 代码高亮 ---
 \usepackage{minted}
