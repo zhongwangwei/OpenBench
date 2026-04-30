@@ -523,6 +523,15 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
         ref_stn_data_dirs: dict[str, str] = {}
         # ref_source -> flat ref NC path (only valid while a grid-only path lives there)
         ref_flat_paths: dict[str, str] = {}
+        # Track refs whose flat NC may need restoration because a stn-involved
+        # prep deleted it but the variable also has grid×grid tasks pending.
+        # extract_station_data_if_needed (processing.py) deletes the shared flat
+        # at data/<var>_ref_<ref>_<varname>.nc as part of its cleanup; subsequent
+        # grid evaluation reads exactly that path and would fail mid-run.
+        refs_with_stn_prep: set[str] = set()
+        refs_with_grid_tasks: set[str] = set()
+        # Remember a representative grid task per ref for end-of-loop restoration
+        first_grid_task_per_ref: dict[str, dict[str, Any]] = {}
         phase_errors: list[dict[str, Any]] = []
 
         for task in vtasks:
@@ -534,6 +543,14 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                 sim_dtype = info.get("sim_data_type", "grid")
                 is_stn_path = (ref_dtype == "stn") or (sim_dtype == "stn")
                 prep_key = (ref_source, sim_source if is_stn_path else "_grid")
+
+                # Track whether this ref ever sees stn-involved or grid-only paths
+                # for end-of-loop flat-NC restoration when both kinds coexist.
+                if is_stn_path:
+                    refs_with_stn_prep.add(ref_source)
+                else:
+                    refs_with_grid_tasks.add(ref_source)
+                    first_grid_task_per_ref.setdefault(ref_source, task)
 
                 processor = DatasetProcessing(info)
 
@@ -634,6 +651,41 @@ def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: b
                     logger.exception(
                         "Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source
                     )
+
+        # End-of-loop flat-NC restoration:
+        # If a ref had any stn-involved prep AND any grid×grid task in this
+        # variable, the stn prep's extract_station_data_if_needed deleted
+        # the shared flat NC at data/<var>_ref_<ref>_<varname>.nc. The
+        # downstream grid evaluation reads that exact path and would crash
+        # with FileNotFoundError. Restore by re-running grid prep once per
+        # affected ref. The restored prep produces a fresh flat NC and
+        # does NOT trigger station extraction (sim is grid).
+        refs_needing_restore = refs_with_stn_prep & refs_with_grid_tasks
+        for ref_to_restore in sorted(refs_needing_restore):
+            grid_task = first_grid_task_per_ref.get(ref_to_restore)
+            if grid_task is None:
+                continue
+            try:
+                logger.info(
+                    "Restoring flat ref NC for %s (%s) after stn-involved prep "
+                    "deleted it (variable also has grid×grid tasks)",
+                    var_name, ref_to_restore,
+                )
+                info = _build_bridge_runtime_info(grid_task)
+                DatasetProcessing(info).prepare_source("ref")
+            except Exception as exc:
+                phase_errors.append(
+                    _make_phase_error(
+                        "preprocess",
+                        f"flat-ref restoration failed: {exc}",
+                        variable=var_name,
+                        ref=ref_to_restore,
+                    )
+                )
+                logger.exception(
+                    "Failed to restore flat ref NC for %s (%s)",
+                    var_name, ref_to_restore,
+                )
 
         return phase_errors
 

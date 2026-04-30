@@ -1551,14 +1551,16 @@ def test_preprocess_mixed_grid_and_stn_sims_with_same_grid_ref(tmp_path, monkeyp
     result = run_evaluation(cfg)
     assert result["status"] == "success", result.get("errors")
 
-    # The ref preprocessing must run TWICE for RefGrid:
-    # - once for the grid×grid path (SimGrid)
-    # - once for the stn-involved path (SimStn) — the stn extraction would
-    #   delete the flat NC, so reusing the grid prep is unsafe
+    # The ref preprocessing must run THREE times for RefGrid:
+    # - once for the grid×grid path (SimGrid) — flat NC created
+    # - once for the stn-involved path (SimStn) — stn extraction deletes flat
+    # - once at end of loop to RESTORE flat (because grid×grid evaluation
+    #   downstream reads data/<var>_ref_<ref>_<varname>.nc)
     ref_calls_for_refgrid = [c for c in prepare_calls if c[0] == "ref" and c[1] == "RefGrid"]
-    assert len(ref_calls_for_refgrid) == 2, (
-        "Same grid ref reused across grid and stn sims should trigger 2 ref preps "
-        f"(one grid, one stn-pair); got {ref_calls_for_refgrid}"
+    assert len(ref_calls_for_refgrid) == 3, (
+        "Same grid ref reused across grid and stn sims should trigger 3 ref preps "
+        "(grid + stn-pair + restoration); "
+        f"got {ref_calls_for_refgrid}"
     )
     sim_dtypes_seen = {c[3] for c in ref_calls_for_refgrid}
     assert sim_dtypes_seen == {"grid", "stn"}, (
@@ -1624,3 +1626,156 @@ def test_cache_validation_pattern_includes_ref_source(tmp_path):
     task_refa = dict(task, ref_source="RefA")
     matches_a = _find_existing_outputs(cache_dir, task_refa)
     assert len(matches_a) == 2, f"RefA should find its 2 files, got {matches_a}"
+
+
+def test_preprocess_grid_stn_grid_sequence_restores_deleted_flat(tmp_path, monkeypatch):
+    """Grid → stn → grid sequence with same ref must end with flat NC present.
+
+    Regression: bf561bc dedupes grid×grid prep by (ref_source, "_grid").
+    Sequence [SimGrid1, SimStn, SimGrid2] for a single grid ref:
+      - Task 1 (grid): prep runs, flat NC at data/<var>_ref_<ref>_<v>.nc created
+      - Task 2 (stn): prep runs, extract_station_data DELETES flat NC
+      - Task 3 (grid): dedupe key (RefA, "_grid") already done → SKIPPED.
+        Flat NC is gone; downstream Evaluation_grid reads the missing path
+        and crashes with FileNotFoundError.
+
+    Fix: end-of-loop restoration. After all per-task prep, if any ref had
+    BOTH stn-involved prep AND grid×grid tasks, re-run grid prep once to
+    restore the flat NC.
+
+    This test simulates the deletion in the FakeProcessor, then asserts
+    the flat NC exists on disk after _preprocess_variable returns.
+    """
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(
+            name="case", output_dir=str(tmp_path), years=[2000, 2001],
+            generate_report=False, unified_mask=False,
+        ),
+        evaluation=EvaluationConfig(variables=["LH"]),
+        reference=ReferenceConfig(sources={"LH": "RefGrid"}),
+        # Three sims: grid, stn, grid — the sequence the reviewer probed
+        simulation={
+            "SimGrid1": SimulationEntry(model="MG1", root_dir=str(tmp_path)),
+            "SimStn": SimulationEntry(model="MS", root_dir=str(tmp_path)),
+            "SimGrid2": SimulationEntry(model="MG2", root_dir=str(tmp_path)),
+        },
+        comparison=ComparisonConfig(enabled=False, items=[]),
+        statistics=StatisticsConfig(enabled=False, items=[]),
+    )
+
+    legacy = {
+        "general": {
+            "basename": "case", "basedir": str(tmp_path),
+            "num_cores": 1, "unified_mask": False, "generate_report": False,
+        },
+        "evaluation_items": {"LH": True},
+        "metrics": {"bias": True}, "scores": {"Overall_Score": True},
+        "comparisons": {}, "statistics": {},
+    }
+    main_nl = {
+        "general": {
+            "basename": "case", "basedir": str(tmp_path),
+            "num_cores": 1, "unified_mask": False,
+            "compare_tim_res": "Month", "compare_grid_res": 0.5,
+            "compare_tzone": 0, "syear": 2000, "eyear": 2001,
+            "time_alignment": "intersection",
+        },
+    }
+    ref_nml = {
+        "general": {"LH_ref_source": "RefGrid"},
+        "LH": {"RefGrid_data_type": "grid"},
+    }
+    sim_nml = {
+        "general": {"LH_sim_source": ["SimGrid1", "SimStn", "SimGrid2"]},
+        "LH": {
+            "SimGrid1_data_type": "grid",
+            "SimStn_data_type": "stn",
+            "SimGrid2_data_type": "grid",
+        },
+    }
+
+    import openbench.config.adapter as adapter
+    import openbench.core.evaluation as evaluation
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    case_root = tmp_path / "case" / "case"
+    data_dir = case_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    flat_nc = data_dir / "LH_ref_RefGrid_rv.nc"
+
+    prepare_calls: list[tuple[str, str, str, str]] = []  # (ds, ref, sim, sim_dtype)
+
+    def fake_build_bridge_runtime_info(task):
+        sim = task["sim_source"]
+        sim_dtype = "stn" if sim == "SimStn" else "grid"
+        return {
+            "casedir": str(tmp_path / "case"),
+            "ref_varname": "rv", "sim_varname": "sv",
+            "ref_data_type": "grid",
+            "sim_data_type": sim_dtype,
+            "ref_source": task["ref_source"], "sim_source": sim,
+        }
+
+    class FakeProcessorWithStnDeletion:
+        """Simulates real DatasetProcessing: stn-involved ref prep deletes flat."""
+
+        def __init__(self, info):
+            self.info = info
+
+        def prepare_source(self, datasource):
+            prepare_calls.append((
+                datasource,
+                self.info["ref_source"],
+                self.info["sim_source"],
+                self.info["sim_data_type"],
+            ))
+            if datasource == "ref":
+                # Always create the flat NC (mirroring real grid prep step)
+                flat_nc.write_text("")
+                # If stn-involved, simulate extract_station_data deleting flat
+                if self.info["ref_data_type"] == "stn" or self.info["sim_data_type"] == "stn":
+                    flat_nc.unlink()
+
+    class FakeStn:
+        def __init__(self, info, fig_nml): pass
+        def make_evaluation_P(self): return None
+
+    class FakeGrid:
+        def __init__(self, info, fig_nml): pass
+        def make_Evaluation(self): return None
+
+    monkeypatch.setattr(adapter, "to_legacy_config", lambda cfg: legacy)
+    monkeypatch.setattr(adapter, "build_legacy_namelists", lambda cfg: (main_nl, ref_nml, sim_nml))
+    monkeypatch.setattr(adapter, "build_fig_nml", lambda: {})
+    monkeypatch.setattr(local_runner, "_build_bridge_runtime_info", fake_build_bridge_runtime_info)
+    monkeypatch.setattr(local_runner, "_apply_unified_mask", lambda *a, **k: None)
+    monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessorWithStnDeletion)
+    monkeypatch.setattr(evaluation, "Evaluation_grid", FakeGrid)
+    monkeypatch.setattr(evaluation, "Evaluation_stn", FakeStn)
+    monkeypatch.setattr(local_runner, "_run_groupby", lambda *a, **k: [])
+
+    result = run_evaluation(cfg)
+    assert result["status"] == "success", result.get("errors")
+
+    # Critical assertion: after _preprocess_variable completes, the flat NC
+    # MUST exist on disk for downstream grid evaluation to succeed.
+    assert flat_nc.exists(), (
+        f"Flat ref NC missing after preprocessing. The grid→stn→grid sequence "
+        f"left the flat NC deleted. prepare_source calls: {prepare_calls}"
+    )
+
+    # Sequence verification: grid prep ran for SimGrid1 (initial), stn prep
+    # ran for SimStn (deleting flat), then grid prep ran again for restoration.
+    ref_call_seq = [c[3] for c in prepare_calls if c[0] == "ref"]
+    # Expect at least one "grid" call after the "stn" call in the sequence
+    last_stn_idx = max(
+        (i for i, t in enumerate(ref_call_seq) if t == "stn"),
+        default=-1,
+    )
+    assert last_stn_idx >= 0, "Expected at least one stn-path ref prep"
+    grid_after_stn = [t for t in ref_call_seq[last_stn_idx + 1 :] if t == "grid"]
+    assert len(grid_after_stn) >= 1, (
+        "Expected at least one grid ref prep AFTER the stn-path prep "
+        f"(restoration). Sequence: {ref_call_seq}"
+    )
