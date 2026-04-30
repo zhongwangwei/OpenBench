@@ -87,6 +87,23 @@ def _backup_then_write(catalog_path: Path, data: dict) -> None:
     _atomic_yaml_write(catalog_path, data)
 
 
+def _invalidate_registry_caches() -> None:
+    """Invalidate the singleton RegistryManager and reference profile cache.
+
+    Without this, long-lived processes (GUI sessions, Jupyter kernels, custom
+    Python scripts) call register_scanned_dataset[s_batch] but subsequent
+    get_registry() returns the stale pre-write singleton. The CLI manually
+    clears caches after scan; the public write API should do it too so
+    callers don't need to know about the cache.
+    """
+    try:
+        from openbench.data.registry.manager import clear_registry_cache
+        clear_registry_cache()
+    except Exception as e:
+        logger.debug("Could not clear registry cache: %s", e)
+    clear_reference_profile_cache()
+
+
 # Lazy-loaded reference profiles (like model_catalog for references)
 _REFERENCE_PROFILES: dict | None = None
 
@@ -460,6 +477,7 @@ def register_scanned_dataset(
     _register_to_dict(scanned, catalog, existing_descriptor=existing_descriptor, on_multi_var=on_multi_var)
 
     _backup_then_write(catalog_path, catalog)
+    _invalidate_registry_caches()
 
     return catalog_path
 
@@ -501,6 +519,7 @@ def register_scanned_datasets_batch(
 
     # Write once (atomic, with backup of previous state)
     _backup_then_write(catalog_path, catalog)
+    _invalidate_registry_caches()
 
     return catalog_path
 
@@ -536,9 +555,43 @@ def _register_to_dict(
 
     # Stage 5: finalize (grid_res, provenance, fulllist)
     descriptor["variables"] = variables
-    _finalize_descriptor(scanned, descriptor, prov)
+    _finalize_descriptor(scanned, descriptor, prov, existing_descriptor)
+
+    # Stage 6: preserve user-edited descriptor-level fields (free-text /
+    # categorization / years that scan can't authoritatively re-derive)
+    _preserve_user_edits(descriptor, existing_descriptor)
 
     catalog[scanned.registry_name] = descriptor
+
+
+def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
+    """Preserve user-edited descriptor-level fields when re-registering.
+
+    Variable-level merge already happens in _build_variables. This handles
+    descriptor-level fields that:
+      - the user often hand-corrects (description, category, years), or
+      - scanning can never authoritatively re-derive (free-text fields).
+
+    fulllist is handled in _finalize_descriptor (it requires the file-exists
+    check before deciding whether to preserve or regenerate).
+    """
+    if not existing:
+        return
+
+    # Fields where existing user edits ALWAYS win when present:
+    #  - description: free text, never auto-derivable
+    #  - category:    scanner picks from directory name, but user may
+    #                 re-categorize (e.g., split Water → Water-Energy)
+    user_owned = ("description", "category")
+    for fld in user_owned:
+        if fld in existing and existing.get(fld):
+            descriptor[fld] = existing[fld]
+
+    # years: prefer existing if present. Filename-based year extraction is
+    # noisy (catches version numbers like "v2010"); the user's authoritative
+    # fix should not be undone by a rescan.
+    if existing.get("years"):
+        descriptor["years"] = existing["years"]
 
 
 # ---------------------------------------------------------------------------
@@ -548,26 +601,16 @@ def _register_to_dict(
 def _build_base_descriptor(scanned, prov: dict) -> dict:
     """Build the initial descriptor from scanned metadata.
 
-    Detects data_groupby by checking whether each variable directory
-    contains a single NC file or multiple files.
+    Detects data_groupby by inspecting filenames in each variable directory:
+      - 1 NC file per variable    → Single
+      - YYYY-MM-DD or YYYYMMDD    → Day
+      - YYYY-MM or YYYYMM         → Month
+      - YYYY only                 → Year
+      - Mixed/unclear             → Year (most common safe default)
     """
     tim_res = scanned.tim_res or ""
 
-    data_groupby = "Year"
-    if scanned.variables:
-        all_single = True
-        for _vn, sub_dir in scanned.variables.items():
-            var_path = Path(scanned.root_dir) / sub_dir
-            if var_path.is_dir():
-                nc_count = _count_nc(var_path)
-                if nc_count == 0:
-                    for child in _iter_dirs(var_path):
-                        nc_count += _count_nc(child)
-                if nc_count > 1:
-                    all_single = False
-                    break
-        if all_single:
-            data_groupby = "Single"
+    data_groupby = _detect_data_groupby(scanned)
     prov["data_groupby"] = "scan"
 
     return {
@@ -580,6 +623,90 @@ def _build_base_descriptor(scanned, prov: dict) -> dict:
         "timezone": 0,
         "root_dir": scanned.root_dir,
     }
+
+
+# Date patterns at filename position boundaries.
+# Use lookarounds (?<![a-zA-Z\d]) / (?![a-zA-Z\d]) to require a non-alphanumeric
+# delimiter (or string boundary), so version tokens like "v20240315" don't
+# count as YYYYMMDD and "ERA5LAND" doesn't bleed into year detection.
+_DATE_PATTERNS = {
+    "day":   re.compile(r"(?<![a-zA-Z\d])(?:\d{4}[-_/]\d{2}[-_/]\d{2}|\d{8})(?!\d)"),
+    "month": re.compile(r"(?<![a-zA-Z\d])(?:\d{4}[-_/]\d{2}|\d{6})(?!\d)"),
+    "year":  re.compile(r"(?<![a-zA-Z\d])\d{4}(?![-_/\d])"),
+}
+
+
+def _classify_filename_date(stem: str) -> str:
+    """Return the most-specific date granularity in a filename stem.
+
+    Order: day > month > year > none. Tokens preceded by letters (e.g., the
+    "v" in "v2010") are excluded so version markers don't masquerade as years.
+    """
+    if _DATE_PATTERNS["day"].search(stem):
+        return "day"
+    if _DATE_PATTERNS["month"].search(stem):
+        return "month"
+    if _DATE_PATTERNS["year"].search(stem):
+        return "year"
+    return "none"
+
+
+def _detect_data_groupby(scanned) -> str:
+    """Detect data_groupby from per-variable file count + filename patterns.
+
+    Returns one of: "Single" | "Day" | "Month" | "Year".
+    The previous implementation only ever returned "Year" or "Single",
+    breaking processing.py's monthly/daily file iteration when descriptor
+    said "Year" but filenames were YYYYMM.
+    """
+    if not scanned.variables:
+        return "Year"
+
+    # Collect NC file lists per variable
+    var_files: list[list[Path]] = []
+    for _vn, sub_dir in scanned.variables.items():
+        var_path = Path(scanned.root_dir) / sub_dir
+        if not var_path.is_dir():
+            continue
+        files = _glob_nc(var_path)
+        if not files:
+            for child in _iter_dirs(var_path):
+                child_files = _glob_nc(child)
+                if child_files:
+                    files = child_files
+                    break
+        if files:
+            var_files.append(files)
+
+    if not var_files:
+        return "Year"
+
+    # Single file per variable across the board → Single
+    if all(len(files) == 1 for files in var_files):
+        return "Single"
+
+    # Tally date pattern frequency across all files (multi-variable datasets
+    # vote together to handle slight per-variable inconsistencies)
+    counts = {"day": 0, "month": 0, "year": 0, "none": 0}
+    total = 0
+    for files in var_files:
+        for f in files:
+            counts[_classify_filename_date(f.stem)] += 1
+            total += 1
+
+    # Plurality wins among day/month/year. Tiebreak prefers more granular
+    # (day > month > year) since over-stating granularity is safer than under.
+    if counts["day"] >= counts["month"] and counts["day"] >= counts["year"] and counts["day"] > 0:
+        return "Day"
+    if counts["month"] >= counts["year"] and counts["month"] > 0:
+        return "Month"
+    if counts["year"] > 0:
+        return "Year"
+
+    # No date markers anywhere — could be a single-file-per-var dataset that
+    # missed the all-1 check (e.g., 1 file in some vars, 2 in others without
+    # date patterns). Default to Year to match historical behavior.
+    return "Year"
 
 
 # ---------------------------------------------------------------------------
@@ -763,8 +890,13 @@ def _apply_profile_overrides(scanned, descriptor: dict, variables: dict, prov: d
 # Stage 5: Finalize descriptor (grid_res default, provenance, fulllist)
 # ---------------------------------------------------------------------------
 
-def _finalize_descriptor(scanned, descriptor: dict, prov: dict) -> None:
-    """Set data_type-dependent fields, record provenance, generate station fulllist."""
+def _finalize_descriptor(scanned, descriptor: dict, prov: dict, existing_descriptor: dict | None = None) -> None:
+    """Set data_type-dependent fields, record provenance, generate station fulllist.
+
+    For station datasets: if an existing fulllist points to an extant file,
+    preserve it (the user may have hand-filtered the station list). Only
+    auto-generate when no valid existing fulllist is recorded.
+    """
     final_dtype = descriptor["data_type"]
 
     if final_dtype == "grid" and "grid_res" not in descriptor:
@@ -778,8 +910,14 @@ def _finalize_descriptor(scanned, descriptor: dict, prov: dict) -> None:
 
     descriptor["_provenance"] = prov
 
-    # Auto-generate fulllist for station datasets
+    # Auto-generate fulllist for station datasets — UNLESS the user already
+    # has a hand-edited fulllist pointing to an existing file.
     if final_dtype == "stn":
+        existing_fulllist = (existing_descriptor or {}).get("fulllist")
+        if existing_fulllist and Path(existing_fulllist).exists():
+            descriptor["fulllist"] = existing_fulllist
+            return
+
         nc_dir = Path(scanned.root_dir)
         if scanned.variables:
             first_sub = next(iter(scanned.variables.values()), "")
@@ -872,7 +1010,12 @@ def _iter_dirs(path: Path):
 
 
 def _detect_tim_res(dataset_dir: Path) -> str:
-    """Detect time resolution from filename patterns."""
+    """Detect time resolution from filename / directory keywords.
+
+    Returns an empty string when no keyword evidence is found, so the caller
+    in _apply_nc_corrections can distinguish "scanned and confirmed" from
+    "default fallback" and assign provenance accordingly.
+    """
     nc_files = _glob_nc(dataset_dir)
     if not nc_files:
         return ""
@@ -895,7 +1038,11 @@ def _detect_tim_res(dataset_dir: Path) -> str:
     if "daily" in name or "daily" in dir_str:
         return "Day"
 
-    return "Month"  # Default assumption
+    # No keyword evidence — return empty so _apply_nc_corrections falls
+    # through to the "default" branch and provenance reflects that honestly.
+    # Previously returned "Month" with provenance="scan", lying about
+    # whether the value was inferred from data or was a hard-coded fallback.
+    return ""
 
 
 def _detect_data_type_from_nc(nc_file: Path) -> str | None:
@@ -1098,12 +1245,21 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
     # Extract prefix and suffix from filename pattern
     # Pattern: <prefix><year><suffix>.nc
     # E.g., "E_2004_GLEAM_v4.2a.nc" → prefix="E_", suffix="_GLEAM_v4.2a"
+    #
+    # Year token rule: 4 consecutive digits NOT preceded by a letter or digit
+    # and NOT followed by a digit. This excludes version markers like "v2010"
+    # (preceded by "v") and longer numeric IDs like "200504" (would partially
+    # match "2005" but it's followed by digits).
+    _YEAR_TOKEN = re.compile(r"(?<![a-zA-Z\d])(\d{4})(?!\d)")
+
     fname = nc_files[0].stem  # Without .nc
-    # Try to find a 4-digit year in the filename
-    year_match = re.search(r"(\d{4})", fname)
+    year_match = _YEAR_TOKEN.search(fname)
     if year_match:
         year_str = year_match.group(1)
-        idx = fname.index(year_str)
+        # Use match start (not .index) so we get the same position the regex
+        # actually matched, even if the same 4-digit substring appears earlier
+        # preceded by a letter (excluded by lookbehind).
+        idx = year_match.start(1)
         prefix = fname[:idx]
         suffix = fname[idx + len(year_str):]
         result["prefix"] = prefix
@@ -1113,10 +1269,10 @@ def _inspect_nc_file(dataset_dir: Path) -> dict:
         result["prefix"] = fname
         result["suffix"] = ""
 
-    # Detect year range from all filenames
+    # Detect year range from all filenames using the same token rule
     years = []
     for f in nc_files:
-        for m in re.finditer(r"(\d{4})", f.stem):
+        for m in _YEAR_TOKEN.finditer(f.stem):
             y = int(m.group(1))
             if 1900 <= y <= 2100:
                 years.append(y)

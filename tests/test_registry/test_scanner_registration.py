@@ -817,3 +817,215 @@ def test_inspect_nc_file_picks_1d_data_var_for_station(tmp_path: Path):
         "1D station variables must not be filtered out."
     )
     assert info.get("varunit") == "W/m2"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for batch 2 (rescan preservation, data_groupby detection,
+# tim_res honest provenance, write-cache invalidation, year-regex tightening).
+# ---------------------------------------------------------------------------
+
+
+def test_rescan_preserves_user_edited_descriptor_fields(tmp_path: Path):
+    """Description / category / years that the user hand-edits in the catalog
+    must NOT be silently overwritten when the scanner re-registers the same
+    dataset (e.g., when a new resolution variant is added to the same group).
+    """
+    from openbench.data.registry.scanner import _register_to_dict
+
+    nc_dir = tmp_path / "Water" / "Evapotranspiration" / "Demo"
+    nc_dir.mkdir(parents=True)
+    import numpy as np
+    import xarray as xr
+    ds = xr.Dataset(
+        {"ET": (["time", "lat", "lon"], np.zeros((12, 4, 4), dtype=np.float32))},
+        coords={"time": np.arange(12), "lat": np.arange(4.0), "lon": np.arange(4.0)},
+    )
+    ds.to_netcdf(nc_dir / "ET_2004_2005.nc")
+
+    scanned = ScannedDataset(
+        name="Demo", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "Water/Evapotranspiration/Demo"},
+    )
+
+    # First registration: descriptor entirely from scan
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog)
+
+    # User edits these fields by hand:
+    catalog["Demo_LowRes"]["description"] = "Custom user description for Demo"
+    catalog["Demo_LowRes"]["category"] = "Energy"   # user re-categorized
+    catalog["Demo_LowRes"]["years"] = [2000, 2010]  # user fixed years
+
+    # Re-register (same group; existing_descriptor passed in like batch path does)
+    existing = catalog["Demo_LowRes"]
+    _register_to_dict(scanned, catalog, existing_descriptor=existing)
+    new_entry = catalog["Demo_LowRes"]
+
+    assert new_entry["description"] == "Custom user description for Demo"
+    assert new_entry["category"] == "Energy"
+    assert new_entry["years"] == [2000, 2010]
+
+
+def test_rescan_preserves_existing_fulllist_when_file_exists(tmp_path: Path):
+    """Station fulllist auto-generation must be skipped when an existing
+    fulllist points to a real file. Previously it always regenerated,
+    overwriting user-curated station subset CSVs.
+    """
+    from openbench.data.registry.scanner import _register_to_dict
+
+    # Create a fake NC + fake user-curated fulllist
+    nc_dir = tmp_path / "Carbon" / "CH4_Flux" / "FluxStn"
+    nc_dir.mkdir(parents=True)
+    import netCDF4
+    with netCDF4.Dataset(nc_dir / "fluxstn_2010.nc", "w") as nc:
+        nc.createDimension("time", 12)
+        v = nc.createVariable("CH4_flux", "f4", ("time",))
+        v.units = "g/m2/year"
+        lat = nc.createVariable("lat", "f4", ()); lat.units = "degrees_north"
+        lon = nc.createVariable("lon", "f4", ()); lon.units = "degrees_east"
+
+    user_fulllist = tmp_path / "user_curated_stations.csv"
+    user_fulllist.write_text("ID,SYEAR,EYEAR,LON,LAT,DIR\nfluxstn,2010,2010,11.0,47.0,\n")
+
+    scanned = ScannedDataset(
+        name="FluxStn", resolution="Station", category="Carbon",
+        data_type="stn", root_dir=str(tmp_path),
+        variables={"CH4_Flux": "Carbon/CH4_Flux/FluxStn"},
+    )
+
+    catalog: dict = {}
+    existing = {"fulllist": str(user_fulllist), "variables": {}}
+    _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["FluxStn"]["fulllist"] == str(user_fulllist), (
+        "Existing fulllist pointing to an extant file must be preserved, "
+        f"not regenerated. Got: {catalog['FluxStn']['fulllist']}"
+    )
+    # Verify file content unchanged (not rewritten)
+    assert user_fulllist.read_text().startswith("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
+
+
+def test_data_groupby_detects_monthly_files(tmp_path: Path):
+    """Files like ET_2010_01.nc / ET_2010_02.nc / ... must be classified as
+    Month, not Year. The previous implementation only output Year or Single.
+    """
+    from openbench.data.registry.scanner import _build_base_descriptor, ScannedDataset
+
+    nc_dir = tmp_path / "var_dir"
+    nc_dir.mkdir()
+    for year in (2010, 2011):
+        for month in (1, 2, 3):
+            (nc_dir / f"ET_{year}_{month:02d}.nc").write_text("")
+
+    scanned = ScannedDataset(
+        name="MonthlyData", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "var_dir"},
+    )
+    desc = _build_base_descriptor(scanned, prov={})
+    assert desc["data_groupby"] == "Month", f"Got: {desc['data_groupby']}"
+
+
+def test_data_groupby_detects_daily_files(tmp_path: Path):
+    """Files like ET_20100101.nc / ET_20100102.nc must be classified as Day."""
+    from openbench.data.registry.scanner import _build_base_descriptor, ScannedDataset
+
+    nc_dir = tmp_path / "var_dir"
+    nc_dir.mkdir()
+    for day in (1, 2, 3, 4, 5):
+        (nc_dir / f"ET_201001{day:02d}.nc").write_text("")
+
+    scanned = ScannedDataset(
+        name="DailyData", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "var_dir"},
+    )
+    desc = _build_base_descriptor(scanned, prov={})
+    assert desc["data_groupby"] == "Day", f"Got: {desc['data_groupby']}"
+
+
+def test_tim_res_provenance_default_when_no_evidence(tmp_path: Path):
+    """When neither filename nor NC content has time-resolution evidence,
+    descriptor.tim_res should fall to "Month" with provenance="default",
+    NOT provenance="scan" which would falsely claim directory-inferred.
+    """
+    from openbench.data.registry.scanner import _register_to_dict, ScannedDataset
+
+    # NC with time variable but no time intervals to infer freq from
+    nc_dir = tmp_path / "Water" / "Evapotranspiration" / "Mystery"
+    nc_dir.mkdir(parents=True)
+    import netCDF4
+    # Single time step → can't compute _diff; tim_res from NC is None
+    with netCDF4.Dataset(nc_dir / "et_unknown.nc", "w") as nc:
+        nc.createDimension("time", 1)
+        nc.createDimension("lat", 4)
+        nc.createDimension("lon", 4)
+        et = nc.createVariable("ET", "f4", ("time", "lat", "lon"))
+        et.units = "mm"
+
+    scanned = ScannedDataset(
+        name="Mystery", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "Water/Evapotranspiration/Mystery"},
+    )
+
+    catalog: dict = {}
+    _register_to_dict(scanned, catalog)
+    entry = catalog["Mystery_LowRes"]
+
+    assert entry["tim_res"] == "Month", f"Should fall back to Month default, got: {entry['tim_res']}"
+    assert entry["_provenance"]["tim_res"] == "default", (
+        f"Provenance must be 'default' (no evidence), not "
+        f"{entry['_provenance']['tim_res']!r}. Lying about scan-confirmed "
+        f"would mislead 'openbench check' output."
+    )
+
+
+def test_register_invalidates_registry_singleton_cache(tmp_path: Path, monkeypatch):
+    """register_scanned_dataset[s_batch] must clear the registry singleton
+    cache so subsequent get_registry() reads see the newly written entry.
+    Long-lived processes (GUI, Jupyter) hit this without the fix.
+    """
+    from openbench.data.registry import manager as mgr_mod
+    from openbench.data.registry.scanner import register_scanned_dataset
+
+    # Set a sentinel cache value so we can detect when it's cleared
+    mgr_mod._REGISTRY_CACHE = "SENTINEL_NOT_NONE"
+
+    catalog_path = tmp_path / "reference_catalog.yaml"
+    scanned = ScannedDataset(
+        name="CacheTest", resolution="LowRes", category="Water",
+        data_type="grid", root_dir=str(tmp_path),
+        variables={"Evapotranspiration": "."},
+    )
+    register_scanned_dataset(scanned, catalog_path=catalog_path)
+
+    assert mgr_mod._REGISTRY_CACHE is None, (
+        "Write API must invalidate the singleton cache so get_registry() "
+        "re-loads from the updated YAML; cache was not cleared."
+    )
+
+
+def test_year_regex_excludes_version_prefix(tmp_path: Path):
+    """Filenames like 'ET_v2010_GLEAM.nc' should NOT extract 2010 as year.
+    The leading 'v' marks version, not date. Previously year extraction was
+    naive '\\d{4}' which polluted years with version markers.
+    """
+    from openbench.data.registry.scanner import _inspect_nc_file
+    import netCDF4
+
+    # Build minimal 2D NC so _inspect_nc_file has data to work with
+    with netCDF4.Dataset(tmp_path / "ET_v2010_GLEAM.nc", "w") as nc:
+        nc.createDimension("lat", 4)
+        nc.createDimension("lon", 4)
+        v = nc.createVariable("ET", "f4", ("lat", "lon"))
+        v.units = "mm"
+
+    info = _inspect_nc_file(tmp_path)
+    # No real year in the filename → syear / eyear must NOT be set
+    assert "syear" not in info, f"v2010 should NOT be detected as year, got syear={info.get('syear')}"
+    assert "eyear" not in info
+    # And prefix should be the full stem (no year split)
+    assert info.get("prefix") == "ET_v2010_GLEAM"
+    assert info.get("suffix") == ""
