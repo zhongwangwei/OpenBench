@@ -848,6 +848,30 @@ ETMonitor_LowRes:
     data_groupby: profile
     tim_res: nc
     grid_res: scan
+ET_Xu_etal_2025_0p25_MidRes:
+  name: ET_Xu_etal_2025_0p25_MidRes
+  description: ET_Xu_etal_2025_0p25 reference dataset (MidRes)
+  category: Water
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  years:
+  - 1950
+  - 2024
+  grid_res: 0.25
+  variables:
+    Evapotranspiration:
+      varname: ET
+      varunit: mm/day
+      sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025_0p25
+      prefix: AutoML_predict_
+      suffix: _1D_0p25
+  _provenance:
+    data_groupby: scan
+    tim_res: nc
+    grid_res: nc
 ET_Xu_etal_2025_LowRes:
   name: ET_Xu_etal_2025_LowRes
   description: ET_Xu_etal_2025 reference dataset (LowRes)
@@ -2235,6 +2259,29 @@ MODIS_MOD10CM_LowRes:
     data_groupby: profile
     tim_res: nc
     grid_res: scan
+MSWEP_0p25_MidRes:
+  name: MSWEP_0p25_MidRes
+  description: MSWEP_0p25 reference dataset (MidRes)
+  category: Water
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  years:
+  - 1979
+  - 2020
+  grid_res: 0.25
+  variables:
+    Precipitation:
+      varname: precipitation
+      varunit: mm d-1
+      sub_dir: Water/Precipitation/MSWEP_0p25
+      prefix: Precipitation_
+  _provenance:
+    data_groupby: scan
+    tim_res: nc
+    grid_res: nc
 MSWEP_MidRes:
   name: MSWEP_MidRes
   description: MSWEP reference dataset (MidRes)
@@ -2281,6 +2328,117 @@ MSWEP_V280_LowRes:
     data_groupby: scan
     tim_res: nc
     grid_res: scan
+MSWX_0p25_LowRes:
+  name: MSWX_0p25_LowRes
+  description: MSWX_0p25 reference dataset (LowRes)
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 1979
+  - 2020
+  grid_res: 0.25
+  variables:
+    Surface_Downward_LW_Radiation:
+      varname: downward_longwave_radiation
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
+      prefix: LWd_
+    Surface_Downward_SW_Radiation:
+      varname: downward_shortwave_radiation
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
+      prefix: SWd_
+    Diurnal_Max_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
+      prefix: Tmax_
+    Diurnal_Min_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
+      prefix: Tmin_
+    Surface_Air_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
+      prefix: Temp_
+    Surface_Specific_Humidity:
+      varname: specific_humidity
+      varunit: kg kg-1
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
+      prefix: SpecHum_
+    Surface_Wind_Speed:
+      varname: wind_speed
+      varunit: m s-1
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
+      prefix: Wind_
+  _provenance:
+    data_groupby: scan
+    tim_res: nc
+    grid_res: nc
+MSWX_0p25_MidRes:
+  name: MSWX_0p25_MidRes
+  description: MSWX_0p25 reference dataset (MidRes)
+  category: Energy
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  years:
+  - 1979
+  - 2020
+  grid_res: 0.25
+  variables:
+    Surface_Downward_LW_Radiation:
+      varname: downward_longwave_radiation
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
+      prefix: LWd_
+    Surface_Downward_SW_Radiation:
+      varname: downward_shortwave_radiation
+      varunit: W m-2
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
+      prefix: SWd_
+    Diurnal_Max_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
+      prefix: Tmax_
+    Diurnal_Min_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
+      prefix: Tmin_
+    Surface_Air_Temperature:
+      varname: air_temperature
+      varunit: degree_Celsius
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
+      prefix: Temp_
+    Surface_Specific_Humidity:
+      varname: specific_humidity
+      varunit: kg kg-1
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
+      prefix: SpecHum_
+    Surface_Wind_Speed:
+      varname: wind_speed
+      varunit: m s-1
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
+      prefix: Wind_
+    Precipitation:
+      varname: precipitation
+      varunit: mm 3h-1
+      sub_dir: Water/Precipitation/MSWX_0p25
+      prefix: Precipitation_
+  _provenance:
+    data_groupby: scan
+    tim_res: nc
+    grid_res: nc
 MSWX_LowRes:
   name: MSWX_LowRes
   description: MSWX reference dataset (LowRes)
@@ -3074,3 +3232,362 @@ SMAP_L4_0p25_MidRes:
     data_groupby: scan
     tim_res: nc
     grid_res: scan
+OpenBench_FLUX_30min:
+  name: OpenBench_FLUX_30min
+  description: OpenBench FLUX tower composite (30-minute)
+  category: Composite
+  data_type: stn
+  tim_res: 30min
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/30min
+  station_matching:
+    dataset_file: OpenBench_FLUX_30min_full.nc
+  variables: &openbench_flux_catalog_variables
+    Ground_Heat:
+      sub_dir: ''
+      varname: G
+      varunit: W/m2
+    Sensible_Heat:
+      sub_dir: ''
+      varname: H
+      varunit: W/m2
+    Latent_Heat:
+      sub_dir: ''
+      varname: LE
+      varunit: W/m2
+    Surface_Downward_LW_Radiation:
+      sub_dir: ''
+      varname: LWdown
+      varunit: W/m2
+    Surface_Upward_LW_Radiation:
+      sub_dir: ''
+      varname: LWup
+      varunit: W/m2
+    Net_Ecosystem_Exchange:
+      sub_dir: ''
+      varname: NEE
+      varunit: umol/m2/s
+    Surface_Pressure:
+      sub_dir: ''
+      varname: Psurf
+      varunit: Pa
+    Surface_Relative_Humidity:
+      sub_dir: ''
+      varname: RH
+      varunit: '%'
+    Surface_Downward_SW_Radiation:
+      sub_dir: ''
+      varname: SWdown
+      varunit: W/m2
+    Surface_Upward_SW_Radiation:
+      sub_dir: ''
+      varname: SWup
+      varunit: W/m2
+    Surface_Air_Temperature:
+      sub_dir: ''
+      varname: Tair
+      varunit: K
+    Surface_Wind_Speed:
+      sub_dir: ''
+      varname: Wind
+      varunit: m/s
+    Evapotranspiration:
+      sub_dir: ''
+      varname: ET
+      varunit: kg/m2/s
+    Precipitation:
+      sub_dir: ''
+      varname: Precip
+      varunit: kg/m2/s
+    Net_Radiation:
+      sub_dir: ''
+      varname: Rn
+      varunit: W/m2
+    Gross_Primary_Productivity:
+      sub_dir: ''
+      varname: GPP
+      varunit: umol/m2/s
+    Ecosystem_Respiration:
+      sub_dir: ''
+      varname: Reco
+      varunit: umol/m2/s
+    Surface_Soil_Moisture:
+      sub_dir: ''
+      varname: SoilMoist_1
+      varunit: m3/m3
+    Surface_Soil_Temperature:
+      sub_dir: ''
+      varname: SoilTemp_1
+      varunit: K
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+OpenBench_FLUX_Hourly:
+  name: OpenBench_FLUX_Hourly
+  description: OpenBench FLUX tower composite (hourly)
+  category: Composite
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly
+  station_matching:
+    dataset_file: OpenBench_FLUX_hourly_full.nc
+  variables: *openbench_flux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+OpenBench_FLUX_Daily:
+  name: OpenBench_FLUX_Daily
+  description: OpenBench FLUX tower composite (daily)
+  category: Composite
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily
+  station_matching:
+    dataset_file: OpenBench_FLUX_daily_full.nc
+  variables: *openbench_flux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+OpenBench_FLUX_Daily_Benchmark:
+  name: OpenBench_FLUX_Daily_Benchmark
+  description: OpenBench FLUX benchmark tower composite (daily)
+  category: Composite
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily_benchmark
+  station_matching:
+    dataset_file: OpenBench_FLUX_daily_benchmark_full.nc
+  variables: *openbench_flux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+OpenBench_FLUX_Hourly_Benchmark:
+  name: OpenBench_FLUX_Hourly_Benchmark
+  description: OpenBench FLUX benchmark tower composite (hourly)
+  category: Composite
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly_benchmark
+  station_matching:
+    dataset_file: OpenBench_FLUX_hourly_benchmark_full.nc
+  variables: *openbench_flux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+OpenBench_FLUX_Monthly_Benchmark:
+  name: OpenBench_FLUX_Monthly_Benchmark
+  description: OpenBench FLUX benchmark tower composite (monthly)
+  category: Composite
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/monthly_benchmark
+  station_matching:
+    dataset_file: OpenBench_FLUX_monthly_benchmark_full.nc
+  variables: *openbench_flux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+UrbanFlux_30min:
+  name: UrbanFlux_30min
+  description: UrbanFlux station composite (30-minute)
+  category: Urban
+  data_type: stn
+  tim_res: 30min
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/30min
+  station_matching:
+    dataset_file: OpenBench_UrbanFlux_30min.nc
+  variables: &urbanflux_catalog_variables
+    Sensible_Heat:
+      sub_dir: ''
+      varname: H
+      varunit: W/m2
+    Latent_Heat:
+      sub_dir: ''
+      varname: LE
+      varunit: W/m2
+    Urban_Latent_Heat_Flux:
+      sub_dir: ''
+      varname: LE
+      varunit: W/m2
+    Surface_Downward_LW_Radiation:
+      sub_dir: ''
+      varname: LWdown
+      varunit: W/m2
+    Surface_Upward_LW_Radiation:
+      sub_dir: ''
+      varname: LWup
+      varunit: W/m2
+    Precipitation:
+      sub_dir: ''
+      varname: Precip
+      varunit: kg/m2/s
+    Surface_Pressure:
+      sub_dir: ''
+      varname: Psurf
+      varunit: Pa
+    Surface_Specific_Humidity:
+      sub_dir: ''
+      varname: Qair
+      varunit: kg/kg
+    Surface_Downward_SW_Radiation:
+      sub_dir: ''
+      varname: SWdown
+      varunit: W/m2
+    Surface_Upward_SW_Radiation:
+      sub_dir: ''
+      varname: SWup
+      varunit: W/m2
+    Snowfall:
+      sub_dir: ''
+      varname: Snowf
+      varunit: kg/m2/s
+    Surface_Air_Temperature:
+      sub_dir: ''
+      varname: Tair
+      varunit: K
+    Surface_Wind_Speed:
+      sub_dir: ''
+      varname: Wind
+      varunit: m/s
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+UrbanFlux_Hourly:
+  name: UrbanFlux_Hourly
+  description: UrbanFlux station composite (hourly)
+  category: Urban
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/hourly
+  station_matching:
+    dataset_file: OpenBench_UrbanFlux_Hourly.nc
+  variables: *urbanflux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+UrbanFlux_Daily:
+  name: UrbanFlux_Daily
+  description: UrbanFlux station composite (daily)
+  category: Urban
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/daily
+  station_matching:
+    dataset_file: OpenBench_UrbanFlux_Daily.nc
+  variables: *urbanflux_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+LAI_Yuan2011_8Day:
+  name: LAI_Yuan2011_8Day
+  description: Yuan et al. 2011 station LAI observations (8-day OpenBench format)
+  category: Bio
+  data_type: stn
+  tim_res: 8Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/8day
+  station_matching:
+    dataset_file: OpenBench_LAI_8day_Yuan2011.nc
+  variables:
+    Leaf_Area_Index:
+      sub_dir: ''
+      varname: LAI
+      varunit: '1'
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+LAI_Yuan2011_Monthly:
+  name: LAI_Yuan2011_Monthly
+  description: Yuan et al. 2011 station LAI observations (monthly OpenBench format)
+  category: Bio
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/monthly
+  station_matching:
+    dataset_file: OpenBench_LAI_monthly_Yuan2011.nc
+  variables:
+    Leaf_Area_Index:
+      sub_dir: ''
+      varname: LAI
+      varunit: '1'
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+Transpiration_OpenBench_Daily:
+  name: Transpiration_OpenBench_Daily
+  description: OpenBench station canopy transpiration (daily)
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration
+  station_matching:
+    dataset_file: OpenBench_Transpiration_Daily_redist.nc
+  variables: &transpiration_daily_catalog_variables
+    Canopy_Transpiration:
+      sub_dir: ''
+      varname: E_canopy_mm_day
+      varunit: mm day-1
+    Transpiration:
+      sub_dir: ''
+      varname: E_canopy_mm_day
+      varunit: mm day-1
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+Transpiration_SAPFLUXNET_Daily:
+  name: Transpiration_SAPFLUXNET_Daily
+  description: SAPFLUXNET station canopy transpiration benchmark (daily)
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET
+  station_matching:
+    dataset_file: OpenBench_Transpiration_Benchmark_Daily.nc
+  variables: *transpiration_daily_catalog_variables
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+Rn-Xu2022_0p25_MidRes:
+  name: Rn-Xu2022_0p25_MidRes
+  description: Rn-Xu2022 0.25 degree net radiation
+  category: Energy
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  grid_res: 0.25
+  variables:
+    Net_Radiation:
+      sub_dir: Heat/Net_Radiation/Rn-Xu2022_0p25/process_data
+      varname: Rn
+      varunit: W/m2
+      prefix: AVHRR_Rn_
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+    grid_res: default

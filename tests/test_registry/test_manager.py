@@ -479,6 +479,181 @@ def test_streamflow_aggregate_entries_use_existing_station_matching_aliases():
         assert profiles[name]["station_matching"]["dataset_file"] == dataset_file
 
 
+def test_promoted_reference_scan_entries_are_bundled_and_portable():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    expected = {
+        "ET_Xu_etal_2025_0p25_MidRes": ("grid", "${OPENBENCH_REF_ROOT}/Grid/MidRes", ["Evapotranspiration"]),
+        "MSWEP_0p25_MidRes": ("grid", "${OPENBENCH_REF_ROOT}/Grid/MidRes", ["Precipitation"]),
+        "MSWX_0p25_LowRes": (
+            "grid",
+            "${OPENBENCH_REF_ROOT}/Grid/LowRes",
+            [
+                "Surface_Downward_LW_Radiation",
+                "Surface_Downward_SW_Radiation",
+                "Diurnal_Max_Temperature",
+                "Diurnal_Min_Temperature",
+                "Surface_Air_Temperature",
+                "Surface_Specific_Humidity",
+                "Surface_Wind_Speed",
+            ],
+        ),
+        "MSWX_0p25_MidRes": (
+            "grid",
+            "${OPENBENCH_REF_ROOT}/Grid/MidRes",
+            [
+                "Surface_Downward_LW_Radiation",
+                "Surface_Downward_SW_Radiation",
+                "Diurnal_Max_Temperature",
+                "Diurnal_Min_Temperature",
+                "Surface_Air_Temperature",
+                "Surface_Specific_Humidity",
+                "Surface_Wind_Speed",
+                "Precipitation",
+            ],
+        ),
+    }
+
+    for name, (data_type, root_dir, variables) in expected.items():
+        entry = catalog[name]
+        assert entry["data_type"] == data_type
+        assert entry["root_dir"] == root_dir
+        assert sorted(entry["variables"]) == sorted(variables)
+
+
+def test_formal_reference_scan_entries_are_bundled_and_profiled():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    expected = {
+        "OpenBench_FLUX_30min": (
+            "stn",
+            "30min",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/30min",
+            "Station/Composite/OpenBench_FLUX/30min",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "OpenBench_FLUX_Hourly": (
+            "stn",
+            "Hour",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly",
+            "Station/Composite/OpenBench_FLUX/hourly",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "OpenBench_FLUX_Daily": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily",
+            "Station/Composite/OpenBench_FLUX/daily",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "OpenBench_FLUX_Daily_Benchmark": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily_benchmark",
+            "Station/Composite/OpenBench_FLUX/daily_benchmark",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "OpenBench_FLUX_Hourly_Benchmark": (
+            "stn",
+            "Hour",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly_benchmark",
+            "Station/Composite/OpenBench_FLUX/hourly_benchmark",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "OpenBench_FLUX_Monthly_Benchmark": (
+            "stn",
+            "Month",
+            "${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/monthly_benchmark",
+            "Station/Composite/OpenBench_FLUX/monthly_benchmark",
+            ["Latent_Heat", "Net_Ecosystem_Exchange", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "UrbanFlux_30min": (
+            "stn",
+            "30min",
+            "${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/30min",
+            "Station/Anth/Urban/UrbanFlux/30min",
+            ["Latent_Heat", "Urban_Latent_Heat_Flux", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "UrbanFlux_Hourly": (
+            "stn",
+            "Hour",
+            "${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/hourly",
+            "Station/Anth/Urban/UrbanFlux/hourly",
+            ["Latent_Heat", "Urban_Latent_Heat_Flux", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "UrbanFlux_Daily": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/daily",
+            "Station/Anth/Urban/UrbanFlux/daily",
+            ["Latent_Heat", "Urban_Latent_Heat_Flux", "Precipitation", "Surface_Air_Temperature"],
+        ),
+        "LAI_Yuan2011_8Day": (
+            "stn",
+            "8Day",
+            "${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/8day",
+            "Station/Bio/Leaf_Area_Index/Yuan2011/8day",
+            ["Leaf_Area_Index"],
+        ),
+        "LAI_Yuan2011_Monthly": (
+            "stn",
+            "Month",
+            "${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/monthly",
+            "Station/Bio/Leaf_Area_Index/Yuan2011/monthly",
+            ["Leaf_Area_Index"],
+        ),
+        "Transpiration_OpenBench_Daily": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Water/Transpiration",
+            "Station/Water/Transpiration",
+            ["Canopy_Transpiration", "Transpiration"],
+        ),
+        "Transpiration_SAPFLUXNET_Daily": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET",
+            "Station/Water/Transpiration/SAPFLUXNET",
+            ["Canopy_Transpiration", "Transpiration"],
+        ),
+        "Rn-Xu2022_0p25_MidRes": (
+            "grid",
+            "Month",
+            "${OPENBENCH_REF_ROOT}/Grid/MidRes",
+            "Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022_0p25",
+            ["Net_Radiation"],
+        ),
+    }
+
+    for name, (data_type, tim_res, root_dir, profile_root, variables) in expected.items():
+        entry = catalog[name]
+        profile = profiles[name.removesuffix("_MidRes")]
+        assert entry["data_type"] == data_type
+        assert entry["tim_res"] == tim_res
+        assert entry["root_dir"] == root_dir
+        assert profile["scan"]["root_sub_dir"] == profile_root
+        if data_type == "stn":
+            assert entry["station_matching"]["dataset_file"] == profile["station_matching"]["dataset_file"]
+        for variable in variables:
+            assert variable in entry["variables"]
+            assert variable in profile["variables"]
+
+
+def test_gleam_midres_raw_composite_is_ignored_because_standardized_entry_exists():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+
+    raw_profile = profiles["GLEAM_v4.2a_MidRes_RawComposite"]
+    assert raw_profile["scan"] == {
+        "layout": "ignore",
+        "root_sub_dir": "Grid/MidRes/Composite/GLEAM_v4.2",
+    }
+
+    entry = catalog["GLEAM_v4.2a_MidRes"]
+    assert entry["root_dir"] == "${OPENBENCH_REF_ROOT}/Grid/MidRes"
+    assert entry["variables"]["Evapotranspiration"]["sub_dir"] == "Water/Evapotranspiration/GLEAM_v4.2a"
+    assert entry["variables"]["Transpiration"]["sub_dir"] == "Water/Transpiration/GLEAM_v4.2a"
+
+
 def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
     tmp_path: Path,
     monkeypatch,

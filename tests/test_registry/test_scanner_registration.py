@@ -75,6 +75,27 @@ def test_inspect_nc_file_detects_tim_res_from_time_dimension(tmp_path: Path):
     assert result_d.get("detected_tim_res") == "Day"
 
 
+def test_detect_tim_res_recognizes_30min_dataset_names(tmp_path: Path):
+    """Half-hourly station folders should not fall back to default monthly metadata."""
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from openbench.data.registry.scanner import _detect_tim_res, _tim_res_rank
+
+    half_hour_dir = tmp_path / "30min"
+    half_hour_dir.mkdir()
+    times = pd.date_range("2000-01-01", periods=4, freq="30min")
+    ds = xr.Dataset(
+        {"LE": (["station", "time"], np.zeros((1, len(times))))},
+        coords={"station": [0], "time": times},
+    )
+    ds.to_netcdf(half_hour_dir / "OpenBench_FLUX_30min_full.nc")
+
+    assert _detect_tim_res(half_hour_dir) == "30min"
+    assert _tim_res_rank("30min") > _tim_res_rank("Hour")
+
+
 def test_inspect_nc_file_marks_monthly_climatology_candidate_without_overriding_tim_res(
     tmp_path: Path,
 ):

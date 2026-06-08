@@ -2442,6 +2442,12 @@ _TIM_RES_RANK = {
     "hour": 6,
     "hourly": 6,
     "h": 6,
+    "30min": 7,
+    "30mins": 7,
+    "30minute": 7,
+    "30minutes": 7,
+    "halfhour": 7,
+    "half-hour": 7,
 }
 
 
@@ -2568,6 +2574,10 @@ def _detect_tim_res(dataset_dir: Path, file_glob: str | list[str] | tuple[str, .
         dir_str, "3", ("hourly", "hour", "hr", "h")
     ):
         return "3Hour"
+    if _has_resolution_token(name, "30", ("minutes", "minute", "mins", "min")) or _has_resolution_token(
+        dir_str, "30", ("minutes", "minute", "mins", "min")
+    ):
+        return "30min"
     if _has_resolution_token(name, "6", ("hourly", "hour", "hr", "h")) or _has_resolution_token(
         dir_str, "6", ("hourly", "hour", "hr", "h")
     ):
