@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 import yaml
 
-from openbench.config.user_settings import resolve_reference_root
+from openbench.config.user_settings import get_user_config_dir, resolve_reference_root
 from openbench.data.registry.schema import (
     FallbackVar,
     ModelProfile,
@@ -56,7 +56,7 @@ def canonical_model_key(name: str) -> str:
 
 def _get_user_dir() -> Path:
     """Return the user config directory (~/.openbench)."""
-    return Path.home() / ".openbench"
+    return get_user_config_dir()
 
 
 def get_writable_model_catalog_path() -> Path:
@@ -215,7 +215,7 @@ class RegistryManager:
         # User overlay: deep-merge user directory on top of built-in
         # (only if different from package dir and exists)
         if user_dir is None:
-            user_dir = Path.home() / ".openbench"
+            user_dir = get_user_config_dir()
 
         if user_dir.exists() and not _same_concrete_path(user_dir, REGISTRY_DIR):
             # ~/.openbench/references/reference_catalog.yaml + individual YAML files

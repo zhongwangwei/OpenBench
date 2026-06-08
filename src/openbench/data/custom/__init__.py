@@ -26,7 +26,9 @@ def _get_user_custom_dir() -> Path:
     env_dir = os.environ.get("OPENBENCH_CUSTOM_DIR")
     if env_dir:
         return Path(env_dir)
-    return Path.home() / ".openbench" / "custom"
+    from openbench.config.user_settings import get_user_config_dir
+
+    return get_user_config_dir() / "custom"
 
 
 def load_filter(name: str) -> Optional[ModuleType]:

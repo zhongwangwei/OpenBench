@@ -114,6 +114,7 @@ def test_ref_scan_writes_user_reference_catalog(tmp_path, monkeypatch):
     captured = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -152,6 +153,7 @@ def test_ref_scan_reports_actual_catalog_path_returned_by_batch(tmp_path, monkey
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -184,6 +186,7 @@ def test_ref_scan_auto_fails_on_ambiguous_nc_variables(tmp_path, monkeypatch):
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -229,6 +232,7 @@ def test_ref_scan_auto_pick_first_keeps_legacy_ambiguous_selection(tmp_path, mon
     selected = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -276,6 +280,7 @@ def test_ref_scan_interactive_ambiguous_variable_choice_reprompts(tmp_path, monk
     selected = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -323,6 +328,7 @@ def test_ref_scan_ambiguous_variable_empty_candidates_fails_cleanly(tmp_path, mo
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(
         scanner_module,
         "find_new_datasets",
@@ -372,6 +378,7 @@ def test_ref_scan_auto_fails_when_unsupported_folders_would_be_skipped(tmp_path,
     registered = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -415,6 +422,7 @@ def test_ref_scan_auto_allow_skip_continues_with_supported_datasets(tmp_path, mo
     registered = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -456,6 +464,7 @@ def test_ref_scan_interactive_requires_confirmation_for_unsupported_skips(tmp_pa
     registered = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -490,6 +499,7 @@ def test_ref_scan_dry_run_reports_unsupported_skips_without_failing(tmp_path, mo
     home = tmp_path / "home"
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -524,6 +534,7 @@ def test_ref_scan_dry_run_warns_how_to_commit_when_skips_are_present(tmp_path, m
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -608,6 +619,7 @@ def test_write_reference_profile_confirms_before_overwriting_scan_config(tmp_pat
         )
     )
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(click, "confirm", lambda *args, **kwargs: False)
 
     with pytest.raises(click.ClickException, match="Profile scan overwrite cancelled"):
@@ -643,6 +655,7 @@ def test_ref_scan_profile_rescue_stops_when_same_skips_remain(tmp_path, monkeypa
     calls = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -677,6 +690,7 @@ def test_ref_scan_profile_rescue_does_not_stall_on_same_path_new_reason(tmp_path
     calls = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         reason = "ambiguous_nc_subdirectories" if len(calls) == 0 else "mixed_grid_resolutions_in_profile"
@@ -712,6 +726,7 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     for child, nc_var, unit in (
@@ -785,6 +800,7 @@ def test_ref_scan_profile_rescue_accepts_multiple_vars_from_one_nc(tmp_path, mon
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     cama_dir = ref_root / "Grid" / "LowRes" / "Composite" / "BadComposite" / "cama"
@@ -869,6 +885,7 @@ def test_ref_scan_profile_rescue_writes_file_glob_and_allows_child_skip(tmp_path
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     for child, nc_var in (("land", "LE"), ("mask", "mask")):
@@ -924,6 +941,7 @@ def test_ref_scan_profile_rescue_creates_station_profile(tmp_path, monkeypatch):
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     base = ref_root / "Station" / "Carbon" / "CH4_Flux" / "MyStn"
@@ -984,6 +1002,7 @@ def test_ref_scan_profile_rescue_creates_grid_nested_profile_for_deep_nc(tmp_pat
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     nc_dir = ref_root / "Grid" / "LowRes" / "Water" / "Runoff" / "DeepDS" / "a" / "b" / "c"
@@ -1035,6 +1054,7 @@ def test_ref_scan_ignore_action_writes_ignore_profile_and_rescans(tmp_path, monk
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     for child in ("raw_a", "raw_b"):
@@ -1072,6 +1092,7 @@ def test_ref_scan_does_not_report_skips_for_already_registered_dataset(tmp_path,
     ref_root = tmp_path / "Reference"
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", {})
 
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
@@ -1123,6 +1144,7 @@ def test_ref_scan_expands_root_environment_variable(tmp_path, monkeypatch):
     seen = []
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("OPENBENCH_TMP_SCAN_ROOT", str(ref_root))
     monkeypatch.setattr(
         scanner_module,
@@ -1143,6 +1165,7 @@ def test_ref_scan_only_filters_rescan_results(tmp_path, monkeypatch):
     ref_root.mkdir()
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     keep = DatasetGroup(base_name="KeepMe")
     keep.variants["LowRes"] = ScannedDataset(
@@ -1187,6 +1210,7 @@ def test_ref_scan_only_ignores_unmatched_skips_when_committing(tmp_path, monkeyp
     ref_root.mkdir()
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     keep = DatasetGroup(base_name="KeepMe")
     keep_variant = ScannedDataset(
@@ -1233,6 +1257,7 @@ def test_ref_scan_dry_run_previews_profile_rescue(tmp_path, monkeypatch):
     ref_root.mkdir()
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     def fake_find_new_datasets(root, on_progress=None, on_skip=None):
         on_skip(
@@ -1272,6 +1297,7 @@ def test_ref_register_writes_user_reference_catalog(tmp_path, monkeypatch):
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1298,6 +1324,7 @@ def test_ref_register_data_type_autodetect_handles_iterdir_errors(tmp_path, monk
     data_root = tmp_path / "ManualDS"
     data_root.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     original_iterdir = Path.iterdir
 
     def fail_data_root_iterdir(self):
@@ -1335,6 +1362,7 @@ def test_ref_register_reports_corrupt_catalog_without_traceback(tmp_path, monkey
     catalog.write_text("bad: [\n")
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1362,6 +1390,7 @@ def test_ref_register_rejects_missing_root_dir_without_traceback(tmp_path, monke
     missing = tmp_path / "missing"
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1387,6 +1416,7 @@ def test_ref_register_rejects_invalid_resolution_and_years(tmp_path, monkeypatch
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     bad_grid = runner.invoke(
         cli,
@@ -1436,6 +1466,7 @@ def test_ref_register_rejects_station_grid_res(tmp_path, monkeypatch):
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1464,6 +1495,7 @@ def test_ref_register_variable_option_accepts_prefix_suffix(tmp_path, monkeypatc
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1496,6 +1528,7 @@ def test_ref_register_accepts_climatology_tim_res(tmp_path, monkeypatch):
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1525,6 +1558,7 @@ def test_ref_register_expands_root_dir_environment_variable(tmp_path, monkeypatc
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("OPENBENCH_TMP_REF_ROOT", str(data_root))
 
     result = runner.invoke(
@@ -1555,6 +1589,7 @@ def test_ref_register_expands_fulllist_environment_variable(tmp_path, monkeypatc
     station_list.write_text("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("OPENBENCH_TMP_FULLLIST", str(station_list))
 
     result = runner.invoke(
@@ -1589,6 +1624,7 @@ def test_ref_register_resolves_relative_fulllist_against_root_dir(tmp_path, monk
     (list_dir / "stations.csv").write_text("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1620,6 +1656,7 @@ def test_ref_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
     data_root.mkdir()
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -1681,6 +1718,7 @@ def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monk
             return existing if name == "BuiltinDS" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(
@@ -1720,6 +1758,7 @@ def test_ref_register_updates_existing_reference_metadata_options(tmp_path, monk
             return existing if name == "BuiltinDS" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(
@@ -1773,6 +1812,7 @@ def test_ref_register_existing_grid_to_station_drops_grid_res(tmp_path, monkeypa
             return existing if name == "BuiltinDS" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(
@@ -1817,6 +1857,7 @@ def test_ref_register_does_not_default_existing_station_reference_to_grid(tmp_pa
             return existing if name == "MyStn" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["ref", "register", "MyStn", "-v", "Sensible_Heat:Qh:W m-2"])
@@ -1851,6 +1892,7 @@ def test_ref_register_reports_metadata_only_update(tmp_path, monkeypatch):
             return existing if name == "BuiltinDS" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["ref", "register", "BuiltinDS", "--category", "Hydrology"])
@@ -1878,6 +1920,7 @@ def test_ref_register_handles_null_variables_in_catalog(tmp_path, monkeypatch):
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(cli, ["ref", "register", "NullRef", "-v", "Runoff:ro:mm day-1"])
 
@@ -1975,6 +2018,7 @@ def test_ref_register_rechecks_new_dataset_root_dir_under_write_lock(tmp_path, m
 def test_ref_register_profile_reports_updated_for_existing_profile(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     first = runner.invoke(
         cli,
@@ -2000,6 +2044,7 @@ def test_ref_register_profile_handles_null_variables_in_catalog(tmp_path, monkey
     profile_path.write_text("NullProfile:\n  description: demo\n  variables: null\n")
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2014,6 +2059,7 @@ def test_ref_register_profile_handles_null_variables_in_catalog(tmp_path, monkey
 def test_ref_register_profile_accepts_prefix_suffix_and_fallback(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2039,6 +2085,7 @@ def test_ref_register_profile_accepts_prefix_suffix_and_fallback(tmp_path, monke
 def test_ref_register_profile_accepts_category_and_validates_data_groupby(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     bad = runner.invoke(
         cli,
@@ -2079,6 +2126,7 @@ def test_ref_register_profile_accepts_category_and_validates_data_groupby(tmp_pa
 def test_ref_register_profile_rejects_climatology_data_groupby(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2297,6 +2345,7 @@ def test_model_register_updates_existing_builtin_model_via_user_overlay(tmp_path
             return existing if name == "BuiltinModel" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(manager_module, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(
@@ -2330,6 +2379,7 @@ def test_model_register_reports_metadata_only_update(tmp_path, monkeypatch):
             return existing if name == "BuiltinModel" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(manager_module, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["model", "register", "BuiltinModel", "--tim-res", "Day"])
@@ -2341,6 +2391,7 @@ def test_model_register_reports_metadata_only_update(tmp_path, monkeypatch):
 def test_model_register_accepts_climatology_tim_res(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2367,6 +2418,7 @@ def test_model_register_accepts_climatology_tim_res(tmp_path, monkeypatch):
 def test_model_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2393,6 +2445,7 @@ def test_model_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
 def test_model_register_preserves_canonical_profile_name_when_input_case_differs(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(cli, ["model", "register", "colm2024", "-v", "Snow_Depth:sd:m"])
 
@@ -2411,6 +2464,7 @@ def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch)
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(cli, ["model", "register", "NullVars", "-v", "Runoff:ro:mm day-1"])
 
@@ -2422,6 +2476,7 @@ def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch)
 def test_model_register_cancels_new_profile_with_no_variables(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     result = runner.invoke(
         cli,
@@ -2506,6 +2561,7 @@ def test_model_register_uses_canonical_name_in_default_description(tmp_path, mon
             return None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(manager_module, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["model", "register", "alias", "-v", "Runoff:ro:mm day-1"])
@@ -2539,6 +2595,7 @@ def test_ref_register_preserves_canonical_reference_name_when_input_case_differs
             return existing if name.lower() == "canonicalref" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["ref", "register", "canonicalref", "-v", "Snow_Depth:sd:m"])
@@ -2578,6 +2635,7 @@ def test_model_remove_var_can_create_overlay_from_builtin_profile(tmp_path, monk
             return existing if name == "BuiltinModel" else None
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(manager_module, "RegistryManager", FakeRegistryManager)
 
     result = runner.invoke(cli, ["model", "remove-var", "BuiltinModel", "Runoff"])
@@ -3463,6 +3521,7 @@ def test_init_reloads_reference_status_after_overlay_creation(tmp_path, monkeypa
         captured.append(status)
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(init_module, "ensure_user_registry_overlays", fake_ensure_user_registry_overlays)
     monkeypatch.setattr(init_module, "_init_reference_registry_preflight", fake_preflight)
     _install_single_reference_registry(monkeypatch)
@@ -3872,6 +3931,7 @@ def test_init_reference_preflight_missing_catalog_runs_scan_then_registers(tmp_p
     )
 
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
     monkeypatch.setattr(init_module, "_resolve_reference_root", lambda value: ref_root)
     monkeypatch.setattr(
@@ -4105,6 +4165,7 @@ def test_resolve_reference_root_expands_prompted_user_path(tmp_path, monkeypatch
     ref_root = home / "Reference"
     ref_root.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
 
     @click.command()
@@ -4126,6 +4187,7 @@ def test_resolve_reference_root_warns_when_saved_root_is_missing(tmp_path, monke
     missing_root = tmp_path / "MissingReference"
     valid_root.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
     remember_reference_root(missing_root)
 

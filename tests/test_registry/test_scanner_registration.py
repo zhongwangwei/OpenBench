@@ -197,6 +197,7 @@ def test_cli_scan_prefers_base_name_existing_descriptor_before_registry_name(
 ):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
 
     variant = ScannedDataset(
@@ -261,6 +262,7 @@ def test_cli_scan_rescan_registers_existing_variants(monkeypatch, tmp_path: Path
 
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
 
     variant = ScannedDataset(
@@ -348,6 +350,7 @@ def test_cli_scan_rejects_out_of_range_multi_variable_choice(monkeypatch, tmp_pa
     ref_root = tmp_path / "Reference"
     ref_root.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
     variant = ScannedDataset(
         name="Demo",
@@ -460,6 +463,7 @@ def test_register_scanned_builtin_identical_descriptor_does_not_shadow_user_over
 
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(registry_manager_module, "REGISTRY_DIR", package_registry)
 
     scanned = ScannedDataset(
@@ -3682,6 +3686,7 @@ def test_scan_root_dir_uses_persisted_openbench_ref_root_token_when_env_unset(
     ref_root = tmp_path / "Reference"
     (settings_dir / "settings.yaml").write_text(yaml.safe_dump({"reference_root": str(ref_root)}))
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
 
     nc_dir = ref_root / "Grid" / "LowRes" / "Water" / "Runoff" / "PortableDemo"
@@ -3975,6 +3980,7 @@ def test_cli_scan_dry_run_does_not_write_catalog(tmp_path: Path, monkeypatch):
     original = catalog_path.read_text()
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
 
     group = DatasetGroup(base_name="DryDemo")

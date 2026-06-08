@@ -12,9 +12,19 @@ import yaml
 SETTINGS_FILE_NAME = "settings.yaml"
 
 
+def resolve_home_dir() -> Path:
+    """Return the user home directory, with an optional ``$OPENBENCH_HOME`` override.
+
+    Falls back to ``Path.home()`` (which honors ``$HOME`` on POSIX and
+    ``%USERPROFILE%`` on Windows), so it remains monkeypatch-friendly in tests.
+    """
+    override = os.environ.get("OPENBENCH_HOME")
+    return Path(override) if override else Path.home()
+
+
 def get_user_config_dir(user_dir: str | Path | None = None) -> Path:
     """Return the per-user OpenBench config directory."""
-    return Path(user_dir).expanduser() if user_dir is not None else Path.home() / ".openbench"
+    return Path(user_dir).expanduser() if user_dir is not None else resolve_home_dir() / ".openbench"
 
 
 def get_user_settings_path(user_dir: str | Path | None = None) -> Path:

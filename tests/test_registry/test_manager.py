@@ -481,6 +481,7 @@ def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
     settings_dir.mkdir(parents=True)
     (settings_dir / "settings.yaml").write_text(yaml.safe_dump({"reference_root": str(tmp_path / "Reference")}))
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
     registry_manager_module._UNRESOLVED_ENV_VARS_WARNED.clear()
 

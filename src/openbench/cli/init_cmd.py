@@ -161,7 +161,9 @@ def _ensure_empty_yaml_overlay(target: Path, base_dir: Path, manifest: dict) -> 
 
 def ensure_user_registry_overlays(user_dir: str | Path | None = None) -> Path:
     """Create the per-user registry overlay skeleton and seed custom filters."""
-    base_dir = Path(user_dir) if user_dir is not None else Path.home() / ".openbench"
+    from openbench.config.user_settings import get_user_config_dir
+
+    base_dir = get_user_config_dir(user_dir)
     references_dir = base_dir / "references"
     models_dir = base_dir / "models"
     custom_dir = base_dir / "custom"
@@ -315,7 +317,9 @@ def _expand_existing_directory(value: str | Path, label: str) -> Path:
 
 
 def _reference_catalog_status(user_dir: str | Path | None = None) -> ReferenceCatalogStatus:
-    base_dir = Path(user_dir) if user_dir is not None else Path.home() / ".openbench"
+    from openbench.config.user_settings import get_user_config_dir
+
+    base_dir = get_user_config_dir(user_dir)
     catalog_path = base_dir / "references" / "reference_catalog.yaml"
     if not catalog_path.exists():
         return ReferenceCatalogStatus(catalog_path=catalog_path, exists=False, empty=True)
