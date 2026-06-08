@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,13 @@ import numpy as np
 import xarray as xr
 
 logger = logging.getLogger(__name__)
+
+# HDF5 (the default netCDF4 backend) is not thread-safe unless built with
+# --enable-threadsafe. OpenBench writes scratch NetCDF files from joblib
+# ``prefer="threads"`` workers (e.g. station matching), so concurrent
+# ``to_netcdf`` calls can segfault the interpreter. Serialize the actual HDF5
+# write with a process-wide lock; per-site compute still runs in parallel.
+_NETCDF_WRITE_LOCK = threading.Lock()
 
 
 _TRUTHY = {"1", "true", "yes", "y", "on"}
@@ -187,4 +195,10 @@ def write_netcdf_atomic(
     files or mfdataset batch shards.
     """
     nc_kwargs = _netcdf_kwargs_with_default_compression(data, kwargs, compression=compression)
-    write_file_atomic(output_path, lambda tmp_path: data.to_netcdf(tmp_path, **nc_kwargs), suffix=".tmp.nc")
+
+    def _locked_write(tmp_path: Path) -> None:
+        # Serialize HDF5 writes across threads (netCDF4/HDF5 is not thread-safe).
+        with _NETCDF_WRITE_LOCK:
+            data.to_netcdf(tmp_path, **nc_kwargs)
+
+    write_file_atomic(output_path, _locked_write, suffix=".tmp.nc")
