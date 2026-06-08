@@ -23,6 +23,9 @@ jobs:
     # GUI tests use Qt; run it headless on the CI runners.
     env:
       QT_QPA_PLATFORM: offscreen
+      # HDF5/netCDF4 segfaults under joblib-parallel writes on some runners
+      # unless file locking is disabled (HDF5 is not fork-safe).
+      HDF5_USE_FILE_LOCKING: "FALSE"
     strategy:
       fail-fast: false
       matrix:
