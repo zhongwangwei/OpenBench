@@ -5374,7 +5374,7 @@ def test_all_commands_registered():
     # Use list_commands() for LazyGroup compatibility
     ctx = click.Context(cli)
     command_names = set(cli.list_commands(ctx))
-    expected = {"run", "check", "ref", "sim", "model", "migrate", "init", "cache", "gui", "version"}
+    expected = {"run", "check", "ref", "sim", "model", "migrate", "init", "cache", "gui", "version", "smoke-test"}
     assert expected == command_names, f"Missing: {expected - command_names}, Extra: {command_names - expected}"
 
 
