@@ -70,7 +70,7 @@ def test_sim_scan_auto_writes_timestamped_simulation_yaml_and_report(tmp_path, m
     assert sim_path.exists()
     assert report_path.exists()
 
-    sim_data = yaml.safe_load(sim_path.read_text())
+    sim_data = yaml.safe_load(sim_path.read_text(encoding="utf-8"))
     assert sim_data["simulation"]["CaseA"]["model"] == "CoLM2024"
     assert sim_data["simulation"]["CaseA"]["root_dir"] == str(history)
     assert sim_data["simulation"]["CaseA"]["tim_res"] == "Month"
@@ -78,7 +78,7 @@ def test_sim_scan_auto_writes_timestamped_simulation_yaml_and_report(tmp_path, m
     assert sim_data["simulation"]["CaseA"]["data_groupby"] == "Year"
     assert sim_data["simulation"]["CaseA"]["prefix"] == "QFLX_EVAP_TOT_"
 
-    report = yaml.safe_load(report_path.read_text())
+    report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
     assert report["summary"]["cases"] == 1
     assert report["cases"][0]["label"] == "CaseA"
     assert report["cases"][0]["time_start"] == "2000-01-01T00:00:00"
@@ -108,7 +108,7 @@ def test_sim_scan_station_collection_writes_fulllist_and_merged_station_files(
 
     assert result.exit_code == 0, result.output
     sim_path = tmp_path / "openbench_sim_scan_20260501-160500.yaml"
-    sim_data = yaml.safe_load(sim_path.read_text())
+    sim_data = yaml.safe_load(sim_path.read_text(encoding="utf-8"))
     entry = sim_data["simulation"]["CaseA"]
     assert entry["root_dir"] == str(case_root)
     assert entry["data_type"] == "stn"
@@ -123,7 +123,7 @@ def test_sim_scan_station_collection_writes_fulllist_and_merged_station_files(
     assert set(rows.columns) >= {"ID", "sim_lon", "sim_lat", "use_syear", "use_eyear", "sim_dir"}
     assert all(Path(path).exists() for path in rows["sim_dir"])
 
-    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-160500.yaml").read_text())
+    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-160500.yaml").read_text(encoding="utf-8"))
     assert report["cases"][0]["station_layout"] == "nested_multi"
     assert report["cases"][0]["station_count"] == 2
     assert Path(report["cases"][0]["merged_dir"]).exists()
@@ -159,7 +159,7 @@ def test_sim_scan_default_station_output_follows_explicit_output_parent(
     )
 
     assert result.exit_code == 0, result.output
-    sim_data = yaml.safe_load(output_path.read_text())
+    sim_data = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     raw_fulllist = sim_data["simulation"]["CaseA"]["fulllist"]
     fulllist = Path(raw_fulllist)
     if not fulllist.is_absolute():
@@ -187,7 +187,7 @@ def test_sim_scan_station_collection_merges_when_any_site_has_multiple_files(
     )
 
     assert result.exit_code == 0, result.output
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-161500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-161500.yaml").read_text(encoding="utf-8"))
     fulllist = Path(sim_data["simulation"]["CaseA"]["fulllist"])
     rows = pd.read_csv(fulllist).set_index("ID")
 
@@ -208,7 +208,7 @@ def test_sim_scan_writes_inferred_prefix_suffix_for_runtime_lookup(tmp_path, mon
     result = runner.invoke(cli, ["sim", "scan", str(root), "--model", "CoLM2024", "--auto"])
 
     assert result.exit_code == 0, result.output
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-162500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-162500.yaml").read_text(encoding="utf-8"))
     entry = sim_data["simulation"]["CaseA"]
     assert entry["data_groupby"] == "Year"
     assert entry["prefix"] == "caseA_QFLX_EVAP_TOT_"
@@ -240,7 +240,7 @@ def test_sim_scan_writes_variable_file_overrides(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["sim", "scan", str(root), "--model", "TE", "--auto"])
 
     assert result.exit_code == 0, result.output
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-172500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-172500.yaml").read_text(encoding="utf-8"))
     entry = sim_data["simulation"]["TE"]
     assert entry["variables"]["Latent_Heat"] == {
         "prefix": "YEE2_JRA-55_LTNT_M",
@@ -269,7 +269,7 @@ def test_sim_scan_duplicate_labels_do_not_overwrite_yaml_entries(tmp_path, monke
     )
 
     assert result.exit_code == 0, result.output
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-163500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-163500.yaml").read_text(encoding="utf-8"))
     simulation = sim_data["simulation"]
     assert "CaseA" in simulation
     duplicate_label = "CaseA__root_b"
@@ -363,7 +363,7 @@ def test_sim_scan_multiple_roots_uses_simulation_defaults(tmp_path, monkeypatch)
     )
 
     assert result.exit_code == 0
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-143500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-143500.yaml").read_text(encoding="utf-8"))
     simulation = sim_data["simulation"]
     assert simulation["_defaults"] == {
         "model": "CoLM2024",
@@ -390,10 +390,10 @@ def test_sim_scan_climatology_option_forces_monthly_climatology(tmp_path, monkey
     )
 
     assert result.exit_code == 0
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-150500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-150500.yaml").read_text(encoding="utf-8"))
     assert sim_data["simulation"]["CaseA"]["tim_res"] == "climatology-month"
 
-    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-150500.yaml").read_text())
+    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-150500.yaml").read_text(encoding="utf-8"))
     assert report["cases"][0]["temporal_kind"] == "climatology-month"
     assert report["cases"][0]["provenance"]["temporal_kind"] == "user"
 
@@ -431,10 +431,10 @@ def test_sim_scan_interactive_confirmation_applies_monthly_climatology_candidate
     )
 
     assert result.exit_code == 0
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-151500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-151500.yaml").read_text(encoding="utf-8"))
     assert sim_data["simulation"]["CaseA"]["tim_res"] == "climatology-month"
 
-    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-151500.yaml").read_text())
+    report = yaml.safe_load((tmp_path / "openbench_sim_scan_report_20260501-151500.yaml").read_text(encoding="utf-8"))
     assert report["cases"][0]["temporal_kind"] == "climatology-month"
     assert report["cases"][0]["temporal_kind_candidate"] is None
     assert report["cases"][0]["provenance"]["temporal_kind"] == "user-confirmed"
@@ -481,7 +481,7 @@ def test_sim_scan_register_model_creates_draft_profile_for_unknown_model(tmp_pat
     assert result.exit_code == 0, result.output
 
     catalog_path = home / ".openbench" / "models" / "model_catalog.yaml"
-    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     profile = catalog["NewModel"]
     assert profile["name"] == "NewModel"
     assert profile["data_type"] == "grid"
@@ -492,7 +492,7 @@ def test_sim_scan_register_model_creates_draft_profile_for_unknown_model(tmp_pat
         "varunit": "mm day-1",
     }
 
-    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260502-101500.yaml").read_text())
+    sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260502-101500.yaml").read_text(encoding="utf-8"))
     assert sim_data["simulation"]["MysteryCase"]["model"] == "NewModel"
 
 
@@ -599,7 +599,7 @@ def test_sim_scan_register_model_rolls_back_profile_when_later_write_fails(
     assert result.exit_code != 0
     catalog_path = home / ".openbench" / "models" / "model_catalog.yaml"
     if catalog_path.exists():
-        assert "RollbackModel" not in (yaml.safe_load(catalog_path.read_text()) or {})
+        assert "RollbackModel" not in (yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {})
 
 
 def test_sim_scan_writes_report_before_rejecting_partial_station_materialization(
@@ -656,7 +656,7 @@ def test_sim_scan_writes_report_before_rejecting_partial_station_materialization
     assert str(report_path) in result.output
     assert report_path.exists()
     assert not output.exists()
-    report = yaml.safe_load(report_path.read_text())
+    report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
     assert report["cases"][0]["station_dropped_sites"] == ["US-BAD"]
 
 
@@ -735,4 +735,4 @@ def test_rebase_station_artifacts_updates_fulllist_and_case_paths(tmp_path):
     _rebase_station_artifacts(result, old_root, new_root)
 
     assert case.merged_dir == new_root / "CaseA" / "merged"
-    assert str(new_root / "CaseA" / "merged" / "S1.nc") in case.fulllist.read_text()
+    assert str(new_root / "CaseA" / "merged" / "S1.nc") in case.fulllist.read_text(encoding="utf-8")

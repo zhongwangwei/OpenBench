@@ -64,7 +64,7 @@ assert after.lower() == "svg", after
 
 def test_visualization_exceptions_do_not_log_errors_without_raising():
     for path in _visualization_python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for handler in [node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)]:
             handler_module = ast.Module(body=handler.body, type_ignores=[])
             raises = any(isinstance(child, ast.Raise) for child in ast.walk(handler_module))
@@ -85,7 +85,7 @@ def test_visualization_exceptions_do_not_log_errors_without_raising():
 
 def test_visualization_renderers_do_not_close_unrelated_figures():
     for path in _visualization_python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -103,7 +103,7 @@ def test_diagram_outputs_use_safe_filename_components():
         ("Fig_taylor_diagram.py", "Taylor_Diagram_"),
         ("Fig_target_diagram.py", "Target_Diagram_"),
     ]:
-        source = (_VIS_DIR / filename).read_text()
+        source = (_VIS_DIR / filename).read_text(encoding="utf-8")
         assert "join_filename_components" in source
         assert raw_prefix + "{evaluation_item}" not in source
 
@@ -113,7 +113,7 @@ def test_visualization_combination_filenames_do_not_join_with_plain_underscores(
         _VIS_DIR / "Fig_parallel_coordinates.py",
         _VIS_DIR / "Fig_portrait_plot_seasonal.py",
     ]:
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
@@ -132,7 +132,7 @@ def test_visualization_renderers_save_and_close_explicit_figures():
     for path in _visualization_python_files():
         if path.name == "_figure_io.py":
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -174,7 +174,7 @@ def test_visualization_renderers_do_not_use_pyplot_current_axes_state():
         "Polygon",
     }
     for path in _visualization_python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
@@ -194,7 +194,7 @@ def test_functions_that_open_figures_are_failure_isolated():
     for path in _visualization_python_files():
         if not path.name.startswith("Fig_"):
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef):
                 continue
@@ -216,7 +216,7 @@ def test_renderers_that_save_figures_also_close_them():
     for path in _visualization_python_files():
         if path.name == "_figure_io.py":
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef):
                 continue
@@ -240,7 +240,7 @@ def test_renderers_that_save_figures_also_close_them():
 
 def test_visualization_renderers_do_not_create_unused_pyplot_figures():
     for path in _visualization_python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
                 continue
@@ -265,7 +265,7 @@ def test_save_figure_creates_parent_and_replaces_atomically(tmp_path):
 
     save_figure(DummyFigure(), output_path, format="txt", dpi=42)
 
-    assert output_path.read_text() == "txt:42"
+    assert output_path.read_text(encoding="utf-8") == "txt:42"
     assert not list(output_path.parent.glob(f".{output_path.name}.*"))
 
 
@@ -291,7 +291,7 @@ def test_save_figure_removes_temporary_file_on_failure(tmp_path):
 
 
 def test_station_index_plot_saves_each_ref_and_sim_iteration():
-    tree = ast.parse((_VIS_DIR / "Fig_stn_plot_index.py").read_text())
+    tree = ast.parse((_VIS_DIR / "Fig_stn_plot_index.py").read_text(encoding="utf-8"))
     function = next(
         node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "make_stn_plot_index"
     )

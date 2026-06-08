@@ -25,7 +25,7 @@ def _load_builtin_yaml(filename: str) -> dict:
     import yaml
 
     path = registry_manager_module.REGISTRY_DIR / filename
-    return yaml.safe_load(path.read_text()) or {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
 def _load_legacy_yaml_dir(dirname: str) -> dict[str, dict]:
@@ -35,7 +35,7 @@ def _load_legacy_yaml_dir(dirname: str) -> dict[str, dict]:
     if not root.exists():
         pytest.skip(f"legacy OpenBench-wei definitions not available: {root}")
 
-    return {path.stem: yaml.safe_load(path.read_text()) or {} for path in sorted(root.glob("*.yaml"))}
+    return {path.stem: yaml.safe_load(path.read_text(encoding="utf-8")) or {} for path in sorted(root.glob("*.yaml"))}
 
 
 def _legacy_openbench_wei_root() -> Path:
@@ -992,7 +992,7 @@ def test_delete_builtin_reference_writes_tombstone_and_survives_reload(tmp_path,
     # A tombstone must have been written to the user overlay catalog.
     import yaml
 
-    written = yaml.safe_load(catalog_path.read_text())
+    written = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     assert any(isinstance(v, dict) and v.get("_deleted") for v in written.values())
 
     # A fresh manager (reload) must NOT resurrect the deleted built-in reference.

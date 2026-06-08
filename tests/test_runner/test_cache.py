@@ -66,7 +66,7 @@ def test_load_preserves_corrupt_file_for_diagnostics(tmp_path):
     """
     cache_file = tmp_path / ".openbench_cache.json"
     cache_file.write_text("{not valid json")
-    original = cache_file.read_text()
+    original = cache_file.read_text(encoding="utf-8")
 
     cache = EvaluationCache(tmp_path)
     # Empty in-memory cache; re-evaluation expected on next run
@@ -76,7 +76,7 @@ def test_load_preserves_corrupt_file_for_diagnostics(tmp_path):
     # Find the .corrupt sibling and verify it preserves the broken content
     corrupt_files = list(tmp_path.glob(".openbench_cache.corrupt-*"))
     assert len(corrupt_files) == 1, f"Expected one .corrupt-* file, found: {[f.name for f in corrupt_files]}"
-    assert corrupt_files[0].read_text() == original
+    assert corrupt_files[0].read_text(encoding="utf-8") == original
 
 
 def test_windows_file_lock_seeds_empty_lock_file_before_locking(monkeypatch, tmp_path):

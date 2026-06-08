@@ -100,23 +100,23 @@ def test_valid_pair_check_accepts_at_least_one_shared_finite_value():
 
 
 def test_evaluation_no_longer_materializes_masks_with_values_copy():
-    source = Path("src/openbench/core/evaluation.py").read_text()
+    source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
 
     assert ".values.copy()" not in source
     assert "_apply_pairwise_valid_mask(s, o)" in source
 
 
 def test_evaluation_side_effect_methods_are_not_cached():
-    source = Path("src/openbench/core/evaluation.py").read_text()
+    source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
 
     assert "@cached" not in source
     assert 's["time"] = o["time"]' not in source
 
 
 def test_processing_uses_chunked_open_mfdataset_wrapper():
-    processing_source = Path("src/openbench/data/processing.py").read_text()
-    selection_source = Path("src/openbench/data/_processing_selection.py").read_text()
-    grid_source = Path("src/openbench/data/_processing_grid.py").read_text()
+    processing_source = Path("src/openbench/data/processing.py").read_text(encoding="utf-8")
+    selection_source = Path("src/openbench/data/_processing_selection.py").read_text(encoding="utf-8")
+    grid_source = Path("src/openbench/data/_processing_grid.py").read_text(encoding="utf-8")
     combined_source = processing_source + selection_source + grid_source
 
     assert "src_ds = xr.open_mfdataset" not in processing_source
@@ -127,9 +127,9 @@ def test_processing_uses_chunked_open_mfdataset_wrapper():
 
 
 def test_remaining_mfdataset_entrypoints_use_dataset_loader_wrappers():
-    station_source = Path("src/openbench/data/station_scanner.py").read_text()
-    cli_data_source = Path("src/openbench/cli/data.py").read_text()
-    cli_optimize_source = Path("src/openbench/cli/_optimize.py").read_text()
+    station_source = Path("src/openbench/data/station_scanner.py").read_text(encoding="utf-8")
+    cli_data_source = Path("src/openbench/cli/data.py").read_text(encoding="utf-8")
+    cli_optimize_source = Path("src/openbench/cli/_optimize.py").read_text(encoding="utf-8")
 
     assert "xr.open_mfdataset(" not in station_source
     assert "_open_mfdataset_chunked(" in station_source
@@ -162,7 +162,7 @@ def test_metric_worker_count_honors_configured_cores(monkeypatch):
 
 
 def test_metric_parallelism_no_longer_uses_hard_coded_worker_cap():
-    source = Path("src/openbench/core/evaluation.py").read_text()
+    source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
 
     assert "len(self.metrics) > 3" not in source
     assert "max_workers=min(4, len(self.metrics))" not in source

@@ -56,7 +56,7 @@ def test_csv_formatter_preserves_existing_file_when_write_fails(tmp_path, monkey
     with pytest.raises(Exception, match="simulated csv failure"):
         manager.save_data(pd.DataFrame({"a": [2]}), "metrics", "table", "csv")
 
-    assert output.read_text() == "a\n1\n"
+    assert output.read_text(encoding="utf-8") == "a\n1\n"
     assert not list(output.parent.glob(".table.csv.*.tmp.csv"))
 
 
@@ -79,5 +79,5 @@ def test_json_formatter_preserves_existing_file_when_write_fails(tmp_path, monke
     with pytest.raises(Exception, match="simulated json failure"):
         manager.save_data({"ok": False}, "metrics", "payload", "json")
 
-    assert json.loads(output.read_text()) == {"ok": True}
+    assert json.loads(output.read_text(encoding="utf-8")) == {"ok": True}
     assert not list(output.parent.glob(".payload.json.*.tmp.json"))

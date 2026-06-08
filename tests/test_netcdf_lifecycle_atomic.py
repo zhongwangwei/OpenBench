@@ -126,7 +126,7 @@ def test_evaluation_score_save_preserves_existing_netcdf_on_write_failure(tmp_pa
 
 
 def test_core_comparison_uses_atomic_netcdf_writes_only():
-    source = Path("src/openbench/core/comparison.py").read_text()
+    source = Path("src/openbench/core/comparison.py").read_text(encoding="utf-8")
 
     assert ".to_netcdf(" not in source
 
@@ -136,7 +136,7 @@ def test_groupby_modules_use_atomic_netcdf_writes_only():
         Path("src/openbench/core/climatezone_groupby.py"),
         Path("src/openbench/core/landcover_groupby.py"),
     ):
-        assert ".to_netcdf(" not in path.read_text(), str(path)
+        assert ".to_netcdf(" not in path.read_text(encoding="utf-8"), str(path)
 
 
 @pytest.mark.parametrize(
@@ -163,7 +163,7 @@ def test_groupby_table_write_preserves_existing_csv_on_failure(tmp_path, monkeyp
     with pytest.raises(OSError, match="simulated CSV write failure"):
         module._write_lines_atomic(str(target), ["new complete table\n"])
 
-    assert target.read_text() == "old complete table\n"
+    assert target.read_text(encoding="utf-8") == "old complete table\n"
     assert not list(tmp_path.glob(".groupby.csv.*.tmp.csv"))
 
 
@@ -172,7 +172,7 @@ def test_groupby_modules_use_atomic_table_writes_only():
         Path("src/openbench/core/climatezone_groupby.py"),
         Path("src/openbench/core/landcover_groupby.py"),
     ):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         assert "with open(output_file_path" not in source, str(path)
         assert "_write_lines_atomic(" in source, str(path)
 
@@ -182,7 +182,7 @@ def test_cdo_remap_paths_use_closed_atomic_temp_netcdf_writes():
         Path("src/openbench/core/statistics/Mod_Statistics.py"),
         Path("src/openbench/data/processing.py"),
     ):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         assert ".to_netcdf(" not in source, str(path)
         assert 'NamedTemporaryFile(suffix=".nc")' not in source, str(path)
 
@@ -316,6 +316,11 @@ def test_atomic_file_write_fsyncs_temp_file_and_parent_directory(tmp_path, monke
 
     write_file_atomic(tmp_path / "out.txt", lambda p: p.write_text("ok"), suffix=".tmp")
 
-    assert (tmp_path / "out.txt").read_text() == "ok"
-    assert len(fsynced) >= 2
-    assert opened_dirs == [tmp_path]
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "ok"
+    # Directory fsync is POSIX-only (os.O_DIRECTORY); Windows skips it by design.
+    if hasattr(os, "O_DIRECTORY"):
+        assert len(fsynced) >= 2
+        assert opened_dirs == [tmp_path]
+    else:
+        assert len(fsynced) >= 1
+        assert opened_dirs == []

@@ -25,7 +25,7 @@ def test_register_scanned_dataset_does_not_persist_unverified_default_years(tmp_
 
     register_scanned_dataset(scanned, catalog_path=catalog)
 
-    text = catalog.read_text()
+    text = catalog.read_text(encoding="utf-8")
     assert "1980" not in text
     assert "2023" not in text
     assert "years:" not in text
@@ -33,7 +33,7 @@ def test_register_scanned_dataset_does_not_persist_unverified_default_years(tmp_
 
 def test_bundled_reference_catalog_has_no_scanner_temporary_variable_fields():
     catalog_path = Path(scanner_module.__file__).with_name("reference_catalog.yaml")
-    catalog = yaml.safe_load(catalog_path.read_text()) or {}
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}
     leaks = []
     for dataset_name, descriptor in catalog.items():
         for variable_name, variable in (descriptor.get("variables") or {}).items():
@@ -139,7 +139,7 @@ def test_register_scanned_dataset_merges_existing_variable_descriptor_by_scanned
         existing_descriptor=existing_descriptor,
     )
 
-    data = yaml.safe_load(catalog.read_text())
+    data = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     descriptor = data["Demo_LowRes"]
     variable = descriptor["variables"]["Evapotranspiration"]
 
@@ -182,7 +182,7 @@ def test_register_scanned_dataset_does_not_match_existing_variable_descriptors_b
         existing_descriptor=existing_descriptor,
     )
 
-    data = yaml.safe_load(catalog.read_text())
+    data = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     variable = data["Demo_LowRes"]["variables"]["Evapotranspiration"]
 
     assert variable["varname"] == "Evapotranspiration"
@@ -252,7 +252,7 @@ def test_cli_scan_prefers_base_name_existing_descriptor_before_registry_name(
     cli_data.scan.callback(str(tmp_path), auto=True, dry_run=False)
 
     assert captured["scanned"] == "Demo_LowRes"
-    settings = yaml.safe_load((home / ".openbench" / "settings.yaml").read_text())
+    settings = yaml.safe_load((home / ".openbench" / "settings.yaml").read_text(encoding="utf-8"))
     assert settings["reference_root"] == str(tmp_path.resolve())
 
 
@@ -420,7 +420,7 @@ def test_register_scanned_dataset_writes_station_list_next_to_catalog(tmp_path: 
 
     register_scanned_dataset(scanned, catalog_path=catalog_path)
 
-    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     expected = catalog_path.parent / "station_lists" / "DemoStation.csv"
     assert catalog["DemoStation"]["fulllist"] == expected.as_posix()
     assert expected.exists()
@@ -478,7 +478,7 @@ def test_register_scanned_builtin_identical_descriptor_does_not_shadow_user_over
 
     catalog_path = register_scanned_datasets_batch([scanned])
 
-    assert yaml.safe_load(catalog_path.read_text()) == {}
+    assert yaml.safe_load(catalog_path.read_text(encoding="utf-8")) == {}
 
 
 def test_batch_register_preserves_existing_descriptor_fields(tmp_path: Path):
@@ -528,7 +528,7 @@ def test_batch_register_preserves_existing_descriptor_fields(tmp_path: Path):
 
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
 
-    data = yaml.safe_load(catalog_path.read_text())
+    data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     var = data["Demo_LowRes"]["variables"]["Evapotranspiration"]
 
     # Hand-edited fields should be preserved (not overwritten by scanner)
@@ -577,7 +577,7 @@ def test_single_register_preserves_existing_descriptor_fields(tmp_path: Path):
 
     register_scanned_dataset(scanned, catalog_path=catalog_path)
 
-    entry = yaml.safe_load(catalog_path.read_text())["Demo_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["Demo_LowRes"]
     assert entry["description"] == "Hand edited description"
     assert entry["category"] == "Custom"
     assert entry["timezone"] == 8
@@ -630,7 +630,7 @@ def test_register_profile_uses_writable_references_dir_and_clears_caches(
 
     assert writable_profile.exists()
     assert not (fake_package_registry / "reference_profiles.yaml").exists()
-    saved = yaml.safe_load(writable_profile.read_text())
+    saved = yaml.safe_load(writable_profile.read_text(encoding="utf-8"))
     assert saved["DemoProfile"]["variables"]["Runoff"]["varname"] == "ro"
     assert registry_cleared == [True]
     assert profile_cleared == [True]
@@ -848,7 +848,7 @@ def test_provenance_reaches_reference_dataset_from_catalog(tmp_path: Path):
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
 
     # Verify provenance is written by the scanner.
-    data = yaml.safe_load(catalog_path.read_text())
+    data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     prov = data["ProvTest_LowRes"].get("_provenance")
     assert prov is not None
     assert "tim_res" in prov
@@ -1217,7 +1217,7 @@ def test_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path):
     catalog_path = tmp_path / "reference_catalog.yaml"
     # Write corrupted YAML
     catalog_path.write_text("not: valid: yaml: ::: garbage\n[broken")
-    original = catalog_path.read_text()
+    original = catalog_path.read_text(encoding="utf-8")
 
     scanned = ScannedDataset(
         name="DemoNew",
@@ -1232,7 +1232,7 @@ def test_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path):
         register_scanned_dataset(scanned, catalog_path=catalog_path)
 
     # Original (corrupted) file untouched — user can recover manually
-    assert catalog_path.read_text() == original
+    assert catalog_path.read_text(encoding="utf-8") == original
 
 
 def test_register_creates_backup_before_overwriting_existing_catalog(tmp_path: Path):
@@ -1254,10 +1254,10 @@ def test_register_creates_backup_before_overwriting_existing_catalog(tmp_path: P
 
     backup_path = Path(str(catalog_path) + ".bak")
     assert backup_path.exists(), f"Expected backup at {backup_path}"
-    bak_data = yaml.safe_load(backup_path.read_text())
+    bak_data = yaml.safe_load(backup_path.read_text(encoding="utf-8"))
     assert "OldDataset_LowRes" in bak_data
     # New file has both
-    new_data = yaml.safe_load(catalog_path.read_text())
+    new_data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     assert "OldDataset_LowRes" in new_data
     assert "NewDataset_LowRes" in new_data
 
@@ -1854,7 +1854,7 @@ def test_rescan_preserves_existing_fulllist_when_file_exists(tmp_path: Path):
         f"not regenerated. Got: {catalog['FluxStn']['fulllist']}"
     )
     # Verify file content unchanged (not rewritten)
-    assert user_fulllist.read_text().startswith("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
+    assert user_fulllist.read_text(encoding="utf-8").startswith("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
 
 
 def test_data_groupby_detects_monthly_files(tmp_path: Path):
@@ -2663,7 +2663,7 @@ def test_concurrent_register_does_not_lose_writes_under_lock(tmp_path: Path):
 
     assert not errors, f"Worker errors: {errors}"
 
-    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     # BOTH datasets must be present — no silent overwrite
     assert "ConcurrentA_LowRes" in catalog, f"ConcurrentA missing from catalog (race condition): {list(catalog.keys())}"
     assert "ConcurrentB_LowRes" in catalog, f"ConcurrentB missing from catalog (race condition): {list(catalog.keys())}"
@@ -2754,10 +2754,10 @@ def test_cli_register_creates_backup_before_overwriting_catalog(tmp_path: Path, 
 
     backup_path = Path(str(catalog_path) + ".bak")
     assert backup_path.exists(), f"Expected .bak at {backup_path}"
-    bak_data = yaml.safe_load(backup_path.read_text())
+    bak_data = yaml.safe_load(backup_path.read_text(encoding="utf-8"))
     assert "OldDataset" in bak_data, "Backup must contain pre-register state"
     # New catalog has both entries (OldDataset preserved)
-    new_data = yaml.safe_load(catalog_path.read_text())
+    new_data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     assert "OldDataset" in new_data
     assert "NewDataset" in new_data
 
@@ -2773,7 +2773,7 @@ def test_cli_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path,
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     catalog_path.write_text("not: valid: ::: garbage\n[broken")
-    original = catalog_path.read_text()
+    original = catalog_path.read_text(encoding="utf-8")
 
     monkeypatch.setattr(
         mgr_mod,
@@ -2798,7 +2798,7 @@ def test_cli_register_refuses_overwrite_when_catalog_unparseable(tmp_path: Path,
         )
 
     # Original (corrupted) file untouched
-    assert catalog_path.read_text() == original
+    assert catalog_path.read_text(encoding="utf-8") == original
 
 
 def test_cli_model_register_creates_backup_before_overwriting(tmp_path: Path, monkeypatch):
@@ -2840,9 +2840,9 @@ def test_cli_model_register_creates_backup_before_overwriting(tmp_path: Path, mo
 
     backup_path = Path(str(catalog_path) + ".bak")
     assert backup_path.exists(), f"Expected .bak at {backup_path}"
-    bak_data = yaml.safe_load(backup_path.read_text())
+    bak_data = yaml.safe_load(backup_path.read_text(encoding="utf-8"))
     assert "OldModel" in bak_data
-    new_data = yaml.safe_load(catalog_path.read_text())
+    new_data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     assert "OldModel" in new_data
     assert "NewModel" in new_data
 
@@ -2858,7 +2858,7 @@ def test_cli_model_register_refuses_overwrite_when_catalog_unparseable(tmp_path:
 
     catalog_path = tmp_path / "model_catalog.yaml"
     catalog_path.write_text("not: valid: ::: garbage\n[broken")
-    original = catalog_path.read_text()
+    original = catalog_path.read_text(encoding="utf-8")
 
     monkeypatch.setattr(
         mgr_mod,
@@ -2880,7 +2880,7 @@ def test_cli_model_register_refuses_overwrite_when_catalog_unparseable(tmp_path:
             append_only=False,
         )
 
-    assert catalog_path.read_text() == original
+    assert catalog_path.read_text(encoding="utf-8") == original
 
 
 def test_cli_model_remove_var_creates_backup(tmp_path: Path, monkeypatch):
@@ -2911,11 +2911,11 @@ def test_cli_model_remove_var_creates_backup(tmp_path: Path, monkeypatch):
 
     backup_path = Path(str(catalog_path) + ".bak")
     assert backup_path.exists()
-    bak_data = yaml.safe_load(backup_path.read_text())
+    bak_data = yaml.safe_load(backup_path.read_text(encoding="utf-8"))
     # Backup retains BOTH variables (pre-remove state)
     assert "Snow_Depth" in bak_data["DemoModel"]["variables"]
     # Current file has only ET
-    new_data = yaml.safe_load(catalog_path.read_text())
+    new_data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     assert "Snow_Depth" not in new_data["DemoModel"]["variables"]
     assert "Evapotranspiration" in new_data["DemoModel"]["variables"]
 
@@ -3112,7 +3112,7 @@ def test_station_direct_nc_layout_uses_reference_profile(monkeypatch, tmp_path: 
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["FlatStation"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["FlatStation"]
 
     assert entry["description"] == "flat station dataset"
     assert entry["variables"] == {
@@ -3178,7 +3178,7 @@ def test_profile_scan_station_direct_can_read_nested_nc_dir(monkeypatch, tmp_pat
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["NamedStation"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["NamedStation"]
     assert entry["fulllist"] == "list/stations.csv"
     assert entry["variables"]["Evapotranspiration"]["sub_dir"] == ""
 
@@ -3241,7 +3241,7 @@ def test_profile_scan_station_shared_files_creates_named_dataset(monkeypatch, tm
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["GRDC_Daily"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["GRDC_Daily"]
 
     assert entry["description"] == "GRDC daily streamflow"
     assert entry["tim_res"] == "Day"
@@ -3298,7 +3298,7 @@ def test_grid_composite_dataset_layout_uses_reference_profile(monkeypatch, tmp_p
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["GridComposite_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["GridComposite_LowRes"]
 
     assert entry["description"] == "profiled grid composite"
     assert entry["tim_res"] == "Day"
@@ -3413,7 +3413,7 @@ def test_profile_scan_grid_composite_children_aggregates_child_dirs(monkeypatch,
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["GLEAM_Profiled_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["GLEAM_Profiled_LowRes"]
 
     assert entry["description"] == "profiled GLEAM composite"
     assert entry["variables"]["Evapotranspiration"]["sub_dir"] == "Composite/GLEAM_v4.2/E"
@@ -3562,7 +3562,7 @@ def test_profile_scan_grid_nested_root_uses_concrete_subdir(monkeypatch, tmp_pat
 
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
-    entry = yaml.safe_load(catalog_path.read_text())["DeepRunnable_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["DeepRunnable_LowRes"]
     assert entry["variables"]["Runoff"]["sub_dir"] == "Water/Runoff/DeepRunnable/a/b/c"
 
 
@@ -3639,7 +3639,7 @@ def test_scan_uses_grandchild_dir_when_nc_files_two_levels_deep(tmp_path: Path):
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
 
-    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     entry = catalog["DeepData_MidRes"]
     assert entry["variables"]["Evapotranspiration"]["varname"] == "ET_actual", (
         f"NC inspection at level 2 should populate varname, got: {entry['variables']['Evapotranspiration']}"
@@ -3790,7 +3790,7 @@ def test_station_generated_fulllist_uses_portable_reference_root(
 
     register_scanned_datasets_batch([scanned], catalog_path=catalog_path)
 
-    entry = yaml.safe_load(catalog_path.read_text())["DemoStation"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["DemoStation"]
     assert entry["fulllist"] == "${OPENBENCH_REF_ROOT}/station_lists/DemoStation.csv"
     assert (ref_root / "station_lists" / "DemoStation.csv").exists()
 
@@ -3849,7 +3849,7 @@ def test_profile_file_glob_is_used_for_registration_inspection(monkeypatch, tmp_
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
 
-    entry = yaml.safe_load(catalog_path.read_text())["SharedDaily"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["SharedDaily"]
     assert entry["tim_res"] == "Day"
     assert entry["_provenance"]["tim_res"] == "nc"
     assert entry["variables"]["Streamflow"]["varname"] == "q_daily"
@@ -3906,7 +3906,7 @@ def test_profile_placeholder_variables_do_not_prompt_before_profile_replacement(
         on_multi_var=fail_prompt,
     )
 
-    entry = yaml.safe_load(catalog_path.read_text())["GridComposite_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["GridComposite_LowRes"]
     assert set(entry["variables"]) == {"Net_Radiation", "Latent_Heat"}
 
 
@@ -3977,7 +3977,7 @@ def test_cli_scan_dry_run_does_not_write_catalog(tmp_path: Path, monkeypatch):
     catalog_path = tmp_path / "reference_catalog.yaml"
     # Pre-existing catalog content — must remain untouched after dry-run
     catalog_path.write_text("ExistingDataset:\n  category: Water\n")
-    original = catalog_path.read_text()
+    original = catalog_path.read_text(encoding="utf-8")
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
@@ -4009,7 +4009,7 @@ def test_cli_scan_dry_run_does_not_write_catalog(tmp_path: Path, monkeypatch):
 
     assert not register_called["flag"], "Dry-run must NOT call register_scanned_datasets_batch"
     # Original catalog content unchanged
-    assert catalog_path.read_text() == original
+    assert catalog_path.read_text(encoding="utf-8") == original
     assert not (home / ".openbench" / "settings.yaml").exists()
 
 
@@ -4065,7 +4065,7 @@ def test_register_scanned_dataset_uses_union_years_across_variables(tmp_path: Pa
     catalog = tmp_path / "reference_catalog.yaml"
     register_scanned_dataset(scanned, catalog_path=catalog)
 
-    data = yaml.safe_load(catalog.read_text())
+    data = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     assert data["Demo_LowRes"]["years"] == [1990, 2005]
 
 

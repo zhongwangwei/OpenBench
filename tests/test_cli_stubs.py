@@ -640,7 +640,7 @@ def test_write_reference_profile_confirms_before_overwriting_scan_config(tmp_pat
             },
         )
 
-    stored = yaml.safe_load(profile_path.read_text())["ExistingProfile"]
+    stored = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["ExistingProfile"]
     assert stored["scan"]["root_sub_dir"] == "Grid/LowRes/Composite/Original"
     assert "Streamflow" not in stored["variables"]
 
@@ -769,7 +769,7 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
     assert "Registered 1 dataset" in result.output
 
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    profile = yaml.safe_load(profile_path.read_text())["BadComposite_LowRes"]
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["BadComposite_LowRes"]
     assert profile["scan"] == {
         "layout": "grid_composite_files",
         "root_sub_dir": "Grid/LowRes/Composite/BadComposite",
@@ -786,7 +786,7 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
     }
 
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
-    entry = yaml.safe_load(catalog_path.read_text())["BadComposite_LowRes"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["BadComposite_LowRes"]
     assert entry["variables"]["Latent_Heat"]["sub_dir"] == "Composite/BadComposite/land"
     assert entry["variables"]["Streamflow"]["sub_dir"] == "Composite/BadComposite/cama"
 
@@ -860,14 +860,14 @@ def test_ref_scan_profile_rescue_accepts_multiple_vars_from_one_nc(tmp_path, mon
     assert "Select variable number" not in result.output
 
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    variables = yaml.safe_load(profile_path.read_text())["BadComposite_LowRes"]["variables"]
+    variables = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["BadComposite_LowRes"]["variables"]
     assert variables["Latent_Heat"]["varname"] == "LE"
     assert variables["Sensible_Heat"]["varname"] == "H"
     assert variables["Net_Radiation"]["varname"] == "Rn"
     assert variables["Streamflow"]["varname"] == "discharge"
 
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
-    entry_vars = yaml.safe_load(catalog_path.read_text())["BadComposite_LowRes"]["variables"]
+    entry_vars = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["BadComposite_LowRes"]["variables"]
     assert entry_vars["Latent_Heat"]["varname"] == "LE"
     assert entry_vars["Sensible_Heat"]["varname"] == "H"
     assert entry_vars["Net_Radiation"]["varname"] == "Rn"
@@ -918,7 +918,7 @@ def test_ref_scan_profile_rescue_writes_file_glob_and_allows_child_skip(tmp_path
 
     assert result.exit_code == 0, result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    variables = yaml.safe_load(profile_path.read_text())["MixedSource_LowRes"]["variables"]
+    variables = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["MixedSource_LowRes"]["variables"]
     assert variables == {
         "Latent_Heat": {
             "root_sub_dir": "Grid/LowRes/Composite/MixedSource/land",
@@ -928,7 +928,7 @@ def test_ref_scan_profile_rescue_writes_file_glob_and_allows_child_skip(tmp_path
         }
     }
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
-    entry_vars = yaml.safe_load(catalog_path.read_text())["MixedSource_LowRes"]["variables"]
+    entry_vars = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["MixedSource_LowRes"]["variables"]
     assert set(entry_vars) == {"Latent_Heat"}
 
 
@@ -980,7 +980,7 @@ def test_ref_scan_profile_rescue_creates_station_profile(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "Updated reference profile: MyStn_Station" in result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    profile = yaml.safe_load(profile_path.read_text())["MyStn_Station"]
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["MyStn_Station"]
     assert profile["scan"] == {
         "layout": "station_direct",
         "root_sub_dir": "Station/Carbon/CH4_Flux/MyStn",
@@ -988,7 +988,7 @@ def test_ref_scan_profile_rescue_creates_station_profile(tmp_path, monkeypatch):
     }
     assert profile["variables"] == {"CH4_Flux": {"varname": "CH4_flux", "varunit": "g m-2 day-1"}}
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
-    entry = yaml.safe_load(catalog_path.read_text())["MyStn_Station"]
+    entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["MyStn_Station"]
     assert entry["data_type"] == "stn"
     assert entry["variables"]["CH4_Flux"]["varname"] == "CH4_flux"
 
@@ -1031,7 +1031,7 @@ def test_ref_scan_profile_rescue_creates_grid_nested_profile_for_deep_nc(tmp_pat
 
     assert result.exit_code == 0, result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    profile = yaml.safe_load(profile_path.read_text())["DeepDS_LowRes"]
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["DeepDS_LowRes"]
     assert profile["scan"] == {
         "layout": "grid_nested_root",
         "root_sub_dir": "Grid/LowRes/Water/Runoff/DeepDS",
@@ -1072,7 +1072,7 @@ def test_ref_scan_ignore_action_writes_ignore_profile_and_rescans(tmp_path, monk
     assert "[i] add ignore profile and rescan" in result.output
     assert "Updated 1 ignore profile" in result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    profiles = yaml.safe_load(profile_path.read_text())
+    profiles = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
     assert any(
         profile.get("scan")
         == {
@@ -1316,7 +1316,7 @@ def test_ref_register_writes_user_reference_catalog(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     user_catalog = home / ".openbench" / "references" / "reference_catalog.yaml"
-    assert "ManualDS" in yaml.safe_load(user_catalog.read_text())
+    assert "ManualDS" in yaml.safe_load(user_catalog.read_text(encoding="utf-8"))
 
 
 def test_ref_register_data_type_autodetect_handles_iterdir_errors(tmp_path, monkeypatch):
@@ -1350,7 +1350,7 @@ def test_ref_register_data_type_autodetect_handles_iterdir_errors(tmp_path, monk
     assert result.exit_code == 0, result.output
     assert "Could not inspect subdirectories" in result.output
     user_catalog = home / ".openbench" / "references" / "reference_catalog.yaml"
-    assert yaml.safe_load(user_catalog.read_text())["ManualDS"]["data_type"] == "grid"
+    assert yaml.safe_load(user_catalog.read_text(encoding="utf-8"))["ManualDS"]["data_type"] == "grid"
 
 
 def test_ref_register_reports_corrupt_catalog_without_traceback(tmp_path, monkeypatch):
@@ -1457,7 +1457,7 @@ def test_ref_register_rejects_invalid_resolution_and_years(tmp_path, monkeypatch
     assert bad_years.exit_code == 1
     assert "--years start year must be <= end year" in bad_years.output
     catalog = home / ".openbench" / "references" / "reference_catalog.yaml"
-    assert not catalog.exists() or not (yaml.safe_load(catalog.read_text()) or {})
+    assert not catalog.exists() or not (yaml.safe_load(catalog.read_text(encoding="utf-8")) or {})
 
 
 def test_ref_register_rejects_station_grid_res(tmp_path, monkeypatch):
@@ -1513,7 +1513,9 @@ def test_ref_register_variable_option_accepts_prefix_suffix(tmp_path, monkeypatc
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())["ManualDS"]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualDS"]
     assert descriptor["variables"]["Runoff"] == {
         "varname": "ro",
         "varunit": "mm day-1",
@@ -1548,7 +1550,9 @@ def test_ref_register_accepts_climatology_tim_res(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())["ManualDS"]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualDS"]
     assert descriptor["tim_res"] == "climatology-month"
 
 
@@ -1577,7 +1581,9 @@ def test_ref_register_expands_root_dir_environment_variable(tmp_path, monkeypatc
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())["ManualDS"]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualDS"]
     assert descriptor["root_dir"] == str(data_root)
 
 
@@ -1610,9 +1616,9 @@ def test_ref_register_expands_fulllist_environment_variable(tmp_path, monkeypatc
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())[
-        "ManualStn"
-    ]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualStn"]
     assert descriptor["fulllist"] == str(station_list)
 
 
@@ -1644,9 +1650,9 @@ def test_ref_register_resolves_relative_fulllist_against_root_dir(tmp_path, monk
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())[
-        "ManualStn"
-    ]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualStn"]
     assert descriptor["fulllist"] == str(data_root / "list" / "stations.csv")
 
 
@@ -1676,7 +1682,9 @@ def test_ref_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())["ManualDS"]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualDS"]
     assert descriptor["tim_res"] == "8Day"
 
 
@@ -1728,7 +1736,7 @@ def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monk
 
     assert result.exit_code == 0, result.output
     user_catalog = home / ".openbench" / "references" / "reference_catalog.yaml"
-    descriptor = yaml.safe_load(user_catalog.read_text())["BuiltinDS"]
+    descriptor = yaml.safe_load(user_catalog.read_text(encoding="utf-8"))["BuiltinDS"]
     assert descriptor["root_dir"] == "/builtin/root"
     assert descriptor["variables"]["Runoff"]["varname"] == "ro"
     assert descriptor["variables"]["Evapotranspiration"]["varname"] == "ET"
@@ -1779,9 +1787,9 @@ def test_ref_register_updates_existing_reference_metadata_options(tmp_path, monk
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())[
-        "BuiltinDS"
-    ]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["BuiltinDS"]
     assert descriptor["data_type"] == "grid"
     assert descriptor["tim_res"] == "Day"
     assert descriptor["grid_res"] == 0.25
@@ -1827,9 +1835,9 @@ def test_ref_register_existing_grid_to_station_drops_grid_res(tmp_path, monkeypa
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())[
-        "BuiltinDS"
-    ]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["BuiltinDS"]
     assert descriptor["data_type"] == "stn"
     assert "grid_res" not in descriptor
 
@@ -1863,7 +1871,9 @@ def test_ref_register_does_not_default_existing_station_reference_to_grid(tmp_pa
     result = runner.invoke(cli, ["ref", "register", "MyStn", "-v", "Sensible_Heat:Qh:W m-2"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())["MyStn"]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["MyStn"]
     assert descriptor["data_type"] == "stn"
     assert descriptor["variables"]["Sensible_Heat"]["varname"] == "Qh"
 
@@ -1925,7 +1935,7 @@ def test_ref_register_handles_null_variables_in_catalog(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["ref", "register", "NullRef", "-v", "Runoff:ro:mm day-1"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(catalog.read_text())["NullRef"]
+    descriptor = yaml.safe_load(catalog.read_text(encoding="utf-8"))["NullRef"]
     assert descriptor["variables"]["Runoff"]["varname"] == "ro"
 
 
@@ -2052,7 +2062,7 @@ def test_ref_register_profile_handles_null_variables_in_catalog(tmp_path, monkey
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(profile_path.read_text())["NullProfile"]
+    descriptor = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["NullProfile"]
     assert descriptor["variables"]["Runoff"]["varname"] == "ro"
 
 
@@ -2076,7 +2086,7 @@ def test_ref_register_profile_accepts_prefix_suffix_and_fallback(tmp_path, monke
 
     assert result.exit_code == 0, result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    runoff = yaml.safe_load(profile_path.read_text())["ManualProfile"]["variables"]["Runoff"]
+    runoff = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["ManualProfile"]["variables"]["Runoff"]
     assert runoff["prefix"] == "runoff_"
     assert runoff["suffix"] == "_monthly"
     assert runoff["fallbacks"] == [{"varname": "runoff_alt", "varunit": "mm day-1", "convert": "value['a:b']"}]
@@ -2118,7 +2128,7 @@ def test_ref_register_profile_accepts_category_and_validates_data_groupby(tmp_pa
     )
     assert result.exit_code == 0, result.output
     profile_path = home / ".openbench" / "references" / "reference_profiles.yaml"
-    profile = yaml.safe_load(profile_path.read_text())["ManualProfile"]
+    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))["ManualProfile"]
     assert profile["category"] == "Water"
     assert profile["data_groupby"] == "Day"
 
@@ -2258,7 +2268,7 @@ def test_ref_optimize_preserves_existing_zarr_when_conversion_fails(tmp_path, mo
 
     assert result.exit_code != 0
     assert "Conversion failed" in result.output
-    assert sentinel.read_text() == "old-ok"
+    assert sentinel.read_text(encoding="utf-8") == "old-ok"
     assert not list(tmp_path.glob(".grid.zarr.tmp-*"))
 
 
@@ -2355,7 +2365,7 @@ def test_model_register_updates_existing_builtin_model_via_user_overlay(tmp_path
 
     assert result.exit_code == 0, result.output
     user_catalog = home / ".openbench" / "models" / "model_catalog.yaml"
-    descriptor = yaml.safe_load(user_catalog.read_text())["BuiltinModel"]
+    descriptor = yaml.safe_load(user_catalog.read_text(encoding="utf-8"))["BuiltinModel"]
     assert descriptor["variables"]["Runoff"]["varname"] == "ro"
     assert descriptor["variables"]["Evapotranspiration"]["varname"] == "ET"
 
@@ -2411,7 +2421,9 @@ def test_model_register_accepts_climatology_tim_res(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["ManualModel"]
+    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
+        "ManualModel"
+    ]
     assert descriptor["tim_res"] == "climatology-year"
 
 
@@ -2438,7 +2450,9 @@ def test_model_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["ManualModel"]
+    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
+        "ManualModel"
+    ]
     assert descriptor["tim_res"] == "3month"
 
 
@@ -2450,7 +2464,9 @@ def test_model_register_preserves_canonical_profile_name_when_input_case_differs
     result = runner.invoke(cli, ["model", "register", "colm2024", "-v", "Snow_Depth:sd:m"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["CoLM2024"]
+    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
+        "CoLM2024"
+    ]
     assert descriptor["name"] == "CoLM2024"
     assert descriptor["variables"]["Snow_Depth"]["varname"] == "sd"
 
@@ -2469,7 +2485,7 @@ def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch)
     result = runner.invoke(cli, ["model", "register", "NullVars", "-v", "Runoff:ro:mm day-1"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(catalog.read_text())["NullVars"]
+    descriptor = yaml.safe_load(catalog.read_text(encoding="utf-8"))["NullVars"]
     assert descriptor["variables"]["Runoff"]["varname"] == "ro"
 
 
@@ -2497,7 +2513,7 @@ def test_model_register_cancels_new_profile_with_no_variables(tmp_path, monkeypa
     assert result.exit_code == 0, result.output
     assert "No variables defined" in result.output
     catalog = home / ".openbench" / "models" / "model_catalog.yaml"
-    assert not catalog.exists() or "EmptyModel" not in (yaml.safe_load(catalog.read_text()) or {})
+    assert not catalog.exists() or "EmptyModel" not in (yaml.safe_load(catalog.read_text(encoding="utf-8")) or {})
 
 
 def test_model_register_merges_against_latest_catalog_under_write_lock(tmp_path, monkeypatch):
@@ -2567,7 +2583,9 @@ def test_model_register_uses_canonical_name_in_default_description(tmp_path, mon
     result = runner.invoke(cli, ["model", "register", "alias", "-v", "Runoff:ro:mm day-1"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["CanonicalModel"]
+    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
+        "CanonicalModel"
+    ]
     assert "description" not in descriptor
 
 
@@ -2601,9 +2619,9 @@ def test_ref_register_preserves_canonical_reference_name_when_input_case_differs
     result = runner.invoke(cli, ["ref", "register", "canonicalref", "-v", "Snow_Depth:sd:m"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "references" / "reference_catalog.yaml").read_text())[
-        "CanonicalRef"
-    ]
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["CanonicalRef"]
     assert descriptor["name"] == "CanonicalRef"
     assert descriptor["variables"]["Snow_Depth"]["varname"] == "sd"
 
@@ -2641,7 +2659,9 @@ def test_model_remove_var_can_create_overlay_from_builtin_profile(tmp_path, monk
     result = runner.invoke(cli, ["model", "remove-var", "BuiltinModel", "Runoff"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["BuiltinModel"]
+    descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
+        "BuiltinModel"
+    ]
     assert "Runoff" not in descriptor["variables"]
     assert "Evapotranspiration" in descriptor["variables"]
 
@@ -2688,14 +2708,14 @@ def test_init_registry_overlays_creates_empty_catalog_overlays(tmp_path):
     ]
     for target in expected_empty_overlays:
         assert target.exists()
-        assert yaml.safe_load(target.read_text()) == {}
+        assert yaml.safe_load(target.read_text(encoding="utf-8")) == {}
 
     custom_sources = sorted(Path(custom_package.__file__).parent.glob("*_filter.py"))
     assert custom_sources
     for source in custom_sources:
         target = tmp_path / "custom" / source.name
         assert target.exists()
-        assert target.read_text() == source.read_text()
+        assert target.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
 
     assert (tmp_path / "custom").is_dir()
 
@@ -2716,7 +2736,7 @@ def test_copy_default_file_if_missing_preserves_seeded_target_when_source_is_rem
 
     init_module._copy_default_file_if_missing(source, target, base_dir, manifest)
 
-    assert target.read_text() == "VALUE = 1\n"
+    assert target.read_text(encoding="utf-8") == "VALUE = 1\n"
     assert "custom/Old_filter.py" not in manifest
 
 
@@ -2750,7 +2770,7 @@ def test_init_registry_overlays_do_not_shadow_builtin_catalog_updates(tmp_path, 
     user_dir = tmp_path / "user"
     ensure_user_registry_overlays(user_dir)
     user_catalog = user_dir / "references" / "reference_catalog.yaml"
-    user_data = yaml.safe_load(user_catalog.read_text()) or {}
+    user_data = yaml.safe_load(user_catalog.read_text(encoding="utf-8")) or {}
     user_data["UserOnly"] = {
         **descriptor("Day")["Foo"],
         "name": "UserOnly",
@@ -2761,7 +2781,7 @@ def test_init_registry_overlays_do_not_shadow_builtin_catalog_updates(tmp_path, 
     (package_registry / "reference_catalog.yaml").write_text(yaml.safe_dump(descriptor("Day")))
     ensure_user_registry_overlays(user_dir)
 
-    assert "Foo" not in (yaml.safe_load(user_catalog.read_text()) or {})
+    assert "Foo" not in (yaml.safe_load(user_catalog.read_text(encoding="utf-8")) or {})
     mgr = manager_module.RegistryManager(user_dir=user_dir)
     assert mgr.get_reference("Foo").tim_res == "Day"
     assert mgr.get_reference("UserOnly").tim_res == "Day"
@@ -2781,9 +2801,9 @@ def test_init_registry_overlays_preserves_existing_user_files(tmp_path):
 
     ensure_user_registry_overlays(tmp_path)
 
-    assert reference_catalog.read_text() == "UserReference: {}\n"
-    assert reference_profiles.read_text() == "UserProfile: {}\n"
-    assert model_catalog.read_text() == "UserModel: {}\n"
+    assert reference_catalog.read_text(encoding="utf-8") == "UserReference: {}\n"
+    assert reference_profiles.read_text(encoding="utf-8") == "UserProfile: {}\n"
+    assert model_catalog.read_text(encoding="utf-8") == "UserModel: {}\n"
     assert (tmp_path / "custom").is_dir()
 
 
@@ -2809,9 +2829,9 @@ def test_init_registry_overlays_converts_untouched_seeded_catalogs_to_empty_over
 
     ensure_user_registry_overlays(user_dir)
 
-    assert yaml.safe_load(reference_catalog.read_text()) == {}
-    assert yaml.safe_load(reference_profiles.read_text()) == {}
-    assert yaml.safe_load(model_catalog.read_text()) == {}
+    assert yaml.safe_load(reference_catalog.read_text(encoding="utf-8")) == {}
+    assert yaml.safe_load(reference_profiles.read_text(encoding="utf-8")) == {}
+    assert yaml.safe_load(model_catalog.read_text(encoding="utf-8")) == {}
 
 
 def test_init_registry_overlays_preserves_modified_seeded_files(tmp_path, monkeypatch):
@@ -2833,7 +2853,7 @@ def test_init_registry_overlays_preserves_modified_seeded_files(tmp_path, monkey
 
     ensure_user_registry_overlays(user_dir)
 
-    assert user_reference.read_text() == "UserReferenceEdit: {}\n"
+    assert user_reference.read_text(encoding="utf-8") == "UserReferenceEdit: {}\n"
 
 
 def test_init_command_initializes_user_registry_overlays(tmp_path, monkeypatch):
@@ -2978,7 +2998,7 @@ def test_init_scans_simulation_roots_into_generated_config(tmp_path, monkeypatch
             },
         )
     ]
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     entry = config["simulation"]["CoLM2024"]
     assert entry["model"] == "CoLM"
     assert entry["root_dir"] == str(case_root)
@@ -3066,7 +3086,7 @@ def test_init_passes_explicit_sim_model_to_scan(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert calls[0][1]["model_name"] == "CoLM"
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert config["simulation"]["grid"]["model"] == "CoLM"
 
 
@@ -3137,7 +3157,7 @@ def test_init_caps_min_year_threshold_to_project_span(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    project = yaml.safe_load(output.read_text())["project"]
+    project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["min_year_threshold"] == 2
 
 
@@ -3211,7 +3231,7 @@ def test_init_sets_project_resolution_from_selected_reference_when_sim_scan_is_m
     )
 
     assert result.exit_code == 0, result.output
-    project = yaml.safe_load(output.read_text())["project"]
+    project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["tim_res"] == "Month"
     assert project["grid_res"] == 0.25
 
@@ -3283,7 +3303,7 @@ def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, mon
     )
 
     assert result.exit_code == 0, result.output
-    text = output.read_text()
+    text = output.read_text(encoding="utf-8")
     cfg = load_config(output)
 
     assert cfg.evaluation.variables == ["Latent_Heat"]
@@ -3372,7 +3392,7 @@ def test_init_deduplicates_variables_that_appear_in_multiple_categories(tmp_path
     )
 
     assert result.exit_code == 0, result.output
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert config["evaluation"]["variables"] == ["Latent_Heat", "Runoff"]
     assert result.output.count("Latent_Heat") == 2  # variable list + reference line
 
@@ -3442,7 +3462,7 @@ def test_init_accepts_variable_and_reference_names(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert config["evaluation"]["variables"] == ["Latent_Heat"]
     assert config["reference"]["Latent_Heat"] == "ERA5LAND_LowRes"
     assert "/refs/era5land" in result.output
@@ -3469,7 +3489,7 @@ def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert config["evaluation"]["variables"] == ["Runoff"]
     assert config["reference"] == {"Runoff": "RunoffRef"}
 
@@ -3575,7 +3595,7 @@ def test_init_writes_default_statistics_items_when_enabled(tmp_path, monkeypatch
     )
 
     assert result.exit_code == 0, result.output
-    assert yaml.safe_load(output.read_text())["statistics"] == {
+    assert yaml.safe_load(output.read_text(encoding="utf-8"))["statistics"] == {
         "enabled": True,
         "items": ["Mean", "Median", "Min", "Max", "Sum"],
     }
@@ -3685,10 +3705,10 @@ def test_init_no_ref_check_allows_template_when_reference_registry_has_no_variab
     )
 
     assert result.exit_code == 0, result.output
-    config = yaml.safe_load(output.read_text())
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
     assert config["evaluation"]["variables"] == ["Latent_Heat", "Runoff"]
     assert config["reference"] == {}
-    assert "# Latent_Heat: <reference_dataset>" in output.read_text()
+    assert "# Latent_Heat: <reference_dataset>" in output.read_text(encoding="utf-8")
     assert "Fill in reference placeholders" in result.output
     assert "Next: openbench check" not in result.output
 
@@ -3783,7 +3803,7 @@ def test_init_prompts_for_missing_grid_resolution_when_simulation_scan_is_mixed(
     )
 
     assert result.exit_code == 0, result.output
-    project = yaml.safe_load(output.read_text())["project"]
+    project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["tim_res"] == "Month"
     assert project["grid_res"] == 0.5
     assert "Target grid_res" in result.output
@@ -3910,8 +3930,8 @@ def test_init_keeps_all_variables_in_template_when_some_are_skipped(tmp_path, mo
     )
 
     assert result.exit_code == 0, result.output
-    assert yaml.safe_load(output.read_text())["evaluation"]["variables"] == ["Latent_Heat"]
-    assert "# - Runoff" in output.read_text()
+    assert yaml.safe_load(output.read_text(encoding="utf-8"))["evaluation"]["variables"] == ["Latent_Heat"]
+    assert "# - Runoff" in output.read_text(encoding="utf-8")
 
 
 def test_init_reference_preflight_missing_catalog_runs_scan_then_registers(tmp_path, monkeypatch):
@@ -3952,7 +3972,7 @@ def test_init_reference_preflight_missing_catalog_runs_scan_then_registers(tmp_p
         ("scan", ref_root),
         ("register", scanned, catalog_path, ref_root),
     ]
-    settings = yaml.safe_load((home / ".openbench" / "settings.yaml").read_text())
+    settings = yaml.safe_load((home / ".openbench" / "settings.yaml").read_text(encoding="utf-8"))
     assert settings["reference_root"] == str(ref_root.resolve())
 
 
@@ -4288,7 +4308,7 @@ def test_init_confirms_before_overwriting_output(tmp_path, monkeypatch):
 
     assert result.exit_code != 0
     assert "Output file already exists" in result.output
-    assert output.read_text() == "original\n"
+    assert output.read_text(encoding="utf-8") == "original\n"
 
 
 def test_init_rejects_directory_output_without_traceback(tmp_path, monkeypatch):
@@ -5329,7 +5349,7 @@ def test_run_writes_per_run_log_with_debug_records(tmp_path, monkeypatch):
     log_path = tmp_path / "run_log_case" / "run.log"
     assert result.exit_code == 0, result.output
     assert log_path.exists()
-    text = log_path.read_text()
+    text = log_path.read_text(encoding="utf-8")
     assert "debug marker for run.log" in text
     assert "info marker for run.log" in text
 

@@ -18,7 +18,7 @@ def test_clone_or_link_ref_for_pair_prefers_first_success(tmp_path, monkeypatch)
 
     def clonefile(source: str, target: str) -> bool:
         calls.append("clonefile")
-        Path(target).write_text(Path(source).read_text())
+        Path(target).write_text(Path(source).read_text(encoding="utf-8"))
         return True
 
     def should_not_run(*_args):  # pragma: no cover - failure path only
@@ -33,7 +33,7 @@ def test_clone_or_link_ref_for_pair_prefers_first_success(tmp_path, monkeypatch)
 
     assert strategy == "clonefile"
     assert calls == ["clonefile"]
-    assert dst.read_text() == "source"
+    assert dst.read_text(encoding="utf-8") == "source"
 
 
 def test_clone_or_link_ref_for_pair_falls_back_to_copy2(tmp_path, monkeypatch):
@@ -52,7 +52,7 @@ def test_clone_or_link_ref_for_pair_falls_back_to_copy2(tmp_path, monkeypatch):
 
     def copy2(source: str, target: str):
         calls.append("copy2")
-        Path(target).write_text(Path(source).read_text())
+        Path(target).write_text(Path(source).read_text(encoding="utf-8"))
         return target
 
     monkeypatch.setattr(local_runner, "_try_clonefile", fail_with_partial("clonefile"))
@@ -65,7 +65,7 @@ def test_clone_or_link_ref_for_pair_falls_back_to_copy2(tmp_path, monkeypatch):
 
     assert strategy == "copy2"
     assert calls == ["clonefile", "reflink", "hardlink", "symlink", "copy2"]
-    assert dst.read_text() == "source"
+    assert dst.read_text(encoding="utf-8") == "source"
 
 
 def test_clone_or_link_ref_for_pair_replaces_existing_stale_file(tmp_path, monkeypatch):
@@ -82,7 +82,7 @@ def test_clone_or_link_ref_for_pair_replaces_existing_stale_file(tmp_path, monke
     strategy = local_runner._clone_or_link_ref_for_pair(str(src), str(dst))
 
     assert strategy == "copy2"
-    assert dst.read_text() == "fresh"
+    assert dst.read_text(encoding="utf-8") == "fresh"
 
 
 def test_clone_or_link_ref_for_pair_replaces_broken_symlink(tmp_path, monkeypatch):
@@ -100,7 +100,7 @@ def test_clone_or_link_ref_for_pair_replaces_broken_symlink(tmp_path, monkeypatc
 
     assert strategy == "copy2"
     assert not dst.is_symlink()
-    assert dst.read_text() == "source"
+    assert dst.read_text(encoding="utf-8") == "source"
 
 
 def _write_pair_mask_inputs(tmp_path):

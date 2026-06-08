@@ -57,24 +57,6 @@ test_data/
 # Local/generated tests and planning artifacts
 docs/performance-benchmark.md
 tests/manual/test_script_entrypoints.py
-tests/test_gui_async_lifecycle.py
-tests/test_gui_config_manager.py
-tests/test_gui_controller_paths.py
-tests/test_gui_evaluation_runner.py
-tests/test_gui_legacy_cleanup.py
-tests/test_gui_page_preview_remote.py
-tests/test_gui_page_run_monitor_remote.py
-tests/test_gui_save_preserves_fields.py
-tests/test_gui_sim_data.py
-tests/test_progress_dashboard.py
-tests/test_progress_parser.py
-tests/test_remote_credentials.py
-tests/test_remote_file_browser.py
-tests/test_remote_runner.py
-tests/test_remote_shell_quoting.py
-tests/test_remote_ssh.py
-tests/test_remote_sync.py
-tests/test_zip_safe_resources.py
 
 # Personal/local test configs
 test_real.yaml

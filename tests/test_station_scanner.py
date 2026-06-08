@@ -383,7 +383,7 @@ def test_station_taylor_comparison_runs_sequential_when_num_cores_is_one(tmp_pat
 
 
 def test_merge_site_uses_atomic_netcdf_write():
-    source = Path("src/openbench/data/station_scanner.py").read_text()
+    source = Path("src/openbench/data/station_scanner.py").read_text(encoding="utf-8")
 
     assert ".to_netcdf(" not in source
 

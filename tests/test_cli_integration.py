@@ -13,7 +13,7 @@ FIXTURES = Path(__file__).parent / "test_config" / "fixtures"
 
 
 def _fixture_with_existing_sim_roots(tmp_path: Path, fixture_name: str) -> Path:
-    data = yaml.safe_load((FIXTURES / fixture_name).read_text())
+    data = yaml.safe_load((FIXTURES / fixture_name).read_text(encoding="utf-8"))
     for label, entry in data.get("simulation", {}).items():
         if not isinstance(entry, dict):
             continue
@@ -28,7 +28,7 @@ def _fixture_with_existing_sim_roots(tmp_path: Path, fixture_name: str) -> Path:
 
 def test_check_valid_config(tmp_path):
     config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
-    data = yaml.safe_load(config.read_text())
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
     ref_root = tmp_path / "ref"
     ref_dir = ref_root / "Water" / "Evapotranspiration" / "GLEAM_v4.2a"
     ref_dir.mkdir(parents=True)
@@ -101,7 +101,7 @@ def test_run_only_drawing_fail_fast_errors_exit_nonzero(tmp_path):
     local_runner.run_evaluation = fake_run_evaluation
     try:
         config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
-        data = yaml.safe_load(config.read_text())
+        data = yaml.safe_load(config.read_text(encoding="utf-8"))
         data.setdefault("project", {})["only_drawing"] = True
         config.write_text(yaml.safe_dump(data, sort_keys=False))
         result = runner.invoke(cli, ["run", str(config)])
@@ -162,7 +162,7 @@ def test_model_register_interactive_comma_separated_varnames_write_fallbacks(tmp
         input="Runoff\nrunoff_primary,runoff_fallback\nmm day-1\n\n",
     )
 
-    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     runoff = catalog["InteractiveModel"]["variables"]["Runoff"]
 
     assert result.exit_code == 0
@@ -219,7 +219,8 @@ def test_init_output_is_loadable(tmp_path, monkeypatch):
     try:
         cfg = load_config(out)
     except ConfigError as e:
-        pytest.fail(f"openbench init produced YAML that loader rejected: {e}\n\nGenerated YAML:\n{out.read_text()}")
+        generated = out.read_text(encoding="utf-8")
+        pytest.fail(f"openbench init produced YAML that loader rejected: {e}\n\nGenerated YAML:\n{generated}")
 
     # Reference entries must be strings (var -> source_name)
     for var, src in cfg.reference.sources.items():

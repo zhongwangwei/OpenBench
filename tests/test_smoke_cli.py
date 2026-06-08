@@ -72,7 +72,7 @@ def test_smoke_test_extracts_fixture_and_invokes_check(tmp_path, monkeypatch):
     assert (sample_root / "Simulation" / "Initial_test" / "stn").is_dir()
     assert (sample_root / "nml" / "nml-json" / "main-Initial_test.json").is_file()
 
-    config = yaml.safe_load(Path(cmd[4]).read_text())
+    config = yaml.safe_load(Path(cmd[4]).read_text(encoding="utf-8"))
     assert config["evaluation"]["variables"] == [
         "Evapotranspiration",
         "Latent_Heat",
@@ -87,7 +87,9 @@ def test_smoke_test_extracts_fixture_and_invokes_check(tmp_path, monkeypatch):
     assert set(config["simulation"]) == {"grid_case", "station_case"}
     assert config["simulation"]["station_case"]["fulllist"] == str(work_dir / "lists" / "station_case.csv")
 
-    catalog = yaml.safe_load((work_dir / "home" / ".openbench" / "references" / "reference_catalog.yaml").read_text())
+    catalog = yaml.safe_load(
+        (work_dir / "home" / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )
     assert catalog["OpenBench_Smoke_GLEAM4_2a"]["root_dir"] == str(sample_root / "Reference" / "Initial_test")
     assert set(catalog) == {
         "OpenBench_Smoke_GLEAM4_2a",
@@ -118,7 +120,7 @@ def test_smoke_config_enables_total_score_heatmap(tmp_path, monkeypatch):
     result = CliRunner().invoke(cli, ["smoke-test", "--work-dir", str(work_dir), "--keep"])
 
     assert result.exit_code == 0, result.output
-    config = yaml.safe_load((work_dir / "openbench-smoke.yaml").read_text())
+    config = yaml.safe_load((work_dir / "openbench-smoke.yaml").read_text(encoding="utf-8"))
     assert config["comparison"] == {"enabled": True, "items": ["HeatMap"]}
 
 
@@ -127,7 +129,7 @@ def test_smoke_run_reports_required_total_score_artifacts(tmp_path, monkeypatch)
 
     def fake_run(cmd, **kwargs):
         config_path = Path(cmd[4])
-        output_dir = Path(yaml.safe_load(config_path.read_text())["project"]["output_dir"])
+        output_dir = Path(yaml.safe_load(config_path.read_text(encoding="utf-8"))["project"]["output_dir"])
         case_dir = output_dir / "openbench_initial_test_smoke"
         (case_dir / "comparisons" / "HeatMap").mkdir(parents=True)
         (case_dir / "scores").mkdir()

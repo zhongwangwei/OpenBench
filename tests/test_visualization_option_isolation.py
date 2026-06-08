@@ -37,7 +37,7 @@ _OPTION_ISOLATED_FUNCTIONS = [
 
 
 def _function_node(filename: str, function_name: str) -> ast.FunctionDef:
-    tree = ast.parse((_VIS_DIR / filename).read_text())
+    tree = ast.parse((_VIS_DIR / filename).read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == function_name:
             return node

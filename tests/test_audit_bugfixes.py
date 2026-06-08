@@ -102,9 +102,9 @@ def test_cp_uses_same_pairwise_nan_mask_for_numerator_and_denominator():
 
 
 def test_station_csv_and_pair_ref_regressions_are_source_guarded():
-    config_source = Path("src/openbench/data/_processing_config.py").read_text()
-    evaluation_source = Path("src/openbench/core/evaluation.py").read_text()
-    preprocessing_source = Path("src/openbench/runner/preprocessing.py").read_text()
+    config_source = Path("src/openbench/data/_processing_config.py").read_text(encoding="utf-8")
+    evaluation_source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
+    preprocessing_source = Path("src/openbench/runner/preprocessing.py").read_text(encoding="utf-8")
 
     assert "write_file_atomic(" in config_source
     assert "_write_file_atomic(" in evaluation_source
@@ -463,6 +463,6 @@ def test_vertical_coordinate_aliases_are_centralized():
         "src/openbench/visualization/only_drawing.py",
         "src/openbench/core/statistics/Mod_Statistics.py",
     ]:
-        source = Path(path).read_text()
+        source = Path(path).read_text(encoding="utf-8")
         assert "COORDINATE_MAP_WITH_VERTICAL" in source
         assert '"elevation": "elev"' not in source

@@ -1640,7 +1640,7 @@ def test_evaluate_single_does_not_cache_when_requested_outputs_are_missing(tmp_p
     assert "requested outputs are missing" in result["error"]
     cache_file = output_dir / ".openbench_cache.json"
     if cache_file.exists():
-        assert json.loads(cache_file.read_text()) == {}
+        assert json.loads(cache_file.read_text(encoding="utf-8")) == {}
 
 
 def test_evaluate_single_force_mode_still_fails_when_requested_outputs_are_missing(tmp_path, monkeypatch):
@@ -1753,7 +1753,7 @@ def test_evaluate_single_does_not_cache_when_requested_netcdf_is_unreadable(tmp_
     assert "requested outputs are missing or unreadable" in result["error"]
     cache_file = output_dir / ".openbench_cache.json"
     if cache_file.exists():
-        assert json.loads(cache_file.read_text()) == {}
+        assert json.loads(cache_file.read_text(encoding="utf-8")) == {}
 
 
 def test_comparison_only_requires_existing_outputs(tmp_path, monkeypatch):
@@ -2145,7 +2145,7 @@ def test_partial_run_cache_marks_only_successful_tasks(tmp_path, monkeypatch):
     assert [entry["variable"] for entry in result["evaluated"]] == ["Runoff"]
     assert any(err["phase"] == "evaluation" and "ET failed" in err["message"] for err in result["errors"])
 
-    cache = json.loads((output_dir / ".openbench_cache.json").read_text())
+    cache = json.loads((output_dir / ".openbench_cache.json").read_text(encoding="utf-8"))
     assert make_cache_key("Runoff", "SimA", "RefA") in cache
     assert make_cache_key("ET", "SimA", "RefA") not in cache
 
@@ -3315,7 +3315,7 @@ def test_force_reruns_and_refreshes_cache_entry(tmp_path, monkeypatch):
     assert ("preprocess", "ref") in calls
     assert ("preprocess", "sim") in calls
     assert ("evaluate", "SimA") in calls
-    assert json.loads((output_dir / ".openbench_cache.json").read_text())[key] == expected_hash
+    assert json.loads((output_dir / ".openbench_cache.json").read_text(encoding="utf-8"))[key] == expected_hash
 
 
 def test_only_drawing_uses_only_drawing_evaluators_and_skips_preprocess(tmp_path, monkeypatch):
@@ -3921,7 +3921,7 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
         assert "class" in bundle.dims
         assert bundle.sizes["class"] == class_count
 
-    rows = [line.split("\t") for line in table_path.read_text().splitlines()[1:]]
+    rows = [line.split("\t") for line in table_path.read_text(encoding="utf-8").splitlines()[1:]]
     weighted_row, constant_row, all_nan_row = rows
     area_weights = np.cos(np.deg2rad(lat))[:, None]
     if weight == "area":
@@ -7451,7 +7451,7 @@ def test_core_parallel_coordinates_preserves_existing_csv_when_rebuild_fails(tmp
             {},
         )
 
-    assert output_csv.read_text() == old_content
+    assert output_csv.read_text(encoding="utf-8") == old_content
     assert plot_calls == []
 
 

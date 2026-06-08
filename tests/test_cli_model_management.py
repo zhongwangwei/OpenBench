@@ -28,7 +28,7 @@ def test_model_register_alias_updates_canonical_profile_after_reload(tmp_path, m
     result = runner.invoke(cli, ["model", "register", "colm", "-v", "Audit_Var:audit_var:1"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))
     assert "CoLM2024" in descriptor
     assert "CoLM" not in descriptor
     assert "alias 'colm' resolved to 'CoLM2024'" in result.output
@@ -44,7 +44,7 @@ def test_model_remove_var_from_bundled_profile_persists_after_reload(tmp_path, m
     result = runner.invoke(cli, ["model", "remove-var", "CoLM2024", "Snow_Depth"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())["CoLM2024"]
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["CoLM2024"]
     assert "Snow_Depth" in descriptor["_delete_variables"]
     assert "Snow_Depth" not in _load_model(home, "CoLM2024").variables
 
@@ -57,7 +57,7 @@ def test_model_remove_var_from_bundled_profile_matches_variable_ignoring_case(tm
     result = runner.invoke(cli, ["model", "remove-var", "CoLM2024", "snow_depth"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())["CoLM2024"]
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["CoLM2024"]
     assert "Snow_Depth" in descriptor["_delete_variables"]
     assert "Snow_Depth" not in _load_model(home, "CoLM2024").variables
 
@@ -256,7 +256,7 @@ def test_model_register_time_offset_merges_default_and_variable_offsets_order_in
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())["OffsetModel"]
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["OffsetModel"]
     assert descriptor["time_offset"] == {"Day": {"Runoff": "0", "default": "-1"}}
     assert _load_model(home, "OffsetModel").time_offset == {"Day": {"Runoff": "0", "default": "-1"}}
 
@@ -297,7 +297,7 @@ def test_model_register_time_offset_preserves_existing_default_when_adding_varia
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())["OffsetUpdateModel"]
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["OffsetUpdateModel"]
     assert descriptor["time_offset"] == {"Day": {"default": "-1", "Runoff": "0"}}
 
 
@@ -467,7 +467,7 @@ def test_model_import_preserves_existing_catalog_key_case(tmp_path, monkeypatch)
     result = runner.invoke(cli, ["model", "import", str(imported), "--yes"])
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(catalog.read_text())
+    descriptor = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     assert list(descriptor) == ["CLM5"]
     assert descriptor["CLM5"]["name"] == "CLM5"
 
@@ -651,7 +651,7 @@ def test_model_register_interactive_can_capture_extended_fields(tmp_path, monkey
     )
 
     assert result.exit_code == 0, result.output
-    descriptor = yaml.safe_load(_catalog(home).read_text())["ManualInteractiveModel"]
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["ManualInteractiveModel"]
     assert descriptor["description"] == "Interactive description"
     assert descriptor["time_offset"] == {"Month": "-15 days"}
     assert descriptor["variables"]["GPP"]["sub_dir"] == "carbon"

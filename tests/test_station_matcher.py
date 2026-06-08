@@ -95,8 +95,8 @@ def test_station_matching_preserves_existing_station_list_when_csv_write_fails(t
     else:
         raise AssertionError("run_station_matching unexpectedly succeeded")
 
-    assert existing_list.read_text().startswith("ID,ref_lon")
-    assert "partial" not in existing_list.read_text()
+    assert existing_list.read_text(encoding="utf-8").startswith("ID,ref_lon")
+    assert "partial" not in existing_list.read_text(encoding="utf-8")
 
 
 def test_station_matching_accepts_string_station_ids(tmp_path):

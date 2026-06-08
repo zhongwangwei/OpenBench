@@ -77,7 +77,7 @@ def test_smoke_test_refuses_non_empty_work_dir(tmp_path):
 
     assert result.exit_code != 0
     assert "already exists and is not empty" in result.output
-    assert sentinel.read_text() == "do not delete"
+    assert sentinel.read_text(encoding="utf-8") == "do not delete"
 
 
 def test_smoke_test_allows_empty_existing_work_dir(monkeypatch, tmp_path):
