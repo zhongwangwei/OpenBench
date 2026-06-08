@@ -5,7 +5,6 @@ import os
 import re
 import warnings
 from array import array
-from typing import Union
 from openbench.visualization._diagram_sampling import limit_diagram_points
 from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
 from openbench.visualization._figure_io import save_figure
@@ -29,6 +28,29 @@ def make_scenarios_comparison_Target_Diagram(
 ):
     option = option.copy()
     import os
+
+    import numpy as np
+
+    # Invariant guard: for the standard Target diagram, RMSD² = bias² + uRMSD²,
+    # where crmsd is the centered/unbiased RMSD (x-axis) and rmsd is the total RMSD.
+    # If callers swap these, radial distances are wrong; warn loudly so the bug is
+    # caught instead of silently producing incorrect figures.
+    try:
+        _b = np.asarray(bias, dtype=float)
+        _c = np.asarray(crmsd, dtype=float)
+        _r = np.asarray(rmsd, dtype=float)
+        _m = np.isfinite(_b) & np.isfinite(_c) & np.isfinite(_r)
+        if _m.any() and not np.allclose(_r[_m] ** 2, _b[_m] ** 2 + _c[_m] ** 2, rtol=1e-3, atol=1e-6):
+            import logging
+
+            logging.warning(
+                "Target diagram '%s/%s': RMSD^2 != bias^2 + uRMSD^2 — check that the "
+                "crmsd (centered) and rmsd (total) arguments are not swapped.",
+                evaluation_item,
+                ref_source,
+            )
+    except (TypeError, ValueError):
+        pass
 
     import matplotlib
     import matplotlib.pyplot as plt
@@ -899,13 +921,6 @@ def add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize, 
         text.set_color(labelcolor[i])
 
 
-def _checkKey(dictionary, key):
-    if key in dictionary.keys():
-        return True
-    else:
-        return False
-
-
 def get_from_dict_or_default(options: dict, default_key: str, dict_key: str, key_key: str):
     """
     Gets values of keys from dictionary or returns defaults.
@@ -939,30 +954,6 @@ def get_from_dict_or_default(options: dict, default_key: str, dict_key: str, key
         return options[dict_key][key_key]
 
 
-def _check_dict_with_keys(
-    variable_name: str, dict_obj: Union[dict, None], accepted_keys: set, or_none: bool = False
-) -> None:
-    """
-    Check if an argument in the form of dictionary has valid keys.
-    :return: None. Raise 'ValueError' if evaluated variable is considered invalid.
-    """
-
-    # if variable is None, check if it can be None
-    if dict_obj is None:
-        if or_none:
-            return None
-        else:
-            raise ValueError("%s cannot be None!" % variable_name)
-
-    # check if every key provided is valid
-    for key in dict_obj.keys():
-        if key not in accepted_keys:
-            raise ValueError("Unrecognized option of %s: %s" % (variable_name, key))
-        del key
-
-    return None
-
-
 def _circle_color_style(option: dict) -> dict:
     """
     Set color and style of grid circles from option['circlecolor'] and
@@ -986,6 +977,14 @@ from openbench.visualization._diagram_utils import (  # noqa: E402
     is_int,
     is_list_in_string,
     parse_literal_option,
+)
+
+from openbench.visualization._diagram_utils import (  # noqa: E402
+    _checkKey,
+    _check_dict_with_keys,
+    _getColorBarLocation,
+    _setColorBarTicks,
+    check_on_off,
 )
 
 
@@ -1335,44 +1334,6 @@ def _read_options(option, **kwargs) -> dict:
         option = _circle_color_style(option)
 
     return option
-
-
-def check_on_off(value):
-    """
-    Check whether variable contains a value of 'on', 'off', True, or False.
-    Returns an error if neither for the first two, and sets True to 'on',
-    and False to 'off'. The 'on' and 'off' can be provided in any combination
-    of upper and lower case letters.
-
-    INPUTS:
-    value : string or boolean to check
-
-    OUTPUTS:
-    None.
-
-    Author: Peter A. Rochford
-        Symplectic, LLC
-        www.thesymplectic.com
-        prochford@thesymplectic.com
-    """
-
-    if isinstance(value, str):
-        lowcase = value.lower()
-        if lowcase == "off":
-            return lowcase
-        elif lowcase == "on":
-            return lowcase
-        else:
-            raise ValueError("Invalid value: " + str(value))
-    elif isinstance(value, bool):
-        if not value:
-            value = "off"
-        elif value:
-            value = "on"
-    else:
-        raise ValueError("Invalid value: " + str(value))
-
-    return value
 
 
 def get_target_diagram_options(**kwargs) -> dict:
@@ -1920,106 +1881,6 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: dic
             hc.set_label(option["titlecolorbar"], fontsize=fontSize, labelpad=labelpad, y=1.05, rotation=0)
     else:
         hc.set_label(hc, "Color Scale", fontsize=fontSize)
-
-
-def _getColorBarLocation(hc, option, **kwargs):
-    """
-    Determine location for color bar.
-
-    Determines location to place color bar for type of plot:
-    target diagram and Taylor diagram. Optional scale arguments
-    (xscale,yscale,cxscale) can be supplied to adjust the placement of
-    the colorbar to accommodate different situations.
-
-    INPUTS:
-    hc     : handle returned by colorbar function
-    option : dictionary containing option values. (Refer to
-            display_target_diagram_options function for more
-            information.)
-
-    OUTPUTS:
-    location : x, y, width, height for color bar
-
-    KEYWORDS:
-    xscale  : scale factor to adjust x-position of color bar
-    yscale  : scale factor to adjust y-position of color bar
-    cxscale : scale factor to adjust thickness of color bar
-    """
-
-    # Check for optional arguments and set defaults if required
-    if "xscale" in kwargs:
-        xscale = kwargs["xscale"]
-    else:
-        xscale = 1.0
-    if "yscale" in kwargs:
-        yscale = kwargs["yscale"]
-    else:
-        yscale = 1.0
-    if "cxscale" in kwargs:
-        cxscale = kwargs["cxscale"]
-    else:
-        cxscale = 1.0
-
-    # Get original position of color bar and not modified position
-    # because of Axes.apply_aspect being called.
-    cp = hc.ax.get_position(original=True)
-
-    # Calculate location : [left, bottom, width, height]
-    if "checkstats" in option:
-        # Taylor diagram
-        location = [
-            cp.x0 + xscale * 0.5 * (1 + math.cos(math.radians(45))) * cp.width,
-            yscale * cp.y0,
-            cxscale * cp.width / 6,
-            cp.height,
-        ]
-    else:
-        # target diagram
-        location = [
-            cp.x0 + xscale * 0.5 * (1 + math.cos(math.radians(60))) * cp.width,
-            yscale * cp.y0,
-            cxscale * cp.width / 6,
-            cxscale * cp.height,
-        ]
-
-    return location
-
-
-def _setColorBarTicks(hc, numBins, lenTick):
-    """
-    Determine number of ticks for color bar.
-
-    Determines number of ticks for colorbar so tick labels do not
-    overlap.
-
-    INPUTS:
-    hc      : handle of colorbar
-    numBins : number of bins to use for determining number of
-            tick values using ticker.MaxNLocator
-    lenTick : maximum number of characters for all the tick labels
-
-    OUTPUTS:
-    None
-
-    """
-
-    maxChar = 10
-    lengthTick = lenTick
-    while lengthTick > maxChar:
-        # Limit number of ticks on color bar to numBins-1
-        hc.locator = ticker.MaxNLocator(nbins=numBins, prune="both")
-        hc.update_ticks()
-
-        # Check number of characters in tick labels is
-        # acceptable, otherwise reduce number of bins
-        locs = str(hc.get_ticks())
-        locs = locs[1:-1].split()
-        lengthTick = 0
-        for tick in locs:
-            tickStr = str(tick).rstrip(".")
-            lengthTick += len(tickStr)
-        if lengthTick > maxChar:
-            numBins -= 1
 
 
 def generate_markers(data_names, option):

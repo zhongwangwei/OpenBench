@@ -63,9 +63,11 @@ class TargetDiagramComparisonMixin:
                                 if isinstance(sim_sources, str):
                                     sim_sources = [sim_sources]
                                 for sim_source in sim_sources:
+                                    # Column order must match the values written below:
+                                    # bias, then total RMSE (=RMSD), then centered CRMSD.
                                     output_file.write(f"{sim_source}_bias\t")
-                                    output_file.write(f"{sim_source}_crmsd\t")
                                     output_file.write(f"{sim_source}_rmsd\t")
+                                    output_file.write(f"{sim_source}_crmsd\t")
 
                                 output_file.write("\n")  # Move "All" to the first line
                                 output_file.write(f"{evaluation_item}\t")
@@ -259,8 +261,11 @@ class TargetDiagramComparisonMixin:
                                         dir_path,
                                         evaluation_item,
                                         biases,
-                                        rmses,
+                                        # Target diagram expects (bias, crmsd, rmsd):
+                                        # crmsd slot = centered/unbiased RMSD (x-axis uRMSD),
+                                        # rmsd slot = total RMSD. Do NOT swap these.
                                         crmsds,
+                                        rmses,
                                         ref_source,
                                         sim_sources,
                                         option,

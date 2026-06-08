@@ -816,8 +816,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 rmses[i] = values[i * 3 + 1]
                                 crmsds[i] = values[i * 3 + 2]
 
+                            # Target diagram expects (bias, crmsd, rmsd): centered CRMSD in the
+                            # crmsd slot (x-axis uRMSD), total RMSD in the rmsd slot. Do NOT swap.
                             make_scenarios_comparison_Target_Diagram(
-                                dir_path, evaluation_item, biases, rmses, crmsds, ref_source, sim_sources, option
+                                dir_path, evaluation_item, biases, crmsds, rmses, ref_source, sim_sources, option
                             )
                         finally:
                             gc.collect()  # Clean up memory after processing each reference source
