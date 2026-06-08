@@ -308,9 +308,10 @@ def _catalog_write_lock(catalog_path: Path):
     overwrites the first writer's new entries. Common in HPC shared-registry
     scenarios where multiple users scan their reference roots in parallel.
 
-    Falls back gracefully on platforms without flock (Windows native, NFS
-    without nlockmgr): logs a debug note and proceeds without serialization.
-    Single-user local installs see no behavior change.
+    Uses fcntl.flock on POSIX and msvcrt.locking on Windows. Falls back
+    gracefully where neither is available (e.g. NFS without nlockmgr): logs a
+    debug note and proceeds without serialization. Single-user local installs
+    see no behavior change.
     """
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = Path(str(catalog_path) + ".lock")
@@ -321,30 +322,40 @@ def _catalog_write_lock(catalog_path: Path):
         yield
         return
 
-    try:
-        import fcntl
-    except ImportError:
-        # Windows native — proceed without locking
-        yield
-        return
-
-    lock_file = open(lock_path, "r")
+    lock_file = open(lock_path, "a+")
     have_lock = False
+    release = None
     try:
         try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            if os.name == "nt":
+                import msvcrt
+
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+
+                def release():
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+
+                def release():
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
             have_lock = True
-        except OSError as e:
+        except (OSError, ImportError) as e:
             logger.debug(
-                "flock unavailable for %s (%s); proceeding without lock",
+                "catalog lock unavailable for %s (%s); proceeding without lock",
                 lock_path,
                 e,
             )
         yield
     finally:
-        if have_lock:
+        if have_lock and release is not None:
             try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                release()
             except OSError:
                 pass
         lock_file.close()
@@ -582,13 +593,13 @@ def _portable_root_dir(path: Path) -> str:
     """Use OPENBENCH_REF_ROOT in scanned catalog paths when it exactly applies."""
     ref_root = resolve_reference_root()
     if not ref_root:
-        return str(path)
+        return path.as_posix()
 
     expanded_root = _expand_path(ref_root)
     try:
         rel = path.resolve().relative_to(expanded_root.resolve())
     except (OSError, ValueError):
-        return str(path)
+        return path.as_posix()
 
     if str(rel) == ".":
         return "${OPENBENCH_REF_ROOT}"
