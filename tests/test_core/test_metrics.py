@@ -90,7 +90,8 @@ def test_percent_change_metrics_do_not_mutate_inputs_with_nan_pairs():
 
     assert abs(float(m.pc_max(sim, obs)) - (-0.25)) < 1e-10
     assert float(m.pc_min(sim, obs)) == 0.0
-    assert abs(float(m.pc_ampli(sim, obs)) - (-1.0 / 3.0)) < 1e-10
+    # pc_ampli casts to float32 internally, so -1/3 is only float32-exact (~1e-7).
+    assert abs(float(m.pc_ampli(sim, obs)) - (-1.0 / 3.0)) < 1e-6
 
     xr.testing.assert_identical(obs, obs_before)
     xr.testing.assert_identical(sim, sim_before)

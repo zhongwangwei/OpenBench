@@ -42,6 +42,7 @@ openbench run   openbench.yaml   # evaluate, plot, report
 - [Performance Tuning](#performance-tuning)
 - [Migrating from Earlier Versions](#migrating-from-earlier-versions)
 - [Requirements](#requirements)
+- [Citation](#citation)
 - [Links](#links)
 - [License](#license)
 
@@ -602,6 +603,26 @@ old and new result sets.
 - Optional extras: `gui` (PySide6), `remote` (paramiko), `report` (xhtml2pdf),
   `migration` (f90nml)
 - See [`pyproject.toml`](pyproject.toml) for the full pinned dependency list
+
+## Citation
+
+If you use OpenBench in scientific work, please cite:
+
+> Wei, Z., Xu, Q., Bai, F., Xu, X., Wei, Z., Dong, W., Liang, H., Wei, N., Lu, X., Li, L., Zhang, S., Yuan, H., Liu, L., and Dai, Y.: OpenBench: a land model evaluation system, Geosci. Model Dev., 18, 6517–6540, <https://doi.org/10.5194/gmd-18-6517-2025>, 2025.
+
+```bibtex
+@article{wei2025openbench,
+  author  = {Wei, Z. and Xu, Q. and Bai, F. and Xu, X. and Wei, Z. and Dong, W.
+             and Liang, H. and Wei, N. and Lu, X. and Li, L. and Zhang, S.
+             and Yuan, H. and Liu, L. and Dai, Y.},
+  title   = {{OpenBench}: a land model evaluation system},
+  journal = {Geoscientific Model Development},
+  volume  = {18},
+  pages   = {6517--6540},
+  year    = {2025},
+  doi     = {10.5194/gmd-18-6517-2025}
+}
+```
 
 ## Links
 

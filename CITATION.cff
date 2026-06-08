@@ -1,0 +1,73 @@
+cff-version: 1.2.0
+message: "If you use OpenBench in scientific work, please cite the article below."
+title: "OpenBench: Open Source Land Surface Model Benchmarking System"
+type: software
+url: "https://github.com/CoLM-SYSU/OpenBench"
+license: MIT
+authors:
+  - family-names: Wei
+    given-names: Z.
+  - family-names: Xu
+    given-names: Q.
+  - family-names: Bai
+    given-names: F.
+  - family-names: Xu
+    given-names: X.
+  - family-names: Wei
+    given-names: Z.
+  - family-names: Dong
+    given-names: W.
+  - family-names: Liang
+    given-names: H.
+  - family-names: Wei
+    given-names: N.
+  - family-names: Lu
+    given-names: X.
+  - family-names: Li
+    given-names: L.
+  - family-names: Zhang
+    given-names: S.
+  - family-names: Yuan
+    given-names: H.
+  - family-names: Liu
+    given-names: L.
+  - family-names: Dai
+    given-names: Y.
+preferred-citation:
+  type: article
+  title: "OpenBench: a land model evaluation system"
+  journal: "Geoscientific Model Development"
+  volume: 18
+  start: 6517
+  end: 6540
+  year: 2025
+  doi: "10.5194/gmd-18-6517-2025"
+  authors:
+    - family-names: Wei
+      given-names: Z.
+    - family-names: Xu
+      given-names: Q.
+    - family-names: Bai
+      given-names: F.
+    - family-names: Xu
+      given-names: X.
+    - family-names: Wei
+      given-names: Z.
+    - family-names: Dong
+      given-names: W.
+    - family-names: Liang
+      given-names: H.
+    - family-names: Wei
+      given-names: N.
+    - family-names: Lu
+      given-names: X.
+    - family-names: Li
+      given-names: L.
+    - family-names: Zhang
+      given-names: S.
+    - family-names: Yuan
+      given-names: H.
+    - family-names: Liu
+      given-names: L.
+    - family-names: Dai
+      given-names: Y.

@@ -56,14 +56,6 @@ test_data/
 
 # Local/generated tests and planning artifacts
 docs/performance-benchmark.md
-docs/superpowers/plans/2026-04-02-reference-provenance-convergence.md
-docs/superpowers/plans/2026-04-03-cli-local-dead-code-cleanup.md
-docs/superpowers/plans/2026-04-04-legacy-cleanup-roadmap.md
-docs/superpowers/plans/2026-04-08-filter-refactor.md
-docs/superpowers/plans/2026-05-01-sim-scan.md
-docs/superpowers/reviews/2026-05-17-final-audit.md
-docs/superpowers/specs/2026-04-02-reference-provenance-convergence-design.md
-docs/superpowers/specs/2026-04-08-filter-refactor-design.md
 tests/test_architecture_cleanup.py
 tests/test_architecture_cli.py
 tests/test_architecture_core.py
@@ -140,3 +132,5 @@ openbench_full_options.yaml
 outputs/
 openbench_init_*.yaml
 /test_*.yaml
+
+docs/superpowers/
