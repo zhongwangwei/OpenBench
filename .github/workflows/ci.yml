@@ -33,6 +33,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      # Headless PySide6 on Linux needs the system EGL/GL/xkbcommon libraries
+      # (libEGL.so.1 etc.); the macOS/Windows wheels bundle their own.
+      - name: Install Qt system libraries for headless PySide6 (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
       # gui (PySide6) + remote (paramiko) extras so the full test suite runs on CI.
       - run: pip install -e ".[dev,gui,remote]"
       # Coverage is reported (terminal + XML) but no hard threshold yet;
