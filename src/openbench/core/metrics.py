@@ -449,16 +449,12 @@ class metrics:
 
     def pc_max(self, s, o):
         s, o = self._validate_inputs(s, o)
-        s = s.astype(np.float32)
-        o = o.astype(np.float32)
 
         o_max = o.max(dim="time")
         return xr.where(o_max != 0, (s.max(dim="time") - o_max) / np.abs(o_max), np.nan)
 
     def pc_min(self, s, o):
         s, o = self._validate_inputs(s, o)
-        s = s.astype(np.float32)
-        o = o.astype(np.float32)
 
         # Normalize by |o_min| so a negative observed minimum (e.g. winter
         # temperature minima) doesn't flip the sign of the relative-bias
@@ -469,8 +465,6 @@ class metrics:
 
     def pc_ampli(self, s, o):
         s, o = self._validate_inputs(s, o)
-        s = s.astype(np.float32)
-        o = o.astype(np.float32)
 
         # Calculate amplitude (range) for observed data. Keep the guard
         # element-wise and lazy: a global ``np.any`` over a dask-backed grid
@@ -634,7 +628,7 @@ class metrics:
         else:
             return apfb_per_year.mean()
 
-    def br2(self, data_array, obs_array, na_rm=True, use_abs=False, fun=None, epsilon_type="none", epsilon_value=None):
+    def br2(self, data_array, obs_array, na_rm=True, use_abs=True, fun=None, epsilon_type="none", epsilon_value=None):
         """
         Calculates the br2 metric (R-squared multiplied by regression slope) along the time dimension.
 

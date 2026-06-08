@@ -90,8 +90,7 @@ def test_percent_change_metrics_do_not_mutate_inputs_with_nan_pairs():
 
     assert abs(float(m.pc_max(sim, obs)) - (-0.25)) < 1e-10
     assert float(m.pc_min(sim, obs)) == 0.0
-    # pc_ampli casts to float32 internally, so -1/3 is only float32-exact (~1e-7).
-    assert abs(float(m.pc_ampli(sim, obs)) - (-1.0 / 3.0)) < 1e-6
+    assert abs(float(m.pc_ampli(sim, obs)) - (-1.0 / 3.0)) < 1e-10
 
     xr.testing.assert_identical(obs, obs_before)
     xr.testing.assert_identical(sim, sim_before)
@@ -143,6 +142,20 @@ def test_br2_returns_nan_for_constant_observations():
     result = m.br2(make_da([1.0, 2.0, 3.0]), make_da([1.0, 1.0, 1.0]))
 
     assert np.isnan(float(result))
+
+
+def test_br2_negative_slope_stays_in_zero_to_r2_range():
+    """br2 must use |slope| (Krause 2005): a perfectly anti-correlated series
+    has slope=-1, r²=1, so br2=1 — not a negative value (L3)."""
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    obs = make_da([1.0, 2.0, 3.0, 4.0])
+    sim = make_da([4.0, 3.0, 2.0, 1.0])  # slope = -1, r² = 1
+
+    value = float(m.br2(sim, obs))
+    assert 0.0 <= value <= 1.0
+    assert abs(value - 1.0) < 1e-10
 
 
 def test_smpi_uses_climatological_mean_difference_not_instantaneous_error():
