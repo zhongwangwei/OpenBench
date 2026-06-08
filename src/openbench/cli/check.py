@@ -216,9 +216,8 @@ def _groupby_static_dataset_findings(cfg) -> list[str]:
             continue
         candidates = static_dataset_candidates(filename)
         if not static_dataset_exists(filename):
-            errors.append(
-                f"{label} requires static dataset {filename} (checked: {', '.join(str(p) for p in candidates)})"
-            )
+            checked = ", ".join(Path(p).as_posix() for p in candidates)
+            errors.append(f"{label} requires static dataset {filename} (checked: {checked})")
     return errors
 
 

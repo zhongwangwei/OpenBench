@@ -386,7 +386,7 @@ class ReportGenerator:
         figures["igbp_groupby"] = []
         for f in igbp_files:
             if self.comparisons_dir in f:
-                rel_path = os.path.relpath(f, self.comparisons_dir)
+                rel_path = os.path.relpath(f, self.comparisons_dir).replace(os.sep, "/")
                 figures["igbp_groupby"].append(f"comparisons/{rel_path}")
 
         if figures["igbp_groupby"]:
@@ -399,7 +399,7 @@ class ReportGenerator:
         figures["pft_groupby"] = []
         for f in pft_files:
             if self.comparisons_dir in f:
-                rel_path = os.path.relpath(f, self.comparisons_dir)
+                rel_path = os.path.relpath(f, self.comparisons_dir).replace(os.sep, "/")
                 figures["pft_groupby"].append(f"comparisons/{rel_path}")
 
         if figures["pft_groupby"]:
@@ -412,7 +412,7 @@ class ReportGenerator:
         figures["climate_zone_groupby"] = []
         for f in climate_files:
             if self.comparisons_dir in f:
-                rel_path = os.path.relpath(f, self.comparisons_dir)
+                rel_path = os.path.relpath(f, self.comparisons_dir).replace(os.sep, "/")
                 figures["climate_zone_groupby"].append(f"comparisons/{rel_path}")
 
         if figures["climate_zone_groupby"]:
@@ -1298,7 +1298,7 @@ class ReportGenerator:
                 for file in files:
                     if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
-                        rel_path = os.path.relpath(src_file, self.metrics_dir)
+                        rel_path = os.path.relpath(src_file, self.metrics_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "metrics", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
                         shutil.copy2(src_file, dst_file)
@@ -1311,7 +1311,7 @@ class ReportGenerator:
                 for file in files:
                     if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
-                        rel_path = os.path.relpath(src_file, self.scores_dir)
+                        rel_path = os.path.relpath(src_file, self.scores_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "scores", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
                         shutil.copy2(src_file, dst_file)
@@ -1324,7 +1324,7 @@ class ReportGenerator:
                 for file in files:
                     if file.endswith(".jpg"):
                         src_file = os.path.join(root, file)
-                        rel_path = os.path.relpath(src_file, self.comparisons_dir)
+                        rel_path = os.path.relpath(src_file, self.comparisons_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "comparisons", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
                         shutil.copy2(src_file, dst_file)

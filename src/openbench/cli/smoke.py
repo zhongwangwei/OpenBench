@@ -124,7 +124,7 @@ def _write_reference_catalog(home: Path, reference_root: Path, station_lists: di
                 "  tim_res: Month",
                 "  grid_res: 2.0",
                 "  years: [2004, 2005]",
-                f"  root_dir: {reference_root}",
+                f"  root_dir: {reference_root.as_posix()}",
                 "  variables:",
                 "    Evapotranspiration:",
                 "      varname: E",
@@ -139,8 +139,8 @@ def _write_reference_catalog(home: Path, reference_root: Path, station_lists: di
                 "  tim_res: Day",
                 "  data_groupby: single",
                 "  years: [2004, 2005]",
-                f"  root_dir: {reference_root / 'GLEAM_hybrid_PLUMBER2'}",
-                f"  fulllist: {station_lists['GLEAM_hybrid_PLUMBER2']}",
+                f"  root_dir: {(reference_root / 'GLEAM_hybrid_PLUMBER2').as_posix()}",
+                f"  fulllist: {station_lists['GLEAM_hybrid_PLUMBER2'].as_posix()}",
                 "  variables:",
                 "    Evapotranspiration:",
                 "      varname: et",
@@ -153,7 +153,7 @@ def _write_reference_catalog(home: Path, reference_root: Path, station_lists: di
                 "  data_groupby: Single",
                 "  grid_res: 2.0",
                 "  years: [2004, 2005]",
-                f"  root_dir: {reference_root / 'ILAMB'}",
+                f"  root_dir: {(reference_root / 'ILAMB').as_posix()}",
                 "  variables:",
                 "    Latent_Heat:",
                 "      varname: le",
@@ -174,8 +174,8 @@ def _write_reference_catalog(home: Path, reference_root: Path, station_lists: di
                 "  tim_res: Day",
                 "  data_groupby: single",
                 "  years: [2004, 2005]",
-                f"  root_dir: {reference_root / 'PLUMBER2'}",
-                f"  fulllist: {station_lists['PLUMBER2']}",
+                f"  root_dir: {(reference_root / 'PLUMBER2').as_posix()}",
+                f"  fulllist: {station_lists['PLUMBER2'].as_posix()}",
                 "  variables:",
                 "    Latent_Heat:",
                 "      varname: Qle_cor",
@@ -198,11 +198,11 @@ def _write_smoke_config(work_dir: Path, sample_root: Path, station_lists: dict[s
     station_simulation_root = sample_root / "Simulation" / "Initial_test" / "stn"
     template = _resource_path(SMOKE_TEMPLATE).read_text(encoding="utf-8")
     config_text = template.format(
-        output_dir=output_dir,
-        reference_root=reference_root,
-        simulation_root=simulation_root,
-        station_simulation_root=station_simulation_root,
-        station_simulation_list=station_lists["station_case"],
+        output_dir=output_dir.as_posix(),
+        reference_root=reference_root.as_posix(),
+        simulation_root=simulation_root.as_posix(),
+        station_simulation_root=station_simulation_root.as_posix(),
+        station_simulation_list=station_lists["station_case"].as_posix(),
     )
     config_path = work_dir / "openbench-smoke.yaml"
     config_path.write_text(config_text, encoding="utf-8")
