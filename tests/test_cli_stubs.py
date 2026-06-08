@@ -5209,7 +5209,9 @@ def test_run_expands_env_paths_before_runner(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["run", str(config_path)])
 
     assert result.exit_code == 0, result.output
-    assert seen == [(str(out_root), str(sim_root))]
+    assert [(o.replace("\\", "/"), s.replace("\\", "/")) for o, s in seen] == [
+        (out_root.as_posix(), sim_root.as_posix())
+    ]
 
 
 def test_run_output_dir_option_overrides_yaml_before_runner(tmp_path, monkeypatch):

@@ -252,7 +252,7 @@ def _smoke_case_dir(config_path: Path) -> Path:
 
 def _relative_artifact(path: Path, base: Path) -> str:
     try:
-        return str(path.relative_to(base))
+        return path.relative_to(base).as_posix()
     except ValueError:
         return str(path)
 

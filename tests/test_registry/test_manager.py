@@ -491,7 +491,7 @@ def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
             context="Demo.root_dir",
         )
 
-    assert expanded == str(tmp_path / "Reference" / "Grid" / "LowRes")
+    assert expanded.replace("\\", "/") == (tmp_path / "Reference" / "Grid" / "LowRes").as_posix()
     assert "OPENBENCH_REF_ROOT" not in caplog.text
 
 

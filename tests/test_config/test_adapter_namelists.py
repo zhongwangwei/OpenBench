@@ -331,7 +331,7 @@ def test_reference_fulllist_relative_to_root_dir_is_resolved(monkeypatch, tmp_pa
 
     _, ref_nml, _ = build_legacy_namelists(cfg)
 
-    assert ref_nml["Runoff"]["DemoStn_fulllist"] == str(tmp_path / "list" / "subset.csv")
+    assert ref_nml["Runoff"]["DemoStn_fulllist"].replace("\\", "/") == (tmp_path / "list" / "subset.csv").as_posix()
 
 
 def test_generated_sim_station_fulllist_columns_are_accepted_by_legacy_reader(tmp_path):

@@ -226,7 +226,7 @@ def _prompt_grid_dataset_choice_profile(skip_path: str, parts: tuple[str, ...], 
     file_glob = _prompt_file_glob(_ref_relative_path(nc_dir, ref_root))
     variables = _prompt_profile_variables_for_child(
         child_rel=_ref_relative_path(nc_dir, ref_root),
-        nc_rel=str(nc_dir.relative_to(ref_root / "Grid" / parts[1])),
+        nc_rel=nc_dir.relative_to(ref_root / "Grid" / parts[1]).as_posix(),
         child_name=default_std,
         all_vars=all_vars,
         default_nc=default_nc,
@@ -238,13 +238,13 @@ def _prompt_grid_dataset_choice_profile(skip_path: str, parts: tuple[str, ...], 
         include_root_sub_dir=False,
     )
     for entry in variables.values():
-        entry["sub_dir"] = str(nc_dir.relative_to(ref_root / "Grid" / parts[1]))
+        entry["sub_dir"] = nc_dir.relative_to(ref_root / "Grid" / parts[1]).as_posix()
     return profile_name, {
         "dataset_name": _grid_dataset_name_for_skip(parts),
         "scan": {
             "layout": "grid_dataset_choice",
             "root_sub_dir": skip_path,
-            "nc_sub_dir": str(child.relative_to(dataset_root)),
+            "nc_sub_dir": child.relative_to(dataset_root).as_posix(),
         },
         "variables": variables,
     }
@@ -318,7 +318,7 @@ def _prompt_grid_nested_profile(skip_path: str, parts: tuple[str, ...], ref_root
     nc_files = sorted(glob_nc(dataset_root, recursive=True))
     concrete_nc_dir = nc_files[0].parent if nc_files else dataset_root
     res_dir = ref_root / "Grid" / parts[1]
-    concrete_sub_dir = str(concrete_nc_dir.relative_to(res_dir))
+    concrete_sub_dir = concrete_nc_dir.relative_to(res_dir).as_posix()
     all_vars = nc_info.get("all_data_vars") or []
     default_nc = nc_info.get("varname") or (all_vars[0]["name"] if all_vars else default_std)
     default_unit = nc_info.get("varunit") or (all_vars[0].get("unit", "") if all_vars else "")

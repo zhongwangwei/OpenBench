@@ -577,7 +577,7 @@ def _portable_artifact_path(path: Path | None, sim_path: Path | None) -> str | N
     if sim_path is not None:
         try:
             base = Path(sim_path).expanduser().resolve().parent
-            rel = os.path.relpath(target.expanduser().resolve(), start=base)
+            rel = Path(os.path.relpath(target.expanduser().resolve(), start=base)).as_posix()
             if not rel.startswith(".."):
                 return rel
         except (OSError, ValueError):

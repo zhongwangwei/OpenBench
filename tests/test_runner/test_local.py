@@ -1023,7 +1023,7 @@ def test_runner_post_phase_helpers_consume_bindings_only(tmp_path, monkeypatch):
     assert len(args) == 3
     assert args[0] is bindings
     assert args[1] == ["HeatMap"]
-    assert str(args[2]).endswith("/case")
+    assert str(args[2]).replace("\\", "/").endswith("/case")
 
 
 def test_runner_statistics_helper_consumes_bindings_only(tmp_path, monkeypatch):
@@ -1109,7 +1109,7 @@ def test_runner_statistics_helper_consumes_bindings_only(tmp_path, monkeypatch):
     assert len(args) == 3
     assert args[0] is bindings
     assert args[1] == ["Mean"]
-    assert str(args[2]).endswith("/case")
+    assert str(args[2]).replace("\\", "/").endswith("/case")
 
 
 def test_runner_report_helper_consumes_bindings_report_config(tmp_path, monkeypatch):
@@ -4001,15 +4001,13 @@ def test_igbp_groupby_only_drawing_falls_back_to_legacy_root_scores_csv(tmp_path
         {},
     )
 
-    assert calls == [
-        (
-            legacy_scores,
-            ("Overall_Score",),
-            "score",
-            f"{case_dir}/comparisons/IGBP_groupby/SimA__RefA/",
-            ["Runoff", "SimA", "RefA"],
-        )
-    ]
+    assert len(calls) == 1
+    call = calls[0]
+    assert call[0] == legacy_scores
+    assert call[1] == ("Overall_Score",)
+    assert call[2] == "score"
+    assert call[3].replace("\\", "/") == f"{case_dir.as_posix()}/comparisons/IGBP_groupby/SimA__RefA/"
+    assert call[4] == ["Runoff", "SimA", "RefA"]
 
 
 def test_comparison_only_drawing_igbp_delegates_to_groupby_fallback(tmp_path, monkeypatch):
