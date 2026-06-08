@@ -1,8 +1,10 @@
 name: Publish to PyPI
 
+# Manual-only: publishing to PyPI is done manually (twine upload) for now,
+# so a GitHub Release no longer auto-triggers (and fails) this workflow.
+# Run it from the Actions tab when trusted publishing is configured.
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   id-token: write
