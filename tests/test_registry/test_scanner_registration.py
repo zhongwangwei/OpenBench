@@ -422,7 +422,7 @@ def test_register_scanned_dataset_writes_station_list_next_to_catalog(tmp_path: 
 
     catalog = yaml.safe_load(catalog_path.read_text())
     expected = catalog_path.parent / "station_lists" / "DemoStation.csv"
-    assert catalog["DemoStation"]["fulllist"] == str(expected)
+    assert catalog["DemoStation"]["fulllist"] == expected.as_posix()
     assert expected.exists()
 
 
