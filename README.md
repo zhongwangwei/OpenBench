@@ -2,10 +2,10 @@
 
 > Open Source Land Surface Model Benchmarking System
 
-[![PyPI version](https://img.shields.io/pypi/v/colm-openbench.svg)](https://pypi.org/project/colm-openbench/)
-[![Python versions](https://img.shields.io/pypi/pyversions/colm-openbench.svg)](https://pypi.org/project/colm-openbench/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-readthedocs-blue.svg)](https://openbench.readthedocs.io)
+[![PyPI version](https://img.shields.io/pypi/v/colm-openbench?include_prereleases)](https://pypi.org/project/colm-openbench/)
+[![Python versions](https://img.shields.io/pypi/pyversions/colm-openbench)](https://pypi.org/project/colm-openbench/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![User's Guide](https://img.shields.io/badge/docs-User's%20Guide%20(PDF)-blue)](docs/manual/OpenBench_UsersGuide_EN.pdf)
 
 OpenBench is a fully automated, cross-platform framework for benchmarking land
 surface models (LSMs) against curated reference datasets. From a single YAML
@@ -606,7 +606,7 @@ old and new result sets.
 ## Links
 
 - Source: <https://github.com/CoLM-SYSU/OpenBench>
-- Documentation: <https://openbench.readthedocs.io>
+- PyPI: <https://pypi.org/project/colm-openbench/>
 - User's Guide (PDF): [English](docs/manual/OpenBench_UsersGuide_EN.pdf) · [中文](docs/manual/OpenBench_UsersGuide.pdf)
 - Issues: <https://github.com/CoLM-SYSU/OpenBench/issues>
 
