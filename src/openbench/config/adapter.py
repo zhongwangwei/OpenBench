@@ -6,12 +6,13 @@ patterns. This adapter translates the new dataclass-based config.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
 
-from openbench.config.schema import OpenBenchConfig
+from openbench.config.schema import OpenBenchConfig, is_simple_project_name
+from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_value_case_insensitive
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ LEGACY_GENERAL_KEYS = {
     "Climate_zone_groupby",
     "unified_mask",
     "time_alignment",
+    "regrid_backend",
     "generate_report",
     "weight",
     "compare_tim_res",
@@ -80,7 +82,7 @@ class RunnerConfig:
         return self.general["compare_tim_res"]
 
     @property
-    def compare_tzone(self) -> int:
+    def compare_tzone(self) -> float:
         return self.general["compare_tzone"]
 
     @property
@@ -154,9 +156,7 @@ class RunnerBindings:
                         return GridEvaluationEvidence(has_grid=True)
                     continue
                 for sim_s in sim_sources:
-                    sim_dtype = self.namelists.simulation.get(var_name, {}).get(
-                        f"{sim_s}_data_type"
-                    )
+                    sim_dtype = self.namelists.simulation.get(var_name, {}).get(f"{sim_s}_data_type")
                     if ref_dtype != "stn" or sim_dtype != "stn":
                         return GridEvaluationEvidence(has_grid=True)
 
@@ -169,7 +169,11 @@ class RunnerBindings:
             namelists=self.namelists,
         )
 
-    def build_statistics_context(self, statistic_vars: list[str]) -> "StatisticsContext":
+    def build_statistics_context(
+        self,
+        statistic_vars: list[str],
+        evaluation_items: list[str] | None = None,
+    ) -> "StatisticsContext":
         """Build the statistics-phase payload.
 
         Each statistic method needs per-variable data source entries that point
@@ -190,23 +194,36 @@ class RunnerBindings:
 
         ref_general = self.namelists.reference.get("general", {})
         sim_general = self.namelists.simulation.get("general", {})
-        eval_vars = list(self.runner_cfg.evaluation_items.keys())
+        eval_vars = (
+            list(evaluation_items) if evaluation_items is not None else list(self.runner_cfg.evaluation_items.keys())
+        )
 
         tim_res = main_nl["general"].get("compare_tim_res", "Month")
         grid_res = main_nl["general"].get("compare_grid_res", 0.5)
         syear = main_nl["general"]["syear"]
         eyear = main_nl["general"]["eyear"]
+        time_alignment = main_nl["general"].get("time_alignment", "intersection")
+        # Per-pair ref FILES are only emitted by the runner when
+        # unified_mask is also enabled (see runner/local.py: the per-pair
+        # `{var}_ref_{ref}_{sim}_{varname}.nc` copy is created inside the
+        # `if unified_mask:` block). Without unified_mask, all sims share
+        # the same `{var}_ref_{ref}_{varname}.nc` file. Statistics paths
+        # must reflect what actually exists on disk.
+        unified_mask_active = bool(main_nl["general"].get("unified_mask", True))
+        per_pair_files_exist = (time_alignment == "per_pair") and unified_mask_active
 
         # Two-source statistics methods that compare sim vs ref
         TWO_SOURCE_METHODS = {
-            "Hellinger_Distance", "Correlation", "Functional_Response",
-            "ANOVA", "Partial_Least_Squares_Regression",
+            "Hellinger_Distance",
+            "Correlation",
+            "Functional_Response",
+            "ANOVA",
+            "Partial_Least_Squares_Regression",
         }
         # Three-source method
         THREE_SOURCE_METHODS = {"Three_Cornered_Hat"}
 
-        def _base_entry(prefix_val: str, varname: str, varunit: str,
-                        data_type: str = "grid") -> dict[str, Any]:
+        def _base_entry(prefix_val: str, varname: str, varunit: str, data_type: str = "grid") -> dict[str, Any]:
             """Build a single data-source entry dict."""
             return {
                 "dir": data_dir,
@@ -239,9 +256,7 @@ class RunnerBindings:
                     continue
 
                 # Normalize ref to list (multi-ref support)
-                ref_sources_list = (
-                    [ref_source_raw] if isinstance(ref_source_raw, str) else list(ref_source_raw)
-                )
+                ref_sources_list = [ref_source_raw] if isinstance(ref_source_raw, str) else list(ref_source_raw)
 
                 ref_nml_var = self.namelists.reference.get(var_name, {})
                 sim_nml_var = self.namelists.simulation.get(var_name, {})
@@ -257,9 +272,15 @@ class RunnerBindings:
                         sim_varunit = sim_nml_var.get(f"{sim_source}_varunit", "")
                         sim_dtype = sim_nml_var.get(f"{sim_source}_data_type", "grid")
 
-                        # File prefixes match evaluation output naming
+                        # File prefixes match evaluation output naming.
+                        # Use the per-pair format ONLY when those files
+                        # actually get written (per_pair + unified_mask).
+                        # Otherwise statistics would point at non-existent
+                        # files and silently fail to find ref data.
                         sim_file_prefix = f"{var_name}_sim_{sim_source}_{sim_varname}"
                         ref_file_prefix = f"{var_name}_ref_{ref_source}_{ref_varname}"
+                        if per_pair_files_exist:
+                            ref_file_prefix = f"{var_name}_ref_{ref_source}_{sim_source}_{ref_varname}"
 
                         # Sanitised label for this var+sim+ref triple (multi-ref:
                         # include ref to keep entries distinct across ref sources)
@@ -279,13 +300,25 @@ class RunnerBindings:
                             source_names.append(pair_label)
                             for key, val in _base_entry(sim_file_prefix, sim_varname, sim_varunit, sim_dtype).items():
                                 stat_section[f"{pair_label}_{key}"] = val
+                            if per_pair_files_exist:
+                                ref_label = f"{var_name}_{ref_source}_{sim_source}"
+                                source_names.append(ref_label)
+                                for key, val in _base_entry(
+                                    ref_file_prefix,
+                                    ref_varname,
+                                    ref_varunit,
+                                    ref_dtype,
+                                ).items():
+                                    stat_section[f"{ref_label}_{key}"] = val
                         else:
                             source_names.append(pair_label)
                             for key, val in _base_entry(sim_file_prefix, sim_varname, sim_varunit, sim_dtype).items():
                                 stat_section[f"{pair_label}_{key}"] = val
 
                     # For Three_Cornered_Hat, add this ref as an extra source per ref
-                    if stat in THREE_SOURCE_METHODS:
+                    # (only when per_pair didn't already register one above —
+                    # which only happens when per-pair files actually exist).
+                    if stat in THREE_SOURCE_METHODS and not per_pair_files_exist:
                         ref_label = f"{var_name}_{ref_source}"
                         if ref_label not in source_names:
                             source_names.append(ref_label)
@@ -300,7 +333,9 @@ class RunnerBindings:
                 "Mann_Kendall_Trend_Test": {"significance_level": 0.05},
                 "ANOVA": {"n_jobs": -1, "analysis_type": "one-way"},
                 "Partial_Least_Squares_Regression": {
-                    "max_components": 10, "n_splits": 5, "n_jobs": -1,
+                    "max_components": 10,
+                    "n_splits": 5,
+                    "n_jobs": -1,
                 },
             }
             if stat in _STAT_DEFAULTS:
@@ -548,31 +583,37 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
         # Use a context manager so the file handle is released even if
         # data_vars probing or any later step inside this try block raises.
         with xr.open_dataset(nc_files[0]) as ds:
-            available = set(ds.data_vars)
+            available = {str(name): str(name) for name in ds.data_vars}
 
         # Try primary first
-        if primary in available:
-            return primary, primary_unit, ""
+        actual_primary = get_mapping_value_case_insensitive(available, primary)
+        if actual_primary is not None:
+            return actual_primary, primary_unit, ""
 
         # Try each fallback
         for fb in fallbacks:
-            if fb.varname in available:
+            actual_fallback = get_mapping_value_case_insensitive(available, fb.varname)
+            if actual_fallback is not None:
                 convert_expr = fb.convert or ""
                 if convert_expr:
                     logger.info(
                         "Varname fallback: %s not found → using %s (convert: %s)",
-                        primary, fb.varname, convert_expr,
+                        primary,
+                        actual_fallback,
+                        convert_expr,
                     )
                 else:
                     logger.info(
                         "Varname fallback: %s not found → using %s (%s)",
-                        primary, fb.varname, fb.varunit or "no unit",
+                        primary,
+                        actual_fallback,
+                        fb.varunit or "no unit",
                     )
                 # When convert is present, the expression transforms data to
                 # the primary variable's unit, so report primary_unit.
                 # When no convert, use the fallback's own unit.
                 effective_unit = primary_unit if convert_expr else (fb.varunit or primary_unit)
-                return fb.varname, effective_unit, convert_expr
+                return actual_fallback, effective_unit, convert_expr
 
         logger.warning("None of %s found in data, using primary: %s", all_names, primary)
     except Exception as exc:
@@ -607,7 +648,7 @@ def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None) -> str:
     if data_root and sub_dir:
         for res in ("MidRes", "HigRes"):
             if res in data_root:
-                lowres_root = data_root.replace(res, "LowRes")
+                lowres_root = data_root.replace(res, "LowRes", 1)
                 lowres_dir = os.path.join(lowres_root, sub_dir)
                 if os.path.isdir(lowres_dir) and glob_nc(lowres_dir):
                     logger.info("Falling back to LowRes: %s", lowres_dir)
@@ -626,12 +667,24 @@ def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None) -> str:
 
 def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
     """Build runner-facing config from OpenBenchConfig."""
+    from openbench.config.loader import ConfigError
     from openbench.config.resolver import derive_target_resolution_context
+    from openbench.data.registry.manager import get_registry
 
-    target_ctx = derive_target_resolution_context(cfg)
+    basename = str(cfg.project.name)
+    if not is_simple_project_name(basename):
+        raise ConfigError("project.name must be a simple directory name, not a path.")
+
+    try:
+        registry = get_registry()
+    except Exception as exc:  # pragma: no cover - keep config conversion usable without registry
+        logger.debug("Could not load registry while deriving runner target resolution: %s", exc)
+        registry = None
+
+    target_ctx = derive_target_resolution_context(cfg, registry)
 
     general = {
-        "basename": cfg.project.name,
+        "basename": basename,
         "basedir": cfg.project.output_dir,
         "syear": cfg.project.years[0],
         "eyear": cfg.project.years[1],
@@ -651,6 +704,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         "Climate_zone_groupby": cfg.project.climate_zone_groupby,
         "unified_mask": cfg.project.unified_mask,
         "time_alignment": cfg.project.time_alignment,
+        "regrid_backend": cfg.project.regrid_backend,
         "generate_report": cfg.project.generate_report,
         "weight": cfg.project.weight or "area",
         "compare_tim_res": target_ctx.tim_res or "Month",
@@ -665,7 +719,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
     else:
         metrics_dict = {"bias": True, "RMSE": True, "correlation": True}
 
-    if cfg.scores:
+    if cfg.scores is not None:
         scores_dict = {s: True for s in cfg.scores}
     else:
         scores_dict = {"Overall_Score": True}
@@ -690,6 +744,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         statistics=list(statistics_dict.keys()),
         general=general,
     )
+
 
 def build_runner_bindings(cfg: OpenBenchConfig) -> RunnerBindings:
     """Build the runner-facing config plus legacy-shaped bindings still needed downstream."""
@@ -733,18 +788,23 @@ def build_fig_nml() -> dict[str, Any]:
     Returns:
         Processed fig_nml dict.
     """
+    from importlib.resources import files
     from pathlib import Path
 
     import yaml
 
-    fignml_dir = Path(__file__).parent.parent / "data" / "fignml"
+    # Use Traversable objects directly so this works when OpenBench is
+    # imported from a zipped wheel on PYTHONPATH. Converting these to
+    # pathlib.Path would point inside the zip and make .exists()/open()
+    # fail even though the resource is present.
+    fignml_dir = files("openbench.data.fignml")
     figlib_path = fignml_dir / "figlib.yaml"
 
-    if not figlib_path.exists():
+    if not figlib_path.is_file():
         logger.warning("figlib.yaml not found at %s, visualization will be skipped", figlib_path)
         return {}
 
-    with open(figlib_path) as f:
+    with figlib_path.open("r", encoding="utf-8") as f:
         figlib = yaml.safe_load(f)
 
     fig_nml: dict[str, Any] = {}
@@ -754,8 +814,8 @@ def build_fig_nml() -> dict[str, Any]:
         config_name = key.replace("_source", "")
         filename = Path(rel_path).name
         config_path = fignml_dir / filename
-        if config_path.exists():
-            with open(config_path) as f:
+        if config_path.is_file():
+            with config_path.open("r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             fig_nml[config_name] = data.get("general", data)
         else:
@@ -767,8 +827,8 @@ def build_fig_nml() -> dict[str, Any]:
         config_name = key.replace("_source", "")
         filename = Path(rel_path).name
         config_path = fignml_dir / filename
-        if config_path.exists():
-            with open(config_path) as f:
+        if config_path.is_file():
+            with config_path.open("r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             comparison[config_name] = data.get("general", data)
     fig_nml["Comparison"] = comparison
@@ -779,8 +839,8 @@ def build_fig_nml() -> dict[str, Any]:
         config_name = key.replace("_source", "")
         filename = Path(rel_path).name
         config_path = fignml_dir / filename
-        if config_path.exists():
-            with open(config_path) as f:
+        if config_path.is_file():
+            with config_path.open("r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             statistic[config_name] = data.get("general", data)
     fig_nml["Statistic"] = statistic
@@ -852,7 +912,6 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
         var_map = r.var_map
 
         if r.status == "ok":
-
             # Construct directory: station data uses its own root_dir;
             # grid data prefers data_root (shared grid directory) over registry root_dir
             if ref_ds.data_type == "stn":
@@ -863,7 +922,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 logger.warning(
                     "No data_root or root_dir for reference %s variable %s. "
                     "Set reference.data_root in config or register with --root-dir.",
-                    resolved_name, var_name,
+                    resolved_name,
+                    var_name,
                 )
             ref_dir = data_root
             if var_map.sub_dir:
@@ -911,7 +971,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             else:
                 logger.warning(
                     "Reference %s not found; variable %s using minimal defaults.",
-                    r.source_name, var_name,
+                    r.source_name,
+                    var_name,
                 )
             # Provide minimal defaults so processing doesn't crash on missing keys
             section[f"{prefix}_data_type"] = "grid"
@@ -937,9 +998,7 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
         ref_general[f"{var_name}_ref_source"] = names[0] if len(names) == 1 else names
     for var_name, originals in _ref_original_lists.items():
         if originals:
-            ref_general[f"{var_name}_ref_source_original"] = (
-                originals[0] if len(originals) == 1 else originals
-            )
+            ref_general[f"{var_name}_ref_source_original"] = originals[0] if len(originals) == 1 else originals
 
     ref_nml = {"general": ref_general, **ref_sections}
 
@@ -958,29 +1017,32 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             model_profile = registry.get_model(model_name)
 
             # Determine variable mapping: inline overrides > model profile > fallback
-            inline_vars = (sim_entry.variables or {}).get(var_name, {})
+            inline_key = get_mapping_key_case_insensitive(sim_entry.variables or {}, var_name)
+            inline_vars = (sim_entry.variables or {}).get(inline_key, {}) if inline_key is not None else {}
 
             # Entry-level prefix/suffix (shared across all variables for this sim)
             entry_prefix = sim_entry.prefix or ""
             entry_suffix = sim_entry.suffix or ""
 
-            if model_profile and var_name in model_profile.variables:
-                profile_var = model_profile.variables[var_name]
+            profile_key = get_mapping_key_case_insensitive(model_profile.variables, var_name) if model_profile else None
+            if model_profile and profile_key is not None:
+                profile_var = model_profile.variables[profile_key]
                 if "varname" in inline_vars:
                     # Inline override — no fallback resolution
                     varname = inline_vars["varname"]
                     varunit = inline_vars.get("varunit", profile_var.varunit)
-                    convert_expr = ""
+                    convert_expr = inline_vars.get("convert", "")
                 else:
                     # Resolve from profile with fallback chain
                     varname, varunit, convert_expr = _resolve_varname(profile_var, sim_entry.root_dir)
                     varunit = inline_vars.get("varunit", varunit)
+                    convert_expr = inline_vars.get("convert", convert_expr)
                 var_prefix = inline_vars.get("prefix", entry_prefix or profile_var.prefix)
                 var_suffix = inline_vars.get("suffix", entry_suffix or profile_var.suffix)
             elif inline_vars:
                 varname = inline_vars.get("varname", var_name)
                 varunit = inline_vars.get("varunit", "")
-                convert_expr = ""
+                convert_expr = inline_vars.get("convert", "")
                 var_prefix = inline_vars.get("prefix", entry_prefix)
                 var_suffix = inline_vars.get("suffix", entry_suffix)
             else:
@@ -997,14 +1059,25 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 var_suffix = entry_suffix
 
             # Data type / resolution: inline override > sim_entry override > model profile > defaults
-            data_type = sim_entry.data_type or (model_profile.data_type if model_profile else "grid")
-            grid_res = sim_entry.grid_res or (model_profile.grid_res if model_profile else None)
-            tim_res = sim_entry.tim_res or (model_profile.tim_res if model_profile else "Month")
+            data_type = (
+                inline_vars.get("data_type")
+                or sim_entry.data_type
+                or (model_profile.data_type if model_profile else "grid")
+            )
+            if inline_vars.get("grid_res") is not None:
+                grid_res = inline_vars["grid_res"]
+            elif sim_entry.grid_res is not None:
+                grid_res = sim_entry.grid_res
+            else:
+                grid_res = model_profile.grid_res if model_profile else None
+            tim_res = (
+                inline_vars.get("tim_res") or sim_entry.tim_res or (model_profile.tim_res if model_profile else "Month")
+            )
 
             # Construct sim directory: root_dir from sim_entry, optionally with sub_dir from profile
             sim_dir = sim_entry.root_dir
-            if model_profile and var_name in model_profile.variables:
-                profile_sub = model_profile.variables[var_name].sub_dir
+            if model_profile and profile_key is not None:
+                profile_sub = model_profile.variables[profile_key].sub_dir
                 if profile_sub:
                     sim_dir = os.path.join(sim_dir, profile_sub)
 
@@ -1015,8 +1088,9 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_varunit"] = varunit
             if convert_expr:
                 var_section[f"{prefix}_convert"] = convert_expr
-            var_section[f"{prefix}_data_groupby"] = (
-                sim_entry.data_groupby or inline_vars.get("data_groupby", "Year")
+            var_section[f"{prefix}_data_groupby"] = inline_vars.get(
+                "data_groupby",
+                sim_entry.data_groupby or "Year",
             )
             var_section[f"{prefix}_tim_res"] = tim_res
             var_section[f"{prefix}_grid_res"] = grid_res
@@ -1027,8 +1101,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_suffix"] = var_suffix
 
             # Pass prefix_fallback if this variable may be in alternative files
-            if model_profile and var_name in model_profile.variables:
-                pf = model_profile.variables[var_name].prefix_fallback
+            if model_profile and profile_key is not None:
+                pf = model_profile.variables[profile_key].prefix_fallback
                 if pf:
                     var_section[f"{prefix}_prefix_fallback"] = pf
             var_section[f"{prefix}_timezone"] = inline_vars.get("timezone", 0)

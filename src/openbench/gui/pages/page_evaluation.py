@@ -20,7 +20,7 @@ EVALUATION_ITEMS = {
         "Soil_Carbon",
     ],
     "Water Cycle": [
-        "Canopy_Interception",
+        "Canopy_Evaporation",
         "Canopy_Transpiration",
         "Evapotranspiration",
         "Permafrost",

@@ -16,26 +16,40 @@ class LazyGroup(click.Group):
     COMMAND_MAP = {
         "run": "openbench.cli.run:run",
         "check": "openbench.cli.check:check",
-        "data": "openbench.cli.data:data",
+        "ref": "openbench.cli.data:data",
+        "sim": "openbench.cli.sim:sim",
         "model": "openbench.cli.model:model",
         "migrate": "openbench.cli.migrate:migrate",
         "init": "openbench.cli.init_cmd:init_cmd",
         "gui": "openbench.cli.gui:gui",
+        "cache": "openbench.cli.cache:cache",
+        "smoke-test": "openbench.cli.smoke:smoke_test",
     }
 
     def list_commands(self, ctx):
-        return ["run", "check", "init", "data", "model", "migrate", "gui", "version"]
+        preferred = [
+            "run",
+            "check",
+            "smoke-test",
+            "init",
+            "ref",
+            "sim",
+            "model",
+            "migrate",
+            "cache",
+            "gui",
+            "version",
+        ]
+        names = set(super().list_commands(ctx)) | set(self.COMMAND_MAP)
+        return [name for name in preferred if name in names] + sorted(names - set(preferred))
 
     def get_command(self, ctx, cmd_name):
-        if cmd_name == "version":
-            return version
-
         if cmd_name in self.COMMAND_MAP:
             module_path, attr = self.COMMAND_MAP[cmd_name].rsplit(":", 1)
             mod = importlib.import_module(module_path)
             return getattr(mod, attr)
 
-        return None
+        return super().get_command(ctx, cmd_name)
 
 
 @click.group(cls=LazyGroup)

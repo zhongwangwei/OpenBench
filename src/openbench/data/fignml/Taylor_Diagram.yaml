@@ -36,3 +36,6 @@ general:
   y_wise: 6
   font: DejaVu Sans
   dpi: 300
+  plotting_mode: balanced
+  max_diagram_points: 200
+  diagram_sample_method: stride

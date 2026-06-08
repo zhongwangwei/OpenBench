@@ -13,6 +13,22 @@ def test_detect_tim_res_prefers_3hour_over_hourly(tmp_path: Path):
     assert _detect_tim_res(dataset_dir) == "3Hour"
 
 
+def test_detect_tim_res_does_not_match_3h_inside_larger_number(tmp_path: Path):
+    dataset_dir = tmp_path / "13hourly_archive"
+    dataset_dir.mkdir()
+    (dataset_dir / "sample_13hourly.nc").write_text("")
+
+    assert _detect_tim_res(dataset_dir) == "Hour"
+
+
+def test_detect_tim_res_does_not_match_6h_inside_larger_number(tmp_path: Path):
+    dataset_dir = tmp_path / "16hourly_archive"
+    dataset_dir.mkdir()
+    (dataset_dir / "sample_16hourly.nc").write_text("")
+
+    assert _detect_tim_res(dataset_dir) == "Hour"
+
+
 def test_detect_tim_res_detects_hourly(tmp_path: Path):
     dataset_dir = tmp_path / "sample_hourly"
     dataset_dir.mkdir()
@@ -21,7 +37,7 @@ def test_detect_tim_res_detects_hourly(tmp_path: Path):
     assert _detect_tim_res(dataset_dir) == "Hour"
 
 
-def test_scan_reference_directory_skips_composite(tmp_path: Path):
+def test_scan_reference_directory_registers_unprofiled_grid_composite(tmp_path: Path):
     ref_root = tmp_path / "ref"
 
     direct = ref_root / "Grid" / "LowRes" / "Water" / "VarA" / "DatasetA"
@@ -33,9 +49,36 @@ def test_scan_reference_directory_skips_composite(tmp_path: Path):
     (composite / "composite.nc").write_text("")
 
     groups = scan_reference_directory(ref_root)
-    names = {group.base_name for group in groups}
+    by_name = {group.base_name: group for group in groups}
 
-    assert names == {"DatasetA"}
+    assert set(by_name) == {"DatasetA", "DatasetD"}
+    variant = by_name["DatasetD"].variants["LowRes"]
+    assert variant.variables == {"VarD": "Composite/VarD/DatasetD"}
+    assert variant.file_count == 1
+
+
+def test_scan_reference_directory_registers_multiple_standard_composite_datasets(tmp_path: Path):
+    """Composite/<variable>/<dataset> with several datasets is standard layout."""
+    import numpy as np
+    import xarray as xr
+
+    ref_root = tmp_path / "ref"
+    for dataset_name in ("DatasetA", "DatasetB"):
+        nc_dir = ref_root / "Grid" / "LowRes" / "Composite" / "VarX" / dataset_name
+        nc_dir.mkdir(parents=True)
+        ds = xr.Dataset(
+            {"VarX": (["lat", "lon"], np.zeros((2, 2), dtype=np.float32))},
+            coords={"lat": [0.0, 0.5], "lon": [0.0, 0.5]},
+        )
+        ds.to_netcdf(nc_dir / f"{dataset_name}_2010.nc")
+
+    skipped = []
+    groups = scan_reference_directory(ref_root, on_skip=skipped.append)
+    by_name = {group.base_name: group for group in groups}
+
+    assert set(by_name) == {"DatasetA", "DatasetB"}
+    assert skipped == []
+    assert by_name["DatasetA"].variants["LowRes"].variables == {"VarX": "Composite/VarX/DatasetA"}
 
 
 def test_scan_reference_directory_discovers_one_level_nested_children(tmp_path: Path):
@@ -72,9 +115,7 @@ def test_scan_reference_directory_finds_grandchildren_within_3_level_depth(tmp_p
     groups = scan_reference_directory(ref_root)
     dataset_c = next(group for group in groups if group.base_name == "DatasetC")
 
-    assert dataset_c.variants["LowRes"].variables == {
-        "VarC": "Water/VarC/DatasetC/child/grand"
-    }
+    assert dataset_c.variants["LowRes"].variables == {"VarC": "Water/VarC/DatasetC/child/grand"}
     assert dataset_c.variants["LowRes"].file_count == 1
 
 
@@ -89,3 +130,18 @@ def test_scan_reference_directory_misses_great_grandchildren(tmp_path: Path):
     groups = scan_reference_directory(ref_root)
 
     assert {group.base_name for group in groups} == set()
+
+
+def test_scan_reference_directory_marks_mixed_shallow_and_deep_nc_children_ambiguous(tmp_path: Path):
+    ref_root = tmp_path / "ref"
+    dataset_dir = ref_root / "Grid" / "LowRes" / "Water" / "VarE" / "DatasetE"
+    (dataset_dir / "shallow").mkdir(parents=True)
+    (dataset_dir / "shallow" / "a.nc").write_text("")
+    (dataset_dir / "deep" / "nested").mkdir(parents=True)
+    (dataset_dir / "deep" / "nested" / "b.nc").write_text("")
+
+    skipped = []
+    groups = scan_reference_directory(ref_root, on_skip=skipped.append)
+
+    assert "DatasetE" not in {group.base_name for group in groups}
+    assert any(message.reason == "ambiguous_nc_subdirectories" for message in skipped)

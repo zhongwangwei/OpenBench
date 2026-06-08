@@ -106,7 +106,9 @@ class Regridder:
                 containing at least this many non-null input points. The default value
                 is 1.0, which will keep output points containing any non-null inputs,
                 while a value of 0.0 will only keep output points where all inputs are
-                non-null.
+                non-null.  With ``skipna=True`` the result is an intensive
+                area-weighted mean over valid overlap, not an extensive total
+                conservation operator.
             output_chunks: Optional dictionary of explicit chunk sizes for the output
                 data. If not provided, the output will be chunked the same as the input
                 data.
@@ -164,10 +166,10 @@ class Regridder:
 
         if isinstance(self._obj, xr.Dataset):
             msg = (
-                "The 'most common value' regridder is not implemented for\n",
+                "The 'most common value' regridder is not implemented for\n"
                 "xarray.Dataset, as it requires specifying the expected labels.\n"
                 "Please select only a single variable (as DataArray),\n"
-                " and regrid it separately.",
+                " and regrid it separately."
             )
             raise ValueError(msg)
 
@@ -289,7 +291,7 @@ def validate_input(
     time_dim: str | None,
 ) -> xr.Dataset:
     if time_dim is not None and time_dim in ds_target_grid.coords:
-        ds_target_grid = ds_target_grid.isel(time=0).reset_coords()
+        ds_target_grid = ds_target_grid.isel({time_dim: 0}).reset_coords()
 
     if len(set(data.dims).intersection(set(ds_target_grid.dims))) == 0:
         msg = (

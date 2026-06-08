@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import gc
+import logging
 
 import numpy as np
 import xarray as xr
@@ -18,7 +19,7 @@ def stat_mann_kendall_trend_test(self, data):
     """
     try:
         significance_level = self.stats_nml["Mann_Kendall_Trend_Test"]["significance_level"]
-    except:
+    except (AttributeError, KeyError, TypeError):
         significance_level = self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"]
 
     def _apply_mann_kendall(da, significance_level):
@@ -36,12 +37,23 @@ def stat_mann_kendall_trend_test(self, data):
             if len(x) < 4:
                 return np.array([np.nan, np.nan, np.nan, np.nan])
 
-            # Calculate Kendall's tau and p-value
-            tau, p_value = stats.kendalltau(np.arange(len(x)), x)
+            # Calculate Kendall's tau and p-value. Use the exact distribution
+            # for short series (scipy's default switches to a normal
+            # approximation that is inaccurate for n < ~20). The exact
+            # path becomes prohibitively slow for n > 50, so we cap there
+            # and fall back to the asymptotic p-value above that.
+            method = "exact" if len(x) <= 50 else "asymptotic"
+            tau, p_value = stats.kendalltau(np.arange(len(x)), x, method=method)
 
-            # Determine trend
+            # Determine trend. Propagate NaN from `p_value` (e.g. exact-method
+            # output for a degenerate constant series) into `significance`
+            # rather than letting `NaN < α` silently fold to False (= "not
+            # significant"), which conflates "no trend" with "undefined".
             trend = np.sign(tau)
-            significance = p_value < significance_level
+            if np.isnan(p_value):
+                significance = np.nan
+            else:
+                significance = float(p_value < significance_level)
 
             return np.array([trend, significance, p_value, tau])
 
@@ -59,7 +71,7 @@ def stat_mann_kendall_trend_test(self, data):
                 vectorize=True,
                 dask="parallelized",
                 output_dtypes=[float],
-                dask_gufunc_kwargs={"mk_params": 4},
+                dask_gufunc_kwargs={"output_sizes": {"mk_params": 4}},
             )
 
             # Create separate variables for each component

@@ -13,12 +13,40 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QDialogButtonBox,
     QPushButton,
-    QCheckBox,
-    QGroupBox,
-    QLineEdit,
-    QMessageBox,
+    QInputDialog,
 )
 from PySide6.QtCore import Qt
+
+
+def choose_nc_variable(parent, var_name, sub_dir, all_vars):
+    """Prompt for the NetCDF variable to register when a file has multiple data vars."""
+    if not all_vars:
+        return None
+
+    labels = []
+    label_to_name = {}
+    for var in all_vars:
+        name = str(var.get("name", ""))
+        unit = str(var.get("unit", ""))
+        dims = ", ".join(str(d) for d in var.get("dims", []))
+        desc = var.get("long_name") or var.get("standard_name") or ""
+        label = f"{name} [{unit}] ({dims})"
+        if desc:
+            label = f"{label} - {desc}"
+        labels.append(label)
+        label_to_name[label] = name
+
+    selected, ok = QInputDialog.getItem(
+        parent,
+        "Multiple variables found",
+        f"Select NetCDF variable for {var_name}\n{sub_dir}",
+        labels,
+        0,
+        False,
+    )
+    if not ok:
+        raise RuntimeError(f"Variable selection cancelled for {var_name} in {sub_dir}")
+    return label_to_name.get(selected)
 
 
 class DataDiscoveryDialog(QDialog):
@@ -56,24 +84,28 @@ class DataDiscoveryDialog(QDialog):
 
         for group in new_groups:
             # Parent item: dataset base name
-            parent_item = QTreeWidgetItem([
-                group.base_name,
-                f"{len(group.variants)} variant(s)",
-                group.category,
-                "",
-                "",
-            ])
+            parent_item = QTreeWidgetItem(
+                [
+                    group.base_name,
+                    f"{len(group.variants)} variant(s)",
+                    group.category,
+                    "",
+                    "",
+                ]
+            )
             parent_item.setFlags(parent_item.flags() | Qt.ItemIsUserCheckable)
             parent_item.setCheckState(0, Qt.Checked)
 
             for res_name, variant in sorted(group.variants.items()):
-                child = QTreeWidgetItem([
-                    "",
-                    res_name,
-                    variant.data_type,
-                    str(len(variant.variables)),
-                    str(variant.file_count),
-                ])
+                child = QTreeWidgetItem(
+                    [
+                        "",
+                        res_name,
+                        variant.data_type,
+                        str(len(variant.variables)),
+                        str(variant.file_count),
+                    ]
+                )
                 child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
                 child.setCheckState(0, Qt.Checked)
                 child.setData(0, Qt.UserRole, (group.base_name, res_name))

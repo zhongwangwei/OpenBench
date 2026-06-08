@@ -4,8 +4,7 @@ Configuration manager for loading, saving, and validating NML configs.
 """
 
 import os
-import shutil
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
 import yaml
@@ -51,8 +50,133 @@ class ConfigManager:
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
 
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+        # Atomic write: dump to a sibling temp file then os.replace onto the
+        # target so a Ctrl+C / power loss / disk-full mid-write cannot leave
+        # a truncated YAML clobbering a previously-working config.
+        tmp_path = path + ".tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    @staticmethod
+    def is_unified_config(config: Dict[str, Any]) -> bool:
+        """Return True when *config* looks like a v3 unified openbench.yaml."""
+        return any(key in config for key in ("project", "evaluation", "reference", "simulation"))
+
+    def unified_to_gui_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a v3 unified openbench.yaml dict to the GUI's internal shape.
+
+        The GUI pages still read the legacy-shaped in-memory sections
+        (``general``, ``ref_data``, ``sim_data``).  Loading a v3
+        ``openbench.yaml`` must therefore reverse the export mapping enough
+        for pages to show the user's existing values instead of defaults.
+        """
+        project = config.get("project", {}) or {}
+        evaluation = config.get("evaluation", {}) or {}
+        reference = config.get("reference", {}) or {}
+        simulation = config.get("simulation", {}) or {}
+
+        years = project.get("years") or [2000, 2020]
+        lat_range = project.get("lat_range") or [-90.0, 90.0]
+        lon_range = project.get("lon_range") or [-180.0, 180.0]
+
+        general: Dict[str, Any] = {
+            "basename": project.get("name", ""),
+            "basedir": project.get("output_dir", "./output"),
+            "compare_tim_res": project.get("tim_res", "month"),
+            "compare_tzone": project.get("timezone", 0.0),
+            "compare_grid_res": project.get("grid_res", 2.0),
+            "syear": years[0] if len(years) > 0 else 2000,
+            "eyear": years[1] if len(years) > 1 else 2020,
+            "min_year": project.get("min_year_threshold", 1.0),
+            "min_lat": lat_range[0] if len(lat_range) > 0 else -90.0,
+            "max_lat": lat_range[1] if len(lat_range) > 1 else 90.0,
+            "min_lon": lon_range[0] if len(lon_range) > 0 else -180.0,
+            "max_lon": lon_range[1] if len(lon_range) > 1 else 180.0,
+            "time_alignment": project.get("time_alignment", "intersection"),
+            "num_cores": project.get("num_cores", 4),
+            "evaluation": True,
+            "comparison": bool((config.get("comparison") or {}).get("enabled", False)),
+            "statistics": bool((config.get("statistics") or {}).get("enabled", False)),
+            "debug_mode": project.get("debug_mode", False),
+            "only_drawing": project.get("only_drawing", False),
+            "unified_mask": project.get("unified_mask", True),
+            "generate_report": project.get("generate_report", True),
+            "dask": project.get("dask", {}) or {},
+            "io": project.get("io", {}) or {},
+            "IGBP_groupby": project.get("IGBP_groupby", False),
+            "PFT_groupby": project.get("PFT_groupby", False),
+            "Climate_zone_groupby": project.get(
+                "Climate_zone_groupby",
+                project.get("climate_zone_groupby", False),
+            ),
+            "weight": "none" if project.get("weight") is None else project.get("weight"),
+            "execution_mode": "local",
+        }
+
+        variables = list(evaluation.get("variables") or [])
+        evaluation_items = {var: True for var in variables}
+        metrics = {name: True for name in (config.get("metrics") or [])}
+        scores = {name: True for name in (config.get("scores") or [])}
+        comparisons = {name: True for name in ((config.get("comparison") or {}).get("items") or [])}
+        statistics = {name: True for name in ((config.get("statistics") or {}).get("items") or [])}
+
+        ref_general: Dict[str, Any] = {}
+        if reference.get("data_root"):
+            ref_general["data_root"] = reference["data_root"]
+        ref_sources = reference.get("sources") if isinstance(reference.get("sources"), dict) else reference
+        for var in variables:
+            if var in ref_sources:
+                ref_general[f"{var}_ref_source"] = ref_sources[var]
+
+        sim_defaults = simulation.get("_defaults", {}) if isinstance(simulation, dict) else {}
+        sim_entries = {k: v for k, v in simulation.items() if k != "_defaults"} if isinstance(simulation, dict) else {}
+        sim_general = {f"{var}_sim_source": list(sim_entries.keys()) for var in variables}
+        sim_source_configs: Dict[str, Dict[str, Any]] = {}
+        for label, raw_entry in sim_entries.items():
+            if not isinstance(raw_entry, dict):
+                continue
+            entry = {**sim_defaults, **raw_entry}
+            variables_override = {}
+            if isinstance(sim_defaults.get("variables"), dict) or isinstance(raw_entry.get("variables"), dict):
+                variables_override = {
+                    **(sim_defaults.get("variables") or {}),
+                    **(raw_entry.get("variables") or {}),
+                }
+            source_general: Dict[str, Any] = {
+                "model": entry.get("model", ""),
+                "model_namelist": entry.get("model", ""),
+                "root_dir": entry.get("root_dir", ""),
+            }
+            for key in ("data_type", "grid_res", "tim_res", "data_groupby", "prefix", "suffix", "fulllist"):
+                if entry.get(key) is not None:
+                    source_general[key] = entry[key]
+            sim_source_configs[label] = {
+                "general": source_general,
+                "variables": variables_override,
+            }
+
+        return {
+            "general": general,
+            "evaluation_items": evaluation_items,
+            "metrics": metrics,
+            "scores": scores,
+            "comparisons": comparisons,
+            "statistics": statistics,
+            "ref_data": {"general": ref_general, "def_nml": {}},
+            "sim_data": {
+                "general": sim_general,
+                "def_nml": {},
+                "source_configs": sim_source_configs,
+            },
+        }
 
     def generate_main_nml(
         self,
@@ -68,7 +192,10 @@ class ConfigManager:
             config: Full configuration dictionary
             openbench_root: OpenBench root directory for generating absolute paths
             output_dir: Output directory path (for nml paths)
-            remote_openbench_path: Remote OpenBench installation path (for remote mode)
+            remote_openbench_path: Deprecated. Kept for API compatibility;
+                v3 support namelists are generated into the case output
+                ``nml/`` directory instead of being read from an OpenBench
+                installation tree.
 
         Returns:
             YAML string
@@ -119,22 +246,18 @@ class ConfigManager:
             ref_nml_path = os.path.normpath(os.path.join(nml_dir, f"ref-{basename}.yaml"))
             sim_nml_path = os.path.normpath(os.path.join(nml_dir, f"sim-{basename}.yaml"))
 
-        # stats.yaml and figlib.yaml are always in the OpenBench installation directory
-        # NOT in the project output directory - find them reliably
-        if is_remote and remote_openbench_path:
-            # Use remote OpenBench path with forward slashes
-            remote_ob = remote_openbench_path.rstrip("/").replace("\\", "/")
-            stats_nml_path = f"{remote_ob}/nml/nml-yaml/stats.yaml"
-            figure_nml_path = f"{remote_ob}/nml/nml-yaml/figlib.yaml"
+        # Legacy split configs are emitted next to the generated main/ref/sim
+        # files in the case output tree. Earlier v3 GUI code tried to resolve
+        # these from an OpenBench install root (`nml/nml-yaml/stats.yaml` and
+        # `figlib.yaml`), but those v2 files do not exist in wheel installs or
+        # v3 source checkouts. Keeping them case-local makes the legacy split
+        # layout self-contained for `openbench migrate` and old tooling.
+        if is_remote:
+            stats_nml_path = f"{nml_dir}/stats-{basename}.yaml"
+            figure_nml_path = f"{nml_dir}/fig-{basename}.yaml"
         else:
-            install_root = self._find_openbench_install_root(openbench_root)
-            if install_root:
-                stats_nml_path = os.path.join(install_root, "nml", "nml-yaml", "stats.yaml")
-                figure_nml_path = os.path.join(install_root, "nml", "nml-yaml", "figlib.yaml")
-            else:
-                # Fallback to relative paths if not found
-                stats_nml_path = "./nml/nml-yaml/stats.yaml"
-                figure_nml_path = "./nml/nml-yaml/figlib.yaml"
+            stats_nml_path = os.path.normpath(os.path.join(nml_dir, f"stats-{basename}.yaml"))
+            figure_nml_path = os.path.normpath(os.path.join(nml_dir, f"fig-{basename}.yaml"))
 
         # For OpenBench, basedir should be the PARENT directory, not including basename
         # Because OpenBench computes output path as: basedir/basename
@@ -166,7 +289,7 @@ class ConfigManager:
             "statistics": general.get("statistics", False),
             "debug_mode": general.get("debug_mode", False),
             "only_drawing": general.get("only_drawing", False),
-            "weight": "None" if general.get("weight", "none").lower() == "none" else general.get("weight"),
+            "weight": "None" if str(general.get("weight", "none")).lower() == "none" else general.get("weight"),
             "IGBP_groupby": general.get("IGBP_groupby", True),
             "PFT_groupby": general.get("PFT_groupby", True),
             "Climate_zone_groupby": general.get("Climate_zone_groupby", True),
@@ -190,6 +313,47 @@ class ConfigManager:
         main_config["statistics"] = config.get("statistics", {})
 
         return yaml.dump(main_config, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+
+    def generate_stats_nml(self, config: Dict[str, Any]) -> str:
+        """Generate the legacy statistics support YAML.
+
+        The v3 runner builds its real statistics namelist from the unified
+        ``openbench.yaml``. This file is only for the legacy split
+        main/ref/sim layout that the GUI still exports for migration and
+        third-party tooling. `openbench migrate` only needs the top-level
+        method sections to preserve the selected statistics.
+        """
+        selected = [name for name, enabled in (config.get("statistics", {}) or {}).items() if bool(enabled)]
+        stats_config: Dict[str, Any] = {"general": {}}
+        for name in selected:
+            stats_config["general"][f"{name}_data_source"] = ""
+            stats_config[name] = {}
+        return yaml.dump(stats_config, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+
+    def generate_figure_nml(self) -> str:
+        """Generate the legacy figure support YAML from bundled v3 resources."""
+        from openbench.config.adapter import build_fig_nml
+
+        return yaml.dump(build_fig_nml(), default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+
+    def write_legacy_support_namelists(self, config: Dict[str, Any], nml_dir: str) -> Dict[str, str]:
+        """Write legacy stats/figure support files into a case ``nml/`` dir.
+
+        Returns:
+            Mapping with ``statistics`` and ``figure`` file paths.
+        """
+        basename = config.get("general", {}).get("basename", "config")
+        os.makedirs(nml_dir, exist_ok=True)
+
+        stats_path = os.path.normpath(os.path.join(nml_dir, f"stats-{basename}.yaml"))
+        figure_path = os.path.normpath(os.path.join(nml_dir, f"fig-{basename}.yaml"))
+
+        with open(stats_path, "w", encoding="utf-8") as f:
+            f.write(self.generate_stats_nml(config))
+        with open(figure_path, "w", encoding="utf-8") as f:
+            f.write(self.generate_figure_nml())
+
+        return {"statistics": stats_path, "figure": figure_path}
 
     def generate_ref_nml(
         self, config: Dict[str, Any], openbench_root: Optional[str] = None, output_dir: Optional[str] = None
@@ -330,7 +494,352 @@ class ConfigManager:
                 if not ref_data.get(key):
                     errors.append(f"Reference data source required for {item}")
 
+        # Check sim data if any items selected. The v3 CLI requires at
+        # least one simulation entry with a non-empty root_dir/model. Catch
+        # that at GUI validation time instead of exporting YAML that
+        # `openbench run/check` will reject.
+        sim_data = config.get("sim_data", {})
+        sim_general = sim_data.get("general", {})
+        sim_source_configs = sim_data.get("source_configs", {})
+        seen_sim_sources = set()
+        for item in selected_items:
+            key = f"{item}_sim_source"
+            sources = sim_general.get(key, [])
+            if isinstance(sources, str):
+                sources = [sources]
+            sources = [s for s in sources if s]
+            if not sources:
+                errors.append(f"Simulation data source required for {item}")
+                continue
+            for source_name in sources:
+                if source_name in seen_sim_sources:
+                    continue
+                seen_sim_sources.add(source_name)
+                source_config = sim_source_configs.get(source_name)
+                if not source_config:
+                    errors.append(f"Simulation source '{source_name}' is missing configuration")
+                    continue
+                source_general = source_config.get("general", {}) if isinstance(source_config, dict) else {}
+                if not (source_general.get("root_dir") or source_general.get("dir")):
+                    errors.append(f"Simulation source '{source_name}' root directory is required")
+                if not (source_general.get("model_namelist") or source_general.get("model")):
+                    errors.append(f"Simulation source '{source_name}' model is required")
+
+        if general.get("comparison"):
+            selected_comparisons = [k for k, v in config.get("comparisons", {}).items() if v]
+            if not selected_comparisons:
+                errors.append("At least one comparison item must be selected when comparison is enabled")
+
+        if general.get("statistics"):
+            selected_statistics = [k for k, v in config.get("statistics", {}).items() if v]
+            if not selected_statistics:
+                errors.append("At least one statistics item must be selected when statistics is enabled")
+
         return errors
+
+    def generate_config_yaml(
+        self,
+        config: Dict[str, Any],
+        *,
+        case_output_dir: Optional[str] = None,
+        path_transform: Optional[Callable[[str], str]] = None,
+    ) -> str:
+        """Generate unified openbench.yaml content from internal GUI dict.
+
+        Maps the legacy internal dict format to the new schema:
+          general.*        → project.*
+          evaluation_items → evaluation.variables
+          ref_data         → reference (data_root + source names)
+          sim_data         → simulation (_defaults + entries)
+          metrics/scores   → metrics/scores (lists)
+          comparisons      → comparison.items
+          statistics       → statistics.items
+
+        Args:
+            config: Internal GUI configuration dictionary.
+            case_output_dir: Optional full case output directory. When
+                provided, ``project.output_dir`` is set to its parent so
+                v3's ``project.output_dir / project.name`` convention lands
+                on the requested case directory.
+            path_transform: Optional callback used by remote export to
+                rewrite user-entered paths into remote-server paths.
+
+        Returns:
+            YAML string in the new unified format.
+        """
+        general = config.get("general", {})
+
+        def _case_parent(path: str) -> str:
+            cleaned = str(path).rstrip("/\\")
+            if "/" in cleaned and "\\" not in cleaned:
+                parent = cleaned.rsplit("/", 1)[0]
+                return parent or "/"
+            return os.path.dirname(os.path.normpath(cleaned))
+
+        def _maybe_transform_path(path: str) -> str:
+            if not path or path_transform is None:
+                return path
+            return path_transform(path)
+
+        # --- project ---
+        project: Dict[str, Any] = {
+            "name": general.get("basename", "config"),
+            "output_dir": _case_parent(case_output_dir) if case_output_dir else general.get("basedir", "./output"),
+            "years": [int(general.get("syear", 2000)), int(general.get("eyear", 2020))],
+        }
+
+        # Target resolution
+        tim_res = general.get("compare_tim_res", "month")
+        if tim_res:
+            project["tim_res"] = tim_res
+        grid_res = general.get("compare_grid_res", 2.0)
+        if grid_res:
+            project["grid_res"] = grid_res
+        timezone = general.get("compare_tzone", 0.0)
+        if timezone is not None:
+            project["timezone"] = timezone
+        weight = general.get("weight", "none")
+        if weight is not None and str(weight).lower() != "":
+            project["weight"] = "none" if str(weight).lower() == "none" else weight
+
+        # Runtime
+        num_cores = general.get("num_cores", 4)
+        if num_cores:
+            project["num_cores"] = int(num_cores)
+        if not general.get("unified_mask", True):
+            project["unified_mask"] = False
+        if not general.get("generate_report", True):
+            project["generate_report"] = False
+        dask_config = general.get("dask")
+        if isinstance(dask_config, dict) and dask_config.get("enabled"):
+            project["dask"] = {k: v for k, v in dask_config.items() if v is not None}
+        io_config = general.get("io")
+        if isinstance(io_config, dict) and io_config:
+            project["io"] = {k: v for k, v in io_config.items() if v is not None}
+
+        # Spatial-temporal bounds
+        min_year = general.get("min_year", 1.0)
+        if min_year and float(min_year) != 3.0:
+            project["min_year_threshold"] = float(min_year)
+        lat_range = [general.get("min_lat", -90.0), general.get("max_lat", 90.0)]
+        lon_range = [general.get("min_lon", -180.0), general.get("max_lon", 180.0)]
+        if lat_range != [-90.0, 90.0]:
+            project["lat_range"] = lat_range
+        if lon_range != [-180.0, 180.0]:
+            project["lon_range"] = lon_range
+
+        # Groupby
+        if general.get("IGBP_groupby", True):
+            project["IGBP_groupby"] = True
+        if general.get("PFT_groupby", True):
+            project["PFT_groupby"] = True
+        if general.get("Climate_zone_groupby", True):
+            project["climate_zone_groupby"] = True
+
+        # Time alignment strategy: forward the General Settings combo so the
+        # exported YAML actually reflects per_pair / strict choices instead
+        # of silently defaulting to intersection downstream.
+        time_alignment = general.get("time_alignment")
+        if time_alignment and time_alignment != "intersection":
+            project["time_alignment"] = time_alignment
+
+        # --- evaluation ---
+        eval_items = config.get("evaluation_items", {})
+        variables = [k for k, v in eval_items.items() if v]
+
+        # --- reference ---
+        reference: Dict[str, Any] = {}
+        ref_data = config.get("ref_data", {})
+        ref_general = ref_data.get("general", {})
+
+        # data_root
+        data_root = ref_general.get("data_root", "")
+        if data_root:
+            reference["data_root"] = _maybe_transform_path(data_root)
+
+        for var in variables:
+            source_key = f"{var}_ref_source"
+            source = ref_general.get(source_key, "")
+            if isinstance(source, list):
+                cleaned = [s for s in source if s]
+                if not cleaned:
+                    continue
+                # Single-element list → write a scalar so simple configs
+                # stay simple; otherwise emit the list verbatim.
+                reference[var] = cleaned[0] if len(cleaned) == 1 else cleaned
+            elif source:
+                reference[var] = source
+
+        # --- simulation ---
+        sim_data = config.get("sim_data", {})
+        sim_general = sim_data.get("general", {})
+        sim_def_nml = sim_data.get("def_nml", {})
+        sim_source_configs = sim_data.get("source_configs", {})
+
+        # Collect all sim source names
+        all_sources: List[str] = []
+        for var in variables:
+            source_key = f"{var}_sim_source"
+            sources = sim_general.get(source_key, [])
+            if isinstance(sources, str):
+                sources = [sources]
+            for s in sources:
+                if s and s not in all_sources:
+                    all_sources.append(s)
+
+        # Build simulation entries from source configs or def_nml
+        sim_entries: Dict[str, Dict[str, Any]] = {}
+        for source_name in all_sources:
+            src_cfg = sim_source_configs.get(source_name, {})
+            src_general = src_cfg.get("general", {}) if src_cfg else {}
+
+            # Try to read from def_nml file if no source_config
+            if not src_general and source_name in sim_def_nml:
+                def_path = sim_def_nml[source_name]
+                if os.path.exists(def_path):
+                    try:
+                        with open(def_path) as f:
+                            def_data = yaml.safe_load(f) or {}
+                        src_general = def_data.get("general", {})
+                    except Exception:
+                        pass
+
+            # Detect model
+            model_nml = src_general.get("model_namelist", "") or src_general.get("model", "")
+            model = self._detect_model_from_path(model_nml) if model_nml else "unknown"
+
+            entry: Dict[str, Any] = {
+                "model": model,
+                "root_dir": _maybe_transform_path(src_general.get("root_dir", src_general.get("dir", ""))),
+            }
+            if src_general.get("data_type"):
+                entry["data_type"] = src_general["data_type"]
+            if src_general.get("grid_res"):
+                entry["grid_res"] = src_general["grid_res"]
+            if src_general.get("tim_res"):
+                entry["tim_res"] = src_general["tim_res"]
+            if src_general.get("data_groupby"):
+                entry["data_groupby"] = src_general["data_groupby"]
+            if src_general.get("prefix"):
+                entry["prefix"] = src_general["prefix"]
+            if src_general.get("suffix"):
+                entry["suffix"] = src_general["suffix"]
+            if src_general.get("fulllist"):
+                entry["fulllist"] = _maybe_transform_path(src_general["fulllist"])
+            if isinstance(src_cfg.get("variables"), dict) and src_cfg["variables"]:
+                entry["variables"] = src_cfg["variables"]
+
+            # Use source_name as label, or derive a cleaner one
+            label = self._derive_label(source_name, entry.get("root_dir", ""))
+            sim_entries[label] = entry
+
+        simulation = self._extract_sim_defaults(sim_entries)
+
+        # --- metrics / scores ---
+        metrics_dict = config.get("metrics", {})
+        metrics_list = [k for k, v in metrics_dict.items() if v]
+
+        scores_dict = config.get("scores", {})
+        scores_list = [k for k, v in scores_dict.items() if v]
+
+        # --- comparison ---
+        comparison: Optional[Dict[str, Any]] = None
+        if general.get("comparison"):
+            comp_items = [k for k, v in config.get("comparisons", {}).items() if v]
+            if comp_items:
+                comparison = {"enabled": True, "items": comp_items}
+
+        # --- statistics ---
+        stats_section: Optional[Dict[str, Any]] = None
+        if general.get("statistics"):
+            stat_items = [k for k, v in config.get("statistics", {}).items() if v]
+            if stat_items:
+                stats_section = {"enabled": True, "items": stat_items}
+
+        # --- assemble ---
+        output: Dict[str, Any] = {
+            "project": project,
+            "evaluation": {"variables": variables},
+            "reference": reference,
+            "simulation": simulation,
+        }
+        if metrics_list:
+            output["metrics"] = metrics_list
+        if scores_list:
+            output["scores"] = scores_list
+        if comparison:
+            output["comparison"] = comparison
+        if stats_section:
+            output["statistics"] = stats_section
+
+        return yaml.dump(output, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+
+    def _detect_model_from_path(self, model_nml_path: str) -> str:
+        """Detect model name from model_namelist path.
+
+        Accepts both legacy paths (e.g. './nml/Mod_variables_definition/
+        CoLM.nml') and bare canonical model names (e.g. 'CoLM2024')
+        produced by the new scan-based PageSimData. The previous code
+        always lowercased the stem and looked up an aliasing map; bare
+        names not in the map were returned in lowercase form, which then
+        failed to match the case-sensitive registry. Preserve the original
+        stem case so v3 configs carry the canonical name unchanged.
+        """
+        if not model_nml_path:
+            return "unknown"
+        stem = Path(model_nml_path).stem
+        model_map = {
+            "colm": "CoLM2024",
+            "clm": "CLM5",
+            "clm5": "CLM5",
+            "noah": "NOAH",
+            "noahmp5": "NoahMP5",
+            "cama": "CaMa",
+            "camaflood": "CaMa",
+            "cama-flood": "CaMa",
+            "gldas": "GLDAS",
+            "gldas2": "GLDAS",
+            "era5land": "ERA5-Land",
+            "era5-land": "ERA5-Land",
+            "te": "TE",
+            "jules7": "JULES7",
+            "vic5": "VIC5",
+        }
+        return model_map.get(stem.lower(), stem)
+
+    def _derive_label(self, source_name: str, root_dir: str) -> str:
+        """Derive a clean case label from source name or path."""
+        import re
+
+        match = re.search(r"(Case\d+)", root_dir)
+        if match:
+            return match.group(1)
+        match = re.search(r"(\d+)_case", source_name)
+        if match:
+            return f"Case{match.group(1).zfill(2)}"
+        return source_name
+
+    def _extract_sim_defaults(self, entries: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract _defaults from simulation entries if fields are shared."""
+        if len(entries) < 2:
+            return entries
+
+        common_keys = ["model", "data_type", "grid_res", "tim_res", "data_groupby"]
+        defaults: Dict[str, Any] = {}
+        first = next(iter(entries.values()))
+        for key in common_keys:
+            val = first.get(key)
+            if val is not None and all(e.get(key) == val for e in entries.values()):
+                defaults[key] = val
+
+        if not defaults:
+            return entries
+
+        result: Dict[str, Any] = {"_defaults": defaults}
+        for label, entry in entries.items():
+            cleaned = {k: v for k, v in entry.items() if k not in defaults or defaults[k] != v}
+            result[label] = cleaned
+        return result
 
     def export_all(
         self,
@@ -357,35 +866,16 @@ class ConfigManager:
         if openbench_root is None:
             openbench_root = get_openbench_root()
 
-        # Create output directory and nml subdirectory
-        nml_dir = os.path.join(output_dir, "nml")
-        os.makedirs(nml_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
 
         files = {}
 
-        # Main NML - goes in nml folder
-        main_path = os.path.join(nml_dir, f"main-{basename}.yaml")
-        main_content = self.generate_main_nml(config, openbench_root, output_dir)
-        with open(main_path, "w", encoding="utf-8") as f:
-            f.write(main_content)
-        files["main"] = main_path
-
-        # Ref NML - goes in nml folder
-        ref_path = os.path.join(nml_dir, f"ref-{basename}.yaml")
-        ref_content = self.generate_ref_nml(config, openbench_root, output_dir)
-        with open(ref_path, "w", encoding="utf-8") as f:
-            f.write(ref_content)
-        files["ref"] = ref_path
-
-        # Sim NML - goes in nml folder
-        sim_path = os.path.join(nml_dir, f"sim-{basename}.yaml")
-        sim_content = self.generate_sim_nml(config, openbench_root, output_dir)
-        with open(sim_path, "w", encoding="utf-8") as f:
-            f.write(sim_content)
-        files["sim"] = sim_path
-
-        # Sync namelists to nml/sim and nml/ref subdirectories
-        self.sync_namelists(config, output_dir, openbench_root)
+        # Generate unified openbench.yaml
+        config_path = os.path.join(output_dir, "openbench.yaml")
+        config_content = self.generate_config_yaml(config, case_output_dir=output_dir)
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(config_content)
+        files["config"] = config_path
 
         return files
 
@@ -431,31 +921,16 @@ class ConfigManager:
         # Copy model definition files for sim (into models/ subdirectory)
         sim_models_dir = os.path.join(sim_nml_dir, "models")
 
-        # Debug logging
-        import tempfile
-
-        debug_log = os.path.join(tempfile.gettempdir(), "openbench_wizard_debug.log")
-        with open(debug_log, "a") as f:
-            f.write(f"\n=== Local mode: Copy model files ===\n")
-            f.write(f"sim_model_files: {sim_model_files}\n")
-            f.write(f"sim_models_dir: {sim_models_dir}\n")
-
         for model_path in sim_model_files:
             if model_path:
                 # Try to find the actual file (handle .nml -> .yaml conversion)
                 actual_path = self._resolve_model_path(model_path)
-                with open(debug_log, "a") as f:
-                    f.write(
-                        f"model_path={model_path}, actual_path={actual_path}, exists={os.path.exists(actual_path) if actual_path else False}\n"
-                    )
                 if actual_path and os.path.exists(actual_path):
                     # Always use .yaml extension for output
                     model_name = os.path.splitext(os.path.basename(actual_path))[0] + ".yaml"
                     dest_path = os.path.join(sim_models_dir, model_name)
                     self._copy_model_definition(actual_path, dest_path, selected_items)
                     copied_files[f"model_{model_name}"] = dest_path
-                    with open(debug_log, "a") as f:
-                        f.write(f"  copied to {dest_path}\n")
 
         # Process reference data namelists
         ref_data = config.get("ref_data", {})
@@ -837,7 +1312,8 @@ class ConfigManager:
 
     def _resolve_model_path(self, model_path: str) -> Optional[str]:
         """
-        Resolve a model path, handling .nml -> .yaml conversion and path variations.
+        Resolve a model path, handling only explicit paths and adjacent
+        .nml -> .yaml compatibility.
 
         Args:
             model_path: Path to model definition file (may be .nml or .yaml)
@@ -848,42 +1324,12 @@ class ConfigManager:
         if os.path.exists(model_path):
             return model_path
 
-        # Try converting .nml to .yaml
+        # Keep the one compatibility case that is independent of install
+        # layout: a legacy .nml reference may point at a side-by-side .yaml.
         if model_path.endswith(".nml"):
             yaml_path = model_path[:-4] + ".yaml"
             if os.path.exists(yaml_path):
                 return yaml_path
-
-            # Try with nml-yaml directory structure
-            # e.g., /path/nml/Mod_variables_definition/CoLM.nml
-            # -> /path/nml/nml-yaml/Mod_variables_definition/CoLM.yaml
-            yaml_path = model_path.replace("/nml/", "/nml/nml-yaml/").replace(".nml", ".yaml")
-            if os.path.exists(yaml_path):
-                return yaml_path
-
-        # Try adding nml-yaml to path for yaml files too
-        if "/nml/" in model_path and "/nml-yaml/" not in model_path:
-            yaml_path = model_path.replace("/nml/", "/nml/nml-yaml/")
-            if os.path.exists(yaml_path):
-                return yaml_path
-
-        # If path points to output directory but file doesn't exist,
-        # search for the model file by name in standard locations
-        model_name = os.path.basename(model_path)
-        model_basename = os.path.splitext(model_name)[0]
-        openbench_root = get_openbench_root()
-
-        # Try common model definition locations
-        search_paths = [
-            os.path.join(openbench_root, "nml", "nml-yaml", "Mod_variables_definition", f"{model_basename}.yaml"),
-            os.path.join(openbench_root, "nml", "nml-yaml", "Mod_variables_definition", f"{model_basename}.nml"),
-            os.path.join(openbench_root, "nml", "Mod_variables_definition", f"{model_basename}.yaml"),
-            os.path.join(openbench_root, "nml", "Mod_variables_definition", f"{model_basename}.nml"),
-        ]
-
-        for search_path in search_paths:
-            if os.path.exists(search_path):
-                return search_path
 
         return None
 
@@ -913,8 +1359,11 @@ class ConfigManager:
         """
         Find the actual OpenBench installation directory.
 
-        This is distinct from the project output directory. The installation
-        directory contains openbench/openbench.py and nml/nml-yaml/stats.yaml.
+        This is distinct from the project output directory. In v3 the
+        installation directory contains pyproject.toml plus
+        src/openbench/cli/main.py (editable layout). The pre-v3 markers
+        (openbench/openbench.py, nml/nml-yaml/stats.yaml) no longer
+        exist and are not checked.
 
         Args:
             openbench_root: A potential OpenBench root (may be output dir)
@@ -922,18 +1371,17 @@ class ConfigManager:
         Returns:
             Path to OpenBench installation directory, or None if not found
         """
-        # First, try using the wizard's own location
-        # The wizard is at OpenBench/openbench_wizard/
-        wizard_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        potential_root = os.path.dirname(wizard_dir)
-
-        # Check if this looks like an OpenBench installation
-        if self._is_openbench_installation(potential_root):
-            return potential_root
-
         # Check if provided openbench_root is actually the installation
         if openbench_root and self._is_openbench_installation(openbench_root):
             return openbench_root
+
+        env_root = os.environ.get("OPENBENCH_ROOT")
+        if env_root and self._is_openbench_installation(env_root):
+            return env_root
+
+        detected_root = get_openbench_root()
+        if detected_root and self._is_openbench_installation(detected_root):
+            return detected_root
 
         # Search common locations
         search_paths = [
@@ -948,31 +1396,20 @@ class ConfigManager:
             if self._is_openbench_installation(path):
                 return path
 
-        # Try to find from environment variable
-        env_root = os.environ.get("OPENBENCH_ROOT")
-        if env_root and self._is_openbench_installation(env_root):
-            return env_root
-
         return None
 
     def _is_openbench_installation(self, path: str) -> bool:
         """
-        Check if a path is a valid OpenBench installation directory.
+        Check if a path is a valid OpenBench v3 installation directory.
 
-        Args:
-            path: Path to check
-
-        Returns:
-            True if this is a valid OpenBench installation
+        Delegates to :func:`openbench.gui.path_utils.looks_like_openbench_root`
+        so the GUI's three places that have to validate this (this
+        method, page_runtime browse dialog, page_run_monitor manual
+        select) all use one definition of "valid".
         """
-        if not path or not os.path.isdir(path):
-            return False
+        from openbench.gui.path_utils import looks_like_openbench_root
 
-        # Check for key files that indicate an OpenBench installation
-        openbench_py = os.path.join(path, "openbench", "openbench.py")
-        stats_yaml = os.path.join(path, "nml", "nml-yaml", "stats.yaml")
-
-        return os.path.exists(openbench_py) or os.path.exists(stats_yaml)
+        return looks_like_openbench_root(path)
 
     def cleanup_unused_namelists(self, config: Dict[str, Any], output_dir: str):
         """

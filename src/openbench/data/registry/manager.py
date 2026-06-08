@@ -8,28 +8,50 @@ directory is used.
 
 Loading order (later entries override earlier):
 1. Built-in catalog:  <package>/data/registry/reference_catalog.yaml
-2. Fallback user dir: ~/.openbench/reference_catalog.yaml  (only if exists)
+2. Fallback user dir: ~/.openbench/references/reference_catalog.yaml  (only if exists)
 3. Fallback individuals: ~/.openbench/references/*.yaml    (only if exists)
 Same for model_catalog.yaml / models/*.yaml.
 """
 
 from __future__ import annotations
 
+from copy import deepcopy
+from importlib.resources import files
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 
+from openbench.config.user_settings import resolve_reference_root
 from openbench.data.registry.schema import (
-    FallbackVar, ModelProfile, ReferenceDataset, StationMatchingConfig, VariableMapping,
+    FallbackVar,
+    ModelProfile,
+    ReferenceDataset,
+    StationMatchingConfig,
+    VariableMapping,
 )
+from openbench.util.names import get_mapping_key_case_insensitive, normalize_name
 
 logger = logging.getLogger(__name__)
 
-# The single authoritative registry directory (inside the package)
-REGISTRY_DIR = Path(__file__).parent
+# The single authoritative registry directory (inside the package). Keep this
+# as an importlib.resources Traversable; converting it to Path breaks when
+# OpenBench is imported directly from a zipped wheel.
+REGISTRY_DIR = files("openbench.data.registry")
+
+_RESERVED_REFERENCE_FILES = {"reference_catalog.yaml", "reference_profiles.yaml"}
+_RESERVED_MODEL_FILES = {"model_catalog.yaml", "aliases.yaml"}
+_MODEL_EQUIVALENT_ALIASES = {
+    "colm": ("colm2024", "CoLM"),
+}
+
+
+def canonical_model_key(name: str) -> str:
+    """Return the canonical registry key for model names that are behavioral aliases."""
+    key = normalize_name(name)
+    return _MODEL_EQUIVALENT_ALIASES.get(key, (key, ""))[0]
 
 
 def _get_user_dir() -> Path:
@@ -37,48 +59,90 @@ def _get_user_dir() -> Path:
     return Path.home() / ".openbench"
 
 
-def get_writable_registry_dir() -> Path:
-    """Return the registry directory for writing.
-
-    If the package registry directory is writable, use it directly.
-    Otherwise fall back to the user directory.
-    """
-    if os.access(REGISTRY_DIR, os.W_OK):
-        return REGISTRY_DIR
-    fallback = _get_user_dir()
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
-
-
 def get_writable_model_catalog_path() -> Path:
-    """Return the path for writing model catalog entries.
+    """Return the user overlay path for writing model catalog entries.
 
-    Writable install: <package>/data/registry/model_catalog.yaml
-    Read-only install: ~/.openbench/models/model_catalog.yaml
+    The package registry remains the bundled default catalog. User-created
+    or edited model profiles are always written to ~/.openbench/models/.
     """
-    if os.access(REGISTRY_DIR, os.W_OK):
-        return REGISTRY_DIR / "model_catalog.yaml"
     fallback = _get_user_dir() / "models"
     fallback.mkdir(parents=True, exist_ok=True)
     return fallback / "model_catalog.yaml"
 
 
 def get_writable_reference_catalog_path() -> Path:
-    """Return the path for writing reference catalog entries.
+    """Return the user overlay path for writing reference catalog entries.
 
-    Writable install: <package>/data/registry/reference_catalog.yaml
-    Read-only install: ~/.openbench/references/reference_catalog.yaml
+    The package registry remains the bundled default catalog. User-created
+    or scanned reference entries are always written to ~/.openbench/references/.
     """
-    if os.access(REGISTRY_DIR, os.W_OK):
-        return REGISTRY_DIR / "reference_catalog.yaml"
     fallback = _get_user_dir() / "references"
     fallback.mkdir(parents=True, exist_ok=True)
     return fallback / "reference_catalog.yaml"
 
 
+def get_writable_reference_profiles_path() -> Path:
+    """Return the user overlay path for writing reference profile entries.
+
+    The package registry remains the bundled default profile set. User-created
+    scanner profiles are always written to ~/.openbench/references/.
+    """
+    fallback = _get_user_dir() / "references"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback / "reference_profiles.yaml"
+
+
+def get_legacy_reference_profiles_path() -> Path:
+    """Return the old user profile path kept for read compatibility."""
+    return _get_user_dir() / "reference_profiles.yaml"
+
+
 _REGISTRY_CACHE: Optional["RegistryManager"] = None
 
 _UNRESOLVED_ENV_VARS_WARNED: set = set()
+
+
+def _is_file_resource(path: Any) -> bool:
+    """Return True for either a filesystem Path or a Traversable file."""
+    if hasattr(path, "is_file"):
+        return path.is_file()
+    return Path(path).is_file()
+
+
+def _is_dir_resource(path: Any) -> bool:
+    """Return True for either a filesystem Path or a Traversable directory."""
+    if hasattr(path, "is_dir"):
+        return path.is_dir()
+    return Path(path).is_dir()
+
+
+def _iter_yaml_resources(directory: Any) -> list[Any]:
+    """List YAML children from a filesystem Path or Traversable directory."""
+    if not _is_dir_resource(directory):
+        return []
+    if hasattr(directory, "glob"):
+        return sorted(directory.glob("*.yaml"))
+    return sorted(
+        (
+            child
+            for child in directory.iterdir()
+            if getattr(child, "name", "").endswith(".yaml") and _is_file_resource(child)
+        ),
+        key=lambda child: child.name,
+    )
+
+
+def _open_yaml_resource(path: Any):
+    """Open a filesystem Path or Traversable YAML resource as text."""
+    return path.open("r", encoding="utf-8")
+
+
+def _same_concrete_path(left: Any, right: Any) -> bool:
+    """Best-effort concrete path comparison, false for virtual resources."""
+    try:
+        return Path(left).resolve() == Path(right).resolve()
+    except (TypeError, ValueError, OSError):
+        return False
 
 
 def _expand_env_path(value, context: str = "") -> Optional[str]:
@@ -93,10 +157,15 @@ def _expand_env_path(value, context: str = "") -> Optional[str]:
     """
     if not isinstance(value, str) or "$" not in value:
         return value
+    if "OPENBENCH_REF_ROOT" in value and "OPENBENCH_REF_ROOT" not in os.environ:
+        ref_root = resolve_reference_root()
+        if ref_root:
+            value = value.replace("${OPENBENCH_REF_ROOT}", ref_root).replace("$OPENBENCH_REF_ROOT", ref_root)
     expanded = os.path.expandvars(value)
     if "$" in expanded:
         # Extract the first unresolved var for the warning
         import re as _re
+
         match = _re.search(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", expanded)
         var_name = match.group(1) if match else "<unknown>"
         # Dedupe by var name so one missing env var = one warning, not 100+
@@ -106,7 +175,9 @@ def _expand_env_path(value, context: str = "") -> Optional[str]:
                 "Reference catalog references env var $%s which is unset. "
                 "Set it (e.g., export %s=/path/to/data) so registry paths "
                 "resolve. First unresolved entry: %s",
-                var_name, var_name, context or value,
+                var_name,
+                var_name,
+                context or value,
             )
     return expanded
 
@@ -131,7 +202,9 @@ class RegistryManager:
     def __init__(self, user_dir: Optional[Path] = None):
         self._references: dict[str, ReferenceDataset] = {}
         self._models: dict[str, ModelProfile] = {}
+        self._model_aliases: dict[str, str] = dict(self.MODEL_ALIASES)
         self._var_index: dict[str, list[str]] = {}  # variable → [ref_keys]
+        self.last_resolve_reason = ""
 
         # Primary: package registry directory
         self._load_reference_catalog(REGISTRY_DIR / "reference_catalog.yaml")
@@ -144,83 +217,92 @@ class RegistryManager:
         if user_dir is None:
             user_dir = Path.home() / ".openbench"
 
-        if user_dir.exists() and user_dir.resolve() != REGISTRY_DIR.resolve():
+        if user_dir.exists() and not _same_concrete_path(user_dir, REGISTRY_DIR):
             # ~/.openbench/references/reference_catalog.yaml + individual YAML files
             self._merge_reference_catalog(user_dir / "references" / "reference_catalog.yaml")
             self._merge_reference_dir(user_dir / "references")
             # ~/.openbench/models/model_catalog.yaml + individual YAML files
             self._merge_model_catalog(user_dir / "models" / "model_catalog.yaml")
             self._merge_model_dir(user_dir / "models")
+            self._load_user_model_aliases(user_dir / "models" / "aliases.yaml")
+
+        self._sync_model_equivalent_aliases()
 
         # Build variable → references index (O(1) lookup instead of O(n) scan)
         self._build_var_index()
+
+    def _sync_model_equivalent_aliases(self) -> None:
+        """Keep legacy model names behaviorally identical to their canonical profile."""
+        for alias_key, (source_key, alias_name) in _MODEL_EQUIVALENT_ALIASES.items():
+            source = self._models.get(source_key)
+            if source is None:
+                continue
+            alias = deepcopy(source)
+            alias.name = alias_name
+            self._models[alias_key] = alias
 
     def _build_var_index(self) -> None:
         """Pre-build variable → reference keys index for fast lookup."""
         self._var_index.clear()
         for key, ref in self._references.items():
             for var_name in ref.variables:
-                self._var_index.setdefault(var_name, []).append(key)
+                self._var_index.setdefault(normalize_name(var_name), []).append(key)
 
     # --- Loading ---
 
-    def _load_reference_catalog(self, path: Path) -> None:
+    def _load_reference_catalog(self, path: Any) -> None:
         """Load all references from a single catalog YAML file."""
-        if not path.exists():
+        if not _is_file_resource(path):
             return
         try:
-            with open(path) as f:
+            with _open_yaml_resource(path) as f:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
                     ref = _build_reference(data)
-                    self._references[name.lower()] = ref
+                    self._references[normalize_name(name)] = ref
                 except Exception as e:
                     logger.warning("Failed to load reference '%s' from %s: %s", name, path.name, e)
         except Exception as e:
             logger.warning("Failed to read reference catalog %s: %s", path, e)
 
-    def _load_reference_dir(self, directory: Path) -> None:
+    def _load_reference_dir(self, directory: Any) -> None:
         """Load references from individual YAML files in a directory."""
-        if not directory.exists():
-            return
-        for path in sorted(directory.glob("*.yaml")):
+        for path in _iter_yaml_resources(directory):
             try:
-                with open(path) as f:
+                with _open_yaml_resource(path) as f:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
                     ref = _build_reference(data)
-                    self._references[data["name"].lower()] = ref
+                    self._references[normalize_name(data["name"])] = ref
             except Exception as e:
                 logger.warning("Failed to load reference from %s: %s", path.name, e)
 
-    def _load_model_catalog(self, path: Path) -> None:
+    def _load_model_catalog(self, path: Any) -> None:
         """Load all models from a single catalog YAML file."""
-        if not path.exists():
+        if not _is_file_resource(path):
             return
         try:
-            with open(path) as f:
+            with _open_yaml_resource(path) as f:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
                     m = _build_model(data)
-                    self._models[name.lower()] = m
+                    self._models[normalize_name(name)] = m
                 except Exception as e:
                     logger.warning("Failed to load model '%s' from %s: %s", name, path.name, e)
         except Exception as e:
             logger.warning("Failed to read model catalog %s: %s", path, e)
 
-    def _load_model_dir(self, directory: Path) -> None:
+    def _load_model_dir(self, directory: Any) -> None:
         """Load models from individual YAML files in a directory."""
-        if not directory.exists():
-            return
-        for path in sorted(directory.glob("*.yaml")):
+        for path in _iter_yaml_resources(directory):
             try:
-                with open(path) as f:
+                with _open_yaml_resource(path) as f:
                     data = yaml.safe_load(f)
                 if data and "name" in data:
                     m = _build_model(data)
-                    self._models[data["name"].lower()] = m
+                    self._models[normalize_name(data["name"])] = m
             except Exception as e:
                 logger.warning("Failed to load model from %s: %s", path.name, e)
 
@@ -235,7 +317,7 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
-                    key = name.lower()
+                    key = normalize_name(name)
                     if key in self._references:
                         self._references[key] = _deep_merge_reference(self._references[key], data)
                         logger.debug("Merged user overlay for reference '%s'", name)
@@ -253,6 +335,8 @@ class RegistryManager:
         if not directory.exists():
             return
         for path in sorted(directory.glob("*.yaml")):
+            if path.name in _RESERVED_REFERENCE_FILES:
+                continue
             try:
                 with open(path) as f:
                     data = yaml.safe_load(f)
@@ -264,7 +348,7 @@ class RegistryManager:
                 else:
                     entries = data
                 for name, entry in entries.items():
-                    key = name.lower()
+                    key = normalize_name(name)
                     if key in self._references:
                         self._references[key] = _deep_merge_reference(self._references[key], entry)
                         logger.debug("Merged user overlay for reference '%s' from %s", name, path.name)
@@ -284,7 +368,11 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
-                    key = name.lower()
+                    key = normalize_name(name)
+                    if isinstance(data, dict) and data.get("_deleted"):
+                        self._models.pop(key, None)
+                        logger.debug("Deleted model '%s' via user overlay tombstone", name)
+                        continue
                     if key in self._models:
                         self._models[key] = _deep_merge_model(self._models[key], data)
                         logger.debug("Merged user overlay for model '%s'", name)
@@ -297,11 +385,31 @@ class RegistryManager:
         except Exception as e:
             logger.warning("Failed to read user model catalog %s: %s", path, e)
 
+    def _load_user_model_aliases(self, path: Path) -> None:
+        """Load user-defined model aliases from ~/.openbench/models/aliases.yaml."""
+        if not path.exists():
+            return
+        try:
+            with open(path) as f:
+                aliases = yaml.safe_load(f) or {}
+            if not isinstance(aliases, dict):
+                logger.warning("Model aliases file must be a mapping: %s", path)
+                return
+            for alias, canonical in aliases.items():
+                alias_key = normalize_name(alias)
+                canonical_key = normalize_name(canonical)
+                if alias_key and canonical_key:
+                    self._model_aliases[alias_key] = canonical_key
+        except Exception as e:
+            logger.warning("Failed to read model aliases %s: %s", path, e)
+
     def _merge_model_dir(self, directory: Path) -> None:
         """Deep-merge individual user model YAML files."""
         if not directory.exists():
             return
         for path in sorted(directory.glob("*.yaml")):
+            if path.name in _RESERVED_MODEL_FILES:
+                continue
             try:
                 with open(path) as f:
                     data = yaml.safe_load(f)
@@ -312,7 +420,7 @@ class RegistryManager:
                 else:
                     entries = data
                 for name, entry in entries.items():
-                    key = name.lower()
+                    key = normalize_name(name)
                     if key in self._models:
                         self._models[key] = _deep_merge_model(self._models[key], entry)
                         logger.debug("Merged user overlay for model '%s' from %s", name, path.name)
@@ -354,7 +462,7 @@ class RegistryManager:
         (empty string for exact matches, human-readable for auto-resolve).
         """
         # Case-insensitive lookup
-        key = name.lower()
+        key = normalize_name(name)
 
         # Try alias first
         key = self.REFERENCE_ALIASES.get(key, key)
@@ -375,9 +483,7 @@ class RegistryManager:
             self.last_resolve_reason = ""
             return None
 
-        ref, reason = _auto_resolve_variant(
-            variants, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res
-        )
+        ref, reason = _auto_resolve_variant(variants, sim_tim_res=sim_tim_res, sim_grid_res=sim_grid_res)
         self.last_resolve_reason = reason
         return ref
 
@@ -392,11 +498,11 @@ class RegistryManager:
             E.g., {'LowRes': ..., 'MidRes': ..., 'HigRes': ...}
         """
         variants = {}
-        base_key = base_name.lower()
+        base_key = normalize_name(base_name)
         base_key = self.REFERENCE_ALIASES.get(base_key, base_key)
 
         for suffix in self.RESOLUTION_SUFFIXES:
-            full_key = f"{base_key}{suffix.lower()}"
+            full_key = f"{base_key}{normalize_name(suffix)}"
             if full_key in self._references:
                 label = suffix[1:]  # Strip leading underscore
                 variants[label] = self._references[full_key]
@@ -422,20 +528,20 @@ class RegistryManager:
     }
 
     def get_model(self, name: str) -> Optional[ModelProfile]:
-        key = name.lower()
+        key = normalize_name(name)
         # Try direct lookup first
         result = self._models.get(key)
         if result:
             return result
         # Try alias
-        canonical = self.MODEL_ALIASES.get(key)
+        canonical = self._model_aliases.get(key)
         if canonical:
             return self._models.get(canonical)
         return None
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         """Get all reference datasets that support a given variable (O(1) index lookup)."""
-        return [self._references[k] for k in self._var_index.get(variable, []) if k in self._references]
+        return [self._references[k] for k in self._var_index.get(normalize_name(variable), []) if k in self._references]
 
     # --- Write methods ---
 
@@ -443,19 +549,39 @@ class RegistryManager:
         """Save or update a model profile to the catalog."""
         catalog_path = get_writable_model_catalog_path()
         catalog = self._read_catalog(catalog_path)
+        existing_key = next(
+            (candidate for candidate in catalog if normalize_name(candidate) == normalize_name(name)),
+            None,
+        )
+        if existing_key is not None and existing_key != name:
+            raise ValueError(
+                f"Model name '{name}' conflicts with existing catalog entry '{existing_key}' case-insensitively"
+            )
         catalog[name] = profile.to_dict()
         self._write_catalog(catalog_path, catalog)
-        self._models[name.lower()] = profile
+        self._models[normalize_name(name)] = profile
         logger.info("Saved model '%s' to %s", name, catalog_path)
 
     def delete_model(self, name: str) -> None:
         """Delete a model profile from the catalog."""
         catalog_path = get_writable_model_catalog_path()
         catalog = self._read_catalog(catalog_path)
-        removed = catalog.pop(name, None) or catalog.pop(name.lower(), None)
-        if removed is not None:
+        key = normalize_name(name)
+        canonical = self._model_aliases.get(canonical_model_key(name), canonical_model_key(name))
+        catalog_key = None
+        for candidate in list(catalog):
+            if normalize_name(candidate) in {key, canonical}:
+                catalog_key = candidate
+                break
+        if catalog_key is not None:
+            catalog.pop(catalog_key, None)
             self._write_catalog(catalog_path, catalog)
-        self._models.pop(name.lower(), None)
+        elif canonical in self._models:
+            profile = self._models[canonical]
+            catalog[profile.name] = {"name": profile.name, "_deleted": True}
+            self._write_catalog(catalog_path, catalog)
+        self._models.pop(canonical, None)
+        self._models.pop(key, None)
         logger.info("Deleted model '%s'", name)
 
     def save_reference(self, name: str, dataset: ReferenceDataset) -> None:
@@ -464,7 +590,7 @@ class RegistryManager:
         catalog = self._read_catalog(catalog_path)
         catalog[name] = dataset.to_dict()
         self._write_catalog(catalog_path, catalog)
-        self._references[name.lower()] = dataset
+        self._references[normalize_name(name)] = dataset
         self._build_var_index()
         logger.info("Saved reference '%s' to %s", name, catalog_path)
 
@@ -472,10 +598,11 @@ class RegistryManager:
         """Delete a reference dataset from the catalog."""
         catalog_path = get_writable_reference_catalog_path()
         catalog = self._read_catalog(catalog_path)
-        removed = catalog.pop(name, None) or catalog.pop(name.lower(), None)
+        catalog_key = get_mapping_key_case_insensitive(catalog, name)
+        removed = catalog.pop(catalog_key, None) if catalog_key is not None else None
         if removed is not None:
             self._write_catalog(catalog_path, catalog)
-        self._references.pop(name.lower(), None)
+        self._references.pop(normalize_name(name), None)
         self._build_var_index()
         logger.info("Deleted reference '%s'", name)
 
@@ -489,6 +616,7 @@ class RegistryManager:
     @staticmethod
     def _write_catalog(path: Path, catalog: dict) -> None:
         import tempfile
+
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
         try:
@@ -535,7 +663,8 @@ def _auto_resolve_variant(
         logger.warning(
             "Auto-resolve: no variant has sufficient time frequency for sim_tim_res=%s. "
             "Falling back to all %d variants.",
-            sim_tim_res, len(variants),
+            sim_tim_res,
+            len(variants),
         )
         candidates = [(l, r, _tim_res_rank(r.tim_res)) for l, r in variants.items()]
         reasons.append(f"no variant >= {sim_tim_res}, fell back to all {len(variants)}")
@@ -571,7 +700,8 @@ def _auto_resolve_variant(
             if ref.root_dir and Path(ref.root_dir).is_dir():
                 logger.info(
                     "Auto-resolve: preferred %s has no data on disk, using %s instead",
-                    best.name, ref.name,
+                    best.name,
+                    ref.name,
                 )
                 reasons.append(f"{best.name} not on disk, switched to {ref.name}")
                 return ref, "; ".join(reasons + [f"selected {ref.name}"])
@@ -599,7 +729,7 @@ def _parse_fallbacks(raw_list: list | None) -> list[FallbackVar] | None:
 
 def _normalize_legacy_varname_list(var_data: dict) -> tuple[str, list[FallbackVar] | None]:
     """Normalize legacy list-valued varname entries into primary + fallbacks."""
-    raw_varname = var_data["varname"]
+    raw_varname = var_data.get("varname", "")
     parsed_fallbacks = _parse_fallbacks(var_data.get("fallbacks")) or []
 
     if not isinstance(raw_varname, list):
@@ -609,10 +739,7 @@ def _normalize_legacy_varname_list(var_data: dict) -> tuple[str, list[FallbackVa
         return "", parsed_fallbacks or None
 
     primary = raw_varname[0]
-    legacy_fallbacks = [
-        FallbackVar(varname=name, varunit=var_data.get("varunit", ""))
-        for name in raw_varname[1:]
-    ]
+    legacy_fallbacks = [FallbackVar(varname=name, varunit=var_data.get("varunit", "")) for name in raw_varname[1:]]
     combined = legacy_fallbacks + parsed_fallbacks
     return primary, combined or None
 
@@ -632,6 +759,8 @@ def _build_reference(data: dict) -> ReferenceDataset:
             max_uparea=var_data.get("max_uparea"),
             min_uparea=var_data.get("min_uparea"),
             fallbacks=fallbacks,
+            compute=var_data.get("compute"),
+            prefix_fallback=var_data.get("prefix_fallback"),
         )
 
     # Validate required fields
@@ -722,6 +851,35 @@ def _build_model(data: dict) -> ModelProfile:
     )
 
 
+def _merge_variable_mapping(
+    existing: VariableMapping | None, overlay: dict, *, include_reference_fields: bool
+) -> VariableMapping:
+    """Merge a partial YAML variable overlay into an existing mapping."""
+    merged = existing.to_dict() if existing is not None else {}
+    merged.update(overlay)
+
+    primary_varname, fallbacks = _normalize_legacy_varname_list(merged)
+    kwargs = {
+        "varname": primary_varname,
+        "varunit": merged.get("varunit", ""),
+        "prefix": merged.get("prefix", ""),
+        "suffix": merged.get("suffix", ""),
+        "sub_dir": merged.get("sub_dir"),
+        "fallbacks": fallbacks,
+        "compute": merged.get("compute"),
+        "prefix_fallback": merged.get("prefix_fallback"),
+    }
+    if include_reference_fields:
+        kwargs.update(
+            {
+                "fulllist": merged.get("fulllist"),
+                "max_uparea": merged.get("max_uparea"),
+                "min_uparea": merged.get("min_uparea"),
+            }
+        )
+    return VariableMapping(**kwargs)
+
+
 def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
     """Deep-merge a user overlay dict into an existing ModelProfile.
 
@@ -736,19 +894,21 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
     grid_res = overlay.get("grid_res", existing.grid_res)
     tim_res = overlay.get("tim_res", existing.tim_res)
 
-    # Deep-merge variables: keep all existing, overlay updates/adds
+    # Deep-merge variables: keep all existing, overlay updates/adds.
+    # ``_delete_variables`` is a user-overlay tombstone list used by the CLI to
+    # remove variables from bundled profiles, where omission alone cannot mean
+    # deletion because overlays are merged.
     variables = dict(existing.variables)
+    for deleted in overlay.get("_delete_variables", []) or []:
+        delete_key = get_mapping_key_case_insensitive(variables, deleted)
+        if delete_key is not None:
+            variables.pop(delete_key, None)
     for var_name, var_data in overlay.get("variables", {}).items():
-        primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
-        variables[var_name] = VariableMapping(
-            varname=primary_varname,
-            varunit=var_data.get("varunit", ""),
-            prefix=var_data.get("prefix", ""),
-            suffix=var_data.get("suffix", ""),
-            sub_dir=var_data.get("sub_dir"),
-            fallbacks=fallbacks,
-            compute=var_data.get("compute"),
-            prefix_fallback=var_data.get("prefix_fallback"),
+        variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
+        variables[variable_key] = _merge_variable_mapping(
+            variables.get(variable_key),
+            var_data,
+            include_reference_fields=False,
         )
 
     # Deep-merge time_offset
@@ -822,19 +982,15 @@ def _deep_merge_reference(existing: ReferenceDataset, overlay: dict) -> Referenc
     # Deep-merge variables
     variables = dict(existing.variables)
     for var_name, var_data in overlay.get("variables", {}).items():
-        primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
-        variables[var_name] = VariableMapping(
-            varname=primary_varname,
-            varunit=var_data.get("varunit", ""),
-            prefix=var_data.get("prefix", ""),
-            suffix=var_data.get("suffix", ""),
-            sub_dir=var_data.get("sub_dir"),
-            fulllist=var_data.get("fulllist"),
-            max_uparea=var_data.get("max_uparea"),
-            min_uparea=var_data.get("min_uparea"),
-            fallbacks=fallbacks,
-            compute=var_data.get("compute"),
-        )
+        variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
+        if var_data is None:
+            variables.pop(variable_key, None)
+        else:
+            variables[variable_key] = _merge_variable_mapping(
+                variables.get(variable_key),
+                var_data,
+                include_reference_fields=True,
+            )
 
     return ReferenceDataset(
         name=name,

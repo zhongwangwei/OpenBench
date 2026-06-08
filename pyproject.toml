@@ -4,10 +4,65 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openbench"]
+# Defense in depth: even if a developer accidentally creates one of
+# these runtime/test directories under the package root (it's
+# happened — a previous build shipped a 13 GB sdist this way), keep
+# them out of the wheel.
+exclude = [
+    "src/openbench/data/custom/output",
+    "src/openbench/data/custom/output/**",
+    "src/openbench/data/custom/cache",
+    "src/openbench/data/custom/cache/**",
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.DS_Store",
+    # Build-time scratch files from the registry's atomic-write +
+    # file-lock paths (see config.user_settings._save and
+    # data.registry.manager._safe_load_catalog). These should never be
+    # shipped to end users — they're transient backups of the user's
+    # local catalog edits and OS-level lock files.
+    "**/*.bak",
+    "**/*.lock",
+    "**/*.tmp",
+]
+
+
+[tool.hatch.build.targets.sdist]
+# By default sdist would pick up everything in the working tree —
+# including any output/cache directories created by ad-hoc test runs
+# (the previous sdist artifact was 13 GB for exactly this reason).
+include = [
+    "src/openbench",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+exclude = [
+    "src/openbench/data/custom/output",
+    "src/openbench/data/custom/output/**",
+    "src/openbench/data/custom/cache",
+    "src/openbench/data/custom/cache/**",
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.DS_Store",
+    # NOTE: we intentionally do NOT blanket-exclude **/*.nc here. The only
+    # NetCDF files tracked in VCS are the bundled classification masks under
+    # src/openbench/dataset/ (IGBP/PFT/Köppen, ~1.1 MB compressed), which must
+    # ship in the sdist so a source build produces a working wheel. All other
+    # .nc (runtime outputs, datasets) stay untracked and are excluded by VCS
+    # selection; local artifact tests and GitHub workflow archive checks guard
+    # that only the dataset masks ship.
+    # See wheel exclude above — same rationale.
+    "**/*.bak",
+    "**/*.lock",
+    "**/*.tmp",
+]
 
 [project]
-name = "openbench"
-version = "3.0.0a1"
+name = "colm-openbench"
+version = "3.0.0b1"
 description = "Open Source Land Surface Model Benchmarking System"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +73,7 @@ authors = [
 ]
 keywords = ["land surface model", "benchmarking", "evaluation", "climate", "earth science"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -42,19 +97,21 @@ dependencies = [
     "PyYAML>=6.0",
     "jinja2>=3.0.0",
     "click>=8.0",
-    "platformdirs>=3.0",
+    "tqdm>=4.0",
+    "packaging>=21.0",
 ]
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.5.0"]
 remote = ["paramiko>=3.0.0", "cryptography>=41.0.0"]
 report = ["xhtml2pdf>=0.2.5"]
+migration = ["f90nml>=1.4.4"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.4.0",
 ]
-all = ["openbench[gui,remote,report]"]
+all = ["colm-openbench[gui,remote,report,migration]"]
 
 [project.scripts]
 openbench = "openbench.cli.main:cli"
@@ -75,19 +132,45 @@ select = ["E", "F", "I", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 # Migrated legacy code — relax lint rules to avoid massive churn
-"src/openbench/util/*.py" = ["E", "F", "W", "I"]
-"src/openbench/data/*.py" = ["E", "F", "W", "I"]
-"src/openbench/data/**/*.py" = ["E", "F", "W", "I"]
-"src/openbench/core/*.py" = ["E", "F", "W", "I"]
-"src/openbench/core/**/*.py" = ["E", "F", "W", "I"]
-"src/openbench/visualization/*.py" = ["E", "F", "W", "I"]
-"src/openbench/config/legacy_*.py" = ["E", "F", "W", "I"]
-"src/openbench/remote/*.py" = ["E", "F", "W", "I"]
-"src/openbench/runner/remote.py" = ["E", "F", "W", "I"]
-"src/openbench/gui/*.py" = ["E", "F", "W", "I"]
-"src/openbench/gui/**/*.py" = ["E", "F", "W", "I"]
+"src/openbench/util/*.py" = ["E", "W", "I"]
+"src/openbench/data/*.py" = ["E", "W", "I"]
+"src/openbench/data/**/*.py" = ["E", "W", "I"]
+"src/openbench/core/*.py" = ["E", "W", "I"]
+"src/openbench/core/**/*.py" = ["E", "W", "I"]
+"src/openbench/visualization/*.py" = ["E", "W", "I"]
+"src/openbench/config/legacy_*.py" = ["E", "W", "I"]
+"src/openbench/remote/*.py" = ["E", "W", "I"]
+"src/openbench/gui/*.py" = ["E", "W", "I"]
+"src/openbench/gui/**/*.py" = ["E", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # "." 让 docs.manual.scripts.* 可被 import（手册生成器与其测试用）
 pythonpath = ["src", "."]
+
+[tool.coverage.run]
+branch = true
+source = ["openbench"]
+omit = [
+    # Auto-generated colormap dispatch (~6000 lines, mostly identical
+    # property bodies — would dominate coverage stats without telling
+    # us anything about real code quality).
+    "src/openbench/visualization/cmaps/cmaps.py",
+    # Optional GUI runs in its own process; skip from headless test cov.
+    "src/openbench/gui/*",
+    "src/openbench/gui/**/*",
+]
+
+[tool.coverage.report]
+# Print line numbers of missing coverage in the terminal report.
+show_missing = true
+# Treat partially-covered branches as misses too.
+skip_covered = false
+exclude_lines = [
+    # Standard pragma
+    "pragma: no cover",
+    # Ignore re-raises and bare protective branches
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import xarray as xr
+from scipy import stats
 
 
 def stat_False_Discovery_Rate(self, *variables):
@@ -17,52 +18,81 @@ def stat_False_Discovery_Rate(self, *variables):
 
     # , alpha = 0.05
     def vectorized_ttest(a, b):
+        a, b = xr.align(a, b, join="inner")
+        valid = np.isfinite(a) & np.isfinite(b)
+        a = a.where(valid)
+        b = b.where(valid)
+
         a_mean = a.mean(dim="time")
         b_mean = b.mean(dim="time")
-        a_var = a.var(dim="time")
-        b_var = b.var(dim="time")
+        # Welch's t-test uses unbiased sample variances.  xarray defaults to
+        # ddof=0 (population variance), which makes |t| too large while still
+        # feeding the result into the Welch-Satterthwaite sample-df formula.
+        a_var = a.var(dim="time", ddof=1)
+        b_var = b.var(dim="time", ddof=1)
         a_count = a.count(dim="time")
         b_count = b.count(dim="time")
 
-        # Avoid division by zero
-        a_count_safe = da.maximum(a_count, 1)
-        b_count_safe = da.maximum(b_count, 1)
+        enough_samples = (a_count > 1) & (b_count > 1)
+        a_count_safe = xr.where(enough_samples, a_count, 1)
+        b_count_safe = xr.where(enough_samples, b_count, 1)
 
-        # Set counts to NaN where they are actually zero
-        a_count_safe = da.where(a_count > 0, a_count_safe, np.nan)
-        b_count_safe = da.where(b_count > 0, b_count_safe, np.nan)
+        variance_term = a_var / a_count_safe + b_var / b_count_safe
+        positive_variance = variance_term > 0
+        variance_term_safe = xr.where(positive_variance, variance_term, 1.0)
+        t_raw = (a_mean - b_mean) / np.sqrt(variance_term_safe)
 
-        t = (a_mean - b_mean) / da.sqrt(a_var / a_count_safe + b_var / b_count_safe)
-        df = (a_var / a_count_safe + b_var / b_count_safe) ** 2 / (
-            (a_var / a_count_safe) ** 2 / da.maximum(a_count - 1, 1)
-            + (b_var / b_count_safe) ** 2 / da.maximum(b_count - 1, 1)
+        df_denominator = (a_var / a_count_safe) ** 2 / xr.where(a_count > 1, a_count - 1, 1) + (
+            b_var / b_count_safe
+        ) ** 2 / xr.where(b_count > 1, b_count - 1, 1)
+        positive_df_denominator = df_denominator > 0
+        df_denominator_safe = xr.where(positive_df_denominator, df_denominator, 1.0)
+        # Use the same `_safe` variance term in the df numerator that was used
+        # in the t denominator; mixing the raw and safe forms left a 0/safe
+        # branch that still emitted numpy RuntimeWarnings under dask.
+        df_raw = variance_term_safe**2 / df_denominator_safe
+
+        valid_ttest = enough_samples & positive_variance & positive_df_denominator
+        t = xr.where(valid_ttest, t_raw, np.nan)
+        df = xr.where(valid_ttest, df_raw, np.nan)
+
+        prob = xr.apply_ufunc(
+            lambda t_values, df_values: stats.t.sf(np.abs(t_values), df_values) * 2,
+            t,
+            df,
+            dask="parallelized",
+            output_dtypes=[float],
         )
-
-        # Use dask's map_overlap for efficient computation
-        prob = da.map_overlap(
-            lambda x, y: stats.t.sf(np.abs(x), y) * 2, t.data, df.data, depth=(0,) * t.ndim, boundary="none"
-        )
-        return xr.DataArray(prob, coords=t.coords, dims=t.dims)
+        return prob
 
     def apply_fdr(p_values, alpha):
-        p_sorted = da.sort(p_values.data.ravel())
+        flat = p_values.data.ravel()
+        if hasattr(flat, "compute"):
+            flat = flat.compute()
+        p_sorted = np.sort(np.asarray(flat).ravel())
+        p_sorted = p_sorted[np.isfinite(p_sorted)]
         m = p_sorted.size
-        thresholds = da.arange(1, m + 1) / m * alpha
-        significant = p_sorted <= thresholds
-        if da.any(significant):
-            p_threshold = p_sorted[da.argmax(significant[::-1])]
-        else:
-            p_threshold = 0
-        return p_threshold.compute()
+        if m == 0:
+            return 0.0
+
+        thresholds = np.arange(1, m + 1) / m * alpha
+        significant_indices = np.nonzero(p_sorted <= thresholds)[0]
+        if significant_indices.size == 0:
+            return 0.0
+        return float(p_sorted[significant_indices[-1]])
+
+    # FDR control level: read from stats namelist or fall back to 0.05.
+    # Previously `alpha` was undefined at the call site (NameError), so
+    # the analysis would have crashed before the dispatcher's "not yet
+    # implemented" guard kicked in.
+    try:
+        alpha = float(self.stats_nml["False_Discovery_Rate"].get("alpha", 0.05))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        alpha = 0.05
 
     # Compute p-values for all pairs of datasets
     n_datasets = len(variables)
     combinations = [(i, j) for i in range(n_datasets) for j in range(i + 1, n_datasets)]
-
-    # Precompute means and variances
-    means = [var.mean(dim="time") for var in variables]
-    variances = [var.var(dim="time") for var in variables]
-    counts = [var.count(dim="time") for var in variables]
 
     p_values = []
     for i, j in combinations:

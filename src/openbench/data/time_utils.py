@@ -6,8 +6,90 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+# CF calendars that produce cftime objects when xarray decodes them.
+# `proleptic_gregorian` and `gregorian` decode to numpy.datetime64 directly.
+_CFTIME_CALENDARS = {
+    "noleap",
+    "365_day",
+    "all_leap",
+    "366_day",
+    "360_day",
+    "julian",
+}
 
-def decode_nonstandard_time(ds: xr.Dataset) -> xr.Dataset:
+
+def normalize_cftime_axis(
+    ds: xr.Dataset,
+    *,
+    source_path: str | None = None,
+) -> xr.Dataset:
+    """Convert a cftime time coordinate to numpy datetime64.
+
+    Climate model output frequently uses non-Gregorian CF calendars
+    (``noleap``, ``360_day``, ``julian`` …). xarray decodes these into
+    ``cftime`` objects, which most of OpenBench's downstream pipeline
+    cannot consume (`pd.to_datetime`, `.dt.strftime`, etc. all raise
+    `TypeError` on cftime).
+
+    Previously the pipeline silently fell back to a Gregorian
+    ``pd.date_range`` so a noleap year ended up with 366 days,
+    introducing a ~1 day-per-year systematic offset for monthly/daily
+    climatology comparisons.
+
+    This helper:
+      1. Detects the calendar attribute.
+      2. Logs which calendar was found.
+      3. Uses xarray's native ``xr.coding.times.cftime_to_nptime`` to
+         convert to ``datetime64[ns]`` while preserving the original
+         calendar string in the time coord's attrs (for downstream
+         calendar-aware unit conversion, e.g. days_in_month).
+
+    Returns the dataset unchanged if its time axis is already
+    ``datetime64`` (the common case) or has no time coord at all.
+    """
+    if "time" not in ds.coords:
+        return ds
+    time_var = ds["time"]
+    if np.issubdtype(time_var.dtype, np.datetime64):
+        return ds
+
+    # cftime values present — capture the calendar before we convert
+    calendar = time_var.encoding.get("calendar") or time_var.attrs.get("calendar") or "unknown"
+
+    # Try to convert via xarray's helper first (handles all cftime types)
+    try:
+        from xarray.coding.times import cftime_to_nptime
+
+        new_values = cftime_to_nptime(time_var.values)
+    except Exception as exc:
+        logging.warning(
+            "Could not convert cftime axis (%s, calendar=%s): %s. "
+            "Downstream time alignment may produce inconsistent results.",
+            source_path or "<dataset>",
+            calendar,
+            exc,
+        )
+        return ds
+
+    new_time = xr.DataArray(
+        new_values,
+        dims=time_var.dims,
+        attrs={**time_var.attrs, "original_calendar": calendar},
+    )
+    ds = ds.assign_coords(time=new_time)
+
+    if calendar in _CFTIME_CALENDARS:
+        logging.info(
+            "Converted CF calendar '%s' to datetime64 for %s "
+            "(note: this may introduce small per-step offsets for non-"
+            "Gregorian calendars; original calendar preserved in attrs).",
+            calendar,
+            source_path or "<dataset>",
+        )
+    return ds
+
+
+def decode_nonstandard_time(ds: xr.Dataset, source_path: str | None = None) -> xr.Dataset:
     """Decode non-standard time units that xarray/cftime cannot handle.
 
     This function is called automatically when ``xr.open_dataset()`` falls
@@ -55,11 +137,7 @@ def decode_nonstandard_time(ds: xr.Dataset) -> xr.Dataset:
         return ds
 
     # ── Gather the units string ──────────────────────────────────────────
-    units_str = (
-        time_var.attrs.get("units", "")
-        or time_var.encoding.get("units", "")
-        or ""
-    )
+    units_str = time_var.attrs.get("units", "") or time_var.encoding.get("units", "") or ""
     # Strip trailing semicolons, whitespace, and other junk
     units_str = re.sub(r"[;\s]+$", "", units_str).strip()
 
@@ -67,12 +145,13 @@ def decode_nonstandard_time(ds: xr.Dataset) -> xr.Dataset:
 
     # ── Strategy 1: "<unit> since <ref_date>" patterns ───────────────────
     if units_str:
-        new_time = _decode_unit_since(units_str, offsets)
+        new_time = _decode_unit_since(units_str, offsets, source_path=source_path)
         if new_time is not None:
             ds = ds.assign_coords(time=new_time)
             logging.info(
                 "Decoded non-standard time: '%s' → %d datetime steps",
-                units_str, len(new_time),
+                units_str,
+                len(new_time),
             )
             return ds
 
@@ -82,7 +161,8 @@ def decode_nonstandard_time(ds: xr.Dataset) -> xr.Dataset:
         if new_time is not None:
             ds = ds.assign_coords(time=new_time)
             logging.info(
-                "Decoded numeric time values → %d datetime steps", len(new_time),
+                "Decoded numeric time values → %d datetime steps",
+                len(new_time),
             )
             return ds
 
@@ -99,14 +179,35 @@ _UNIT_SINCE_RE = re.compile(
 
 # Map unit tokens to a canonical form
 _UNIT_MAP = {
-    "month": "month", "months": "month", "mon": "month", "mons": "month",
-    "year": "year", "years": "year", "yr": "year", "yrs": "year",
-    "common_year": "year", "common_years": "year",
-    "season": "season", "seasons": "season",
-    "day": "day", "days": "day", "d": "day",
-    "hour": "hour", "hours": "hour", "hr": "hour", "hrs": "hour", "h": "hour",
-    "minute": "minute", "minutes": "minute", "min": "minute", "mins": "minute",
-    "second": "second", "seconds": "second", "sec": "second", "secs": "second", "s": "second",
+    "month": "month",
+    "months": "month",
+    "mon": "month",
+    "mons": "month",
+    "year": "year",
+    "years": "year",
+    "yr": "year",
+    "yrs": "year",
+    "common_year": "year",
+    "common_years": "year",
+    "season": "season",
+    "seasons": "season",
+    "day": "day",
+    "days": "day",
+    "d": "day",
+    "hour": "hour",
+    "hours": "hour",
+    "hr": "hour",
+    "hrs": "hour",
+    "h": "hour",
+    "minute": "minute",
+    "minutes": "minute",
+    "min": "minute",
+    "mins": "minute",
+    "second": "second",
+    "seconds": "second",
+    "sec": "second",
+    "secs": "second",
+    "s": "second",
 }
 
 
@@ -126,8 +227,8 @@ def _parse_ref_date(ref_str: str) -> np.datetime64 | None:
         pass
     # Common formats
     from datetime import datetime as _dt
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
-                "%Y-%m", "%Y", "%Y/%m/%d", "%d-%b-%Y"):
+
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m", "%Y", "%Y/%m/%d", "%d-%b-%Y"):
         try:
             return np.datetime64(_dt.strptime(ref_str, fmt))
         except ValueError:
@@ -135,7 +236,12 @@ def _parse_ref_date(ref_str: str) -> np.datetime64 | None:
     return None
 
 
-def _decode_unit_since(units_str: str, offsets: np.ndarray) -> np.ndarray | None:
+def _decode_unit_since(
+    units_str: str,
+    offsets: np.ndarray,
+    *,
+    source_path: str | None = None,
+) -> np.ndarray | None:
     """Decode ``<unit> since <ref_date>`` patterns."""
     m = _UNIT_SINCE_RE.match(units_str)
     if not m:
@@ -154,6 +260,8 @@ def _decode_unit_since(units_str: str, offsets: np.ndarray) -> np.ndarray | None
     ref_ts = pd.Timestamp(ref)
 
     if canon == "month":
+        if _looks_like_scaled_annual_month_axis(offsets, ref_ts, source_path):
+            offsets = np.arange(12, dtype=float)
         dates = []
         for off in offsets:
             total = ref_ts.month - 1 + int(off)
@@ -195,6 +303,30 @@ def _decode_unit_since(units_str: str, offsets: np.ndarray) -> np.ndarray | None
             return None
 
     return None
+
+
+def _looks_like_scaled_annual_month_axis(
+    offsets: np.ndarray,
+    ref_ts: pd.Timestamp,
+    source_path: str | None,
+) -> bool:
+    """Detect model files that encode one monthly year as 0,3,...,33.
+
+    These files are annual ``MYYYY`` outputs with 12 monthly slices, but the
+    non-CF ``calendar months since`` coordinate is scaled by 3. Treating it
+    literally expands one annual file into three years and makes consecutive
+    year files overlap.
+    """
+    values = np.asarray(offsets, dtype=float)
+    if (
+        not source_path
+        or values.size != 12
+        or ref_ts.month != 1
+        or ref_ts.day != 1
+        or not re.search(r"(^|[^A-Za-z0-9])M\d{4}([^A-Za-z0-9]|$)", str(source_path))
+    ):
+        return False
+    return bool(np.allclose(values, np.arange(12, dtype=float) * 3))
 
 
 def _decode_numeric_time(offsets: np.ndarray) -> np.ndarray | None:
@@ -241,60 +373,3 @@ def _decode_numeric_time(offsets: np.ndarray) -> np.ndarray | None:
         return np.array(dates, dtype="datetime64[ns]")
 
     return None
-
-
-class timelib:
-    def __init__(self):
-        self.name = "DatasetPreprocessing"
-        self.version = "0.1"
-        self.release = "0.1"
-        self.date = "Mar 2023"
-        self.author = "Zhongwang Wei / zhongwang007@gmail.com"
-        self.freq_map = {
-            "month": "ME",
-            "mon": "ME",
-            "monthly": "ME",
-            "day": "D",
-            "daily": "D",
-            "hour": "h",  # Changed from 'H' to 'h' to avoid FutureWarning
-            "hr": "h",  # Changed from 'H' to 'h' to avoid FutureWarning
-            "hourly": "h",  # Changed from 'H' to 'h' to avoid FutureWarning
-            "year": "Y",
-            "yr": "Y",
-            "yearly": "Y",
-            "week": "W",
-            "wk": "W",
-            "weekly": "W",
-        }
-
-    def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
-        print("Checking time coordinate...")
-        if "time" not in ds.coords:
-            logging.info("The dataset does not contain a 'time' coordinate.")
-            # Based on the syear and eyear, create a time index
-            time_index = pd.date_range(start=f"{syear}-01-01T00:00:00", end=f"{eyear}-12-31T23:59:59", freq=tim_res)
-            ds = ds.expand_dims("time")  # Ensure 'time' dimension exists
-            ds = ds.assign_coords(time=time_index)  # Assign the created time index to the dataset
-        elif not np.issubdtype(ds.time.dtype, np.datetime64):
-            try:
-                ds["time"] = pd.to_datetime(ds.time.values)
-            except (ValueError, TypeError, AttributeError):
-                # Delete the time coordinate
-                ds = ds.drop("time")
-                # Delete the time dimension
-                ds = ds.squeeze("time")
-                time_index = pd.date_range(start=f"{syear}-01-01T00:00:00", end=f"{eyear}-12-31T23:59:59", freq=tim_res)
-                ds = ds.expand_dims("time")  # Ensure 'time' dimension exists
-                ds = ds.assign_coords(time=time_index)  # Assign the created time index to the dataset
-        else:
-            # Check for duplicate time values and remove them
-            if ds["time"].to_index().duplicated().any():
-                logging.info("Duplicate time values found. Removing duplicates.")
-                _, unique_indices = np.unique(ds["time"], return_index=True)
-                ds = ds.isel(time=unique_indices)
-
-            # Replace the existing time index with a new one based on syear, eyear, and tim_res
-            time_index = pd.date_range(start=f"{syear}-01-01T00:00:00", end=f"{eyear}-12-31T23:59:59", freq=tim_res)
-            ds = ds.reindex(time=time_index)  # Reindex the dataset with the created time index
-
-        return ds

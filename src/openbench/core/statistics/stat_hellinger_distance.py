@@ -15,7 +15,14 @@ def stat_hellinger_distance(self, v, u):
     Returns:
         xarray.DataArray: Hellinger Distance score for each grid point
     """
-    nbins = self.stats_nml["Hellinger_Distance"]["nbins"]
+    # Fall back to a sane default when the config namespace is missing, in
+    # line with the other stat_* modules. Without this, any deployment that
+    # didn't migrate the Hellinger_Distance section from compare_nml would
+    # crash with a bare KeyError here.
+    try:
+        nbins = int(self.stats_nml["Hellinger_Distance"]["nbins"])
+    except (KeyError, AttributeError, TypeError):
+        nbins = 20
 
     if isinstance(v, xr.Dataset):
         v = list(v.data_vars.values())[0]
@@ -31,24 +38,28 @@ def stat_hellinger_distance(self, v, u):
         if len(v_valid) < 2:  # Not enough data points
             return np.nan
 
-        # Calculate 2D histogram
-        hist, _, _ = np.histogram2d(v_valid, u_valid, bins=nbins)
+        # Hellinger distance is between two 1-D distributions; bin v and u
+        # against a SHARED edge set so the marginal probability vectors are
+        # comparable. The previous implementation built a 2-D joint histogram
+        # and summed sqrt(joint), which had no defined statistical meaning
+        # and was almost always clamped to 0 by the (1 - bc) <= 0 guard.
+        combined_min = float(min(v_valid.min(), u_valid.min()))
+        combined_max = float(max(v_valid.max(), u_valid.max()))
+        if combined_min == combined_max:
+            return 0.0  # both constant and identical
+        edges = np.linspace(combined_min, combined_max, nbins + 1)
 
-        # Normalize the histogram
-        hist = hist / hist.sum()
+        p, _ = np.histogram(v_valid, bins=edges)
+        q, _ = np.histogram(u_valid, bins=edges)
+        p_sum, q_sum = p.sum(), q.sum()
+        if p_sum == 0 or q_sum == 0:
+            return np.nan
+        p = p / p_sum
+        q = q / q_sum
 
-        # Calculate Hellinger distance
-
-        # 公式计算问题
-        # hellinger_dist = np.sqrt(1 - np.sum(np.sqrt(hist)))
-        hellinger_dist = np.sqrt(np.sum(np.sqrt(hist)))
-
-        # print(hist)
-        # print(type(hist))
-        # print(hellinger_dist)
-        # print(type(hellinger_dist))
-
-        return hellinger_dist
+        # BC(P,Q) = sum sqrt(P_i * Q_i) ∈ [0, 1]; H = sqrt(1 - BC) ∈ [0, 1]
+        bc = float(np.sum(np.sqrt(p * q)))
+        return float(np.sqrt(max(0.0, 1.0 - bc)))
 
     # Rechunk time dimension to single chunk for apply_ufunc with dask
     if hasattr(v, "chunks") and v.chunks is not None:

@@ -1,3 +1,4 @@
+import logging
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
@@ -6,18 +7,32 @@ import numpy as np
 import pandas as pd
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.util.filenames import filename_component
 
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index
+from ._validation import finite_min_max
+
+logger = logging.getLogger(__name__)
 
 
+@with_isolated_rc
 def make_stn_plot_index(file, method_name, main_nml, sources, option):
+    option = option.copy()
+    # Snapshot the (already-copied) option so each loop iteration starts
+    # from a fresh dict; the previous code mutated option["vmin"]/vmax/extend
+    # inside the first iteration and the second iteration then inherited
+    # those values whenever the vmin_max_on branch didn't overwrite them.
+    option_base = option.copy()
     # read the data
     df = pd.read_csv(file, header=0)
     df = Convert_Type.convert_Frame(df)
     # loop the keys in self.variables to get the metric output
     for type, source in zip(["ref_value", "sim_value"], sources):
+        option = option_base.copy()
         min_metric = -999.0
         max_metric = 100000.0
 
@@ -29,37 +44,24 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         try:
             stn_lon = data_select["ref_lon"].values
             stn_lat = data_select["ref_lat"].values
-        except:
+        except Exception:
             stn_lon = data_select["sim_lon"].values
             stn_lat = data_select["sim_lat"].values
         metric = data_select["%s" % (type)].values
 
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
-        min_value, max_value = np.percentile(metric, 5), np.percentile(metric, 95)
-        cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+        min_value, max_value = finite_min_max(metric, label=f"{method_name} station map/{type}", percentile=(5, 95))
+        cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], type)
         if not option["vmin_max_on"]:
             option["vmax"], option["vmin"] = mticks[-1], mticks[0]
 
-        if min_value < option["vmin"] and max_value > option["vmax"]:
-            option["extend"] = "both"
-        elif min_value > option["vmin"] and max_value > option["vmax"]:
-            option["extend"] = "max"
-        elif min_value < option["vmin"] and max_value < option["vmax"]:
-            option["extend"] = "min"
-        else:
-            option["extend"] = "neither"
-
-        # Add check for empty or all-NaN array
-        if len(metric) == 0 or np.all(np.isnan(metric)):
-            print(f"Warning: No valid data for {method_name}. Skipping plot.")
-            return
+        option["extend"] = extend
 
         font = {"family": option["font"]}
         matplotlib.rc("font", **font)
 
         params = {
-            "backend": "ps",
             "axes.labelsize": option["labelsize"],
             "grid.linewidth": 0.2,
             "font.size": option["labelsize"],
@@ -140,32 +142,37 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         title = option["title"]
         if not option["title"]:
             title = f"{source} {method_name}"
-        plt.title(title, fontsize=option["title_size"], weight="bold")
-    if not option["colorbar_position_set"]:
-        pos = ax.get_position()
-        left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-        if (
-            (option["min_lat"] < -60)
-            & (option["max_lat"] > 89)
-            & (option["min_lon"] < -179)
-            & (option["max_lon"] > 179)
-        ):
-            if option["colorbar_position"] == "horizontal":
-                cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
-            else:
-                cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
-        else:
-            if option["colorbar_position"] == "horizontal":
-                if len(option["xticklabel"]) == 0:
-                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+        ax.set_title(title, fontsize=option["title_size"], weight="bold")
+        if not option["colorbar_position_set"]:
+            pos = ax.get_position()
+            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+            if (
+                (option["min_lat"] < -60)
+                & (option["max_lat"] > 89)
+                & (option["min_lon"] < -179)
+                & (option["max_lon"] > 179)
+            ):
+                if option["colorbar_position"] == "horizontal":
+                    cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
                 else:
-                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                    cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
             else:
-                cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
-    else:
-        cbaxes = fig.add_axes(
-            [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]]
-        )
+                if option["colorbar_position"] == "horizontal":
+                    if len(option["xticklabel"]) == 0:
+                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+                    else:
+                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                else:
+                    cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
+        else:
+            cbaxes = fig.add_axes(
+                [
+                    option["colorbar_left"],
+                    option["colorbar_bottom"],
+                    option["colorbar_width"],
+                    option["colorbar_height"],
+                ]
+            )
 
         cb = fig.colorbar(
             cs,
@@ -179,7 +186,10 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         cb.solids.set_edgecolor("face")
 
         filename2 = file[:-4]
-        plt.savefig(
-            f"{filename2}_{type}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+        save_figure(
+            fig,
+            f"{filename2}_{filename_component(type)}.{option['saving_format']}",
+            format=f"{option['saving_format']}",
+            dpi=option["dpi"],
         )
-        plt.close()
+        plt.close(fig)

@@ -5,7 +5,29 @@ Cross-platform path utilities for converting and validating paths.
 
 import os
 import sys
+from importlib.resources import files
+from pathlib import Path
 from typing import Optional, Tuple
+
+
+_OPENBENCH_ROOT_MARKERS = [
+    "/OpenBench/",
+    "/openbench/",
+]
+
+_PROJECT_PATH_MARKERS = [
+    "/output/",
+]
+
+# Legacy v2 layout fragments kept only for cross-platform conversion of
+# existing saved paths. They are intentionally quarantined away from the
+# active OpenBench-root markers so new v3 code does not treat them as
+# install-layout defaults.
+_LEGACY_V2_PATH_MARKERS = [
+    "/nml/nml-yaml/",
+    "/nml/nml-Fortran/",
+    "/Mod_variables_definition/",
+]
 
 
 def is_cross_platform_path(path: str) -> bool:
@@ -125,26 +147,124 @@ def remote_basename(path: str) -> str:
     return path.split("/")[-1]
 
 
+def looks_like_openbench_root(root: str) -> bool:
+    """Detect a valid OpenBench v3 root in any supported install layout.
+
+    v3 is a pip-installable package; the v2 marker
+    ``openbench/openbench.py`` no longer exists. We accept any of:
+
+      * **editable / repo checkout** — ``src/openbench/cli/main.py``
+        exists under ``root``;
+      * **source tree with metadata** — ``pyproject.toml`` under
+        ``root`` declares the ``colm-openbench`` distribution;
+      * **wheel / pip install** — ``root`` is the package directory
+        itself (i.e. it has ``cli/main.py`` and ``data/registry/``); or
+        it is a parent directory containing such an
+        ``openbench/`` subpackage (e.g. ``site-packages``).
+
+    Without the wheel-layout cases, pip-install users would be forced
+    to pick a directory that doesn't exist on their machine.
+
+    Used by:
+      - ``find_openbench_root`` below
+      - the GUI's "browse for OpenBench directory" dialogs in
+        page_runtime / page_run_monitor
+      - ``config_manager._is_openbench_installation``
+    """
+    if not root or not os.path.isdir(root):
+        return False
+
+    # 1) Editable / repo checkout
+    if os.path.exists(os.path.join(root, "src", "openbench", "cli", "main.py")):
+        return True
+
+    # 2) Source tree with pyproject.toml
+    pyproject = os.path.join(root, "pyproject.toml")
+    if os.path.exists(pyproject):
+        try:
+            with open(pyproject, "r", encoding="utf-8") as fh:
+                head = fh.read(4096)
+            if (
+                'name = "colm-openbench"' in head
+                or "name = 'colm-openbench'" in head
+                or 'name = "openbench"' in head
+                or "name = 'openbench'" in head
+            ):
+                return True
+        except OSError:
+            pass
+
+    # 3) The package directory itself (wheel-installed `…/site-packages/openbench`)
+    if os.path.exists(os.path.join(root, "cli", "main.py")) and os.path.isdir(os.path.join(root, "data", "registry")):
+        return True
+
+    # 4) A parent directory containing an installed `openbench/` subpackage
+    #    (e.g. site-packages). We only require the same two markers under
+    #    `openbench/` so a random folder named `openbench` doesn't match.
+    sub = os.path.join(root, "openbench")
+    if (
+        os.path.isdir(sub)
+        and os.path.exists(os.path.join(sub, "cli", "main.py"))
+        and os.path.isdir(os.path.join(sub, "data", "registry"))
+    ):
+        return True
+
+    return False
+
+
 def get_openbench_root() -> str:
     """
     Find the OpenBench root directory.
 
+    Resolution order (each candidate is validated by
+    :func:`looks_like_openbench_root` before being accepted):
+
+      1. ``~/.openbench_wizard/config.txt`` saved path
+      2. Common user folders (Desktop / Documents / home / OpenBench)
+      3. Current working directory
+      4. The directory that *contains* the installed `openbench`
+         package (so a `pip install`-only user always gets a sensible
+         answer pointing at site-packages)
+
     Returns:
-        Absolute path to OpenBench root directory
+        Absolute path to a directory that passes the v3 marker check.
+        If no candidate qualifies the function still returns CWD as a
+        last-resort string (callers downstream emit warnings) — but
+        `looks_like_openbench_root(returned_path)` is True in all
+        normal install layouts, including wheel installs.
     """
-    # Try to load saved path first
+    # 1) Saved path — but only if it's actually an OpenBench root.
+    #    Earlier this trusted any existing path, which let a stale
+    #    `~/.openbench_wizard/config.txt` pollute every relative path
+    #    in the GUI (to_absolute_path, default output_dir, legacy
+    #    nml sync, …) with no warning.
     try:
         home_dir = os.path.expanduser("~")
         config_file = os.path.join(home_dir, ".openbench_wizard", "config.txt")
         if os.path.exists(config_file):
             with open(config_file, "r", encoding="utf-8") as f:
-                path = f.read().strip()
-                if path and os.path.exists(path):
-                    return os.path.normpath(path)
+                saved = f.read().strip()
+            if saved and looks_like_openbench_root(saved):
+                return os.path.normpath(saved)
+            if saved and os.path.exists(saved):
+                # Path exists but isn't a v3 root — warn rather than
+                # silently returning a misconfigured location.
+                print(f"Warning: saved OpenBench path {saved!r} is not a valid v3 install root; ignoring.")
     except Exception as e:
         print(f"Warning: Could not load saved OpenBench path: {e}")
 
-    # Search common locations
+    # 1b) Honour an explicit OPENBENCH_ROOT env var (CI / HPC users set this
+    # to point at a shared install rather than rely on the hard-coded list
+    # below). Validated with the same v3-root check so a stale env var
+    # doesn't silently misconfigure the GUI.
+    env_root = os.environ.get("OPENBENCH_ROOT", "").strip()
+    if env_root:
+        if looks_like_openbench_root(env_root):
+            return os.path.normpath(env_root)
+        else:
+            print(f"Warning: OPENBENCH_ROOT={env_root!r} is not a valid v3 install root; ignoring.")
+
+    # 2) Search common locations using the shared v3 marker check.
     possible_roots = [
         os.path.join(os.path.expanduser("~"), "Desktop", "OpenBench"),
         os.path.join(os.path.expanduser("~"), "Documents", "OpenBench"),
@@ -152,11 +272,44 @@ def get_openbench_root() -> str:
     ]
 
     for root in possible_roots:
-        if root and os.path.exists(os.path.join(root, "openbench", "openbench.py")):
+        if looks_like_openbench_root(root):
             return os.path.normpath(root)
 
-    # Fallback to current working directory
-    return os.path.normpath(os.getcwd())
+    # 3) Current working directory if it qualifies.
+    cwd = os.getcwd()
+    if looks_like_openbench_root(cwd):
+        return os.path.normpath(cwd)
+
+    # 4) For pip-only filesystem installs, point at the directory that
+    #    contains the installed `openbench` package (e.g.
+    #    `.../site-packages`). Avoid package.__file__; in zipped wheels
+    #    there is no stable filesystem parent to return, so this branch
+    #    simply won't match and callers fall back to CWD.
+    try:
+        package_root = files("openbench")
+        if isinstance(package_root, Path):
+            installed_pkg_parent = str(package_root.parent)
+            if looks_like_openbench_root(installed_pkg_parent):
+                return os.path.normpath(installed_pkg_parent)
+    except Exception:
+        pass
+
+    # 5) Last-resort fallback: CWD. `looks_like_openbench_root` will
+    #    return False for callers that need to gate on it.
+    return os.path.normpath(cwd)
+
+
+def get_remote_ssh_manager(controller):
+    """Get SSH manager from the controller if in remote mode.
+
+    Returns:
+        SSHManager instance if in remote mode and connected, None otherwise.
+    """
+    from openbench.remote.storage import RemoteStorage
+
+    if not isinstance(controller.storage, RemoteStorage):
+        return None
+    return controller.ssh_manager
 
 
 def to_absolute_path(path: str, base_dir: Optional[str] = None) -> str:
@@ -263,15 +416,10 @@ def _convert_linux_to_windows(linux_path: str, openbench_root: str) -> str:
     # Normalize separators in the linux path for searching
     search_path = linux_path.replace("\\", "/")
 
-    # Common markers that indicate OpenBench structure
-    markers = [
-        "/OpenBench/",
-        "/openbench/",
-        "/nml/nml-yaml/",
-        "/nml/nml-Fortran/",
-        "/output/",
-        "/Mod_variables_definition/",
-    ]
+    # Common markers that indicate OpenBench structure. Legacy v2
+    # fragments are quarantined in a separate constant; they support
+    # conversion of old saved paths, not active v3 root discovery.
+    markers = _OPENBENCH_ROOT_MARKERS + _PROJECT_PATH_MARKERS + _LEGACY_V2_PATH_MARKERS
 
     for marker in markers:
         lower_search = search_path.lower()
@@ -307,15 +455,9 @@ def _convert_windows_to_linux(windows_path: str, openbench_root: str) -> str:
     # Normalize separators
     search_path = windows_path.replace("\\", "/")
 
-    # Common markers
-    markers = [
-        "/OpenBench/",
-        "/openbench/",
-        "/nml/nml-yaml/",
-        "/nml/nml-Fortran/",
-        "/output/",
-        "/Mod_variables_definition/",
-    ]
+    # Common markers. See _convert_linux_to_windows for why legacy v2
+    # markers are kept separate from root markers.
+    markers = _OPENBENCH_ROOT_MARKERS + _PROJECT_PATH_MARKERS + _LEGACY_V2_PATH_MARKERS
 
     for marker in markers:
         lower_search = search_path.lower()

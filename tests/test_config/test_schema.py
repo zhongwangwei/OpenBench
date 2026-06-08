@@ -8,6 +8,7 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
+    is_simple_project_name,
 )
 
 
@@ -103,8 +104,11 @@ def test_openbench_config_minimal():
 def test_openbench_config_full():
     cfg = OpenBenchConfig(
         project=ProjectConfig(
-            name="full", output_dir="./out", years=[2000, 2020],
-            num_cores=16, time_alignment="per_pair",
+            name="full",
+            output_dir="./out",
+            years=[2000, 2020],
+            num_cores=16,
+            time_alignment="per_pair",
         ),
         evaluation=EvaluationConfig(variables=["GPP", "Latent_Heat"]),
         reference=ReferenceConfig(sources={"GPP": "FLUXCOM", "Latent_Heat": "FLUXCOM"}),
@@ -122,3 +126,12 @@ def test_openbench_config_full():
     assert cfg.comparison.enabled is True
     assert cfg.project.num_cores == 16
     assert cfg.project.time_alignment == "per_pair"
+
+
+def test_simple_project_name_rejects_whitespace():
+    assert is_simple_project_name("case-01")
+    assert not is_simple_project_name("my project")
+    assert not is_simple_project_name("my\tproject")
+    assert not is_simple_project_name("my\nproject")
+    assert not is_simple_project_name(" case")
+    assert not is_simple_project_name("case ")

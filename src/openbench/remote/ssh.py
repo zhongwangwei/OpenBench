@@ -6,14 +6,17 @@ Handles SSH connections, file transfers, and remote command execution.
 """
 
 import os
+import posixpath
 import re
 import shlex
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import Optional, Tuple, List, Callable, Generator
 
 import paramiko
-from paramiko import SSHClient, RSAKey, SSHException
+from paramiko import SSHClient, SSHException
 from paramiko.hostkeys import HostKeys
 
 logger = logging.getLogger(__name__)
@@ -201,6 +204,7 @@ class SSHManager:
         """
         self._client: Optional[SSHClient] = None
         self._sftp: Optional[paramiko.SFTPClient] = None
+        self._jump_sftp: Optional[paramiko.SFTPClient] = None
         self._timeout = timeout
         self._host = ""
         self._user = ""
@@ -210,6 +214,23 @@ class SSHManager:
         # Multi-hop connection attributes
         self._jump_client: Optional[SSHClient] = None
         self._jump_channel = None
+        self._last_detection_errors: list[str] = []
+        # Reentrant lock guarding mutations of self._client / self._sftp /
+        # self._jump_* and short reads of the active client. Held only across
+        # state changes and channel acquisition, NOT across long-running
+        # channel I/O — that would block stop()/kill paths that need to open
+        # a second channel on the same SSHManager from another thread.
+        self._state_lock = threading.RLock()
+
+    @property
+    def last_detection_errors(self) -> tuple[str, ...]:
+        """Errors suppressed during the last interpreter/conda discovery call."""
+        return tuple(self._last_detection_errors)
+
+    def _record_detection_error(self, message: str, exc: Exception) -> None:
+        detail = f"{message}: {exc}"
+        self._last_detection_errors.append(detail)
+        logger.debug(detail)
 
     @property
     def is_connected(self) -> bool:
@@ -273,6 +294,14 @@ class SSHManager:
         if user is None:
             raise SSHConnectionError("Username is required (format: user@host)")
 
+        if self._jump_client is not None or self._jump_channel is not None or self._jump_sftp is not None:
+            self.disconnect_jump()
+
+        # Close any prior client+sftp before reassigning, otherwise the old
+        # socket/thread leaks and a stale self._sftp keeps a dead client alive.
+        if self._client is not None or self._sftp is not None:
+            self._safe_close_client()
+
         self._client = paramiko.SSHClient()
 
         # Use secure host key policy
@@ -286,6 +315,7 @@ class SSHManager:
                 username=user,
                 password=password,
                 key_filename=key_file,
+                passphrase=passphrase,
                 timeout=self._timeout,
                 allow_agent=False,
                 look_for_keys=False,
@@ -294,33 +324,60 @@ class SSHManager:
             self._user = user
             self._port = port
         except SSHException as e:
-            self._client = None
-            raise SSHConnectionError(f"SSH connection failed: {e}")
+            self._safe_close_client()
+            raise SSHConnectionError(f"SSH connection failed: {e}") from e
         except Exception as e:
-            self._client = None
-            raise SSHConnectionError(f"Connection failed: {e}")
+            self._safe_close_client()
+            raise SSHConnectionError(f"Connection failed: {e}") from e
+
+    def _safe_close_client(self) -> None:
+        """Best-effort close of self._client (and self._sftp) and reset to None.
+
+        Used by `connect()` failure paths and re-connect to avoid leaking the
+        underlying socket when paramiko has instantiated SSHClient but
+        `connect()` raised before it was fully wired up, or when callers
+        reuse the manager without `disconnect()` first.
+
+        The SFTP channel is owned by the client transport, so close it here
+        too — leaving a stale self._sftp pointing at a dead client made
+        subsequent operations raise SSHException from inside paramiko.
+        """
+        with self._state_lock:
+            if self._sftp is not None:
+                try:
+                    self._sftp.close()
+                except Exception:
+                    pass
+                self._sftp = None
+            if self._client is not None:
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
+                self._client = None
 
     def disconnect(self) -> None:
         """Disconnect from server.
 
         Cleans up both main and jump connections if present.
         """
-        # First disconnect jump connection if present
-        self.disconnect_jump()
+        with self._state_lock:
+            # First disconnect jump connection if present
+            self.disconnect_jump()
 
-        if self._sftp:
-            try:
-                self._sftp.close()
-            except Exception:
-                pass
-            self._sftp = None
+            if self._sftp:
+                try:
+                    self._sftp.close()
+                except Exception:
+                    pass
+                self._sftp = None
 
-        if self._client:
-            try:
-                self._client.close()
-            except Exception:
-                pass
-            self._client = None
+            if self._client:
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
+                self._client = None
 
     def test_connection(self) -> bool:
         """Test if connection is alive.
@@ -331,10 +388,20 @@ class SSHManager:
         if not self.is_connected:
             return False
         try:
-            self._client.exec_command("echo ok", timeout=5)
-            return True
+            stdin, stdout, stderr = self._client.exec_command("echo ok", timeout=5)
+            stdout.read()
+            stderr.read()
+            return stdout.channel.recv_exit_status() == 0
         except Exception:
             return False
+        finally:
+            for stream_name in ("stdin", "stdout", "stderr"):
+                stream = locals().get(stream_name)
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
     @property
     def is_jump_connected(self) -> bool:
@@ -375,6 +442,9 @@ class SSHManager:
         """
         if not self.is_connected:
             raise SSHConnectionError("Must connect to main server first")
+
+        if self._jump_client is not None or self._jump_channel is not None or self._jump_sftp is not None:
+            self.disconnect_jump()
 
         try:
             # Open channel to node through main server
@@ -426,12 +496,29 @@ class SSHManager:
                     look_for_keys=True,
                 )
         except Exception as e:
+            try:
+                if self._jump_client:
+                    self._jump_client.close()
+            except Exception:
+                pass
+            try:
+                if self._jump_channel:
+                    self._jump_channel.close()
+            except Exception:
+                pass
             self._jump_client = None
             self._jump_channel = None
-            raise SSHConnectionError(f"Jump connection failed: {e}")
+            raise SSHConnectionError(f"Jump connection failed: {e}") from e
 
     def disconnect_jump(self) -> None:
         """Disconnect from compute node (jump connection)."""
+        if self._jump_sftp:
+            try:
+                self._jump_sftp.close()
+            except Exception:
+                pass
+            self._jump_sftp = None
+
         if self._jump_client:
             try:
                 self._jump_client.close()
@@ -471,23 +558,61 @@ class SSHManager:
         Raises:
             SSHConnectionError: If not connected
         """
-        client = self.get_active_client()
-        if client is None:
-            raise SSHConnectionError("Not connected to server")
+        with self._state_lock:
+            client = self.get_active_client()
+            if client is None:
+                raise SSHConnectionError("Not connected to server")
 
+        # Treat the user-visible `timeout` as a wall-clock deadline for the
+        # whole command. paramiko's `timeout=` on exec_command is only a
+        # per-recv idle timeout, so a remote process that keeps dribbling
+        # output (or stays stuck inside the read loop) would never abort.
+        total_timeout = timeout or self._timeout
+        start = time.monotonic()
         try:
-            stdin, stdout, stderr = client.exec_command(command, timeout=timeout or self._timeout)
-            exit_code = stdout.channel.recv_exit_status()
+            stdin, stdout, stderr = client.exec_command(command, timeout=total_timeout)
+            channel = stdout.channel
+            out_chunks: list[bytes] = []
+            err_chunks: list[bytes] = []
+            while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
+                if (time.monotonic() - start) > total_timeout:
+                    try:
+                        channel.close()
+                    except Exception:
+                        pass
+                    raise SSHConnectionError(f"execute exceeded total_timeout={total_timeout}s; aborting")
+                if channel.recv_ready():
+                    out_chunks.append(channel.recv(65536))
+                if channel.recv_stderr_ready():
+                    err_chunks.append(channel.recv_stderr(65536))
+                if not channel.recv_ready() and not channel.recv_stderr_ready():
+                    time.sleep(0.01)
+            while channel.recv_ready():
+                out_chunks.append(channel.recv(65536))
+            while channel.recv_stderr_ready():
+                err_chunks.append(channel.recv_stderr(65536))
+            exit_code = channel.recv_exit_status()
             return (
-                stdout.read().decode("utf-8", errors="replace"),
-                stderr.read().decode("utf-8", errors="replace"),
+                b"".join(out_chunks).decode("utf-8", errors="replace"),
+                b"".join(err_chunks).decode("utf-8", errors="replace"),
                 exit_code,
             )
         except SSHException as e:
             raise SSHConnectionError(f"Command execution failed: {e}")
+        finally:
+            for stream_name in ("stdin", "stdout", "stderr"):
+                stream = locals().get(stream_name)
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
     def execute_stream(
-        self, command: str, callback: Optional[Callable[[str], None]] = None
+        self,
+        command: str,
+        callback: Optional[Callable[[str], None]] = None,
+        total_timeout: Optional[float] = None,
     ) -> Generator[str, None, int]:
         """Execute command and stream output (both stdout and stderr).
 
@@ -496,6 +621,9 @@ class SSHManager:
         Args:
             command: Command to execute
             callback: Optional callback for each line of output
+            total_timeout: Wall-clock deadline (seconds) for the entire
+                streaming session. Default None preserves prior unbounded
+                behavior; pass a number to abort if the remote process hangs.
 
         Yields:
             Lines of output (from both stdout and stderr)
@@ -505,52 +633,74 @@ class SSHManager:
         """
         import select
 
-        client = self.get_active_client()
-        if client is None:
-            raise SSHConnectionError("Not connected to server")
+        with self._state_lock:
+            client = self.get_active_client()
+            if client is None:
+                raise SSHConnectionError("Not connected to server")
+            transport = client.get_transport()
+            channel = transport.open_session()
+        # Channel I/O runs outside the state lock so concurrent operations
+        # on the same SSHManager (e.g. a stop-button kill from another
+        # thread) can still open their own session.
 
-        transport = client.get_transport()
-        channel = transport.open_session()
-        channel.exec_command(command)
+        start = time.monotonic()
+        try:
+            channel.exec_command(command)
 
-        # Make channel non-blocking for reading
-        channel.setblocking(0)
+            # Make channel non-blocking for reading
+            channel.setblocking(0)
 
-        # Read output in real-time from both stdout and stderr
-        while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
-            # Use select to wait for data with timeout
-            readable, _, _ = select.select([channel], [], [], 0.1)
+            # Read output in real-time from both stdout and stderr
+            while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
+                if total_timeout is not None and (time.monotonic() - start) > total_timeout:
+                    try:
+                        channel.close()
+                    except Exception:
+                        pass
+                    raise SSHConnectionError(f"execute_stream exceeded total_timeout={total_timeout}s; aborting")
+                # Wait up to 0.1s for either stdout or stderr to become
+                # readable. We don't use the return value — the subsequent
+                # recv_ready() / recv_stderr_ready() checks are the source
+                # of truth — but the select call still serves as an
+                # event-driven sleep that yields the thread until data
+                # arrives or the timeout elapses, instead of busy-looping.
+                select.select([channel], [], [], 0.1)
 
-            if channel.recv_ready():
+                if channel.recv_ready():
+                    data = channel.recv(4096).decode("utf-8", errors="replace")
+                    for line in data.splitlines(keepends=True):
+                        if callback:
+                            callback(line)
+                        yield line
+
+                if channel.recv_stderr_ready():
+                    data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
+                    for line in data.splitlines(keepends=True):
+                        if callback:
+                            callback(line)
+                        yield line
+
+            # Read any remaining data after exit
+            while channel.recv_ready():
                 data = channel.recv(4096).decode("utf-8", errors="replace")
                 for line in data.splitlines(keepends=True):
                     if callback:
                         callback(line)
                     yield line
 
-            if channel.recv_stderr_ready():
+            while channel.recv_stderr_ready():
                 data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
                 for line in data.splitlines(keepends=True):
                     if callback:
                         callback(line)
                     yield line
 
-        # Read any remaining data after exit
-        while channel.recv_ready():
-            data = channel.recv(4096).decode("utf-8", errors="replace")
-            for line in data.splitlines(keepends=True):
-                if callback:
-                    callback(line)
-                yield line
-
-        while channel.recv_stderr_ready():
-            data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
-            for line in data.splitlines(keepends=True):
-                if callback:
-                    callback(line)
-                yield line
-
-        return channel.recv_exit_status()
+            return channel.recv_exit_status()
+        finally:
+            try:
+                channel.close()
+            except Exception:
+                pass
 
     def _get_sftp(self) -> paramiko.SFTPClient:
         """Get or create SFTP client.
@@ -561,23 +711,40 @@ class SSHManager:
         Raises:
             SSHConnectionError: If not connected
         """
-        if not self.is_connected:
-            raise SSHConnectionError("Not connected to server")
+        with self._state_lock:
+            active_client = self.get_active_client()
+            if active_client is None:
+                raise SSHConnectionError("Not connected to server")
 
-        if self._sftp is None:
-            self._sftp = self._client.open_sftp()
+            if active_client is self._jump_client:
+                if self._jump_sftp is None:
+                    self._jump_sftp = self._jump_client.open_sftp()
+                return self._jump_sftp
+
+            if self._sftp is None:
+                self._sftp = self._client.open_sftp()
         return self._sftp
+
+    def open_sftp(self) -> paramiko.SFTPClient:
+        """Public alias for the cached SFTP client.
+
+        The returned client is owned by this SSHManager and reused across
+        callers; callers must NOT call .close() on it (closing is handled
+        by SSHManager.disconnect()).
+        """
+        return self._get_sftp()
 
     def upload_file(self, local_path: str, remote_path: str) -> None:
         """Upload a file to remote server.
 
         Args:
             local_path: Local file path
-            remote_path: Remote destination path
+            remote_path: Remote destination path (POSIX)
         """
         sftp = self._get_sftp()
-        # Ensure remote directory exists
-        remote_dir = os.path.dirname(remote_path)
+        # Use posixpath for remote paths so a Windows client doesn't truncate
+        # at a backslash that's actually part of a remote (POSIX) filename.
+        remote_dir = posixpath.dirname(remote_path)
         if remote_dir:
             self._ensure_remote_dir(remote_dir)
         sftp.put(local_path, remote_path)
@@ -601,7 +768,7 @@ class SSHManager:
 
         Args:
             local_dir: Local directory path
-            remote_dir: Remote destination path
+            remote_dir: Remote destination path (POSIX)
         """
         sftp = self._get_sftp()
         self._ensure_remote_dir(remote_dir)
@@ -611,12 +778,17 @@ class SSHManager:
             if rel_path == ".":
                 remote_root = remote_dir
             else:
-                remote_root = os.path.join(remote_dir, rel_path).replace("\\", "/")
+                # On Windows, os.path.relpath returns backslash-separated
+                # paths; convert to POSIX before joining onto a POSIX remote
+                # path, otherwise the leading-component replace() leaves
+                # mid-path backslashes in place.
+                rel_path_posix = rel_path.replace(os.sep, "/")
+                remote_root = posixpath.join(remote_dir, rel_path_posix)
                 self._ensure_remote_dir(remote_root)
 
             for file in files:
                 local_file = os.path.join(root, file)
-                remote_file = os.path.join(remote_root, file).replace("\\", "/")
+                remote_file = posixpath.join(remote_root, file)
                 sftp.put(local_file, remote_file)
 
     def _ensure_remote_dir(self, remote_dir: str) -> None:
@@ -626,25 +798,51 @@ class SSHManager:
             remote_dir: Remote directory path
         """
         sftp = self._get_sftp()
-        dirs = remote_dir.replace("\\", "/").split("/")
+        normalized = remote_dir.replace("\\", "/").rstrip("/")
+        dirs = [part for part in normalized.split("/") if part]
+        is_absolute = normalized.startswith("/")
         path = ""
         for d in dirs:
-            if not d:
-                continue
-            path = f"{path}/{d}"
+            if is_absolute:
+                path = f"{path.rstrip('/')}/{d}" if path else f"/{d}"
+            else:
+                path = f"{path}/{d}" if path else d
             try:
                 sftp.stat(path)
             except FileNotFoundError:
                 sftp.mkdir(path)
 
+    # Allowed characters in a remote $HOME path before we trust it for
+    # interpolation into shell commands. Anything outside this set (spaces,
+    # `;`, backticks, `$`, quotes, ...) could break command construction or
+    # enable injection via callers that interpolate the path directly into
+    # shell strings (detect_python_interpreters / detect_conda_envs do this
+    # to support `ls -d {home}/miniconda*/bin/python` style globs, which
+    # cannot be quoted as a single token without disabling the glob).
+    _SAFE_HOME_RE = re.compile(r"^[A-Za-z0-9_./\-]+$")
+
     def _get_home_dir(self) -> str:
         """Get remote home directory.
 
         Returns:
-            Home directory path
+            Home directory path. Falls back to ``/home/<user>`` if the
+            remote echo fails or returns a value with characters that are
+            unsafe for unquoted shell interpolation (so that downstream
+            ``f"ls -d {home}/..."`` commands cannot be hijacked).
         """
         stdout, _, _ = self.execute("echo $HOME", timeout=5)
-        return stdout.strip() or f"/home/{self._user}"
+        candidate = stdout.strip()
+        fallback = f"/home/{self._user}"
+        if not candidate:
+            return fallback
+        if not self._SAFE_HOME_RE.match(candidate):
+            logger.warning(
+                "Remote $HOME contains unsafe characters (%r); falling back to %s",
+                candidate,
+                fallback,
+            )
+            return fallback
+        return candidate
 
     def detect_python_interpreters(self) -> List[str]:
         """Detect available Python interpreters on remote server.
@@ -655,6 +853,7 @@ class SSHManager:
         Returns:
             List of Python interpreter paths
         """
+        self._last_detection_errors = []
         pythons = []
         home = self._get_home_dir()
 
@@ -674,8 +873,8 @@ class SSHManager:
                     path = path.strip()
                     if path and path not in pythons:
                         pythons.append(path)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_detection_error("Python discovery command failed", exc)
 
         # Method 2: Use interactive login shell (bash -i -l) to get same env as user
         login_cmds = [
@@ -687,10 +886,20 @@ class SSHManager:
             try:
                 stdout, _, exit_code = self.execute(cmd, timeout=15)
                 if exit_code == 0 and stdout.strip():
-                    path = stdout.strip().split("\n")[0]
+                    # `bash -i -l` runs the user's .bashrc/.profile, which
+                    # commonly print welcome banners, prompt fragments, or
+                    # `cd` notices before our `which python` output. Pick
+                    # the last line that actually looks like an absolute
+                    # path instead of blindly taking `[0]`.
+                    path = ""
+                    for line in stdout.splitlines():
+                        line = line.strip()
+                        if line.startswith("/"):
+                            path = line
                     if path and path not in pythons and not is_system_path(path):
                         pythons.append(path)
-            except Exception:
+            except Exception as exc:
+                self._record_detection_error("Python discovery command failed", exc)
                 continue
 
         # Method 3: Check .local/bin (pip user install)
@@ -702,8 +911,8 @@ class SSHManager:
                 result = stdout.strip()
                 if result and result not in pythons:
                     pythons.append(result)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_detection_error("Python discovery command failed", exc)
 
         return pythons
 
@@ -713,6 +922,7 @@ class SSHManager:
         Returns:
             List of (env_name, env_path) tuples
         """
+        self._last_detection_errors = []
         envs = []
         home = self._get_home_dir()
 
@@ -724,8 +934,8 @@ class SSHManager:
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
                 conda_exe = stdout.strip().split("\n")[0]
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_detection_error("Conda discovery command failed", exc)
 
         # Method 2: Try interactive login shell to get conda from user's environment
         if not conda_exe:
@@ -733,8 +943,8 @@ class SSHManager:
                 stdout, _, exit_code = self.execute("bash -i -l -c 'which conda' 2>/dev/null", timeout=15)
                 if exit_code == 0 and stdout.strip():
                     conda_exe = stdout.strip().split("\n")[0]
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_detection_error("Conda discovery command failed", exc)
 
         if not conda_exe:
             return envs
@@ -755,21 +965,36 @@ class SSHManager:
                                 envs.append((name, path))
                             elif name == "base":
                                 envs.insert(0, (name, path))
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_detection_error("Conda discovery command failed", exc)
 
         return envs
 
-    def check_openbench_installed(self, path: str) -> bool:
-        """Check if OpenBench is installed at given path.
+    def check_openbench_installed(self, path: str, python_path: str = "python3") -> bool:
+        """Check if OpenBench v3 is installed at the given path.
+
+        v3 is a `pip install colm-openbench` package — the legacy v2 marker
+        ``openbench/openbench.py`` no longer exists. We accept either:
+          * an editable / source checkout: ``src/openbench/cli/main.py``
+            present under ``path``, OR
+          * an importable installed module: ``python -m openbench --help``
+            exits 0 from the given ``path``.
 
         Args:
-            path: Path to check
-
-        Returns:
-            True if OpenBench is installed
+            path: Remote directory to check.
+            python_path: Remote Python interpreter to use for the
+                module-import probe (defaults to "python3").
         """
-        check_file = f"{path}/openbench/openbench.py"
-        quoted_file = shlex.quote(check_file)
-        stdout, _, exit_code = self.execute(f"test -f {quoted_file} && echo exists", timeout=5)
-        return exit_code == 0 and "exists" in stdout
+        # Editable / repo-checkout marker first (cheap, no Python startup).
+        quoted_path = shlex.quote(path)
+        cli_marker = shlex.quote(f"{path}/src/openbench/cli/main.py")
+        stdout, _, exit_code = self.execute(f"test -f {cli_marker} && echo exists", timeout=5)
+        if exit_code == 0 and "exists" in stdout:
+            return True
+        # Fall back to actually importing the module from that cwd.
+        quoted_python = shlex.quote(python_path)
+        _, _, exit_code = self.execute(
+            f"cd {quoted_path} && {quoted_python} -m openbench --help >/dev/null 2>&1",
+            timeout=15,
+        )
+        return exit_code == 0

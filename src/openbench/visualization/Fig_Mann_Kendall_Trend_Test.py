@@ -1,4 +1,9 @@
 import math
+import os
+
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.util.filenames import filename_component
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -14,12 +19,13 @@ from openbench.util.converttype import Convert_Type
 from .Fig_toolbox import get_index, tick_length
 
 
+@with_isolated_rc
 def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, significant, main_nml, option):
+    option = option.copy()
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -72,14 +78,13 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
         ylocs=np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1],
     )
 
-    p = ax.contourf(
+    ax.contourf(
         lon,
         lat,
         p_value,
         levels=[0, significant, 1],
         hatches=[".....", None],
         colors="none",
-        add_colorbar=False,
         zorder=3,
     )
 
@@ -109,7 +114,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
         option["title"] = f"Mann-Kendall Test Results ({title}) on significant level: {significant:.3f}"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"], weight="bold", loc="left")
+    ax.set_title(option["title"], fontsize=option["title_size"], weight="bold", loc="left")
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -158,13 +163,20 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
     )
     cb.solids.set_edgecolor("face")
 
-    file2 = file[:-3]
-    plt.savefig(f"{file2}_{title}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(
+        fig,
+        f"{file2}_{filename_component(title)}.{option['saving_format']}",
+        format=f"{option['saving_format']}",
+        dpi=option["dpi"],
+    )
+    plt.close(fig)
 
 
 def make_Mann_Kendall_Trend_Test(file, method_name, data_sources, main_nml, option):
-    ds = xr.open_dataset(f"{file}")
+    option = option.copy()
+    with xr.open_dataset(f"{file}") as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
     trend = ds.trend
     if trend.ndim == 3 and trend.shape[0] == 1:
@@ -186,7 +198,7 @@ def make_Mann_Kendall_Trend_Test(file, method_name, data_sources, main_nml, opti
         option["extend"] = "both"
     try:
         option["vmin"], option["vmax"] = math.floor(tau.min(skipna=True).values), math.ceil(tau.max(skipna=True).values)
-    except:
+    except Exception:
         option["vmin"], option["vmax"] = -1, 1
     map(file, method_name, data_sources, ilon, ilat, tau, "tau", p_value, significant, main_nml, option)
 

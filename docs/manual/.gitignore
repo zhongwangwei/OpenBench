@@ -1,35 +1,3 @@
-# LaTeX build artifacts
-*.aux
-*.log
-*.out
-*.toc
-*.lof
-*.lot
-*.fls
-*.fdb_latexmk
-*.synctex.gz
-*.bbl
-*.blg
-*.run.xml
-*.bcf
-*.idx
-*.ilg
-*.ind
-*.nav
-*.snm
-*.vrb
-
-# minted cache (新旧两种命名)
-_minted/
-_minted-*/
-*.pyg
-
-# xelatex 中间产物
-*.xdv
-
-# subfiles intermediate
-*-blx.bib
-
-# PDF outputs (do NOT commit; use make to rebuild)
-*.pdf
-_generated/*.tex
+# Only the built PDFs are committed under docs/manual/.
+# The LaTeX source lives locally under users-guide/ (rebuild with: make -C users-guide all).
+users-guide/

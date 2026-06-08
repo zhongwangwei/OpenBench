@@ -25,16 +25,118 @@ Thumbs.db
 
 # Project
 output/
+output_station_smoke/
+logs/
 *.nc
 *.nc4
+# Exception: ship the standard classification masks (IGBP/PFT/Köppen) with the
+# package. They are compressed integer masks (~1.1 MB total) consumed by the
+# *_groupby evaluation paths via openbench.util.static_datasets. Users can still
+# override them via $OPENBENCH_DATASET_DIR or ./dataset/.
+!src/openbench/dataset/
+!src/openbench/dataset/*.nc
 cache/
 .pytest_cache/
 .ruff_cache/
 htmlcov/
 .coverage
 
+# Registry runtime scratch (atomic-write backup + advisory lock files,
+# created next to reference_catalog.yaml / model_catalog.yaml).
+*.bak
+*.lock
+*.tmp
+
 OpenBench-wei/
 openbench-wizard/
+bk/
 
 test_data/
 .worktrees/
+
+# Local/generated tests and planning artifacts
+docs/performance-benchmark.md
+docs/superpowers/plans/2026-04-02-reference-provenance-convergence.md
+docs/superpowers/plans/2026-04-03-cli-local-dead-code-cleanup.md
+docs/superpowers/plans/2026-04-04-legacy-cleanup-roadmap.md
+docs/superpowers/plans/2026-04-08-filter-refactor.md
+docs/superpowers/plans/2026-05-01-sim-scan.md
+docs/superpowers/reviews/2026-05-17-final-audit.md
+docs/superpowers/specs/2026-04-02-reference-provenance-convergence-design.md
+docs/superpowers/specs/2026-04-08-filter-refactor-design.md
+tests/test_architecture_cleanup.py
+tests/test_architecture_cli.py
+tests/test_architecture_core.py
+tests/test_architecture_data.py
+tests/test_architecture_runner.py
+tests/test_audit_bugfixes.py
+tests/manual/test_script_entrypoints.py
+tests/test_benchmark_script.py
+tests/test_build_artifacts.py
+tests/test_smoke_cli.py
+tests/test_cache_regressions.py
+tests/test_case_insensitive_names.py
+tests/test_cli_check_preflight.py
+tests/test_cli_model_management.py
+tests/test_cli_sim_scan.py
+tests/test_climatology_weighting.py
+tests/test_converttype_precision.py
+tests/test_core/test_statistics.py
+tests/test_data_pipeline_validation.py
+tests/test_groupby_regressions.py
+tests/test_gui_async_lifecycle.py
+tests/test_gui_config_manager.py
+tests/test_gui_controller_paths.py
+tests/test_gui_evaluation_runner.py
+tests/test_gui_legacy_cleanup.py
+tests/test_gui_page_preview_remote.py
+tests/test_gui_page_run_monitor_remote.py
+tests/test_gui_save_preserves_fields.py
+tests/test_gui_sim_data.py
+tests/test_netcdf_lifecycle_atomic.py
+tests/test_no_file_path_regression.py
+tests/test_output_manager.py
+tests/test_pair_ref_copy_on_write.py
+tests/test_parallel.py
+tests/test_performance_optimizations.py
+tests/test_processing_time_missing.py
+tests/test_progress_dashboard.py
+tests/test_progress_parser.py
+tests/test_regrid_weight_cache.py
+tests/test_remote_credentials.py
+tests/test_remote_file_browser.py
+tests/test_remote_runner.py
+tests/test_remote_shell_quoting.py
+tests/test_remote_ssh.py
+tests/test_remote_sync.py
+tests/test_report_groupby_paths.py
+tests/test_sim_scanner.py
+tests/test_station_matcher.py
+tests/test_station_scanner.py
+tests/test_tier_b_regressions.py
+tests/test_time_utils.py
+tests/test_unit.py
+tests/test_visualization_combinations.py
+tests/test_visualization_diagram_sampling.py
+tests/test_visualization_downsample.py
+tests/test_visualization_failure_propagation.py
+tests/test_visualization_filenames.py
+tests/test_visualization_global_state.py
+tests/test_visualization_option_isolation.py
+tests/test_visualization_option_parsing.py
+tests/test_visualization_sampling.py
+tests/test_visualization_units.py
+tests/test_zip_safe_resources.py
+
+# Personal/local test configs
+test_real.yaml
+test_wei.yaml
+test_wei2.yaml
+test_wei_full.yaml
+test_cross_dtype.yaml
+test_river.yaml
+test_lu_stn.yaml
+openbench_full_options.yaml
+outputs/
+openbench_init_*.yaml
+/test_*.yaml

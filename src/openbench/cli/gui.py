@@ -2,12 +2,17 @@
 
 import click
 
+from openbench.cli._options import remote_not_implemented_message
+
 
 @click.command()
-@click.argument("config", type=click.Path(exists=True), required=False)
-@click.option("--remote", is_flag=True, help="Start in remote mode.")
+@click.argument("config", type=click.Path(exists=True, file_okay=True, dir_okay=False), required=False)
+@click.option("--remote", default=None, help="[NOT IMPLEMENTED] Remote host or saved profile name.")
 def gui(config, remote):
     """Launch the OpenBench graphical interface."""
+    if remote:
+        raise click.ClickException(remote_not_implemented_message(remote))
+
     try:
         from openbench.gui import _check_gui_deps
 

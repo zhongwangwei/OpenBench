@@ -3,6 +3,7 @@
 import os
 import re
 from glob import glob
+from importlib.resources import files
 
 import matplotlib
 import matplotlib.cm
@@ -12,7 +13,6 @@ from packaging import version
 from ._version import __version__
 from .colormap import Colormap
 
-CMAPSFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "colormaps")
 USER_CMAPFILE_DIR = os.environ.get("CMAP_DIR")
 
 
@@ -27,6 +27,26 @@ else:
     register_cmap = matplotlib.cm.register_cmap
 
 
+def _cmap_resource(*parts):
+    """Return a Traversable for a built-in RGB colormap resource.
+
+    Anchor at the top-level ``openbench`` package instead of the cmaps
+    package because ``openbench.visualization.cmaps`` historically
+    replaces its module object with a ``Cmaps`` instance for API
+    compatibility. ``importlib.resources.files("openbench")`` remains a
+    real package in source, wheel, and zipimport layouts.
+    """
+    return files("openbench").joinpath("visualization", "cmaps", "colormaps", *parts)
+
+
+def _read_cmap(cmap_file):
+    """Read a user path or an importlib.resources Traversable."""
+    if hasattr(cmap_file, "read_text"):
+        return cmap_file.read_text(encoding="utf-8")
+    with open(cmap_file, encoding="utf-8") as cmap:
+        return cmap.read()
+
+
 class Cmaps(object):
     """colormaps"""
 
@@ -38,8 +58,7 @@ class Cmaps(object):
 
     def _coltbl(self, cmap_file):
         pattern = re.compile(r"(\d\.?\d*)\s+(\d\.?\d*)\s+(\d\.?\d*).*")
-        with open(cmap_file) as cmap:
-            cmap_buff = cmap.read()
+        cmap_buff = _read_cmap(cmap_file)
         cmap_buff = re.compile("ncolors.*\n").sub("", cmap_buff)
         if re.search(r"\s*\d\.\d*", cmap_buff):
             return np.asarray(pattern.findall(cmap_buff), "f4")
@@ -80,7 +99,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "3gauss.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "3gauss.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -91,7 +110,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "3gauss.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "3gauss.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -102,7 +121,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "3saw.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "3saw.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -113,7 +132,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "3saw.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "3saw.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -124,7 +143,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BkBlAqGrYeOrReViWh200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BkBlAqGrYeOrReViWh200.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -135,7 +154,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BkBlAqGrYeOrReViWh200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BkBlAqGrYeOrReViWh200.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -146,7 +165,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrWh2YeOrReVi22.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrWh2YeOrReVi22.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -157,7 +176,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrWh2YeOrReVi22.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrWh2YeOrReVi22.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -168,7 +187,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -179,7 +198,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -190,7 +209,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrYeOrReVi200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrYeOrReVi200.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -201,7 +220,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlAqGrYeOrReVi200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlAqGrYeOrReVi200.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -212,7 +231,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlGrYeOrReVi200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlGrYeOrReVi200.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -223,7 +242,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlGrYeOrReVi200.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlGrYeOrReVi200.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -234,7 +253,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -245,7 +264,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -256,7 +275,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlWhRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlWhRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -267,7 +286,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlWhRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlWhRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -278,7 +297,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueDarkOrange18.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueDarkOrange18.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -289,7 +308,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueDarkOrange18.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueDarkOrange18.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -300,7 +319,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueDarkRed18.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueDarkRed18.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -311,7 +330,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueDarkRed18.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueDarkRed18.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -322,7 +341,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueGreen14.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueGreen14.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -333,7 +352,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueGreen14.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueGreen14.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -344,7 +363,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -355,7 +374,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -366,7 +385,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueRedGray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueRedGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -377,7 +396,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueRedGray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueRedGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -388,7 +407,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueWhiteOrangeRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueWhiteOrangeRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -399,7 +418,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueWhiteOrangeRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueWhiteOrangeRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -410,7 +429,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueYellowRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueYellowRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -421,7 +440,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BlueYellowRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BlueYellowRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -432,7 +451,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BrownBlue12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BrownBlue12.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -443,7 +462,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "BrownBlue12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "BrownBlue12.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -454,7 +473,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_coldhot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_coldhot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -465,7 +484,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_coldhot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_coldhot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -476,7 +495,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_drywet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_drywet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -487,7 +506,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_drywet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_drywet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -498,7 +517,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_set3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_set3.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -509,7 +528,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_set3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_set3.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -520,7 +539,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_wet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_wet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -531,7 +550,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "CBR_wet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "CBR_wet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -542,7 +561,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "Cat12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "Cat12.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -553,7 +572,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "Cat12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "Cat12.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -564,7 +583,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GHRSST_anomaly.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GHRSST_anomaly.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -575,7 +594,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GHRSST_anomaly.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GHRSST_anomaly.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -586,7 +605,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_cool.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_cool.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -597,7 +616,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_cool.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_cool.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -608,7 +627,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_copper.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_copper.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -619,7 +638,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_copper.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_copper.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -630,7 +649,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_drywet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_drywet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -641,7 +660,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_drywet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_drywet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -652,7 +671,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_gebco.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_gebco.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -663,7 +682,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_gebco.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_gebco.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -674,7 +693,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_globe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_globe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -685,7 +704,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_globe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_globe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -696,7 +715,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -707,7 +726,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -718,7 +737,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_haxby.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_haxby.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -729,7 +748,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_haxby.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_haxby.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -740,7 +759,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -751,7 +770,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -762,7 +781,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -773,7 +792,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -784,7 +803,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_nighttime.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_nighttime.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -795,7 +814,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_nighttime.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_nighttime.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -806,7 +825,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_no_green.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_no_green.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -817,7 +836,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_no_green.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_no_green.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -828,7 +847,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_ocean.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_ocean.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -839,7 +858,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_ocean.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_ocean.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -850,7 +869,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_paired.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_paired.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -861,7 +880,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_paired.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_paired.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -872,7 +891,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_panoply.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_panoply.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -883,7 +902,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_panoply.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_panoply.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -894,7 +913,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_polar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_polar.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -905,7 +924,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_polar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_polar.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -916,7 +935,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_red2green.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_red2green.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -927,7 +946,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_red2green.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_red2green.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -938,7 +957,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_relief.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_relief.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -949,7 +968,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_relief.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_relief.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -960,7 +979,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_relief_oceanonly.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_relief_oceanonly.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -971,7 +990,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_relief_oceanonly.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_relief_oceanonly.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -982,7 +1001,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_seis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_seis.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -993,7 +1012,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_seis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_seis.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1004,7 +1023,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_split.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_split.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1015,7 +1034,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_split.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_split.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1026,7 +1045,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_topo.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_topo.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1037,7 +1056,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_topo.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_topo.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1048,7 +1067,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_wysiwyg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_wysiwyg.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1059,7 +1078,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_wysiwyg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_wysiwyg.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1070,7 +1089,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_wysiwygcont.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_wysiwygcont.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1081,7 +1100,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GMT_wysiwygcont.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GMT_wysiwygcont.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1092,7 +1111,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GSFC_landsat_udf_density.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GSFC_landsat_udf_density.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1103,7 +1122,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GSFC_landsat_udf_density.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GSFC_landsat_udf_density.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1114,7 +1133,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GrayWhiteGray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GrayWhiteGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1125,7 +1144,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GrayWhiteGray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GrayWhiteGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1136,7 +1155,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GreenMagenta16.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GreenMagenta16.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1147,7 +1166,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GreenMagenta16.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GreenMagenta16.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1158,7 +1177,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GreenYellow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GreenYellow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1169,7 +1188,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "GreenYellow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "GreenYellow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1180,7 +1199,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Accent.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Accent.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1191,7 +1210,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Accent.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Accent.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1202,7 +1221,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Blues.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Blues.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1213,7 +1232,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Blues.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Blues.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1224,7 +1243,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BrBG.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BrBG.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1235,7 +1254,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BrBG.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BrBG.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1246,7 +1265,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BuGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BuGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1257,7 +1276,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BuGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BuGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1268,7 +1287,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BuPu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BuPu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1279,7 +1298,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_BuPu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_BuPu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1290,7 +1309,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Dark2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Dark2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1301,7 +1320,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Dark2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Dark2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1312,7 +1331,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_GnBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_GnBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1323,7 +1342,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_GnBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_GnBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1334,7 +1353,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Greens.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Greens.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1345,7 +1364,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Greens.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Greens.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1356,7 +1375,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Greys.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Greys.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1367,7 +1386,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Greys.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Greys.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1378,7 +1397,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_OrRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_OrRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1389,7 +1408,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_OrRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_OrRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1400,7 +1419,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Oranges.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Oranges.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1411,7 +1430,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Oranges.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Oranges.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1422,7 +1441,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PRGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PRGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1433,7 +1452,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PRGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PRGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1444,7 +1463,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Paired.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Paired.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1455,7 +1474,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Paired.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Paired.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1466,7 +1485,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Pastel1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Pastel1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1477,7 +1496,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Pastel1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Pastel1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1488,7 +1507,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Pastel2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Pastel2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1499,7 +1518,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Pastel2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Pastel2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1510,7 +1529,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PiYG.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PiYG.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1521,7 +1540,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PiYG.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PiYG.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1532,7 +1551,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1543,7 +1562,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1554,7 +1573,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuBuGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuBuGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1565,7 +1584,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuBuGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuBuGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1576,7 +1595,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuOr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuOr.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1587,7 +1606,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuOr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuOr.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1598,7 +1617,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1609,7 +1628,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_PuRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_PuRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1620,7 +1639,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Purples.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Purples.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1631,7 +1650,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Purples.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Purples.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1642,7 +1661,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1653,7 +1672,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1664,7 +1683,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdGy.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdGy.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1675,7 +1694,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdGy.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdGy.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1686,7 +1705,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdPu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdPu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1697,7 +1716,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdPu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdPu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1708,7 +1727,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdYlBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdYlBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1719,7 +1738,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdYlBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdYlBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1730,7 +1749,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdYlGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdYlGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1741,7 +1760,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_RdYlGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_RdYlGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1752,7 +1771,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Reds.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Reds.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1763,7 +1782,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Reds.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Reds.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1774,7 +1793,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1785,7 +1804,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1796,7 +1815,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1807,7 +1826,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1818,7 +1837,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set3.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1829,7 +1848,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Set3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Set3.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1840,7 +1859,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Spectral.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Spectral.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1851,7 +1870,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_Spectral.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_Spectral.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1862,7 +1881,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_StepSeq.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_StepSeq.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1873,7 +1892,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_StepSeq.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_StepSeq.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1884,7 +1903,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1895,7 +1914,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlGn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlGn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1906,7 +1925,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlGnBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlGnBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1917,7 +1936,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlGnBu.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlGnBu.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1928,7 +1947,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlOrBr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlOrBr.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1939,7 +1958,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlOrBr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlOrBr.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1950,7 +1969,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlOrRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlOrRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1961,7 +1980,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_YlOrRd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_YlOrRd.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1972,7 +1991,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_afmhot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_afmhot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1983,7 +2002,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_afmhot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_afmhot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -1994,7 +2013,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_autumn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_autumn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2005,7 +2024,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_autumn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_autumn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2016,7 +2035,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_bone.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_bone.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2027,7 +2046,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_bone.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_bone.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2038,7 +2057,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_brg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_brg.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2049,7 +2068,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_brg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_brg.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2060,7 +2079,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_bwr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_bwr.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2071,7 +2090,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_bwr.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_bwr.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2082,7 +2101,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_cool.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_cool.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2093,7 +2112,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_cool.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_cool.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2104,7 +2123,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_coolwarm.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_coolwarm.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2115,7 +2134,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_coolwarm.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_coolwarm.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2126,7 +2145,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_copper.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_copper.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2137,7 +2156,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_copper.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_copper.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2148,7 +2167,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_cubehelix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_cubehelix.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2159,7 +2178,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_cubehelix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_cubehelix.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2170,7 +2189,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_flag.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_flag.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2181,7 +2200,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_flag.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_flag.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2192,7 +2211,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_earth.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_earth.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2203,7 +2222,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_earth.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_earth.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2214,7 +2233,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2225,7 +2244,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2236,7 +2255,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_heat.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_heat.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2247,7 +2266,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_heat.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_heat.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2258,7 +2277,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_ncar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_ncar.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2269,7 +2288,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_ncar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_ncar.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2280,7 +2299,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2291,7 +2310,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2302,7 +2321,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_stern.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_stern.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2313,7 +2332,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_stern.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_stern.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2324,7 +2343,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_yarg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_yarg.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2335,7 +2354,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gist_yarg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gist_yarg.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2346,7 +2365,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gnuplot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gnuplot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2357,7 +2376,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gnuplot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gnuplot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2368,7 +2387,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gnuplot2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gnuplot2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2379,7 +2398,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_gnuplot2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_gnuplot2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2390,7 +2409,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2401,7 +2420,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2412,7 +2431,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_hsv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_hsv.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2423,7 +2442,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_hsv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_hsv.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2434,7 +2453,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2445,7 +2464,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2456,7 +2475,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_ocean.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_ocean.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2467,7 +2486,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_ocean.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_ocean.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2478,7 +2497,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_pink.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_pink.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2489,7 +2508,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_pink.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_pink.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2500,7 +2519,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_prism.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_prism.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2511,7 +2530,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_prism.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_prism.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2522,7 +2541,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2533,7 +2552,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2544,7 +2563,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_s3pcpn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_s3pcpn.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2555,7 +2574,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_s3pcpn.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_s3pcpn.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2566,7 +2585,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_s3pcpn_l.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_s3pcpn_l.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2577,7 +2596,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_s3pcpn_l.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_s3pcpn_l.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2588,7 +2607,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_seismic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_seismic.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2599,7 +2618,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_seismic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_seismic.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2610,7 +2629,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_spring.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_spring.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2621,7 +2640,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_spring.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_spring.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2632,7 +2651,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_sstanom.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_sstanom.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2643,7 +2662,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_sstanom.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_sstanom.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2654,7 +2673,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_summer.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_summer.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2665,7 +2684,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_summer.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_summer.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2676,7 +2695,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_terrain.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_terrain.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2687,7 +2706,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_terrain.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_terrain.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2698,7 +2717,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_viridis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_viridis.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2709,7 +2728,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_viridis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_viridis.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2720,7 +2739,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_winter.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_winter.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2731,7 +2750,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "MPL_winter.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "MPL_winter.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2742,7 +2761,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_banded.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_banded.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2753,7 +2772,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_banded.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_banded.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2764,7 +2783,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_blu_red.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_blu_red.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2775,7 +2794,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_blu_red.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_blu_red.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2786,7 +2805,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_blue_red.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_blue_red.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2797,7 +2816,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_blue_red.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_blue_red.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2808,7 +2827,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_bright.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_bright.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2819,7 +2838,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_bright.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_bright.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2830,7 +2849,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_gebco.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_gebco.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2841,7 +2860,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_gebco.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_gebco.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2852,7 +2871,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_jaisnd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_jaisnd.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2863,7 +2882,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_jaisnd.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_jaisnd.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2874,7 +2893,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2885,7 +2904,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2896,7 +2915,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_manga.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_manga.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2907,7 +2926,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_manga.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_manga.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2918,7 +2937,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_rainbow2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_rainbow2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2929,7 +2948,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_rainbow2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_rainbow2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2940,7 +2959,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_roullet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_roullet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2951,7 +2970,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NCV_roullet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NCV_roullet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2962,7 +2981,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_a.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_a.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2973,7 +2992,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_a.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_a.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2984,7 +3003,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_b.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_b.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -2995,7 +3014,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_b.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_b.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3006,7 +3025,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_c.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_c.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3017,7 +3036,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_div_vegetation_c.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_div_vegetation_c.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3028,7 +3047,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_modis_ndvi.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_modis_ndvi.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3039,7 +3058,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NEO_modis_ndvi.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NEO_modis_ndvi.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3050,7 +3069,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NMCRef.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NMCRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3061,7 +3080,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NMCRef.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NMCRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3072,7 +3091,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NMCVel.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NMCVel.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3083,7 +3102,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NMCVel.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NMCVel.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3094,7 +3113,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NOC_ndvi.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NOC_ndvi.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3105,7 +3124,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "NOC_ndvi.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "NOC_ndvi.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3116,7 +3135,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "OceanLakeLandSnow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "OceanLakeLandSnow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3127,7 +3146,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "OceanLakeLandSnow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "OceanLakeLandSnow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3138,7 +3157,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Gallet13.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Gallet13.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3149,7 +3168,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Gallet13.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Gallet13.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3160,7 +3179,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Lindaa06.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Lindaa06.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3171,7 +3190,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Lindaa06.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Lindaa06.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3182,7 +3201,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Lindaa07.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Lindaa07.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3193,7 +3212,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_Lindaa07.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_Lindaa07.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3204,7 +3223,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_bhw3_22.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_bhw3_22.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3215,7 +3234,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_bhw3_22.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_bhw3_22.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3226,7 +3245,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_es_landscape_79.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_es_landscape_79.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3237,7 +3256,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_es_landscape_79.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_es_landscape_79.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3248,7 +3267,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_feb_sunrise.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_feb_sunrise.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3259,7 +3278,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_feb_sunrise.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_feb_sunrise.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3270,7 +3289,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_foggy_sunrise.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_foggy_sunrise.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3281,7 +3300,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_foggy_sunrise.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_foggy_sunrise.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3292,7 +3311,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_fs2006.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_fs2006.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3303,7 +3322,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "SVG_fs2006.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "SVG_fs2006.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3314,7 +3333,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "StepSeq25.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "StepSeq25.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3325,7 +3344,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "StepSeq25.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "StepSeq25.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3336,7 +3355,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "UKM_hadcrut.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "UKM_hadcrut.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3347,7 +3366,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "UKM_hadcrut.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "UKM_hadcrut.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3358,7 +3377,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ViBlGrWhYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ViBlGrWhYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3369,7 +3388,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ViBlGrWhYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ViBlGrWhYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3380,7 +3399,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhBlGrYeRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhBlGrYeRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3391,7 +3410,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhBlGrYeRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhBlGrYeRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3402,7 +3421,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhBlReWh.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhBlReWh.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3413,7 +3432,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhBlReWh.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhBlReWh.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3424,7 +3443,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhViBlGrYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhViBlGrYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3435,7 +3454,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhViBlGrYeOrRe.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhViBlGrYeOrRe.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3446,7 +3465,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhViBlGrYeOrReWh.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhViBlGrYeOrReWh.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3457,7 +3476,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhViBlGrYeOrReWh.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhViBlGrYeOrReWh.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3468,7 +3487,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteBlue.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteBlue.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3479,7 +3498,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteBlue.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteBlue.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3490,7 +3509,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteBlueGreenYellowRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteBlueGreenYellowRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3501,7 +3520,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteBlueGreenYellowRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteBlueGreenYellowRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3512,7 +3531,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteGreen.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteGreen.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3523,7 +3542,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteGreen.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteGreen.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3534,7 +3553,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteYellowOrangeRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteYellowOrangeRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3545,7 +3564,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "WhiteYellowOrangeRed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "WhiteYellowOrangeRed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3556,7 +3575,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3567,7 +3586,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3578,7 +3597,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg256.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg256.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3589,7 +3608,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg256.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg256.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3600,7 +3619,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg_blueyellowred.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg_blueyellowred.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3611,7 +3630,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "amwg_blueyellowred.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "amwg_blueyellowred.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3622,7 +3641,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_9step.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_9step.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3633,7 +3652,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_9step.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_9step.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3644,7 +3663,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3655,7 +3674,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3666,7 +3685,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_rainbow_inv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_rainbow_inv.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3677,7 +3696,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cb_rainbow_inv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cb_rainbow_inv.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3688,7 +3707,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_0.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_0.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3699,7 +3718,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_0.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_0.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3710,7 +3729,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3721,7 +3740,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3732,7 +3751,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3743,7 +3762,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "circular_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "circular_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3754,7 +3773,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cividis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cividis.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3765,7 +3784,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cividis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cividis.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3776,7 +3795,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_algae.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_algae.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3787,7 +3806,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_algae.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_algae.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3798,7 +3817,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_amp.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_amp.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3809,7 +3828,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_amp.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_amp.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3820,7 +3839,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_balance.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_balance.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3831,7 +3850,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_balance.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_balance.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3842,7 +3861,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_curl.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_curl.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3853,7 +3872,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_curl.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_curl.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3864,7 +3883,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_deep.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_deep.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3875,7 +3894,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_deep.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_deep.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3886,7 +3905,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_delta.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_delta.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3897,7 +3916,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_delta.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_delta.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3908,7 +3927,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_dense.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_dense.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3919,7 +3938,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_dense.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_dense.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3930,7 +3949,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3941,7 +3960,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3952,7 +3971,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_haline.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_haline.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3963,7 +3982,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_haline.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_haline.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3974,7 +3993,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_ice.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_ice.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3985,7 +4004,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_ice.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_ice.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -3996,7 +4015,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_matter.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_matter.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4007,7 +4026,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_matter.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_matter.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4018,7 +4037,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_oxy.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_oxy.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4029,7 +4048,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_oxy.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_oxy.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4040,7 +4059,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_phase.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_phase.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4051,7 +4070,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_phase.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_phase.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4062,7 +4081,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_solar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_solar.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4073,7 +4092,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_solar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_solar.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4084,7 +4103,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_speed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_speed.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4095,7 +4114,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_speed.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_speed.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4106,7 +4125,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_tempo.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_tempo.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4117,7 +4136,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_tempo.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_tempo.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4128,7 +4147,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_thermal.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_thermal.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4139,7 +4158,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_thermal.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_thermal.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4150,7 +4169,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_turbid.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_turbid.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4161,7 +4180,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmocean_turbid.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmocean_turbid.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4172,7 +4191,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_b2r.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_b2r.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4183,7 +4202,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_b2r.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_b2r.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4194,7 +4213,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_flux.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_flux.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4205,7 +4224,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_flux.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_flux.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4216,7 +4235,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_haxby.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_haxby.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4227,7 +4246,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cmp_haxby.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cmp_haxby.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4238,7 +4257,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cosam.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cosam.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4249,7 +4268,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cosam.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cosam.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4260,7 +4279,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cosam12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cosam12.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4271,7 +4290,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cosam12.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cosam12.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4282,7 +4301,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cyclic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cyclic.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4293,7 +4312,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "cyclic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "cyclic.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4304,7 +4323,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4315,7 +4334,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4326,7 +4345,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "detail.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "detail.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4337,7 +4356,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "detail.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "detail.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4348,7 +4367,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "drought_severity.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "drought_severity.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4359,7 +4378,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "drought_severity.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "drought_severity.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4370,7 +4389,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "example.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "example.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4381,7 +4400,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "example.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "example.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4392,7 +4411,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "extrema.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "extrema.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4403,7 +4422,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "extrema.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "extrema.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4414,7 +4433,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "grads_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "grads_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4425,7 +4444,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "grads_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "grads_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4436,7 +4455,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "grads_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "grads_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4447,7 +4466,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "grads_rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "grads_rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4458,7 +4477,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gscyclic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gscyclic.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4469,7 +4488,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gscyclic.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gscyclic.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4480,7 +4499,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gsdtol.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gsdtol.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4491,7 +4510,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gsdtol.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gsdtol.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4502,7 +4521,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gsltod.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gsltod.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4513,7 +4532,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gsltod.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gsltod.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4524,7 +4543,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gui_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gui_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4535,7 +4554,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "gui_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "gui_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4546,7 +4565,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "helix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "helix.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4557,7 +4576,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "helix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "helix.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4568,7 +4587,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "helix1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "helix1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4579,7 +4598,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "helix1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "helix1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4590,7 +4609,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hlu_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hlu_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4601,7 +4620,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hlu_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hlu_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4612,7 +4631,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotcold_18lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotcold_18lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4623,7 +4642,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotcold_18lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotcold_18lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4634,7 +4653,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotcolr_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotcolr_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4645,7 +4664,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotcolr_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotcolr_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4656,7 +4675,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotres.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotres.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4667,7 +4686,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "hotres.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "hotres.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4678,7 +4697,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "lithology.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "lithology.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4689,7 +4708,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "lithology.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "lithology.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4700,7 +4719,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4711,7 +4730,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_hot.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_hot.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4722,7 +4741,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_hsv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_hsv.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4733,7 +4752,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_hsv.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_hsv.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4744,7 +4763,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4755,7 +4774,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_jet.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_jet.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4766,7 +4785,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_lines.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_lines.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4777,7 +4796,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "matlab_lines.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "matlab_lines.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4788,7 +4807,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "mch_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "mch_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4799,7 +4818,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "mch_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "mch_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4810,7 +4829,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ncl_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ncl_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4821,7 +4840,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ncl_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ncl_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4832,7 +4851,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ncview_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ncview_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4843,7 +4862,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "ncview_default.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "ncview_default.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4854,7 +4873,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nice_gfdl.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nice_gfdl.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4865,7 +4884,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nice_gfdl.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nice_gfdl.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4876,7 +4895,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nrl_sirkes.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nrl_sirkes.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4887,7 +4906,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nrl_sirkes.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nrl_sirkes.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4898,7 +4917,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nrl_sirkes_nowhite.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nrl_sirkes_nowhite.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4909,7 +4928,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "nrl_sirkes_nowhite.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "nrl_sirkes_nowhite.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4920,7 +4939,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "perc2_9lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "perc2_9lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4931,7 +4950,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "perc2_9lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "perc2_9lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4942,7 +4961,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "percent_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "percent_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4953,7 +4972,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "percent_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "percent_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4964,7 +4983,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "posneg_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "posneg_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4975,7 +4994,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "posneg_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "posneg_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4986,7 +5005,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "posneg_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "posneg_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -4997,7 +5016,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "posneg_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "posneg_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5008,7 +5027,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5019,7 +5038,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5030,7 +5049,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5041,7 +5060,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5052,7 +5071,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_3.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5063,7 +5082,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "prcp_3.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "prcp_3.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5074,7 +5093,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip2_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip2_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5085,7 +5104,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip2_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip2_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5096,7 +5115,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip2_17lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip2_17lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5107,7 +5126,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip2_17lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip2_17lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5118,7 +5137,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip3_16lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip3_16lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5129,7 +5148,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip3_16lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip3_16lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5140,7 +5159,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip4_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip4_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5151,7 +5170,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip4_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip4_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5162,7 +5181,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip4_diff_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip4_diff_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5173,7 +5192,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip4_diff_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip4_diff_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5184,7 +5203,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5195,7 +5214,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_11lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_11lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5206,7 +5225,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_diff_12lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_diff_12lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5217,7 +5236,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_diff_12lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_diff_12lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5228,7 +5247,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_diff_1lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_diff_1lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5239,7 +5258,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "precip_diff_1lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "precip_diff_1lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5250,7 +5269,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "psgcap.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "psgcap.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5261,7 +5280,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "psgcap.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "psgcap.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5272,7 +5291,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "radar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "radar.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5283,7 +5302,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "radar.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "radar.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5294,7 +5313,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "radar_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "radar_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5305,7 +5324,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "radar_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "radar_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5316,7 +5335,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5327,7 +5346,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5338,7 +5357,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+white+gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+white+gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5349,7 +5368,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+white+gray.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+white+gray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5360,7 +5379,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+white.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+white.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5371,7 +5390,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow+white.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow+white.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5382,7 +5401,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5393,7 +5412,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rainbow.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rainbow.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5404,7 +5423,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rh_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rh_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5415,7 +5434,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "rh_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "rh_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5426,7 +5445,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "seaice_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "seaice_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5437,7 +5456,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "seaice_1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "seaice_1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5448,7 +5467,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "seaice_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "seaice_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5459,7 +5478,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "seaice_2.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "seaice_2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5470,7 +5489,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "so4_21.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "so4_21.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5481,7 +5500,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "so4_21.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "so4_21.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5492,7 +5511,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "so4_23.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "so4_23.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5503,7 +5522,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "so4_23.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "so4_23.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5514,7 +5533,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "spread_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "spread_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5525,7 +5544,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "spread_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "spread_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5536,7 +5555,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "srip_reanalysis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "srip_reanalysis.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5547,7 +5566,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "srip_reanalysis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "srip_reanalysis.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5558,7 +5577,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "sunshine_9lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "sunshine_9lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5569,7 +5588,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "sunshine_9lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "sunshine_9lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5580,7 +5599,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "sunshine_diff_12lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "sunshine_diff_12lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5591,7 +5610,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "sunshine_diff_12lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "sunshine_diff_12lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5602,7 +5621,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "t2m_29lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "t2m_29lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5613,7 +5632,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "t2m_29lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "t2m_29lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5624,7 +5643,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrAvg1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrAvg1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5635,7 +5654,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrAvg1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrAvg1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5646,7 +5665,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrStd1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrStd1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5657,7 +5676,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrStd1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrStd1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5668,7 +5687,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrVar1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrVar1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5679,7 +5698,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbrVar1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbrVar1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5690,7 +5709,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_240-300.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_240-300.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5701,7 +5720,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_240-300.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_240-300.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5712,7 +5731,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_stdev_0-30.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_stdev_0-30.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5723,7 +5742,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_stdev_0-30.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_stdev_0-30.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5734,7 +5753,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_var_0-500.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_var_0-500.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5745,7 +5764,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "tbr_var_0-500.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "tbr_var_0-500.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5756,7 +5775,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp1.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5767,7 +5786,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp1.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp1.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5778,7 +5797,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5789,7 +5808,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_19lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_19lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5800,7 +5819,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_diff_18lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_diff_18lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5811,7 +5830,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_diff_18lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_diff_18lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5822,7 +5841,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_diff_1lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_diff_1lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5833,7 +5852,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "temp_diff_1lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "temp_diff_1lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5844,7 +5863,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "testcmap.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "testcmap.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5855,7 +5874,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "testcmap.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "testcmap.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5866,7 +5885,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "thelix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "thelix.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5877,7 +5896,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "thelix.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "thelix.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5888,7 +5907,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "topo_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "topo_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5899,7 +5918,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "topo_15lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "topo_15lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5910,7 +5929,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "uniform.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "uniform.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5921,7 +5940,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "uniform.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "uniform.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5932,7 +5951,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "vegetation_ClarkU.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "vegetation_ClarkU.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5943,7 +5962,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "vegetation_ClarkU.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "vegetation_ClarkU.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5954,7 +5973,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "vegetation_modis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "vegetation_modis.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5965,7 +5984,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "vegetation_modis.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "vegetation_modis.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5976,7 +5995,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wgne15.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wgne15.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5987,7 +6006,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wgne15.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wgne15.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -5998,7 +6017,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wh-bl-gr-ye-re.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wh-bl-gr-ye-re.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6009,7 +6028,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wh-bl-gr-ye-re.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wh-bl-gr-ye-re.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6020,7 +6039,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wind_17lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wind_17lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6031,7 +6050,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wind_17lev.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wind_17lev.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6042,7 +6061,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wxpEnIR.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wxpEnIR.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6053,7 +6072,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "ncar_ncl", "wxpEnIR.rgb")
+            cmap_file = _cmap_resource("ncar_ncl", "wxpEnIR.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6064,7 +6083,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "Carbone42.rgb")
+            cmap_file = _cmap_resource("self_defined", "Carbone42.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6075,29 +6094,34 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "Carbone42.rgb")
+            cmap_file = _cmap_resource("self_defined", "Carbone42.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
 
+    # Intentional override: the user-supplied `self_defined/NMCRef.rgb`
+    # takes precedence over the upstream NCAR NCL palette of the same
+    # name. Both definitions are emitted by the cmaps generator; the
+    # second one wins by Python override semantics. F811 is silenced
+    # because this is the documented behaviour.
     @property
-    def NMCRef(self):
+    def NMCRef(self):  # noqa: F811
         cname = "NMCRef"
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NMCRef.rgb")
+            cmap_file = _cmap_resource("self_defined", "NMCRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
 
     @property
-    def NMCRef_r(self):
+    def NMCRef_r(self):  # noqa: F811
         cname = "NMCRef_r"
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NMCRef.rgb")
+            cmap_file = _cmap_resource("self_defined", "NMCRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6108,7 +6132,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NMCVel2.rgb")
+            cmap_file = _cmap_resource("self_defined", "NMCVel2.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6119,7 +6143,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NMCVel2.rgb")
+            cmap_file = _cmap_resource("self_defined", "NMCVel2.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6130,7 +6154,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSRef.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6141,7 +6165,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSRef.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSRef.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6152,7 +6176,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSSPW.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSSPW.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6163,7 +6187,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSSPW.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSSPW.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6174,7 +6198,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSVel.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSVel.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6185,7 +6209,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "NWSVel.rgb")
+            cmap_file = _cmap_resource("self_defined", "NWSVel.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6196,7 +6220,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "TopoGray.rgb")
+            cmap_file = _cmap_resource("self_defined", "TopoGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6207,7 +6231,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "TopoGray.rgb")
+            cmap_file = _cmap_resource("self_defined", "TopoGray.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6218,7 +6242,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "TwoClass.rgb")
+            cmap_file = _cmap_resource("self_defined", "TwoClass.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6229,7 +6253,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "TwoClass.rgb")
+            cmap_file = _cmap_resource("self_defined", "TwoClass.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6240,7 +6264,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "mask.rgb")
+            cmap_file = _cmap_resource("self_defined", "mask.rgb")
             cmap = Colormap(self._coltbl(cmap_file), name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap
@@ -6251,7 +6275,7 @@ class Cmaps(object):
         try:
             return get_cmap(cname)
         except:
-            cmap_file = os.path.join(CMAPSFILE_DIR, "self_defined", "mask.rgb")
+            cmap_file = _cmap_resource("self_defined", "mask.rgb")
             cmap = Colormap(self._coltbl(cmap_file)[::-1], name=cname)
             register_cmap(name=cname, cmap=cmap)
             return cmap

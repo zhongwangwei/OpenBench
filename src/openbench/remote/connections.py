@@ -8,8 +8,7 @@ Saves and loads connection profiles from ~/.openbench_wizard/connections.yaml
 Usage:
     This module provides persistent storage for SSH connection profiles.
     It is intended to be used by RemoteConfigWidget to populate the connection
-    dropdown list and save new connections. The ProjectSelectorDialog indirectly
-    uses this through RemoteConfigWidget.
+    dropdown list and save new connections.
 
     Example:
         manager = ConnectionManager()
@@ -17,11 +16,13 @@ Usage:
         manager.save_connection(name="Server", host="user@example.com")
 """
 
+import logging
 import os
 from typing import Dict, List, Optional, Any
-from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -48,7 +49,15 @@ class ConnectionManager:
                 with open(self._config_path, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f) or {}
                 self._connections = data.get("connections", [])
-            except Exception:
+            except (yaml.YAMLError, OSError) as e:
+                # Surface parse / I/O failure so a corrupted config doesn't
+                # silently turn into "no saved connections" with no clue
+                # to the user that their data was ignored.
+                logger.warning(
+                    "Failed to load remote connections from %s: %s. Treating as empty list.",
+                    self._config_path,
+                    e,
+                )
                 self._connections = []
         else:
             self._connections = []
@@ -63,6 +72,13 @@ class ConnectionManager:
         data = {"connections": self._connections}
         with open(self._config_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+        # Restrict to owner only — the file holds host names, usernames,
+        # ports, and jump-node configs. Default umask would leave it
+        # world-readable on POSIX.
+        try:
+            os.chmod(self._config_path, 0o600)
+        except OSError:
+            pass
 
     def list_connections(self) -> List[Dict[str, Any]]:
         """Get list of saved connections."""

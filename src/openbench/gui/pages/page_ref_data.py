@@ -2,59 +2,48 @@
 """
 Reference Data configuration page.
 
-Data structure for _source_configs:
+Each evaluation variable has exactly ONE reference source selected via a
+registry combo box.  A collapsible "Advanced" section shows auto-filled
+fields (varname, varunit, sub_dir, prefix, suffix) that the user can
+override.
+
+Internal data structure:
     _source_configs[var_name][source_name] = {
         "general": {...},           # Shared settings (root_dir, data_type, etc.)
-        "var_config": {...},        # Variable-specific settings (sub_dir, varname, prefix, suffix, varunit)
+        "varname": ..., "varunit": ..., "prefix": ..., "suffix": ..., "sub_dir": ...
     }
-
-This allows the same source (e.g., GLEAM_v4.2a) to be used by multiple variables
-with different per-variable configurations.
 """
 
 import logging
 import shlex
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
+    QFormLayout,
     QGroupBox,
     QPushButton,
-    QListWidget,
-    QListWidgetItem,
     QLabel,
-    QScrollArea,
+    QLineEdit,
     QWidget,
-    QFrame,
     QMessageBox,
     QDialog,
     QComboBox,
+    QToolButton,
+    QProgressDialog,
 )
 from PySide6.QtCore import Qt
 
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.widgets import DataSourceEditor
-from openbench.gui.path_utils import to_absolute_path, convert_paths_in_dict
+from openbench.gui.path_utils import to_absolute_path
 
 logger = logging.getLogger(__name__)
 
+_DETACHED_SCAN_WORKERS = []
 
-def get_remote_ssh_manager(controller):
-    """Get SSH manager from the controller if in remote mode.
 
-    Args:
-        controller: The WizardController instance
-
-    Returns:
-        SSHManager instance if in remote mode and connected, None otherwise
-    """
-    # Check storage type to determine if in remote mode
-    from openbench.remote.storage import RemoteStorage
-
-    if not isinstance(controller.storage, RemoteStorage):
-        return None
-    return controller.ssh_manager
+from openbench.gui.path_utils import get_remote_ssh_manager
 
 
 class PageRefData(BasePage):
@@ -68,8 +57,6 @@ class PageRefData(BasePage):
     def _setup_content(self):
         """Setup page content."""
         # === Data Root + Scan Controls ===
-        from PySide6.QtWidgets import QLineEdit
-
         scan_group = QGroupBox("Reference Data Root")
         scan_layout = QHBoxLayout(scan_group)
 
@@ -99,9 +86,9 @@ class PageRefData(BasePage):
         self.content_layout.addWidget(scan_group)
 
         # === Registry Info ===
-        from openbench.data.registry import RegistryManager
+        from openbench.data.registry.manager import get_registry
 
-        mgr = RegistryManager()
+        mgr = get_registry()
         ref_count = len(mgr.list_references())
         self.registry_label = QLabel(f"Registry: {ref_count} datasets available")
         self.content_layout.addWidget(self.registry_label)
@@ -114,9 +101,10 @@ class PageRefData(BasePage):
 
         self.content_layout.addWidget(self.var_container)
 
-        # Store references to source lists
-        self._source_lists: Dict[str, QListWidget] = {}
-        # Structure: _source_configs[var_name][source_name] = {"general": {...}, "var_config": {...}}
+        # Store references to per-variable combo boxes and advanced fields
+        self._var_combos: Dict[str, QComboBox] = {}
+        self._var_advanced_fields: Dict[str, Dict[str, QLineEdit]] = {}
+        # Structure: _source_configs[var_name][source_name] = {"general": {...}, ...}
         self._source_configs: Dict[str, Dict[str, Any]] = {}
 
         # Add validate button at bottom
@@ -129,14 +117,19 @@ class PageRefData(BasePage):
         self.content_layout.addLayout(validate_layout)
 
     def _rebuild_variable_groups(self):
-        """Rebuild variable groups based on selected evaluation items."""
+        """Rebuild variable groups based on selected evaluation items.
+
+        Each variable gets a single combo box to select the registry dataset
+        and a collapsible "Advanced" section with auto-filled fields.
+        """
         # Clear existing
         while self.var_layout.count():
             child = self.var_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        self._source_lists.clear()
+        self._var_combos.clear()
+        self._var_advanced_fields.clear()
 
         # Get selected evaluation items
         eval_items = self.controller.config.get("evaluation_items", {})
@@ -153,62 +146,65 @@ class PageRefData(BasePage):
             group = QGroupBox(var_name.replace("_", " "))
             group_layout = QVBoxLayout(group)
 
-            # Source list - use minimum height instead of maximum for better space usage
-            source_list = QListWidget()
-            source_list.setMinimumHeight(60)
-            source_list.setProperty("var_name", var_name)
-            self._source_lists[var_name] = source_list
-            group_layout.addWidget(source_list, 1)  # stretch factor 1 to expand
+            # --- Dataset combo row ---
+            combo_layout = QHBoxLayout()
+            combo_label = QLabel("Dataset:")
+            combo_layout.addWidget(combo_label)
 
-            # Buttons row 1: Registry quick-add
-            registry_layout = QHBoxLayout()
+            combo = QComboBox()
+            combo.setMinimumWidth(300)
+            combo.setProperty("var_name", var_name)
+            self._populate_registry_combo(combo, var_name)
+            combo.currentIndexChanged.connect(lambda _idx, v=var_name, c=combo: self._on_dataset_selected(v, c))
+            combo_layout.addWidget(combo, stretch=1)
+            self._var_combos[var_name] = combo
 
-            registry_combo = QComboBox()
-            registry_combo.setMinimumWidth(250)
-            registry_combo.setProperty("var_name", var_name)
-            self._populate_registry_combo(registry_combo, var_name)
-            registry_layout.addWidget(registry_combo, stretch=1)
+            gear_btn = QPushButton("⚙")
+            gear_btn.setFixedWidth(30)
+            gear_btn.setToolTip("Manage datasets in Data Registry")
+            gear_btn.clicked.connect(lambda: self.controller.go_to_page("registry"))
+            combo_layout.addWidget(gear_btn)
 
-            btn_add_registry = QPushButton("+ Add from Registry")
-            btn_add_registry.setProperty("secondary", True)
-            btn_add_registry.setToolTip("Add a known reference dataset from the built-in registry")
-            btn_add_registry.clicked.connect(
-                lambda checked, v=var_name, c=registry_combo: self._add_from_registry(v, c)
-            )
-            registry_layout.addWidget(btn_add_registry)
-            group_layout.addLayout(registry_layout)
+            group_layout.addLayout(combo_layout)
 
-            # Buttons row 2: Manual add/edit/remove
-            btn_layout = QHBoxLayout()
+            # --- Collapsible Advanced section ---
+            toggle_btn = QToolButton()
+            toggle_btn.setText("Advanced")
+            toggle_btn.setCheckable(True)
+            toggle_btn.setChecked(False)
+            toggle_btn.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+            toggle_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            toggle_btn.setArrowType(Qt.RightArrow)
 
-            btn_add = QPushButton("+ Add Custom")
-            btn_add.setProperty("secondary", True)
-            btn_add.setToolTip("Manually configure a custom data source")
-            btn_add.clicked.connect(lambda checked, v=var_name: self._add_source(v))
-            btn_layout.addWidget(btn_add)
+            advanced_widget = QWidget()
+            advanced_form = QFormLayout(advanced_widget)
+            advanced_form.setContentsMargins(20, 4, 0, 4)
 
-            btn_copy = QPushButton("Copy")
-            btn_copy.setProperty("secondary", True)
-            btn_copy.setToolTip("Copy selected source as a new source")
-            btn_copy.clicked.connect(lambda checked, v=var_name: self._copy_source(v))
-            btn_layout.addWidget(btn_copy)
+            fields = {}
+            for field_name in ("varname", "varunit", "sub_dir", "prefix", "suffix"):
+                le = QLineEdit()
+                le.setPlaceholderText("(auto-filled from registry)")
+                le.setProperty("var_name", var_name)
+                le.setProperty("field_name", field_name)
+                le.editingFinished.connect(lambda v=var_name: self._on_advanced_field_edited(v))
+                advanced_form.addRow(field_name + ":", le)
+                fields[field_name] = le
 
-            btn_edit = QPushButton("Edit")
-            btn_edit.setProperty("secondary", True)
-            btn_edit.clicked.connect(lambda checked, v=var_name: self._edit_source(v))
-            btn_layout.addWidget(btn_edit)
+            self._var_advanced_fields[var_name] = fields
+            advanced_widget.setVisible(False)
 
-            btn_remove = QPushButton("Remove")
-            btn_remove.setProperty("secondary", True)
-            btn_remove.clicked.connect(lambda checked, v=var_name: self._remove_source(v))
-            btn_layout.addWidget(btn_remove)
+            def _toggle_advanced(checked, btn=toggle_btn, widget=advanced_widget):
+                widget.setVisible(checked)
+                btn.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
 
-            btn_layout.addStretch()
-            group_layout.addLayout(btn_layout)
+            toggle_btn.toggled.connect(_toggle_advanced)
 
-            self.var_layout.addWidget(group, 1)  # stretch factor 1 to expand
+            group_layout.addWidget(toggle_btn)
+            group_layout.addWidget(advanced_widget)
 
-        # No addStretch() here - let groups expand to fill space
+            self.var_layout.addWidget(group)
+
+        self.var_layout.addStretch()
 
     def _browse_data_root(self):
         """Browse for reference data root directory."""
@@ -225,20 +221,108 @@ class PageRefData(BasePage):
             QMessageBox.warning(self, "No Path", "Please enter or browse for the reference data root directory.")
             return
 
+        # Refuse to silently scan a local path while the controller is wired
+        # to a remote storage backend — the worker only knows the local FS,
+        # so a remote path would either fail os.path.isdir or match an
+        # unrelated local directory of the same name.
+        try:
+            from openbench.remote.storage import RemoteStorage
+
+            if isinstance(getattr(self.controller, "storage", None), RemoteStorage):
+                QMessageBox.warning(
+                    self,
+                    "Remote mode",
+                    "Reference scanning currently only supports local paths.\n"
+                    f"Path {data_root!r} would be checked on this machine, not the remote host.",
+                )
+                return
+        except Exception:
+            # Storage backend not importable in non-remote builds — proceed.
+            pass
+
         import os
 
         if not os.path.isdir(data_root):
             QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
             return
 
-        try:
-            from openbench.data.registry.scanner import find_new_datasets, register_scanned_dataset
-            from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
+        self.btn_scan.setEnabled(False)
+        progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
+        progress.setWindowTitle("Scanning")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
 
-            new_groups = find_new_datasets(data_root)
+        from openbench.gui.pages._scan_worker import FindDatasetsWorker
+
+        worker = FindDatasetsWorker(data_root)
+        self._scan_worker = worker
+        self._scan_progress = progress
+        worker.finished_with_result.connect(self._on_scan_data_root_finished)
+        worker.failed.connect(self._on_scan_data_root_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+        progress.show()
+
+    def _detach_scan_worker(self, worker):
+        """Keep an unparented QThread alive until Qt emits finished."""
+        if worker is None:
+            return
+        _DETACHED_SCAN_WORKERS.append(worker)
+
+        def _forget_worker():
+            try:
+                _DETACHED_SCAN_WORKERS.remove(worker)
+            except ValueError:
+                pass
+
+        worker.finished.connect(_forget_worker)
+
+    def _finish_scan_worker(self, cancel: bool = False):
+        progress = getattr(self, "_scan_progress", None)
+        if progress is not None:
+            progress.close()
+            progress.deleteLater()
+        worker = getattr(self, "_scan_worker", None)
+        if worker is not None:
+            if cancel:
+                for signal, slot in (
+                    (worker.finished_with_result, self._on_scan_data_root_finished),
+                    (worker.failed, self._on_scan_data_root_failed),
+                ):
+                    try:
+                        signal.disconnect(slot)
+                    except (RuntimeError, TypeError):
+                        pass
+                if worker.isRunning():
+                    worker.requestInterruption()
+                    worker.quit()
+                    worker.wait(3000)
+            if worker.isRunning():
+                self._detach_scan_worker(worker)
+        self._scan_progress = None
+        self._scan_worker = None
+        self.btn_scan.setEnabled(True)
+
+    def closeEvent(self, event):
+        self._finish_scan_worker(cancel=True)
+        super().closeEvent(event)
+
+    def _on_scan_data_root_failed(self, message: str):
+        self._finish_scan_worker()
+        QMessageBox.critical(self, "Scan Failed", f"Error scanning: {message}")
+        logger.error("Data scan failed: %s", message)
+
+    def _on_scan_data_root_finished(self, new_groups):
+        self._finish_scan_worker()
+        try:
+            from openbench.data.registry.scanner import register_scanned_datasets_batch
+            from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
 
             if not new_groups:
-                QMessageBox.information(self, "Scan Complete", "No new datasets found. All datasets already registered.")
+                QMessageBox.information(
+                    self, "Scan Complete", "No new datasets found. All datasets already registered."
+                )
                 return
 
             dlg = DataDiscoveryDialog(new_groups, parent=self)
@@ -247,26 +331,20 @@ class PageRefData(BasePage):
                 if not selected:
                     return
 
-                from openbench.data.registry.manager import RegistryManager
+                variants = [variant for _base, _res, variant in selected]
+                register_scanned_datasets_batch(
+                    variants,
+                    on_multi_var=lambda var_name, sub_dir, all_vars: choose_nc_variable(
+                        self, var_name, sub_dir, all_vars
+                    ),
+                )
+                registered = len(variants)
 
-                mgr = RegistryManager()
-                registered = 0
-                for base_name, res_name, variant in selected:
-                    existing = mgr.get_reference(variant.name)
-                    existing_dict = None
-                    if existing:
-                        existing_dict = {
-                            "variables": {
-                                vn: {"varname": vm.varname, "varunit": vm.varunit,
-                                     "prefix": vm.prefix, "suffix": vm.suffix}
-                                for vn, vm in existing.variables.items()
-                            }
-                        }
-                    register_scanned_dataset(variant, existing_descriptor=existing_dict)
-                    registered += 1
+                # Refresh registry
+                from openbench.data.registry.manager import clear_registry_cache, get_registry
 
-                # Refresh registry label
-                mgr2 = RegistryManager()
+                clear_registry_cache()
+                mgr2 = get_registry()
                 self.registry_label.setText(f"Registry: {len(mgr2.list_references())} datasets available")
 
                 # Rebuild variable groups to pick up new registry entries
@@ -274,14 +352,14 @@ class PageRefData(BasePage):
                 self.load_from_config()
 
                 QMessageBox.information(
-                    self, "Scan Complete",
-                    f"Registered {registered} new dataset(s).\n"
-                    "They are now available in the dropdown menus below.",
+                    self,
+                    "Scan Complete",
+                    f"Registered {registered} new dataset(s).\nThey are now available in the dropdown menus below.",
                 )
 
         except Exception as e:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning: {e}")
-            logger.exception("Data scan failed")
+            logger.exception("Data scan registration failed")
 
     def _populate_registry_combo(self, combo, var_name):
         """Populate registry combo with available reference datasets for this variable.
@@ -293,9 +371,9 @@ class PageRefData(BasePage):
         combo.addItem("-- Select from Registry --", None)
 
         try:
-            from openbench.data.registry import RegistryManager
+            from openbench.data.registry.manager import get_registry
 
-            mgr = RegistryManager()
+            mgr = get_registry()
             refs_with_var = mgr.references_for_variable(var_name)
             if refs_with_var:
                 # Group by base name (strip _LowRes/_MidRes/_HigRes suffix)
@@ -334,29 +412,39 @@ class PageRefData(BasePage):
         except ImportError:
             combo.addItem("(Registry not available)", None)
 
-    def _add_from_registry(self, var_name: str, combo):
-        """Add a reference source from the registry with pre-filled config."""
+    def _on_dataset_selected(self, var_name: str, combo: QComboBox):
+        """Handle dataset selection from the combo box.
+
+        For multi-resolution groups, opens the resolution picker.
+        Looks up the dataset + variable from the registry, fills the
+        advanced fields, and stores the result in ``_source_configs``.
+        """
         combo_data = combo.currentData()
         if not combo_data:
+            # Placeholder selected — clear source config for this variable
+            self._source_configs.pop(var_name, None)
+            self._clear_advanced_fields(var_name)
+            self.save_to_config()
             return
 
         # Handle multi-resolution group: open resolution picker
         if isinstance(combo_data, dict) and "group" in combo_data:
             source_name = self._pick_resolution(combo_data, var_name)
             if not source_name:
+                # User cancelled — revert combo to placeholder
+                combo.blockSignals(True)
+                combo.setCurrentIndex(0)
+                combo.blockSignals(False)
                 return
+            # After picker, select the resolved item in the combo if present,
+            # otherwise just proceed with the source_name we got.
         else:
             source_name = combo_data
 
-        # Check for duplicate
-        if var_name in self._source_configs and source_name in self._source_configs[var_name]:
-            QMessageBox.information(self, "Duplicate", f"'{source_name}' is already added for this variable.")
-            return
-
         try:
-            from openbench.data.registry import RegistryManager
+            from openbench.data.registry.manager import get_registry
 
-            mgr = RegistryManager()
+            mgr = get_registry()
             ref = mgr.get_reference(source_name)
             if ref is None:
                 QMessageBox.warning(self, "Not Found", f"Dataset '{source_name}' not found in registry.")
@@ -388,37 +476,57 @@ class PageRefData(BasePage):
                 source_data["suffix"] = var_mapping.suffix
                 if var_mapping.sub_dir:
                     source_data["sub_dir"] = var_mapping.sub_dir
-                    # If root_dir is empty but sub_dir exists, hint the user
-                    if not general["root_dir"]:
-                        general["root_dir"] = ""  # User needs to set data_root
 
-            if var_name not in self._source_configs:
-                self._source_configs[var_name] = {}
-            self._source_configs[var_name][source_name] = source_data
-            self._update_source_list(var_name)
+            # Store as the single source for this variable
+            self._source_configs[var_name] = {source_name: source_data}
+            self._fill_advanced_fields(var_name, source_data)
             self.save_to_config()
-
-            # Show info if root_dir is empty
-            if not general.get("root_dir"):
-                QMessageBox.information(
-                    self,
-                    "Set Data Path",
-                    f"'{source_name}' added from registry.\n\n"
-                    f"Please edit it to set the data root directory\n"
-                    f"(where the reference data files are located).",
-                )
 
         except ImportError:
             QMessageBox.warning(self, "Error", "Registry module not available.")
+
+    def _fill_advanced_fields(self, var_name: str, source_data: dict):
+        """Populate the Advanced fields from *source_data*."""
+        fields = self._var_advanced_fields.get(var_name, {})
+        for key, line_edit in fields.items():
+            value = source_data.get(key, "")
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            line_edit.setText(str(value) if value else "")
+
+    def _clear_advanced_fields(self, var_name: str):
+        """Reset all Advanced fields for *var_name* to empty."""
+        fields = self._var_advanced_fields.get(var_name, {})
+        for line_edit in fields.values():
+            line_edit.setText("")
+
+    def _on_advanced_field_edited(self, var_name: str):
+        """Persist manual overrides from the Advanced fields back to _source_configs."""
+        sources = self._source_configs.get(var_name, {})
+        if not sources:
+            return
+        # There is exactly one source per variable now
+        source_name = next(iter(sources))
+        source_data = sources[source_name]
+
+        fields = self._var_advanced_fields.get(var_name, {})
+        for key, line_edit in fields.items():
+            text = line_edit.text().strip()
+            if text:
+                source_data[key] = text
+            else:
+                source_data.pop(key, None)
+
+        self.save_to_config()
 
     def _pick_resolution(self, group_data, var_name):
         """Open resolution picker dialog for a multi-resolution dataset.
 
         Returns selected source_name or None if cancelled.
         """
-        from openbench.data.registry import RegistryManager
+        from openbench.data.registry.manager import get_registry
 
-        mgr = RegistryManager()
+        mgr = get_registry()
         base_name = group_data["group"]
         variant_names = group_data["variants"]
 
@@ -468,126 +576,11 @@ class PageRefData(BasePage):
                 return variant_names[0]
         return None
 
-    def _add_source(self, var_name: str):
-        """Add new data source for variable."""
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_type="ref",
-            var_name=var_name,  # Pass variable name for context
-            ssh_manager=ssh_manager,
-            parent=self,
-        )
-        if dialog.exec():
-            source_name = dialog.get_source_name()
-            if source_name:
-                if var_name not in self._source_configs:
-                    self._source_configs[var_name] = {}
-                self._source_configs[var_name][source_name] = dialog.get_data()
-                self._update_source_list(var_name)
-                self.save_to_config()
-
-    def _copy_source(self, var_name: str):
-        """Copy selected data source as a new source."""
-        import copy
-
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to copy.")
-            return
-
-        source_name = current.text()
-        existing_data = self._source_configs.get(var_name, {}).get(source_name, {})
-
-        # Deep copy the data to avoid modifying the original
-        copied_data = copy.deepcopy(existing_data)
-        # Remove def_nml_path so a new one will be generated
-        copied_data.pop("def_nml_path", None)
-
-        # Open dialog with copied data but no source name (user must enter new name)
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_type="ref", var_name=var_name, initial_data=copied_data, ssh_manager=ssh_manager, parent=self
-        )
-        if dialog.exec():
-            new_source_name = dialog.get_source_name()
-            if new_source_name:
-                if new_source_name == source_name:
-                    QMessageBox.warning(self, "Error", "New source name must be different from the original.")
-                    return
-                if var_name not in self._source_configs:
-                    self._source_configs[var_name] = {}
-                self._source_configs[var_name][new_source_name] = dialog.get_data()
-                self._update_source_list(var_name)
-                self.save_to_config()
-
-    def _edit_source(self, var_name: str):
-        """Edit selected data source."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to edit.")
-            return
-
-        source_name = current.text()
-        existing_data = self._source_configs.get(var_name, {}).get(source_name, {})
-
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_name=source_name,
-            source_type="ref",
-            var_name=var_name,  # Pass variable name for context
-            initial_data=existing_data,
-            ssh_manager=ssh_manager,
-            parent=self,
-        )
-        if dialog.exec():
-            self._source_configs[var_name][source_name] = dialog.get_data()
-            self.save_to_config()
-
-    def _remove_source(self, var_name: str):
-        """Remove selected data source."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to remove.")
-            return
-
-        source_name = current.text()
-        reply = QMessageBox.question(
-            self, "Confirm", f"Remove source '{source_name}'?", QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            if var_name in self._source_configs:
-                self._source_configs[var_name].pop(source_name, None)
-            self._update_source_list(var_name)
-            self.save_to_config()
-
-    def _update_source_list(self, var_name: str):
-        """Update the source list widget for a variable."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        source_list.clear()
-        sources = self._source_configs.get(var_name, {})
-        for source_name in sources.keys():
-            source_list.addItem(source_name)
-
     def load_from_config(self):
         """Load from config.
 
-        Properly loads per-variable configurations from source files.
-        Each variable gets its own copy of the config with variable-specific settings.
+        For each variable, reads the single ``{var}_ref_source`` value, restores
+        the combo selection, and fills the advanced fields.
         """
         import os
         import yaml
@@ -600,8 +593,13 @@ class PageRefData(BasePage):
         ref_data = self.controller.config.get("ref_data", {})
         general_section = ref_data.get("general", {})
         def_nml = ref_data.get("def_nml", {})
-        # saved_source_configs now uses compound key: "var_name::source_name"
         saved_source_configs = ref_data.get("source_configs", {})
+
+        # Restore the data root text box from the persisted general
+        # section so reloading a project doesn't lose the user's path.
+        saved_data_root = general_section.get("data_root", "")
+        if saved_data_root:
+            self.data_root_input.setText(saved_data_root)
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
@@ -609,75 +607,82 @@ class PageRefData(BasePage):
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
 
-        # Parse existing config into source configs
         eval_items = self.controller.config.get("evaluation_items", {})
         selected = [k for k, v in eval_items.items() if v]
 
         for var_name in selected:
             key = f"{var_name}_ref_source"
-            sources = general_section.get(key, [])
-            if isinstance(sources, str):
-                sources = [sources]
+            raw = general_section.get(key, "")
+            # Accept both string and single-element list for backward compat
+            if isinstance(raw, list):
+                source_name = raw[0] if raw else ""
+            else:
+                source_name = raw or ""
 
-            self._source_configs[var_name] = {}
-            for source_name in sources:
-                # Use compound key for per-variable storage
-                compound_key = f"{var_name}::{source_name}"
+            if not source_name:
+                continue
 
-                # First check if we have saved source config (from previous edits)
-                if compound_key in saved_source_configs:
-                    saved_config = saved_source_configs[compound_key]
-                    # Check if cached data has valid root_dir - if not, force re-read from def_nml
-                    general = saved_config.get("general", {})
-                    root_dir = general.get("root_dir") or general.get("dir", "")
-                    if root_dir:
-                        self._source_configs[var_name][source_name] = saved_config.copy()
-                        self._update_source_list(var_name)
-                        continue
-                    # Cached data is incomplete, fall through to load from def_nml
+            # Try to restore from saved source_configs (compound key)
+            compound_key = f"{var_name}::{source_name}"
+            source_data = None
 
-                # Otherwise load from def_nml file
+            if compound_key in saved_source_configs:
+                saved = saved_source_configs[compound_key]
+                general = saved.get("general", {})
+                if general.get("root_dir") or general.get("dir"):
+                    source_data = saved.copy()
+
+            # Fall back to def_nml file
+            if source_data is None:
                 def_nml_path = def_nml.get(source_name, "")
                 source_data = {"def_nml_path": def_nml_path}
 
-                # Try to load the actual def_nml file content
                 if def_nml_path:
                     nml_content = None
 
                     if is_remote:
-                        # In remote mode, only load from remote server
                         if ssh_manager and ssh_manager.is_connected:
                             remote_path = self._resolve_remote_def_nml_path(ssh_manager, def_nml_path)
                             nml_content = self._load_remote_nml_content(ssh_manager, remote_path)
-                        # If not connected, don't fall back to local - just skip loading
-                        # The paths in the config are already remote paths
                     else:
-                        # Local mode - load from local file
                         full_path = self._resolve_def_nml_path(def_nml_path)
                         if full_path and os.path.exists(full_path):
                             try:
                                 with open(full_path, "r", encoding="utf-8") as f:
                                     nml_content = yaml.safe_load(f) or {}
                             except Exception as e:
-                                print(f"Warning: Failed to load def_nml file {full_path}: {e}")
+                                logger.warning("Failed to load def_nml file %s: %s", full_path, e)
 
                     if nml_content:
-                        # Load general section
                         if "general" in nml_content:
                             source_data["general"] = nml_content["general"].copy()
-
-                        # Load variable-specific settings (all fields from var section)
                         if var_name in nml_content:
-                            var_config = nml_content[var_name]
-                            # Store all var-specific fields at top level for DataSourceEditor
-                            for field, value in var_config.items():
+                            for field, value in nml_content[var_name].items():
                                 source_data[field] = value
 
-                self._source_configs[var_name][source_name] = source_data
+            self._source_configs[var_name] = {source_name: source_data}
 
-            self._update_source_list(var_name)
+            # Set the combo to the matching item (block signals to avoid re-trigger)
+            combo = self._var_combos.get(var_name)
+            if combo:
+                combo.blockSignals(True)
+                matched = False
+                for i in range(combo.count()):
+                    item_data = combo.itemData(i)
+                    if item_data == source_name:
+                        combo.setCurrentIndex(i)
+                        matched = True
+                        break
+                if not matched:
+                    # Source not in combo — add it as a custom entry
+                    combo.addItem(source_name, source_name)
+                    combo.setCurrentIndex(combo.count() - 1)
+                combo.blockSignals(False)
 
-        # Save loaded configs back to controller to ensure they're available for export
+            # Fill advanced fields
+            self._fill_advanced_fields(var_name, source_data)
+
+        # Persist loaded state back
         if self._source_configs:
             self.save_to_config()
 
@@ -689,7 +694,7 @@ class PageRefData(BasePage):
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(f"cat '{def_nml_path}'", timeout=30)
+            stdout, stderr, exit_code = ssh_manager.execute(f"cat {shlex.quote(def_nml_path)}", timeout=30)
             if exit_code == 0 and stdout.strip():
                 return yaml.safe_load(stdout) or {}
             else:
@@ -780,37 +785,51 @@ class PageRefData(BasePage):
     def save_to_config(self):
         """Save to config.
 
-        Uses compound key "var_name::source_name" for source_configs to preserve
-        per-variable configurations even when the same source is used by multiple variables.
+        Each variable stores exactly one source name as a string in
+        ``ref_data["general"]["{var}_ref_source"]``.
         """
-        general = {}
+        existing_ref_data = self.controller.config.get("ref_data", {})
+        preserved = {
+            key: value
+            for key, value in existing_ref_data.items()
+            if key not in {"general", "def_nml", "source_configs"}
+        }
+        existing_general = existing_ref_data.get("general", {})
+        general = {
+            key: value
+            for key, value in existing_general.items()
+            if key != "data_root" and not key.endswith("_ref_source")
+        }
         def_nml = {}
-        source_configs = {}  # Store full source configurations with compound keys
+        source_configs = {}
 
         for var_name, sources in self._source_configs.items():
             if sources:
-                key = f"{var_name}_ref_source"
-                general[key] = list(sources.keys())
+                # Single source per variable — store the name as a plain string
+                source_name = next(iter(sources))
+                general[f"{var_name}_ref_source"] = source_name
 
-                for source_name, source_data in sources.items():
-                    # Get def_nml_path if it exists, otherwise generate one
-                    def_nml_path = source_data.get("def_nml_path", "")
-                    if not def_nml_path:
-                        # Will be generated during namelist sync
-                        basedir = self.controller.config.get("general", {}).get("basedir", "./output")
-                        def_nml_path = f"{basedir}/nml/ref/{source_name}.yaml"
-                    def_nml[source_name] = def_nml_path
+                source_data = sources[source_name]
+                def_nml_path = source_data.get("def_nml_path", "")
+                if not def_nml_path:
+                    basedir = self.controller.config.get("general", {}).get("basedir", "./output")
+                    def_nml_path = f"{basedir}/nml/ref/{source_name}.yaml"
+                def_nml[source_name] = def_nml_path
 
-                    # Store with compound key to preserve per-variable configs
-                    compound_key = f"{var_name}::{source_name}"
-                    source_configs[compound_key] = source_data.copy()
-                    # Also store var_name in the config for later retrieval
-                    source_configs[compound_key]["_var_name"] = var_name
+                compound_key = f"{var_name}::{source_name}"
+                source_configs[compound_key] = source_data.copy()
+                source_configs[compound_key]["_var_name"] = var_name
+
+        # Persist the reference data root so it survives a reload. The
+        # text box is the user's primary anchor for browsing/scanning;
+        # losing it on save makes the page look blank on reopen.
+        general["data_root"] = self.data_root_input.text().strip()
 
         ref_data = {
+            **preserved,
             "general": general,
             "def_nml": def_nml,
-            "source_configs": source_configs,  # Include full configs for sync
+            "source_configs": source_configs,
         }
         self.controller.update_section("ref_data", ref_data)
 
@@ -836,18 +855,14 @@ class PageRefData(BasePage):
                     context={"var_name": var_name},
                 )
                 if not manager.show_error_and_focus(error):
-                    # Auto-open add source dialog
-                    self._add_source(var_name)
                     return False
 
-            # Validate each source has required fields
+            # Validate the single source
             for source_name, source_data in sources.items():
-                # Check varname - can be at top level, in general, or in var_config
                 general = source_data.get("general", {})
                 var_config = source_data.get("var_config", {})
                 varname = source_data.get("varname") or var_config.get("varname") or general.get("varname") or ""
                 if not varname:
-                    # Show warning and ask for confirmation
                     reply = QMessageBox.warning(
                         self,
                         "Variable Name Missing",
@@ -855,16 +870,13 @@ class PageRefData(BasePage):
                         f"Data source: {source_name}\n"
                         f"Variable: {var_name.replace('_', ' ')}\n\n"
                         f"Is this variable defined in the filter configuration?\n\n"
-                        f"Click 'Yes' to continue, 'No' to edit the source.",
+                        f"Click 'Yes' to continue, 'No' to go back and fix it.",
                         QMessageBox.Yes | QMessageBox.No,
                         QMessageBox.No,
                     )
                     if reply == QMessageBox.No:
-                        self._select_and_edit_source(var_name, source_name)
                         return False
 
-                # Check prefix/suffix (only for grid data, not station data)
-                # prefix/suffix can be at top level or in general section
                 data_type = general.get("data_type", "grid")
                 if data_type != "stn":
                     prefix = source_data.get("prefix") or general.get("prefix") or ""
@@ -877,10 +889,8 @@ class PageRefData(BasePage):
                             context={"var_name": var_name, "source_name": source_name},
                         )
                         if not manager.show_error_and_focus(error):
-                            self._select_and_edit_source(var_name, source_name)
                             return False
 
-                # Check root_dir
                 root_dir = general.get("root_dir", "") or general.get("dir", "")
                 if not root_dir:
                     error = ValidationError(
@@ -890,23 +900,10 @@ class PageRefData(BasePage):
                         context={"var_name": var_name, "source_name": source_name},
                     )
                     if not manager.show_error_and_focus(error):
-                        self._select_and_edit_source(var_name, source_name)
                         return False
 
         self.save_to_config()
         return True
-
-    def _select_and_edit_source(self, var_name: str, source_name: str):
-        """Select source in list and open edit dialog."""
-        source_list = self._source_lists.get(var_name)
-        if source_list:
-            # Find and select the item
-            for i in range(source_list.count()):
-                if source_list.item(i).text() == source_name:
-                    source_list.setCurrentRow(i)
-                    break
-            # Open edit dialog
-            self._edit_source(var_name)
 
     def _validate_data(self):
         """Validate all configured data sources."""

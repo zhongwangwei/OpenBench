@@ -1,4 +1,7 @@
-import warnings
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+
+import os
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -7,26 +10,26 @@ import xarray as xr
 
 from openbench.util.converttype import Convert_Type
 
-warnings.simplefilter(action="ignore", category=RuntimeWarning)
-
 from .Fig_toolbox import get_index, tick_length
+from ._downsample import downsample_for_plot, lat_lon_plot_args
+from ._validation import finite_min_max
 
 
+@with_isolated_rc
 def make_geo_plot_index(file, method_name, main_nml, option):
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
 
-    ds = xr.open_dataset(f"{file}")
+    with xr.open_dataset(f"{file}") as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
-    data = ds[method_name]
-    ilat = ds.lat.values
-    ilon = ds.lon.values
-    lon, lat = np.meshgrid(ilon, ilat)
+    data = downsample_for_plot(ds[method_name], option)
+    data, ilat, ilon, lon, lat, extent, origin = lat_lon_plot_args(data)
 
-    min_value, max_value = np.nanmin(data), np.nanmax(data)
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    min_value, max_value = finite_min_max(data, label=f"{method_name} geo plot index")
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], method_name)
     if not option["vmin_max_on"]:
         option["vmax"], option["vmin"] = mticks[-1], mticks[0]
 
@@ -34,7 +37,6 @@ def make_geo_plot_index(file, method_name, main_nml, option):
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -51,16 +53,10 @@ def make_geo_plot_index(file, method_name, main_nml, option):
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
-    if ilat[0] - ilat[-1] < 0:
-        origin = "lower"
-    else:
-        origin = "upper"
-
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(data.values, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -151,6 +147,6 @@ def make_geo_plot_index(file, method_name, main_nml, option):
     )
     cb.solids.set_edgecolor("face")
 
-    file2 = file[:-3]
-    plt.savefig(f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(fig, f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)

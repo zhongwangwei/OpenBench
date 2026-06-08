@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Optional, Union
 
 
@@ -149,6 +149,10 @@ class ReferenceDataset:
             d["grid_res"] = self.grid_res
         if self.fulllist:
             d["fulllist"] = self.fulllist
+        if self.station_matching is not None:
+            d["station_matching"] = asdict(self.station_matching)
+        if self._provenance:
+            d["_provenance"] = self._provenance
         d["variables"] = {name: vm.to_dict() for name, vm in self.variables.items()}
         return d
 

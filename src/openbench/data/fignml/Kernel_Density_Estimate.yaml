@@ -24,3 +24,7 @@ general:
   saving_format: jpg
   font: DejaVu Sans
   dpi: 300
+  plotting_mode: balanced
+  max_samples_per_series: 50000
+  kde_max_samples: 10000
+  sample_method: stride

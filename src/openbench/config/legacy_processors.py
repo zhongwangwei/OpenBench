@@ -10,20 +10,20 @@ Version: 2.0
 Date: July 2025
 """
 
-import importlib
 import logging
 import os
 import re
+from copy import deepcopy
 from typing import Any, Dict, Tuple
 
 from openbench.util.exceptions import ConfigurationError
 
 # Heavy dependencies for data processing
 try:
-    import numpy as np
-    import pandas as pd
-    import xarray as xr
-    from joblib import Parallel, delayed
+    import numpy as np  # noqa: F401  feature-detection import
+    import pandas as pd  # noqa: F401  feature-detection import
+    import xarray as xr  # noqa: F401  feature-detection import
+    from joblib import Parallel, delayed  # noqa: F401  feature-detection import
 
     _HAS_DATA_LIBS = True
 except ImportError:
@@ -32,7 +32,7 @@ except ImportError:
 
 # Import caching - CacheSystem is mandatory for data processing modules
 try:
-    from openbench.data.cache import cached, get_cache_manager
+    from openbench.data.cache import cached, get_cache_manager  # noqa: F401  feature detection
 
     _HAS_CACHE = True
 except ImportError:
@@ -55,11 +55,18 @@ class GeneralInfoReader:
     """
 
     # Keys that must never be overwritten by namelist data
-    _PROTECTED_KEYS = frozenset({
-        "__class__", "__dict__", "__doc__", "__module__",
-        "_safe_update", "_PROTECTED_KEYS",
-        "_custom_filter_warnings_shown", "_time_resolution_warning_shown",
-    })
+    _PROTECTED_KEYS = frozenset(
+        {
+            "__class__",
+            "__dict__",
+            "__doc__",
+            "__module__",
+            "_safe_update",
+            "_PROTECTED_KEYS",
+            "_custom_filter_warnings_shown",
+            "_time_resolution_warning_shown",
+        }
+    )
 
     def _safe_update(self, data: dict) -> None:
         """Update instance attributes from dict, skipping protected/method names."""
@@ -131,19 +138,19 @@ class GeneralInfoReader:
         }
 
         # Coordinate mapping for standardization (shared + local extensions)
-        from openbench.data.coordinates import COORDINATE_MAP
-        self.coordinate_map = dict(COORDINATE_MAP)
-        self.coordinate_map.update({
-            "XTIME": "time",
-            "elevation": "elev", "height": "elev",
-            "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
-            "ELEV": "elev", "HEIGHT": "elev",
-        })
+        from openbench.data.coordinates import COORDINATE_MAP_WITH_VERTICAL
+
+        self.coordinate_map = dict(COORDINATE_MAP_WITH_VERTICAL)
 
         self.sim_source = sim_source
         self.ref_source = ref_source
 
-        # Initialize processing
+        # Initialize processing from task-local copies. Fallback varname
+        # population below mutates self.sim_nml/self.ref_nml for legacy
+        # compatibility, but must not pollute the shared namelists reused by
+        # subsequent evaluation tasks.
+        sim_nml = deepcopy(sim_nml)
+        ref_nml = deepcopy(ref_nml)
         self._initialize_attributes(main_nl, sim_nml, ref_nml, item, sim_source, ref_source)
         self._set_evaluation_variables(metric_vars, score_vars, comparison_vars, statistic_vars)
         self._process_data_types()
@@ -232,6 +239,7 @@ class GeneralInfoReader:
                     try:
                         setattr(self, f"{source_type}_fulllist", str(nml["general"][f"{source}_fulllist"]))
                     except (KeyError, TypeError) as e2:
+                        setattr(self, f"{source_type}_fulllist", "")
                         logging.error(f"read {source_type}_fulllist namelist error: {e2}")
 
             # Handle uparea attributes for station data
@@ -243,7 +251,10 @@ class GeneralInfoReader:
 
     def _process_data_types(self):
         """Process and validate data types."""
-        valid_types = ["grid", "stn", "point"]
+        # Must mirror loader.VALID_SIM_DATA_TYPES — a third value here
+        # would let unsupported types pass legacy validation that the
+        # loader would correctly reject.
+        valid_types = ["grid", "stn"]
         for data_type in [self.ref_data_type, self.sim_data_type]:
             if data_type not in valid_types:
                 logging.warning(f"Unknown data type: {data_type}. Valid types: {valid_types}")
@@ -419,8 +430,9 @@ class GeneralInfoReader:
                 self.stn_list = pd.DataFrame()
 
     @staticmethod
-    def _match_station_lists(sim_stn: pd.DataFrame, ref_stn: pd.DataFrame,
-                              spatial_threshold_deg: float = 0.01) -> pd.DataFrame:
+    def _match_station_lists(
+        sim_stn: pd.DataFrame, ref_stn: pd.DataFrame, spatial_threshold_deg: float = 0.01
+    ) -> pd.DataFrame:
         """Match two station lists for stn×stn evaluation.
 
         Strategy:
@@ -437,7 +449,9 @@ class GeneralInfoReader:
             n_ref = len(ref_stn)
             logging.info(
                 "Station matching by ID: %d matches (sim=%d, ref=%d)",
-                len(merged), n_sim, n_ref,
+                len(merged),
+                n_sim,
+                n_ref,
             )
             return merged
 
@@ -445,7 +459,9 @@ class GeneralInfoReader:
         logging.warning(
             "No ID matches between sim (%d stations) and ref (%d stations). "
             "Attempting spatial matching (threshold=%.4f°)...",
-            len(sim_stn), len(ref_stn), spatial_threshold_deg,
+            len(sim_stn),
+            len(ref_stn),
+            spatial_threshold_deg,
         )
 
         # Find lat/lon columns
@@ -459,6 +475,7 @@ class GeneralInfoReader:
             return pd.DataFrame()
 
         import numpy as np
+
         rows = []
         ref_lats = ref_lat.values.astype(float)
         ref_lons = ref_lon.values.astype(float)
@@ -526,6 +543,15 @@ class GeneralInfoReader:
 
     def _rename_station_columns(self, sim_only=False, ref_only=False):
         """Rename station columns to standard names."""
+
+        def _ensure_side_time_columns(df: pd.DataFrame, side: str) -> None:
+            syear_col = f"{side}_syear"
+            eyear_col = f"{side}_eyear"
+            if syear_col not in df.columns and "use_syear" in df.columns:
+                df[syear_col] = df["use_syear"]
+            if eyear_col not in df.columns and "use_eyear" in df.columns:
+                df[eyear_col] = df["use_eyear"]
+
         if not ref_only and hasattr(self, "sim_stn_list"):
             self.sim_stn_list.rename(
                 columns={
@@ -537,6 +563,7 @@ class GeneralInfoReader:
                 },
                 inplace=True,
             )
+            _ensure_side_time_columns(self.sim_stn_list, "sim")
         if not sim_only and hasattr(self, "ref_stn_list"):
             self.ref_stn_list.rename(
                 columns={
@@ -548,10 +575,13 @@ class GeneralInfoReader:
                 },
                 inplace=True,
             )
+            _ensure_side_time_columns(self.ref_stn_list, "ref")
 
         # Also rename in combined station list if it exists
         if hasattr(self, "stn_list") and not self.stn_list.empty:
             # Standard column mapping for coordinates and other fields
+            from openbench.data.coordinates import VERTICAL_COORDINATE_MAP
+
             column_mapping = {
                 "id": "ID",
                 "Id": "ID",
@@ -565,30 +595,32 @@ class GeneralInfoReader:
                 "Latitude": "lat",
                 "LAT": "lat",
                 "Lat": "lat",
-                "elevation": "elev",
-                "Elevation": "elev",
-                "ELEV": "elev",
-                "alt": "elev",
-                "altitude": "elev",
             }
+            column_mapping.update(VERTICAL_COORDINATE_MAP)
 
             # Apply column renaming
             for old_name, new_name in column_mapping.items():
                 if old_name in self.stn_list.columns:
                     self.stn_list.rename(columns={old_name: new_name}, inplace=True)
 
-            # Handle DIR column renaming based on data types
-            if "DIR" in self.stn_list.columns:
-                if self.ref_data_type == "stn" and self.sim_data_type == "stn":
-                    # For station-to-station comparison, we need both ref_dir and sim_dir
-                    # This case is more complex and handled in merge logic
-                    pass
-                elif self.ref_data_type == "stn":
-                    # Reference is station data, rename DIR to ref_dir
-                    self.stn_list.rename(columns={"DIR": "ref_dir"}, inplace=True)
-                elif self.sim_data_type == "stn":
-                    # Simulation is station data, rename DIR to sim_dir
-                    self.stn_list.rename(columns={"DIR": "sim_dir"}, inplace=True)
+            # Handle side-specific station columns based on data types.
+            if self.ref_data_type == "stn" and self.sim_data_type != "stn":
+                self.stn_list.rename(
+                    columns={"DIR": "ref_dir", "SYEAR": "ref_syear", "EYEAR": "ref_eyear"},
+                    inplace=True,
+                )
+            elif self.sim_data_type == "stn" and self.ref_data_type != "stn":
+                self.stn_list.rename(
+                    columns={"DIR": "sim_dir", "SYEAR": "sim_syear", "EYEAR": "sim_eyear"},
+                    inplace=True,
+                )
+            # Generated station lists commonly carry use_syear/use_eyear rather
+            # than side-specific names; mirror them before filtering so the
+            # branches below do not fail with KeyError.
+            if self.ref_data_type == "stn":
+                _ensure_side_time_columns(self.stn_list, "ref")
+            if self.sim_data_type == "stn":
+                _ensure_side_time_columns(self.stn_list, "sim")
 
     def _filter_stations(self):
         """Filter stations based on criteria."""
@@ -613,13 +645,18 @@ class GeneralInfoReader:
             self._apply_default_filter()
 
         # Save the filtered station list
-        if hasattr(self, "stn_list") and not self.stn_list.empty:
-            if len(self.stn_list) == 0:
-                logging.error("No stations selected. Check filter criteria.")
-                raise ValueError("No stations selected. Check filter criteria.")
+        if hasattr(self, "stn_list"):
+            if self.stn_list.empty:
+                cause = getattr(self, "_station_list_error", None)
+                message = "No stations selected. Check filter criteria."
+                if cause is not None:
+                    message = f"{message} Station list error: {cause}"
+                logging.error(message)
+                raise ValueError(message)
 
             # Always write to a case-specific path to avoid overwriting the original ref CSV
             stn_list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.csv")
+            os.makedirs(os.path.dirname(stn_list_path), exist_ok=True)
             self.ref_fulllist = stn_list_path
             self.stn_list.to_csv(stn_list_path, index=False)
             final_count = len(self.stn_list)
@@ -636,16 +673,20 @@ class GeneralInfoReader:
         # Priority 1: station_matching config from reference catalog
         try:
             from openbench.data.registry.manager import get_registry
+
             mgr = get_registry()
             ref = mgr.get_reference(self.ref_source)
             if ref and ref.station_matching:
                 sm = ref.station_matching
+
                 def _station_matcher_filter(info):
                     from pathlib import Path
                     from openbench.data.station_matcher import run_station_matching
+
                     dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
                     run_station_matching(
-                        info, dataset_path,
+                        info,
+                        dataset_path,
                         method=sm.method,
                         station_id_var=sm.station_id_var,
                         lon_var=sm.lon_var,
@@ -658,6 +699,7 @@ class GeneralInfoReader:
                         max_uparea=sm.max_uparea,
                         time_format=sm.time_format,
                     )
+
                 return _station_matcher_filter
         except Exception as e:
             logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)
@@ -665,6 +707,7 @@ class GeneralInfoReader:
         # Priority 2: Python filter file
         try:
             from openbench.data.custom import load_filter
+
             filter_module = load_filter(self.ref_source)
             if filter_module:
                 func = getattr(filter_module, f"filter_{self.ref_source}", None)
@@ -767,7 +810,8 @@ class GeneralInfoReader:
         if hasattr(self, "min_year") and self.min_year:
             try:
                 min_year_val = int(self.min_year)
-                year_filter = (self.stn_list["use_eyear"] - self.stn_list["use_syear"]) >= min_year_val
+                available_years = self.stn_list["use_eyear"] - self.stn_list["use_syear"] + 1
+                year_filter = available_years >= min_year_val
                 self.stn_list["Flag"] = self.stn_list["Flag"] & year_filter
             except (ValueError, AttributeError):
                 pass
@@ -798,16 +842,13 @@ class GeneralInfoReader:
         self.stn_list = self.stn_list[self.stn_list["Flag"]]
         logging.info(f"Total number of stations selected: {len(self.stn_list)}")
 
-        # Log a warning if no stations are selected
+        # Fail fast if no stations are selected; downstream processing cannot
+        # evaluate an empty station list usefully.
         if len(self.stn_list) == 0:
-            logging.warning("No stations selected after filtering. Check filter criteria.")
-            logging.warning(f"Reference data type: {self.ref_data_type}, time range: {self.ref_syear}-{self.ref_eyear}")
-            logging.warning(f"Simulation data type: {self.sim_data_type}")
-
-    def _station_filter_criteria(self, row):
-        """Custom station filtering criteria."""
-        # Default implementation - can be overridden
-        return True
+            logging.error("No stations selected after filtering. Check filter criteria.")
+            logging.error(f"Reference data type: {self.ref_data_type}, time range: {self.ref_syear}-{self.ref_eyear}")
+            logging.error(f"Simulation data type: {self.sim_data_type}")
+            raise ValueError("No stations selected after filtering. Check filter criteria.")
 
     @staticmethod
     def _safe_int(value, default=None):
@@ -843,17 +884,13 @@ class GeneralInfoReader:
             self.use_syear = gen_sy
             self.use_eyear = gen_ey
             if ref_sy is not None and ref_sy > gen_sy:
-                logging.warning(
-                    "strict mode: ref starts at %d but config requires %d", ref_sy, gen_sy)
+                logging.warning("strict mode: ref starts at %d but config requires %d", ref_sy, gen_sy)
             if ref_ey is not None and ref_ey < gen_ey:
-                logging.warning(
-                    "strict mode: ref ends at %d but config requires %d", ref_ey, gen_ey)
+                logging.warning("strict mode: ref ends at %d but config requires %d", ref_ey, gen_ey)
             if sim_sy is not None and sim_sy > gen_sy:
-                logging.warning(
-                    "strict mode: sim starts at %d but config requires %d", sim_sy, gen_sy)
+                logging.warning("strict mode: sim starts at %d but config requires %d", sim_sy, gen_sy)
             if sim_ey is not None and sim_ey < gen_ey:
-                logging.warning(
-                    "strict mode: sim ends at %d but config requires %d", sim_ey, gen_ey)
+                logging.warning("strict mode: sim ends at %d but config requires %d", sim_ey, gen_ey)
         else:
             # intersection and per_pair: same formula (max starts, min ends)
             # For per_pair the difference is that the runner calls this once per
@@ -867,43 +904,10 @@ class GeneralInfoReader:
             self.use_syear = max(syear_values) if syear_values else 1990
             self.use_eyear = min(eyear_values) if eyear_values else 2020
 
-    def to_dict(self):
-        """Convert the instance attributes to a dictionary."""
-        return self.__dict__
-
-    def _check_station_file(self, station_info, required_var, file_path):
-        """Helper function to check if required variable exists in station file."""
-        try:
-            with xr.open_dataset(file_path, engine="netcdf4", chunks={}) as ds:
-                has_var = required_var in ds.data_vars
-            return {
-                "ID": station_info["ID"],
-                "valid": has_var,
-                "error": None if has_var else f"Required variable '{required_var}' not found",
-            }
-        except Exception as e:
-            return {"ID": station_info["ID"], "valid": False, "error": f"Error reading file: {str(e)}"}
-
-    @cached(key_prefix="station_batch", ttl=1800)
-    def _process_station_batch(self, stations_df, required_var, dir_column, n_jobs=-1):
-        """Process a batch of stations in parallel."""
-        if not _HAS_DATA_LIBS:
-            logging.warning("Joblib not available, processing stations sequentially")
-            results = []
-            for _, row in stations_df.iterrows():
-                results.append(self._check_station_file(row, required_var, row[dir_column]))
-        else:
-            results = Parallel(n_jobs=n_jobs)(
-                delayed(self._check_station_file)(row, required_var, row[dir_column])
-                for _, row in stations_df.iterrows()
-            )
-
-        # Process results and update flags
-        invalid_stations = []
-        for result in results:
-            if not result["valid"]:
-                invalid_stations.append(result["ID"])
-                if result["error"]:
-                    logging.warning(f"Warning: Station ID {result['ID']}: {result['error']}")
-
-        return invalid_stations
+    # Removed dead methods: `to_dict`, `_check_station_file`, and the
+    # `@cached`-decorated `_process_station_batch` had zero call sites
+    # across the codebase. Their continued presence would (a) keep the
+    # `joblib.Parallel` + `cached` decorator import surface live for no
+    # benefit and (b) silently come back to life if anyone ever called
+    # `_process_station_batch` and ran into the broken cache key state
+    # documented in the audit notes.

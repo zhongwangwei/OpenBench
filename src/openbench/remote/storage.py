@@ -7,7 +7,7 @@ Unified storage interface for local and remote file operations.
 import os
 import glob as glob_module
 from abc import ABC, abstractmethod
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from openbench.remote.sync import SyncEngine
@@ -201,6 +201,10 @@ class RemoteStorage(ProjectStorage):
 
     def write_file(self, path: str, content: str) -> None:
         self._sync.write(path, content)
+
+    def mark_synced(self, path: str, content: str) -> None:
+        """Update the sync cache after an out-of-band remote write."""
+        self._sync.mark_synced(path, content)
 
     def list_dir(self, path: str) -> List[str]:
         return self._sync.list_dir(path)

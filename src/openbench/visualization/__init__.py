@@ -1,6 +1,37 @@
 """Plotting and figure generation."""
 
-from .Fig_ANOVA import make_ANOVA
+# Default to a non-interactive backend only for the common Linux/headless CLI
+# case, and never override a backend chosen by the caller.  `matplotlib.use(...,
+# force=False)` still changes a caller-selected backend when pyplot has not yet
+# been imported, so guard explicitly instead of relying on force=False.
+import os as _os
+import sys as _sys
+
+import matplotlib as _matplotlib
+
+
+def _backend_name(value) -> str:
+    return str(value).lower()
+
+
+def _caller_selected_backend() -> bool:
+    return bool(_os.environ.get("MPLBACKEND")) or _backend_name(_matplotlib.get_backend()) != _backend_name(
+        _matplotlib.rcParamsOrig.get("backend")
+    )
+
+
+def _should_default_to_agg() -> bool:
+    if "matplotlib.pyplot" in _sys.modules or _caller_selected_backend():
+        return False
+    if not _sys.platform.startswith("linux"):
+        return False
+    return not (_os.environ.get("DISPLAY") or _os.environ.get("WAYLAND_DISPLAY"))
+
+
+if _should_default_to_agg():
+    _matplotlib.use("Agg", force=False)
+
+from .Fig_ANOVA import make_ANOVA  # noqa: E402
 from .Fig_Basic_Plot import make_Basic, make_plot_index_grid, make_plot_index_stn, plot_stn
 from .Fig_Correlation import make_Correlation
 from .Fig_Diff_Plot import make_scenarios_comparison_Diff_Plot
@@ -24,7 +55,6 @@ from .Fig_target_diagram import make_scenarios_comparison_Target_Diagram
 from .Fig_taylor_diagram import make_scenarios_comparison_Taylor_Diagram
 from .Fig_Three_Cornered_Hat import make_Three_Cornered_Hat
 from .Fig_Whisker_Plot import make_scenarios_comparison_Whisker_Plot
-from .Fig_Z_Score import make_Z_Score
 
 __all__ = [
     "make_scenarios_comparison_Portrait_Plot_seasonal",
@@ -47,7 +77,6 @@ __all__ = [
     "make_Correlation",
     "make_Standard_Deviation",
     "make_Hellinger_Distance",
-    "make_Z_Score",
     "make_Functional_Response",
     "make_Partial_Least_Squares_Regression",
     "make_plot_index_stn",

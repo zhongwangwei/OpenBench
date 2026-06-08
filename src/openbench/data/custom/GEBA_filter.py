@@ -1,13 +1,18 @@
 """Custom filter for the GEBA (Global Energy Balance Archive) reference dataset."""
 
 import logging
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
 import xarray as xr
 
+from openbench.util.filenames import station_file_path
+from openbench.util.netcdf import write_file_atomic
+from openbench.util.netcdf import write_netcdf_atomic
 
-def process_site(station_idx, dataset, info, varname):
+
+def process_site(station_idx, dataset, info, varname, duplicate_station_ids=None):
     """Extract metadata for a single station and persist its series as NetCDF."""
     station_id = str(dataset["station"].isel(station=station_idx).values)
     lon = float(dataset["lon"].isel(station=station_idx).values)
@@ -47,12 +52,12 @@ def process_site(station_idx, dataset, info, varname):
 
     scratch_dir = Path(info.casedir) / "scratch" / f"GEBA_{varname}_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    file_path = scratch_dir / f"{station_id}.nc"
+    file_path = station_file_path(scratch_dir, station_id, index=station_idx, duplicate_ids=duplicate_station_ids)
 
     # Save data
     data_out = data_var.squeeze(drop=True)
     ds_out = xr.Dataset({varname: data_out})
-    ds_out.to_netcdf(file_path)
+    write_netcdf_atomic(ds_out, file_path)
 
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
@@ -90,21 +95,23 @@ def filter_GEBA(info, ds=None):
     dataset_path = Path(info.ref_dir) / "GEBA_monthly.nc"
 
     if not dataset_path.exists():
-        logging.error(f"GEBA dataset not found: {dataset_path}")
-        return
+        raise FileNotFoundError(f"GEBA dataset not found: {dataset_path}")
 
     with xr.open_dataset(dataset_path) as ds_file:
         station_rows = []
+        station_ids = [str(value) for value in ds_file["station"].values]
+        duplicate_station_ids = {station_id for station_id, count in Counter(station_ids).items() if count > 1}
         num_stations = ds_file.dims["station"]
 
         for idx in range(num_stations):
-            result = process_site(idx, ds_file, info, varname)
+            result = process_site(idx, ds_file, info, varname, duplicate_station_ids)
             if result:
                 station_rows.append(result)
 
     if not station_rows:
-        logging.error(f"No GEBA stations satisfy the selection criteria for {varname}.")
-        return
+        raise ValueError(
+            f"No GEBA stations satisfy the selection criteria for {varname} (time range, lon/lat extent, min_year)."
+        )
 
     df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
@@ -113,5 +120,5 @@ def filter_GEBA(info, ds=None):
     info.ref_fulllist = f"{info.casedir}/stn_GEBA_{varname}_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
-    df.to_csv(info.ref_fulllist, index=False)
+    write_file_atomic(info.ref_fulllist, lambda tmp_path: df.to_csv(tmp_path, index=False), suffix=".tmp.csv")
     logging.info(f"GEBA station list saved: {len(df)} stations for {varname}")

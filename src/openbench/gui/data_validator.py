@@ -7,11 +7,15 @@ Supports both local and remote (SSH) validation.
 """
 
 import json
+import logging
 import os
+import shlex
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
 from openbench.gui.path_utils import to_absolute_path, get_openbench_root
+
+logger = logging.getLogger(__name__)
 
 
 def safe_open(path: str):
@@ -118,6 +122,7 @@ class FilePathGenerator:
         self._is_remote = is_remote
         self._ssh_manager = ssh_manager
         self._remote_openbench_root = remote_openbench_root
+        self.last_error: str | None = None
 
     def _get_base_dir(self) -> str:
         """Get the base directory path (root_dir + sub_dir)."""
@@ -195,14 +200,19 @@ class FilePathGenerator:
 
     def _remote_glob(self, base_dir: str, pattern: str) -> List[str]:
         """Find files matching pattern on remote server via SSH."""
+        self.last_error = None
         try:
             # Use find command to match files
-            cmd = f"find '{base_dir}' -maxdepth 1 -name '{pattern}' -type f 2>/dev/null | sort"
+            cmd = f"find {shlex.quote(base_dir)} -maxdepth 1 -name {shlex.quote(pattern)} -type f 2>/dev/null | sort"
             stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
             if exit_code == 0 and stdout.strip():
                 return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
-        except Exception:
-            pass
+            if exit_code != 0:
+                detail = stderr.strip() or stdout.strip() or f"exit code {exit_code}"
+                self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern}: {detail}"
+        except Exception as exc:
+            self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern}: {exc}"
+            logger.warning("%s", self.last_error)
         return []
 
 
@@ -228,14 +238,13 @@ class LocalNetCDFValidator:
     def check_variable(self, path: str, varname: str) -> ValidationCheck:
         """Check if variable exists in NetCDF file."""
         try:
-            import xarray as xr
+            import xarray as xr  # noqa: F401  feature detection
         except ImportError:
             return ValidationCheck("variable_exists", False, "xarray required: pip install xarray netCDF4")
 
         try:
-            ds = self._open_dataset(path)
-            available_vars = list(ds.data_vars)
-            ds.close()
+            with self._open_dataset(path) as ds:
+                available_vars = list(ds.data_vars)
 
             if varname in available_vars:
                 return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
@@ -255,21 +264,19 @@ class LocalNetCDFValidator:
     def check_time_range(self, path: str, syear: int, eyear: int) -> ValidationCheck:
         """Check if data time range covers required period."""
         try:
-            import xarray as xr
-            import pandas as pd
+            import xarray as xr  # noqa: F401  feature detection
+            import pandas as pd  # noqa: F401  feature detection
         except ImportError:
             return ValidationCheck("time_range", False, "xarray required: pip install xarray netCDF4")
 
         try:
-            ds = self._open_dataset(path)
-            time_dim = self._find_dim(ds, self.TIME_DIMS)
+            with self._open_dataset(path) as ds:
+                time_dim = self._find_dim(ds, self.TIME_DIMS)
 
-            if time_dim is None:
-                ds.close()
-                return ValidationCheck("time_range", False, f"Time dimension not found, tried: {self.TIME_DIMS}")
+                if time_dim is None:
+                    return ValidationCheck("time_range", False, f"Time dimension not found, tried: {self.TIME_DIMS}")
 
-            time_vals = ds[time_dim].values
-            ds.close()
+                time_vals = ds[time_dim].values
 
             # Convert to years - handle cftime objects
             try:
@@ -298,22 +305,20 @@ class LocalNetCDFValidator:
     ) -> ValidationCheck:
         """Check if data spatial range covers required area."""
         try:
-            import xarray as xr
+            import xarray as xr  # noqa: F401  feature detection
         except ImportError:
             return ValidationCheck("spatial_range", False, "xarray required: pip install xarray netCDF4")
 
         try:
-            ds = self._open_dataset(path)
-            lat_dim = self._find_dim(ds, self.LAT_DIMS)
-            lon_dim = self._find_dim(ds, self.LON_DIMS)
+            with self._open_dataset(path) as ds:
+                lat_dim = self._find_dim(ds, self.LAT_DIMS)
+                lon_dim = self._find_dim(ds, self.LON_DIMS)
 
-            if lat_dim is None or lon_dim is None:
-                ds.close()
-                return ValidationCheck("spatial_range", False, "Lat/lon dimensions not found")
+                if lat_dim is None or lon_dim is None:
+                    return ValidationCheck("spatial_range", False, "Lat/lon dimensions not found")
 
-            lat_vals = ds[lat_dim].values
-            lon_vals = ds[lon_dim].values
-            ds.close()
+                lat_vals = ds[lat_dim].values
+                lon_vals = ds[lon_dim].values
 
             data_min_lat, data_max_lat = float(lat_vals.min()), float(lat_vals.max())
             data_min_lon, data_max_lon = float(lon_vals.min()), float(lon_vals.max())
@@ -357,7 +362,7 @@ try:
         except Exception:
             return xr.open_dataset(path, decode_times=False)
 
-    ds = safe_open("{path}")
+    ds = safe_open({path_json})
     result = {{"success": True}}
     result["variables"] = list(ds.data_vars)
 
@@ -409,7 +414,7 @@ except Exception as e:
     def check_file_exists(self, path: str) -> ValidationCheck:
         """Check if file exists on remote server."""
         try:
-            stdout, stderr, exit_code = self._ssh.execute(f"test -f '{path}'", timeout=10)
+            stdout, stderr, exit_code = self._ssh.execute(f"test -f {shlex.quote(path)}", timeout=10)
             if exit_code == 0:
                 return ValidationCheck("file_exists", True, f"File exists: {path}")
             return ValidationCheck("file_exists", False, f"File not found: {path}")
@@ -420,7 +425,7 @@ except Exception as e:
         """Run inspection script on remote server."""
         import base64
 
-        script = self.INSPECT_SCRIPT.format(path=path)
+        script = self.INSPECT_SCRIPT.format(path_json=json.dumps(path))
 
         # Encode script as base64 to avoid shell quoting issues
         script_b64 = base64.b64encode(script.encode()).decode()
@@ -428,9 +433,13 @@ except Exception as e:
         # Build command with proper Python environment
         if self._conda_env:
             # Activate conda environment before running
-            cmd = f"source ~/.bashrc 2>/dev/null; conda activate {self._conda_env} 2>/dev/null; echo {script_b64} | base64 -d | {self._python_path}"
+            cmd = (
+                "source ~/.bashrc 2>/dev/null; "
+                f"conda activate {shlex.quote(self._conda_env)} 2>/dev/null; "
+                f"printf %s {shlex.quote(script_b64)} | base64 -d | {shlex.quote(self._python_path)}"
+            )
         else:
-            cmd = f"echo {script_b64} | base64 -d | {self._python_path}"
+            cmd = f"printf %s {shlex.quote(script_b64)} | base64 -d | {shlex.quote(self._python_path)}"
 
         try:
             stdout, stderr, exit_code = self._ssh.execute(cmd, timeout=30)
@@ -535,6 +544,7 @@ class DataValidator:
         self._is_remote = is_remote
         self._ssh_manager = ssh_manager
         self._remote_openbench_root = remote_openbench_root
+        self.last_error: str | None = None
 
         if is_remote and ssh_manager:
             self._validator = RemoteNetCDFValidator(ssh_manager, python_path, conda_env)
@@ -570,9 +580,13 @@ class DataValidator:
         data_groupby = general.get("data_groupby", "Year")
         data_type = general.get("data_type", "grid")
 
-        # Use source-specific years if available, otherwise general config
-        syear = source_config.get("syear") or general.get("syear") or general_config.get("syear", 2000)
-        eyear = source_config.get("eyear") or general.get("eyear") or general_config.get("eyear", 2020)
+        # Use source-specific years if available, otherwise general config.
+        # source_config is shaped {"general": {...}, "varname": ..., ...} so
+        # `source_config.get("syear")` was always None — the actual per-source
+        # value lives one level down under "general".
+        _src_general = source_config.get("general", {}) or {}
+        syear = _src_general.get("syear") or general.get("syear") or general_config.get("syear", 2000)
+        eyear = _src_general.get("eyear") or general.get("eyear") or general_config.get("eyear", 2020)
 
         # For station data without prefix/suffix, skip file path validation
         # Station data files may not follow the standard naming pattern
@@ -597,12 +611,15 @@ class DataValidator:
         # Check file existence
         first_existing_path = None
         if not sample_paths:
-            # No files found matching the pattern
+            # No files found matching the pattern, or remote listing failed.
             base_dir = path_gen._get_base_dir()
             pattern = f"{prefix}*{suffix}.nc"
-            checks.append(
-                ValidationCheck("file_exists", False, f"No files found matching pattern '{pattern}' in {base_dir}")
-            )
+            if getattr(path_gen, "last_error", None):
+                checks.append(ValidationCheck("file_exists", False, path_gen.last_error))
+            else:
+                checks.append(
+                    ValidationCheck("file_exists", False, f"No files found matching pattern '{pattern}' in {base_dir}")
+                )
         else:
             for path in sample_paths:
                 check = self._validator.check_file_exists(path)

@@ -1,12 +1,16 @@
-{% set name = "openbench" %}
-{% set version = "3.0.0a1" %}
+{% set name = "colm-openbench" %}
+{% set dist_name = name|replace("-", "_") %}
+{% set version = "3.0.0b1" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ dist_name }}-{{ version }}.tar.gz
+  # conda-forge 必填：提交前用 PyPI 上该版本 sdist 的校验和填入
+  #   计算：  curl -L <url> | openssl sha256
+  # sha256: <填入对应 sdist 的 sha256>
 
 build:
   noarch: python
@@ -35,7 +39,8 @@ requirements:
     - pyyaml >=6.0
     - jinja2 >=3.0.0
     - click >=8.0
-    - platformdirs >=3.0
+    - tqdm >=4.0
+    - packaging >=21.0
 
 test:
   imports:
@@ -45,10 +50,16 @@ test:
 
 about:
   home: https://github.com/CoLM-SYSU/OpenBench
+  dev_url: https://github.com/zhongwangwei/OpenBench
   license: MIT
   license_family: MIT
+  license_file: LICENSE
   summary: Open Source Land Surface Model Benchmarking System
   description: |
     OpenBench is a fully automated, cross-platform framework for
     benchmarking land surface models (LSMs) against curated reference
     datasets with consistent metrics, visualizations, and reports.
+
+extra:
+  recipe-maintainers:
+    - zhongwangwei

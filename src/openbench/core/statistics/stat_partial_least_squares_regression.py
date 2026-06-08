@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
-import warnings
+import logging
 
 import numpy as np
 import xarray as xr
 from joblib import Parallel, delayed
-
-warnings.simplefilter(action="ignore", category=UserWarning)
 
 
 def stat_partial_least_squares_regression(self, *variables):
@@ -38,8 +36,18 @@ def stat_partial_least_squares_regression(self, *variables):
     X_vars = list(variables[1:])  # [var for var in variables if '_Y' not in var.name]
 
     def extract_xarray_data(data):
-        """统一提取 xarray.Dataset 或 xarray.DataArray 的数据"""
+        """统一提取 xarray.Dataset 或 xarray.DataArray 的数据。
+
+        Dataset input must contain exactly one data variable — `squeeze('variable')`
+        raises ValueError on a multi-variable Dataset, so check up front with a
+        clearer message.
+        """
         if isinstance(data, xr.Dataset):
+            if len(data.data_vars) != 1:
+                raise ValueError(
+                    "stat_partial_least_squares_regression expects a single-variable "
+                    f"Dataset, got {len(data.data_vars)}: {list(data.data_vars)}"
+                )
             return data.to_array().squeeze("variable").values  # Dataset → 转多变量DataArray再取值
         elif isinstance(data, xr.DataArray):
             return data.values  # DataArray → 直接取值
@@ -50,14 +58,31 @@ def stat_partial_least_squares_regression(self, *variables):
     Y_data = extract_xarray_data(Y_vars)
     X_data = np.concatenate([extract_xarray_data(x)[np.newaxis, ...] for x in X_vars], axis=0)
     X_data = np.moveaxis(X_data, 0, 1)  # Reshape to (time, n_variables, lat, lon)
-    # Standardize data
-    X_mean = np.mean(X_data, axis=0)
-    X_std = np.std(X_data, axis=0)
-    X_stand = (X_data - X_mean) / X_std
+    # Standardize data. Guard zero-variance columns (constant predictors,
+    # e.g. mask layers) — naive division would yield inf/NaN that pollute
+    # every grid cell in that predictor and silently propagate downstream
+    # via the per-cell NaN filter in compute_plsr / compute_best_components.
+    # NaN-aware std: any NaN in an input column made `np.std` return NaN for
+    # the whole column, defeating the `where=X_std != 0` guard (NaN != 0 is
+    # True), which then produced NaN/inf in `X_stand` and silently NaN-d that
+    # cell downstream.
+    X_mean = np.nanmean(X_data, axis=0)
+    X_std = np.nanstd(X_data, axis=0)
+    X_stand = np.divide(
+        X_data - X_mean,
+        X_std,
+        out=np.full_like(X_data, np.nan, dtype=np.float64),
+        where=X_std != 0,
+    )
 
-    Y_mean = np.mean(Y_data, axis=0)
-    Y_std = np.std(Y_data, axis=0)
-    Y_stand = (Y_data - Y_mean) / Y_std
+    Y_mean = np.nanmean(Y_data, axis=0)
+    Y_std = np.nanstd(Y_data, axis=0)
+    Y_stand = np.divide(
+        Y_data - Y_mean,
+        Y_std,
+        out=np.full_like(Y_data, np.nan, dtype=np.float64),
+        where=Y_std != 0,
+    )
 
     # Define helper functions for parallel processing
     def compute_best_components(lat, lon):
@@ -87,11 +112,34 @@ def stat_partial_least_squares_regression(self, *variables):
         coef = pls.coef_.T
         intercept = pls.intercept_.T
         residuals = y - pls.predict(x).ravel()
-        mse = np.mean(residuals**2)
-        coef_std_err = np.sqrt(mse / len(y))
-        df = len(y) - 1
-        t_vals = coef.ravel() / coef_std_err
+        # Residual degrees of freedom: n - n_components - 1 (the PLS
+        # latent components plus the intercept consume parameters).
+        # Previously this used `df = n - 1`, which inflated DF, deflated
+        # t critical values, and made p-values appear more significant
+        # than they were. Guard df > 0 for series too short for the
+        # chosen number of components.
+        df = len(y) - n_components - 1
+        if df <= 0:
+            return lat, lon, np.full(X_data.shape[1], np.nan), np.nan, np.full(X_data.shape[1], np.nan), np.nan
+        mse = np.sum(residuals**2) / df
+        # Per-coefficient SE via the OLS approximation
+        # Cov(beta) ≈ mse * (X'X)^-1. The previous formula
+        # `sqrt(mse/n)` gave every coefficient the *same* SE
+        # (sample-mean SE), so t/p values ignored the variability
+        # contribution of each predictor. Use pinv for numerical
+        # stability with collinear standardized predictors; clip
+        # tiny negative numerics from pinv to zero.
+        try:
+            xtx_inv_diag = np.diag(np.linalg.pinv(x.T @ x))
+            coef_var = mse * np.maximum(xtx_inv_diag, 0.0)
+            coef_std_err = np.sqrt(coef_var)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                t_vals = np.where(coef_std_err > 0, coef.ravel() / coef_std_err, np.nan)
+        except np.linalg.LinAlgError:
+            t_vals = np.full(X_data.shape[1], np.nan)
         p_vals = 2 * (1 - t.cdf(np.abs(t_vals), df))
+        # Mask p-values for cells where SE was undefined.
+        p_vals = np.where(np.isnan(t_vals), np.nan, p_vals)
         r_squared = pls.score(x, y)
 
         return lat, lon, coef.ravel(), intercept.ravel(), p_vals, r_squared
@@ -124,8 +172,16 @@ def stat_partial_least_squares_regression(self, *variables):
         p_values[:, lat, lon] = p_vals
         r_squared_values[lat, lon] = r_squared
 
-    # Calculate anomaly
-    anomaly = coef_values * Y_std[np.newaxis, :, :]
+    # Convert standardized coefficients back to original predictor units:
+    # dy/dx = beta_std * Y_std / X_std. Without the X_std term, predictors
+    # with different units/scales produce incomparable anomaly magnitudes.
+    scale = np.divide(
+        Y_std[np.newaxis, :, :],
+        X_std,
+        out=np.full_like(coef_values, np.nan, dtype=np.float64),
+        where=X_std != 0,
+    )
+    anomaly = coef_values * scale
     # Create output dataset
     ds = xr.Dataset(
         data_vars={
@@ -145,6 +201,6 @@ def stat_partial_least_squares_regression(self, *variables):
     ds["intercepts"].attrs["long_name"] = "PLSR intercepts"
     ds["p_values"].attrs["long_name"] = "P-values"
     ds["r_squared"].attrs["long_name"] = "R-squared"
-    ds["anomaly"].attrs["long_name"] = "Anomaly (coefficients * Y standard deviation)"
+    ds["anomaly"].attrs["long_name"] = "Anomaly (coefficients rescaled by Y_std / X_std)"
 
     return ds

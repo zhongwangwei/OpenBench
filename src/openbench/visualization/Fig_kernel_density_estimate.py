@@ -1,4 +1,11 @@
+import hashlib
+import logging
 import math
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from ._sampling import sample_series_for_plot
+from openbench.visualization._figure_io import save_figure
+from openbench.visualization._filenames import join_filename_components
+from openbench.visualization._validation import finite_values
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -6,7 +13,10 @@ import numpy as np
 from matplotlib import rcParams
 from scipy.stats import gaussian_kde
 
+logger = logging.getLogger(__name__)
 
+
+@with_isolated_rc
 def make_scenarios_comparison_Kernel_Density_Estimate(
     basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered, option
 ):
@@ -15,7 +25,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
         matplotlib.rc("font", **font)
 
         params = {
-            "backend": "ps",
             "axes.linewidth": option["axes_linewidth"],
             "font.size": option["fontsize"],
             "xtick.labelsize": option["xtick"],
@@ -44,6 +53,8 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
             sim_source = sim_sources[i]
 
             try:
+                data = sample_series_for_plot(data, option, purpose="kde")
+                data = finite_values(data, label=f"{evaluation_item}/{ref_source}/{sim_source}/{varname} KDE")
                 lower_bound = np.min(data)
                 filtered_data = data
                 if varname in ["KGE", "KGESS", "NSE"]:
@@ -62,7 +73,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                 density = kde(x_values)
 
                 # Store the line object
-                (line,) = plt.plot(
+                (line,) = ax.plot(
                     x_values,
                     density,
                     color=MLINES[sim_source]["lineColor"],
@@ -71,15 +82,19 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                     label=sim_source,
                 )
                 lines.append(line)  # Add the line object to the list
-                plt.fill_between(
+                ax.fill_between(
                     x_values, density, color=MLINES[sim_source]["lineColor"], alpha=MLINES[sim_source]["alpha"]
                 )
 
-            except Exception as e:
-                print(e)
-                print(
-                    f"Error: {evaluation_item} {ref_source} {sim_source} {varname} Kernel Density Estimate failed!"
-                )  # ValueError: array must not contain infs or NaNs
+            except Exception:
+                logger.exception(
+                    "%s %s %s %s Kernel Density Estimate failed",
+                    evaluation_item,
+                    ref_source,
+                    sim_source,
+                    varname,
+                )
+                raise
 
         # Add labels and legend
         if varname == "percent_bias":
@@ -130,14 +145,26 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
         else:
             yticklabel = option["yticklabel"]
 
-        plt.xlabel(xticklabel, fontsize=option["xtick"] + 1, weight="bold")
-        plt.ylabel(yticklabel, fontsize=option["ytick"] + 1, weight="bold")
-        plt.title(title, fontsize=option["title_fontsize"], weight="bold", loc="center")
+        ax.set_xlabel(xticklabel, fontsize=option["xtick"] + 1, weight="bold")
+        ax.set_ylabel(yticklabel, fontsize=option["ytick"] + 1, weight="bold")
+        ax.set_title(title, fontsize=option["title_fontsize"], weight="bold", loc="center")
 
-        output_file_path = (
-            f"{basedir}/Kernel_Density_Estimate_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
-        )
-        plt.savefig(output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+        # Encode the sim_sources set into the filename so that two consecutive
+        # runs over [A,B] and [A,B,C] don't overwrite each other's KDE PNG.
+        # Use a short stable hash to keep filenames bounded; the full list is
+        # logged below at INFO so users can map the token back if needed.
+        if sim_sources:
+            sim_key = "+".join(sorted(sim_sources))
+            sim_token = hashlib.sha1(sim_key.encode("utf-8")).hexdigest()[:8]
+            logger.info("Fig_kde: token %s = sim_sources [%s]", sim_token, sim_key)
+            filename_parts = ("Kernel_Density_Estimate", evaluation_item, ref_source, varname, sim_token)
+        else:
+            filename_parts = ("Kernel_Density_Estimate", evaluation_item, ref_source, varname)
+        output_file_path = f"{basedir}/{join_filename_components(*filename_parts)}.{option['saving_format']}"
+        save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+        # Close the figure so matplotlib's figure manager releases its
+        # reference; otherwise figures accumulate across batch calls.
+        plt.close(fig)
 
 
 def generate_lines(data_names, option):

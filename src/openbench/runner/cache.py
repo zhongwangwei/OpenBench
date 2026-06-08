@@ -4,12 +4,12 @@ Skips re-computation when config + data haven't changed.
 Uses SHA-256 hash of the evaluation parameters to detect changes.
 Cache metadata stored in output_dir/.openbench_cache.json
 
-Thread/process safe: atomic write (temp file + rename) AND fcntl.flock
-around mark_done/invalidate so concurrent workers writing distinct keys
+Thread/process safe: atomic write (temp file + rename) AND a platform file
+lock around mark_done/invalidate so concurrent workers writing distinct keys
 don't lose each other's updates via a load-modify-save race.
 
-NOTE: fcntl.flock is advisory and may behave inconsistently on some NFS
-implementations. For local filesystems (the common OpenBench case) it
+NOTE: POSIX fcntl.flock is advisory and may behave inconsistently on some
+NFS implementations. For local filesystems (the common OpenBench case) it
 provides full mutual exclusion across processes.
 """
 
@@ -26,10 +26,19 @@ from typing import Any
 
 try:
     import fcntl  # POSIX only (macOS/Linux)
+
     _HAS_FCNTL = True
 except ImportError:  # pragma: no cover - Windows
     fcntl = None
     _HAS_FCNTL = False
+
+try:
+    import msvcrt  # Windows only
+
+    _HAS_MSVCRT = True
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
+    _HAS_MSVCRT = False
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +47,47 @@ logger = logging.getLogger(__name__)
 def _file_lock(lock_path: Path):
     """Cross-platform file lock context manager.
 
-    On POSIX uses fcntl.flock(LOCK_EX). On Windows (or any platform without
-    fcntl) degrades to a no-op with a single warning logged on first use —
-    the same behaviour as the pre-fix code.
+    On POSIX uses fcntl.flock(LOCK_EX). On Windows uses msvcrt.locking()
+    over the first byte of a dedicated lock file. If the platform lock cannot
+    be acquired, fail closed rather than continuing with an unprotected
+    load-modify-save sequence that can lose cache entries under concurrency.
     """
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    f = open(lock_path, "w")
+    f = open(lock_path, "a+b")
     locked = False
+    backend = None
     try:
         if _HAS_FCNTL:
             try:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 locked = True
+                backend = "fcntl"
             except OSError as e:
-                logger.debug("fcntl.flock unavailable on %s: %s", lock_path, e)
+                logger.warning("fcntl.flock unavailable on %s: %s", lock_path, e)
+                raise RuntimeError(f"failed to acquire cache lock {lock_path}") from e
+        elif _HAS_MSVCRT:
+            try:
+                f.seek(0)
+                if f.seek(0, os.SEEK_END) == 0:
+                    f.write(b"\0")
+                    f.flush()
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                locked = True
+                backend = "msvcrt"
+            except OSError as e:
+                logger.warning("msvcrt.locking unavailable on %s: %s", lock_path, e)
+                raise RuntimeError(f"failed to acquire cache lock {lock_path}") from e
+        else:
+            raise RuntimeError("no supported cache file-lock backend is available")
         yield
     finally:
         try:
-            if locked and _HAS_FCNTL:
+            if locked and backend == "fcntl":
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            elif locked and backend == "msvcrt":
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
         except OSError:
             pass
         f.close()
@@ -84,21 +115,24 @@ class EvaluationCache:
                 # went wrong (e.g., partial write from a crashed process).
                 try:
                     import time
-                    corrupt_path = self._cache_file.with_suffix(
-                        f".corrupt-{int(time.time())}"
-                    )
+
+                    corrupt_path = self._cache_file.with_suffix(f".corrupt-{int(time.time())}")
                     self._cache_file.rename(corrupt_path)
                     logger.warning(
                         "Failed to load cache file %s: %s. Renamed to %s for "
                         "diagnostics; starting with empty cache (re-evaluation "
                         "expected on next run).",
-                        self._cache_file, e, corrupt_path,
+                        self._cache_file,
+                        e,
+                        corrupt_path,
                     )
                 except OSError as rename_err:
                     logger.warning(
                         "Failed to load cache file %s: %s. Could not preserve "
                         "diagnostic copy (%s); starting with empty cache.",
-                        self._cache_file, e, rename_err,
+                        self._cache_file,
+                        e,
+                        rename_err,
                     )
                 return {}
         return {}
@@ -108,9 +142,7 @@ class EvaluationCache:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         try:
             # Atomic write: temp file + rename prevents race conditions
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._cache_dir), suffix=".tmp", prefix=".cache_"
-            )
+            fd, tmp_path = tempfile.mkstemp(dir=str(self._cache_dir), suffix=".tmp", prefix=".cache_")
             try:
                 with os.fdopen(fd, "w") as f:
                     json.dump(self._cache, f, indent=2)

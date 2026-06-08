@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 
 import numpy as np
@@ -7,6 +8,15 @@ import xarray as xr
 from joblib import Parallel, delayed
 
 logger = logging.getLogger(__name__)
+
+
+def _canonical_sim_grid_res(value):
+    """Return the supported HydroWeb routing resolution matching a user value."""
+    valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
+    for resolution in valid_resolutions:
+        if math.isclose(float(value), resolution, rel_tol=1e-6, abs_tol=1e-8):
+            return resolution
+    raise ValueError(f"HydroWeb filter: sim_grid_res {value} not in valid set {valid_resolutions}")
 
 
 def process_station(station, info):
@@ -31,8 +41,9 @@ def process_station(station, info):
         with xr.open_dataset(file_path) as df:
             if info.debug_mode:
                 logger.info("Processing station %s...", int(station["ID"]))
-            result["obs_syear"] = int(df["time.year"].values[0])
-            result["obs_eyear"] = int(df["time.year"].values[-1])
+            years = pd.to_datetime(df["time"].values).year
+            result["obs_syear"] = int(years[0])
+            result["obs_eyear"] = int(years[-1])
             result["use_syear"] = max(result["obs_syear"], int(info.sim_syear), int(info.syear))
             result["use_eyear"] = min(result["obs_eyear"], int(info.sim_eyear), int(info.eyear))
             if (
@@ -73,30 +84,22 @@ def filter_HydroWeb(info, ds=None):
 
     # Initialization mode
     if info.compare_tim_res.lower() != "d":
-        raise ValueError(
-            f"HydroWeb filter requires compare_tim_res=Day; got {info.compare_tim_res!r}"
-        )
+        raise ValueError(f"HydroWeb filter requires compare_tim_res=Day; got {info.compare_tim_res!r}")
 
     # Confirm the resolution of info.sim_grid_res
     if not hasattr(info, "sim_grid_res"):
         raise ValueError("HydroWeb filter requires info.sim_grid_res; not defined")
 
     if not isinstance(info.sim_grid_res, (int, float)):
-        raise ValueError(
-            f"HydroWeb filter: sim_grid_res must be a number, got {type(info.sim_grid_res).__name__}"
-        )
+        raise ValueError(f"HydroWeb filter: sim_grid_res must be a number, got {type(info.sim_grid_res).__name__}")
 
-    valid_resolutions = [0.25, 0.0167, 0.0833, 0.1, 0.05]
     logger.info(
         "The simulation grid resolution of routing model can be different from the LSM grid resolution. "
         "Using sim_grid_res = %s from configuration. "
         "Valid values: 0.25(15min), 0.0167(1min), 0.0833(5min), 0.1(6min), 0.05(3min)",
         info.sim_grid_res,
     )
-    if info.sim_grid_res not in valid_resolutions:
-        raise ValueError(
-            f"HydroWeb filter: sim_grid_res {info.sim_grid_res} not in valid set {valid_resolutions}"
-        )
+    info.sim_grid_res = _canonical_sim_grid_res(info.sim_grid_res)
 
     if info.debug_mode:
         logger.info("Using simulation grid resolution: %s degrees", info.sim_grid_res)
@@ -118,7 +121,7 @@ def filter_HydroWeb(info, ds=None):
             station_list.at[i, key] = value
 
     ind = station_list[station_list["Flag"]].index
-    data_select = station_list.loc[ind]
+    data_select = station_list.loc[ind].copy()
 
     if info.sim_grid_res == 0.25:
         lat0 = np.arange(89.875, -90, -0.25)
@@ -137,13 +140,15 @@ def filter_HydroWeb(info, ds=None):
         lon0 = np.arange(-179.975, 180, 0.05)
     data_select["lon_cama"] = -9999.0
     data_select["lat_cama"] = -9999.0
-    for iii in range(len(data_select["ID"])):
-        data_select["lon_cama"].values[iii] = float(lon0[int(data_select["ix1"].values[iii]) - 1])
-        data_select["lat_cama"].values[iii] = float(lat0[int(data_select["iy1"].values[iii]) - 1])
-        if abs(data_select["lat_cama"].values[iii] - data_select["lat"].values[iii]) > 1:
-            logger.warning("ID %s lat does not match (cama vs station)", data_select["ID"][iii])
-        if abs(data_select["lon_cama"].values[iii] - data_select["lon"].values[iii]) > 1:
-            logger.warning("ID %s lon does not match (cama vs station)", data_select["ID"].values[iii])
+    for idx, row in data_select.iterrows():
+        lon_cama = float(lon0[int(row["ix1"]) - 1])
+        lat_cama = float(lat0[int(row["iy1"]) - 1])
+        data_select.at[idx, "lon_cama"] = lon_cama
+        data_select.at[idx, "lat_cama"] = lat_cama
+        if abs(lat_cama - float(row["lat"])) > 1:
+            logger.warning("ID %s lat does not match (cama vs station)", row["ID"])
+        if abs(lon_cama - float(row["lon"])) > 1:
+            logger.warning("ID %s lon does not match (cama vs station)", row["ID"])
     logger.info("HydroWeb filter selected %d stations", len(data_select["ID"]))
     if len(data_select["ID"]) == 0:
         raise ValueError(

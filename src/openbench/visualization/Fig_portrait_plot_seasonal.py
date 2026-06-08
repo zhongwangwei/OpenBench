@@ -1,16 +1,29 @@
-import itertools
 import logging
 import os
-import sys
+from openbench.visualization._combinations import limited_product
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import matplotlib
 import matplotlib.collections as collections
+from matplotlib.artist import setp
+from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
 
 from openbench.util.converttype import Convert_Type
+from openbench.visualization._validation import finite_min_max, finite_values
+from openbench.visualization._filenames import join_filename_components
+
+logger = logging.getLogger(__name__)
+
+
+def _format_tick_labels(ax, option):
+    """Format existing portrait-plot tick labels without resetting locators."""
+    setp(ax.get_xticklabels(), rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"])
+    setp(ax.get_yticklabels(), rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"])
 
 
 def _read_comparison_file(file):
@@ -46,13 +59,14 @@ def _read_comparison_file(file):
     return df
 
 
+@with_isolated_rc
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
+    option = option.copy()
     # Set figure size
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": 15,
         "xtick.labelsize": option["xtick"],
@@ -132,7 +146,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             data_score[k, i, j] = df.loc[
                                 (df["Item"] == item) & (df["Reference"] == reference) & (df["Simulation"] == sim_source)
                             ][f"{score}_{season}"].iloc[0]
-                        except:
+                        except Exception:
                             data_score[k, i, j] = np.nan
             # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
@@ -167,13 +181,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     logo_off=True,
                 )
 
-                # Rotate x-axis labels for better readability
-                ax.set_xticklabels(
-                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
-                )
-                ax.set_yticklabels(
-                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
-                )
+                # Rotate axis labels for better readability without resetting tick locators.
+                _format_tick_labels(ax, option)
                 ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
                 if not option["ylabel"]:
                     ylabel = "Scores"
@@ -185,16 +194,17 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f"{item}_{reference}"
+                filename = join_filename_components(item, reference)
                 output_file_path = (
                     f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
                 )
-                plt.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-                plt.close()
-            except Exception as e:
-                logging.error(f"Error in {item} - {reference}: {e}")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {item} - {reference}")
+                raise
     # delete the variables
     del (
         df,
@@ -233,7 +243,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     # scores = ['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df["Reference"]))
+    all_combinations = list(limited_product(filtered_df["Reference"], option, context="Portrait seasonal scores"))
 
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
@@ -298,13 +308,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     logo_off=True,
                 )
 
-                # Rotate x-axis labels for better readability
-                ax.set_xticklabels(
-                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
-                )
-                ax.set_yticklabels(
-                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
-                )
+                # Rotate axis labels for better readability without resetting tick locators.
+                _format_tick_labels(ax, option)
                 ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
                 if not option["ylabel"]:
                     ylabel = score.replace("_", " ")
@@ -315,14 +320,15 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f"{score}_{'_'.join(item_combination)}"
+                filename = join_filename_components(score, *item_combination)
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-                plt.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-                plt.close()
-            except Exception as e:
-                logging.error(f"Error in {score} - {item_combination}: {e}")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {score} - {item_combination}")
+                raise
     # delete the variables
     del (
         df,
@@ -383,7 +389,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             # Set figure size
             mfigsize = (len(sim_sources), len(metrics))
             figure, axes = plt.subplots(nrows=len(metrics), ncols=1, figsize=mfigsize, sharex=True)
-            plt.subplots_adjust(hspace=0)  # -0.91
+            axes = np.atleast_1d(axes)
+            figure.subplots_adjust(hspace=0)  # -0.91
 
             for i, metric in enumerate(metrics):
                 # Set x-axis and y-axis labels
@@ -425,20 +432,15 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                         ifigure=i,
                     )
                     axes[i] = ax
-                    axes[i].set_yticklabels(
-                        yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
-                    )
+                    # Rotate axis labels for better readability without resetting tick locators.
+                    _format_tick_labels(ax, option)
 
-                    # Rotate x-axis labels for better readability
                     ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
                     if not option["ylabel"]:
                         ylabel = "Metrics"
                     if not option["xlabel"]:
                         xlabel = "Simulations"
 
-                    ax.set_xticklabels(
-                        xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
-                    )
                     ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
                     axes[0].set_title(title, fontsize=option["title_size"])
 
@@ -451,18 +453,31 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                         lw=option["legend_lw"],
                         fontsize=option["legend_fontsize"],
                     )
+                except Exception:
+                    logging.exception(f"Error in {reference} - {item} {metric}")
+                    raise
 
-                    # Save the plot
-                    filename = f"{item}_{reference}"
-                    output_file_path = (
-                        f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
-                    )
-                    plt.savefig(
-                        output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
-                    )
-                    plt.close()
-                except Exception as e:
-                    logging.error(f"Error in {reference} - {item} {metric}: {e}")
+            # Save once per (item, reference) — the shared multi-row figure
+            # was previously saved+closed inside the metric loop, which closed
+            # the canvas on the first iteration and overwrote the same output
+            # file for each subsequent metric, leaving only the last state.
+            filename = join_filename_components(item, reference)
+            output_file_path = (
+                f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_metrics.{option['saving_format']}"
+            )
+            try:
+                save_figure(
+                    figure,
+                    output_file_path,
+                    format=f"{option['saving_format']}",
+                    dpi=option["dpi"],
+                    bbox_inches="tight",
+                )
+            except Exception:
+                logging.exception(f"Error saving {output_file_path}")
+                raise
+            finally:
+                plt.close(figure)
     del (
         df,
         unique_items,
@@ -498,7 +513,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     sim_sources = df["Simulation"].unique()
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df["Reference"]))
+    all_combinations = list(limited_product(filtered_df["Reference"], option, context="Portrait seasonal metrics"))
 
     # Iterate over each metric
     for metric in metrics:
@@ -565,13 +580,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     logo_off=True,
                 )
 
-                # Rotate x-axis labels for better readability
-                ax.set_xticklabels(
-                    xaxis_labels, rotation=option["x_rotation"], ha=option["x_ha"], fontsize=option["xtick"]
-                )
-                ax.set_yticklabels(
-                    yaxis_labels, rotation=option["y_rotation"], ha=option["y_ha"], fontsize=option["ytick"]
-                )
+                # Rotate axis labels for better readability without resetting tick locators.
+                _format_tick_labels(ax, option)
                 ylabel, xlabel, title = option["ylabel"], option["xlabel"], option["title"]
                 if not option["ylabel"]:
                     ylabel = metric.replace("_", " ")
@@ -582,14 +592,15 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_title(title, fontsize=option["title_size"])
 
                 # Save the plot
-                filename = f"{metric}_{'_'.join(item_combination)}"
+                filename = join_filename_components(metric, *item_combination)
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
-                plt.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-                plt.close()
-            except Exception as e:
-                logging.error(f"Error in {metric} - {item_combination}: {e}")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {metric} - {item_combination}")
+                raise
 
     del (
         df,
@@ -611,6 +622,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     )
 
 
+@with_isolated_rc
 def portrait_plot(
     data,
     xaxis_labels,
@@ -636,8 +648,8 @@ def portrait_plot(
     cbar_label=None,
     cbar_label_fontsize=15,
     cbar_tick_fontsize=12,
-    cbar_kw={},
-    cbar_option={},
+    cbar_kw=None,
+    cbar_option=None,
     colorbar_off=False,
     missing_color="grey",
     invert_yaxis=True,
@@ -716,10 +728,16 @@ def portrait_plot(
     # ----------------
     # Prepare plotting
     # ----------------
+    cbar_kw = dict(cbar_kw or {})
+    cbar_kw.setdefault("orientation", "horizontal")
+    cbar_option = dict(cbar_option or {})
+    cbar_option.setdefault("colorbar_position_set", False)
+
     data, num_divide = prepare_data(data, xaxis_labels, yaxis_labels, debug=debug)
+    finite_values(data, label="Portrait Plot seasonal")
 
     if num_divide not in [1, 2, 4]:
-        sys.exit("Error: Number of (stacked) array is not 1, 2, or 4.")
+        raise ValueError("Error: Number of (stacked) array is not 1, 2, or 4.")
 
     if annotate:
         if annotate_data is None:
@@ -728,7 +746,7 @@ def portrait_plot(
         else:
             annotate_data, num_divide_annotate = prepare_data(annotate_data, xaxis_labels, yaxis_labels, debug=debug)
             if num_divide_annotate != num_divide:
-                sys.exit("Error: annotate_data does not have same size as data")
+                raise ValueError("Error: annotate_data does not have same size as data")
 
     # ----------------
     # Ready to plot!!
@@ -741,10 +759,9 @@ def portrait_plot(
     ax.set_facecolor(missing_color)
 
     if vrange is None:
-        vmin = np.nanmin(data)
-        vmax = np.nanmax(data)
+        vmin, vmax = finite_min_max(data, label="Portrait Plot seasonal")
         if use_axes:
-            vmin, vmax = np.percentile(data, [5, 95])
+            vmin, vmax = finite_min_max(data, label="Portrait Plot seasonal", percentile=(5, 95))
     else:
         vmin = min(vrange)
         vmax = max(vrange)
@@ -753,7 +770,7 @@ def portrait_plot(
     if cmap_bounds is None:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     else:
-        cmap = plt.get_cmap(cmap)
+        cmap = matplotlib.colormaps.get_cmap(cmap) if isinstance(cmap, str) else cmap
         if "extend" in list(cbar_kw.keys()):
             extend = cbar_kw["extend"]
         else:
@@ -776,7 +793,7 @@ def portrait_plot(
         if annotate:
             if annotate_data is not None:
                 if annotate_data.shape != data.shape:
-                    sys.exit("Error: annotate_data has different size than data")
+                    raise ValueError("Error: annotate_data has different size than data")
             else:
                 annotate_data = data
             ax = annotate_heatmap(
@@ -850,7 +867,7 @@ def portrait_plot(
 
     """
     # Rotate the tick labels and set their alignment.
-    plt.setp(
+    setp(
         ax.get_xticklabels(),
         fontsize=xaxis_fontsize,
         rotation=-30,
@@ -859,7 +876,7 @@ def portrait_plot(
     )
     """
     # Rotate and align top ticklabels
-    plt.setp(
+    setp(
         [tick.label2 for tick in ax.xaxis.get_major_ticks()],
         rotation=xticklabel_rotation,
         ha="left",
@@ -870,7 +887,7 @@ def portrait_plot(
 
     if xaxis_tick_labels_top_and_bottom:
         # Rotate and align bottom ticklabels
-        plt.setp(
+        setp(
             [tick.label1 for tick in ax.xaxis.get_major_ticks()],
             rotation=xticklabel_rotation,
             ha="right",
@@ -880,12 +897,12 @@ def portrait_plot(
         )
 
     # Set font size for yaxis tick labels
-    plt.setp(ax.get_yticklabels(), fontsize=yaxis_fontsize)
+    setp(ax.get_yticklabels(), fontsize=yaxis_fontsize)
 
     # Legend
     if legend_on:
         if legend_labels is None:
-            sys.exit("Error: legend_labels was not provided.")
+            raise ValueError("Error: legend_labels was not provided.")
         else:
             if not use_axes:
                 add_legend(
@@ -996,27 +1013,26 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
     # In case data was given as list of arrays, convert it to numpy (stacked) array
     if isinstance(data, list):
         if debug:
-            print("data type is list")
-            print("len(data):", len(data))
+            logger.info("data type is list")
+            logger.info("len(data):", len(data))
         if len(data) == 1:  # list has only 1 array as element
             if isinstance(data[0], np.ndarray) and (len(data[0].shape) == 2):
                 data = data[0]
                 num_divide = 1
             else:
-                sys.exit("Error: Element of given list is not in np.ndarray type")
+                raise ValueError("Error: Element of given list is not in np.ndarray type")
         else:  # list has more than 1 arrays as elements
             data = np.stack(data)
             num_divide = len(data)
 
     # Now, data is expected to be be a numpy array (whether given or converted from list)
     if debug:
-        print("data.shape:", data.shape)
-
+        logger.info("data.shape:", data.shape)
     if data.shape[-1] != len(xaxis_labels) and len(xaxis_labels) > 0:
-        sys.exit("Error: Number of elements in xaxis_label mismatchs to the data")
+        raise ValueError("Error: Number of elements in xaxis_label mismatchs to the data")
 
     if data.shape[-2] != len(yaxis_labels) and len(yaxis_labels) > 0:
-        sys.exit("Error: Number of elements in yaxis_label mismatchs to the data")
+        raise ValueError("Error: Number of elements in yaxis_label mismatchs to the data")
 
     if isinstance(data, np.ndarray):
         # data = np.squeeze(data)
@@ -1025,14 +1041,13 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
         elif len(data.shape) == 3:
             num_divide = data.shape[0]
         else:
-            print("data.shape:", data.shape)
-            sys.exit("Error: data.shape is not right")
+            logger.info("data.shape:", data.shape)
+            raise ValueError("Error: data.shape is not right")
     else:
-        sys.exit("Error: Converted or given data is not in np.ndarray type")
+        raise ValueError("Error: Converted or given data is not in np.ndarray type")
 
     if debug:
-        print("num_divide:", num_divide)
-
+        logger.info("num_divide:", num_divide)
     return data, num_divide
 
 
@@ -1040,6 +1055,7 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
 # Portrait plot 1: heatmap-style (no triangle)
 # (Inspired from: https://matplotlib.org/devdocs/gallery/images_contours_and_fields/image_annotated_heatmap.html)
 # ----------------------------------------------------------------------
+@with_isolated_rc
 def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwargs):
     """
     Create a heatmap from a numpy array and two lists of labels.
@@ -1054,7 +1070,7 @@ def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwa
         A list or array of length N with the labels for the columns.
     ax
         A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
-        not provided, use current axes or create a new one.  Optional.
+        not provided, create a new axes.  Optional.
     invert_yaxis
         A bool to decide top-down or bottom-up order on y-axis
     **kwargs
@@ -1062,7 +1078,7 @@ def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwa
     """
 
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     if invert_yaxis:
         ax.invert_yaxis()
@@ -1234,6 +1250,7 @@ def triamatrix(a, ax, rot=0, cmap="viridis", **kwargs):
 # Portrait plot 4 (four triangles)
 # (Inspired from: https://stackoverflow.com/questions/44666679/something-like-plt-matshow-but-with-triangles)
 # ----------------------------------------------------------------------
+@with_isolated_rc
 def quatromatrix(
     top,
     right,
@@ -1246,7 +1263,7 @@ def quatromatrix(
     invert_yaxis=True,
 ):
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     n = left.shape[0]
     m = left.shape[1]
@@ -1318,7 +1335,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
         if labels is None:
             labels = ["TOP", "RIGHT", "BOTTOM", "LEFT"]
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [
                     [box_x, box_y],
                     [box_x + box_size / 2.0, box_y + box_size / 2],
@@ -1331,7 +1348,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
             )
         )
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [
                     [box_x + box_size, box_y],
                     [box_x + box_size / 2.0, box_y + box_size / 2],
@@ -1344,7 +1361,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
             )
         )
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [
                     [box_x + box_size, box_y + box_size],
                     [box_x + box_size / 2.0, box_y + box_size / 2],
@@ -1357,7 +1374,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
             )
         )
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [
                     [box_x, box_y],
                     [box_x + box_size / 2.0, box_y + box_size / 2],
@@ -1405,7 +1422,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
         if labels is None:
             labels = ["UPPER", "LOWER"]
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [[box_x, box_y], [box_x, box_y + box_size], [box_x + box_size, box_y]],
                 color="k",
                 fill=False,
@@ -1414,7 +1431,7 @@ def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fo
             )
         )
         ax.add_patch(
-            plt.Polygon(
+            Polygon(
                 [
                     [box_x + box_size, box_y + box_size],
                     [box_x, box_y + box_size],

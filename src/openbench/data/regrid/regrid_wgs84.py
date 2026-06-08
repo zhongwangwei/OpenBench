@@ -33,7 +33,7 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
             for time_idx in range(data.time.size):
                 orig_values = data.isel(time=time_idx).values
                 orig_values_flat = orig_values.ravel()
-                mask = np.isfinite(orig_values_flat)
+                mask = np.isfinite(orig_values_flat) & np.isfinite(orig_lon_flat) & np.isfinite(orig_lat_flat)
                 if mask.sum() == 0:
                     regridded_data.append(np.full_like(new_lon_2d, np.nan))
                     continue
@@ -48,7 +48,7 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
             new_data_vars[var_name] = (("time", "lat", "lon"), np.array(regridded_data))
         else:
             orig_values_flat = data.values.ravel()
-            mask = np.isfinite(orig_values_flat)
+            mask = np.isfinite(orig_values_flat) & np.isfinite(orig_lon_flat) & np.isfinite(orig_lat_flat)
             if mask.sum() > 0:
                 regridded = griddata(
                     (orig_lon_flat[mask], orig_lat_flat[mask]),

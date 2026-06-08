@@ -29,8 +29,11 @@ statistic_nml:
   Correlation_source: ./nml/nml-yaml/fignml/Correlation.yaml
   Standard_Deviation_source: ./nml/nml-yaml/fignml/Standard_Deviation.yaml
   Functional_Response_source: ./nml/nml-yaml/fignml/Functional_Response.yaml
+  # Z_Score is a NetCDF-only statistic in v3; this entry is retained so
+  # legacy configs validate, but no make_Z_Score visualization is exported.
   Z_Score_source: ./nml/nml-yaml/fignml/Z_Score.yaml
   Three_Cornered_Hat_source: ./nml/nml-yaml/fignml/Three_Cornered_Hat.yaml
   Hellinger_Distance_source: ./nml/nml-yaml/fignml/Hellinger_Distance.yaml
   Partial_Least_Squares_Regression_source: ./nml/nml-yaml/fignml/Partial_Least_Squares_Regression.yaml
+  False_Discovery_Rate_source: ./nml/nml-yaml/fignml/False_Discovery_Rate.yaml
   ANOVA_source: ./nml/nml-yaml/fignml/ANOVA.yaml

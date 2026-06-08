@@ -1,9 +1,15 @@
+import logging
 import math
 import numbers
 import os
+import re
 import warnings
 from array import array
 from typing import Union
+from openbench.visualization._diagram_sampling import limit_diagram_points
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.visualization._filenames import join_filename_components
 
 import matplotlib
 import matplotlib.colors as clr
@@ -14,10 +20,14 @@ from matplotlib import rcParams, ticker
 from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 
+logger = logging.getLogger(__name__)
 
+
+@with_isolated_rc
 def make_scenarios_comparison_Target_Diagram(
     basedir, evaluation_item, bias, crmsd, rmsd, ref_source, sim_sources, option
 ):
+    option = option.copy()
     import os
 
     import matplotlib
@@ -28,7 +38,6 @@ def make_scenarios_comparison_Target_Diagram(
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
         "xtick.direction": "out",
@@ -43,9 +52,16 @@ def make_scenarios_comparison_Target_Diagram(
 
     fig, ax = plt.subplots(figsize=(option["x_wise"], option["y_wise"]))
 
+    (bias, crmsd, rmsd), sim_sources = limit_diagram_points(
+        [bias, crmsd, rmsd],
+        sim_sources,
+        option,
+        context="Target Diagram",
+    )
     option["MARKERS"] = generate_markers(sim_sources, option)
 
     target_diagram(
+        ax,
         bias,
         crmsd,
         rmsd,
@@ -57,7 +73,7 @@ def make_scenarios_comparison_Target_Diagram(
         circlestyle=option["circlestyle"],
         circleLineWidth=option["widthcircle"],
         circlelabelsize=option["circlelabelsize"],
-        legend={option["set_legend"], option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]},
+        legend=(option["set_legend"], option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]),
     )
 
     # if not option['title']:
@@ -65,11 +81,14 @@ def make_scenarios_comparison_Target_Diagram(
     # ax.set_title(option['title'], fontsize=option['title_size'], pad=30)
 
     output_file_path = os.path.join(
-        f"{basedir}", f"Target_Diagram_{evaluation_item}_{ref_source}.{option['saving_format']}"
+        f"{basedir}",
+        f"{join_filename_components('Target_Diagram', evaluation_item, ref_source)}.{option['saving_format']}",
     )
-    plt.savefig(output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+    save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+    plt.close(fig)
 
 
+@with_isolated_rc
 def target_diagram(*args, **kwargs):
     """
     Plot a target diagram from statistics of different series.
@@ -133,7 +152,7 @@ def target_diagram(*args, **kwargs):
 
     # Modify axes for target diagram (no overlay)
     if option["overlay"] == "off":
-        axes_handles = plot_target_axes(ax, axes, option)
+        plot_target_axes(ax, axes, option)
 
     # Plot data points
     lowcase = option["markerdisplayed"].lower()
@@ -143,6 +162,14 @@ def target_diagram(*args, **kwargs):
         plot_pattern_diagram_colorbar(ax, RMSDs, Bs, RMSDz, option)
     else:
         raise ValueError("Unrecognized option: " + option["markerdisplayed"])
+
+
+# Use the shared print helpers (the help dialog would crash with
+# NameError otherwise — these were previously referenced-but-never-defined).
+from openbench.visualization._diagram_utils import (  # noqa: E402
+    disp as _disp,
+    dispopt as _dispopt,
+)
 
 
 def _display_target_diagram_options():
@@ -261,21 +288,11 @@ def _display_target_diagram_options():
     )
 
 
-def _disp(text):
-    print(text)
-
-
-def _dispopt(optname, optval):
-    """
-    Displays option name and values
-
-    This is a support function for the DISPLAY_TARGET_DIAGRAM_OPTIONS function.
-    It displays the option name OPTNAME on a line by itself followed by its
-    value OPTVAL on the following line.
-    """
-
-    _disp("\t%s" % optname)
-    _disp("\t\t%s" % optval)
+# Removed an older `_disp`/`_dispopt` redefinition here that shadowed the
+# shared print-helpers imported above. The two implementations had the
+# same name but different output sinks (logger.info vs print) — confusing
+# and silently determined by import order. The shared print versions are
+# correct for the help-text use case.
 
 
 def _ensure_np_array_or_die(v, label: str) -> np.ndarray:
@@ -326,7 +343,7 @@ def _get_target_diagram_arguments(*args):
         return [], [], [], []
     elif nargin == 3:
         bs, rmsds, rmsdz = args
-        CAX = plt.gca()
+        CAX = None
     elif nargin == 4:
         CAX, bs, rmsds, rmsdz = args
         if not hasattr(CAX, "axes"):
@@ -339,6 +356,9 @@ def _get_target_diagram_arguments(*args):
     Bs = _ensure_np_array_or_die(bs, "Bs")
     RMSDs = _ensure_np_array_or_die(rmsds, "RMSDs")
     RMSDz = _ensure_np_array_or_die(rmsdz, "RMSDz")
+
+    if CAX is None:
+        _, CAX = plt.subplots()
 
     return CAX, Bs, RMSDs, RMSDz
 
@@ -380,7 +400,7 @@ def plot_target_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> list
         fmt = self.axis.get_major_formatter()
         self.axis.offsetText.set_visible(False)
         self.axis.set_label_text(self.label + " (" + fmt.get_offset() + ")")
-        print(fmt.get_offset())
+        logger.info(fmt.get_offset())
 
     axes_handles = []
     fontFamily = rcParams.get("font.family")
@@ -572,7 +592,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         if len(markerlabel) == 0:
             warnings.warn("No markers within axis limit ranges.")
         else:
-            add_legend(markerlabel, labelcolor, option, rgba, markerSize, fontSize, hp)
+            add_legend(ax, markerlabel, labelcolor, option, rgba, markerSize, fontSize, hp)
     else:
         # Plot markers as dots of a single color with accompanying labels
 
@@ -622,7 +642,7 @@ def plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         markerlabel = option["markerlabel"]
         marker_label_color = clr.to_rgb(edge_color) + (alpha,)
         if type(markerlabel) is dict:
-            add_legend(markerlabel, labelcolor, option, marker_label_color, markerSize, fontSize)
+            add_legend(ax, markerlabel, labelcolor, option, marker_label_color, markerSize, fontSize)
 
 
 def get_single_markers(markers: dict):
@@ -744,7 +764,11 @@ def get_default_markers(X, option: dict):
     return marker, markercolor
 
 
-def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[]):
+def add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=None):
+    # Mutable default would persist across calls and accumulate handles —
+    # the legend would grow indefinitely in batch evaluations.
+    if hp is None:
+        hp = []
     """
     Adds a legend to a pattern diagram.
 
@@ -804,7 +828,7 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
             # Put legend in a default location
             markerlabel = tuple(markerLabel)
             if option["legend"]["set_legend"]:
-                leg = plt.legend(
+                leg = ax.legend(
                     hp,
                     markerlabel,
                     loc="upper right",
@@ -813,7 +837,7 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
                     bbox_to_anchor=(option["legend"]["bbox_to_anchor_x"], option["legend"]["bbox_to_anchor_y"]),
                 )
             else:
-                leg = plt.legend(
+                leg = ax.legend(
                     hp, markerlabel, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.55, 1.05)
                 )
         else:
@@ -828,7 +852,7 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
             markerlabel = tuple(markerLabel)
 
             # Shift figure to include legend
-            plt.gcf().subplots_adjust(right=0.6)
+            ax.figure.subplots_adjust(right=0.6)
 
             # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
@@ -839,7 +863,7 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
                     loc = (1.2, 0.25)
                 else:
                     loc = (1.1, 0.25)
-            leg = plt.legend(hp, markerlabel, loc=loc, fontsize=fontSize, numpoints=1, ncol=ncol)
+            leg = ax.legend(hp, markerlabel, loc=loc, fontsize=fontSize, numpoints=1, ncol=ncol)
 
     elif type(markerLabel) is dict:
         # Add legend using labels provided as dictionary
@@ -860,13 +884,13 @@ def add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[
             legend_elements.append(legend_object)
 
         # Put legend in a default location
-        leg = plt.legend(
+        leg = ax.legend(
             handles=legend_elements, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.2, 1.0)
         )
 
         if _checkKey(option, "numberpanels") and option["numberpanels"] == 2:
             # add padding so legend is not cut off
-            plt.tight_layout(pad=1)
+            ax.figure.tight_layout(pad=1)
     else:
         raise Exception("markerLabel type is not a list or dictionary: " + str(type(markerLabel)))
 
@@ -955,33 +979,14 @@ def _circle_color_style(option: dict) -> dict:
     return option
 
 
-def is_int(element):
-    """
-    Check if variable is an integer.
-    """
-    try:
-        int(element)
-        return True
-    except ValueError:
-        return False
-
-
-def is_float(element):
-    """
-    Check if variable is a float.
-    """
-    try:
-        float(element)
-        return True
-    except ValueError:
-        return False
-
-
-def is_list_in_string(element):
-    """
-    Check if variable is list provided as string
-    """
-    return bool(re.search(r"\[|\]", element))
+# Canonical implementations now live in _diagram_utils so Fig_taylor_diagram
+# and this module share them; locally re-export under the existing names.
+from openbench.visualization._diagram_utils import (  # noqa: E402
+    is_float,
+    is_int,
+    is_list_in_string,
+    parse_literal_option,
+)
 
 
 def _default_options() -> dict:
@@ -1311,9 +1316,9 @@ def _read_options(option, **kwargs) -> dict:
 
         elif keys[index] in tuplekey:
             try:
-                option[keys[index]] = eval(values[index])
-            except NameError:
-                raise Exception("Invalid " + keys[index] + ": " + values[index])
+                option[keys[index]] = parse_literal_option(values[index], keys[index])
+            except ValueError as exc:
+                raise Exception(str(exc)) from exc
         elif pd.isna(values[index]):
             option[keys[index]] = ""
         elif is_int(values[index]):
@@ -1842,7 +1847,7 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: dic
     cxscale = fontSize / 10  # scale color bar by font size
     markerSize = option["markersize"] * 2
 
-    hp = plt.scatter(
+    hp = ax.scatter(
         X,
         Y,
         s=markerSize,
@@ -1877,7 +1882,7 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: dic
     # Add color bar to plot
     if option["colormap"] == "on":
         # map color shading of markers to colormap
-        hc = plt.colorbar(hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ax=ax)
+        hc = ax.figure.colorbar(hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ax=ax)
 
         # Limit number of ticks on color bar to reasonable number
         if orientation == "horizontal":
@@ -1886,8 +1891,8 @@ def plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: dic
     elif option["colormap"] == "off":
         # map color shading of markers to min to max range of Z values
         if len(Z) > 1:
-            ax.clim(min(Z), max(Z))
-            hc = ax.colorbar(
+            hp.set_clim(min(Z), max(Z))
+            hc = ax.figure.colorbar(
                 hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ticks=[min(Z), max(Z)], ax=ax
             )
 
@@ -2015,10 +2020,6 @@ def _setColorBarTicks(hc, numBins, lenTick):
             lengthTick += len(tickStr)
         if lengthTick > maxChar:
             numBins -= 1
-
-
-def _disp(text):
-    print(text)
 
 
 def generate_markers(data_names, option):

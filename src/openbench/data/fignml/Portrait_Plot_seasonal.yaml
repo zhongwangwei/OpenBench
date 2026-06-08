@@ -35,3 +35,5 @@ general:
   y_wise: 8
   font: DejaVu Sans
   dpi: 300
+  plotting_mode: balanced
+  max_combinations: 100

@@ -1,6 +1,41 @@
-"""openbench data commands."""
+"""openbench ref commands."""
+
+from pathlib import Path
 
 import click
+
+from openbench.cli import _display, _optimize, _profile_rescue, _ref_commands, _register, _scan, _scan_support
+from openbench.cli._options import TIM_RES_TYPE, expand_existing_directory, expand_path
+
+DATA_GROUPBY_TYPE = click.Choice(
+    ["single", "Year", "Day", "Month"],
+    case_sensitive=False,
+)
+
+
+def _expand_existing_directory(value: str | Path, label: str) -> str:
+    return str(expand_existing_directory(value, label))
+
+
+def _normalize_fulllist_path(value: str | Path, root_dir: str | Path | None) -> str:
+    path = expand_path(value)
+    if path.is_absolute():
+        return str(path)
+    if root_dir:
+        return str((Path(root_dir) / path).resolve())
+    return str(path.resolve())
+
+
+def _load_catalog_for_cli(path: Path) -> dict:
+    from openbench.data.registry.scanner import _safe_load_catalog
+
+    try:
+        return _safe_load_catalog(path)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+_reference_to_dict = _ref_commands.reference_to_dict
 
 
 @click.group()
@@ -10,560 +45,299 @@ def data():
 
 @data.command("list")
 @click.option("--variable", default=None, help="Filter by variable name.")
-def list_datasets(variable):
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
+def list_datasets(variable, fmt):
     """List all available reference datasets."""
-    from openbench.data.registry import RegistryManager
-
-    mgr = RegistryManager()
-
-    if variable:
-        refs = mgr.references_for_variable(variable)
-        if not refs:
-            click.echo(f"No datasets found for variable: {variable}")
-            return
-    else:
-        refs = mgr.list_references()
-
-    click.secho(f"{'Name':<30} {'Category':<12} {'Type':<6} {'Res':<8} {'Years':<14} {'Variables'}", bold=True)
-    click.echo("─" * 100)
-    for r in refs:
-        res = f"{r.grid_res}°" if r.grid_res else "stn"
-        years = f"{r.years[0]}-{r.years[1]}" if r.years else "?"
-        nvars = len(r.variables)
-        click.echo(f"{r.name:<30} {r.category:<12} {r.data_type:<6} {res:<8} {years:<14} {nvars}")
-
-    click.echo(f"\nTotal: {len(refs)} datasets")
+    return _ref_commands.list_datasets(variable, fmt, reference_to_dict_fn=_reference_to_dict)
 
 
-@data.command()
+@data.command(hidden=True)
 @click.argument("names", nargs=-1, required=True)
 def download(names):
     """[NOT IMPLEMENTED] Download reference datasets by name (planned for v3.0)."""
-    click.echo("Dataset download not yet implemented (requires hosted data repository).")
-    click.echo(f"Requested: {', '.join(names)}")
+    return _ref_commands.download(names)
 
 
-@data.command()
+@data.command(hidden=True)
 def status():
     """Show local dataset cache status. [Cache reporting NOT IMPLEMENTED in v3.0a1; only registry count is shown.]"""
-    from openbench.data.registry import RegistryManager
-
-    mgr = RegistryManager()
-    refs = mgr.list_references()
-    click.echo(f"Registry: {len(refs)} datasets available")
-    click.echo("Local cache: not yet implemented")
+    return _ref_commands.status()
 
 
 @data.command()
 @click.argument("name")
 def path(name):
     """Print local path for a dataset.  Supports base names (e.g. ERA5LAND)."""
-    from openbench.data.registry import RegistryManager
+    return _ref_commands.path(name)
 
-    mgr = RegistryManager()
-    ref = mgr.get_reference(name)
 
-    # Fall back to resolution variants if exact match fails
-    if ref is None:
-        variants = mgr.get_resolution_variants(name)
-        if variants:
-            for res_label, v in sorted(variants.items()):
-                path_str = v.root_dir or "(no local path)"
-                click.echo(f"{v.name}: {path_str}")
-            return
+@data.command("convert-old")
+@click.argument("old_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("output_path", type=click.Path(dir_okay=False, path_type=Path))
+@click.option("--name", required=True, help="Dataset name for the converted registry entry.")
+@click.option("--category", default="", help="Dataset category for the converted registry entry.")
+@click.option("--description", default="", help="Description for the converted registry entry.")
+def convert_old(old_path, output_path, name, category, description):
+    """Convert an old-format reference YAML into a v3 registry descriptor."""
+    return _ref_commands.convert_old(old_path, output_path, name, category, description)
 
-        click.secho(f"Dataset not found: {name}", fg="red")
-        raise SystemExit(1)
 
-    if ref.root_dir:
-        click.echo(ref.root_dir)
-    else:
-        click.echo(f"No local path configured for {name}")
+@data.command("delete")
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Delete without confirmation.")
+def delete(name, yes):
+    """Delete a user reference dataset entry or overlay."""
+    return _ref_commands.delete_reference(name, yes, load_catalog_for_cli_fn=_load_catalog_for_cli)
 
 
 @data.command()
 @click.argument("name")
-@click.option("--root-dir", default=None, help="Root directory containing data files (required for new).")
-@click.option("--data-type", type=click.Choice(["grid", "stn"]), default=None, help="Data type (auto-detected from NC if omitted).")
-@click.option("--tim-res", type=click.Choice(["Month", "Day", "Hour", "Year"]), default="Month")
+@click.option(
+    "--root-dir",
+    default=None,
+    help="Root directory containing data files (required for new).",
+)
+@click.option(
+    "--data-type",
+    type=click.Choice(["grid", "stn"]),
+    default=None,
+    help="Data type (auto-detected from NC if omitted).",
+)
+@click.option("--tim-res", type=TIM_RES_TYPE, default=None)
 @click.option("--grid-res", type=float, default=None, help="Grid resolution in degrees.")
 @click.option("--category", default="Other", help="Category: Water, Carbon, Energy, etc.")
 @click.option("--years", nargs=2, type=int, default=None, help="Start and end year.")
 @click.option("--fulllist", default=None, type=click.Path(), help="Station list CSV path (for stn data).")
-@click.option("-v", "--variable", multiple=True,
-              help="'VarName:ncname:unit' (repeatable). Overwrites if exists.")
-@click.option("-f", "--fallback", multiple=True,
-              help="'VarName:fallback_name:fallback_unit:conversion' (repeatable).")
+@click.option(
+    "-v",
+    "--variable",
+    multiple=True,
+    help="'StdName:ncname:unit[:prefix[:suffix]]' (repeatable). Overwrites if exists.",
+)
+@click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
 def register(name, root_dir, data_type, tim_res, grid_res, category, years, fulllist, variable, fallback):
     """Register or update a reference dataset in the registry.
 
     Creates a new entry or updates an existing one. Variables are overwritten
     by default when names match.
 
-    \b
-    Examples:
-        openbench data register MyData --root-dir /data/myref \\
-            --data-type grid --grid-res 0.5 --tim-res Month \\
-            --years 2000 2020 --category Water \\
-            -v "Evapotranspiration:ET:mm day-1"
+
+Examples:
+openbench ref register MyData --root-dir /data/myref \
+  --data-type grid --grid-res 0.5 --tim-res Month \
+  --years 2000 2020 --category Water \
+  -v "Evapotranspiration:ET:mm day-1"
 
-        # With fallback + conversion
-        openbench data register ERA5 --root-dir /data/era5 \\
-            -v "Latent_Heat:slhf:W m-2" \\
-            -f "Latent_Heat:surface_latent_heat_flux:J m-2:value / 3600"
+
+openbench ref register ERA5 --root-dir /data/era5 \
+  -v "Latent_Heat:slhf:W m-2" \
+  -f "Latent_Heat:surface_latent_heat_flux:J m-2:value / 3600"
 
-        # Station data with fulllist CSV
-        openbench data register PLUMBER2 --root-dir /data/PLUMBER2/dataset \\
-            --data-type stn --tim-res Day \\
-            --fulllist /data/PLUMBER2/list/PLUMBER2.csv \\
-            -v "Latent_Heat:Qle_cor:W/m2" \\
-            -v "Sensible_Heat:Qh_cor:W/m2"
+
+openbench ref register PLUMBER2 --root-dir /data/PLUMBER2/dataset \
+  --data-type stn --tim-res Day \
+  --fulllist /data/PLUMBER2/list/PLUMBER2.csv \
+  -v "Latent_Heat:Qle_cor:W/m2" \
+  -v "Sensible_Heat:Qh_cor:W/m2"
 
-        # Update existing: add a variable
-        openbench data register MyData -v "Runoff:RNOF:mm day-1"
+
+openbench ref register MyData -v "Runoff:RNOF:mm day-1"
     """
-    from pathlib import Path
-
-    from openbench.data.registry.manager import get_writable_reference_catalog_path
-    from openbench.data.registry.scanner import _safe_load_catalog
-
-    catalog_path = get_writable_reference_catalog_path()
-
-    # Use the same hardened load helper as scan: corrupted catalog raises
-    # rather than silently resetting to {}, and we get a .bak before write.
-    existing_catalog = _safe_load_catalog(catalog_path)
-
-    existing = existing_catalog.get(name, {})
-    is_new = name not in existing_catalog
-
-    # Parse primary variables and fallbacks
-    from openbench.cli._parsing import parse_fallbacks, parse_variables
-
-    new_vars = parse_variables(variable)
-    parse_fallbacks(fallback, new_vars, existing.get("variables", {}))
-
-    # Require root_dir for new entries
-    if is_new and not root_dir:
-        click.secho("Error: --root-dir is required for new datasets.", fg="red")
-        raise SystemExit(1)
-
-    if not variable and not fallback and is_new:
-        click.echo("\nAdd variables (empty name to finish):")
-        while True:
-            var_name = click.prompt("  Standard variable name (e.g., Evapotranspiration)", default="")
-            if not var_name:
-                break
-            nc_name = click.prompt("  Variable name in NetCDF file", default=var_name)
-            unit = click.prompt("  Unit", default="")
-            prefix = click.prompt("  File prefix", default="")
-            suffix = click.prompt("  File suffix", default="")
-            entry = {"varname": nc_name, "varunit": unit}
-            if prefix:
-                entry["prefix"] = prefix
-            if suffix:
-                entry["suffix"] = suffix
-            new_vars[var_name] = entry
-
-    if not new_vars and is_new:
-        click.secho("No variables defined. Registration cancelled.", fg="yellow")
-        return
-
-    # Auto-detect data_type from NC file if not specified
-    if data_type is None and root_dir:
-        from openbench.data.coordinates import glob_nc
-        from openbench.data.registry.scanner import _detect_data_type_from_nc
-        # Search root_dir and up to one level of subdirs for a NC file
-        root_path = Path(root_dir)
-        nc_files = glob_nc(root_path)
-        # Try one level deeper if nothing at root
-        if not nc_files:
-            for child in root_path.iterdir():
-                if child.is_dir():
-                    nc_files = glob_nc(child)
-                    if nc_files:
-                        break
-        nc_file = nc_files[0] if nc_files else None
-        if nc_file is not None:
-            detected = _detect_data_type_from_nc(nc_file)
-            if detected:
-                data_type = detected
-                click.echo(f"  Auto-detected data_type: {data_type}")
-            else:
-                click.echo("  Could not auto-detect data_type from NC file, using default: grid")
-    if data_type is None:
-        data_type = "grid"  # final fallback
-
-    # Build/update descriptor
-    descriptor = existing.copy()
-    descriptor["name"] = name
-    if is_new or root_dir:
-        descriptor["root_dir"] = root_dir
-    if is_new:
-        descriptor.setdefault("description", f"{name} reference dataset")
-        descriptor.setdefault("category", category)
-        descriptor.setdefault("data_type", data_type)
-        descriptor.setdefault("tim_res", tim_res)
-        descriptor.setdefault("data_groupby", "Year")
-        descriptor.setdefault("timezone", 0)
-        descriptor.setdefault("years", list(years) if years else [2000, 2020])
-    else:
-        if category != "Other":
-            descriptor["category"] = category
-        if years:
-            descriptor["years"] = list(years)
-
-    if grid_res is not None:
-        descriptor["grid_res"] = grid_res
-    if fulllist is not None:
-        descriptor["fulllist"] = str(Path(fulllist).resolve())
-
-    # Merge variables (overwrite existing)
-    merged_vars = descriptor.get("variables", {})
-    updated = [k for k in new_vars if k in merged_vars]
-    added = [k for k in new_vars if k not in merged_vars]
-    merged_vars.update(new_vars)
-    descriptor["variables"] = merged_vars
-
-    existing_catalog[name] = descriptor
-    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
-    # Backup previous catalog state before write so user can recover if this
-    # registration was a mistake. Then invalidate the singleton registry
-    # cache so subsequent get_registry() reads see the new entry.
-    _backup_then_write(catalog_path, existing_catalog)
-    _invalidate_registry_caches()
-
-    if is_new:
-        click.secho(f"✓ Created '{name}' ({len(merged_vars)} variables)", fg="green")
-    else:
-        parts = []
-        if added:
-            parts.append(f"{len(added)} added")
-        if updated:
-            parts.append(f"{len(updated)} updated")
-        click.secho(f"✓ Updated '{name}': {', '.join(parts)} ({len(merged_vars)} total)", fg="green")
-    click.echo(f"Verify: openbench data show {name}")
+    return _register.register_reference(
+        name,
+        root_dir,
+        data_type,
+        tim_res,
+        grid_res,
+        category,
+        years,
+        fulllist,
+        variable,
+        fallback,
+        expand_existing_directory_fn=_expand_existing_directory,
+        normalize_fulllist_path_fn=_normalize_fulllist_path,
+        load_catalog_for_cli_fn=_load_catalog_for_cli,
+    )
 
 
 @data.command("register-profile")
 @click.argument("name")
-@click.option("-v", "--variable", multiple=True,
-              help="'VarName:ncname:unit' (repeatable).")
-@click.option("--tim-res", default=None, help="Time resolution override (Day, Month, Hour).")
-@click.option("--data-groupby", default=None, help="Data groupby override (single, Year).")
+@click.option("-v", "--variable", multiple=True, help="'StdName:ncname:unit[:prefix[:suffix]]' (repeatable).")
+@click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
+@click.option("--tim-res", type=TIM_RES_TYPE, default=None, help="Time resolution override.")
+@click.option("--category", default=None, help="Category override: Water, Carbon, Energy, etc.")
+@click.option("--data-groupby", type=DATA_GROUPBY_TYPE, default=None, help="Data groupby override.")
 @click.option("--fulllist", default=None, help="Station list CSV pattern (relative to root_dir).")
 @click.option("--description", default=None, help="Dataset description.")
-def register_profile(name, variable, tim_res, data_groupby, fulllist, description):
+def register_profile(
+    name,
+    variable,
+    fallback=(),
+    tim_res=None,
+    category=None,
+    data_groupby=None,
+    fulllist=None,
+    description=None,
+):
     """Register a reference profile (variable mappings for a dataset type).
 
     Profiles are shared across resolutions. E.g., registering 'GLEAM_v4.2a'
     applies to GLEAM_v4.2a_LowRes, GLEAM_v4.2a_MidRes, etc.
 
-    \b
-    Examples:
-        openbench data register-profile MyData \\
-            -v "Latent_Heat:LE:W m-2" \\
-            -v "Sensible_Heat:H:W m-2"
+
+Examples:
+openbench ref register-profile MyData \
+  -v "Latent_Heat:LE:W m-2" \
+  -v "Sensible_Heat:H:W m-2"
 
-        openbench data register-profile PLUMBER2_new \\
-            --tim-res Day --data-groupby single \\
-            --fulllist "../list/stations.csv" \\
-            -v "Latent_Heat:Qle_cor:W m-2"
+
+openbench ref register-profile PLUMBER2_new \
+  --tim-res Day --data-groupby single \
+  --fulllist "../list/stations.csv" \
+  -v "Latent_Heat:Qle_cor:W m-2"
     """
-    from openbench.data.registry.manager import get_writable_registry_dir
-    from openbench.data.registry.scanner import _safe_load_catalog
-
-    profile_path = get_writable_registry_dir() / "reference_profiles.yaml"
-
-    # Hardened load: corrupted YAML raises rather than silently resetting
-    profiles = _safe_load_catalog(profile_path)
-
-    existing = profiles.get(name, {})
-
-    # Parse variables
-    new_vars = {}
-    for v in variable:
-        parts = v.split(":")
-        if len(parts) < 2:
-            click.secho(f"Invalid format: '{v}'. Use 'VarName:ncname:unit'", fg="red")
-            raise SystemExit(1)
-        var_name = parts[0].strip()
-        nc_name = parts[1].strip()
-        unit = parts[2].strip() if len(parts) > 2 else ""
-        new_vars[var_name] = {"varname": nc_name, "varunit": unit}
-
-    if not variable and not existing:
-        click.secho("No variables specified. Use -v 'VarName:ncname:unit'", fg="red")
-        raise SystemExit(1)
-
-    # Build profile
-    profile = existing.copy()
-    if description:
-        profile["description"] = description
-    elif "description" not in profile:
-        profile["description"] = f"{name} reference dataset"
-    if tim_res:
-        profile["tim_res"] = tim_res
-    if data_groupby:
-        profile["data_groupby"] = data_groupby
-    if fulllist:
-        profile["fulllist"] = fulllist
-
-    # Merge variables
-    merged = profile.get("variables", {})
-    merged.update(new_vars)
-    profile["variables"] = merged
-
-    profiles[name] = profile
-
-    from openbench.data.registry.scanner import _backup_then_write, _invalidate_registry_caches
-    _backup_then_write(profile_path, profiles)
-    _invalidate_registry_caches()
-
-    is_new = name not in existing or not existing
-    action = "Created" if is_new else "Updated"
-    click.secho(f"✓ {action} profile '{name}' ({len(merged)} variables)", fg="green")
-    click.echo("Re-scan to apply: openbench data scan /path/to/reference")
+    return _register.register_reference_profile(
+        name,
+        variable,
+        fallback=fallback,
+        tim_res=tim_res,
+        category=category,
+        data_groupby=data_groupby,
+        fulllist=fulllist,
+        description=description,
+        load_catalog_for_cli_fn=_load_catalog_for_cli,
+    )
 
 
 @data.command()
 @click.argument("name")
-def show(name):
+@click.option("--format", "fmt", type=click.Choice(["text", "json", "yaml"]), default="text")
+def show(name, fmt):
     """Show details of a dataset. Supports base name to show all resolutions.
 
     Examples:
-        openbench data show GLEAM_v4.2a          # shows all resolutions
-        openbench data show GLEAM_v4.2a_LowRes   # shows specific one
+        openbench ref show GLEAM_v4.2a          # shows all resolutions
+        openbench ref show GLEAM_v4.2a_LowRes   # shows specific one
     """
-    from openbench.data.registry import RegistryManager
-
-    mgr = RegistryManager()
-
-    # Check for resolution variants first
-    variants = mgr.get_resolution_variants(name)
-
-    if variants and len(variants) > 1:
-        # Multi-resolution: show summary of all variants
-        click.secho(f"{name}", bold=True)
-        click.echo(f"Available at {len(variants)} resolution(s):\n")
-
-        for res_label, ref in sorted(variants.items()):
-            status = click.style(f"[{res_label}]", bold=True)
-            click.echo(f"  {status} {ref.name}")
-            click.echo(f"    Type: {ref.data_type}, Grid: {ref.grid_res or 'N/A'}°, Time: {ref.tim_res}")
-            years = f"{ref.years[0]}-{ref.years[1]}" if ref.years else "N/A"
-            click.echo(f"    Years: {years}, Variables: {len(ref.variables)}")
-            if ref.root_dir:
-                click.echo(f"    Path: {ref.root_dir}")
-            click.echo()
-
-        click.echo("Base-name references are resolved using target resolution context:")
-        click.echo("  - project.tim_res / project.grid_res when set")
-        click.echo("  - otherwise the shared simulation resolution, if all simulations agree")
-        click.echo("  - otherwise OpenBench asks you to specify a full variant or set comparison.* explicitly")
-        click.echo()
-        click.echo("In openbench.yaml, use either:")
-        click.echo("  reference:")
-        click.echo(f"    Evapotranspiration: {name}            # select by target resolution context")
-        for res_label, ref in sorted(variants.items()):
-            click.echo(f"    Evapotranspiration: {ref.name}   # force {res_label}")
-        return
-
-    # Single dataset (exact match or auto-resolved)
-    ref = mgr.get_reference(name)
-    if ref is None:
-        click.secho(f"Dataset not found: {name}", fg="red")
-        raise SystemExit(1)
-
-    click.secho(f"{ref.name}", bold=True)
-    click.echo(f"Description: {ref.description}")
-    click.echo(f"Category: {ref.category}")
-    click.echo(f"Type: {ref.data_type}, Resolution: {ref.grid_res or 'N/A'}°, Time: {ref.tim_res}")
-    click.echo(f"Years: {ref.years[0]}-{ref.years[1]}" if ref.years else "Years: N/A")
-    if ref.root_dir:
-        click.echo(f"Path: {ref.root_dir}")
-    click.echo()
-    click.secho(f"{'Variable':<35} {'NetCDF name':<20} {'Unit':<20} {'Fallback'}", bold=True)
-    click.echo("─" * 100)
-    for var_name, mapping in sorted(ref.variables.items()):
-        vn = mapping.varname if isinstance(mapping.varname, str) else mapping.varname[0]
-        fb_str = ""
-        if mapping.fallbacks:
-            fb_parts = []
-            for fb in mapping.fallbacks:
-                conv = f" ({fb.convert})" if fb.convert else ""
-                fb_parts.append(f"{fb.varname} [{fb.varunit}]{conv}")
-            fb_str = " → ".join(fb_parts)
-        click.echo(f"{var_name:<35} {vn:<20} {mapping.varunit:<20} {fb_str}")
+    return _display.show_reference(name, fmt, reference_to_dict_fn=_reference_to_dict)
 
 
 @data.command()
-@click.argument("ref_root", type=click.Path(exists=True))
-@click.option("--auto", is_flag=True, help="Register all found datasets without prompting.")
+@click.argument("ref_root")
+@click.option(
+    "--auto",
+    "--yes",
+    "-y",
+    "auto",
+    is_flag=True,
+    help="Register all found datasets without prompting; fail on ambiguous NC variables.",
+)
 @click.option("--dry-run", is_flag=True, help="Show what would be registered without writing the catalog.")
-def scan(ref_root, auto, dry_run):
+@click.option("--rescan", is_flag=True, help="Refresh already registered scanned datasets too.")
+@click.option(
+    "--only",
+    "only_pattern",
+    default=None,
+    help="Only register/rescan dataset names matching this shell pattern.",
+)
+@click.option(
+    "--allow-skip",
+    is_flag=True,
+    help="Continue when scanner finds unsupported folders that cannot be auto-registered.",
+)
+@click.option(
+    "--pick-first",
+    is_flag=True,
+    help="With --auto, silently pick the first variable when an NC file is ambiguous "
+    "(unsafe; matches pre-3.x behavior).",
+)
+def scan(ref_root, auto, dry_run, rescan=False, only_pattern=None, allow_skip=False, pick_first=False):
     """Scan a directory for reference datasets and register new ones.
 
-    REF_ROOT is the reference data root (e.g., /Volumes/work/Reference).
-    Expected structure: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
+        REF_ROOT is the reference data root (e.g., /Volumes/work/Reference).
+        Expected structure: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
 
+    
     Examples:
-        openbench data scan /Volumes/work/Reference
-        openbench data scan /Volumes/work/Reference --dry-run
+    openbench ref scan /Volumes/work/Reference
+
+    
+    openbench ref scan /Volumes/work/Reference --dry-run
+
+    
+    openbench ref scan /Volumes/work/Reference --rescan --auto
     """
-    from openbench.data.registry.scanner import find_new_datasets, register_scanned_datasets_batch
-
-    def _progress(msg):
-        click.echo(msg)
-
-    click.secho(f"Scanning {ref_root}...", bold=True)
-    new_groups = find_new_datasets(ref_root, on_progress=_progress)
-
-    click.echo()
-    if not new_groups:
-        click.secho("No new datasets found. All datasets already registered.", fg="yellow")
-        return
-
-    click.secho(f"Found {len(new_groups)} new dataset(s):", bold=True)
-    click.echo()
-
-    to_register = []
-    for group in new_groups:
-        for res_name, variant in sorted(group.variants.items()):
-            label = f"  {variant.registry_name:<35} {variant.data_type:<5} {variant.category:<10} {len(variant.variables)} vars, {variant.file_count} files"
-            click.echo(label)
-            to_register.append(variant)
-
-    click.echo()
-
-    if dry_run:
-        click.secho(
-            f"[DRY RUN] Would register {len(to_register)} dataset(s). "
-            "No catalog changes made.",
-            fg="cyan", bold=True,
-        )
-        click.echo("Re-run without --dry-run to commit. Use --auto to skip the confirmation prompt.")
-        return
-
-    if not auto:
-        if not click.confirm(f"Register {len(to_register)} dataset(s)?"):
-            return
-
-    def _multi_var_handler(var_name, sub_dir, all_vars):
-        """Prompt user to pick a variable when NC file has multiple data variables."""
-        click.echo()
-        click.secho(f"  Multiple variables in {sub_dir}/ (evaluating: {var_name}):", fg="yellow")
-        for i, v in enumerate(all_vars, 1):
-            desc = v.get("long_name") or v.get("standard_name") or ""
-            if desc:
-                desc = f"  — {desc}"
-            click.echo(f"    [{i}] {v['name']:<20} {v['unit']:<15} {v['dims']}{desc}")
-        if auto:
-            click.echo(f"    → Auto-selected: {all_vars[0]['name']}")
-            return all_vars[0]["name"]
-        choice = click.prompt("  Select variable number", type=int, default=1)
-        idx = max(0, min(choice - 1, len(all_vars) - 1))
-        return all_vars[idx]["name"]
-
-    def _register_progress(msg):
-        click.secho(f"  ✓{msg.lstrip()}", fg="green")
-
-    register_scanned_datasets_batch(
-        to_register,
-        on_multi_var=_multi_var_handler,
-        on_progress=_register_progress,
+    return _scan.run_scan(
+        ref_root,
+        auto,
+        dry_run,
+        rescan=rescan,
+        only_pattern=only_pattern,
+        allow_skip=allow_skip,
+        pick_first=pick_first,
+        expand_existing_directory_fn=_expand_existing_directory,
+        filter_scan_groups_fn=_filter_scan_groups,
+        filter_scan_skips_fn=_filter_scan_skips,
+        print_scan_skip_report_fn=_print_scan_skip_report,
+        print_profile_rescue_preview_fn=_print_profile_rescue_preview,
+        prompt_scan_skip_action_fn=_prompt_scan_skip_action,
+        profile_rescue_supported_fn=_profile_rescue_supported,
+        create_ignore_profiles_for_scan_skips_fn=_create_ignore_profiles_for_scan_skips,
+        create_profiles_for_scan_skips_fn=_create_profiles_for_scan_skips,
+        scan_skip_keys_fn=_scan_skip_keys,
+        format_scan_skip_key_fn=_format_scan_skip_key,
     )
-    registered = len(to_register)
 
-    # Clear registry cache so subsequent lookups see newly registered datasets
-    from openbench.data.registry.manager import clear_registry_cache
 
-    clear_registry_cache()
+# Compatibility names imported by init_cmd/tests and passed into _scan.run_scan.
+_print_scan_skip_report = _scan_support.print_scan_skip_report
+_scan_skip_keys = _scan_support.scan_skip_keys
+_filter_scan_groups = _scan_support.filter_scan_groups
+_filter_scan_skips = _scan_support.filter_scan_skips
+_format_scan_skip_key = _scan_support.format_scan_skip_key
+_create_profiles_for_scan_skips = _scan_support.create_profiles_for_scan_skips
+_create_ignore_profiles_for_scan_skips = _scan_support.create_ignore_profiles_for_scan_skips
 
-    click.echo()
-    click.secho(f"Registered {registered} dataset(s).", fg="green", bold=True)
-    click.echo("Verify: openbench data list")
-
-    # Warn about unverified defaults
-    click.echo()
-    click.secho(
-        "Note: Some fields (tim_res, grid_res, years) may be defaults and not verified from data.",
-        fg="yellow",
-    )
-    click.echo("Use 'openbench data show <name>' to check, and 'openbench data register <name>' to fix.")
+_print_profile_rescue_preview = _profile_rescue._print_profile_rescue_preview
+_prompt_scan_skip_action = _profile_rescue._prompt_scan_skip_action
+_profile_rescue_supported = _profile_rescue._profile_rescue_supported
+_prompt_reference_profile_for_scan_skip = _profile_rescue._prompt_reference_profile_for_scan_skip
+_prompt_grid_composite_profile = _profile_rescue._prompt_grid_composite_profile
+_prompt_grid_dataset_choice_profile = _profile_rescue._prompt_grid_dataset_choice_profile
+_prompt_station_direct_profile = _profile_rescue._prompt_station_direct_profile
+_prompt_grid_nested_profile = _profile_rescue._prompt_grid_nested_profile
+_prompt_profile_variables_for_child = _profile_rescue._prompt_profile_variables_for_child
+_profile_variable_entry = _profile_rescue._profile_variable_entry
+_prompt_standard_variable_name = _profile_rescue._prompt_standard_variable_name
+_prompt_nc_variable_name = _profile_rescue._prompt_nc_variable_name
+_resolve_nc_variable_choice = _profile_rescue._resolve_nc_variable_choice
+_next_nc_default = _profile_rescue._next_nc_default
+_prompt_file_glob = _profile_rescue._prompt_file_glob
+_is_grid_composite_root_skip = _profile_rescue._is_grid_composite_root_skip
+_is_grid_composite_skip = _profile_rescue._is_grid_composite_skip
+_is_grid_dataset_skip = _profile_rescue._is_grid_dataset_skip
+_is_station_dataset_skip = _profile_rescue._is_station_dataset_skip
+_default_profile_name_for_skip = _profile_rescue._default_profile_name_for_skip
+_grid_dataset_name_for_skip = _profile_rescue._grid_dataset_name_for_skip
+_station_standard_variable_default = _profile_rescue._station_standard_variable_default
+_ignore_profile_name = _profile_rescue._ignore_profile_name
+_sanitize_profile_name = _profile_rescue._sanitize_profile_name
+_inspect_first_nc_under = _profile_rescue._inspect_first_nc_under
+_profile_child_specs = _profile_rescue._profile_child_specs
+_ref_relative_path = _profile_rescue._ref_relative_path
+_write_reference_profile = _profile_rescue._write_reference_profile
+_write_reference_profiles = _profile_rescue._write_reference_profiles
 
 
 @data.command()
 @click.argument("name")
 def optimize(name):
     """Convert dataset to zarr for faster reads."""
-    from openbench.data.registry import RegistryManager
-
-    mgr = RegistryManager()
-    ref = mgr.get_reference(name)
-    if ref is None:
-        click.secho(f"Dataset not found: {name}", fg="red")
-        raise SystemExit(1)
-
-    if not ref.root_dir:
-        click.secho(f"No local path configured for {name}. Download it first.", fg="red")
-        raise SystemExit(1)
-
-    try:
-        import xarray as xr
-    except ImportError:
-        click.secho("xarray is required for optimization.", fg="red")
-        raise SystemExit(1)
-
-    from pathlib import Path
-
-    root = Path(ref.root_dir)
-    if not root.exists():
-        click.secho(f"Data directory not found: {root}", fg="red")
-        raise SystemExit(1)
-
-    zarr_dir = root.parent / f"{root.name}.zarr"
-    if zarr_dir.exists():
-        click.echo(f"Zarr store already exists: {zarr_dir}")
-        if not click.confirm("Overwrite?"):
-            return
-
-    # Find all NetCDF files
-    from openbench.data.coordinates import glob_nc
-
-    nc_files = glob_nc(root, recursive=True)
-
-    if not nc_files:
-        click.secho(f"No NetCDF files found in {root}", fg="yellow")
-        return
-
-    click.echo(f"Found {len(nc_files)} NetCDF files")
-    click.echo(f"Converting to zarr: {zarr_dir}")
-
-    try:
-        # Open all files as a single dataset and save as zarr
-        ds = xr.open_mfdataset(nc_files, combine="by_coords", engine="netcdf4")
-        ds.to_zarr(str(zarr_dir), mode="w")
-        ds.close()
-
-        # Report size comparison
-        import os
-
-        nc_size = sum(os.path.getsize(f) for f in nc_files)
-        zarr_size = sum(
-            os.path.getsize(os.path.join(dp, f))
-            for dp, _, fns in os.walk(zarr_dir)
-            for f in fns
-        )
-        click.secho("✓ Converted to zarr", fg="green")
-        click.echo(f"  NetCDF: {nc_size / 1e9:.1f} GB")
-        click.echo(f"  Zarr:   {zarr_size / 1e9:.1f} GB")
-    except Exception as e:
-        click.secho(f"Conversion failed: {e}", fg="red")
-        raise SystemExit(1)
+    return _optimize.optimize_reference(name)
 
 
 @data.command("generate-station-list")
-@click.argument("dataset_dir", type=click.Path(exists=True))
+@click.argument("dataset_dir")
 @click.option("-o", "--output", default=None, help="Output CSV path. Default: dataset_dir/station_list.csv")
 def generate_station_list(dataset_dir, output):
     """Auto-generate a station list CSV from NC files.
@@ -577,30 +351,12 @@ def generate_station_list(dataset_dir, output):
 
     \b
     Example:
-      openbench data generate-station-list /data/PLUMBER2/dataset/
-      openbench data generate-station-list /data/GRDC/ -o grdc_stations.csv
+      openbench ref generate-station-list /data/PLUMBER2/dataset/
+      openbench ref generate-station-list /data/GRDC/ -o grdc_stations.csv
     """
-    from pathlib import Path
-
-    from openbench.data.registry.scanner import generate_station_list as gen_list
-
-    dataset_path = Path(dataset_dir)
-    output_path = Path(output) if output else None
-
-    try:
-        csv_path = gen_list(dataset_path, output_path)
-        import pandas as pd
-
-        df = pd.read_csv(csv_path)
-        click.secho(f"✓ Generated {csv_path}", fg="green")
-        click.echo(f"  Stations: {len(df)}")
-        if "LON" in df.columns and "LAT" in df.columns:
-            click.echo(f"  Lon range: [{df['LON'].min():.2f}, {df['LON'].max():.2f}]")
-            click.echo(f"  Lat range: [{df['LAT'].min():.2f}, {df['LAT'].max():.2f}]")
-        if "SYEAR" in df.columns and "EYEAR" in df.columns:
-            click.echo(f"  Year range: [{df['SYEAR'].min()}, {df['EYEAR'].max()}]")
-        elif "SYEAR" in df.columns:
-            click.echo(f"  Start year: {df['SYEAR'].min()}-{df['SYEAR'].max()}")
-    except Exception as e:
-        click.secho(f"Failed: {e}", fg="red")
-        raise SystemExit(1)
+    return _ref_commands.generate_station_list(
+        dataset_dir,
+        output,
+        expand_existing_directory_fn=expand_existing_directory,
+        expand_path_fn=expand_path,
+    )

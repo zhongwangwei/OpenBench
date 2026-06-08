@@ -4,6 +4,7 @@ import logging
 import os
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
@@ -30,7 +31,7 @@ def stat_anova(self, *variables):
         if analysis_type == "twoway":
             import statsmodels.api as sm
             import statsmodels.formula.api as smf
-            from scipy.stats import t
+            from scipy.stats import t  # noqa: F401  used by twoway statsmodels code path below
 
         elif analysis_type == "oneway":
             from scipy.stats import f_oneway
@@ -66,10 +67,14 @@ def stat_anova(self, *variables):
     data_array = np.stack([combined_data[var].values for var in combined_data.data_vars if var != "Y_data"], axis=-1)
     Y_data_array = combined_data["Y_data"].values
 
-    # Determine number of cores to use
-    num_cores = n_jobs if n_jobs > 0 else os.cpu_count()
-    # Limit cores to a reasonable number to avoid memory issues
-    num_cores = min(num_cores, os.cpu_count(), 8)
+    # Determine number of cores to use.  Respect the configured n_jobs while
+    # capping only at the actual host CPU count; do not impose an arbitrary
+    # 8-core ceiling on larger machines.
+    cpu_count = max(1, os.cpu_count() or 1)
+    # n_jobs == 0 would otherwise leak through as `num_cores = 0` and crash
+    # joblib; treat it (along with negative values) as "use all cores".
+    num_cores = n_jobs if n_jobs and n_jobs > 0 else cpu_count
+    num_cores = min(max(1, num_cores), cpu_count)
 
     try:
         if analysis_type == "twoway":
@@ -90,8 +95,8 @@ def stat_anova(self, *variables):
                     or np.any(np.isnan(Y_data_slice))
                     or np.any(np.isinf(data_slice))
                     or np.any(np.isinf(Y_data_slice))
-                    or np.any(np.all(data_slice < 1e-10, axis=0))
-                    or np.all(Y_data_slice < 1e-10)
+                    or np.any(np.all(np.abs(data_slice) < 1e-10, axis=0))
+                    or np.all(np.abs(Y_data_slice) < 1e-10)
                     or len(Y_data_slice) < data_slice.shape[1] + 2
                 ):  # Ensure enough samples for model
                     return np.full(data_slice.shape[1] * 2, np.nan), np.full(data_slice.shape[1] * 2, np.nan)
@@ -188,16 +193,26 @@ def stat_anova(self, *variables):
                     or np.any(np.isnan(Y_data_slice))
                     or np.any(np.isinf(data_slice))
                     or np.any(np.isinf(Y_data_slice))
-                    or np.any(np.all(data_slice < 1e-10, axis=0))
-                    or np.all(Y_data_slice < 1e-10)
+                    or np.any(np.all(np.abs(data_slice) < 1e-10, axis=0))
+                    or np.all(np.abs(Y_data_slice) < 1e-10)
                 ):
-                    return np.nan, np.nan
+                    return np.nan, np.nan, np.nan
 
                 try:
-                    # More robust grouping approach - discretize continuous variables
-                    groups = []
+                    # Per-X-variable one-way ANOVA: discretise each predictor
+                    # into quartile groups separately and run ANOVA on Y. The
+                    # previous implementation accumulated quartile groups
+                    # across all X variables into a single f_oneway call,
+                    # which tested a meaningless pooled hypothesis.
+                    # Aggregate strategy: keep the most significant predictor
+                    # (smallest p-value) for each grid cell, with a
+                    # Bonferroni correction across the K predictors actually
+                    # tested. Without the correction, taking min(p) inflates
+                    # the family-wise type-I error rate from α to ~1-(1-α)^K
+                    # (e.g. ≈23% at α=0.05 with K=5).
+                    best_f, best_p = np.nan, np.nan
+                    n_tested = 0
                     for i in range(data_slice.shape[1]):
-                        # Use quartiles to discretize the data
                         x = data_slice[:, i]
                         x_valid = x[~np.isnan(x)]
                         if len(x_valid) < 4:  # Not enough data for quartiles
@@ -206,26 +221,31 @@ def stat_anova(self, *variables):
                         # Calculate quartiles
                         q1, q2, q3 = np.percentile(x_valid, [25, 50, 75])
 
-                        # Group by quartiles
+                        # Group Y by X's quartile bins
                         g1 = Y_data_slice[(x <= q1) & ~np.isnan(Y_data_slice)]
                         g2 = Y_data_slice[(x > q1) & (x <= q2) & ~np.isnan(Y_data_slice)]
                         g3 = Y_data_slice[(x > q2) & (x <= q3) & ~np.isnan(Y_data_slice)]
                         g4 = Y_data_slice[(x > q3) & ~np.isnan(Y_data_slice)]
 
-                        # Add non-empty groups
-                        for g in [g1, g2, g3, g4]:
-                            if len(g) >= 2:  # Need at least 2 samples
-                                groups.append(g)
+                        var_groups = [g for g in (g1, g2, g3, g4) if len(g) >= 2]
+                        if len(var_groups) < 2:
+                            continue
 
-                    if len(groups) < 2:  # Need at least 2 groups for ANOVA
-                        return np.nan, np.nan
+                        f_i, p_i = f_oneway(*var_groups)
+                        if np.isnan(p_i):
+                            continue
+                        n_tested += 1
+                        if np.isnan(best_p) or p_i < best_p:
+                            best_f, best_p = f_i, p_i
 
-                    # Perform one-way ANOVA
-                    f_statistic, p_value = f_oneway(*groups)
-                    return f_statistic, p_value
+                    adjusted_p = best_p
+                    if n_tested > 1 and not np.isnan(best_p):
+                        # Bonferroni: p_adj = min(K * p, 1)
+                        adjusted_p = min(best_p * n_tested, 1.0)
+                    return best_f, best_p, adjusted_p
                 except Exception as e:
                     logging.debug(f"Error in one-way ANOVA: {e}")
-                    return np.nan, np.nan
+                    return np.nan, np.nan, np.nan
 
             # Parallel processing with chunking to conserve memory
             chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
@@ -244,11 +264,16 @@ def stat_anova(self, *variables):
 
             # Reshape results
             f_statistics = np.array([r[0] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
-            p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
+            raw_p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
+            p_values = np.array([r[2] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
 
             # Create output dataset
             output_ds = xr.Dataset(
-                {"F_statistic": (["lat", "lon"], f_statistics), "p_value": (["lat", "lon"], p_values)},
+                {
+                    "F_statistic": (["lat", "lon"], f_statistics),
+                    "raw_p_value": (["lat", "lon"], raw_p_values),
+                    "p_value": (["lat", "lon"], p_values),
+                },
                 coords={
                     "lat": combined_data.lat,
                     "lon": combined_data.lon,
@@ -258,8 +283,10 @@ def stat_anova(self, *variables):
             # Add metadata
             output_ds["F_statistic"].attrs["long_name"] = "F-statistic from one-way ANOVA"
             output_ds["F_statistic"].attrs["description"] = "F-statistic for the one-way ANOVA"
-            output_ds["p_value"].attrs["long_name"] = "P-values from one-way ANOVA"
-            output_ds["p_value"].attrs["description"] = "P-values for the one-way ANOVA"
+            output_ds["raw_p_value"].attrs["long_name"] = "Raw p-values from one-way ANOVA"
+            output_ds["raw_p_value"].attrs["description"] = "Unadjusted p-values paired with F_statistic"
+            output_ds["p_value"].attrs["long_name"] = "Bonferroni-adjusted p-values from one-way ANOVA"
+            output_ds["p_value"].attrs["description"] = "Bonferroni-adjusted p-values for the one-way ANOVA"
             output_ds.attrs["analysis_type"] = "one-way ANOVA"
 
         return output_ds

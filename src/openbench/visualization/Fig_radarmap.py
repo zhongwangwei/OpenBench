@@ -1,5 +1,7 @@
 import logging
 import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,6 +13,7 @@ from matplotlib.patches import Patch
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index
+from ._validation import finite_min_max
 
 
 def _read_comparison_file(file):
@@ -46,6 +49,7 @@ def _read_comparison_file(file):
     return df
 
 
+@with_isolated_rc
 def make_scenarios_comparison_radar_map(file, score, option):
     # Read file with fallback and auto-detection
     df = _read_comparison_file(file)
@@ -55,10 +59,22 @@ def make_scenarios_comparison_radar_map(file, score, option):
     ref_dataname = [f"{item1.replace('_', ' ')}\n({item2})" for item1, item2 in zip(list1, list2)]
     df.set_index("Item", inplace=True)
     df = df.iloc[:, 1:].astype("float32")
-    min_value, max_value = np.nanmin(df.values), np.nanmax(df.values)
+    min_value, max_value = finite_min_max(df.values, label=f"{score} radar map")
+    # fillna(0) keeps the polygon plottable, but a real "0 score" and an
+    # "evaluation-failed NaN" then look identical on the radar — warn so the
+    # user knows the filled cells are not valid performance, just placeholders.
+    nan_count = int(df.isna().sum().sum())
+    if nan_count > 0:
+        logging.warning(
+            "Fig_radarmap (%s): %d NaN cell(s) in the score matrix filled with 0; "
+            "the corresponding sim/variable did not produce a valid score and the "
+            "radar polygon should NOT be read as 'performance = 0'.",
+            score,
+            nan_count,
+        )
     df = df.fillna(0)
 
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value)
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option.get("cmap", "Spectral"), score)
     if mticks[-1] > 0.5:
         mticks_interval = 0.2
     else:
@@ -69,7 +85,6 @@ def make_scenarios_comparison_radar_map(file, score, option):
         option["vmax"], option["vmin"] = mticks[-1], mticks[0]
 
     params = {
-        "backend": "ps",
         "figure.figsize": [option["x_wise"], option["y_wise"]],
         "figure.dpi": option["dpi"],
         "figure.autolayout": True,
@@ -92,13 +107,15 @@ def make_scenarios_comparison_radar_map(file, score, option):
     }
     rcParams.update(params)
 
-    colors = ["#2887c5", "#d35625", "#e5b51f", "#80328c", "#50bee2", "#9e1d32", "#75a641", "#2b2f79"]
+    series_count = len(df.columns)
+    color_positions = np.linspace(0.1, 0.9, max(series_count, 1))
+    series_colors = [cmap(position) for position in color_positions]
 
     fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
     angles = [n / float(len(ref_dataname)) * 2 * np.pi for n in range(len(ref_dataname))]
     angles += angles[:1]
 
-    plt.title(score.replace("_", " "))
+    ax.set_title(score.replace("_", " "))
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_xticks(angles[:-1])
@@ -126,18 +143,19 @@ def make_scenarios_comparison_radar_map(file, score, option):
     for i in range(len(df.columns)):
         values = df.iloc[:, i].tolist()
         values += values[:1]
-        ax.plot(angles, values, colors[i], linestyle="-")
-        ax.fill(angles, values, colors[i], alpha=0.8)
+        ax.plot(angles, values, color=series_colors[i], linestyle="-")
+        ax.fill(angles, values, color=series_colors[i], alpha=0.8)
 
     legend_elements = [
-        Patch(facecolor=colors[i], edgecolor="black", label=df.columns[i]) for i in range(len(df.columns))
+        Patch(facecolor=series_colors[i], edgecolor="black", label=df.columns[i]) for i in range(len(df.columns))
     ]
     title_font = FontProperties(weight="bold")
-    plt.legend(
+    ax.legend(
         handles=legend_elements,
         bbox_to_anchor=(1, 0.1),
         title=option["legend_title"],
         title_fontproperties=title_font,
     )
-    file2 = file[:-4]
-    plt.savefig(f"{file2}_radarmap.{option['saving_format']}")
+    file2 = os.path.splitext(file)[0]
+    save_figure(fig, f"{file2}_radarmap.{option['saving_format']}")
+    plt.close(fig)

@@ -6,6 +6,10 @@ from pathlib import Path
 import pandas as pd
 import xarray as xr
 
+from openbench.util.filenames import station_file_path
+from openbench.util.netcdf import write_file_atomic
+from openbench.util.netcdf import write_netcdf_atomic
+
 
 def process_site(station_idx, dataset, info):
     """Extract metadata for a single station and persist its series as NetCDF."""
@@ -43,13 +47,13 @@ def process_site(station_idx, dataset, info):
 
     scratch_dir = Path(info.casedir) / "scratch" / f"CH4_FluxnetANN_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    file_path = scratch_dir / f"{station_id}.nc"
+    file_path = station_file_path(scratch_dir, station_id)
 
     # Save FCH4 data - isel already removes the data dimension
     # so we just need to squeeze any remaining singleton dimensions
     fch4_data = fch4.squeeze(drop=True)
     ds_out = xr.Dataset({"FCH4": fch4_data})
-    ds_out.to_netcdf(file_path)
+    write_netcdf_atomic(ds_out, file_path)
 
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
@@ -86,8 +90,7 @@ def filter_CH4_FluxnetANN(info, ds=None):
     dataset_path = Path(info.ref_dir) / "FCH4_F_ANN_monthly_wetland_tier1.nc"
 
     if not dataset_path.exists():
-        logging.error(f"CH4_FluxnetANN dataset not found: {dataset_path}")
-        return
+        raise FileNotFoundError(f"CH4_FluxnetANN dataset not found: {dataset_path}")
 
     with xr.open_dataset(dataset_path) as ds_file:
         station_rows = []
@@ -97,8 +100,7 @@ def filter_CH4_FluxnetANN(info, ds=None):
                 station_rows.append(result)
 
     if not station_rows:
-        logging.error("No CH4_FluxnetANN stations satisfy the selection criteria.")
-        return
+        raise ValueError("No CH4_FluxnetANN stations satisfy the selection criteria.")
 
     df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
@@ -107,5 +109,5 @@ def filter_CH4_FluxnetANN(info, ds=None):
     info.ref_fulllist = f"{info.casedir}/stn_CH4_FluxnetANN_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
-    df.to_csv(info.ref_fulllist, index=False)
+    write_file_atomic(info.ref_fulllist, lambda tmp_path: df.to_csv(tmp_path, index=False), suffix=".tmp.csv")
     logging.info("CH4_FluxnetANN station list saved")

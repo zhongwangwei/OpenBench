@@ -12,15 +12,25 @@ class Convert_Type:
 
     @staticmethod
     def convert_nc(ds: xr.DataArray | xr.Dataset) -> xr.DataArray | xr.Dataset:
+        def _can_downcast_coord(name: str, coord: xr.DataArray) -> bool:
+            # Time coordinates often arrive as numeric float64 before decode;
+            # downcasting them to float32 loses sub-daily precision.
+            return str(name).lower() != "time" and coord.dtype.kind == "f" and coord.dtype.itemsize == 8
+
         if isinstance(ds, xr.Dataset):
-            for var in ds.variables:
+            ds = ds.copy(deep=False)
+            for var in ds.data_vars:
                 if ds[var].dtype.kind == "f" and ds[var].dtype.itemsize == 8:  # 检查是否 float64
                     ds[var] = ds[var].astype(dtype="float32", casting="same_kind", copy=False)
         else:
             if ds.dtype == "float64":
                 ds = ds.astype(dtype="float32", casting="same_kind", copy=False)
         ds = ds.assign_coords(
-            {coord: ds.coords[coord].astype("float32") for coord in ds.coords if ds.coords[coord].dtype == "float64"}
+            {
+                coord: ds.coords[coord].astype("float32")
+                for coord in ds.coords
+                if _can_downcast_coord(coord, ds.coords[coord])
+            }
         )
         return ds
 

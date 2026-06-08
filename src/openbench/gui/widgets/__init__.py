@@ -10,6 +10,8 @@ from openbench.gui.widgets.model_definition_editor import ModelDefinitionEditor
 from openbench.gui.widgets.remote_config import RemoteConfigWidget
 from openbench.gui.widgets.sync_status import SyncStatusWidget
 from openbench.gui.widgets.path_completer import PathCompleter
+from openbench.gui.widgets.nc_importer import NCImporterDialog
+from openbench.gui.widgets.variable_editor import VariableEditorDialog
 
 __all__ = [
     "PathSelector",
@@ -23,4 +25,6 @@ __all__ = [
     "RemoteConfigWidget",
     "SyncStatusWidget",
     "PathCompleter",
+    "NCImporterDialog",
+    "VariableEditorDialog",
 ]

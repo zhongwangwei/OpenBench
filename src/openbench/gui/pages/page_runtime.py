@@ -149,27 +149,29 @@ class PageRuntime(BasePage):
 
         local_layout.addRow("Python:", python_layout)
 
-        # OpenBench path with Browse and Install buttons
-        openbench_layout = QHBoxLayout()
-        openbench_layout.setSpacing(8)
+        # OpenBench path — auto-detected for local mode, hidden by default.
+        # Kept as a hidden field so save/load config and remote mode still work.
         self.local_openbench_input = QLineEdit()
         self.local_openbench_input.setPlaceholderText("Path to OpenBench installation directory")
         self.local_openbench_input.textChanged.connect(self._on_config_changed)
-        openbench_layout.addWidget(self.local_openbench_input, 1)
+        self.local_openbench_input.setVisible(False)
 
         self.btn_browse_openbench = QPushButton("Browse")
         self.btn_browse_openbench.setFixedWidth(60)
         self.btn_browse_openbench.setToolTip("Browse for OpenBench installation directory")
         self.btn_browse_openbench.clicked.connect(self._browse_openbench)
-        openbench_layout.addWidget(self.btn_browse_openbench)
+        self.btn_browse_openbench.setVisible(False)
 
         self.btn_install_openbench = QPushButton("Install")
         self.btn_install_openbench.setFixedWidth(60)
         self.btn_install_openbench.setToolTip("Install OpenBench from GitHub")
         self.btn_install_openbench.clicked.connect(self._install_openbench)
-        openbench_layout.addWidget(self.btn_install_openbench)
+        self.btn_install_openbench.setVisible(False)
 
-        local_layout.addRow("OpenBench:", openbench_layout)
+        # Auto-fill with current OpenBench root
+        from openbench.gui.path_utils import get_openbench_root
+
+        self.local_openbench_input.setText(get_openbench_root())
 
         self.content_layout.addWidget(self.local_env_group)
 
@@ -183,8 +185,10 @@ class PageRuntime(BasePage):
         # Auto-detect Python on startup
         self._detect_python()
 
-        # Clear any cached settings from previous sessions on startup
-        self._clear_cached_settings_file()
+        # Restore the previous runtime settings after widgets are initialized.
+        # The settings file is written by _auto_save_settings() on user changes;
+        # clearing it here made _auto_load_settings() unreachable in practice.
+        self._auto_load_settings()
 
     def _on_execution_mode_changed(self, checked: bool):
         """Handle execution mode change."""
@@ -379,15 +383,23 @@ class PageRuntime(BasePage):
         path = QFileDialog.getExistingDirectory(self, "Select OpenBench Installation Directory", start_dir)
 
         if path:
-            # Verify it's a valid OpenBench installation
-            script_path = os.path.join(path, "openbench", "openbench.py")
-            if os.path.exists(script_path):
+            # Verify it's a valid OpenBench installation. v3 markers:
+            # editable layout `src/openbench/cli/main.py` or a
+            # `pyproject.toml` declaring the openbench package. The
+            # pre-v3 marker `openbench/openbench.py` was retired and
+            # would falsely reject every valid v3 checkout.
+            from openbench.gui.path_utils import looks_like_openbench_root
+
+            if looks_like_openbench_root(path):
                 self.local_openbench_input.setText(path)
             else:
                 reply = QMessageBox.question(
                     self,
                     "Not a Valid OpenBench Directory",
-                    f"The selected directory does not contain 'openbench/openbench.py'.\n\n"
+                    "The selected directory does not look like an OpenBench v3 "
+                    "installation.\nExpected one of:\n"
+                    "  • src/openbench/cli/main.py (editable install / repo)\n"
+                    '  • pyproject.toml declaring `name = "openbench"`\n\n'
                     f"Selected: {path}\n\n"
                     "Use this path anyway?",
                     QMessageBox.Yes | QMessageBox.No,
@@ -560,8 +572,6 @@ class PageRuntime(BasePage):
 
     def _refresh_conda(self):
         """Refresh the list of available conda environments."""
-        import subprocess
-        import json
 
         current_python = self.python_combo.currentText().split(" ")[0]
         envs = self._get_conda_envs(current_python)

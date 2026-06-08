@@ -1,5 +1,6 @@
 """Utility functions shared between methods."""
 
+import warnings
 from collections.abc import Hashable
 from typing import Any, overload
 

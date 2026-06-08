@@ -1,3 +1,5 @@
+import os
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib
@@ -6,14 +8,19 @@ import numpy as np
 import xarray as xr
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index, tick_length
 
 
+@with_isolated_rc
 def make_Functional_Response(file, method_name, data_sources, main_nml, option):
-    ds = xr.open_dataset(f"{file}")
+    option = option.copy()
+    with xr.open_dataset(f"{file}") as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
     data = ds.functional_response_score
     ilat = ds.lat.values
@@ -26,7 +33,6 @@ def make_Functional_Response(file, method_name, data_sources, main_nml, option):
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -99,10 +105,10 @@ def make_Functional_Response(file, method_name, data_sources, main_nml, option):
     ax.yaxis.set_major_formatter(lat_formatter)
 
     if option["title"] is None:
-        option["title"] = "Correlation Results"
+        option["title"] = f"{method_name.replace('_', ' ')} Results"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -151,6 +157,6 @@ def make_Functional_Response(file, method_name, data_sources, main_nml, option):
     )
     cb.solids.set_edgecolor("face")
 
-    file2 = file[:-3]
-    plt.savefig(f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(fig, f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)

@@ -13,4 +13,4 @@ def stat_standard_deviation(self, data):
     """
     if isinstance(data, xr.Dataset):
         data = list(data.data_vars.values())[0]
-    return data.std(dim="time")
+    return data.std(dim="time", ddof=1)

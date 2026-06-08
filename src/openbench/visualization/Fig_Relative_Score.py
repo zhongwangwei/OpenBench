@@ -1,6 +1,7 @@
 import logging
 import os
-import warnings
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -13,22 +14,49 @@ from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
 
 from openbench.util.converttype import Convert_Type
-
-warnings.simplefilter(action="ignore", category=RuntimeWarning)
+from openbench.util.filenames import (
+    relative_grid_score_filename,
+    relative_station_score_plot_stem,
+    relative_station_scores_filename,
+)
 
 from .Fig_toolbox import get_index, tick_length
+from ._downsample import downsample_for_plot, lat_lon_plot_args
+from ._validation import finite_min_max, finite_values
+
+logger = logging.getLogger(__name__)
 
 
+def _first_existing_path(*paths: str) -> str:
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    return paths[0]
+
+
+def _relative_station_scores_path(output_dir, evaluation_item, ref_source, sim_source):
+    return _first_existing_path(
+        os.path.join(output_dir, relative_station_scores_filename(evaluation_item, ref_source, sim_source)),
+        os.path.join(output_dir, f"{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv"),
+    )
+
+
+def _relative_grid_score_path(output_dir, evaluation_item, ref_source, sim_source, score):
+    return _first_existing_path(
+        os.path.join(output_dir, relative_grid_score_filename(evaluation_item, ref_source, sim_source, score)),
+        os.path.join(output_dir, f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc"),
+    )
+
+
+@with_isolated_rc
 def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, option):
-    # Add check for empty or all-NaN array
-    if len(metric) == 0 or np.all(np.isnan(metric)):
-        logging.warning(f"No valid data for {method_name}. Skipping plot.")
-        return
+    option = option.copy()
+    finite_values(metric, label=f"Relative Score station {method_name}")
 
     if not option["cmap"]:
         option["cmap"] = "coolwarm"
-    min_value, max_value = np.nanpercentile(metric, 5), np.nanpercentile(metric, 95)
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    min_value, max_value = finite_min_max(metric, label=f"Relative Score station {method_name}", percentile=(5, 95))
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], method_name)
     if not option["vmin_max_on"]:
         option["vmax"], option["vmin"] = mticks[-1], mticks[0]
 
@@ -38,7 +66,6 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -117,7 +144,7 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
     title = option["title"]
 
-    plt.title(title, fontsize=option["title_size"], weight="bold")
+    ax.set_title(title, fontsize=option["title_size"], weight="bold")
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -157,13 +184,13 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
     cb.solids.set_edgecolor("face")
 
     filename2 = file[:-4]
-    plt.savefig(f"{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    save_figure(fig, f"{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)
 
 
 def prepare_stn(output_dir, evaluation_item, ref_source, sim_source, scores, main_nml, option):
     # read the data
-    file = f"{output_dir}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_scores.csv"
+    file = _relative_station_scores_path(output_dir, evaluation_item, ref_source, sim_source)
     if os.path.exists(file):
         df = pd.read_csv(file, header=0)
         df = Convert_Type.convert_Frame(df)
@@ -180,44 +207,43 @@ def prepare_stn(output_dir, evaluation_item, ref_source, sim_source, scores, mai
             try:
                 stn_lon = data_select["ref_lon"].values
                 stn_lat = data_select["ref_lat"].values
-            except:
+            except Exception:
                 stn_lon = data_select["sim_lon"].values
                 stn_lat = data_select["sim_lat"].values
             metric = data_select["%s" % (var)].values
-            output_file = f"{output_dir}/{evaluation_item}_stn_{ref_source}_{sim_source}_relative_{score}.csv"
+            output_file = os.path.join(
+                output_dir, f"{relative_station_score_plot_stem(evaluation_item, ref_source, sim_source, score)}.csv"
+            )
             try:
                 make_stn_plot_index(output_file, score, metric, stn_lat, stn_lon, main_nml, option)
-            except:
-                logging.error(f"ERROR: relative {score} {ref_source} {sim_source}")
+            except Exception:
+                logging.exception(f"ERROR: relative {score} {ref_source} {sim_source}")
+                raise
 
 
+@with_isolated_rc
 def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
-    lon, lat = np.meshgrid(ilon, ilat)
+    option = option.copy()
+    data = downsample_for_plot(data, option)
+    finite_values(data, label=f"Relative Score grid {file}")
+    data, ilat, ilon, lon, lat, extent, origin = lat_lon_plot_args(data)
 
     if not option["cmap"]:
         option["cmap"] = "coolwarm"
-    min_value, max_value = np.nanmin(data), np.nanmax(data)
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    min_value, max_value = finite_min_max(data, label=f"Relative Score grid {file}")
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], "Overall_Score")
     if not option["vmin_max_on"]:
         try:
             option["vmax"], option["vmin"] = mticks[-1], mticks[0]
-        except:
+        except Exception:
             option["vmax"], option["vmin"] = mticks[0] + 1, mticks[0]
 
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = extend
 
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -234,16 +260,17 @@ def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
-    if ilat[0] - ilat[-1] < 0:
-        origin = "lower"
-    else:
-        origin = "upper"
-
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(
+            data.values if hasattr(data, "values") else data,
+            cmap=cmap,
+            vmin=mticks[0],
+            vmax=mticks[-1],
+            extent=extent,
+            origin=origin,
+        )
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -291,7 +318,7 @@ def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
         option["title"] = "Correlation Results"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -340,16 +367,16 @@ def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
     )
     cb.solids.set_edgecolor("face")
 
-    file2 = file[:-3]
-    plt.savefig(f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(fig, f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)
 
 
 def prepare_geo(output_dir, evaluation_item, ref_source, sim_source, scores, main_nml, option):
     for score in scores:
-        filename = f"{output_dir}/{evaluation_item}_ref_{ref_source}_sim_{sim_source}_Relative{score}.nc"
+        filename = _relative_grid_score_path(output_dir, evaluation_item, ref_source, sim_source, score)
         if os.path.exists(filename):
-            print(filename)
+            logger.info(filename)
             with xr.open_dataset(filename) as ds:
                 ds = Convert_Type.convert_nc(ds)
                 data = ds[f"relative_{score}"]
@@ -359,7 +386,8 @@ def prepare_geo(output_dir, evaluation_item, ref_source, sim_source, scores, mai
                 try:
                     make_geo_plot_index(filename, data, ilat, ilon, main_nml, option)
                 except Exception:
-                    logging.error(f"ERROR: relative {score} {ref_source} {sim_source}")
+                    logging.exception(f"ERROR: relative {score} {ref_source} {sim_source}")
+                    raise
 
 
 def make_scenarios_comparison_Relative_Score(

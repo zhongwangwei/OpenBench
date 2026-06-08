@@ -9,12 +9,14 @@ from openbench.data.compute import ComputeError, execute_compute
 
 def _make_ds():
     """Create a test dataset."""
-    return xr.Dataset({
-        "a": xr.DataArray(np.array([1.0, 2.0, 3.0])),
-        "b": xr.DataArray(np.array([10.0, 20.0, 30.0])),
-        "rain": xr.DataArray(np.array([0.5, 1.0, 0.3])),
-        "snow": xr.DataArray(np.array([0.1, 0.0, 0.2])),
-    })
+    return xr.Dataset(
+        {
+            "a": xr.DataArray(np.array([1.0, 2.0, 3.0])),
+            "b": xr.DataArray(np.array([10.0, 20.0, 30.0])),
+            "rain": xr.DataArray(np.array([0.5, 1.0, 0.3])),
+            "snow": xr.DataArray(np.array([0.1, 0.0, 0.2])),
+        }
+    )
 
 
 def test_simple_expression():
@@ -60,8 +62,76 @@ def test_empty_expression_error():
 
 
 def test_fillna():
-    ds = xr.Dataset({
-        "x": xr.DataArray(np.array([1.0, np.nan, 3.0])),
-    })
+    ds = xr.Dataset(
+        {
+            "x": xr.DataArray(np.array([1.0, np.nan, 3.0])),
+        }
+    )
     result = execute_compute(ds, "ds['x'].fillna(0)", "test")
     np.testing.assert_array_equal(result.values, [1.0, 0.0, 3.0])
+
+
+def test_te_total_runoff_compute_handles_zdepth_dimension():
+    from openbench.data.registry.manager import get_registry
+
+    profile = get_registry().get_model("TE")
+    expression = profile.variables["Total_Runoff"].compute
+    ds = xr.Dataset(
+        {
+            "RUNOFF": (
+                ["zdepth", "time"],
+                np.array([[1.0, 2.0, 3.0], [10.0, 20.0, 30.0]]),
+            )
+        },
+        coords={"zdepth": [0, 1], "time": [0, 1, 2]},
+    )
+
+    result = execute_compute(ds, expression, "Total_Runoff")
+
+    assert result.dims == ("time",)
+    np.testing.assert_array_equal(result.values, [1.0, 2.0, 3.0])
+
+
+def test_compute_rejects_unknown_identifier():
+    ds = _make_ds()
+    with pytest.raises(ComputeError, match="identifier 'os' is not allowed"):
+        execute_compute(ds, "os.system('touch /tmp/openbench_pwn')", "test")
+
+
+def test_compute_rejects_invalid_assignment_target():
+    ds = _make_ds()
+    with pytest.raises(ComputeError, match="Invalid assignment target"):
+        execute_compute(ds, "ds['a'] = ds['b']; ds['a']", "test")
+
+
+def test_compute_validation_allows_explicit_extra_names():
+    from openbench.data.compute import _validate_expression
+
+    _validate_expression("value * 12.011 - f_assim", allowed_names={"value", "f_assim", "np"})
+    with pytest.raises(ComputeError, match="identifier 'missing' is not allowed"):
+        _validate_expression("value + missing", allowed_names={"value", "np"})
+
+
+def test_compute_supports_dataset_membership_checks():
+    ds = xr.Dataset(
+        {
+            "RUNOFF": xr.DataArray(np.array([1.0, 2.0, 3.0])),
+            "fallback": xr.DataArray(np.array([10.0, 20.0, 30.0])),
+        }
+    )
+
+    result = execute_compute(
+        ds,
+        "ds['RUNOFF'] if 'RUNOFF' in ds else ds['fallback']",
+        "Runoff",
+    )
+
+    np.testing.assert_array_equal(result.values, [1.0, 2.0, 3.0])
+
+
+def test_compute_membership_checks_are_case_insensitive():
+    ds = xr.Dataset({"runoff": xr.DataArray(np.array([4.0, 5.0]))})
+
+    result = execute_compute(ds, "ds['RUNOFF'] if 'RUNOFF' in ds else 0", "Runoff")
+
+    np.testing.assert_array_equal(result.values, [4.0, 5.0])

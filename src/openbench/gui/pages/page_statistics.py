@@ -17,6 +17,7 @@ STATISTICS_ITEMS = {
         "Hellinger_Distance",
         "Three_Cornered_Hat",
         "Partial_Least_Squares_Regression",
+        "False_Discovery_Rate",
         "ANOVA",
     ],
 }

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import xarray as xr
 
+from .stat_correlation import _align_finite_time_pair
+
 
 def stat_covariance(self, data1, data2):
     """
@@ -13,4 +15,5 @@ def stat_covariance(self, data1, data2):
     Returns:
         xarray.DataArray: Covariance of the input data
     """
-    return xr.cov(data1, data2, dim="time")
+    data1, data2 = _align_finite_time_pair(data1, data2)
+    return xr.cov(data1, data2, dim="time").rename("Covariance")

@@ -44,10 +44,7 @@ BCC_AVIM:
       varname: Net_Radiation
       varunit: W m-2
     Root_Zone_Soil_Moisture: &id005
-      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1) + ds['SOILLIQ'].isel(levsoi=2)
-        + ds['SOILLIQ'].isel(levsoi=3) + ds['SOILLIQ'].isel(levsoi=4) + ds['SOILLIQ'].isel(levsoi=5)
-        + ds['SOILLIQ'].isel(levsoi=6) + ds['SOILLIQ'].isel(levsoi=7) + ds['SOILLIQ'].isel(levsoi=8)
-        * 0.29) / 1000.0
+      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1) + ds['SOILLIQ'].isel(levsoi=2) + ds['SOILLIQ'].isel(levsoi=3) + ds['SOILLIQ'].isel(levsoi=4) + ds['SOILLIQ'].isel(levsoi=5) + ds['SOILLIQ'].isel(levsoi=6) + ds['SOILLIQ'].isel(levsoi=7) + ds['SOILLIQ'].isel(levsoi=8) * 0.29) / 1000.0
       varname: Root_Zone_Soil_Moisture
       varunit: m3 m-3
     Sensible_Heat: &id006
@@ -65,8 +62,7 @@ BCC_AVIM:
       varname: FIRA
       varunit: W m-2
     Surface_Soil_Moisture: &id010
-      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06
-        / 1000.0
+      compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06 / 1000.0
       varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature: &id011
@@ -75,6 +71,165 @@ BCC_AVIM:
     Total_Runoff: &id012
       varname: QRUNOFF
       varunit: mm day-1
+    Leaf_Sensible_Heat:
+      varname: FSH_V
+      varunit: w m-2
+    Ground_Sensible_Heat:
+      varname: FSH_G
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: FSR
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: FIRE
+      varunit: w m-2
+    Surface_Net_SW_Radiation:
+      varname: FSA
+      varunit: w m-2
+    Albedo:
+      varname: ''
+      varunit: unitless
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: m2 m-2
+    Leaf_Greenness:
+      varname: ''
+      varunit: m2 m-2
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: w m-2
+    Canopy_Evaporation:
+      varname: ''
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: QSOIL
+      varunit: mm s-1
+    Canopy_Transpiration:
+      varname: QVEGT
+      varunit: mm s-1
+    Surface_Runoff:
+      varname: QOVER
+      varunit: mm s-1
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: mm s-1
+    Infiltration Excess Surface Runoff:
+      varname: ''
+      varunit: mm s-1
+    Subsurface_Runoff:
+      varname: ''
+      varunit: mm s-1
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: mm s-1
+    Snow_Depth:
+      varname: H2OSNO
+      varunit: mm
+    Surface_Snow_Cover_In_Fraction:
+      varname: FSNO
+      varunit: m2 m-2
+    Water_Table_Depth:
+      varname: ''
+      varunit: m
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: mm
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: mm
+    Streamflow:
+      varname: ''
+      varunit: m3 s-1
+    Inundation_Fraction:
+      varname: ''
+      varunit: m2 m-2
+    Inundation_Area:
+      varname: ''
+      varunit: m2
+    River_Water_Level:
+      varname: ''
+      varunit: m2
+    Lake_temperature:
+      varname: TLAKE
+      varunit: m2
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: m2 m-2
+    Lake_Water_Level:
+      varname: ''
+      varunit: m2
+    Lake_Water_Area:
+      varname: ''
+      varunit: m2
+    Lake_Water_Volume:
+      varname: ''
+      varunit: m2
+    Lake_Surface_Water_Temperature:
+      varname: ''
+      varunit: K
+    Urban_Anthropogenic_Heat_Flux:
+      varname: ''
+      varunit: w m-2
+    Urban_Albedo:
+      varname: ''
+      varunit: unitless
+    Urban_Surface_Temperature:
+      varname: ''
+      varunit: K
+    Urban_Air_Temperature_Max:
+      varname: ''
+      varunit: K
+    Urban_Air_Temperature_Min:
+      varname: ''
+      varunit: K
+    Urban_Latent_Heat_Flux:
+      varname: ''
+      varunit: w m-2
+    Crop_Phase:
+      varname: ''
+      varunit: unitless
+    Grain_To_Crop_Seed_Carbon:
+      varname: ''
+      varunit: gC m-2 s-1
+    Crop_Yield_Rice:
+      varname: ''
+      varunit: ''
+    Crop_Yield_Corn:
+      varname: ''
+      varunit: t ha-1
+    Crop_Yield_Rice_Major:
+      varname: ''
+      varunit: g m-2 s-1
+    Total_Irrigation_Amount:
+      varname: ''
+      varunit: kg m-2
+    Dam_Inflow:
+      varname: ''
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname: ''
+      varunit: m3 s-1
+    Dam_Elevation:
+      varname: ''
+      varunit: m
+    Dam_Storage:
+      varname: ''
+      varunit: m3
+    Surface_Downward_SW_Radiation:
+      varname: FSDS
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: FLDS
+      varunit: w m-2
+    Surface_Specific_Humidity:
+      varname: QBOT
+      varunit: unitless
+    Precipitation:
+      varname: RAIN
+      varunit: mm s-1
+    Surface_Air_Temperature:
+      varname: TSA
+      varunit: K
 CLM5:
   data_type: grid
   description: Community Land Model version 5
@@ -119,6 +274,165 @@ CLM5:
     Surface_Soil_Moisture: *id010
     Surface_Soil_Temperature: *id011
     Total_Runoff: *id012
+    Leaf_Sensible_Heat:
+      varname: FSH_V
+      varunit: w m-2
+    Ground_Sensible_Heat:
+      varname: FSH_G
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: FSR
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: FIRE
+      varunit: w m-2
+    Surface_Net_SW_Radiation:
+      varname: FSA
+      varunit: w m-2
+    Albedo:
+      varname: ''
+      varunit: unitless
+    Net_Ecosystem Exchange:
+      varname: NEE
+      varunit: g m-2 s-1
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: TSAI
+      varunit: m2 m-2
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: mm s-1
+    Canopy_Evaporation:
+      varname: QVEGE
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: QSOIL
+      varunit: mm s-1
+    Snow_Evaporation:
+      varname: QSNOEVAP
+      varunit: mm s-1
+    Canopy_Transpiration:
+      varname: QVEGT
+      varunit: mm s-1
+    Surface_Runoff:
+      varname: QOVER
+      varunit: mm s-1
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: QINFL
+      varunit: mm s-1
+    Subsurface_Runoff:
+      varname: QDRAI
+      varunit: mm s-1
+    Groundwater_Recharge_Rate:
+      varname: f_qcharge
+      varunit: mm s-1
+    Snow_Depth:
+      varname: SNOW_DEPTH
+      varunit: m
+    Surface_Snow_Cover_In_Fraction:
+      varname: FSNO_EFF
+      varunit: unitless
+    Lake_Surface_Water_Temperature:
+      varname: TLAKE
+      varunit: K
+    Surface_Lake_Ice_Fraction_Cover:
+      varname: LAKEICEFRAC_SURF
+      varunit: unitless
+    Water_Table_Depth:
+      varname: ZWT
+      varunit: m
+    Depth_Of_Surface_Water:
+      varname: H2OSFC
+      varunit: mm
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: QFLOOD
+      varunit: m3 s-1
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: TWS
+      varunit: mm
+    Urban_Anthropogenic_Heat_Flux:
+      varname: ''
+      varunit: w m-2
+    Urban_Albedo:
+      varname: ''
+      varunit: unitless
+    Urban_Surface_Temperature:
+      varname: TSKIN
+      varunit: K
+    Urban_Air_Temperature_Max:
+      varname: TREFMXAV
+      varunit: K
+    Urban_Air_Temperature_Min:
+      varname: TREFMNAV
+      varunit: K
+    Urban_Latent_Heat_Flux:
+      varname: EFLX_LH_TOT
+      varunit: w m-2
+    Crop_Phase:
+      varname: CPHASE
+      varunit: unitless
+    Crop_Yield_Rice:
+      varname: GRAINC_TO_FOOD
+      varunit: g m-2 s-1
+    Total_Irrigation_Amount:
+      varname: qirrig_drip + qirrig_sprinkler
+      varunit: mm/s
+    Grain_To_Crop_Seed_Carbon:
+      varname: GRAINC_TO_SEED
+      varunit: g m-2 s-1
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: TREFMXAV
+      varunit: K
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Downward_SW_Radiation:
+      varname: FSDS
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: FLDS
+      varunit: w m-2
+    Surface_Relative_Humidity:
+      varname: RH2M
+      varunit: percentage
+    Surface_Specific_Humidity:
+      varname: QBOT
+      varunit: unitless
+    Precipitation:
+      varname: ''
+      varunit: mm s-1
+    Surface_Air_Temperature:
+      varname: TSA
+      varunit: K
+    Surface_Wind_Speed:
+      varname: ''
+      varunit: m s-1 wind
 CaMa:
   data_type: grid
   description: CaMa-Flood River Routing Model
@@ -135,8 +449,8 @@ CaMa:
       varunit: m3 s-1
     Dam_Outflow:
       varname:
-      - damouf
-      - outflw
+        - damouf
+        - outflw
       varunit: m3 s-1
     Depth_Of_Surface_Water:
       varname: flddph
@@ -177,86 +491,76 @@ CoLM2024:
       : -1 months
       default: '0'
   variables:
-    Canopy_Interception:
+    Canopy_Evaporation:
       compute: ds['f_fevpl'] - ds['f_etr']
-      varname: Canopy_Interception
+      varname: Canopy_Evaporation
       varunit: mm s-1
     Canopy_Transpiration:
       varname: f_etr
       varunit: mm s-1
     Crop_Yield_Corn:
-      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0)
-        + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0);
-        ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0)
-        + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0)
-        + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0)
-        + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0))
-        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0) + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0); ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0) + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0) + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0) + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0)) * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
       varname: Crop_Yield_Corn
       varunit: t ha-1
     Crop_Yield_Maize:
-      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0)
-        + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0);
-        ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0)
-        + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0)
-        + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0)
-        + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0))
-        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+      compute: total_area = ds['area_rainfed_temp_corn'].fillna(0) + ds['area_irrigated_temp_corn'].fillna(0) + ds['area_rainfed_trop_corn'].fillna(0) + ds['area_irrigated_trop_corn'].fillna(0); ((ds['f_cropprodc_rainfed_temp_corn'].fillna(0) * ds['area_rainfed_temp_corn'].fillna(0) + ds['f_cropprodc_irrigated_temp_corn'].fillna(0) * ds['area_irrigated_temp_corn'].fillna(0) + ds['f_cropprodc_rainfed_trop_corn'].fillna(0) * ds['area_rainfed_trop_corn'].fillna(0) + ds['f_cropprodc_irrigated_trop_corn'].fillna(0) * ds['area_irrigated_trop_corn'].fillna(0)) * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
       varname: Crop_Yield_Maize
       varunit: t ha-1
     Crop_Yield_Rice:
-      compute: total_area = ds['area_rainfed_rice'].fillna(0) + ds['area_irrigated_rice'].fillna(0);
-        ((ds['f_cropprodc_rainfed_rice'].fillna(0) * ds['area_rainfed_rice'].fillna(0)
-        + ds['f_cropprodc_irrigated_rice'].fillna(0) * ds['area_irrigated_rice'].fillna(0))
-        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+      compute: total_area = ds['area_rainfed_rice'].fillna(0) + ds['area_irrigated_rice'].fillna(0); ((ds['f_cropprodc_rainfed_rice'].fillna(0) * ds['area_rainfed_rice'].fillna(0) + ds['f_cropprodc_irrigated_rice'].fillna(0) * ds['area_irrigated_rice'].fillna(0)) * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
       varname: Crop_Yield_Rice
       varunit: t ha-1
     Crop_Yield_Soybean:
-      compute: total_area = ds['area_rainfed_temp_soybean'].fillna(0) + ds['area_irrigated_temp_soybean'].fillna(0)
-        + ds['area_rainfed_trop_soybean'].fillna(0) + ds['area_irrigated_trop_soybean'].fillna(0);
-        ((ds['f_cropprodc_rainfed_temp_soybean'].fillna(0) * ds['area_rainfed_temp_soybean'].fillna(0)
-        + ds['f_cropprodc_irrigated_temp_soybean'].fillna(0) * ds['area_irrigated_temp_soybean'].fillna(0)
-        + ds['f_cropprodc_rainfed_trop_soybean'].fillna(0) * ds['area_rainfed_trop_soybean'].fillna(0)
-        + ds['f_cropprodc_irrigated_trop_soybean'].fillna(0) * ds['area_irrigated_trop_soybean'].fillna(0))
-        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+      compute: total_area = ds['area_rainfed_temp_soybean'].fillna(0) + ds['area_irrigated_temp_soybean'].fillna(0) + ds['area_rainfed_trop_soybean'].fillna(0) + ds['area_irrigated_trop_soybean'].fillna(0); ((ds['f_cropprodc_rainfed_temp_soybean'].fillna(0) * ds['area_rainfed_temp_soybean'].fillna(0) + ds['f_cropprodc_irrigated_temp_soybean'].fillna(0) * ds['area_irrigated_temp_soybean'].fillna(0) + ds['f_cropprodc_rainfed_trop_soybean'].fillna(0) * ds['area_rainfed_trop_soybean'].fillna(0) + ds['f_cropprodc_irrigated_trop_soybean'].fillna(0) * ds['area_irrigated_trop_soybean'].fillna(0)) * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
       varname: Crop_Yield_Soybean
       varunit: t ha-1
     Crop_Yield_Wheat:
-      compute: total_area = ds['area_rainfed_spwheat'].fillna(0) + ds['area_irrigated_spwheat'].fillna(0)
-        + ds['area_rainfed_wtwheat'].fillna(0) + ds['area_irrigated_wtwheat'].fillna(0);
-        ((ds['f_cropprodc_rainfed_spwheat'].fillna(0) * ds['area_rainfed_spwheat'].fillna(0)
-        + ds['f_cropprodc_irrigated_spwheat'].fillna(0) * ds['area_irrigated_spwheat'].fillna(0)
-        + ds['f_cropprodc_rainfed_wtwheat'].fillna(0) * ds['area_rainfed_wtwheat'].fillna(0)
-        + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0))
-        * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
+      compute: total_area = ds['area_rainfed_spwheat'].fillna(0) + ds['area_irrigated_spwheat'].fillna(0) + ds['area_rainfed_wtwheat'].fillna(0) + ds['area_irrigated_wtwheat'].fillna(0); ((ds['f_cropprodc_rainfed_spwheat'].fillna(0) * ds['area_rainfed_spwheat'].fillna(0) + ds['f_cropprodc_irrigated_spwheat'].fillna(0) * ds['area_irrigated_spwheat'].fillna(0) + ds['f_cropprodc_rainfed_wtwheat'].fillna(0) * ds['area_rainfed_wtwheat'].fillna(0) + ds['f_cropprodc_irrigated_wtwheat'].fillna(0) * ds['area_irrigated_wtwheat'].fillna(0)) * 1e6 * 2.5e-6 / total_area.where(total_area > 0) * 3600 * 24 * 365) / 100
       varname: Crop_Yield_Wheat
       varunit: t ha-1
     Dam_Inflow:
       fallbacks:
-      - varname: qresv_in
-        varunit: m3 s-1
+        - varname: qresv_in
+          varunit: m3 s-1
       prefix_fallback: &id013
-      - _cama_
-      - _unitcat_
+        - _cama_
+        - _unitcat_
       varname: daminf
       varunit: m3 s-1
     Dam_Outflow:
       fallbacks:
-      - varname: qresv_out
-        varunit: m3 s-1
+        - varname: qresv_out
+          varunit: m3 s-1
       prefix_fallback: *id013
       varname: damouf
       varunit: m3 s-1
+    Dam_Elevation:
+      fallbacks:
+        - varname: f_sfcelv
+          varunit: m
+      prefix_fallback: *id013
+      varname: sfcelv
+      varunit: m
+    Dam_Storage:
+      fallbacks:
+        - varname: volresv
+          varunit: m3
+      prefix_fallback: *id013
+      varname: damsto
+      varunit: m3
     Dam_Water_Elevation:
+      fallbacks:
+        - varname: f_sfcelv
+          varunit: m
       prefix_fallback:
-      - _cama_
-      - _unitcat_
+        - _cama_
+        - _unitcat_
       varname: sfcelv
       varunit: m
     Dam_Water_Storage:
       fallbacks:
-      - varname: volresv
-        varunit: m3
+        - varname: volresv
+          varunit: m3
       prefix_fallback: *id013
       varname: damsto
       varunit: m3
@@ -268,9 +572,9 @@ CoLM2024:
       varunit: mm s-1
     Gross_Primary_Productivity:
       fallbacks:
-      - convert: value * 12.011
-        varname: f_assim
-        varunit: mol m-2 s-1
+        - convert: value * 12.011
+          varname: f_assim
+          varunit: mol m-2 s-1
       varname: f_gpp
       varunit: g m-2 s-1
     Ground_Evaporation:
@@ -279,16 +583,29 @@ CoLM2024:
     Ground_Heat:
       varname: f_fgrnd
       varunit: W m-2
+    Depth_Of_Surface_Water:
+      fallbacks:
+        - varname: f_flddph
+          varunit: m
+      prefix_fallback: *id013
+      varname: flddph
+      varunit: m
     Inundation_Area:
+      fallbacks:
+        - varname: f_floodarea
+          varunit: m2
       prefix_fallback:
-      - _cama_
-      - _unitcat_
+        - _cama_
+        - _unitcat_
       varname: fldare
       varunit: m2
     Inundation_Fraction:
+      fallbacks:
+        - varname: f_floodfrc
+          varunit: m2 m-2
       prefix_fallback:
-      - _cama_
-      - _unitcat_
+        - _cama_
+        - _unitcat_
       varname: fldfrc
       varunit: m2 m-2
     Latent_Heat:
@@ -302,9 +619,9 @@ CoLM2024:
       varunit: m2 m-2
     Net_Ecosystem_Exchange:
       fallbacks:
-      - convert: value * 12.011 - f_assim * 12.011
-        varname: f_respc
-        varunit: mol m-2 s-1
+        - convert: value * 12.011 - f_assim * 12.011
+          varname: f_respc
+          varunit: mol m-2 s-1
       varname: f_nee
       varunit: g m-2 s-1
     Net_Radiation:
@@ -316,20 +633,15 @@ CoLM2024:
       varunit: mm s-1
     River_Water_Level:
       fallbacks:
-      - varname: f_wdpth_ucat
-        varunit: m
+        - varname: f_sfcelv
+          varunit: m
+        - varname: f_wdpth_ucat
+          varunit: m
       prefix_fallback: *id013
       varname: sfcelv
       varunit: m
     Root_Zone_Soil_Moisture:
-      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6)
-        + ds['f_wliq_soisno'].isel(soilsnow=7) + ds['f_wliq_soisno'].isel(soilsnow=8)
-        + ds['f_wliq_soisno'].isel(soilsnow=9) + ds['f_wliq_soisno'].isel(soilsnow=10)
-        + ds['f_wliq_soisno'].isel(soilsnow=11) + ds['f_wliq_soisno'].isel(soilsnow=12)
-        * 0.31) / 1000.0 if 'f_wliq_soisno' in ds else (ds['f_h2osoi'].isel(soil=0)
-        * 0.0175 + ds['f_h2osoi'].isel(soil=1) * 0.0276 + ds['f_h2osoi'].isel(soil=2)
-        * 0.0455 + ds['f_h2osoi'].isel(soil=3) * 0.0749 + ds['f_h2osoi'].isel(soil=4)
-        * 0.1236 + ds['f_h2osoi'].isel(soil=5) * 0.2038) / 0.4929
+      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6) + ds['f_wliq_soisno'].isel(soilsnow=7) + ds['f_wliq_soisno'].isel(soilsnow=8) + ds['f_wliq_soisno'].isel(soilsnow=9) + ds['f_wliq_soisno'].isel(soilsnow=10) + ds['f_wliq_soisno'].isel(soilsnow=11) + ds['f_wliq_soisno'].isel(soilsnow=12) * 0.31) / 1000.0 if 'f_wliq_soisno' in ds else (ds['f_h2osoi'].isel(soil=0) * 0.0175 + ds['f_h2osoi'].isel(soil=1) * 0.0276 + ds['f_h2osoi'].isel(soil=2) * 0.0455 + ds['f_h2osoi'].isel(soil=3) * 0.0749 + ds['f_h2osoi'].isel(soil=4) * 0.1236 + ds['f_h2osoi'].isel(soil=5) * 0.2038) / 0.4929
       varname: Root_Zone_Soil_Moisture
       varunit: m3 m-3
     Sensible_Heat:
@@ -346,10 +658,17 @@ CoLM2024:
       varunit: mm s-1
     Streamflow:
       fallbacks:
-      - varname: f_discharge
-        varunit: m3 s-1
+        - varname: f_discharge
+          varunit: m3 s-1
       prefix_fallback: *id013
       varname: outflw
+      varunit: m3 s-1
+    Streamflow_Ocean:
+      fallbacks:
+        - varname: f_discharge_rivermouth
+          varunit: m3 s-1
+      prefix_fallback: *id013
+      varname: outflw_ocean
       varunit: m3 s-1
     Surface_Air_Temperature:
       varname: f_tref
@@ -373,10 +692,7 @@ CoLM2024:
       varname: Surface_Net_SW_Radiation
       varunit: W m-2
     Surface_Soil_Moisture:
-      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6))
-        / 0.0626 / 1000.0 if 'f_wliq_soisno' in ds else (ds['f_h2osoi'].isel(soil=0)
-        * 0.0175 + ds['f_h2osoi'].isel(soil=1) * 0.0276 + ds['f_h2osoi'].isel(soil=2)
-        * 0.0455) / 0.0906
+      compute: (ds['f_wliq_soisno'].isel(soilsnow=5) + ds['f_wliq_soisno'].isel(soilsnow=6)) / 0.0626 / 1000.0 if 'f_wliq_soisno' in ds else (ds['f_h2osoi'].isel(soil=0) * 0.0175 + ds['f_h2osoi'].isel(soil=1) * 0.0276 + ds['f_h2osoi'].isel(soil=2) * 0.0455) / 0.0906
       varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature:
@@ -393,16 +709,18 @@ CoLM2024:
       varname: Surface_Wind_Speed
       varunit: m s-1
     Terrestrial_Water_Storage_Change:
-      compute: ds['f_wat'].fillna(0) + ds['f_wa'].fillna(0) + ds['f_wdsrf'].fillna(0)
-        + ds['f_wetwat'].fillna(0)
+      compute: ds['f_wat'].fillna(0) + ds['f_wa'].fillna(0) + ds['f_wdsrf'].fillna(0) + ds['f_wetwat'].fillna(0)
       varname: Terrestrial_Water_Storage_Change
       varunit: mm
+    Total_Water_Storage:
+      prefix_fallback: *id013
+      varname: f_storge
+      varunit: m3
     Total_Runoff:
       varname: f_rnof
       varunit: mm s-1
     Urban_Anthropogenic_Heat_Flux:
-      compute: ds['f_fhac'] + ds['f_fach'] + ds['f_fhah'] + ds['f_fvehc'] + ds['f_fmeta']
-        + ds['f_fwst']
+      compute: ds['f_fhac'] + ds['f_fach'] + ds['f_fhah'] + ds['f_fvehc'] + ds['f_fmeta'] + ds['f_fwst']
       varname: Urban_Anthropogenic_Heat_Flux
       varunit: W m-2
     Veg_Cover_In_Fraction:
@@ -529,8 +847,8 @@ InteractiveModel:
   variables:
     Runoff:
       fallbacks:
-      - varname: runoff_fallback
-        varunit: mm day-1
+        - varname: runoff_fallback
+          varunit: mm day-1
       varname: runoff_primary
       varunit: mm day-1
 JRA3Q:
@@ -654,13 +972,151 @@ JULES7:
     Total_Runoff:
       varname: runoff
       varunit: kg m-2 s-1
+    Canopy_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Latent_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Heat:
+      varname: ''
+      varunit: ''
+    Surface_Upward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation:
+      varname: ''
+      varunit: ''
+    Ground_Evaporation:
+      varname: ''
+      varunit: ''
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Downward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Downward_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
+    Surface_Specific_Humidity:
+      varname: ''
+      varunit: ''
+    Precipitation:
+      varname: ''
+      varunit: ''
+    Surface_Air_Temperature:
+      varname: ''
+      varunit: ''
 LEM2:
   data_type: grid
   description: Land surface Energy/water Model 2
   name: LEM2
   tim_res: Month
   variables:
-    Canopy_Interception:
+    Canopy_Evaporation:
       varname: QVEGE
       varunit: mm s-1
     Canopy_Sensible_Heat:
@@ -720,13 +1176,157 @@ LEM2:
     Surface_Upward_SW_Radiation:
       varname: FSR
       varunit: w m-2
+    Ground_Latent_Heat:
+      varname: ''
+      varunit: ''
+    Net_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Albedo:
+      varname: ''
+      varunit: ''
+    Gross_Primary_Productivity:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Ecosystem_Respiration:
+      varname: ''
+      varunit: ''
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Leaf_Area_Index:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Evapotranspiration:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Soil_Evaporation:
+      varname: ''
+      varunit: ''
+    Total_Runoff:
+      varname: ''
+      varunit: ''
+    Subsurface_Runoff:
+      varname: ''
+      varunit: ''
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Snow_Depth:
+      varname: ''
+      varunit: ''
+    Surface_Snow_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: ''
+      varunit: ''
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
+    Precipitation:
+      varname: ''
+      varunit: ''
+    Surface_Air_Temperature:
+      varname: ''
+      varunit: ''
 LS3MIP:
   data_type: grid
   description: LS3MIP Land Surface Models
   name: LS3MIP
   tim_res: Month
   variables:
-    Canopy_Interception:
+    Canopy_Evaporation:
       varname: evspsblveg
       varunit: kg m-2 s-1
     Canopy_Transpiration:
@@ -743,7 +1343,211 @@ MATSIRO:
   description: MATSIRO Land Surface Model
   name: MATSIRO
   tim_res: Month
-  variables: {}
+  variables:
+    Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Canopy_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Latent_Heat:
+      varname: ''
+      varunit: ''
+    Latent_Heat:
+      varname: ''
+      varunit: ''
+    Net_Radiation:
+      varname: ''
+      varunit: ''
+    Ground_Heat:
+      varname: ''
+      varunit: ''
+    Surface_Upward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Upward_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Albedo:
+      varname: ''
+      varunit: ''
+    Gross_Primary_Productivity:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Ecosystem_Respiration:
+      varname: ''
+      varunit: ''
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Leaf_Area_Index:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Evapotranspiration:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation:
+      varname: ''
+      varunit: ''
+    Ground_Evaporation:
+      varname: ''
+      varunit: ''
+    Soil_Evaporation:
+      varname: ''
+      varunit: ''
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Total_Runoff:
+      varname: ''
+      varunit: ''
+    Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Subsurface_Runoff:
+      varname: ''
+      varunit: ''
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Snow_Water_Equivalent:
+      varname: ''
+      varunit: ''
+    Snow_Depth:
+      varname: ''
+      varunit: ''
+    Surface_Snow_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: ''
+      varunit: ''
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Downward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Downward_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
+    Surface_Specific_Humidity:
+      varname: ''
+      varunit: ''
+    Precipitation:
+      varname: ''
+      varunit: ''
+    Surface_Air_Temperature:
+      varname: ''
+      varunit: ''
 NoahMP5:
   data_type: grid
   description: Noah-MP Land Surface Model v5
@@ -757,7 +1561,7 @@ NoahMP5:
       compute: ds['EvapGroundNet'] + ds['EvapCanopyNet']
       varname: Canopy_Evaporation_Canopy_Transpiration
       varunit: mm s-1
-    Canopy_Interception:
+    Canopy_Evaporation:
       varname: EvapCanopyNet
       varunit: mm s-1
     Canopy_Sensible_Heat:
@@ -856,6 +1660,114 @@ NoahMP5:
     Water_Table_Depth:
       varname: WaterTableDepth
       varunit: m
+    Ground_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Net_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Upward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Upward_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: NetEcoExchange
+      varunit: g m-2 s-1
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: SoilMoisture
+      varunit: unitless
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: ''
+      varunit: ''
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
 SMAP_L4:
   data_type: grid
   description: SMAP Level 4 Soil Moisture
@@ -882,7 +1794,7 @@ TE:
     Albedo:
       varname: ALB
       varunit: percentage
-    Canopy_Interception:
+    Canopy_Evaporation:
       varname: EIFLX
       varunit: kg m-2 s-1
     Ground_Heat:
@@ -905,8 +1817,8 @@ TE:
       varunit: kg m2-1
     Streamflow:
       fallbacks:
-      - varname: Streamflow
-        varunit: m3 s-1
+        - varname: Streamflow
+          varunit: m3 s-1
       varname: outflw
       varunit: m3 s-1
     Surface_Downward_LW_Radiation:
@@ -928,12 +1840,156 @@ TE:
       varname: SSRU
       varunit: W m-2
     Total_Runoff:
-      compute: ds['RUNOFF'].isel(lev=0).squeeze()
+      compute: ds['RUNOFF'].isel(lev=0).squeeze() if 'lev' in ds['RUNOFF'].dims else ds['RUNOFF'].isel(zdepth=0).squeeze() if 'zdepth' in ds['RUNOFF'].dims else ds['RUNOFF'].squeeze()
       varname: Total_Runoff
       varunit: kg m-2 s-1
     Total_Water_Storage:
       varname: STORGE
       varunit: m3
+    Net_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Net_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Gross_Primary_Productivity:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Ecosystem_Respiration:
+      varname: ''
+      varunit: ''
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Leaf_Area_Index:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Evapotranspiration:
+      varname:
+      varunit: None
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Ground_Evaporation:
+      varname: ''
+      varunit: ''
+    Soil_Evaporation:
+      varname: ''
+      varunit: ''
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Canopy_Transpiration:
+      varname:
+      varunit: None
+    Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Subsurface_Runoff:
+      varname: ''
+      varunit: ''
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Snow_Depth:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Moisture:
+      varname: '' #GLWtot
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
+    Precipitation:
+      varname: ''
+      varunit: ''
+    Surface_Air_Temperature:
+      varname: ''
+      varunit: ''
 VIC5:
   data_type: grid
   description: Variable Infiltration Capacity Model v5
@@ -947,7 +2003,7 @@ VIC5:
       compute: ds['OUT_EVAP_CANOP'] + ds['OUT_TRANSP_VEG']
       varname: Canopy_Evaporation_Canopy_Transpiration
       varunit: mm step-1
-    Canopy_Interception:
+    Canopy_Evaporation:
       varname: OUT_EVAP_CANOP
       varunit: mm step-1
     Canopy_Transpiration:
@@ -1029,6 +2085,123 @@ VIC5:
     Veg_Cover_In_Fraction:
       varname: FCANOPY
       varunit: unitless
+    Leaf_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Ground_Sensible_Heat:
+      varname: ''
+      varunit: ''
+    Surface_Upward_SW_Radiation:
+      varname: ''
+      varunit: ''
+    Surface_Upward_LW_Radiation:
+      varname: ''
+      varunit: ''
+    Gross_Primary_Productivity:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Ecosystem_Respiration:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Ground_Evaporation:
+      varname: ''
+      varunit: ''
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: OUT_SOIL_MOIST_FRAC
+      varunit: mm
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: ''
+      varunit: ''
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban:
+      varname: ''
+      varunit: ''
+    Sensible_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Latent_Heat_From_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Waste_Heat_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Sensible_Flux_From_Heat_or_Cool_AC:
+      varname: ''
+      varunit: ''
+    Flux_From_Metabolism:
+      varname: ''
+      varunit: ''
+    Flux_From_Traffic:
+      varname: ''
+      varunit: ''
+    Temperature_Of_Urban_Roof:
+      varname: ''
+      varunit: ''
+    Dam_Inflow:
+      varname: ''
+      varunit: ''
+    Dam_Outflow:
+      varname: ''
+      varunit: ''
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Specific_Humidity:
+      varname: ''
+      varunit: ''
 WRF:
   data_type: grid
   description: Weather Research and Forecasting Model
@@ -1086,13 +2259,11 @@ WRF:
       varname: PSFC
       varunit: Pa
     Surface_Soil_Moisture:
-      compute: ds['SMOIS'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims
-        else ds['SMOIS'].isel(soil=0)
+      compute: ds['SMOIS'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['SMOIS'].isel(soil=0)
       varname: SMOIS
       varunit: m3 m-3
     Surface_Soil_Temperature:
-      compute: ds['TSLB'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims
-        else ds['TSLB'].isel(soil=0)
+      compute: ds['TSLB'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['TSLB'].isel(soil=0)
       varname: TSLB
       varunit: K
     Surface_Specific_Humidity:
@@ -1108,3 +2279,423 @@ WRF:
       compute: (ds['U10']**2 + ds['V10']**2)**0.5
       varname: Wind_Speed_10m
       varunit: m s-1
+CaMaFlood:
+  data_type: grid
+  description: CaMa-Flood legacy model profile
+  name: CaMaFlood
+  tim_res: Day
+  variables:
+    Total_Runoff:
+      varname: f_rnof
+      varunit: mm s-1
+    Streamflow:
+      varname: outflw
+      varunit: m3 s-1
+    Inundation_Fraction:
+      varname: fldfrc
+      varunit: m2 m-2
+    Inundation_Area:
+      varname: fldare
+      varunit: m2
+    Dam_Inflow:
+      varname: daminf
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname: damouf
+      varunit: m3 s-1
+    Dam_Elevation:
+      varname: sfcelv
+      varunit: m
+    Dam_Storage:
+      varname: damsto
+      varunit: m3
+    River_Water_Level:
+      varname: sfcelv
+      varunit: m
+CoLM:
+  data_type: grid
+  description: Common Land Model legacy model profile
+  name: CoLM
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: f_fsena
+      varunit: w m-2
+    Leaf_Sensible_Heat:
+      varname: f_fsenl
+      varunit: w m-2
+    Ground_Sensible_Heat:
+      varname: f_fseng
+      varunit: w m-2
+    Latent_Heat:
+      varname: f_lfevpa
+      varunit: w m-2
+    Net_Radiation:
+      varname: f_rnet
+      varunit: w m-2
+    Ground_Heat:
+      varname: f_fgrnd
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: f_sr
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: f_olrg
+      varunit: w m-2
+    Surface_Net_SW_Radiation:
+      varname: ''
+      varunit: w m-2
+    Surface_Net_LW_Radiation:
+      varname: ''
+      varunit: w m-2
+    Surface_Albedo:
+      varname: ''
+      varunit: unitless
+    Gross_Primary_Productivity:
+      varname: f_gpp
+      varunit: g m-2 s-1
+    Canopy_Assimilation_Rate:
+      varname: f_assim
+      varunit: mol m-2 s-1
+    Ecosystem_Respiration:
+      varname: f_respc
+      varunit: mol m-2 s-1
+    Veg_Cover_In_Fraction:
+      varname: f_sigf
+      varunit: m2 m-2
+    Leaf_Greenness:
+      varname: f_green
+      varunit: m2 m-2
+    Leaf_Area_Index:
+      varname: f_lai
+      varunit: unitless
+    Soil_Carbon:
+      varname: f_totsom
+      varunit: g C m-2
+    Evapotranspiration:
+      varname: f_fevpa
+      varunit: mm s-1
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: f_fevpl
+      varunit: mm s-1
+    Canopy_Evaporation:
+      varname: ''
+      varunit: mm s-1
+    Ground_Evaporation:
+      varname: f_fevpg
+      varunit: mm s-1
+    Canopy_Transpiration:
+      varname: f_etr
+      varunit: mm s-1
+    Total_Runoff:
+      varname: f_rnof
+      varunit: mm s-1
+    Surface_Runoff:
+      varname: f_rsur
+      varunit: mm s-1
+    Saturation_Excess_Surface_Runoff:
+      varname: f_rsur_se
+      varunit: mm s-1
+    Infiltration Excess Surface Runoff:
+      varname: f_rsur_ie
+      varunit: mm s-1
+    Subsurface_Runoff:
+      varname: f_rsur
+      varunit: mm s-1
+    Groundwater_Recharge_Rate:
+      varname: f_qcharge
+      varunit: mm s-1
+    Snow_Water_Equivalent:
+      varname: f_scv
+      varunit: mm
+    Snow_Depth:
+      varname: f_snowdp
+      varunit: m
+    Surface_Snow_Cover_In_Fraction:
+      varname: f_fsno
+      varunit: m2 m-2
+    Water_Table_Depth:
+      varname: f_zwt
+      varunit: m
+    Depth_Of_Surface_Water:
+      varname: f_wdsrf
+      varunit: mm
+    Water_Storage_In_Aquifer:
+      varname: f_wa
+      varunit: mm
+    Surface_Soil_Moisture:
+      varname: f_wliq_soisno
+      varunit: m3 m-3
+    Root_Zone_Soil_Moisture:
+      varname: f_wliq_soisno
+      varunit: m3 m-3
+    Surface_Soil_Temperature:
+      varname: f_t_grnd
+      varunit: K
+    Terrestrial_Water_Storage_Change:
+      varname: ''
+      varunit: mm
+    Streamflow:
+      varname: f_discharge
+      varunit: m3 s-1
+    Inundation_Fraction:
+      varname: fldfrc
+      varunit: m2 m-2
+    Inundation_Area:
+      varname: fldare
+      varunit: m2
+    River_Water_Level:
+      varname: ??
+      varunit: m2
+    Lake_temperature:
+      varname: ''
+      varunit: m2
+    Lake_Ice_Fraction_Cover:
+      varname: f_lake_icefrac
+      varunit: m2 m-2
+    Lake_Water_Level:
+      varname: ''
+      varunit: m2
+    Lake_Water_Area:
+      varname: ''
+      varunit: m2
+    Lake_Water_Volume:
+      varname: ''
+      varunit: m2
+    Lake_Surface_Water_Temperature:
+      varname: f_t_lake
+      varunit: K
+    Urban_Anthropogenic_Heat_Flux:
+      varname: ''
+      varunit: w m-2
+    Urban_Daytime_Surface_Temperature:
+      varname: f_t_grndday
+      varunit: K
+    Urban_Nittime_Surface_Temperature:
+      varname: f_t_grndnit
+      varunit: K
+    Urban_Air_Temperature_Max:
+      varname: f_tmax
+      varunit: K
+    Urban_Air_Temperature_Min:
+      varname: f_tmin
+      varunit: K
+    Urban_Latent_Heat_Flux:
+      varname: f_lfevpa
+      varunit: w m-2
+    Crop_Phase:
+      varname: f_cphase
+      varunit: unitless
+    Grain_To_Crop_Seed_Carbon:
+      varname: f_grainc_to_seed
+      varunit: gC m-2 s-1
+    Crop_Yield_Rice:
+      varname: ''
+      varunit: ''
+    Crop_Yield_Corn:
+      varname: ''
+      varunit: t ha-1
+    Crop_Yield_Rice_Major:
+      varname: f_grainc_to_cropprodc
+      varunit: g m-2 s-1
+    Total_Irrigation_Amount:
+      varname: f_sum_irrig
+      varunit: kg m-2
+    Dam_Inflow:
+      varname: daminf
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname: damouf
+      varunit: m3 s-1
+    Dam_Elevation:
+      varname: sfcelv
+      varunit: m
+    Dam_Storage:
+      varname: damsto
+      varunit: m3
+    Surface_Downward_SW_Radiation:
+      varname: f_xy_solarin
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: f_xy_frl
+      varunit: w m-2
+    Surface_Specific_Humidity:
+      varname: f_qref
+      varunit: unitless
+    Precipitation:
+      varname: ''
+      varunit: mm s-1
+    Surface_Air_Temperature:
+      varname: f_tref
+      varunit: K
+    Surface_Wind_Speed:
+      varname: ''
+      varunit: m s-1 wind
+GLDAS2:
+  data_type: grid
+  description: GLDAS2 legacy model profile
+  name: GLDAS2
+  tim_res: Month
+  variables:
+    Sensible_Heat:
+      varname: Qh_tavg
+      varunit: w m-2
+    Latent_Heat:
+      varname: Qle_tavg
+      varunit: w m-2
+    Net_Radiation:
+      varname: ''
+      varunit: w m-2
+    Ground_Heat:
+      varname: Qg_tavg
+      varunit: w m-2
+    Surface_Upward_SW_Radiation:
+      varname: ''
+      varunit: w m-2
+    Surface_Upward_LW_Radiation:
+      varname: ''
+      varunit: w m-2
+    Surface_Net_SW_Radiation:
+      varname: Swnet_tavg
+      varunit: w m-2
+    Surface_Net_LW_Radiation:
+      varname: Lwnet_tavg
+      varunit: w m-2
+    Albedo:
+      varname: Albedo_inst
+      varunit: percentage
+    Gross_Primary_Productivity:
+      varname: ''
+      varunit: ''
+    Net_Ecosystem Exchange:
+      varname: ''
+      varunit: ''
+    Ecosystem_Respiration:
+      varname: ''
+      varunit: ''
+    Veg_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Leaf_Greenness:
+      varname: ''
+      varunit: ''
+    Leaf_Area_Index:
+      varname: ''
+      varunit: ''
+    Stem_Area_Index:
+      varname: ''
+      varunit: ''
+    Evapotranspiration:
+      varname: Evap_tavg
+      varunit: kg m-2 s-1
+    Canopy_Evaporation_Canopy_Transpiration:
+      varname: ''
+      varunit: ''
+    Canopy_Evaporation:
+      varname: ECanop
+      varunit: W m-2
+    Ground_Evaporation:
+      varname: ''
+      varunit: ''
+    Soil_Evaporation:
+      varname: ESoil
+      varunit: W m-2
+    Snow_Evaporation:
+      varname: ''
+      varunit: ''
+    Canopy_Transpiration:
+      varname: Tveg_tavg
+      varunit: W m-2 heat
+    Total_Runoff:
+      varname: ''
+      varunit: mm 3hour-1
+    Surface_Runoff:
+      varname: ''
+      varunit: kg m-2 s-1
+    Subsurface_Runoff:
+      varname: ''
+      varunit: kg m-2 s-1
+    Saturation_Excess_Surface_Runoff:
+      varname: ''
+      varunit: ''
+    Infiltration:
+      varname: ''
+      varunit: ''
+    Groundwater_Recharge_Rate:
+      varname: ''
+      varunit: ''
+    Snow_Water_Equivalent:
+      varname: SWE
+      varunit: Kg m-2
+    Snow_Depth:
+      varname: SnowDepth
+      varunit: M
+    Surface_Snow_Cover_In_Fraction:
+      varname: ''
+      varunit: ''
+    Lake_temperature:
+      varname: ''
+      varunit: ''
+    Lake_Ice_Fraction_Cover:
+      varname: ''
+      varunit: ''
+    Water_Table_Depth:
+      varname: ''
+      varunit: ''
+    Depth_Of_Surface_Water:
+      varname: ''
+      varunit: ''
+    Water_Storage_In_Aquifer:
+      varname: ''
+      varunit: ''
+    Surface_Soil_Moisture:
+      varname: ''
+      varunit: ''
+    Root-Zone_Soil_Moisture:
+      varname: RootMoist
+      varunit: kg m-2
+    Surface_Soil_Temperature:
+      varname: ''
+      varunit: ''
+    Streamflow:
+      varname: ''
+      varunit: ''
+    Inundation_Fraction:
+      varname: ''
+      varunit: ''
+    Inundation_Area:
+      varname: ''
+      varunit: ''
+    Total_Water_Storage:
+      varname: TWS
+      varunit: mm
+    Diurnal_Temperature_Range:
+      varname: ''
+      varunit: ''
+    Diurnal_Max_Temperature:
+      varname: ''
+      varunit: ''
+    Diurnal_Min_Temperature:
+      varname: ''
+      varunit: ''
+    Surface_Downward_SW_Radiation:
+      varname: SWdown_f_tavg
+      varunit: w m-2
+    Surface_Downward_LW_Radiation:
+      varname: LWdown_f_tavg
+      varunit: w m-2
+    Surface_Relative_Humidity:
+      varname: ''
+      varunit: ''
+    Surface_Vapor_Pressure:
+      varname: ''
+      varunit: ''
+    Surface_Specific_Humidity:
+      varname: Qair_f
+      varunit: unitless
+    Precipitation:
+      varname: Rainf_f
+      varunit: kg m-2 s-1
+    Surface_Air_Temperature:
+      varname: Tair_f
+      varunit: K

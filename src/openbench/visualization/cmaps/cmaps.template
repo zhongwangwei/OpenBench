@@ -3,6 +3,7 @@
 import os
 import re
 from glob import glob
+from importlib.resources import files
 from packaging import version
 
 import matplotlib
@@ -12,8 +13,6 @@ import numpy as np
 from ._version import __version__
 from .colormap import Colormap
 
-CMAPSFILE_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 'colormaps')
 USER_CMAPFILE_DIR = os.environ.get('CMAP_DIR')
 
 
@@ -28,6 +27,19 @@ else:
     register_cmap = matplotlib.cm.register_cmap
     
 
+def _cmap_resource(*parts):
+    """Return a Traversable for a built-in RGB colormap resource."""
+    return files('openbench').joinpath('visualization', 'cmaps', 'colormaps', *parts)
+
+
+def _read_cmap(cmap_file):
+    """Read a user path or an importlib.resources Traversable."""
+    if hasattr(cmap_file, 'read_text'):
+        return cmap_file.read_text(encoding='utf-8')
+    with open(cmap_file, encoding='utf-8') as cmap:
+        return cmap.read()
+
+
 class Cmaps(object):
     """colormaps"""
 
@@ -37,8 +49,7 @@ class Cmaps(object):
 
     def _coltbl(self, cmap_file):
         pattern = re.compile(r'(\d\.?\d*)\s+(\d\.?\d*)\s+(\d\.?\d*).*')
-        with open(cmap_file) as cmap:
-            cmap_buff = cmap.read()
+        cmap_buff = _read_cmap(cmap_file)
         cmap_buff = re.compile('ncolors.*\n').sub('', cmap_buff)
         if re.search(r'\s*\d\.\d*', cmap_buff):
             return np.asarray(pattern.findall(cmap_buff), 'f4')

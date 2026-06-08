@@ -1,8 +1,13 @@
+import logging
 import math
 import os
 import re
 import warnings
 from typing import Union
+from openbench.visualization._diagram_sampling import limit_diagram_points
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.visualization._filenames import join_filename_components
 
 import matplotlib
 import matplotlib.colors as clr
@@ -10,17 +15,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams, ticker
+from matplotlib.lines import Line2D  # used by dict-style _add_legend
+
+logger = logging.getLogger(__name__)
 
 
+@with_isolated_rc
 def make_scenarios_comparison_Taylor_Diagram(
     basedir, evaluation_item, STDs, RMSs, cors, ref_source, sim_sources, option
 ):
+    option = option.copy()
     font = {"family": "DejaVu Sans"}
     # font = {'family': option['font']}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
         "xtick.direction": "out",
@@ -33,15 +42,37 @@ def make_scenarios_comparison_Taylor_Diagram(
 
     fig, ax = plt.subplots(figsize=(option["x_wise"], option["y_wise"]))
 
+    (STDs, RMSs, cors), sim_sources = limit_diagram_points(
+        [STDs, RMSs, cors],
+        sim_sources,
+        option,
+        has_reference=True,
+        context="Taylor Diagram",
+    )
     MARKERS = generate_markers(sim_sources, option)
     if option["Normalized"]:
-        stds = STDs / STDs[0]
+        # Guard reference STD = 0 (constant reference series): the Taylor
+        # diagram is undefined and STDs / STDs[0] would yield inf/NaN that
+        # blows up the polar transform.  CRMSD shares the same units as STD,
+        # so normalized Taylor diagrams must scale both by the reference STD.
+        if STDs[0] == 0:
+            logging.warning(
+                "Taylor diagram: reference STD is zero (constant reference series); "
+                "skipping normalization and using raw STDs."
+            )
+            stds = STDs
+            rms = RMSs
+        else:
+            stds = STDs / STDs[0]
+            rms = RMSs / STDs[0]
     else:
         stds = STDs
+        rms = RMSs
 
     taylor_diagram(
+        ax,
         stds,
-        RMSs,
+        rms,
         cors,
         markers=MARKERS,
         markerLegend=option["markerLegend"],
@@ -62,7 +93,11 @@ def make_scenarios_comparison_Taylor_Diagram(
         stdlabelsize=option["STDlabelsize"],
         corlabelsize=option["CORlabelsize"],
         normalizedstd=option["Normalized"],
-        legend={option["set_legend"], option["bbox_to_anchor_x"], option["bbox_to_anchor_y"]},
+        legend=dict(
+            set_legend=option["set_legend"],
+            bbox_to_anchor_x=option["bbox_to_anchor_x"],
+            bbox_to_anchor_y=option["bbox_to_anchor_y"],
+        ),
         # tickRMS =  np.arange(tickRMS_range_min,tickRMS_range_max,tickRMS_range_step),
         # tickSTD =  np.arange(tickSTD_range_min,tickSTD_range_max,tickSTD_range_step),
         # tickRMSangle = 150, axismax = tickRMS_range_max,
@@ -81,11 +116,13 @@ def make_scenarios_comparison_Taylor_Diagram(
         f"{basedir}",
         "comparisons",
         "Taylor_Diagram",
-        f"Taylor_Diagram_{evaluation_item}_{ref_source}.{option['saving_format']}",
+        f"{join_filename_components('Taylor_Diagram', evaluation_item, ref_source)}.{option['saving_format']}",
     )
-    plt.savefig(output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+    save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+    plt.close(fig)
 
 
+@with_isolated_rc
 def taylor_diagram(*args, **kwargs):
     """
     ***   modified from SkillMetric  s*****
@@ -149,7 +186,11 @@ def taylor_diagram(*args, **kwargs):
     _check_taylor_stats(STDs, RMSs, CORs, 0.01) if options["checkstats"] == "on" else None
 
     # Express statistics in polar coordinates.
-    rho, theta = STDs, np.arccos(CORs)
+    # Clip CORs to [-1, 1] before arccos: correlations computed upstream can
+    # come back as 1.0 + ε due to floating-point round-off, and np.arccos
+    # returns NaN for those values, silently dropping the corresponding
+    # marker from the diagram.
+    rho, theta = STDs, np.arccos(np.clip(CORs, -1.0, 1.0))
 
     #  Get axis values for plot
     axes = _get_taylor_diagram_axes(ax, rho, options)
@@ -190,6 +231,15 @@ def taylor_diagram(*args, **kwargs):
         raise ValueError("Unrecognized option: " + options["markerdisplayed"])
 
     return None
+
+
+# Use the shared print helpers — these are referenced 200+ times by
+# `_display_taylor_diagram_options` and were previously never defined
+# (calling that help function crashed with NameError).
+from openbench.visualization._diagram_utils import (  # noqa: E402
+    disp as _disp,
+    dispopt as _dispopt,
+)
 
 
 def _display_taylor_diagram_options() -> None:
@@ -471,7 +521,7 @@ def _get_taylor_diagram_arguments(*args):
         return [], [], [], []
     elif nargin == 3:
         stds, rmss, cors = args
-        CAX = plt.gca()
+        CAX = None
     elif nargin == 4:
         CAX, stds, rmss, cors = args
         if not hasattr(CAX, "axes"):
@@ -484,6 +534,9 @@ def _get_taylor_diagram_arguments(*args):
     STDs = _ensure_np_array_or_die(stds, "STDs")
     RMSs = _ensure_np_array_or_die(rmss, "RMSs")
     CORs = _ensure_np_array_or_die(cors, "CORs")
+
+    if CAX is None:
+        _, CAX = plt.subplots()
 
     return CAX, STDs, RMSs, CORs
 
@@ -545,7 +598,7 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
     cxscale = fontSize / 10  # scale color bar by font size
     markerSize = option["markersize"] * 2
 
-    hp = plt.scatter(
+    hp = ax.scatter(
         X,
         Y,
         s=markerSize,
@@ -580,7 +633,7 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
     # Add color bar to plot
     if option["colormap"] == "on":
         # map color shading of markers to colormap
-        hc = plt.colorbar(hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ax=ax)
+        hc = ax.figure.colorbar(hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ax=ax)
 
         # Limit number of ticks on color bar to reasonable number
         if orientation == "horizontal":
@@ -589,8 +642,8 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
     elif option["colormap"] == "off":
         # map color shading of markers to min to max range of Z values
         if len(Z) > 1:
-            ax.clim(min(Z), max(Z))
-            hc = ax.colorbar(
+            hp.set_clim(min(Z), max(Z))
+            hc = ax.figure.colorbar(
                 hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ticks=[min(Z), max(Z)], ax=ax
             )
 
@@ -858,7 +911,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         if len(markerlabel) == 0:
             warnings.warn("No markers within axis limit ranges.")
         else:
-            _add_legend(markerlabel, labelcolor, option, rgba, markerSize, fontSize, hp)
+            _add_legend(ax, markerlabel, labelcolor, option, rgba, markerSize, fontSize, hp)
     else:
         # Plot markers as dots of a single color with accompanying labels
 
@@ -912,7 +965,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
         markerlabel = option["markerlabel"]
         marker_label_color = clr.to_rgb(edge_color) + (alpha,)
         if type(markerlabel) is dict:
-            _add_legend(markerlabel, labelcolor, option, marker_label_color, markerSize, fontSize)
+            _add_legend(ax, markerlabel, labelcolor, option, marker_label_color, markerSize, fontSize)
 
 
 def _get_default_markers(X, option: dict):
@@ -947,9 +1000,8 @@ def _get_default_markers(X, option: dict):
     kind = ["+", "o", "x", "s", "d", "^", "v", "p", "h", "*"]
     colorm = ["r", "b", "g", "c", "m", "y", "k", "gray"]
     if len(X) > 80:
-        print("You must introduce new markers to plot more than 70 cases.")
-        print("The marker character array need to be extended inside the code.")
-
+        logger.warning("You must introduce new markers to plot more than 70 cases.")
+        logger.info("The marker character array need to be extended inside the code.")
     if len(X) <= len(kind):
         # Define markers with specified color
         marker = []
@@ -977,7 +1029,11 @@ def _get_default_markers(X, option: dict):
     return marker, markercolor
 
 
-def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=[]):
+def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=None):
+    # Mutable default would persist across calls and accumulate handles —
+    # the legend would grow indefinitely in batch evaluations.
+    if hp is None:
+        hp = []
     """
     Adds a legend to a pattern diagram.
 
@@ -1037,7 +1093,7 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
             # Put legend in a default location
             markerlabel = tuple(markerLabel)
             if option["legend"]["set_legend"]:
-                leg = plt.legend(
+                leg = ax.legend(
                     hp,
                     markerlabel,
                     loc="upper right",
@@ -1046,7 +1102,7 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
                     bbox_to_anchor=(option["legend"]["bbox_to_anchor_x"], option["legend"]["bbox_to_anchor_y"]),
                 )
             else:
-                leg = plt.legend(
+                leg = ax.legend(
                     hp, markerlabel, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.5, 1.0)
                 )
         else:
@@ -1061,7 +1117,7 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
             markerlabel = tuple(markerLabel)
 
             # Shift figure to include legend
-            plt.gcf().subplots_adjust(right=0.6)
+            ax.figure.subplots_adjust(right=0.6)
             # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
             if option["legend"]["set_legend"]:
@@ -1071,7 +1127,7 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
                     loc = (1.2, 0.25)
                 else:
                     loc = (1.1, 0.25)
-            leg = plt.legend(hp, markerlabel, loc=loc, fontsize=fontSize, numpoints=1, ncol=ncol)
+            leg = ax.legend(hp, markerlabel, loc=loc, fontsize=fontSize, numpoints=1, ncol=ncol)
 
     elif type(markerLabel) is dict:
         # Add legend using labels provided as dictionary
@@ -1092,13 +1148,13 @@ def _add_legend(markerLabel, labelcolor, option, rgba, markerSize, fontSize, hp=
             legend_elements.append(legend_object)
 
         # Put legend in a default location
-        leg = plt.legend(
+        leg = ax.legend(
             handles=legend_elements, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.4, 1.1)
         )
 
         if _checkKey(option, "numberpanels") and option["numberpanels"] == 2:
             # add padding so legend is not cut off
-            plt.tight_layout(pad=1)
+            ax.figure.tight_layout(pad=1)
     else:
         raise Exception("markerLabel type is not a list or dictionary: " + str(type(markerLabel)))
 
@@ -1300,33 +1356,15 @@ def _check_dict_with_keys(
     return None
 
 
-def _is_int(element):
-    """
-    Check if variable is an integer.
-    """
-    try:
-        int(element)
-        return True
-    except ValueError:
-        return False
-
-
-def _is_float(element):
-    """
-    Check if variable is a float.
-    """
-    try:
-        float(element)
-        return True
-    except ValueError:
-        return False
-
-
-def _is_list_in_string(element):
-    """
-    Check if variable is list provided as string
-    """
-    return bool(re.search(r"\[|\]", element))
+# Aliases kept for backward compatibility with internal call sites in
+# this module; the canonical implementation lives in _diagram_utils so
+# Fig_target_diagram.py can share it.
+from openbench.visualization._diagram_utils import (  # noqa: E402
+    is_float as _is_float,
+    is_int as _is_int,
+    is_list_in_string as _is_list_in_string,
+    parse_literal_option as _parse_literal_option,
+)
 
 
 def _default_options(CORs: list) -> dict:
@@ -1691,11 +1729,21 @@ def _get_options(option: dict, **kwargs) -> dict:
                 option[optname] = optvalue
             elif optname == "legend":
                 if option["markerlegend"] == "on":
-                    option["legend"] = dict(
-                        set_legend=list(optvalue)[0],
-                        bbox_to_anchor_x=list(optvalue)[1],
-                        bbox_to_anchor_y=list(optvalue)[2],
-                    )
+                    if isinstance(optvalue, dict):
+                        option["legend"] = {
+                            "set_legend": bool(optvalue.get("set_legend", optvalue.get("setLegend", False))),
+                            "bbox_to_anchor_x": optvalue.get("bbox_to_anchor_x", optvalue.get("bboxToAnchorX", 1.4)),
+                            "bbox_to_anchor_y": optvalue.get("bbox_to_anchor_y", optvalue.get("bboxToAnchorY", 1.1)),
+                        }
+                    else:
+                        values = list(optvalue)
+                        if len(values) < 3:
+                            raise ValueError("legend must contain set_legend, bbox_to_anchor_x, bbox_to_anchor_y")
+                        option["legend"] = dict(
+                            set_legend=bool(values[0]),
+                            bbox_to_anchor_x=values[1],
+                            bbox_to_anchor_y=values[2],
+                        )
             elif optname == "markersizeobs":
                 option["markersizeobs"] = optvalue
 
@@ -1795,9 +1843,9 @@ def _read_options(option: dict, **kwargs) -> dict:
 
         elif keys[index] in tuplekey:
             try:
-                option[keys[index]] = eval(values[index])
-            except NameError:
-                raise Exception("Invalid " + keys[index] + ": " + values[index])
+                option[keys[index]] = _parse_literal_option(values[index], keys[index])
+            except ValueError as exc:
+                raise Exception(str(exc)) from exc
         elif keys[index] == "rmslabelformat":
             option[keys[index]] = values[index]
         elif pd.isna(values[index]):
@@ -2032,8 +2080,6 @@ def _overlay_taylor_diagram_circles(ax: matplotlib.axes.Axes, axes: dict, option
 
     # Define label format
     labelFormat = "{" + option["rmslabelformat"] + "}"
-    fontSize = matplotlib.rcParams.get("font.size") + 2
-
     for iradius in option["tickrms"]:
         phi = th[np.where(radius >= iradius)]
         if len(phi) != 0:
@@ -2154,7 +2200,6 @@ def _overlay_taylor_diagram_lines(ax: matplotlib.axes.Axes, axes: dict, option: 
     # annotate them in correlation coefficient
     if option["showlabelscor"] == "on":
         ticklabels_col = _get_from_dict_or_default(option, "colcor", "colscor", "tick_labels")
-        fontSize = matplotlib.rcParams.get("font.size")
         rt = 1.05 * axes["rmax"]
         for i, cc in enumerate(corr):
             if option["numberpanels"] == 2:
@@ -2171,7 +2216,7 @@ def _overlay_taylor_diagram_lines(ax: matplotlib.axes.Axes, axes: dict, option: 
                 fontsize=option["ticksizecor"],
             )
             del i, cc
-        del fontSize, rt, ticklabels_col
+        del rt, ticklabels_col
 
     return None
 
@@ -2233,7 +2278,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
 
     axes_handles = []
     axlabweight = option["labelweight"]
-    fontSize = rcParams.get("font.size") + 2
     lineWidth = rcParams.get("lines.linewidth")
     fontFamily = rcParams.get("font.family")
     if option["numberpanels"] == 1:
@@ -2271,8 +2315,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
                 c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
                 dd = 1.15 * axes["rmax"]
                 for ii, ith in enumerate(c):
-                    cur_x = dd * np.cos(ith * np.pi / 180)
-                    cur_y = dd * np.sin(ith * np.pi / 180)
                     # print("%s: %.03f, %.03f, %.03f" % (lab[ii], cur_x, cur_y, ith))
                     handle = ax.text(dd * np.cos(ith * np.pi / 180), dd * np.sin(ith * np.pi / 180), lab[ii])
                     handle.set(

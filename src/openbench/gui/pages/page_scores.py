@@ -5,12 +5,7 @@ Scores selection page.
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import CheckboxGroup
-
-
-SCORES_ITEMS = {
-    "ILAMB Scoring System": ["nBiasScore", "nRMSEScore", "nPhaseScore", "nIavScore", "nSpatialScore", "Overall_Score"],
-    "Other": ["The_Ideal_Point_score"],
-}
+from openbench.core.registry import SCORES_ITEMS
 
 
 class PageScores(BasePage):

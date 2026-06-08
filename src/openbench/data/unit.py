@@ -1,10 +1,52 @@
 import logging
 import threading
 
+
 # Module-level cache for case-insensitive unit lookup
 # Format: normalized_unit_lowercase -> (base_unit, conversion_func or None)
 _UNIT_LOOKUP_CACHE = None
 _UNIT_CACHE_LOCK = threading.Lock()
+
+
+SECONDS_PER_DAY = 86400.0
+LATENT_HEAT_VAPORIZATION_J_KG = 2.5e6
+
+
+def _per_day_to_per_year(x):
+    """Convert mm/day → mm/year using calendar-aware factor when possible.
+
+    If `x` is an xarray DataArray with a time coordinate, multiply by
+    the year length implied by each timestamp (365 or 366 for leap).
+    Otherwise fall back to the Julian year (365.25), which averages
+    leap-year drift out.
+    """
+    try:
+        if hasattr(x, "time") and "time" in getattr(x, "coords", {}):
+            years = x.time.dt.year
+            # Days in year vector aligned with time axis
+            is_leap = ((years % 4 == 0) & (years % 100 != 0)) | (years % 400 == 0)
+            days = is_leap.astype("float64") + 365.0
+            return x * days
+    except Exception:
+        pass
+    return x * 365.25
+
+
+def _per_month_to_per_day(x):
+    """Convert mm/month → mm/day using calendar-aware days-in-month.
+
+    Mirror of `_per_day_to_per_year`. The fixed 30.44 (mean Gregorian
+    month length) used previously gave up to ±10% per-step error in
+    months with 28/31 days. When `x` is an xarray DataArray with a
+    time coordinate we use `x.time.dt.days_in_month`; otherwise fall
+    back to 30.4375 (= 365.25/12) which averages leap drift.
+    """
+    try:
+        if hasattr(x, "time") and "time" in getattr(x, "coords", {}):
+            return x / x.time.dt.days_in_month
+    except Exception:
+        pass
+    return x / 30.4375
 
 
 class UnitProcessing:
@@ -37,19 +79,32 @@ class UnitProcessing:
                 "mol m-2 s-1": lambda x: x * (86400 * 12.01),  # Molar carbon
                 "mumolco2 m-2 s-1": lambda x: x * (12e-6 * 86400),  # CO2 flux
             },
+            "mm": {
+                # Water-equivalent depth/stock. Keep this separate from
+                # rate units (mm day-1 / mm year-1) so SWE, soil water, and
+                # other kg m-2 water-column state variables are not mislabeled
+                # as annual fluxes.
+                "kg m-2": lambda x: x,
+                "kg/m2": lambda x: x,
+                "kg m**-2": lambda x: x,
+            },
             "mm day-1": {
                 "kg m-2 s-1": lambda x: x * 86400,
+                "kg/m2/s": lambda x: x * 86400,
                 "mm s-1": lambda x: x * 86400,
                 "mm hr-1": lambda x: x * 24,
                 "mm h-1": lambda x: x * 24,
                 "mm hour-1": lambda x: x * 24,
-                "mm mon-1": lambda x: x / 30.44,
-                "mm m-1": lambda x: x / 30.44,
-                "mm month-1": lambda x: x / 30.44,
-                "w m-2 heat": lambda x: x / 28.4,
+                "mm mon-1": lambda x: _per_month_to_per_day(x),
+                "mm month-1": lambda x: _per_month_to_per_day(x),
+                "w m-2 heat": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
                 "mm 3hour-1": lambda x: x * 8,
             },
             "w m-2": {
+                "w/m2": lambda x: x,
+                "watt/m2": lambda x: x,
+                "watt m-2": lambda x: x,
+                "w m**-2": lambda x: x,
                 "mj m-2 day-1": lambda x: x * 11.574074074074074,  # 1 / 0.0864
                 "mj m-2 d-1": lambda x: x * 11.574074074074074,  # 1 / 0.0864
             },
@@ -80,20 +135,22 @@ class UnitProcessing:
             "m3 s-1": {
                 "m3 day-1": lambda x: x / 86400,
                 "m3 d-1": lambda x: x / 86400,
-                "l s-1": lambda x: x * 1000,
+                "l s-1": lambda x: x / 1000,
             },
             "mcm": {
-                "m3": lambda x: x * 1e6,
-                "km3": lambda x: x / 1000,
+                "m3": lambda x: x / 1e6,
+                "km3": lambda x: x * 1000,
                 "million cubic meters": lambda x: x,
             },
             "mm year-1": {
-                "m year-1": lambda x: x / 1000,
-                "cm year-1": lambda x: x / 10,
-                "kg m-2": lambda x: x,
-                "mm month-1": lambda x: x * 12,
-                "mm mon-1": lambda x: x * 12,
-                "mm day-1": lambda x: x * 365,
+                "m year-1": lambda x: x * 1000,
+                "cm year-1": lambda x: x * 10,
+                # Calendar-aware factor: use the actual day count of each
+                # timestamp's year (365 or 366) when xarray supplies a
+                # time coordinate; otherwise fall back to 365.25 (Julian
+                # year) which averages out the leap-year drift instead of
+                # the 0.27% systematic bias produced by a flat * 365.
+                "mm day-1": lambda x: _per_day_to_per_year(x),
             },
             "m": {
                 "cm": lambda x: x / 100,
@@ -103,7 +160,7 @@ class UnitProcessing:
                 "m2": lambda x: x / 1.0e6,
             },
             "m s-1": {
-                "km h-1": lambda x: x * 3.6,
+                "km h-1": lambda x: x / 3.6,
             },
             "t ha-1": {
                 "kg ha-1": lambda x: x / 1000,
@@ -172,10 +229,14 @@ class UnitProcessing:
         )
         return data, input_unit
 
-    @staticmethod
     def process_unit(self, data, unit):
         """
         Process unit conversion for a specific item.
+
+        Note: this used to be decorated `@staticmethod` but kept `self` in
+        its signature, which made it un-callable both as a method
+        (TypeError on extra arg) and as a function (no `item` available).
+        Removed the decorator so it works as a normal instance method.
         """
         if hasattr(UnitProcessing, f"Unit_{self.item}"):
             return getattr(UnitProcessing, f"Unit_{self.item}")(self, data, unit)

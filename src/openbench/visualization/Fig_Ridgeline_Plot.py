@@ -3,8 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import rcParams
 from scipy.stats import gaussian_kde
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from ._sampling import sample_distribution_series, sample_series_for_plot
+from openbench.visualization._figure_io import save_figure
+from openbench.visualization._filenames import join_filename_components
 
 
+@with_isolated_rc
 def make_scenarios_comparison_Ridgeline_Plot(
     basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered, option
 ):
@@ -13,7 +18,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
         matplotlib.rc("font", **font)
 
         params = {
-            "backend": "ps",
             "axes.linewidth": option["axes_linewidth"],
             #   'font.size': option["fontsize"],
             "xtick.labelsize": option["xtick"],
@@ -31,6 +35,8 @@ def make_scenarios_comparison_Ridgeline_Plot(
 
         # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
+
+        datasets_filtered = sample_distribution_series(datasets_filtered, option, purpose="kde")
 
         # Find global min and max for x-axis
         def remove_outliers(data_list):
@@ -55,6 +61,7 @@ def make_scenarios_comparison_Ridgeline_Plot(
         scale_factor = 0.15
 
         for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
+            data = sample_series_for_plot(data, option, purpose="kde")
             filtered_data = data
             if varname in ["KGE", "NSE", "KGESS"]:
                 filtered_data = np.where(data < -1, -1, data)
@@ -64,8 +71,15 @@ def make_scenarios_comparison_Ridgeline_Plot(
             kde = gaussian_kde(filtered_data)
             y_range = kde(x_range)
 
-            # Scale and shift the densities
-            y_range = y_range * scale_factor / y_range.max()
+            # Scale and shift the densities. Guard near-constant inputs:
+            # when filtered_data is (nearly) a single value, the KDE peak can
+            # collapse to 0 over x_range and `/ y_range.max()` would produce
+            # inf/NaN that escapes the plotting axes.
+            y_max = y_range.max()
+            if y_max > 0:
+                y_range = y_range * scale_factor / y_max
+            else:
+                y_range = np.zeros_like(y_range)
             y_shift = i * y_shift_increment
 
             # Plot the KDE
@@ -151,14 +165,12 @@ def make_scenarios_comparison_Ridgeline_Plot(
         axes.set_xlim(global_min - dx, global_max + dx)
 
         # Adjust layout and save
-        plt.tight_layout()
-        output_file_path = (
-            f"{basedir}/Ridgeline_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
-        )
-        plt.savefig(output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+        fig.tight_layout()
+        output_file_path = f"{basedir}/{join_filename_components('Ridgeline_Plot', evaluation_item, ref_source, varname)}.{option['saving_format']}"
+        save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
 
         # Clean up
-        plt.close()
+        plt.close(fig)
         return
 
 

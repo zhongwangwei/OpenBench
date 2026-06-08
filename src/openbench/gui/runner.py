@@ -4,15 +4,15 @@ OpenBench evaluation runner with progress tracking.
 """
 
 import os
-import re
 import sys
 import subprocess
 import threading
-from typing import Optional, Callable, List
+from collections import deque
+from typing import Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import Signal, QThread
 
 
 class RunnerStatus(Enum):
@@ -21,8 +21,20 @@ class RunnerStatus(Enum):
     IDLE = "idle"
     RUNNING = "running"
     COMPLETED = "completed"
+    PARTIAL = "partial"
     FAILED = "failed"
     STOPPED = "stopped"
+
+
+def _looks_like_partial_completion(lines) -> bool:
+    """Return True when CLI output represents a partial OpenBench run.
+
+    The CLI exits non-zero for both hard failures and partial runs so that
+    automation notices errors.  The GUI should still surface the runner-level
+    status distinctly instead of flattening "some tasks failed after others
+    succeeded" into an ordinary process failure.
+    """
+    return any("Evaluation completed with errors" in str(line) for line in lines)
 
 
 @dataclass
@@ -58,6 +70,12 @@ class EvaluationRunner(QThread):
         self._stop_lock = threading.Lock()  # Lock for thread-safe stop flag access
         self._process: Optional[subprocess.Popen] = None
 
+        # Cleanup runs on the Qt event loop when the QThread reports finished,
+        # not from Python's GC thread. Replaces the old __del__ pattern which
+        # could fire during interpreter shutdown (psutil module unloaded) and
+        # carried a pid-reuse risk if the subprocess had already exited.
+        self.finished.connect(self._cleanup_process)
+
         # Progress tracking
         self._total_tasks = 0
         self._completed_tasks = 0
@@ -82,42 +100,42 @@ class EvaluationRunner(QThread):
         self._completed_groupby_tasks = set()  # (var, groupby_type) tuples
         self._completed_comparison_tasks = set()  # comparison names
 
-    def __del__(self):
-        """Cleanup subprocess on thread destruction to prevent orphaned processes."""
-        self._cleanup_process()
+    @staticmethod
+    def _format_failure_with_tail(message: str, output_tail) -> str:
+        """Append recent subprocess output to a failure message when available."""
+        tail = [line for line in output_tail if line]
+        if not tail:
+            return message
+        return f"{message}\n\nRecent output:\n" + "\n".join(tail)
+
+    @staticmethod
+    def _format_command_context(message: str, cmd: list[str] | None) -> str:
+        """Append local command context to unexpected runner errors."""
+        if not cmd:
+            return message
+        return f"{message}\n\nCommand: {' '.join(cmd)}"
 
     def _cleanup_process(self):
-        """Safely cleanup the subprocess."""
+        """Safely cleanup the subprocess. Idempotent; called from the
+        Qt event loop via the finished signal and from run()'s finally
+        block. Does nothing if the subprocess has already exited."""
         if self._process is not None:
             try:
                 if self._process.poll() is None:  # Process still running
                     self._kill_process_tree()
-            except Exception:
-                pass  # Ignore errors during cleanup
+            except Exception as exc:
+                self.log_message.emit(f"Warning: error during subprocess cleanup: {exc}")
 
     def run(self):
         """Run the evaluation."""
+        cmd = None
+        output_tail = deque(maxlen=5)
+        saw_partial_completion = False
         try:
             self._emit_progress(
                 RunnerStatus.RUNNING, 0, "Initializing", "", "Starting", "Starting OpenBench evaluation..."
             )
             self.log_message.emit("Starting OpenBench evaluation...")
-
-            # Build command
-            # Assumes openbench is in PYTHONPATH or installed
-            openbench_path = self._find_openbench_script()
-
-            if not openbench_path:
-                error_msg = (
-                    "Could not find OpenBench script (openbench/openbench.py).\n\n"
-                    "Please ensure OpenBench is installed in one of these locations:\n"
-                    "• ~/Desktop/OpenBench/\n"
-                    "• ~/Documents/OpenBench/\n"
-                    "• ~/OpenBench/\n"
-                    "• Or set the path in Run Monitor page"
-                )
-                self.finished_signal.emit(False, error_msg)
-                return
 
             # Find Python interpreter (not the bundled executable)
             python_exe = self._find_python_interpreter()
@@ -134,14 +152,12 @@ class EvaluationRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return
 
-            cmd = [python_exe, openbench_path, self.config_path]
+            cmd = [python_exe, "-m", "openbench", "run", self.config_path]
 
             self.log_message.emit(f"Running: {' '.join(cmd)}")
 
-            # Determine project root from the OpenBench script location
-            # openbench_path is like: /path/to/OpenBench/openbench/openbench.py
-            # project_root should be: /path/to/OpenBench
-            project_root = os.path.dirname(os.path.dirname(openbench_path))
+            # Determine project root from the config file location
+            project_root = os.path.dirname(os.path.abspath(self.config_path))
 
             self.log_message.emit(f"Working directory: {project_root}")
 
@@ -206,6 +222,8 @@ class EvaluationRunner(QThread):
 
                 line = line.strip()
                 if line:
+                    output_tail.append(line)
+                    saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
                     self.log_message.emit(line)
 
                     # Parse progress from log
@@ -220,6 +238,8 @@ class EvaluationRunner(QThread):
                 for line in remaining_output.strip().split("\n"):
                     line = line.strip()
                     if line:
+                        output_tail.append(line)
+                        saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
                         self.log_message.emit(line)
                         progress, var, stage = self._parse_progress(line, progress)
 
@@ -232,14 +252,24 @@ class EvaluationRunner(QThread):
                 )
                 self.finished_signal.emit(True, "Evaluation completed successfully")
             else:
-                self._emit_progress(
-                    RunnerStatus.FAILED, progress, "Failed", "", "", f"Process exited with code {return_code}"
-                )
-                self.finished_signal.emit(False, f"Process exited with code {return_code}")
+                message = self._format_failure_with_tail(f"Process exited with code {return_code}", output_tail)
+                if saw_partial_completion:
+                    if not _looks_like_partial_completion([message]):
+                        message = "Evaluation completed with errors\n" + message
+                    self._emit_progress(RunnerStatus.PARTIAL, progress, "Partial", "", "", message)
+                else:
+                    self._emit_progress(RunnerStatus.FAILED, progress, "Failed", "", "", message)
+                self.finished_signal.emit(False, message)
 
         except Exception as e:
-            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", str(e))
-            self.finished_signal.emit(False, str(e))
+            error_msg = self._format_command_context(f"Local execution error: {e}", cmd)
+            self._emit_progress(RunnerStatus.FAILED, 0, "Error", "", "", error_msg)
+            self.finished_signal.emit(False, error_msg)
+        finally:
+            # Ensure subprocess is reaped even if run() exits via early
+            # return or an exception path. Prevents orphan processes
+            # that the old __del__ tried to clean up unsafely.
+            self._cleanup_process()
 
     def _find_python_interpreter(self) -> Optional[str]:
         """Find a Python interpreter to run OpenBench.
@@ -332,211 +362,42 @@ class EvaluationRunner(QThread):
         # No suitable Python found - user needs to configure in General settings
         return None
 
-    def _find_openbench_script(self) -> Optional[str]:
-        """Find the OpenBench main script."""
-        config_dir = os.path.dirname(os.path.abspath(self.config_path))
-        home_dir = os.path.expanduser("~")
-
-        # Look for openbench.py in common locations
-        possible_paths = [
-            # Relative to config file (nml/nml-yaml -> project root -> openbench)
-            os.path.join(config_dir, "..", "..", "openbench", "openbench.py"),
-            os.path.join(config_dir, "..", "..", "..", "openbench", "openbench.py"),
-            os.path.join(config_dir, "..", "openbench", "openbench.py"),
-            # Relative to current working directory
-            os.path.join(os.getcwd(), "openbench", "openbench.py"),
-            # Common user directories
-            os.path.join(home_dir, "Desktop", "OpenBench", "openbench", "openbench.py"),
-            os.path.join(home_dir, "Documents", "OpenBench", "openbench", "openbench.py"),
-            os.path.join(home_dir, "OpenBench", "openbench", "openbench.py"),
-            # Check if executable is in OpenBench directory
-            os.path.join(os.path.dirname(sys.executable), "..", "openbench", "openbench.py"),
-            os.path.join(os.path.dirname(sys.executable), "openbench", "openbench.py"),
-        ]
-
-        # Also search in parent directories of config file
-        parent = os.path.dirname(config_dir)
-        for _ in range(5):  # Search up to 5 levels up
-            check_path = os.path.join(parent, "openbench", "openbench.py")
-            if check_path not in possible_paths:
-                possible_paths.append(check_path)
-            parent = os.path.dirname(parent)
-
-        self.log_message.emit("Looking for OpenBench script...")
-        for path in possible_paths:
-            abs_path = os.path.abspath(path)
-            self.log_message.emit(f"  Checking: {abs_path}")
-            if os.path.exists(abs_path):
-                self.log_message.emit(f"  Found: {abs_path}")
-                # Save found path for future reference
-                self._save_openbench_path(os.path.dirname(os.path.dirname(abs_path)))
-                return abs_path
-
-        # Try to load saved path
-        saved_path = self._load_openbench_path()
-        if saved_path:
-            script_path = os.path.join(saved_path, "openbench", "openbench.py")
-            if os.path.exists(script_path):
-                self.log_message.emit(f"  Using saved path: {script_path}")
-                return script_path
-
-        self.log_message.emit("OpenBench script not found in any expected location")
-        return None
-
-    def _get_config_file_path(self) -> str:
-        """Get path to wizard config file."""
-        home_dir = os.path.expanduser("~")
-        config_dir = os.path.join(home_dir, ".openbench_wizard")
-        os.makedirs(config_dir, exist_ok=True)
-        return os.path.join(config_dir, "config.txt")
-
-    def _save_openbench_path(self, path: str):
-        """Save OpenBench directory path for future use."""
-        try:
-            config_file = self._get_config_file_path()
-            with open(config_file, "w", encoding="utf-8") as f:
-                f.write(path)
-        except Exception as e:
-            self.log_message.emit(f"Warning: Could not save OpenBench path: {e}")
-
-    def _load_openbench_path(self) -> Optional[str]:
-        """Load saved OpenBench directory path."""
-        try:
-            config_file = self._get_config_file_path()
-            if os.path.exists(config_file):
-                with open(config_file, "r", encoding="utf-8") as f:
-                    path = f.read().strip()
-                    if os.path.exists(path):
-                        return path
-        except Exception:
-            pass
-        return None
+    # NOTE: Deleted four v2 helper methods that searched the filesystem
+    # for `openbench/openbench.py`:
+    #   _find_openbench_script, _get_config_file_path,
+    #   _save_openbench_path, _load_openbench_path
+    # In v3 the runner invokes the installed module via
+    # `python -m openbench run` (see `run()` above) — there is no
+    # standalone script to locate. Removing these methods also removes
+    # the misleading "OpenBench script not found" log lines that v3
+    # users would never have hit.
 
     def _parse_progress(self, line: str, current_progress: float) -> tuple:
-        """Parse progress from log line with detailed task tracking."""
-        var = self._current_variable
-        stage = ""
+        """Parse progress from log line (delegates to shared parser)."""
+        from openbench.gui.progress_parser import parse_progress_line
 
-        line_lower = line.lower()
-
-        # Detect variable being processed
-        # Patterns: "Processing Variable_Name", "Evaluating Variable_Name"
-        if "processing" in line_lower or "evaluating" in line_lower:
-            for keyword in ["Processing", "Evaluating", "processing", "evaluating"]:
-                if keyword in line:
-                    parts = line.split(keyword)
-                    if len(parts) > 1:
-                        remaining = parts[1].strip()
-                        if remaining:
-                            var_name = remaining.split()[0].strip(".:,")
-                            if var_name and len(var_name) > 2:
-                                self._current_variable = var_name
-                                var = var_name
-                        break
-
-        # Detect reference/simulation source being processed
-        # Patterns: "ref_source: FLUXNET", "ref: FLUXNET", "sim_source: CLM5", "sim: 01_case"
-        if "ref_source" in line_lower or "reference" in line_lower or " ref:" in line_lower or "- ref:" in line_lower:
-            # Try to extract ref source from patterns like "- ref: SOURCE_NAME"
-            if " ref:" in line or "- ref:" in line:
-                match = re.search(r"[-\s]ref:\s*(\S+)", line)
-                if match:
-                    self._current_ref = match.group(1).strip(",:")
-            else:
-                parts = line.split(":")
-                if len(parts) > 1:
-                    self._current_ref = parts[-1].strip().split()[0] if parts[-1].strip() else ""
-        if "sim_source" in line_lower or "simulation" in line_lower or " sim:" in line_lower or "- sim:" in line_lower:
-            # Try to extract sim source from patterns like "- sim: SOURCE_NAME"
-            if " sim:" in line or "- sim:" in line:
-                match = re.search(r"[-\s]sim:\s*(\S+)", line)
-                if match:
-                    self._current_sim = match.group(1).strip(",:")
-            else:
-                parts = line.split(":")
-                if len(parts) > 1:
-                    self._current_sim = parts[-1].strip().split()[0] if parts[-1].strip() else ""
-
-        # Detect stage
-        if "evaluation" in line_lower and "item" not in line_lower:
-            stage = "Evaluation"
-        elif "comparison" in line_lower or "groupby" in line_lower:
-            stage = "Comparison"
-            # Track comparison task progress
-            # Pattern: "Processing X comparison" starts a comparison
-            # Pattern: "Done running X comparison" completes a comparison
-            if "done running" in line_lower and "comparison" in line_lower:
-                # Extract comparison name from "Done running X comparison"
-                match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
-                if match:
-                    comp_name = match.group(1)
-                    if comp_name not in self._completed_comparison_tasks:
-                        self._completed_comparison_tasks.add(comp_name)
-        elif "statistic" in line_lower:
-            stage = "Statistics"
-
-        # Detect task completions
-        task_completed = False
-
-        # Evaluation task completion
-        # Patterns: "Evaluation completed for X", "finished evaluating X"
-        if stage == "Evaluation" and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
-            task_key = (self._current_variable, self._current_ref, self._current_sim)
-            if task_key not in self._completed_eval_tasks and self._current_variable:
-                self._completed_eval_tasks.add(task_key)
-                task_completed = True
-
-        # Groupby task completion
-        # Patterns: "IGBP groupby completed", "PFT analysis done"
-        for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-            if groupby_type in line_lower and (
-                "completed" in line_lower or "finished" in line_lower or "done" in line_lower
-            ):
-                task_key = (self._current_variable, groupby_type)
-                if task_key not in self._completed_groupby_tasks:
-                    self._completed_groupby_tasks.add(task_key)
-                    task_completed = True
-
-        # Comparison/Statistics task completion
-        if stage == "Statistics" and ("completed" in line_lower or "finished" in line_lower):
-            # Try to extract comparison name
-            comp_name = self._current_variable or "comparison"
-            if comp_name not in self._completed_comparison_tasks:
-                self._completed_comparison_tasks.add(comp_name)
-                task_completed = True
-
-        # Calculate progress using class constants
-        if self._total_tasks > 0:
-            # Count completed tasks from all categories
-            total_completed = (
-                len(self._completed_eval_tasks)
-                + len(self._completed_groupby_tasks)
-                + len(self._completed_comparison_tasks)
-            )
-            # Use max(1, ...) for extra safety against division by zero
-            task_progress = (total_completed / max(1, self._total_tasks)) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + task_progress, self.PROGRESS_MAX)
-        elif self._num_comparisons > 0 and len(self._completed_comparison_tasks) > 0:
-            # Fallback for comparison phase
-            comparison_progress = (
-                len(self._completed_comparison_tasks) / max(1, self._num_comparisons)
-            ) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + comparison_progress, self.PROGRESS_MAX)
-        elif self._num_variables > 0:
-            # Fallback to simple variable counting
-            completed_vars = len(set(t[0] for t in self._completed_eval_tasks if t[0]))
-            # Use max(1, ...) for extra safety against division by zero
-            variable_progress = (completed_vars / max(1, self._num_variables)) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + variable_progress, self.PROGRESS_MAX)
-        else:
-            # Last resort: increment based on activity
-            if task_completed or stage or "complete" in line_lower or "done" in line_lower:
-                current_progress = min(current_progress + self.PROGRESS_INCREMENT * 2, self.PROGRESS_MAX)
-            # Slow increment during comparison phase to show activity
-            elif stage == "Comparison":
-                current_progress = min(current_progress + self.PROGRESS_INCREMENT, self.PROGRESS_MAX)
-
-        return current_progress, var, stage
+        state = {
+            "current_variable": self._current_variable,
+            "current_ref": self._current_ref,
+            "current_sim": self._current_sim,
+            "completed_eval_tasks": self._completed_eval_tasks,
+            "completed_groupby_tasks": self._completed_groupby_tasks,
+            "completed_comparison_tasks": self._completed_comparison_tasks,
+            "total_tasks": self._total_tasks,
+            "num_comparisons": self._num_comparisons,
+            "num_variables": self._num_variables,
+        }
+        constants = {
+            "PROGRESS_INIT": self.PROGRESS_INIT,
+            "PROGRESS_WORK": self.PROGRESS_WORK,
+            "PROGRESS_MAX": self.PROGRESS_MAX,
+            "PROGRESS_INCREMENT": self.PROGRESS_INCREMENT,
+        }
+        progress, var, stage = parse_progress_line(line, current_progress, state, constants)
+        self._current_variable = state["current_variable"]
+        self._current_ref = state["current_ref"]
+        self._current_sim = state["current_sim"]
+        return progress, var, stage
 
     def set_total_variables(self, count: int):
         """Set the total number of variables to process (legacy method)."""
@@ -647,17 +508,28 @@ class EvaluationRunner(QThread):
             except psutil.NoSuchProcess:
                 pass
         except ImportError:
-            pass
+            # psutil not installed → only the direct subprocess will be
+            # killed below; any grandchildren spawned by OpenBench are
+            # orphaned. Surface this so packaging / install-doc readers
+            # know psutil should be a hard dep for the GUI runner.
+            self.log_message.emit(
+                "Warning: psutil not installed — cannot recursively kill child "
+                "processes. Install psutil to ensure clean shutdown."
+            )
 
         # Kill the main process (SIGKILL on Unix, TerminateProcess on Windows)
         try:
             self._process.kill()
-        except Exception:
+        except Exception as kill_exc:
             # Fallback to terminate if kill fails
             try:
                 self._process.terminate()
-            except Exception:
-                pass
+                self.log_message.emit(f"Warning: process.kill() failed; used terminate(): {kill_exc}")
+            except Exception as terminate_exc:
+                self.log_message.emit(
+                    f"Warning: could not stop OpenBench process: kill failed ({kill_exc}); "
+                    f"terminate failed ({terminate_exc})"
+                )
 
     def stop(self):
         """Request stop (thread-safe)."""

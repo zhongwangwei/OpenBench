@@ -4,8 +4,7 @@ General settings page.
 """
 
 import logging
-import os
-import sys
+import shlex
 
 from PySide6.QtWidgets import (
     QFormLayout,
@@ -25,7 +24,6 @@ from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDou
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import PathSelector
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
-from openbench.gui.path_utils import to_absolute_path
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +219,98 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(groupby_group)
 
+        # === Performance Settings ===
+        performance_group = QGroupBox("Performance Settings")
+        performance_layout = QGridLayout(performance_group)
+
+        self.cb_netcdf_compression = QCheckBox("Compress NetCDF outputs")
+        self.cb_netcdf_compression.setToolTip("Enable zlib compression for numeric NetCDF outputs.")
+        self.cb_netcdf_compression.stateChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.cb_netcdf_compression, 0, 0)
+
+        performance_layout.addWidget(QLabel("Compression Level:"), 0, 1)
+        self.netcdf_compression_level_spin = NoScrollSpinBox()
+        self.netcdf_compression_level_spin.setRange(0, 9)
+        self.netcdf_compression_level_spin.setValue(1)
+        self.netcdf_compression_level_spin.setToolTip("zlib level 0-9; level 1 is the recommended fast default.")
+        self.netcdf_compression_level_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.netcdf_compression_level_spin, 0, 2)
+
+        performance_layout.addWidget(QLabel("Multi-file Combine:"), 1, 0)
+        self.mfdataset_batch_mode_combo = NoScrollComboBox()
+        self.mfdataset_batch_mode_combo.addItem("Auto planner", "auto")
+        self.mfdataset_batch_mode_combo.addItem("Disabled", "disabled")
+        self.mfdataset_batch_mode_combo.addItem("Fixed batch size", "fixed")
+        self.mfdataset_batch_mode_combo.setToolTip(
+            "Auto uses file count, total size, and available memory. Disabled maps to batch size 0."
+        )
+        self.mfdataset_batch_mode_combo.currentIndexChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.mfdataset_batch_mode_combo, 1, 1)
+
+        self.mfdataset_batch_size_spin = NoScrollSpinBox()
+        self.mfdataset_batch_size_spin.setRange(1, 10000)
+        self.mfdataset_batch_size_spin.setValue(100)
+        self.mfdataset_batch_size_spin.setToolTip("Used only when Multi-file Combine is set to Fixed batch size.")
+        self.mfdataset_batch_size_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.mfdataset_batch_size_spin, 1, 2)
+
+        performance_layout.addWidget(QLabel("Auto Min Files:"), 2, 0)
+        self.mfdataset_auto_min_files_spin = NoScrollSpinBox()
+        self.mfdataset_auto_min_files_spin.setRange(1, 1000000)
+        self.mfdataset_auto_min_files_spin.setValue(200)
+        self.mfdataset_auto_min_files_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.mfdataset_auto_min_files_spin, 2, 1)
+
+        performance_layout.addWidget(QLabel("Auto Max Batch:"), 2, 2)
+        self.mfdataset_auto_max_size_spin = NoScrollSpinBox()
+        self.mfdataset_auto_max_size_spin.setRange(1, 10000)
+        self.mfdataset_auto_max_size_spin.setValue(100)
+        self.mfdataset_auto_max_size_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.mfdataset_auto_max_size_spin, 2, 3)
+
+        performance_layout.addWidget(QLabel("Memory Fraction:"), 3, 0)
+        self.mfdataset_auto_memory_fraction_spin = NoScrollDoubleSpinBox()
+        self.mfdataset_auto_memory_fraction_spin.setRange(0.01, 1.0)
+        self.mfdataset_auto_memory_fraction_spin.setSingleStep(0.05)
+        self.mfdataset_auto_memory_fraction_spin.setValue(0.25)
+        self.mfdataset_auto_memory_fraction_spin.setToolTip("Fraction of available memory used to size auto batches.")
+        self.mfdataset_auto_memory_fraction_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.mfdataset_auto_memory_fraction_spin, 3, 1)
+
+        self.cb_dask_enabled = QCheckBox("Enable dask.distributed")
+        self.cb_dask_enabled.setToolTip("Start a local dask.distributed cluster for xarray lazy workloads.")
+        self.cb_dask_enabled.stateChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.cb_dask_enabled, 4, 0)
+
+        performance_layout.addWidget(QLabel("Workers:"), 4, 1)
+        self.dask_workers_spin = NoScrollSpinBox()
+        self.dask_workers_spin.setRange(1, 128)
+        self.dask_workers_spin.setValue(4)
+        self.dask_workers_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.dask_workers_spin, 4, 2)
+
+        performance_layout.addWidget(QLabel("Threads/Worker:"), 5, 0)
+        self.dask_threads_spin = NoScrollSpinBox()
+        self.dask_threads_spin.setRange(1, 64)
+        self.dask_threads_spin.setValue(1)
+        self.dask_threads_spin.valueChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.dask_threads_spin, 5, 1)
+
+        self.cb_dask_processes = QCheckBox("Use processes")
+        self.cb_dask_processes.setChecked(True)
+        self.cb_dask_processes.stateChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.cb_dask_processes, 5, 2)
+
+        performance_layout.addWidget(QLabel("Memory Limit:"), 6, 0)
+        self.dask_memory_limit_input = QLineEdit()
+        self.dask_memory_limit_input.setPlaceholderText("auto or e.g. 4GB")
+        self.dask_memory_limit_input.setText("auto")
+        self.dask_memory_limit_input.textChanged.connect(self._on_performance_changed)
+        performance_layout.addWidget(self.dask_memory_limit_input, 6, 1, 1, 2)
+
+        self.content_layout.addWidget(performance_group)
+        self._update_performance_controls_state()
+
         # Note: Runtime Environment is now on a separate page (PageRuntime)
         # num_cores_spin kept for config compatibility
         self.num_cores_spin = NoScrollSpinBox()
@@ -231,6 +321,28 @@ class PageGeneral(BasePage):
     def _on_toggle_changed(self, state):
         """Handle feature toggle changes."""
         self.save_to_config()
+
+    def _on_performance_changed(self, *_args):
+        """Handle performance setting changes."""
+        self._update_performance_controls_state()
+        self.save_to_config()
+
+    def _update_performance_controls_state(self):
+        """Enable controls that are relevant to the selected performance modes."""
+        if hasattr(self, "mfdataset_batch_mode_combo"):
+            mode = self.mfdataset_batch_mode_combo.currentData() or "auto"
+            self.mfdataset_batch_size_spin.setEnabled(mode == "fixed")
+        if hasattr(self, "netcdf_compression_level_spin"):
+            self.netcdf_compression_level_spin.setEnabled(self.cb_netcdf_compression.isChecked())
+        if hasattr(self, "cb_dask_enabled"):
+            enabled = self.cb_dask_enabled.isChecked()
+            for widget in (
+                self.dask_workers_spin,
+                self.dask_threads_spin,
+                self.cb_dask_processes,
+                self.dask_memory_limit_input,
+            ):
+                widget.setEnabled(enabled)
 
     def _on_year_range_changed(self, value):
         """Handle year range changes - save and sync namelists."""
@@ -324,7 +436,7 @@ class PageGeneral(BasePage):
             dialog.accept()
 
         browser.file_selected.connect(on_path_selected)
-        dialog.exec_()
+        dialog.exec()
 
     def _get_remote_ssh_manager(self):
         """Get SSH manager from the runtime page."""
@@ -451,7 +563,11 @@ class PageGeneral(BasePage):
 
         try:
             # Create directories on remote server
-            cmd = f"mkdir -p '{output_dir}' '{output_dir}/nml/sim' '{output_dir}/nml/ref'"
+            cmd = (
+                f"mkdir -p {shlex.quote(output_dir)} "
+                f"{shlex.quote(output_dir + '/nml/sim')} "
+                f"{shlex.quote(output_dir + '/nml/ref')}"
+            )
             stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=30)
 
             if exit_code == 0:
@@ -468,7 +584,6 @@ class PageGeneral(BasePage):
     def load_from_config(self):
         """Load settings from controller config."""
         import os
-        import sys
 
         general = self.controller.config.get("general", {})
         basename = general.get("basename", "")
@@ -560,6 +675,7 @@ class PageGeneral(BasePage):
         self.cb_unified_mask.setChecked(general.get("unified_mask", True))
 
         self.num_cores_spin.setValue(general.get("num_cores", 4))
+        self._load_performance_settings(general)
 
         weight = general.get("weight", "none")
         if weight is None:
@@ -576,6 +692,105 @@ class PageGeneral(BasePage):
 
         # Update Year Range state based on per_var_time_range settings
         self.update_year_range_state()
+
+    def _set_combo_by_data(self, combo, value):
+        for i in range(combo.count()):
+            if combo.itemData(i) == value:
+                combo.setCurrentIndex(i)
+                return
+
+    def _load_performance_settings(self, general):
+        """Load project.io and project.dask settings into visible controls."""
+        if not hasattr(self, "cb_netcdf_compression"):
+            return
+        io_config = general.get("io", {}) or {}
+        dask_config = general.get("dask", {}) or {}
+
+        widgets = [
+            self.cb_netcdf_compression,
+            self.netcdf_compression_level_spin,
+            self.mfdataset_batch_mode_combo,
+            self.mfdataset_batch_size_spin,
+            self.mfdataset_auto_min_files_spin,
+            self.mfdataset_auto_max_size_spin,
+            self.mfdataset_auto_memory_fraction_spin,
+            self.cb_dask_enabled,
+            self.dask_workers_spin,
+            self.dask_threads_spin,
+            self.cb_dask_processes,
+            self.dask_memory_limit_input,
+        ]
+        previous = [widget.blockSignals(True) for widget in widgets]
+        try:
+            self.cb_netcdf_compression.setChecked(bool(io_config.get("netcdf_compression", False)))
+            self.netcdf_compression_level_spin.setValue(int(io_config.get("netcdf_compression_level", 1)))
+
+            batch_size = io_config.get("mfdataset_batch_size", None)
+            if batch_size == 0:
+                self._set_combo_by_data(self.mfdataset_batch_mode_combo, "disabled")
+            elif batch_size is None or str(batch_size).lower() == "auto":
+                self._set_combo_by_data(self.mfdataset_batch_mode_combo, "auto")
+            else:
+                self._set_combo_by_data(self.mfdataset_batch_mode_combo, "fixed")
+                self.mfdataset_batch_size_spin.setValue(int(batch_size))
+
+            self.mfdataset_auto_min_files_spin.setValue(int(io_config.get("mfdataset_auto_batch_min_files", 200)))
+            self.mfdataset_auto_max_size_spin.setValue(int(io_config.get("mfdataset_auto_batch_max_size", 100)))
+            self.mfdataset_auto_memory_fraction_spin.setValue(
+                float(io_config.get("mfdataset_auto_batch_memory_fraction", 0.25))
+            )
+
+            self.cb_dask_enabled.setChecked(bool(dask_config.get("enabled", False)))
+            self.dask_workers_spin.setValue(int(dask_config.get("n_workers") or 4))
+            self.dask_threads_spin.setValue(int(dask_config.get("threads_per_worker") or 1))
+            self.cb_dask_processes.setChecked(bool(dask_config.get("processes", True)))
+            self.dask_memory_limit_input.setText(str(dask_config.get("memory_limit", "auto") or "auto"))
+        finally:
+            for widget, state in zip(widgets, previous):
+                widget.blockSignals(state)
+        self._update_performance_controls_state()
+
+    def _collect_io_config(self, existing_general):
+        """Collect visible project.io controls, preserving old config in tests/legacy pages."""
+        if not hasattr(self, "cb_netcdf_compression"):
+            return existing_general.get("io", {})
+
+        io_config = {}
+        if self.cb_netcdf_compression.isChecked():
+            io_config["netcdf_compression"] = True
+            io_config["netcdf_compression_level"] = self.netcdf_compression_level_spin.value()
+
+        batch_mode = self.mfdataset_batch_mode_combo.currentData() or "auto"
+        if batch_mode == "disabled":
+            io_config["mfdataset_batch_size"] = 0
+        elif batch_mode == "fixed":
+            io_config["mfdataset_batch_size"] = self.mfdataset_batch_size_spin.value()
+
+        min_files = self.mfdataset_auto_min_files_spin.value()
+        max_size = self.mfdataset_auto_max_size_spin.value()
+        memory_fraction = self.mfdataset_auto_memory_fraction_spin.value()
+        if min_files != 200:
+            io_config["mfdataset_auto_batch_min_files"] = min_files
+        if max_size != 100:
+            io_config["mfdataset_auto_batch_max_size"] = max_size
+        if abs(memory_fraction - 0.25) > 1e-9:
+            io_config["mfdataset_auto_batch_memory_fraction"] = memory_fraction
+
+        return io_config
+
+    def _collect_dask_config(self, existing_general):
+        """Collect visible project.dask controls, preserving old config in tests/legacy pages."""
+        if not hasattr(self, "cb_dask_enabled"):
+            return existing_general.get("dask", {})
+        if not self.cb_dask_enabled.isChecked():
+            return {}
+        return {
+            "enabled": True,
+            "n_workers": self.dask_workers_spin.value(),
+            "threads_per_worker": self.dask_threads_spin.value(),
+            "processes": self.cb_dask_processes.isChecked(),
+            "memory_limit": self.dask_memory_limit_input.text().strip() or "auto",
+        }
 
     def _save_to_config_no_sync(self):
         """Save settings to controller config WITHOUT triggering sync_namelists.
@@ -627,7 +842,15 @@ class PageGeneral(BasePage):
             "execution_mode": existing_general.get("execution_mode", "local"),
             "python_path": existing_general.get("python_path", ""),
             "conda_env": existing_general.get("conda_env", ""),
+            "local_openbench_path": existing_general.get("local_openbench_path", ""),
         }
+
+        io_config = self._collect_io_config(existing_general)
+        if io_config:
+            general["io"] = io_config
+        dask_config = self._collect_dask_config(existing_general)
+        if dask_config:
+            general["dask"] = dask_config
 
         # Preserve remote config if exists
         if "remote" in existing_general:
@@ -637,7 +860,6 @@ class PageGeneral(BasePage):
 
     def save_to_config(self):
         """Save settings to controller config."""
-        import os
 
         # Check if basename or basedir changed (affects output directory)
         old_general = self.controller.config.get("general", {})

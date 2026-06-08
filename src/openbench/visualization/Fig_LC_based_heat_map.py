@@ -1,6 +1,8 @@
 import logging
 import math
 import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -10,6 +12,88 @@ import xarray as xr
 from matplotlib import rcParams
 
 from openbench.util.converttype import Convert_Type
+from openbench.util.filenames import groupby_class_netcdf_stem
+
+logger = logging.getLogger(__name__)
+
+
+def _annotation_color(value, *, high=0.8, low=0.2):
+    """Return readable annotation color for diverging heat-map cells."""
+    try:
+        return "white" if float(value) > high or float(value) < low else "black"
+    except (TypeError, ValueError):
+        return "black"
+
+
+def _add_custom_colorbar_axes(fig, option):
+    return fig.add_axes(
+        [
+            option["colorbar_left"],
+            option["colorbar_bottom"],
+            option["colorbar_width"],
+            option["colorbar_height"],
+        ]
+    )
+
+
+def _groupby_class_netcdf_files(option, statistic):
+    """Return safe per-class NetCDF files, with legacy name fallback."""
+    import glob
+
+    selected_item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
+    groupby_prefix = str(option.get("groupby", "")).split("_", maxsplit=1)[0]
+    safe_stem = groupby_class_netcdf_stem(selected_item, ref_source, sim_source, statistic, groupby_prefix)
+    safe_pattern = glob.escape(os.path.join(option["path"], safe_stem)) + "__*.nc"
+    legacy_stem = os.path.join(
+        option["path"], f"{selected_item}_ref_{ref_source}_sim_{sim_source}_{statistic}_{groupby_prefix}_"
+    )
+    legacy_pattern = glob.escape(legacy_stem) + "*.nc"
+    files = glob.glob(safe_pattern)
+    files.extend(path for path in glob.glob(legacy_pattern) if path not in files)
+    return files
+
+
+def _require_groupby_class_netcdf_files(option, statistic):
+    """Return per-class NetCDF files or fail with a clear producer/consumer path error."""
+    files = _groupby_class_netcdf_files(option, statistic)
+    if not files:
+        item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
+        groupby = option.get("groupby", "groupby")
+        raise FileNotFoundError(
+            f"{groupby} heatmap missing per-class NetCDF inputs for "
+            f"item={item!r}, sim={sim_source!r}, ref={ref_source!r}, statistic={statistic!r} "
+            f"under {option['path']!r}. Run the full groupby producer first or check safe/legacy filenames."
+        )
+    return files
+
+
+def _open_groupby_class_distribution(option, statistic):
+    """Open class NetCDF inputs as a single distribution axis for quantiles.
+
+    New producers write one ``__classes.nc`` with a ``class`` dimension; older
+    runs wrote one file per class.  Normalize both to the historical synthetic
+    ``time`` axis consumed by this plotting code.
+    """
+    files = _require_groupby_class_netcdf_files(option, statistic)
+    if len(files) == 1:
+        with xr.open_dataset(files[0]) as dataset:
+            ds = dataset.load()
+        if "class" in ds.dims:
+            return ds.rename({"class": "time"})
+        logger.warning(
+            "LC/CZ heatmap quantile clip for %s degenerates: only one legacy per-class NetCDF matched; "
+            "colour scale will reflect a single sample, not a distribution.",
+            statistic,
+        )
+        return ds.expand_dims(dim={"time": [0]})
+
+    datasets = []
+    for path in files:
+        with xr.open_dataset(path) as dataset:
+            datasets.append(dataset.load())
+    for idx, ds in enumerate(datasets):
+        datasets[idx] = ds.expand_dims(dim={"time": [idx]})
+    return xr.concat(datasets, dim="time")
 
 
 def _read_metrics_file(file):
@@ -79,7 +163,9 @@ def _read_metrics_file(file):
     return df
 
 
+@with_isolated_rc
 def make_LC_based_heat_map(file, selected_metrics, lb, option):
+    option = option.copy()
     selected_metrics = list(selected_metrics)
     # Convert the data to a DataFrame with fallback and auto-detection
     df = _read_metrics_file(file)
@@ -171,7 +257,6 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     # font = {'family': option['font']}
     matplotlib.rc("font", **font)
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
         "xtick.labelsize": option["xtick"],
@@ -230,7 +315,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > 0.8 else "black" or df_selected.iloc[i, j] < 0.2,
+                    color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
 
@@ -258,9 +343,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                 else:
                     cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         else:
-            cbar_ax = fig.add_axes(
-                option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]
-            )
+            cbar_ax = _add_custom_colorbar_axes(fig, option)
         cbar = fig.colorbar(
             im,
             cax=cbar_ax,
@@ -271,18 +354,9 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     elif len(df_selected.index) == 1 and lb != "score":
         fig, ax = plt.subplots(figsize=(option["x_wise"], option["y_wise"]))
 
-        selected_item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
-
         metric = df_selected.index[0]
-        print(metric)
-        import glob
-
-        files = glob.glob(f"{option['path']}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc")
-        datasets = [xr.open_dataset(file) for file in files]
-        for t, ds in enumerate(datasets):
-            datasets[t] = ds.expand_dims(dim={"time": [t]})  # 为每个文件添加一个新的'time'维度
-
-        combined_dataset = xr.concat(datasets, dim="time")
+        logger.info(metric)
+        combined_dataset = _open_groupby_class_distribution(option, metric)
         quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
         # consider 0.05 and 0.95 value as the max/min value
         custom_vmin_vmax = {}
@@ -356,7 +430,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > x1 else "black" or df_selected.iloc[i, j] < x2,
+                    color=_annotation_color(df_selected.iloc[i, j], high=x1, low=x2),
                     fontsize=option["fontsize"],
                 )
 
@@ -384,9 +458,7 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                 else:
                     cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         else:
-            cbar_ax = fig.add_axes(
-                option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]
-            )
+            cbar_ax = _add_custom_colorbar_axes(fig, option)
         cbar = fig.colorbar(
             im,
             cax=cbar_ax,
@@ -395,24 +467,16 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
             extend=option["extend"],
         )
     else:
-        selected_item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
         mfigsize = (len(shorter[option["groupby"]]), len(df_selected.index))
         fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=mfigsize, sharex=True)
         fig.text(-0.01, 0.5, "Metrics", va="center", rotation="vertical", fontsize=option["ytick"] + 1)
-        plt.subplots_adjust(hspace=0)
+        fig.subplots_adjust(hspace=0)
         # get the minimal and maximal value
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
         custom_vmin_vmax = {}
         for i, (metric, row_data) in enumerate(df_selected.iterrows()):
-            import glob
-
-            files = glob.glob(f"{option['path']}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc")
-            datasets = [xr.open_dataset(file) for file in files]
-            for t, ds in enumerate(datasets):
-                datasets[t] = ds.expand_dims(dim={"time": [t]})  # 为每个文件添加一个新的'time'维度
-
-            combined_dataset = xr.concat(datasets, dim="time")
+            combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
             # consider 0.05 and 0.95 value as the max/min value
 
@@ -507,11 +571,18 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
         axes[0].set_title(option["title"], fontsize=option["title_size"])
 
     file2 = file[:-4]
-    plt.savefig(f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    save_figure(
+        fig, f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+    )
+    # Close only the figure created by this renderer; closing "all" would
+    # destroy unrelated figures owned by callers or concurrent renderers.
+    plt.close(fig)
     # plt.show()
 
 
+@with_isolated_rc
 def make_CZ_based_heat_map(file, selected_metrics, lb, option):
+    option = option.copy()
     selected_metrics = list(selected_metrics)
     # Convert the data to a DataFrame with fallback and auto-detection
     df = _read_metrics_file(file)
@@ -523,43 +594,9 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
     # Select the desired metrics
     df_selected = df.loc[selected_metrics]
 
-    CZ_class_names = {
-        1: "Af",
-        2: "Am",
-        3: "Aw",
-        4: "BWh",
-        5: "BWk",
-        6: "BSh",
-        7: "BSk",
-        8: "Csa",
-        9: "Csb",
-        10: "Csc",
-        11: "Cwa",
-        12: "Cwb",
-        13: "Cwc",
-        14: "Cfa",
-        15: "Cfb",
-        16: "Cfc",
-        17: "Dsa",
-        18: "Dsb",
-        19: "Dsc",
-        20: "Dsd",
-        21: "Dwa",
-        22: "Dwb",
-        23: "Dwc",
-        24: "Dwd",
-        25: "Dfa",
-        26: "Dfb",
-        27: "Dfc",
-        28: "Dfd",
-        29: "ET",
-        30: "EF",
-    }
-
     font = {"family": "DejaVu Sans"}
     matplotlib.rc("font", **font)
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
         "xtick.labelsize": option["xtick"],
@@ -582,7 +619,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
             vmin, vmax = 0, 1
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
-        im1 = axes[0].imshow(df_selected.iloc[:, :16], cmap=option["cmap"], vmin=vmin, vmax=vmax)
+        axes[0].imshow(df_selected.iloc[:, :16], cmap=option["cmap"], vmin=vmin, vmax=vmax)
         im2 = axes[1].imshow(df_selected.iloc[:, 16:], cmap=option["cmap"], vmin=vmin, vmax=vmax)
 
         axes[0].set_xticks(range(len(df_selected.columns[:16])))
@@ -599,7 +636,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > 0.8 else "black" or df_selected.iloc[i, j] < 0.2,
+                    color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
 
@@ -617,7 +654,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > 0.8 else "black" or df_selected.iloc[i, j] < 0.2,
+                    color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
         if len(option["title"]) == 0:
@@ -659,9 +696,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                 else:
                     cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         else:
-            cbar_ax = fig.add_axes(
-                option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]
-            )
+            cbar_ax = _add_custom_colorbar_axes(fig, option)
         cbar = fig.colorbar(
             im2,
             cax=cbar_ax,
@@ -672,16 +707,8 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
 
     elif len(df_selected.index) == 1 and lb != "score":
         fig, axes = plt.subplots(nrows=2, figsize=(option["x_wise"], option["y_wise"]))
-        selected_item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
         metric = df_selected.index[0]
-        import glob
-
-        files = glob.glob(f"{option['path']}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc")
-        datasets = [xr.open_dataset(file) for file in files]
-        for t, ds in enumerate(datasets):
-            datasets[t] = ds.expand_dims(dim={"time": [t]})  # 为每个文件添加一个新的'time'维度
-
-        combined_dataset = xr.concat(datasets, dim="time")
+        combined_dataset = _open_groupby_class_distribution(option, metric)
         quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
         # consider 0.05 and 0.95 value as the max/min value
         custom_vmin_vmax = {}
@@ -720,7 +747,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         vmin, vmax = custom_vmin_vmax[metric][0], custom_vmin_vmax[metric][1]
         x1, x2 = custom_vmin_vmax[metric][2], custom_vmin_vmax[metric][3]
 
-        im1 = axes[0].imshow(df_selected.iloc[:, :16], cmap=option["cmap"], vmin=vmin, vmax=vmax)
+        axes[0].imshow(df_selected.iloc[:, :16], cmap=option["cmap"], vmin=vmin, vmax=vmax)
         im2 = axes[1].imshow(df_selected.iloc[:, 16:], cmap=option["cmap"], vmin=vmin, vmax=vmax)
 
         for ax in axes.flat:
@@ -747,7 +774,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > 0.8 else "black" or df_selected.iloc[i, j] < 0.2,
+                    color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
         #
@@ -765,7 +792,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                     f"{df_selected.iloc[i, j]:{option['ticks_format']}}",
                     ha="center",
                     va="center",
-                    color="white" if df_selected.iloc[i, j] > 0.8 else "black" or df_selected.iloc[i, j] < 0.2,
+                    color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
         if len(option["title"]) == 0:
@@ -797,9 +824,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                 else:
                     cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.04])
         else:
-            cbar_ax = fig.add_axes(
-                option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]
-            )
+            cbar_ax = _add_custom_colorbar_axes(fig, option)
         cbar = fig.colorbar(
             im2,
             cax=cbar_ax,
@@ -808,7 +833,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
             extend=option["extend"],
         )
     else:
-        selected_item, sim_source, ref_source = option["item"][0], option["item"][1], option["item"][2]
         mfigsize = (15, len(df_selected.index) * 2)
 
         from matplotlib.gridspec import GridSpec
@@ -840,7 +864,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
             ax.set_position([pos.x0, pos.y0, new_width, pos.height])
             axes_part2.append(ax)
 
-        plt.subplots_adjust(hspace=0)  # 每部分内部无间隔
+        fig.subplots_adjust(hspace=0)  # 每部分内部无间隔
         fig.text(-0.01, 0.5, "Metrics", va="center", rotation="vertical", fontsize=option["ytick"] + 1)
 
         # get the minimal and maximal value
@@ -850,14 +874,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         custom_vmin_vmax = {}
         df_1 = df_selected.iloc[:, :16]
         for i, (metric, row_data) in enumerate(df_1.iterrows()):
-            import glob
-
-            files = glob.glob(f"{option['path']}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc")
-            datasets = [xr.open_dataset(file) for file in files]
-            for t, ds in enumerate(datasets):
-                datasets[t] = ds.expand_dims(dim={"time": [t]})  # 为每个文件添加一个新的'time'维度
-
-            combined_dataset = xr.concat(datasets, dim="time")
+            combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
             # consider 0.05 and 0.95 value as the max/min value
 
@@ -942,14 +959,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
 
         df_2 = df_selected.iloc[:, 16:]
         for i, (metric, row_data) in enumerate(df_2.iterrows()):
-            import glob
-
-            files = glob.glob(f"{option['path']}{selected_item}_ref_{ref_source}_sim_{sim_source}_{metric}*.nc")
-            datasets = [xr.open_dataset(file) for file in files]
-            for t, ds in enumerate(datasets):
-                datasets[t] = ds.expand_dims(dim={"time": [t]})  # 为每个文件添加一个新的'time'维度
-
-            combined_dataset = xr.concat(datasets, dim="time")
+            combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
             # consider 0.05 and 0.95 value as the max/min value
 
@@ -1030,4 +1040,9 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         axes_part2[-1].set_xlabel(option["xlabel"], fontsize=option["xtick"] + 1)
 
     file2 = file[:-4]
-    plt.savefig(f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    save_figure(
+        fig, f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+    )
+    # Close only the figure created by this renderer; closing "all" would
+    # destroy unrelated figures owned by callers or concurrent renderers.
+    plt.close(fig)

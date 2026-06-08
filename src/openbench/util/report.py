@@ -10,11 +10,26 @@ import os
 import shutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote, unquote
 
 import numpy as np
 import pandas as pd
 import xarray as xr
-from jinja2 import Template
+from jinja2 import Environment, select_autoescape
+
+from openbench.util.filenames import filename_component, join_filename_components
+
+
+# HTML escaping is enabled by default to prevent XSS in user-controlled
+# fields (e.g. evaluation_item names, file paths). Use a single shared
+# Environment so templates parsed from strings inherit autoescape.
+def _url_path(path: str) -> str:
+    """URL-encode each path segment without treating literal %2F in filenames as a slash."""
+    return "/".join(quote(segment, safe="") for segment in str(path).split("/"))
+
+
+_jinja_env = Environment(autoescape=select_autoescape(default=True, default_for_string=True))
+_jinja_env.filters["url_path"] = _url_path
 
 # Import PDF generation libraries
 try:
@@ -28,6 +43,22 @@ import logging
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+
+def _dedupe_paths(paths: List[str]) -> List[str]:
+    """Return paths in first-seen order without duplicates."""
+    seen = set()
+    unique = []
+    for path in paths:
+        if path not in seen:
+            seen.add(path)
+            unique.append(path)
+    return unique
+
+
+def _decode_filename_component(value: str) -> str:
+    """Decode a component produced by filename_component()."""
+    return unquote(value)
 
 
 class ReportGenerator:
@@ -161,8 +192,11 @@ class ReportGenerator:
         metrics_data = {}
 
         # Look for CSV files with evaluation results
-        csv_pattern = os.path.join(self.metrics_dir, f"{item}_*_evaluations.csv")
-        csv_files = glob.glob(csv_pattern)
+        csv_files = [
+            path
+            for path in self._item_output_files(self.metrics_dir, item, (".csv",))
+            if os.path.basename(path).endswith(("_evaluations.csv", "__evaluations.csv"))
+        ]
 
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
@@ -186,14 +220,13 @@ class ReportGenerator:
                     grid_grid_pairs.add(key)
 
         # Look for individual NetCDF files with spatial metrics
-        nc_pattern = os.path.join(self.metrics_dir, f"{item}_*.nc")
-        nc_files = glob.glob(nc_pattern)
+        nc_files = self._item_output_files(self.metrics_dir, item, (".nc", ".nc4"))
 
         for nc_file in nc_files:
             if "_evaluations" not in nc_file:  # Skip CSV-related files
                 # Skip NetCDF files that are already covered by comprehensive grid vs grid stats
-                filename = os.path.basename(nc_file)
-                key = os.path.basename(nc_file).replace(".nc", "")
+                os.path.basename(nc_file)
+                key = os.path.splitext(os.path.basename(nc_file))[0]
                 try:
                     with xr.open_dataset(nc_file) as ds:
                         # Get the main data variable (skip coordinate variables)
@@ -267,8 +300,11 @@ class ReportGenerator:
         scores_data = {}
 
         # Similar to metrics collection
-        csv_pattern = os.path.join(self.scores_dir, f"{item}_*_evaluations.csv")
-        csv_files = glob.glob(csv_pattern)
+        csv_files = [
+            path
+            for path in self._item_output_files(self.scores_dir, item, (".csv",))
+            if os.path.basename(path).endswith(("_evaluations.csv", "__evaluations.csv"))
+        ]
 
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
@@ -295,13 +331,20 @@ class ReportGenerator:
             "climate_zone_groupby": [],
         }
 
-        # Metrics figures
-        metrics_pattern = os.path.join(self.metrics_dir, f"{item}_*.jpg")
-        figures["metrics"] = [os.path.basename(f) for f in glob.glob(metrics_pattern)]
+        # Metrics/scores figures may use either legacy ``<item>_...`` names or
+        # safe component-joined names. Avoid interpolating item into the glob so
+        # items containing path separators cannot alter the search path.
+        figures["metrics"] = [
+            os.path.basename(f)
+            for f in glob.glob(os.path.join(self.metrics_dir, "*.jpg"))
+            if self._filename_matches_item(f, item)
+        ]
 
-        # Scores figures
-        scores_pattern = os.path.join(self.scores_dir, f"{item}_*.jpg")
-        figures["scores"] = [os.path.basename(f) for f in glob.glob(scores_pattern)]
+        figures["scores"] = [
+            os.path.basename(f)
+            for f in glob.glob(os.path.join(self.scores_dir, "*.jpg"))
+            if self._filename_matches_item(f, item)
+        ]
 
         # Comparison figures (from various subdirectories)
         comparison_dirs = [
@@ -324,30 +367,20 @@ class ReportGenerator:
         ]
 
         for comp_dir in comparison_dirs:
-            # HeatMap and RadarMap show aggregate data across all items, not per-item
-            # They use naming patterns like scenarios_{score}_comparison_heatmap.jpg
+            comp_path = os.path.join(self.comparisons_dir, comp_dir)
             if comp_dir in ["HeatMap", "RadarMap"]:
-                comp_path = os.path.join(self.comparisons_dir, comp_dir, "*.jpg")
+                # HeatMap and RadarMap show aggregate data across all items, not per-item.
+                comp_files = self._dir_files(comp_path, (".jpg",))
             else:
-                comp_path = os.path.join(self.comparisons_dir, comp_dir, f"*{item}*.jpg")
-            comp_files = glob.glob(comp_path)
+                # Avoid interpolating item into a glob: item names can contain
+                # filesystem/glob metacharacters and similar prefixes must not collide.
+                comp_files = [
+                    path for path in self._dir_files(comp_path, (".jpg",)) if self._filename_matches_item(path, item)
+                ]
             figures["comparisons"].extend([f"{comp_dir}/{os.path.basename(f)}" for f in comp_files])
 
         # IGBP groupby figures - now primarily in comparisons directory
-        igbp_files = []
-        # Check comparisons directory as the primary location
-        igbp_comp_dir = os.path.join(self.comparisons_dir, "IGBP_groupby")
-        if os.path.exists(igbp_comp_dir):
-            # Look for heatmap figures in subdirectories
-            for subdir in glob.glob(os.path.join(igbp_comp_dir, "*/")):
-                heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
-                igbp_files.extend(heatmap_files)
-                # Also look for any other jpg files related to the item
-                other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                igbp_files.extend([f for f in other_files if f not in igbp_files])
-            # Also check the root directory
-            root_files = glob.glob(os.path.join(igbp_comp_dir, f"*{item}*.jpg"))
-            igbp_files.extend(root_files)
+        igbp_files = self._collect_groupby_figure_files(["IGBP_groupby"], item)
 
         # Format paths relative to the base directory
         figures["igbp_groupby"] = []
@@ -360,20 +393,7 @@ class ReportGenerator:
             logger.info(f"Found IGBP groupby figures: {figures['igbp_groupby']}")
 
         # PFT groupby figures - now primarily in comparisons directory
-        pft_files = []
-        # Check comparisons directory as the primary location
-        pft_comp_dir = os.path.join(self.comparisons_dir, "PFT_groupby")
-        if os.path.exists(pft_comp_dir):
-            # Look for heatmap figures in subdirectories
-            for subdir in glob.glob(os.path.join(pft_comp_dir, "*/")):
-                heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
-                pft_files.extend(heatmap_files)
-                # Also look for any other jpg files related to the item
-                other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                pft_files.extend([f for f in other_files if f not in pft_files])
-            # Also check the root directory
-            root_files = glob.glob(os.path.join(pft_comp_dir, f"*{item}*.jpg"))
-            pft_files.extend(root_files)
+        pft_files = self._collect_groupby_figure_files(["PFT_groupby"], item)
 
         # Format paths relative to the base directory
         figures["pft_groupby"] = []
@@ -386,21 +406,7 @@ class ReportGenerator:
             logger.info(f"Found PFT groupby figures: {figures['pft_groupby']}")
 
         # Climate zone groupby figures - now primarily in comparisons directory
-        climate_files = []
-        # Check comparisons directory as the primary location - note the directory might be CZ_groupby
-        for cz_name in ["Climate_zone_groupby", "CZ_groupby"]:
-            cz_comp_dir = os.path.join(self.comparisons_dir, cz_name)
-            if os.path.exists(cz_comp_dir):
-                # Look for heatmap figures in subdirectories
-                for subdir in glob.glob(os.path.join(cz_comp_dir, "*/")):
-                    heatmap_files = glob.glob(os.path.join(subdir, f"*{item}*heatmap*.jpg"))
-                    climate_files.extend(heatmap_files)
-                    # Also look for any other jpg files related to the item
-                    other_files = glob.glob(os.path.join(subdir, f"*{item}*.jpg"))
-                    climate_files.extend([f for f in other_files if f not in climate_files])
-                # Also check the root directory
-                root_files = glob.glob(os.path.join(cz_comp_dir, f"*{item}*.jpg"))
-                climate_files.extend(root_files)
+        climate_files = self._collect_groupby_figure_files(["Climate_zone_groupby", "CZ_groupby"], item)
 
         # Format paths relative to the base directory
         figures["climate_zone_groupby"] = []
@@ -414,6 +420,75 @@ class ReportGenerator:
 
         return figures
 
+    def _filename_matches_item(self, path: str, item: str) -> bool:
+        """Return whether a generated filename belongs to item under safe or legacy naming.
+
+        Safe names use ``__`` component boundaries. Legacy names use ``<item>_``
+        prefixes. Substring matching is intentionally avoided so ``Run`` cannot
+        accidentally collect ``Runoff`` outputs.
+        """
+        stem = os.path.splitext(os.path.basename(path))[0]
+        safe_item = filename_component(item)
+        if stem == safe_item or stem.startswith(f"{safe_item}__"):
+            return True
+        if not stem.startswith(f"{item}_"):
+            return False
+
+        # Legacy names use "_" as both component separator and a legal
+        # character inside item names. If the current item is a prefix of a
+        # longer configured item, avoid attaching that longer item's legacy
+        # output to the shorter one (e.g. Run vs Run_off).
+        for other in self.metadata.get("evaluation_items", []):
+            if other != item and len(str(other)) > len(str(item)) and stem.startswith(f"{other}_"):
+                return False
+        return True
+
+    def _dir_files(self, directory: str, suffixes: tuple[str, ...]) -> List[str]:
+        """List direct child files with suffixes without user-controlled glob patterns."""
+        if not os.path.isdir(directory):
+            return []
+        matches: List[str] = []
+        lowered_suffixes = tuple(s.lower() for s in suffixes)
+        try:
+            for name in sorted(os.listdir(directory)):
+                path = os.path.join(directory, name)
+                if os.path.isfile(path) and name.lower().endswith(lowered_suffixes):
+                    matches.append(path)
+        except OSError as exc:
+            logger.warning("Could not list report directory %s: %s", directory, exc)
+        return matches
+
+    def _item_output_files(self, directory: str, item: str, suffixes: tuple[str, ...]) -> List[str]:
+        """Return files that belong to an item under safe or legacy naming."""
+        return [path for path in self._dir_files(directory, suffixes) if self._filename_matches_item(path, item)]
+
+    def _filename_matches_pair(self, path: str, item: str, ref_source: str, sim_source: str) -> bool:
+        """Return whether a metric/score filename belongs to an item/ref/sim pair."""
+        stem = os.path.splitext(os.path.basename(path))[0]
+        safe_prefix = join_filename_components(item, "ref", ref_source, "sim", sim_source)
+        legacy_prefix = f"{item}_ref_{ref_source}_sim_{sim_source}_"
+        return stem == safe_prefix or stem.startswith(f"{safe_prefix}__") or stem.startswith(legacy_prefix)
+
+    def _filename_matches_data_role(self, path: str, item: str, role: str) -> bool:
+        """Return whether a data filename belongs to item and role (ref/sim)."""
+        stem = os.path.splitext(os.path.basename(path))[0]
+        safe_prefix = join_filename_components(item, role)
+        legacy_prefix = f"{item}_{role}_"
+        return stem == safe_prefix or stem.startswith(f"{safe_prefix}__") or stem.startswith(legacy_prefix)
+
+    def _collect_groupby_figure_files(self, groupby_dirs: List[str], item: str) -> List[str]:
+        """Collect groupby figures recursively under safe and legacy pair directories."""
+        matches: List[str] = []
+        for groupby_dir in groupby_dirs:
+            groupby_path = os.path.join(self.comparisons_dir, groupby_dir)
+            if not os.path.exists(groupby_path):
+                continue
+            for root, _dirs, files in os.walk(groupby_path):
+                for file in files:
+                    if file.endswith(".jpg") and self._filename_matches_item(file, item):
+                        matches.append(os.path.join(root, file))
+        return _dedupe_paths(matches)
+
     def _collect_statistics(self, item: str) -> Dict[str, Any]:
         """Collect statistical analysis results"""
         stats = {}
@@ -422,8 +497,7 @@ class ReportGenerator:
         stat_dirs = ["Mean", "Median", "Min", "Max", "Standard_Deviation", "Mann_Kendall_Trend_Test"]
 
         for stat_dir in stat_dirs:
-            stat_path = os.path.join(self.comparisons_dir, stat_dir, f"{item}_*.nc")
-            stat_files = glob.glob(stat_path)
+            stat_files = self._item_output_files(os.path.join(self.comparisons_dir, stat_dir), item, (".nc", ".nc4"))
 
             if stat_files:
                 stats[stat_dir] = [os.path.basename(f) for f in stat_files]
@@ -460,43 +534,19 @@ class ReportGenerator:
 
                     logger.info(f"Checking groupby directory: {groupby_path}")
 
-                    # Look in subdirectories for txt files with statistics
-                    for subdir in glob.glob(os.path.join(groupby_path, "*/")):
-                        # Look for metrics.txt files
-                        txt_patterns = [
-                            os.path.join(subdir, f"*{item}*metrics.txt"),
-                            os.path.join(subdir, f"*{item}*.txt"),
-                        ]
-                        for pattern in txt_patterns:
-                            found_txt = glob.glob(pattern)
-                            txt_files.extend(found_txt)
+                    for root, _dirs, files in os.walk(groupby_path):
+                        for file in files:
+                            path = os.path.join(root, file)
+                            if file.endswith(".txt") and self._filename_matches_item(file, item):
+                                txt_files.append(path)
+                            elif file.endswith(".csv") and self._filename_matches_item(file, item):
+                                csv_files.append(path)
+                            elif file.endswith((".nc", ".nc4")) and self._filename_matches_item(file, item):
+                                nc_files.append(path)
 
-                    # Check for CSV files with statistics (try multiple patterns)
-                    csv_patterns = [
-                        os.path.join(groupby_path, f"*{item}*_statistics.csv"),
-                        os.path.join(groupby_path, f"*{item}*.csv"),
-                        os.path.join(groupby_path, f"{item}_*.csv"),
-                        os.path.join(groupby_path, "*.csv"),
-                    ]
-
-                    for pattern in csv_patterns:
-                        found_files = glob.glob(pattern)
-                        if found_files:
-                            csv_files.extend(found_files)
-                            logger.info(f"Found CSV files with pattern {pattern}: {found_files}")
-
-                    # Also check for NetCDF files with spatial statistics
-                    nc_patterns = [
-                        os.path.join(groupby_path, f"*{item}*.nc"),
-                        os.path.join(groupby_path, f"{item}_*.nc"),
-                        os.path.join(groupby_path, "*.nc"),
-                    ]
-
-                    for pattern in nc_patterns:
-                        found_files = glob.glob(pattern)
-                        if found_files:
-                            nc_files.extend(found_files)
-                            logger.info(f"Found NC files with pattern {pattern}: {found_files}")
+            txt_files = _dedupe_paths(txt_files)
+            csv_files = _dedupe_paths(csv_files)
+            nc_files = _dedupe_paths(nc_files)
 
             # Process txt files if found
             if txt_files:
@@ -527,7 +577,7 @@ class ReportGenerator:
                 stats_data = []
                 for csv_file in csv_files:
                     try:
-                        df = pd.read_csv(csv_file)
+                        df = pd.read_csv(csv_file, sep=None, engine="python")
                         stats_data.append(
                             {
                                 "file": os.path.basename(csv_file),
@@ -911,9 +961,6 @@ class ReportGenerator:
                 comparison_pairs.append((ref_source, sim_source))
 
         for ref_source, sim_source in comparison_pairs:
-            # Look for this comparison pair
-            base_pattern = f"{item}_ref_{ref_source}_sim_{sim_source}_"
-
             # Get year information from data files
             syear = self._get_year_info(item, ref_source, sim_source, "syear")
             eyear = self._get_year_info(item, ref_source, sim_source, "eyear")
@@ -962,8 +1009,16 @@ class ReportGenerator:
                 }
 
             # Search for metrics in metrics directory
-            metrics_files = glob.glob(os.path.join(self.metrics_dir, f"{base_pattern}*.nc"))
-            scores_files = glob.glob(os.path.join(self.scores_dir, f"{base_pattern}*.nc"))
+            metrics_files = [
+                path
+                for path in self._item_output_files(self.metrics_dir, item, (".nc", ".nc4"))
+                if self._filename_matches_pair(path, item, ref_source, sim_source)
+            ]
+            scores_files = [
+                path
+                for path in self._item_output_files(self.scores_dir, item, (".nc", ".nc4"))
+                if self._filename_matches_pair(path, item, ref_source, sim_source)
+            ]
 
             all_files = metrics_files + scores_files
 
@@ -997,7 +1052,7 @@ class ReportGenerator:
                                 }
 
                 except Exception as e:
-                    self.logger.warning(f"Error reading {nc_file}: {e}")
+                    logger.warning(f"Error reading {nc_file}: {e}")
 
             # Try to estimate correlation if not present but other metrics are available
             # Check if 'correlation' is an enabled metric
@@ -1033,6 +1088,8 @@ class ReportGenerator:
                     "max": min(1.0, estimated_corr + 0.1),
                     "median": estimated_corr,
                     "coverage": 100.0,
+                    "estimated": True,
+                    "estimation_source": "heuristic",
                 }
 
             if len(pair_data) > 2:  # More than just the year entries
@@ -1069,12 +1126,18 @@ class ReportGenerator:
 
         for search_dir in search_dirs:
             if os.path.exists(search_dir):
-                # Look for files matching the pattern: item_ref_*_sim_*
-                pattern = os.path.join(search_dir, f"{item}_ref_*_sim_*.nc")
-                files = glob.glob(pattern)
+                files = self._item_output_files(search_dir, item, (".nc", ".nc4"))
 
                 for file_path in files:
                     filename = os.path.basename(file_path)
+                    safe_ref, safe_sim = self._extract_sources_from_safe_filename(filename, item)
+                    if safe_ref:
+                        ref_sources.add(safe_ref)
+                    if safe_sim:
+                        sim_sources.add(safe_sim)
+                    if safe_ref or safe_sim:
+                        continue
+
                     parts = filename.split("_")
 
                     # Extract ref and sim sources
@@ -1107,6 +1170,28 @@ class ReportGenerator:
                         sim_sources.add(sim_source)
 
         return list(ref_sources), list(sim_sources)
+
+    def _extract_sources_from_safe_filename(self, filename: str, item: str) -> tuple[Optional[str], Optional[str]]:
+        """Extract ref/sim source names from safe component-joined filenames."""
+        stem = os.path.splitext(os.path.basename(filename))[0]
+        parts = stem.split("__")
+        if not parts or parts[0] != filename_component(item):
+            return None, None
+        ref_source = None
+        sim_source = None
+        try:
+            ref_idx = parts.index("ref")
+            if ref_idx + 1 < len(parts):
+                ref_source = _decode_filename_component(parts[ref_idx + 1])
+        except ValueError:
+            pass
+        try:
+            sim_idx = parts.index("sim")
+            if sim_idx + 1 < len(parts):
+                sim_source = _decode_filename_component(parts[sim_idx + 1])
+        except ValueError:
+            pass
+        return ref_source, sim_source
 
     def _get_reference_sources(self, item: str) -> List[str]:
         """Get reference sources for an evaluation item from general configuration"""
@@ -1160,14 +1245,13 @@ class ReportGenerator:
         """Get year information directly from NetCDF data files"""
         years_found = []
 
-        # Search patterns for data files
-        data_patterns = [
-            os.path.join(self.data_dir, f"{item}_ref_*.nc"),
-            os.path.join(self.data_dir, f"{item}_sim_*.nc"),
-        ]
-
-        for pattern in data_patterns:
-            for data_file in glob.glob(pattern):
+        for role in ("ref", "sim"):
+            data_files = [
+                path
+                for path in self._item_output_files(self.data_dir, item, (".nc", ".nc4"))
+                if self._filename_matches_data_role(path, item, role)
+            ]
+            for data_file in data_files:
                 try:
                     with xr.open_dataset(data_file) as ds:
                         if "time" in ds.dims or "time" in ds.coords:
@@ -1305,7 +1389,7 @@ class ReportGenerator:
         logger.info("Generating HTML report...")
 
         # HTML template
-        html_template = Template("""<!DOCTYPE html>
+        html_template = _jinja_env.from_string("""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1567,7 +1651,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
             {% for fig in item_data.figures.metrics %}
             <div class="figure-container">
-                <img src="figures/metrics/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/metrics/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1580,7 +1664,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
             {% for fig in item_data.figures.scores %}
             <div class="figure-container">
-                <img src="figures/scores/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/scores/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1593,7 +1677,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
             {% for fig in item_data.figures.comparisons %}
             <div class="figure-container">
-                <img src="figures/comparisons/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/comparisons/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1634,7 +1718,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.igbp_groupby %}
             <div class="figure-container">
-                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1676,7 +1760,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.pft_groupby %}
             <div class="figure-container">
-                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1718,7 +1802,7 @@ class ReportGenerator:
         <div style="display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 0 auto;">
             {% for fig in item_data.figures.climate_zone_groupby %}
             <div class="figure-container">
-                <img src="figures/{{ fig }}" alt="{{ fig }}">
+                <img src="figures/{{ fig|url_path }}" alt="{{ fig }}">
                 <div class="figure-caption">{{ fig|replace('/', ' - ')|replace('_', ' ')|replace('.jpg', '') }}</div>
             </div>
             {% endfor %}
@@ -1735,7 +1819,7 @@ class ReportGenerator:
         
         {% if comparisons.figures.heatmap %}
         <div class="figure-container">
-            <img src="figures/comparisons/{{ comparisons.figures.heatmap }}" alt="Overall Score Heatmap">
+            <img src="figures/comparisons/{{ comparisons.figures.heatmap|url_path }}" alt="Overall Score Heatmap">
             <div class="figure-caption">Figure: Overall Score Comparison Heatmap</div>
         </div>
         {% endif %}
@@ -1764,7 +1848,7 @@ class ReportGenerator:
         
         {% if comparisons.figures.radar %}
         <div class="figure-container">
-            <img src="figures/comparisons/{{ comparisons.figures.radar }}" alt="Radar Map">
+            <img src="figures/comparisons/{{ comparisons.figures.radar|url_path }}" alt="Radar Map">
             <div class="figure-caption">Figure: Multi-dimensional Performance Radar Chart</div>
         </div>
         {% endif %}
@@ -1821,7 +1905,7 @@ class ReportGenerator:
         """
         if not PDF_AVAILABLE:
             logger.warning("PDF generation not available. Please install xhtml2pdf.")
-            logger.warning("Run: pip install xhtml2pdf")
+            logger.warning("Run: pip install xhtml2pdf (or install xhtml2pdf in your conda environment)")
             return None
 
         try:

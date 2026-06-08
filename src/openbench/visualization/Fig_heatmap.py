@@ -1,12 +1,15 @@
 import logging
 import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 # Add the local visualization path for cmaps
-from openbench.visualization import cmaps
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import rcParams
+
+from .Fig_toolbox import get_colormap
 
 
 def _read_comparison_file(file):
@@ -46,7 +49,9 @@ def _read_comparison_file(file):
     return df
 
 
+@with_isolated_rc
 def make_scenarios_scores_comparison_heat_map(file, score, option):
+    option = option.copy()
     # Convert the data to a DataFrame with fallback and auto-detection
     df = _read_comparison_file(file)
     # exclude the first column
@@ -59,7 +64,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     matplotlib.rc("font", **font)
     # Create the heatmap using Matplotlib
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
         "xtick.labelsize": option["xtick"],
@@ -96,7 +100,8 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     else:
         vmin, vmax = 0, 1
 
-    im = ax.imshow(df, cmap=cmaps.MPL_RdBu_r, vmin=vmin, vmax=vmax)
+    cmap = get_colormap(option.get("cmap", "coolwarm"))
+    im = ax.imshow(df, cmap=cmap, vmin=vmin, vmax=vmax)
 
     # Add colorbar
     # Add labels and title
@@ -114,7 +119,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     ax.set_xlabel(option["xlabel"], fontsize=option["xtick"] + 1, weight="bold")
 
     title = option["title"]
-    if len(option["title"]) == 0:
+    if not option["title"]:
         # title = f'Heatmap of {score}'
         title = f"{score}"
     ax.set_title(title.replace("_", " "), fontsize=option["title_size"], weight="bold")
@@ -158,6 +163,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
             xlabel = ax.xaxis.label
             xticks = ax.get_xticklabels()
             max_xtick_height = 0
+            x_height = 0
             for xtick in xticks:
                 bbox = xtick.get_window_extent()
                 bbox_transformed = bbox.transformed(fig.transFigure.inverted())
@@ -179,10 +185,10 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
                     cbar_ax = fig.add_axes([left + width / 6, bottom - max_xtick_height - 0.1, width / 3 * 2, 0.02])
     else:
         cbar_ax = fig.add_axes(
-            option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]
+            [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]]
         )
 
-    cbar = fig.colorbar(
+    fig.colorbar(
         im,
         cax=cbar_ax,
         label=option["colorbar_label"],
@@ -193,4 +199,7 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     # plt.tight_layout()
 
     file2 = file[:-4]
-    plt.savefig(f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    save_figure(
+        fig, f"{file2}_heatmap.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+    )
+    plt.close(fig)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -13,14 +12,9 @@ def test_api_service_module_is_removed():
     assert not (ROOT / "src/openbench/util/api_service.py").exists()
 
 
-def test_config_check_only_keeps_color_helper():
-    """Legacy config-check entrypoints should be removed from the helper module."""
-    import openbench.util.config_check as config_check
-
-    assert hasattr(config_check, "get_platform_colors")
-    assert not hasattr(config_check, "check_config_files_exist")
-    assert not hasattr(config_check, "print_config_validation_results")
-    assert not hasattr(config_check, "validate_config_before_processing")
+def test_legacy_config_check_module_is_removed():
+    """The v2 config-check helper should not remain as a legacy utility shell."""
+    assert not (ROOT / "src/openbench/util/config_check.py").exists()
 
 
 def test_legacy_config_modules_are_removed():
@@ -36,12 +30,17 @@ def test_general_info_reader_no_longer_inherits_namelist_reader():
     assert "NamelistReader" not in {base.__name__ for base in GeneralInfoReader.__mro__[1:]}
 
 
-def test_evaluation_module_uses_current_modular_engine():
-    """evaluation.py should wire into the current evaluation_engine module."""
+def test_detached_evaluation_engine_module_is_removed():
+    """Unwired modular evaluation engine should not remain as a shadow path."""
+    assert not (ROOT / "src/openbench/core/evaluation_engine.py").exists()
+
+
+def test_evaluation_module_does_not_import_detached_engine():
+    """evaluation.py should not expose the removed modular engine feature flag."""
     import openbench.core.evaluation as evaluation_module
 
-    assert evaluation_module._HAS_MODULAR_ENGINE is True
-    assert evaluation_module.create_evaluation_engine.__module__ == "openbench.core.evaluation_engine"
+    assert not hasattr(evaluation_module, "_HAS_MODULAR_ENGINE")
+    assert not hasattr(evaluation_module, "create_evaluation_engine")
 
 
 def test_evaluation_module_does_not_keep_unused_engine_aliases():
@@ -115,6 +114,15 @@ def test_only_active_config_legacy_bridge_module_remains():
     """No deleted config legacy modules should be reintroduced during cleanup."""
     legacy_modules = sorted(path.name for path in (ROOT / "src/openbench/config").glob("legacy_*.py"))
     assert legacy_modules == ["legacy_processors.py"]
+
+
+def test_orphaned_data_file_processing_module_is_removed():
+    """file_processing.py only kept the old Lib_FileProcessing shell.
+
+    It had no live imports in src/ or tests/; active data preparation now
+    lives in the split _processing_* modules behind openbench.data.processing.
+    """
+    assert not (ROOT / "src/openbench/data/file_processing.py").exists()
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,8 @@
 import math
+import os
+
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -12,9 +16,12 @@ from matplotlib import rcParams
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index, tick_length
+from ._validation import finite_min_max
 
 
+@with_isolated_rc
 def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
+    option = option.copy()
     with xr.open_dataset(f"{file}") as ds:
         ds = Convert_Type.convert_nc(ds)
         data = ds.Standard_Deviation.load()  # Load into memory
@@ -22,7 +29,8 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
         ilon = ds.lon.values.copy()
     lon, lat = np.meshgrid(ilon, ilat)
 
-    option["vmin"], option["vmax"] = 0, math.ceil(data.max().values)
+    _, data_max = finite_min_max(data, label="Standard Deviation")
+    option["vmin"], option["vmax"] = 0, math.ceil(data_max)
     if not option["extend"]:
         option["extend"] = "neither"
 
@@ -30,7 +38,6 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -113,7 +120,7 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
         option["title"] = "Correlation Results"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -162,6 +169,6 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
     )
     cb.solids.set_edgecolor("face")
 
-    file2 = file[:-3]
-    plt.savefig(f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(fig, f"{file2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)

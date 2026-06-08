@@ -18,63 +18,27 @@ The core module is organized into submodules:
 
 from .metrics import metrics
 from .scores import scores
+from openbench import __version__
 
-# Import evaluation classes
-try:
-    from .evaluation import Evaluation_grid, Evaluation_stn
-    from .evaluation_engine import (
-        GridEvaluationEngine,
-        ModularEvaluationEngine,
-        StationEvaluationEngine,
-        create_evaluation_engine,
-        evaluate_datasets,
-    )
+from .evaluation import Evaluation_grid, Evaluation_stn
+from .climatezone_groupby import CZ_groupby
+from .comparison import ComparisonProcessing
+from .landcover_groupby import LC_groupby
 
-    _HAS_EVALUATION = True
-except ImportError:
-    _HAS_EVALUATION = False
-    Evaluation_grid = None
-    Evaluation_stn = None
-    ModularEvaluationEngine = None
-    GridEvaluationEngine = None
-    StationEvaluationEngine = None
-
-    def create_evaluation_engine(*args, **kwargs):
-        return None
-
-    def evaluate_datasets(*args, **kwargs):
-        return {}
-
-
-# Import comparison classes
-try:
-    from .climatezone_groupby import CZ_groupby
-    from .comparison import ComparisonProcessing
-    from .landcover_groupby import LC_groupby
-
-    _HAS_COMPARISON = True
-except ImportError:
-    _HAS_COMPARISON = False
-    ComparisonProcessing = None
-    LC_groupby = None
-    CZ_groupby = None
+_HAS_EVALUATION = True
+_HAS_COMPARISON = True
 
 __all__ = [
     "metrics",
     "scores",
     "Evaluation_grid",
     "Evaluation_stn",
-    "ModularEvaluationEngine",
-    "GridEvaluationEngine",
-    "StationEvaluationEngine",
-    "create_evaluation_engine",
-    "evaluate_datasets",
     "ComparisonProcessing",
     "LC_groupby",
     "CZ_groupby",
+    "__version__",
 ]
 
-__version__ = "0.3"
 __author__ = "Zhongwang Wei"
 __email__ = "zhongwang007@gmail.com"
 

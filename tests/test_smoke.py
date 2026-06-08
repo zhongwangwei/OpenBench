@@ -5,7 +5,7 @@ def test_import_openbench():
     """Verify that the openbench package can be imported."""
     import openbench
 
-    assert openbench.__version__ == "3.0.0a1"
+    assert openbench.__version__ == "3.0.0b1"
     assert openbench.__title__ == "OpenBench"
 
 
@@ -22,7 +22,7 @@ def test_cli_entry_point():
     runner = CliRunner()
     result = runner.invoke(cli, ["version"])
     assert result.exit_code == 0
-    assert "3.0.0a1" in result.output
+    assert "3.0.0" in result.output
 
 
 def test_cli_help():
@@ -46,7 +46,7 @@ def test_cli_version_option():
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "3.0.0a1" in result.output
+    assert "3.0.0" in result.output
 
 
 def test_gui_import_guard():
@@ -58,4 +58,4 @@ def test_gui_import_guard():
     try:
         _check_gui_deps()
     except ImportError as e:
-        assert "openbench[gui]" in str(e)
+        assert "colm-openbench[gui]" in str(e)

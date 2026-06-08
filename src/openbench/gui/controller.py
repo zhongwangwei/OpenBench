@@ -26,30 +26,32 @@ class WizardController(QObject):
     ALL_PAGES = [
         "runtime",
         "general",
+        "registry",
+        "sim_data",
+        "ref_data",
         "evaluation_items",
         "metrics",
         "scores",
         "comparisons",
         "statistics",
-        "ref_data",
-        "sim_data",
         "preview",
         "run_monitor",
     ]
 
     # Page display names
     PAGE_NAMES = {
-        "runtime": "Runtime Environment",
         "general": "General",
-        "evaluation_items": "Evaluation Items",
+        "registry": "Data Registry",
+        "sim_data": "Simulation Data",
+        "ref_data": "Reference Data",
+        "evaluation_items": "Evaluation",
         "metrics": "Metrics",
         "scores": "Scores",
         "comparisons": "Comparisons",
         "statistics": "Statistics",
-        "ref_data": "Reference Data",
-        "sim_data": "Simulation Data",
-        "preview": "Preview & Export",
-        "run_monitor": "Run & Monitor",
+        "runtime": "Runtime Environment",
+        "preview": "Preview & Run",
+        "run_monitor": "Run Monitor",
     }
 
     # Conditional pages and their toggle keys
@@ -61,7 +63,7 @@ class WizardController(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._config: Dict[str, Any] = self._default_config()
-        self._current_page: str = "runtime"
+        self._current_page: str = "general"
         self._project_root: str = ""
         self._config_manager = ConfigManager()
         self._auto_sync_enabled = True
@@ -115,19 +117,25 @@ class WizardController(QObject):
                 "compare_grid_res": 2.0,
                 "syear": 2000,
                 "eyear": 2020,
+                "min_year": 1.0,
                 "min_lat": -90.0,
                 "max_lat": 90.0,
                 "min_lon": -180.0,
                 "max_lon": 180.0,
+                "time_alignment": "intersection",
                 "num_cores": 4,
                 "evaluation": True,
                 "comparison": True,
                 "statistics": False,
                 "debug_mode": False,
+                "only_drawing": False,
+                "unified_mask": True,
                 "generate_report": True,
                 "IGBP_groupby": True,
                 "PFT_groupby": True,
                 "Climate_zone_groupby": True,
+                "weight": "none",
+                "execution_mode": "local",
             },
             "evaluation_items": {},
             "metrics": {},
@@ -253,7 +261,7 @@ class WizardController(QObject):
     def reset(self):
         """Reset to default state."""
         self._config = self._default_config()
-        self._current_page = "runtime"
+        self._current_page = self.ALL_PAGES[0]  # "runtime"
         self.config_updated.emit(self._config)
         self.pages_visibility_changed.emit()
         self.page_changed.emit(self._current_page)
@@ -303,9 +311,25 @@ class WizardController(QObject):
                 else:
                     result = os.path.join(basedir, basename)
         else:
-            # Use project root to construct output path
-            openbench_root = self._project_root or get_openbench_root()
-            result = os.path.join(openbench_root, "output", basename)
+            if is_remote:
+                remote_config = general.get("remote", {})
+                remote_root = remote_config.get("openbench_path", "") or getattr(self.storage, "project_dir", "")
+                remote_root = str(remote_root or "~/OpenBench").rstrip("/").replace("\\", "/")
+                relative_basedir = basedir or "./output"
+                if relative_basedir.startswith("./"):
+                    relative_basedir = relative_basedir[2:]
+                relative_basedir = relative_basedir.strip("/").replace("\\", "/")
+                result = (
+                    f"{remote_root}/{relative_basedir}/{basename}" if relative_basedir else f"{remote_root}/{basename}"
+                )
+            else:
+                # Use project root to construct output path
+                openbench_root = self._project_root or get_openbench_root()
+                relative_basedir = basedir or "./output"
+                if relative_basedir.startswith("./"):
+                    relative_basedir = relative_basedir[2:]
+                relative_basedir = relative_basedir.strip("/\\")
+                result = os.path.join(openbench_root, relative_basedir or "output", basename)
 
         # In remote mode, ensure forward slashes
         if is_remote:
@@ -367,6 +391,8 @@ class WizardController(QObject):
         )
         ref_content = self._config_manager.generate_ref_nml(self._config, openbench_root, output_dir)
         sim_content = self._config_manager.generate_sim_nml(self._config, openbench_root, output_dir)
+        stats_content = self._config_manager.generate_stats_nml(self._config)
+        figure_content = self._config_manager.generate_figure_nml()
 
         # Calculate the relative path from storage root to output_dir
         # This ensures files are written to the case output directory, not OpenBench/nml
@@ -396,10 +422,14 @@ class WizardController(QObject):
                 self._storage.write_file(f"{nml_path}/main-{basename}.yaml", main_content)
                 self._storage.write_file(f"{nml_path}/ref-{basename}.yaml", ref_content)
                 self._storage.write_file(f"{nml_path}/sim-{basename}.yaml", sim_content)
+                self._storage.write_file(f"{nml_path}/stats-{basename}.yaml", stats_content)
+                self._storage.write_file(f"{nml_path}/fig-{basename}.yaml", figure_content)
             else:
                 self._storage.write_file(os.path.join(nml_path, f"main-{basename}.yaml"), main_content)
                 self._storage.write_file(os.path.join(nml_path, f"ref-{basename}.yaml"), ref_content)
                 self._storage.write_file(os.path.join(nml_path, f"sim-{basename}.yaml"), sim_content)
+                self._storage.write_file(os.path.join(nml_path, f"stats-{basename}.yaml"), stats_content)
+                self._storage.write_file(os.path.join(nml_path, f"fig-{basename}.yaml"), figure_content)
         except Exception as e:
             print(f"Warning: Failed to sync namelists: {e}")
 
@@ -415,6 +445,7 @@ class WizardController(QObject):
 
         with open(main_path, "w", encoding="utf-8") as f:
             f.write(main_content)
+        self._config_manager.write_legacy_support_namelists(self._config, nml_dir)
 
     def get_combined_metrics_scores_selection(self) -> Dict[str, bool]:
         """Get combined selection from metrics and scores pages."""

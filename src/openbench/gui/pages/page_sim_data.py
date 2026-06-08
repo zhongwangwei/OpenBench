@@ -1,49 +1,207 @@
 # -*- coding: utf-8 -*-
 """
-Simulation Data configuration page.
+Simulation Data configuration page — scan-based workflow.
 
-For simulation data, prefix/suffix are shared across all variables at the general level.
-This is different from reference data where each variable has its own prefix/suffix.
+Users point at a simulation root directory, click Scan, and the page
+discovers available case subdirectories.  Each case gets a checkbox
+(to include/exclude) and its own model dropdown.  Shared settings
+(data_type, grid_res, tim_res, etc.) are at the bottom.
+
+The union of selected models' variable profiles determines which
+variables are available for evaluation downstream.
 """
 
 import logging
+import os
+import re
 import shlex
-from typing import Dict, Any
+from typing import Any, Dict, List, Set
 
 from PySide6.QtWidgets import (
-    QVBoxLayout,
-    QHBoxLayout,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
     QGroupBox,
-    QPushButton,
-    QListWidget,
+    QHBoxLayout,
     QLabel,
-    QWidget,
+    QLineEdit,
     QMessageBox,
-    QDialog,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
+from PySide6.QtCore import Qt, Signal
 
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.widgets import DataSourceEditor
-from openbench.gui.path_utils import to_absolute_path, convert_paths_in_dict
 
 logger = logging.getLogger(__name__)
 
 
-def get_remote_ssh_manager(controller):
-    """Get SSH manager from the controller if in remote mode.
+from openbench.gui.path_utils import get_remote_ssh_manager
 
-    Args:
-        controller: The WizardController instance
 
-    Returns:
-        SSHManager instance if in remote mode and connected, None otherwise
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _detect_prefix(case_dir: str) -> str:
+    for sub in (os.path.join(case_dir, "history"), case_dir):
+        nc_files = [str(path) for path in _glob_nc_local(sub)]
+        if nc_files:
+            basename = os.path.basename(nc_files[0])
+            match = re.match(r"^(.*?)(\d{4})", basename)
+            return match.group(1) if match else ""
+    return ""
+
+
+def _find_nc_dir(case_dir: str) -> str:
+    hist = os.path.join(case_dir, "history")
+    if os.path.isdir(hist) and _glob_nc_local(hist):
+        return hist
+    if _glob_nc_local(case_dir):
+        return case_dir
+    return ""
+
+
+def _glob_nc_local(directory: str):
+    from openbench.data.coordinates import glob_nc
+
+    return glob_nc(directory)
+
+
+def _remote_is_dir(ssh_manager, path: str) -> bool:
+    stdout, _, exit_code = ssh_manager.execute(
+        f"test -d {shlex.quote(path)} && echo dir",
+        timeout=10,
+    )
+    return exit_code == 0 and "dir" in stdout
+
+
+def _remote_first_nc_file(ssh_manager, directory: str) -> str:
+    quoted = shlex.quote(directory)
+    cmd = (
+        f"find {quoted} -maxdepth 1 -type f "
+        r"\( -name '*.nc' -o -name '*.nc4' \) | sort | head -n 1"
+    )
+    stdout, _, exit_code = ssh_manager.execute(cmd, timeout=30)
+    if exit_code != 0:
+        return ""
+    return stdout.strip().splitlines()[0] if stdout.strip() else ""
+
+
+def _remote_find_nc_dir(ssh_manager, case_dir: str) -> str:
+    hist = f"{case_dir.rstrip('/')}/history"
+    if _remote_is_dir(ssh_manager, hist) and _remote_first_nc_file(ssh_manager, hist):
+        return hist
+    if _remote_first_nc_file(ssh_manager, case_dir):
+        return case_dir
+    return ""
+
+
+def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
+    for sub in (f"{case_dir.rstrip('/')}/history", case_dir):
+        first_nc = _remote_first_nc_file(ssh_manager, sub)
+        if first_nc:
+            basename = os.path.basename(first_nc)
+            match = re.match(r"^(.*?)(\d{4})", basename)
+            return match.group(1) if match else ""
+    return ""
+
+
+def _remote_list_child_dirs(ssh_manager, root: str) -> list[str]:
+    quoted = shlex.quote(root)
+    stdout, _, exit_code = ssh_manager.execute(
+        f"find {quoted} -mindepth 1 -maxdepth 1 -type d -print | sort",
+        timeout=30,
+    )
+    if exit_code != 0:
+        return []
+    return [line.strip() for line in stdout.splitlines() if line.strip()]
+
+
+def _get_model_names() -> List[str]:
+    """Return sorted list of registered model names."""
+    try:
+        from openbench.data.registry.manager import get_registry
+
+        mgr = get_registry()
+        return sorted([m.name for m in mgr.list_models()])
+    except Exception:
+        return []
+
+
+def _read_nc_varnames(nc_dir: str) -> List[str]:
+    """Read variable names from the first NC file in a directory."""
+    nc_files = [str(path) for path in _glob_nc_local(nc_dir)]
+    if not nc_files:
+        return []
+    try:
+        import xarray as xr
+
+        with xr.open_dataset(nc_files[0]) as ds:
+            return list(ds.data_vars)
+    except Exception:
+        return []
+
+
+def _match_model(nc_vars: List[str]) -> List[tuple]:
+    """Match NC variable names against registered model profiles.
+
+    Returns list of (model_name, match_count, total_profile_vars, match_ratio)
+    sorted by match_ratio descending. Only includes models with ratio > 0.
     """
-    # Check storage type to determine if in remote mode
-    from openbench.remote.storage import RemoteStorage
+    if not nc_vars:
+        return []
+    nc_set = set(nc_vars)
+    results = []
+    try:
+        from openbench.data.registry.manager import get_registry
 
-    if not isinstance(controller.storage, RemoteStorage):
-        return None
-    return controller.ssh_manager
+        mgr = get_registry()
+        for mp in mgr.list_models():
+            if not mp.variables:
+                continue
+            # Collect all varnames (primary + fallbacks) for this model
+            model_varnames = set()
+            for vm in mp.variables.values():
+                if isinstance(vm.varname, list):
+                    model_varnames.update(vm.varname)
+                elif vm.varname:
+                    model_varnames.add(vm.varname)
+                if vm.fallbacks:
+                    for fb in vm.fallbacks:
+                        model_varnames.add(fb.varname)
+            overlap = nc_set & model_varnames
+            if overlap:
+                ratio = len(overlap) / len(model_varnames) if model_varnames else 0
+                results.append((mp.name, len(overlap), len(model_varnames), ratio))
+    except Exception:
+        pass
+    results.sort(key=lambda x: x[3], reverse=True)
+    return results
+
+
+def _get_model_variables(model_name: str) -> List[str]:
+    """Return variable names supported by a model profile."""
+    try:
+        from openbench.data.registry.manager import get_registry
+
+        mgr = get_registry()
+        mp = mgr.get_model(model_name)
+        if mp and hasattr(mp, "variables"):
+            return sorted(mp.variables.keys())
+    except Exception:
+        pass
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Page
+# ---------------------------------------------------------------------------
 
 
 class PageSimData(BasePage):
@@ -51,622 +209,470 @@ class PageSimData(BasePage):
 
     PAGE_ID = "sim_data"
     PAGE_TITLE = "Simulation Data"
-    PAGE_SUBTITLE = "Configure simulation data sources for each evaluation variable"
-    CONTENT_EXPAND = True  # Allow content to fill available space
+    PAGE_SUBTITLE = "Scan a directory for simulation cases, assign models, and select cases to evaluate"
+    CONTENT_EXPAND = True
+
+    # Emitted when case selection or model assignment changes.
+    # Carries the union of variable names from all selected models.
+    available_variables_changed = Signal(list)
+
+    # ------------------------------------------------------------------
+    # Setup
+    # ------------------------------------------------------------------
 
     def _setup_content(self):
-        """Setup page content."""
-        self.var_container = QWidget()
-        self.var_layout = QVBoxLayout(self.var_container)
-        self.var_layout.setContentsMargins(0, 0, 0, 0)
-        self.var_layout.setSpacing(15)
+        # === Scan section ===
+        scan_group = QGroupBox("Scan for Cases")
+        scan_form = QFormLayout(scan_group)
 
-        self.content_layout.addWidget(self.var_container)
+        root_row = QHBoxLayout()
+        self._root_input = QLineEdit()
+        self._root_input.setPlaceholderText("Simulation root directory (e.g. /data/Simulation)")
+        root_row.addWidget(self._root_input, 1)
+        self._browse_btn = QPushButton("Browse")
+        self._browse_btn.clicked.connect(self._browse_root)
+        root_row.addWidget(self._browse_btn)
+        scan_form.addRow("Root directory:", root_row)
 
-        self._source_lists: Dict[str, QListWidget] = {}
-        # For sim data: _source_configs[var_name][source_name] = {...}
-        # prefix/suffix are stored in general section (shared)
-        self._source_configs: Dict[str, Dict[str, Any]] = {}
+        btn_row = QHBoxLayout()
+        self._scan_btn = QPushButton("Scan")
+        self._scan_btn.setToolTip("List subdirectories that contain NetCDF simulation output")
+        self._scan_btn.clicked.connect(self._do_scan)
+        btn_row.addWidget(self._scan_btn)
+        btn_row.addStretch()
+        scan_form.addRow("", btn_row)
 
-        # Add validate button at bottom
+        self.content_layout.addWidget(scan_group)
+
+        # === Case list (scrollable) ===
+        self._case_scroll = QScrollArea()
+        self._case_scroll.setWidgetResizable(True)
+        self._case_widget = QWidget()
+        self._case_layout = QVBoxLayout(self._case_widget)
+        self._case_layout.setContentsMargins(4, 4, 4, 4)
+        self._case_layout.setSpacing(4)
+        self._case_scroll.setWidget(self._case_widget)
+        self.content_layout.addWidget(self._case_scroll, 1)
+
+        # Per-case data: list of dicts with keys:
+        #   checkbox, model_combo, label, nc_dir, auto_prefix
+        self._cases: List[Dict[str, Any]] = []
+
+        # Cached model names
+        self._model_names: List[str] = _get_model_names()
+
+        # === Shared settings ===
+        self._settings_group = QGroupBox("Shared Case Settings")
+        settings_form = QFormLayout(self._settings_group)
+
+        self._data_type_combo = QComboBox()
+        self._data_type_combo.addItems(["grid", "stn"])
+        settings_form.addRow("data_type:", self._data_type_combo)
+
+        self._grid_res_input = QLineEdit()
+        self._grid_res_input.setPlaceholderText("e.g. 0.5")
+        settings_form.addRow("grid_res:", self._grid_res_input)
+
+        self._tim_res_combo = QComboBox()
+        self._tim_res_combo.addItems(["Month", "Day", "Hour", "Year"])
+        settings_form.addRow("tim_res:", self._tim_res_combo)
+
+        self._data_groupby_combo = QComboBox()
+        self._data_groupby_combo.addItems(["month", "Year", "day", "single"])
+        settings_form.addRow("data_groupby:", self._data_groupby_combo)
+
+        self._prefix_input = QLineEdit()
+        self._prefix_input.setPlaceholderText("Per-case auto-detected (override here for all)")
+        settings_form.addRow("prefix override:", self._prefix_input)
+
+        self._suffix_input = QLineEdit()
+        settings_form.addRow("suffix:", self._suffix_input)
+
+        self._settings_group.setVisible(False)
+        self.content_layout.addWidget(self._settings_group)
+
+        # === Validate button ===
         validate_layout = QHBoxLayout()
         validate_layout.addStretch()
         self.validate_btn = QPushButton("Validate Data")
-        self.validate_btn.setToolTip("Check files, variable names, time and spatial ranges for all data sources")
+        self.validate_btn.setToolTip("Check that simulation files exist")
         self.validate_btn.clicked.connect(self._validate_data)
         validate_layout.addWidget(self.validate_btn)
         self.content_layout.addLayout(validate_layout)
 
-    def _rebuild_variable_groups(self):
-        """Rebuild variable groups based on selected evaluation items."""
-        while self.var_layout.count():
-            child = self.var_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+        # Legacy compat
+        self._source_configs: Dict[str, Dict[str, Any]] = {}
 
-        self._source_lists.clear()
+    # ------------------------------------------------------------------
+    # Browse & Scan
+    # ------------------------------------------------------------------
 
-        eval_items = self.controller.config.get("evaluation_items", {})
-        selected = [k for k, v in eval_items.items() if v]
+    def _browse_root(self):
+        path = QFileDialog.getExistingDirectory(self, "Select Simulation Root Directory")
+        if path:
+            self._root_input.setText(path)
 
-        if not selected:
-            label = QLabel("No evaluation items selected. Please go back and select items.")
-            label.setStyleSheet("color: #666; font-style: italic;")
-            self.var_layout.addWidget(label)
-            return
+    def _do_scan(self):
+        root = self._root_input.text().strip()
 
-        for var_name in selected:
-            group = QGroupBox(var_name.replace("_", " "))
-            group_layout = QVBoxLayout(group)
-
-            # Source list - use minimum height instead of maximum for better space usage
-            source_list = QListWidget()
-            source_list.setMinimumHeight(60)
-            source_list.setProperty("var_name", var_name)
-            self._source_lists[var_name] = source_list
-            group_layout.addWidget(source_list, 1)  # stretch factor 1 to expand
-
-            btn_layout = QHBoxLayout()
-
-            btn_add = QPushButton("+ Add Source")
-            btn_add.setProperty("secondary", True)
-            btn_add.clicked.connect(lambda checked, v=var_name: self._add_source(v))
-            btn_layout.addWidget(btn_add)
-
-            btn_copy = QPushButton("Copy")
-            btn_copy.setProperty("secondary", True)
-            btn_copy.setToolTip("Copy selected source as a new source")
-            btn_copy.clicked.connect(lambda checked, v=var_name: self._copy_source(v))
-            btn_layout.addWidget(btn_copy)
-
-            btn_edit = QPushButton("Edit")
-            btn_edit.setProperty("secondary", True)
-            btn_edit.clicked.connect(lambda checked, v=var_name: self._edit_source(v))
-            btn_layout.addWidget(btn_edit)
-
-            btn_remove = QPushButton("Remove")
-            btn_remove.setProperty("secondary", True)
-            btn_remove.clicked.connect(lambda checked, v=var_name: self._remove_source(v))
-            btn_layout.addWidget(btn_remove)
-
-            btn_layout.addStretch()
-            group_layout.addLayout(btn_layout)
-
-            self.var_layout.addWidget(group, 1)  # stretch factor 1 to expand
-
-        # No addStretch() here - let groups expand to fill space
-
-    def _add_source(self, var_name: str):
-        """Add new data source."""
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_type="sim",
-            var_name=var_name,  # Pass for context (shown in title)
-            ssh_manager=ssh_manager,
-            parent=self,
-        )
-        if dialog.exec():
-            source_name = dialog.get_source_name()
-            if source_name:
-                if var_name not in self._source_configs:
-                    self._source_configs[var_name] = {}
-                self._source_configs[var_name][source_name] = dialog.get_data()
-                self._update_source_list(var_name)
-                self.save_to_config()
-
-    def _copy_source(self, var_name: str):
-        """Copy selected data source as a new source."""
-        import copy
-
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to copy.")
-            return
-
-        source_name = current.text()
-        existing_data = self._source_configs.get(var_name, {}).get(source_name, {})
-
-        # Deep copy the data to avoid modifying the original
-        copied_data = copy.deepcopy(existing_data)
-        # Remove def_nml_path so a new one will be generated
-        copied_data.pop("def_nml_path", None)
-
-        # Open dialog with copied data but no source name (user must enter new name)
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_type="sim", var_name=var_name, initial_data=copied_data, ssh_manager=ssh_manager, parent=self
-        )
-        if dialog.exec():
-            new_source_name = dialog.get_source_name()
-            if new_source_name:
-                if new_source_name == source_name:
-                    QMessageBox.warning(self, "Error", "New source name must be different from the original.")
-                    return
-                if var_name not in self._source_configs:
-                    self._source_configs[var_name] = {}
-                self._source_configs[var_name][new_source_name] = dialog.get_data()
-                self._update_source_list(var_name)
-                self.save_to_config()
-
-    def _edit_source(self, var_name: str):
-        """Edit selected data source."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to edit.")
-            return
-
-        source_name = current.text()
-        existing_data = self._source_configs.get(var_name, {}).get(source_name, {})
-
-        ssh_manager = get_remote_ssh_manager(self.controller)
-        dialog = DataSourceEditor(
-            source_name=source_name,
-            source_type="sim",
-            var_name=var_name,  # Pass for context (shown in title)
-            initial_data=existing_data,
-            ssh_manager=ssh_manager,
-            parent=self,
-        )
-        if dialog.exec():
-            self._source_configs[var_name][source_name] = dialog.get_data()
-            self.save_to_config()
-
-    def _remove_source(self, var_name: str):
-        """Remove selected data source."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        current = source_list.currentItem()
-        if not current:
-            QMessageBox.information(self, "Info", "Please select a source to remove.")
-            return
-
-        source_name = current.text()
-        reply = QMessageBox.question(
-            self, "Confirm", f"Remove source '{source_name}'?", QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            if var_name in self._source_configs:
-                self._source_configs[var_name].pop(source_name, None)
-            self._update_source_list(var_name)
-            self.save_to_config()
-
-    def _update_source_list(self, var_name: str):
-        """Update the source list widget."""
-        source_list = self._source_lists.get(var_name)
-        if not source_list:
-            return
-
-        source_list.clear()
-        sources = self._source_configs.get(var_name, {})
-        for source_name in sources.keys():
-            source_list.addItem(source_name)
-
-    def load_from_config(self):
-        """Load from config.
-
-        For sim data, prefix/suffix are in the general section of the source file,
-        shared across all variables.
-        Uses compound key "var_name::source_name" for source_configs.
-        """
-        import os
-        import yaml
-
-        # Clear existing source configs before reloading
-        self._source_configs.clear()
-
-        self._rebuild_variable_groups()
-
-        sim_data = self.controller.config.get("sim_data", {})
-        general_section = sim_data.get("general", {})
-        def_nml = sim_data.get("def_nml", {})
-        # saved_source_configs now uses compound key: "var_name::source_name"
-        saved_source_configs = sim_data.get("source_configs", {})
-
-        # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
 
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
+        if is_remote:
+            if not root or not ssh_manager or not ssh_manager.is_connected or not _remote_is_dir(ssh_manager, root):
+                QMessageBox.warning(self, "Invalid Path", "Please enter a valid remote simulation root directory.")
+                return
+        elif not root or not os.path.isdir(root):
+            QMessageBox.warning(self, "Invalid Path", "Please enter a valid simulation root directory.")
+            return
 
-        eval_items = self.controller.config.get("evaluation_items", {})
-        selected = [k for k, v in eval_items.items() if v]
+        self._clear_cases()
 
-        for var_name in selected:
-            key = f"{var_name}_sim_source"
-            sources = general_section.get(key, [])
-            if isinstance(sources, str):
-                sources = [sources]
-
-            self._source_configs[var_name] = {}
-            for source_name in sources:
-                # Use compound key for per-variable storage
-                compound_key = f"{var_name}::{source_name}"
-
-                # First check if we have saved source config (from previous edits)
-                if compound_key in saved_source_configs:
-                    saved_config = saved_source_configs[compound_key]
-                    # Check if cached data has valid root_dir - if not, force re-read from def_nml
-                    general = saved_config.get("general", {})
-                    root_dir = general.get("root_dir") or general.get("dir", "")
-                    if root_dir:
-                        self._source_configs[var_name][source_name] = saved_config.copy()
-                        self._update_source_list(var_name)
-                        continue
-                    # Cached data is incomplete, fall through to load from def_nml
-
-                # Otherwise load from def_nml file
-                def_nml_path = def_nml.get(source_name, "")
-                source_data = {"def_nml_path": def_nml_path}
-
-                # Try to load the actual def_nml file content
-                if def_nml_path:
-                    nml_content = None
-
-                    if is_remote:
-                        # In remote mode, only load from remote server
-                        if ssh_manager and ssh_manager.is_connected:
-                            remote_path = self._resolve_remote_def_nml_path(ssh_manager, def_nml_path)
-                            nml_content = self._load_remote_nml_content(ssh_manager, remote_path)
-                        # If not connected in remote mode, don't fall back to local - just skip loading
-                    else:
-                        # Local mode - load from local file
-                        full_path = self._resolve_def_nml_path(def_nml_path)
-                        if full_path and os.path.exists(full_path):
-                            try:
-                                with open(full_path, "r", encoding="utf-8") as f:
-                                    nml_content = yaml.safe_load(f) or {}
-                            except Exception as e:
-                                print(f"Warning: Failed to load def_nml file {full_path}: {e}")
-
-                    if nml_content:
-                        # For sim data, store the general section
-                        # prefix/suffix are at general level
-                        if "general" in nml_content:
-                            source_data["general"] = nml_content["general"].copy()
-
-                        # Load varname from model definition file
-                        model_nml_path = nml_content.get("general", {}).get("model_namelist", "")
-                        if model_nml_path:
-                            varname = self._load_varname_from_model(model_nml_path, var_name, is_remote, ssh_manager)
-                            if varname:
-                                source_data["varname"] = varname
-
-                self._source_configs[var_name][source_name] = source_data
-
-            self._update_source_list(var_name)
-
-        # Save loaded configs back to controller to ensure they're available for export
-        if self._source_configs:
-            self.save_to_config()
-
-    def _load_remote_nml_content(self, ssh_manager, def_nml_path: str) -> dict:
-        """Load NML content from remote server."""
-        import yaml
-
-        if not def_nml_path:
-            return None
-
+        # Scanning runs synchronously on the GUI thread (full QThread
+        # refactor is a separate item); show a wait cursor and pump the
+        # event loop between subdirectories so the window stays painted
+        # and the cursor visible during multi-thousand-entry scans
+        # rather than appearing frozen.
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(f"cat '{def_nml_path}'", timeout=30)
-            if exit_code == 0 and stdout.strip():
-                return yaml.safe_load(stdout) or {}
+            discovered = []
+            if is_remote:
+                for full in _remote_list_child_dirs(ssh_manager, root):
+                    label = os.path.basename(full.rstrip("/"))
+                    nc_dir = _remote_find_nc_dir(ssh_manager, full)
+                    if nc_dir:
+                        prefix = _remote_detect_prefix(ssh_manager, full)
+                        discovered.append((label, nc_dir, prefix))
+                    QApplication.processEvents()
             else:
-                print(f"Warning: Failed to read remote file {def_nml_path}: {stderr}")
-        except Exception as e:
-            print(f"Warning: Failed to load remote def_nml file {def_nml_path}: {e}")
-
-        return None
-
-    def _resolve_remote_def_nml_path(self, ssh_manager, def_nml_path: str) -> str:
-        """Resolve def_nml path on remote server.
-
-        Works the same way as _resolve_def_nml_path for local mode:
-        to_absolute_path(def_nml_path, openbench_root)
-
-        Handles both Unix and Windows local paths.
-        """
-        from openbench.gui.path_utils import to_posix_path
-
-        if not def_nml_path:
-            return ""
-
-        # Get remote OpenBench path from config
-        general = self.controller.config.get("general", {})
-        remote_config = general.get("remote", {})
-        remote_openbench_path = remote_config.get("openbench_path", "")
-
-        if not remote_openbench_path:
-            return def_nml_path
-
-        # Convert to POSIX format (forward slashes)
-        path = to_posix_path(def_nml_path)
-
-        # Handle Windows absolute paths (e.g., C:/Users/...)
-        if len(path) >= 2 and path[1] == ":":
-            # This is a Windows local path - extract relative part if contains /nml/
-            if "/nml/" in path:
-                relative_path = "nml/" + path.split("/nml/", 1)[1]
-                return f"{remote_openbench_path.rstrip('/')}/{relative_path}"
-            # Unknown Windows path - cannot convert to remote
-            return path
-
-        # Extract relative path from various formats
-        relative_path = path
-
-        # If path contains /nml/, extract from that point (handles local temp paths)
-        if "/nml/" in path:
-            relative_path = "nml/" + path.split("/nml/", 1)[1]
-        elif path.startswith("./"):
-            relative_path = path[2:]
-        elif path.startswith("/"):
-            # Check if it's already a valid remote path
-            if any(path.startswith(prefix) for prefix in ["/home/", "/share/", "/data/", "/work/", "/scratch/"]):
-                return path
-            # Extract relative portion if contains /nml/
-            if "/nml/" in path:
-                relative_path = "nml/" + path.split("/nml/", 1)[1]
-            else:
-                return path
-
-        # Same as local: to_absolute_path(def_nml_path, openbench_root)
-        return f"{remote_openbench_path.rstrip('/')}/{relative_path}"
-
-    def _resolve_def_nml_path(self, def_nml_path: str) -> str:
-        """Resolve def_nml path to YAML file."""
-        import os
-
-        if not def_nml_path:
-            return ""
-
-        # Get OpenBench root
-        openbench_root = self._get_openbench_root()
-
-        # Convert to absolute path
-        full_path = to_absolute_path(def_nml_path, openbench_root)
-
-        # If already absolute and exists, return it
-        if os.path.exists(full_path):
-            return full_path
-
-        # Try converting .nml to .yaml
-        yaml_path = full_path.replace("nml-Fortran", "nml-yaml").replace(".nml", ".yaml")
-        if os.path.exists(yaml_path):
-            return yaml_path
-
-        return full_path  # Return even if doesn't exist, let validation catch it
-
-    def _load_varname_from_model(self, model_path: str, var_name: str, is_remote: bool, ssh_manager) -> str:
-        """Load varname from model definition file for a specific variable.
-
-        Args:
-            model_path: Path to model definition file
-            var_name: Variable name to look up (e.g., "Evapotranspiration")
-            is_remote: Whether in remote mode
-            ssh_manager: SSH manager for remote access
-
-        Returns:
-            Variable name from model definition, or empty string if not found
-        """
-        import os
-        import yaml
-
-        model_content = None
-
-        if is_remote and ssh_manager and ssh_manager.is_connected:
-            # Load from remote
-            remote_path = self._resolve_remote_def_nml_path(ssh_manager, model_path)
-            try:
-                stdout, stderr, exit_code = ssh_manager.execute(f"cat '{remote_path}'", timeout=30)
-                if exit_code == 0 and stdout.strip():
-                    model_content = yaml.safe_load(stdout) or {}
-            except Exception as e:
-                logger.debug("Failed to load remote model file %s: %s", remote_path, e)
-        else:
-            # Load from local
-            full_path = self._resolve_def_nml_path(model_path)
-            if full_path and os.path.exists(full_path):
                 try:
-                    with open(full_path, "r", encoding="utf-8") as f:
-                        model_content = yaml.safe_load(f) or {}
-                except Exception as e:
-                    logger.debug("Failed to load model file %s: %s", full_path, e)
+                    entries = sorted(os.listdir(root))
+                except OSError as exc:
+                    QMessageBox.critical(self, "Error", f"Cannot list directory:\n{exc}")
+                    return
 
-        if model_content and var_name in model_content:
-            var_config = model_content[var_name]
-            if isinstance(var_config, dict):
-                return var_config.get("varname", "")
+                for entry in entries:
+                    full = os.path.join(root, entry)
+                    if not os.path.isdir(full):
+                        continue
+                    nc_dir = _find_nc_dir(full)
+                    if nc_dir:
+                        prefix = _detect_prefix(full)
+                        discovered.append((entry, nc_dir, prefix))
+                    QApplication.processEvents()
+        finally:
+            QApplication.restoreOverrideCursor()
 
-        return ""
+        if not discovered:
+            QMessageBox.information(self, "No Cases Found", f"No subdirectories with NetCDF files under:\n{root}")
+            return
+
+        # Auto-detect model from the first case's NC file
+        first_nc_dir = discovered[0][1]
+        nc_vars = [] if is_remote else _read_nc_varnames(first_nc_dir)
+        auto_model = ""
+        match_info = ""
+
+        if nc_vars:
+            matches = _match_model(nc_vars)
+            if matches and matches[0][3] >= 0.3:
+                auto_model = matches[0][0]
+            match_info = (
+                "\n".join(f"{name}: {count}/{total} vars ({ratio:.0%})" for name, count, total, ratio in matches[:5])
+                if matches
+                else "No matching model profiles found."
+            )
+
+        # Refresh model names
+        self._model_names = _get_model_names()
+
+        # Show confirmation dialog
+        from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
+
+        dlg = ScanConfirmDialog(
+            discovered=discovered,
+            model_names=self._model_names,
+            auto_model=auto_model,
+            match_info=match_info,
+            nc_var_count=len(nc_vars),
+            parent=self,
+        )
+        # Wire "Register New Model" button to navigate to registry
+        dlg.register_button.clicked.connect(lambda: (dlg.reject(), self.controller.go_to_page("registry")))
+
+        if not dlg.exec():
+            return
+
+        confirmed = dlg.get_results()
+        if not confirmed:
+            return
+
+        # Build per-case rows from confirmed results
+        for case in confirmed:
+            self._add_case_row(
+                case["label"],
+                case["nc_dir"],
+                case["prefix"],
+                checked=True,
+                model_name=case["model"],
+            )
+
+        self._settings_group.setVisible(True)
+        self._on_selection_changed()
+
+    def _add_case_row(self, label: str, nc_dir: str, prefix: str, checked: bool = True, model_name: str = ""):
+        """Add one case row: [checkbox] label  path  [model combo]"""
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(2, 2, 2, 2)
+
+        cb = QCheckBox(label)
+        cb.setChecked(checked)
+        cb.toggled.connect(self._on_selection_changed)
+        row_layout.addWidget(cb)
+
+        path_label = QLabel(nc_dir)
+        path_label.setStyleSheet("color: #888; font-size: 11px;")
+        path_label.setToolTip(nc_dir)
+        row_layout.addWidget(path_label, 1)
+
+        prefix_label = QLabel(f"prefix: {prefix}")
+        prefix_label.setStyleSheet("color: #aaa; font-size: 10px;")
+        row_layout.addWidget(prefix_label)
+
+        model_combo = QComboBox()
+        model_combo.setMinimumWidth(150)
+        for mn in self._model_names:
+            model_combo.addItem(mn, mn)
+        if model_name:
+            idx = model_combo.findData(model_name)
+            if idx >= 0:
+                model_combo.setCurrentIndex(idx)
+        model_combo.currentIndexChanged.connect(self._on_selection_changed)
+        row_layout.addWidget(model_combo)
+
+        gear_btn = QPushButton("⚙")
+        gear_btn.setFixedWidth(30)
+        gear_btn.setToolTip("Manage models in Data Registry")
+        gear_btn.clicked.connect(lambda: self.controller.go_to_page("registry"))
+        row_layout.addWidget(gear_btn)
+
+        self._case_layout.addWidget(row)
+        self._cases.append(
+            {
+                "checkbox": cb,
+                "model_combo": model_combo,
+                "label": label,
+                "nc_dir": nc_dir,
+                "auto_prefix": prefix,
+                "row_widget": row,
+            }
+        )
+
+    def _clear_cases(self):
+        for case in self._cases:
+            case["row_widget"].deleteLater()
+        self._cases.clear()
+
+    # ------------------------------------------------------------------
+    # Selection changed → derive available variables
+    # ------------------------------------------------------------------
+
+    def _on_selection_changed(self):
+        """Called when any checkbox or model combo changes."""
+        self.save_to_config()
+        # Emit available variables from selected models
+        var_set = self._get_available_variables()
+        self.available_variables_changed.emit(sorted(var_set))
+
+    def _get_available_variables(self) -> Set[str]:
+        """Union of variables from all selected cases' model profiles."""
+        var_set: Set[str] = set()
+        for case in self._cases:
+            if not case["checkbox"].isChecked():
+                continue
+            model_name = case["model_combo"].currentData()
+            if model_name:
+                var_set.update(_get_model_variables(model_name))
+        return var_set
+
+    def get_selected_cases(self) -> List[Dict[str, Any]]:
+        """Return list of selected case info dicts (for other pages)."""
+        result = []
+        prefix_override = self._prefix_input.text().strip()
+        for case in self._cases:
+            if case["checkbox"].isChecked():
+                result.append(
+                    {
+                        "label": case["label"],
+                        "nc_dir": case["nc_dir"],
+                        "prefix": prefix_override or case["auto_prefix"],
+                        "model": case["model_combo"].currentData() or "",
+                    }
+                )
+        return result
+
+    # ------------------------------------------------------------------
+    # Config persistence
+    # ------------------------------------------------------------------
 
     def save_to_config(self):
-        """Save to config.
+        cases = self.get_selected_cases()
+        case_labels = [c["label"] for c in cases]
+        existing_sim_data = self.controller.config.get("sim_data", {})
+        preserved = {
+            key: value
+            for key, value in existing_sim_data.items()
+            if key not in {"general", "def_nml", "source_configs", "_scan_root", "_shared_settings"}
+        }
 
-        Uses compound key "var_name::source_name" for source_configs to preserve
-        per-variable configurations even when the same source is used by multiple variables.
-        """
-        general = {}
-        def_nml = {}
-        source_configs = {}  # Store full source configurations with compound keys
+        prefix_override = self._prefix_input.text().strip()
 
-        for var_name, sources in self._source_configs.items():
-            if sources:
-                key = f"{var_name}_sim_source"
-                general[key] = list(sources.keys())
+        existing_source_configs = existing_sim_data.get("source_configs", {}) or {}
+        source_configs: Dict[str, Any] = {}
+        for c in cases:
+            existing_source = dict(existing_source_configs.get(c["label"], {}) or {})
+            source_general = dict(existing_source.get("general", {}) or {})
+            source_general.update(
+                {
+                    "model_namelist": c["model"],
+                    "root_dir": c["nc_dir"],
+                    "data_type": self._data_type_combo.currentText(),
+                    "grid_res": self._grid_res_input.text().strip(),
+                    "tim_res": self._tim_res_combo.currentText(),
+                    "data_groupby": self._data_groupby_combo.currentText(),
+                    "prefix": prefix_override or c["prefix"],
+                    "suffix": self._suffix_input.text().strip(),
+                }
+            )
+            existing_source["general"] = source_general
+            source_configs[c["label"]] = existing_source
 
-                for source_name, source_data in sources.items():
-                    # Get def_nml_path if it exists, otherwise generate one
-                    def_nml_path = source_data.get("def_nml_path", "")
-                    if not def_nml_path:
-                        # Will be generated during namelist sync
-                        basedir = self.controller.config.get("general", {}).get("basedir", "./output")
-                        def_nml_path = f"{basedir}/nml/sim/{source_name}.yaml"
-                    def_nml[source_name] = def_nml_path
+        # For every selected evaluation variable, all selected cases are sources
+        eval_items = self.controller.config.get("evaluation_items", {})
+        selected_vars = [k for k, v in eval_items.items() if v]
+        # If no eval items selected yet, use the derived variable list
+        if not selected_vars:
+            selected_vars = sorted(self._get_available_variables())
 
-                    # Store with compound key to preserve per-variable configs
-                    compound_key = f"{var_name}::{source_name}"
-                    source_configs[compound_key] = source_data.copy()
-                    # Also store var_name in the config for later retrieval
-                    source_configs[compound_key]["_var_name"] = var_name
+        # Preserve user-set fields inside sim_data["general"] (e.g. `data_root`
+        # or other non-*_sim_source keys) so they survive scan/checkbox saves.
+        # Only the *_sim_source mappings are rewritten below.
+        existing_inner_general = existing_sim_data.get("general", {}) or {}
+        general: Dict[str, Any] = {k: v for k, v in existing_inner_general.items() if not k.endswith("_sim_source")}
+        for var_name in selected_vars:
+            general[f"{var_name}_sim_source"] = list(case_labels)
 
         sim_data = {
+            **preserved,
             "general": general,
-            "def_nml": def_nml,
-            "source_configs": source_configs,  # Include full configs for sync
+            "def_nml": existing_sim_data.get("def_nml", {}) or {},
+            "source_configs": source_configs,
+            "_scan_root": self._root_input.text().strip(),
+            "_shared_settings": {
+                "data_type": self._data_type_combo.currentText(),
+                "grid_res": self._grid_res_input.text().strip(),
+                "tim_res": self._tim_res_combo.currentText(),
+                "data_groupby": self._data_groupby_combo.currentText(),
+                "prefix": prefix_override,
+                "suffix": self._suffix_input.text().strip(),
+            },
         }
+
         self.controller.update_section("sim_data", sim_data)
 
-        # Trigger namelist sync
-        self.controller.sync_namelists()
-
-    def validate(self) -> bool:
-        """Validate page input - ensure all evaluation items have data sources."""
-        from openbench.gui.validation import ValidationError, ValidationManager
-
-        eval_items = self.controller.config.get("evaluation_items", {})
-        selected = [k for k, v in eval_items.items() if v]
-
-        manager = ValidationManager(self)
-
-        for var_name in selected:
-            sources = self._source_configs.get(var_name, {})
-            if not sources:
-                error = ValidationError(
-                    field_name="data_source",
-                    message=f"{var_name.replace('_', ' ')} is missing simulation data source configuration",
-                    page_id=self.PAGE_ID,
-                    context={"var_name": var_name},
-                )
-                if not manager.show_error_and_focus(error):
-                    # Auto-open add source dialog
-                    self._add_source(var_name)
-                    return False
-
-            # Validate each source has required fields
-            for source_name, source_data in sources.items():
-                # Check varname - can be at top level, in general, or in var_config
-                general = source_data.get("general", {})
-                var_config = source_data.get("var_config", {})
-                varname = source_data.get("varname") or var_config.get("varname") or general.get("varname") or ""
-                if not varname:
-                    # Show warning and ask for confirmation
-                    reply = QMessageBox.warning(
-                        self,
-                        "Variable Name Missing",
-                        f"Variable name is not set for:\n\n"
-                        f"Data source: {source_name}\n"
-                        f"Variable: {var_name.replace('_', ' ')}\n\n"
-                        f"Is this variable defined in the filter configuration?\n\n"
-                        f"Click 'Yes' to continue, 'No' to edit the source.",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    if reply == QMessageBox.No:
-                        self._select_and_edit_source(var_name, source_name)
-                        return False
-
-                # Check prefix/suffix (only for grid data, not station data)
-                # prefix/suffix can be at top level or in general section
-                data_type = general.get("data_type", "grid")
-                if data_type != "stn":
-                    prefix = source_data.get("prefix") or general.get("prefix") or ""
-                    suffix = source_data.get("suffix") or general.get("suffix") or ""
-                    if not prefix and not suffix:
-                        error = ValidationError(
-                            field_name="prefix/suffix",
-                            message=f"At least one of file prefix or suffix is required\n\nData source: {source_name}\nVariable: {var_name.replace('_', ' ')}",
-                            page_id=self.PAGE_ID,
-                            context={"var_name": var_name, "source_name": source_name},
-                        )
-                        if not manager.show_error_and_focus(error):
-                            self._select_and_edit_source(var_name, source_name)
-                            return False
-
-                # Check root_dir
-                root_dir = general.get("root_dir", "") or general.get("dir", "")
-                if not root_dir:
-                    error = ValidationError(
-                        field_name="root_dir",
-                        message=f"Root directory is required\n\nData source: {source_name}\nVariable: {var_name.replace('_', ' ')}",
-                        page_id=self.PAGE_ID,
-                        context={"var_name": var_name, "source_name": source_name},
-                    )
-                    if not manager.show_error_and_focus(error):
-                        self._select_and_edit_source(var_name, source_name)
-                        return False
-
-        self.save_to_config()
-        return True
-
-    def _select_and_edit_source(self, var_name: str, source_name: str):
-        """Select source in list and open edit dialog."""
-        source_list = self._source_lists.get(var_name)
-        if source_list:
-            # Find and select the item
-            for i in range(source_list.count()):
-                if source_list.item(i).text() == source_name:
-                    source_list.setCurrentRow(i)
-                    break
-            # Open edit dialog
-            self._edit_source(var_name)
-
-    def _validate_data(self):
-        """Validate all configured data sources."""
-        from openbench.gui.data_validator import DataValidator
-        from openbench.gui.widgets.validation_dialog import ValidationProgressDialog, ValidationResultsDialog
-
-        # Check if any sources configured
-        if not self._source_configs:
-            QMessageBox.information(self, "No Data", "No data sources configured. Please add a data source first.")
+    def load_from_config(self):
+        sim_data = self.controller.config.get("sim_data", {})
+        if not sim_data:
             return
 
-        # Get general config
-        general_config = self.controller.config.get("general", {})
+        scan_root = sim_data.get("_scan_root", "")
+        if scan_root:
+            self._root_input.setText(scan_root)
 
-        # Check if in remote mode using storage type
+        # Restore shared settings
+        ss = sim_data.get("_shared_settings", {})
+        if ss:
+            if ss.get("data_type"):
+                idx = self._data_type_combo.findText(ss["data_type"])
+                if idx >= 0:
+                    self._data_type_combo.setCurrentIndex(idx)
+            if ss.get("grid_res"):
+                self._grid_res_input.setText(str(ss["grid_res"]))
+            if ss.get("tim_res"):
+                idx = self._tim_res_combo.findText(ss["tim_res"])
+                if idx >= 0:
+                    self._tim_res_combo.setCurrentIndex(idx)
+            if ss.get("data_groupby"):
+                idx = self._data_groupby_combo.findText(ss["data_groupby"])
+                if idx >= 0:
+                    self._data_groupby_combo.setCurrentIndex(idx)
+            if ss.get("prefix"):
+                self._prefix_input.setText(ss["prefix"])
+            if ss.get("suffix"):
+                self._suffix_input.setText(ss["suffix"])
+
+        # Restore cases from source_configs
+        saved_configs = sim_data.get("source_configs", {})
+        if not saved_configs:
+            return
+
+        # Determine which labels are selected
+        general_section = sim_data.get("general", {})
+        selected_labels = set()
+        for key, val in general_section.items():
+            if key.endswith("_sim_source"):
+                if isinstance(val, list):
+                    selected_labels.update(val)
+                elif isinstance(val, str):
+                    selected_labels.add(val)
+
+        self._clear_cases()
+        for label, cfg in saved_configs.items():
+            gen = cfg.get("general", {})
+            nc_dir = gen.get("root_dir", "")
+            prefix = gen.get("prefix", "")
+            model_name = gen.get("model_namelist", "")
+            self._add_case_row(label, nc_dir, prefix, checked=(label in selected_labels), model_name=model_name)
+
+        if saved_configs:
+            self._settings_group.setVisible(True)
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def validate(self) -> bool:
+        cases = self.get_selected_cases()
+        if not cases:
+            QMessageBox.warning(self, "No Cases", "Please scan and select at least one simulation case.")
+            return False
+        for c in cases:
+            if not c["model"]:
+                QMessageBox.warning(self, "No Model", f"Please select a model for case '{c['label']}'.")
+                return False
+        return True
+
+    def _validate_data(self):
+        cases = self.get_selected_cases()
+        if not cases:
+            QMessageBox.information(self, "Nothing to Validate", "No cases selected.")
+            return
+        # Quick check: verify NC directories exist
+        issues = []
         from openbench.remote.storage import RemoteStorage
 
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
-
-        if is_remote and not ssh_manager:
-            QMessageBox.warning(self, "Not Connected", "Remote mode requires connecting to the server first.")
-            return
-
-        # Get remote config for remote mode
-        remote_openbench_root = ""
-        python_path = ""
-        conda_env = ""
-        if is_remote:
-            remote_config = general_config.get("remote", {})
-            remote_openbench_root = remote_config.get("openbench_path", "")
-            python_path = remote_config.get("python_path", "")
-            conda_env = remote_config.get("conda_env", "")
-
-        # Create validator
-        validator = DataValidator(
-            is_remote=is_remote,
-            ssh_manager=ssh_manager,
-            remote_openbench_root=remote_openbench_root,
-            python_path=python_path,
-            conda_env=conda_env,
-        )
-
-        # Show progress dialog
-        progress_dialog = ValidationProgressDialog(validator, self._source_configs, general_config, parent=self)
-
-        if progress_dialog.exec() == QDialog.Accepted:
-            report = progress_dialog.get_report()
-            if report:
-                # Show results dialog
-                results_dialog = ValidationResultsDialog(report, parent=self)
-                results_dialog.exec()
+        for c in cases:
+            if is_remote:
+                ok = ssh_manager and ssh_manager.is_connected and _remote_is_dir(ssh_manager, c["nc_dir"])
+            else:
+                ok = os.path.isdir(c["nc_dir"])
+            if not ok:
+                issues.append(f"{c['label']}: directory not found ({c['nc_dir']})")
+        if issues:
+            QMessageBox.warning(self, "Validation Issues", "\n".join(issues))
+        else:
+            QMessageBox.information(self, "Validation OK", f"All {len(cases)} case directories verified.")

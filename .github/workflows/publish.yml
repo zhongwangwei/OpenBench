@@ -17,6 +17,36 @@ jobs:
           python-version: "3.11"
       - run: pip install build
       - run: python -m build
+      - name: Check archive contents
+        run: |
+          python - <<'PY'
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          expected_nc = {
+              "openbench/dataset/IGBP.nc",
+              "openbench/dataset/PFT.nc",
+              "openbench/dataset/Climate_zone.nc",
+          }
+
+          wheel = next(Path("dist").glob("*.whl"))
+          with zipfile.ZipFile(wheel) as zf:
+              wheel_nc = {name for name in zf.namelist() if name.endswith(".nc")}
+          if wheel_nc != expected_nc:
+              raise SystemExit(f"unexpected wheel NetCDF members: {sorted(wheel_nc)}")
+
+          sdist = next(Path("dist").glob("*.tar.gz"))
+          with tarfile.open(sdist, "r:gz") as tf:
+              sdist_nc = {
+                  "/".join(Path(name).parts[-4:])
+                  for name in tf.getnames()
+                  if name.endswith(".nc")
+              }
+          expected_sdist_nc = {"src/" + name for name in expected_nc}
+          if sdist_nc != expected_sdist_nc:
+              raise SystemExit(f"unexpected sdist NetCDF members: {sorted(sdist_nc)}")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: dist

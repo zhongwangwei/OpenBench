@@ -1,5 +1,7 @@
 """Tests for config adapter — new format to legacy format bridge."""
 
+from types import SimpleNamespace
+
 import pytest
 
 import openbench.config.adapter as adapter_module
@@ -57,6 +59,99 @@ def test_build_runner_config_returns_typed_inputs():
     assert runner_cfg.statistics == []
 
 
+def test_build_runner_config_preserves_explicit_empty_scores():
+    """Omitted scores keep the default, but ``scores: []`` disables scores."""
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="runner", output_dir="./output", years=[2004, 2010]),
+        evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.2a"}),
+        simulation={"CoLM2024": SimulationEntry(model="CoLM2024", root_dir="/data")},
+        scores=[],
+    )
+
+    runner_cfg = adapter_module.build_runner_config(cfg)
+    legacy = to_legacy_config(cfg)
+
+    assert runner_cfg.scores == []
+    assert legacy["scores"] == {}
+
+
+def test_build_runner_config_uses_model_profile_resolution_when_entry_missing(monkeypatch):
+    """Runner target resolution should match model-profile fallback used by sim bindings."""
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="runner", output_dir="./output", years=[2004, 2010]),
+        evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.2a"}),
+        simulation={"CaseA": SimulationEntry(model="ProfileModel", root_dir="/data")},
+    )
+    registry = SimpleNamespace(get_model=lambda name: SimpleNamespace(tim_res="Day", grid_res=0.25))
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+
+    runner_cfg = adapter_module.build_runner_config(cfg)
+
+    assert runner_cfg.compare_tim_res == "Day"
+    assert runner_cfg.compare_grid_res == 0.25
+
+
+def test_adapter_preserves_inline_sim_variable_convert(monkeypatch):
+    """Inline variable-level convert expressions must reach legacy sim_nml."""
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="convert", output_dir="./output", years=[2004, 2010]),
+        evaluation=EvaluationConfig(variables=["GPP"]),
+        reference=ReferenceConfig(sources={"GPP": "FLUXCOM"}),
+        simulation={
+            "CaseA": SimulationEntry(
+                model="InlineModel",
+                root_dir="/data",
+                variables={"GPP": {"varname": "gpp_raw", "varunit": "mol m-2 s-1", "convert": "value * 12.011"}},
+            )
+        },
+    )
+    registry = SimpleNamespace(
+        get_model=lambda name: None,
+        get_resolution_variants=lambda name: {},
+        get_reference=lambda name, **kwargs: None,
+    )
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+
+    _main, _ref, sim = adapter_module.build_legacy_namelists(cfg)
+
+    assert sim["GPP"]["CaseA_convert"] == "value * 12.011"
+
+
+def test_build_runner_config_rejects_model_profile_resolution_conflict(monkeypatch):
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="runner", output_dir="./output", years=[2004, 2010]),
+        evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.2a_LowRes"}),
+        simulation={
+            "Monthly": SimulationEntry(model="MonthlyModel", root_dir="/monthly"),
+            "Daily": SimulationEntry(model="DailyModel", root_dir="/daily"),
+        },
+    )
+    models = {
+        "monthlymodel": SimpleNamespace(tim_res="Month", grid_res=0.5),
+        "dailymodel": SimpleNamespace(tim_res="Day", grid_res=0.25),
+    }
+    registry = SimpleNamespace(get_model=lambda name: models.get(name.lower()))
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+
+    with pytest.raises(ConfigError, match="ambiguous across simulations"):
+        adapter_module.build_runner_config(cfg)
+
+
+def test_build_runner_config_rejects_project_name_path_with_config_error():
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="../../escape", output_dir="./output", years=[2004, 2010]),
+        evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.2a"}),
+        simulation={"CoLM2024": SimulationEntry(model="CoLM2024", root_dir="/data")},
+    )
+
+    with pytest.raises(ConfigError, match="project.name must be a simple directory name"):
+        adapter_module.build_runner_config(cfg)
+
+
 def test_adapter_declares_legacy_general_key_contract():
     """The adapter should publish the exact legacy general keys it owns."""
     assert adapter_module.LEGACY_GENERAL_KEYS == {
@@ -85,6 +180,7 @@ def test_adapter_declares_legacy_general_key_contract():
         "compare_tim_res",
         "compare_tzone",
         "compare_grid_res",
+        "regrid_backend",
     }
 
 
@@ -98,6 +194,8 @@ def test_full_config_adapter():
             min_year_threshold=5,
             lat_range=[-60, 90],
             lon_range=[-180, 180],
+            tim_res="Month",
+            grid_res=0.5,
             num_cores=8,
             time_alignment="per_pair",
         ),
@@ -163,8 +261,11 @@ def test_explicit_comparison_resolution_overrides_simulation_context():
     """Explicit project-level resolution should remain the source of truth for legacy compare_* fields."""
     cfg = OpenBenchConfig(
         project=ProjectConfig(
-            name="explicit-res", output_dir=".", years=[2000, 2010],
-            tim_res="Month", grid_res=0.5,
+            name="explicit-res",
+            output_dir=".",
+            years=[2000, 2010],
+            tim_res="Month",
+            grid_res=0.5,
         ),
         evaluation=EvaluationConfig(variables=["GPP"]),
         reference=ReferenceConfig(sources={"GPP": "FLUXCOM"}),
@@ -515,15 +616,22 @@ def test_iter_task_sources_multi_ref_cartesian_product():
     Cartesian product behavior at the adapter level.
     """
     runner_cfg = adapter_module.RunnerConfig(
-        basename="case", basedir=".",
+        basename="case",
+        basedir=".",
         evaluation_items={"ET": True},
-        metrics=["bias"], scores=["Overall_Score"],
-        comparisons=[], statistics=[],
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
         general={
-            "basename": "case", "basedir": ".",
-            "compare_tim_res": "Month", "compare_grid_res": 0.5,
-            "compare_tzone": 0, "num_cores": 1,
-            "syear": 2000, "eyear": 2001,
+            "basename": "case",
+            "basedir": ".",
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "num_cores": 1,
+            "syear": 2000,
+            "eyear": 2001,
         },
     )
     bindings = adapter_module.RunnerBindings(
@@ -548,23 +656,32 @@ def test_iter_task_sources_multi_ref_cartesian_product():
     assert len(sources) == 4
     pairs = {(s.sim_source, s.ref_source) for s in sources}
     assert pairs == {
-        ("SimA", "GLEAM"), ("SimB", "GLEAM"),
-        ("SimA", "FLUXCOM"), ("SimB", "FLUXCOM"),
+        ("SimA", "GLEAM"),
+        ("SimB", "GLEAM"),
+        ("SimA", "FLUXCOM"),
+        ("SimB", "FLUXCOM"),
     }
 
 
 def test_iter_task_sources_single_ref_str_works_unchanged():
     """Regression guard: single-string ref_source must still produce 1 task per sim."""
     runner_cfg = adapter_module.RunnerConfig(
-        basename="case", basedir=".",
+        basename="case",
+        basedir=".",
         evaluation_items={"ET": True},
-        metrics=["bias"], scores=["Overall_Score"],
-        comparisons=[], statistics=[],
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
         general={
-            "basename": "case", "basedir": ".",
-            "compare_tim_res": "Month", "compare_grid_res": 0.5,
-            "compare_tzone": 0, "num_cores": 1,
-            "syear": 2000, "eyear": 2001,
+            "basename": "case",
+            "basedir": ".",
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "num_cores": 1,
+            "syear": 2000,
+            "eyear": 2001,
         },
     )
     bindings = adapter_module.RunnerBindings(
@@ -572,14 +689,18 @@ def test_iter_task_sources_single_ref_str_works_unchanged():
         namelists=adapter_module.LegacyNamelists(
             main={"general": runner_cfg.general},
             reference={"general": {"ET_ref_source": "GLEAM"}, "ET": {"GLEAM_data_type": "grid"}},
-            simulation={"general": {"ET_sim_source": ["SimA", "SimB"]}, "ET": {"SimA_data_type": "grid", "SimB_data_type": "grid"}},
+            simulation={
+                "general": {"ET_sim_source": ["SimA", "SimB"]},
+                "ET": {"SimA_data_type": "grid", "SimB_data_type": "grid"},
+            },
         ),
         figures=adapter_module.LegacyFigureConfig(raw={}),
     )
 
     sources = bindings.iter_task_sources(["ET"])
     assert {(s.sim_source, s.ref_source) for s in sources} == {
-        ("SimA", "GLEAM"), ("SimB", "GLEAM"),
+        ("SimA", "GLEAM"),
+        ("SimB", "GLEAM"),
     }
 
 
@@ -591,15 +712,22 @@ def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
     silently skipping grid evaluation that SimGrid actually needed.
     """
     runner_cfg = adapter_module.RunnerConfig(
-        basename="case", basedir=".",
+        basename="case",
+        basedir=".",
         evaluation_items={"ET": True},
-        metrics=["bias"], scores=["Overall_Score"],
-        comparisons=[], statistics=[],
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
         general={
-            "basename": "case", "basedir": ".",
-            "compare_tim_res": "Month", "compare_grid_res": 0.5,
-            "compare_tzone": 0, "num_cores": 1,
-            "syear": 2000, "eyear": 2001,
+            "basename": "case",
+            "basedir": ".",
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "num_cores": 1,
+            "syear": 2000,
+            "eyear": 2001,
         },
     )
     bindings = adapter_module.RunnerBindings(
@@ -621,23 +749,29 @@ def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
 
     evidence = bindings.has_grid_evaluation(["ET"])
     assert evidence.has_grid is True, (
-        "has_grid_evaluation returned False for mixed sim types — "
-        "SimGrid requires grid evaluation but was ignored"
+        "has_grid_evaluation returned False for mixed sim types — SimGrid requires grid evaluation but was ignored"
     )
 
 
 def test_has_grid_evaluation_pure_stn_x_stn_returns_false():
     """Pure stn × stn (ref=stn, all sims=stn) should still return has_grid=False."""
     runner_cfg = adapter_module.RunnerConfig(
-        basename="case", basedir=".",
+        basename="case",
+        basedir=".",
         evaluation_items={"ET": True},
-        metrics=["bias"], scores=["Overall_Score"],
-        comparisons=[], statistics=[],
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
         general={
-            "basename": "case", "basedir": ".",
-            "compare_tim_res": "Month", "compare_grid_res": 0.5,
-            "compare_tzone": 0, "num_cores": 1,
-            "syear": 2000, "eyear": 2001,
+            "basename": "case",
+            "basedir": ".",
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "num_cores": 1,
+            "syear": 2000,
+            "eyear": 2001,
         },
     )
     bindings = adapter_module.RunnerBindings(
@@ -655,3 +789,58 @@ def test_has_grid_evaluation_pure_stn_x_stn_returns_false():
 
     evidence = bindings.has_grid_evaluation(["ET"])
     assert evidence.has_grid is False
+
+
+def test_statistics_context_per_pair_uses_pair_specific_ref_prefix():
+    """per_pair statistics must read the same masked ref copies as evaluation."""
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case",
+        basedir=".",
+        evaluation_items={"ET": True},
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=["Hellinger_Distance"],
+        general={
+            "basename": "case",
+            "basedir": ".",
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "num_cores": 1,
+            "syear": 2000,
+            "eyear": 2001,
+            "time_alignment": "per_pair",
+        },
+    )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={
+                "general": {"ET_ref_source": "RefA"},
+                "ET": {
+                    "RefA_data_type": "grid",
+                    "RefA_varname": "et_ref",
+                    "RefA_varunit": "mm day-1",
+                },
+            },
+            simulation={
+                "general": {"ET_sim_source": ["SimA", "SimB"]},
+                "ET": {
+                    "SimA_data_type": "grid",
+                    "SimA_varname": "et_sim",
+                    "SimA_varunit": "mm day-1",
+                    "SimB_data_type": "grid",
+                    "SimB_varname": "et_sim",
+                    "SimB_varunit": "mm day-1",
+                },
+            },
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    context = bindings.build_statistics_context(["Hellinger_Distance"])
+
+    assert context.stats_nml["Hellinger_Distance"]["ET_SimA2_prefix"] == "ET_ref_RefA_SimA_et_ref"
+    assert context.stats_nml["Hellinger_Distance"]["ET_SimB2_prefix"] == "ET_ref_RefA_SimB_et_ref"

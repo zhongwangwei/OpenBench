@@ -11,6 +11,50 @@ import pandas as pd
 import xarray as xr
 
 
+def _time_weights(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.DataArray | None:
+    """Return weights for averaging over time.
+
+    Monthly/annual aggregate time series should be weighted by represented
+    month length; daily/sub-daily samples should keep equal per-sample weight.
+    """
+    if "time" not in ds.coords or ds.sizes.get("time", 0) <= 1:
+        return None
+    tim_res = str(source_tim_res or ds.attrs.get("tim_res", "") or ds.attrs.get("time_resolution", "")).strip().lower()
+    if tim_res in {"m", "me", "mon", "month", "monthly", "climatology-month"}:
+        return ds["time"].dt.days_in_month.astype("float64")
+    if tim_res in {"d", "day", "daily", "h", "hr", "hour", "hourly"}:
+        return xr.ones_like(ds["time"], dtype="float64")
+
+    try:
+        diffs = pd.Series(pd.to_datetime(ds["time"].values)).diff().dropna().dt.total_seconds() / 86400.0
+        median_days = float(diffs.median()) if not diffs.empty else 0.0
+    except Exception:
+        median_days = 0.0
+    if median_days >= 27.0:
+        logging.debug("Inferring monthly climatology weights from median Δt=%s days", median_days)
+        return ds["time"].dt.days_in_month.astype("float64")
+    return xr.ones_like(ds["time"], dtype="float64")
+
+
+def _weighted_time_mean(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.Dataset:
+    weights = _time_weights(ds, source_tim_res)
+    if weights is None:
+        return ds.mean(dim="time", skipna=True)
+    return ds.weighted(weights).mean(dim="time", skipna=True)
+
+
+def _monthly_climatology_mean(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.Dataset:
+    monthly = []
+    for month in range(1, 13):
+        group = ds.where(ds["time"].dt.month == month, drop=True)
+        if group.sizes.get("time", 0) == 0:
+            continue
+        monthly.append(_weighted_time_mean(group, source_tim_res).expand_dims(month=[month]))
+    if not monthly:
+        raise ValueError("No months available for monthly climatology")
+    return xr.concat(monthly, dim="month").sortby("month")
+
+
 class ClimatologyProcessor:
     """
     Process data for climatological evaluations.
@@ -101,7 +145,13 @@ class ClimatologyProcessor:
         else:
             return None
 
-    def prepare_reference_climatology(self, ds: xr.Dataset, clim_type: str, syear: int) -> Optional[xr.Dataset]:
+    def prepare_reference_climatology(
+        self,
+        ds: xr.Dataset,
+        clim_type: str,
+        syear: int,
+        source_tim_res: str | None = None,
+    ) -> Optional[xr.Dataset]:
         """
         Prepare reference data for climatology evaluation.
 
@@ -122,8 +172,20 @@ class ClimatologyProcessor:
 
         if clim_type == self.ANNUAL_CLIMATOLOGY:
             # Annual climatology processing
-            if not has_time_dim or time_size == 0:
-                # No time dimension - add time dimension with syear-01-01
+            if has_time_dim and time_size == 0:
+                # Empty time dim means the caller passed a dataset whose
+                # data variables already collapse to zero entries — adding
+                # back a singleton time would silently drop those vars.
+                # Raise so the upstream caller can decide whether to skip
+                # this dataset or fix its inputs, instead of producing a
+                # nonsense empty climatology.
+                raise ValueError(
+                    "Annual climatology requested but dataset has 'time' "
+                    "dimension of size 0; refusing to fabricate a "
+                    "climatology over zero data points."
+                )
+            if not has_time_dim:
+                # No time dimension — add a singleton with syear-01-01.
                 ds = ds.expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
@@ -139,14 +201,14 @@ class ClimatologyProcessor:
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                 ds = ds.assign_coords(time=monthly_times)
                 # Average to annual climatology
-                ds = ds.mean(dim="time", skipna=True).expand_dims("time")
+                ds = _weighted_time_mean(ds, source_tim_res).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Averaged 12 months to annual climatology at {annual_time}")
             else:
                 # Multiple time points (e.g., daily data) - average to annual climatology
                 logging.info(f"Reference: Processing {time_size} time points to annual climatology")
-                ds = ds.mean(dim="time", skipna=True).expand_dims("time")
+                ds = _weighted_time_mean(ds, source_tim_res).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Averaged {time_size} time points to annual climatology at {annual_time}")
@@ -164,7 +226,7 @@ class ClimatologyProcessor:
                 # Multiple time points - calculate monthly climatology via groupby
                 try:
                     logging.info(f"Reference: Processing {time_size} time points to monthly climatology")
-                    ds_monthly = ds.groupby("time.month").mean(dim="time", skipna=True)
+                    ds_monthly = _monthly_climatology_mean(ds, source_tim_res)
 
                     # Reorder to ensure months are in order (1-12)
                     ds_monthly = ds_monthly.sortby("month")
@@ -190,7 +252,13 @@ class ClimatologyProcessor:
 
         return ds
 
-    def prepare_simulation_climatology(self, ds: xr.Dataset, clim_type: str, syear: int) -> xr.Dataset:
+    def prepare_simulation_climatology(
+        self,
+        ds: xr.Dataset,
+        clim_type: str,
+        syear: int,
+        source_tim_res: str | None = None,
+    ) -> xr.Dataset:
         """
         Prepare simulation data to match reference climatology.
 
@@ -211,7 +279,7 @@ class ClimatologyProcessor:
 
         if clim_type == self.ANNUAL_CLIMATOLOGY:
             # Calculate multi-year mean
-            ds_mean = ds.mean(dim="time", skipna=True)
+            ds_mean = _weighted_time_mean(ds, source_tim_res)
             ds_mean = ds_mean.expand_dims("time")
             annual_time = pd.Timestamp(f"{syear}-01-01")
             ds_mean = ds_mean.assign_coords(time=[annual_time])
@@ -221,7 +289,7 @@ class ClimatologyProcessor:
             # Calculate multi-year monthly mean
             try:
                 # Group by month and calculate mean
-                ds_monthly = ds.groupby("time.month").mean(dim="time", skipna=True)
+                ds_monthly = _monthly_climatology_mean(ds, source_tim_res)
 
                 # Reorder to ensure months are in order (1-12)
                 ds_monthly = ds_monthly.sortby("month")
@@ -320,7 +388,13 @@ class ClimatologyProcessor:
 
 
 def process_climatology_evaluation(
-    ref_ds: xr.Dataset, sim_ds: xr.Dataset, metrics: List[str], compare_tim_res: str = None, syear: int = None
+    ref_ds: xr.Dataset,
+    sim_ds: xr.Dataset,
+    metrics: List[str],
+    compare_tim_res: str = None,
+    syear: int = None,
+    ref_tim_res: str | None = None,
+    sim_tim_res: str | None = None,
 ) -> Tuple[Optional[xr.Dataset], Optional[xr.Dataset], List[str]]:
     """
     Process datasets for climatology evaluation.
@@ -366,8 +440,8 @@ def process_climatology_evaluation(
 
     # Prepare reference and simulation climatology
     try:
-        ref_processed = processor.prepare_reference_climatology(ref_ds, clim_type, syear)
-        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type, syear)
+        ref_processed = processor.prepare_reference_climatology(ref_ds, clim_type, syear, source_tim_res=ref_tim_res)
+        sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type, syear, source_tim_res=sim_tim_res)
     except Exception as e:
         logging.error(f"Failed to prepare climatology datasets: {e}")
         return None, None, []

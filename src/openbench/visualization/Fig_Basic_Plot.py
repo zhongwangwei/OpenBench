@@ -1,5 +1,8 @@
 import logging
-import warnings
+import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.util.filenames import join_filename_components
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -18,6 +21,8 @@ from openbench.data.unit import UnitProcessing
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import convert_unit
+from ._downsample import downsample_for_plot, lat_lon_plot_args
+from ._validation import finite_min_max
 
 
 def convert_cftime_to_pandas(data_array):
@@ -54,16 +59,15 @@ def convert_cftime_to_pandas(data_array):
             # If conversion fails, try xarray's built-in conversion
             try:
                 return data_array.assign_coords(time=pd.to_datetime(time_coord.values))
-            except:
-                # If all else fails, return original
+            except Exception:  # If all else fails, return original
                 pass
 
     return data_array
 
 
-warnings.simplefilter(action="ignore", category=RuntimeWarning)
-
 from .Fig_toolbox import get_index, process_unit
+
+logger = logging.getLogger(__name__)
 
 
 def determine_display_unit(self):
@@ -95,7 +99,7 @@ def determine_display_unit(self):
                     # Fallback: use reference unit
                     display_unit = convert_unit(ref_unit)
                     logging.warning(f"Unit mismatch: ref={ref_unit}, sim={sim_unit}. Using ref unit.")
-            except:
+            except Exception:
                 display_unit = convert_unit(ref_unit)
                 logging.warning(f"Failed to convert units. Using ref unit: {ref_unit}")
 
@@ -106,9 +110,8 @@ def make_plot_index_grid(self):
     key = self.ref_varname
 
     for metric in self.metrics:
-        option = self.fig_nml["make_geo_plot_index"]
-        print(f"plotting metric: {metric}")
-
+        option = self.fig_nml["make_geo_plot_index"].copy()
+        logger.info(f"plotting metric: {metric}")
         # Determine the display unit with consistent handling
         display_unit = determine_display_unit(self)
         option["colorbar_label"] = metric.replace("_", "\n") + "\n" + process_unit(display_unit, display_unit, metric)
@@ -119,9 +122,10 @@ def make_plot_index_grid(self):
         try:
             import math
 
-            ds = xr.open_dataset(
+            with xr.open_dataset(
                 f"{self.casedir}/metrics/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}.nc"
-            )[metric]
+            ) as _ds:
+                ds = _ds[metric].load()
             ds = Convert_Type.convert_nc(ds)
             quantiles = ds.quantile([0.05, 0.95], dim=["lat", "lon"])
             del ds
@@ -137,7 +141,7 @@ def make_plot_index_grid(self):
                 elif metric in ["NSE", "KGE", "KGESS", "correlation", "kappa_coeff", "rSpearman"]:
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
-                    option["vmin"], option["vmax"] = math.floor(quantiles[1].values), 1
+                    option["vmin"], option["vmax"] = math.floor(quantiles[0].values), 1
                 elif metric in [
                     "RMSE",
                     "CRMSD",
@@ -153,30 +157,33 @@ def make_plot_index_grid(self):
                 else:
                     option["vmin"], option["vmax"] = 0, 1
 
-            cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"])
+            cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], metric)
+            option["extend"] = extend
             plot_map_grid(self, cmap, norm, bnd, metric, "metrics", mticks, option)
-        except:
-            print(f"ERROR: {key} {metric} ploting error, please check!")
-
+        except Exception:
+            logger.exception(f"ERROR: {key} {metric} plotting error, please check!")
+            raise
     # print("\033[1;32m" + "=" * 80 + "\033[0m")
     for score in self.scores:
         # Skip global map plotting for nSpatialScore since it's constant globally
         if score == "nSpatialScore":
-            print(f"skipping global map plotting for score: {score} (constant globally)")
+            logger.warning(f"skipping global map plotting for score: {score} (constant globally)")
             continue
 
-        option = self.fig_nml["make_geo_plot_index"]
-        print(f"plotting score: {score}")
+        option = self.fig_nml["make_geo_plot_index"].copy()
+        logger.info(f"plotting score: {score}")
         option["colorbar_label"] = score.replace("_", "\n")
         if not option["vmin_max_on"]:
             option["vmin"], option["vmax"] = 0, 1
 
-        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"])
+        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], score)
+        option["extend"] = extend
         plot_map_grid(self, cmap, norm, bnd, score, "scores", mticks, option)
-    print("\033[1;32m" + "=" * 80 + "\033[0m")
 
 
+@with_isolated_rc
 def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
+    option = option.copy()
     # Plot settings
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -189,7 +196,6 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -204,16 +210,17 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     rcParams.update(params)
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    ds = xr.open_dataset(f"{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc")
+    with xr.open_dataset(
+        f"{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc"
+    ) as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
 
-    # Extract variables
-    ilat = ds.lat.values
-    ilon = ds.lon.values
-    lat, lon = np.meshgrid(ilat[::-1], ilon)
+    data = downsample_for_plot(ds[xitem], option)
+    data, ilat, ilon, lon, lat, extent, origin = lat_lon_plot_args(data)
 
-    var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
-    min_value, max_value = np.nanmin(var), np.nanmax(var)
+    var = data.values
+    min_value, max_value = finite_min_max(var, label=f"{xitem} grid map")
     if min_value < option["vmin"] and max_value > option["vmax"]:
         option["extend"] = "both"
     elif min_value > option["vmin"] and max_value > option["vmax"]:
@@ -225,17 +232,10 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
-
-    if ilat[0] - ilat[-1] < 0:
-        origin = "lower"
-    else:
-        origin = "upper"
-
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, var, levels=levels, cmap=colormap, norm=normalize, extend=option["extend"])
     else:
-        cs = ax.imshow(ds[xitem].values, cmap=colormap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(var, cmap=colormap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -279,7 +279,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -329,16 +329,22 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     )
     cb.solids.set_edgecolor("face")
 
-    plt.savefig(
-        f"{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.{option['saving_format']}",
+    output_name = (
+        f"{join_filename_components(self.item, 'ref', self.ref_source, 'sim', self.sim_source, xitem)}"
+        f".{option['saving_format']}"
+    )
+    save_figure(
+        fig,
+        os.path.join(self.casedir, k, output_name),
         format=f"{option['saving_format']}",
         dpi=option["dpi"],
     )
-    plt.close()
+    plt.close(fig)
 
 
+@with_isolated_rc
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
-    option = self.fig_nml["plot_stn"]
+    option = self.fig_nml["plot_stn"].copy()
     import matplotlib
     import matplotlib.pyplot as plt
     from pylab import rcParams
@@ -349,7 +355,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "font.size": option["fontsize"],
         "legend.fontsize": option["fontsize"],
@@ -364,7 +369,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     }
     rcParams.update(params)
 
-    legs = ["Obs", "Sim"]
     lines = [option["obs_lineswidth"], option["sim_lineswidth"]]
     alphas = [option["obs_alphas"], option["sim_alphas"]]
     linestyles = [option["obs_linestyle"], option["sim_linestyle"]]
@@ -382,7 +386,9 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     markersizes = [option["obs_markersize"], option["sim_markersize"]]
 
     fig, ax = plt.subplots(1, 1, figsize=(option["x_wise"], option["y_wise"]))
-    max_time_len = max(len(sim), len(obs))
+    # Guard zero-length inputs: if both series are empty, dividing lines/markers
+    # by 0 below would raise ZeroDivisionError and abort the figure.
+    max_time_len = max(1, max(len(sim), len(obs)))
 
     # Convert cftime to pandas datetime for plotting compatibility
     obs_plot = convert_cftime_to_pandas(obs)
@@ -390,6 +396,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
 
     obs_plot.plot.line(
         x="time",
+        ax=ax,
         label="Obs",
         linewidth=lines[0] / max_time_len,
         linestyle=linestyles[0],
@@ -400,6 +407,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     )
     sim_plot.plot.line(
         x="time",
+        ax=ax,
         label="Sim",
         linewidth=lines[1] / max_time_len,
         linestyle=linestyles[1],
@@ -421,7 +429,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     ax.set_xlabel("Date", fontsize=option["xtick"] + 4, fontweight="bold")
     # ax.tick_params(axis='both', top='off', labelsize=16)
 
-    overall_label = f" RMSE: {RMSE:.2f} R: {correlation:.2f} KGESS: {KGESS:.2f} "
     # ax.scatter([], [], color='black', marker='o', label=overall_label)
     ax.legend(loc="best", shadow=False, labelspacing=option["labelspacing"], fontsize=option["fontsize"])
     # add RMSE,KGE,correlation in two digital to the legend in left top
@@ -433,7 +440,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         fontsize=option["fontsize"] - 4,
         verticalalignment="top",
     )
-    if len(option["title"]) == 0:
+    if not option["title"]:
         lat = f"{abs(lat_lon[0]):.2f}°{'N' if lat_lon[0] > 0 else ('S' if lat_lon[0] < 0 else '')}"
         lon = f"{abs(lat_lon[1]):.2f}°{'E' if lat_lon[1] > 0 else ('W' if lat_lon[1] < 0 else '')}"
         option["title"] = f"ID: {str(ID).title()}  ({lat}, {lon})"
@@ -442,15 +449,20 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         ax.grid(linestyle=option["grid_linestyle"], alpha=0.7, linewidth=option["grid_width"])
 
     # plt.tight_layout()
-    plt.savefig(
-        f"{self.casedir}/data/stn_{self.ref_source}_{self.sim_source}/{key[0]}_{ID}_timeseries.{option['saving_format']}",
+    output_dir = os.path.join(self.casedir, "data", join_filename_components("stn", self.ref_source, self.sim_source))
+    output_name = f"{join_filename_components(key[0], ID, 'timeseries')}.{option['saving_format']}"
+    save_figure(
+        fig,
+        os.path.join(output_dir, output_name),
         format=f"{option['saving_format']}",
         dpi=option["dpi"],
     )
     plt.close(fig)
 
 
+@with_isolated_rc
 def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mticks, option):
+    option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     import matplotlib
@@ -463,7 +475,6 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -476,15 +487,12 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
         "text.usetex": False,
     }
     rcParams.update(params)
-    # Add check for empty or all-NaN array
-    if len(metric) == 0 or np.all(np.isnan(metric)):
-        print(f"Warning: No valid data for {varname}. Skipping plot.")
-        return
+    # Fail before silently omitting a requested station map.
+    min_value, max_value = finite_min_max(metric, label=f"{varname} station map")
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    min_value, max_value = np.nanmin(metric), np.nanmax(metric)
     if min_value < option["vmin"] and max_value > option["vmax"]:
         option["extend"] = "both"
     elif min_value > option["vmin"] and max_value > option["vmax"]:
@@ -550,7 +558,7 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"], weight="bold")
+    ax.set_title(option["title"], fontsize=option["title_size"], weight="bold")
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -600,29 +608,44 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     )
     cb.solids.set_edgecolor("face")
     # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
-    plt.savefig(
-        f"{self.casedir}/{s_m}/{self.item}_stn_{self.ref_source}_{self.sim_source}_{varname}.{option['saving_format']}",
+    output_name = (
+        f"{join_filename_components(self.item, 'stn', self.ref_source, self.sim_source, varname)}"
+        f".{option['saving_format']}"
+    )
+    save_figure(
+        fig,
+        os.path.join(self.casedir, s_m, output_name),
         format=f"{option['saving_format']}",
         dpi=option["dpi"],
     )
-    plt.close()
+    plt.close(fig)
 
 
 def make_plot_index_stn(self):
     # read the data
-    df = pd.read_csv(
-        f"{self.casedir}/scores/{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv", header=0
+    station_eval_name = f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv"
+    csv_candidates = []
+    if self.metrics:
+        csv_candidates.append(os.path.join(self.casedir, "metrics", station_eval_name))
+    if self.scores:
+        csv_candidates.append(os.path.join(self.casedir, "scores", station_eval_name))
+    csv_candidates.extend(
+        [
+            os.path.join(self.casedir, "metrics", station_eval_name),
+            os.path.join(self.casedir, "scores", station_eval_name),
+        ]
     )
+    csv_path = next((path for path in csv_candidates if os.path.exists(path)), None)
+    if csv_path is None:
+        raise FileNotFoundError(f"Station evaluation CSV not found in metrics/ or scores/: {station_eval_name}")
+    df = pd.read_csv(csv_path, header=0)
     df = Convert_Type.convert_Frame(df)
 
     # loop the keys in self.variables to get the metric output
     for metric in self.metrics:
-        option = self.fig_nml["make_stn_plot_index"]
-        if "extend" not in self.fig_nml["make_geo_plot_index"]:
-            self.fig_nml["make_geo_plot_index"]["extend"] = "both"  # Default value
-        option["extend"] = self.fig_nml["make_geo_plot_index"]["extend"]
-        print(f"plotting metric: {metric}")
-
+        option = self.fig_nml["make_stn_plot_index"].copy()
+        option["extend"] = self.fig_nml["make_geo_plot_index"].get("extend", "both")
+        logger.info(f"plotting metric: {metric}")
         # Determine the display unit with consistent handling (same logic as grid)
         display_unit = determine_display_unit(self)
         option["colorbar_label"] = metric.replace("_", "\n") + "\n" + process_unit(display_unit, display_unit, metric)
@@ -638,15 +661,18 @@ def make_plot_index_stn(self):
         try:
             lon_select = data_select["ref_lon"].values
             lat_select = data_select["ref_lat"].values
-        except:
+        except Exception:
             lon_select = data_select["sim_lon"].values
             lat_select = data_select["sim_lat"].values
         plotvar = data_select["%s" % (metric)].values
+        if not np.isfinite(plotvar).any():
+            logger.warning("skipping station map for metric %s: no finite data", metric)
+            continue
+        vmin, vmax = finite_min_max(plotvar, label=f"{metric} station map", percentile=(5, 95))
 
         try:
             import math
 
-            vmin, vmax = np.percentile(plotvar, 5), np.percentile(plotvar, 95)
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
                     option["vmax"] = math.ceil(vmax)
@@ -673,20 +699,21 @@ def make_plot_index_stn(self):
                     option["vmin"], option["vmax"] = 0, math.ceil(vmax)
                 else:
                     option["vmin"], option["vmax"] = 0, 1
-        except:
+        except Exception:
             option["vmin"], option["vmax"] = 0, 1
 
-        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"])
+        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], metric)
+        option["extend"] = extend
         plot_stn_map(self, lon_select, lat_select, plotvar, cmap, norm, metric, "metrics", mticks, option)
 
     for score in self.scores:
         # Skip global map plotting for nSpatialScore since it's constant globally
         if score == "nSpatialScore":
-            print(f"skipping station map plotting for score: {score} (constant globally)")
+            logger.warning(f"skipping station map plotting for score: {score} (constant globally)")
             continue
 
-        option = self.fig_nml["make_stn_plot_index"]
-        print(f"plotting score: {score}")
+        option = self.fig_nml["make_stn_plot_index"].copy()
+        logger.info(f"plotting score: {score}")
         option["colorbar_label"] = score.replace("_", "\n")
         min_score = -999.0
         max_score = 100000.0
@@ -704,20 +731,26 @@ def make_plot_index_stn(self):
         try:
             lon_select = data_select["ref_lon"].values
             lat_select = data_select["ref_lat"].values
-        except:
+        except Exception:
             lon_select = data_select["sim_lon"].values
             lat_select = data_select["sim_lat"].values
         plotvar = data_select["%s" % (score)].values
+        if not np.isfinite(plotvar).any():
+            logger.warning("skipping station map for score %s: no finite data", score)
+            continue
 
         if not option["vmin_max_on"]:
             option["vmin"], option["vmax"] = 0, 1
 
-        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"])
+        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], score)
+        option["extend"] = extend
 
         plot_stn_map(self, lon_select, lat_select, plotvar, cmap, norm, score, "scores", mticks, option)
 
 
+@with_isolated_rc
 def make_Basic(file, method_name, data_sources, main_nml, option):
+    option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     import numpy as np
@@ -728,31 +761,22 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     # filename = "_".join(filename_parts) + "_output"
     # file = os.path.join(output_dir, f"{method_name}", filename)
 
-    ds = xr.open_dataset(file)
+    with xr.open_dataset(file) as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
-    data = ds[method_name]
-    ilat = ds.lat.values
-    ilon = ds.lon.values
-    lon, lat = np.meshgrid(ilon, ilat)
+    data = downsample_for_plot(ds[method_name], option)
+    data, ilat, ilon, lon, lat, extent, origin = lat_lon_plot_args(data)
 
-    min_value, max_value = np.nanmin(data), np.nanmax(data)
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    min_value, max_value = finite_min_max(data, label=f"{method_name} basic map")
+    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], method_name)
     if not option["vmin_max_on"]:
         option["vmax"], option["vmin"] = mticks[-1], mticks[0]
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = extend
 
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -769,16 +793,10 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    extent = (ilon[0], ilon[-1], ilat[0], ilat[-1])
-    if ilat[0] - ilat[-1] < 0:
-        origin = "lower"
-    else:
-        origin = "upper"
-
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, data, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(data, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(data.values, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -826,7 +844,7 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
         option["title"] = "Correlation Results"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -876,5 +894,5 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     )
     cb.solids.set_edgecolor("face")
 
-    plt.savefig(f"{file}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    save_figure(fig, f"{file}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
+    plt.close(fig)

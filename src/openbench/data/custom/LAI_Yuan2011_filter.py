@@ -6,8 +6,12 @@ from pathlib import Path
 import pandas as pd
 import xarray as xr
 
+from openbench.util.filenames import station_file_path
+from openbench.util.netcdf import write_file_atomic
+from openbench.util.netcdf import write_netcdf_atomic
 
-def process_site(site, dataset, info):
+
+def process_site(site, dataset, info, site_index=None, duplicate_station_ids=None):
     """Extract metadata for a single site and persist its series as NetCDF."""
     site_name = str(site.values)
     lon = float(dataset["lon"].sel(site=site).values)
@@ -30,8 +34,8 @@ def process_site(site, dataset, info):
 
     scratch_dir = Path(info.casedir) / "scratch" / f"LAI_Yuan2011_{info.sim_source}"
     scratch_dir.mkdir(parents=True, exist_ok=True)
-    file_path = scratch_dir / f"{site_name}.nc"
-    dataset["lai"].sel(site=site).squeeze().to_netcdf(file_path)
+    file_path = station_file_path(scratch_dir, site_name, index=site_index, duplicate_ids=duplicate_station_ids)
+    write_netcdf_atomic(dataset["lai"].sel(site=site).squeeze(), file_path)
 
     return [site_name, lon, lat, use_syear, use_eyear, str(file_path)]
 
@@ -64,19 +68,19 @@ def filter_LAI_Yuan2011(info, ds=None):
     dataset_path = Path(info.ref_dir) / filename
 
     if not dataset_path.exists():
-        logging.error(f"LAI_Yuan2011 dataset not found: {dataset_path}")
-        return
+        raise FileNotFoundError(f"LAI_Yuan2011 dataset not found: {dataset_path}")
 
     with xr.open_dataset(dataset_path) as ds_file:
         station_rows = []
-        for site in ds_file["site"]:
-            result = process_site(site, ds_file, info)
+        site_ids = [str(value) for value in ds_file["site"].values]
+        duplicate_site_ids = {site_id for site_id in site_ids if site_ids.count(site_id) > 1}
+        for idx, site in enumerate(ds_file["site"]):
+            result = process_site(site, ds_file, info, idx, duplicate_site_ids)
             if result:
                 station_rows.append(result)
 
     if not station_rows:
-        logging.error("No LAI_Yuan2011 sites satisfy the selection criteria.")
-        return
+        raise ValueError("No LAI_Yuan2011 sites satisfy the selection criteria.")
 
     df = pd.DataFrame(station_rows, columns=["ID", "ref_lon", "ref_lat", "use_syear", "use_eyear", "ref_dir"])
 
@@ -85,5 +89,5 @@ def filter_LAI_Yuan2011(info, ds=None):
     info.ref_fulllist = f"{info.casedir}/stn_LAI_Yuan2011_{info.sim_source}_list.txt"
     info.stn_list = df.copy()
 
-    df.to_csv(info.ref_fulllist, index=False)
+    write_file_atomic(info.ref_fulllist, lambda tmp_path: df.to_csv(tmp_path, index=False), suffix=".tmp.csv")
     logging.info("LAI_Yuan2011 station list saved")

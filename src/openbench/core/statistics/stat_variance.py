@@ -11,4 +11,4 @@ def stat_variance(self, data):
     Returns:
         xarray.DataArray: Variance of the input data
     """
-    return data.var(dim="time")
+    return data.var(dim="time", ddof=1)

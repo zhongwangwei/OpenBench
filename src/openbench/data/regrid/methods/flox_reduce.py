@@ -169,7 +169,7 @@ def compute_mode(
         *coords,
         dim=coords,
         func="count",
-        expected_groups=(pd.Index(values.astype(data)), *bounds),
+        expected_groups=(pd.Index(values.astype(data.dtype)), *bounds),
         fill_value=-1,
     )
     result = result.idxmax(array_name) if not anti_mode else result.idxmin(array_name)

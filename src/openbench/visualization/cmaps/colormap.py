@@ -45,18 +45,17 @@ class Colormap(colors.ListedColormap):
         import matplotlib.pyplot as plt
 
         a = np.outer(np.ones(10), np.arange(0, 1, 0.001))
-        plt.figure(figsize=(2.5, 0.5))
-        plt.subplots_adjust(top=0.95, bottom=0.05, left=0.01, right=0.99)
-        plt.subplot(111)
-        plt.axis("off")
-        plt.imshow(a, aspect="auto", cmap=self, origin="lower")
-        plt.text(
+        fig, ax = plt.subplots(figsize=(2.5, 0.5))
+        fig.subplots_adjust(top=0.95, bottom=0.05, left=0.01, right=0.99)
+        ax.axis("off")
+        ax.imshow(a, aspect="auto", cmap=self, origin="lower")
+        ax.text(
             0.5,
             0.5,
             self._name,
             verticalalignment="center",
             horizontalalignment="center",
             fontsize=12,
-            transform=plt.gca().transAxes,
+            transform=ax.transAxes,
         )
-        plt.show()
+        fig.show()

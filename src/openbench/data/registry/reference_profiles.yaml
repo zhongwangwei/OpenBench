@@ -1,0 +1,1288 @@
+# Reference dataset profiles — variable mappings for known datasets.
+#
+# Works like model_catalog.yaml: defines the standard variable names,
+# NC variable names, and units for well-known reference datasets.
+#
+# When the scanner finds a dataset matching a profile name, it inherits
+# the variable mappings automatically. Profiles are keyed by base name
+# (without resolution suffix), so GLEAM_v4.2a applies to both
+# GLEAM_v4.2a_LowRes and GLEAM_v4.2a_MidRes.
+#
+# Users can register new profiles via:
+#   openbench ref register-profile MyDataset -v "Latent_Heat:LE:W m-2"
+#
+# Structure:
+#   DatasetBaseName:
+#     description: ...
+#     tim_res: Day          # optional override
+#     data_groupby: single  # optional override
+#     variables:
+#       StandardVarName:
+#         varname: ncvar_name
+#         varunit: unit string
+
+# ─── Composite station datasets (multi-variable, one NC per station) ─────────
+
+FLUXNET_PLUMBER2:
+  description: FLUXNET/PLUMBER2 multi-site flux tower dataset (170 sites)
+  tim_res: Hour
+  data_groupby: single
+  variables:
+    Latent_Heat:
+      varname: Qle_cor
+      varunit: W m-2
+    Sensible_Heat:
+      varname: Qh_cor
+      varunit: W m-2
+    Ground_Heat:
+      varname: Qg
+      varunit: W m-2
+    Net_Radiation:
+      varname: Rnet
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: SWup
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: LWup
+      varunit: W m-2
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: mumolCO2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: mumolCO2 m-2 s-1
+
+FLUX_PLUMBER2:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Composite/FLUXNET_PLUMBER2
+    nc_sub_dir: dataset
+    consume: false
+  description: FLUXNET PLUMBER2 flux tower composite (hourly)
+  category: Composite
+  tim_res: Hour
+  data_groupby: single
+  fulllist: ${OPENBENCH_REF_ROOT}/Station/Composite/FLUXNET_PLUMBER2/list/FLUXNET_PLUMBER2.csv
+  variables:
+    Latent_Heat:
+      sub_dir: ''
+      varname: Qle_cor
+      varunit: W m-2
+      fallbacks:
+        - varname: Qle
+          varunit: W m-2
+    Sensible_Heat:
+      sub_dir: ''
+      varname: Qh_cor
+      varunit: W m-2
+      fallbacks:
+        - varname: Qh
+          varunit: W m-2
+    Ground_Heat:
+      sub_dir: ''
+      varname: Qg
+      varunit: W m-2
+    Net_Radiation:
+      sub_dir: ''
+      varname: Rnet
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      sub_dir: ''
+      varname: SWup
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      sub_dir: ''
+      varname: LWup
+      varunit: W m-2
+    Gross_Primary_Productivity:
+      sub_dir: ''
+      varname: GPP
+      varunit: mumolCO2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      sub_dir: ''
+      varname: NEE
+      varunit: mumolCO2 m-2 s-1
+
+PLUMBER2S:
+  description: PLUMBER2 supplementary flux tower dataset (90 sites)
+  tim_res: Hour
+  data_groupby: single
+  variables:
+    Latent_Heat:
+      varname: Qle_cor
+      varunit: W m-2
+    Sensible_Heat:
+      varname: Qh_cor
+      varunit: W m-2
+    Ground_Heat:
+      varname: Qg
+      varunit: W m-2
+    Net_Radiation:
+      varname: Rnet
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: SWup
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: LWup
+      varunit: W m-2
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: mumolCO2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: mumolCO2 m-2 s-1
+
+# ─── Single-variable station datasets ────────────────────────────────────────
+
+GEBA:
+  description: Global Energy Balance Archive station data
+  category: Heat
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: W m-2
+    Latent_Heat:
+      varname: LE
+      varunit: W m-2
+    Sensible_Heat:
+      varname: H
+      varunit: W m-2
+
+    Longwave_Incoming_Radiation:
+      varname: LWin
+      varunit: W m-2
+    Latent_Heat_Flux:
+      varname: LE
+      varunit: W m-2
+    Sensible_Heat_Flux:
+      varname: H
+      varunit: W m-2
+CH4_FluxnetANN:
+  description: FluxNet annual methane flux station data
+  category: Bio
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Methane:
+      varname: FCH4
+      varunit: g C m-2 d-1
+
+    FCH4:
+      varname: FCH4
+      varunit: g C m-2 d-1
+LAI_Yuan2011:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Bio/Yuan2011
+    file_glob: lai_monthly_500.nc
+  description: Yuan et al. 2011 station LAI observations
+  category: Bio
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Leaf_Area_Index:
+      varname: lai
+      varunit: unitless
+
+Transpiration_GLEAM_hybird:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Water/Transpiration/GLEAM_Hybird
+    nc_sub_dir: dataset
+  description: GLEAM Hybrid station transpiration
+  category: Water
+  tim_res: Day
+  data_groupby: single
+  fulllist: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/GLEAM_Hybird/list/Transpiration_GLEAM_hybird.csv
+  variables:
+    Canopy_Transpiration:
+      sub_dir: ''
+      varname: et
+      varunit: mm day-1
+
+Xu_et_al2025_stn:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Water/Evapotranspiration/Xu_et_al2025
+    nc_sub_dir: dataset
+  description: Xu et al. 2025 station evapotranspiration (daily)
+  category: Water
+  tim_res: Day
+  data_groupby: single
+  fulllist: ${OPENBENCH_REF_ROOT}/Station/Water/Evapotranspiration/Xu_et_al2025/list/Xu_et_al2025.csv
+  variables:
+    Evapotranspiration:
+      sub_dir: ''
+      varname: et
+      varunit: mm day-1
+
+Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: OpenBench_Streamflow_Daily.nc
+  description: OpenBench consolidated daily streamflow alias
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: OpenBench_Streamflow_Monthly_full.nc
+  description: OpenBench consolidated monthly streamflow alias
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Monthly_full.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: upstream_area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+Hourly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Hourly
+    file_glob: OpenBench_Streamflow_Hourly_full.nc
+  description: OpenBench consolidated hourly streamflow alias
+  tim_res: Hour
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Hourly_full.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+# Profile-driven scans for StreamFlow folders that contain many named
+# single-file station datasets in one shared directory.
+
+BRSC_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: BRSC_monthly.nc
+  description: Bureau of River System Compilation monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: BRSC_monthly.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: upstream_area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+Beck_2017_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: Beck_2017_daily.nc
+  description: Beck et al. 2017 daily streamflow dataset
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: Beck_2017_daily.nc
+    station_id_var: station_id
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+Caravan_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: Caravan_daily.nc
+  description: Caravan daily streamflow dataset
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: Caravan_daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+Dai_Trenberth_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: coastal-stns-Vol-monthly.updated-May2019.nc
+  description: Dai & Trenberth monthly streamflow at river mouths
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: direct
+    dataset_file: coastal-stns-Vol-monthly.updated-May2019.nc
+    station_id_var: id
+    time_var: time
+    time_format: YYYYMM
+    discharge_var: FLOW
+    lat_var: lat
+    lon_var: lon
+    area_var: area_stn
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+GRDC_Caravan_extension_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: GRDC_Caravan_extension_daily.nc
+  description: GRDC Caravan extension daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GRDC_Caravan_extension_daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+GRDC_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: GRDC_daily.nc
+  description: GRDC daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GRDC_daily.nc
+    station_id_var: GRDC_Num
+    time_var: Time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: Upstream_Area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+GRDC_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: GRDC_monthly.nc
+  description: GRDC Monthly streamflow (consolidated with CaMa allocation)
+  years:
+  - 1806
+  - 2019
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GRDC_monthly.nc
+    station_id_var: GRDC_Num
+    time_var: Time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: Upstream_Area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: discharge
+      varunit: m3 s-1
+
+GRDC_RESG_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: RSEG_monthly.nc
+  description: GRDC RESG monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: RSEG_monthly.nc
+    station_id_var: GRDC_Num
+    time_var: Time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: ''
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+GRDD_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: GRDD_monthly.nc
+  description: GRDD monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GRDD_monthly.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+GSHA_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: GSHA_monthly.nc
+  description: GSHA monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GSHA_monthly.nc
+    station_id_var: station_id
+    time_var: time
+    discharge_var: mean
+    lat_var: latitude
+    lon_var: longitude
+    area_var: area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+GSIM_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: GSIM_monthly.nc
+  description: Global Streamflow Indices and Metadata monthly
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: GSIM_monthly.nc
+    station_id_var: station_id
+    time_var: time
+    discharge_var: MEAN
+    lat_var: latitude
+    lon_var: longitude
+    area_var: area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+Hubei_Hydro_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: Hubei_Hydro_Daily.nc
+  description: Hubei Hydrological Bureau daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: Hubei_Hydro_Daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+
+OpenBench_Streamflow_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: OpenBench_Streamflow_Daily.nc
+  description: OpenBench consolidated daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+OpenBench_Streamflow_Hourly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Hourly
+    file_glob: OpenBench_Streamflow_Hourly*.nc
+  description: OpenBench consolidated hourly streamflow
+  tim_res: Hour
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Hourly_full.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+OpenBench_Streamflow_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: OpenBench_Streamflow_Monthly*.nc
+  description: OpenBench consolidated monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_Streamflow_Monthly_full.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: upstream_area
+  variables:
+    Streamflow:
+      min_uparea: 1000.0
+      max_uparea: 50000000000.0
+      varname: streamflow
+      varunit: m3 s-1
+
+R_ArcticNet_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: R-ArcticNet_daily.nc
+  description: R-ArcticNET daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: R-ArcticNet_daily.nc
+    station_id_var: Station_ID
+    time_var: Time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: Upstream_Area
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+
+R_ArcticNet_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: R-ArcticNet_monthly.nc
+  description: R-ArcticNET monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: R-ArcticNet_monthly.nc
+    station_id_var: Station_ID
+    time_var: Time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: Upstream_Area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+YCZ_Bulletin_Monthly:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Monthly
+    file_glob: YCZ_Bulletin_monthly.nc
+  description: Yangtze Conservancy Zone Bulletin monthly streamflow
+  tim_res: Month
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: YCZ_Bulletin_monthly.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: Disch
+    lat_var: Lat
+    lon_var: Lon
+    area_var: upstream_area
+  variables:
+    Streamflow:
+      varname: discharge
+      varunit: m3 s-1
+
+YRC_Daily:
+  scan:
+    layout: station_shared_files
+    root_sub_dir: Station/Water/StreamFlow/Daily
+    file_glob: YRC_daily.nc
+  description: Yellow River Conservancy Commission daily streamflow
+  tim_res: Day
+  data_groupby: single
+  station_matching:
+    method: cama_allocation
+    dataset_file: YRC_daily.nc
+    station_id_var: station
+    time_var: time
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    area_var: area
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+
+# ─── Grid datasets ───────────────────────────────────────────────────────────
+# Base name applies to all resolution variants (LowRes, MidRes, HigRes)
+
+GLEAM_v4.2a:
+  description: GLEAM v4.2a global evaporation and soil moisture
+  category: Energy
+  tim_res: Month
+  data_groupby: Year
+  scan:
+    layout: grid_composite_children
+    root_sub_dir: Grid/LowRes/Composite/GLEAM_v4.2
+  variables:
+    Sensible_Heat:
+      child: H
+      varname: H
+      varunit: W m-2
+    Bare_Soil_Evaporation:
+      child: Eb
+      varname: Eb
+      varunit: mm day-1
+    Canopy_Evaporation:
+      child: Ei
+      varname: Ei
+      varunit: mm day-1
+    Evapotranspiration:
+      child: E
+      varname: E
+      varunit: mm day-1
+    Open_Water_Evaporation:
+      child: Ew
+      sub_dir: Water/Open_Water_Evaporation/GLEAM_v4.2a
+      varname: Ew
+      varunit: mm day-1
+    Root_Zone_Soil_Moisture:
+      child: SMrz
+      varname: SMrz
+      varunit: m3 m-3
+    Surface_Soil_Moisture:
+      child: SMs
+      varname: SMs
+      varunit: m3 m-3
+    Transpiration:
+      child: Et
+      varname: Et
+      varunit: mm day-1
+
+    Canopy_Transpiration:
+      sub_dir: Transpiration/GLEAM_v4.2a
+      varname: Et
+      varunit: mm day-1
+      prefix: Et_
+      suffix: _GLEAM_v4.2a
+ERA5LAND:
+  description: ERA5-Land reanalysis
+  variables:
+    Latent_Heat:
+      varname: slhf
+      varunit: W m-2
+    Sensible_Heat:
+      varname: sshf
+      varunit: W m-2
+    Net_Radiation:
+      varname: Rnet
+      varunit: W m-2
+    Surface_Albedo:
+      varname: fal
+      varunit: "1"
+    Surface_Downward_LW_Radiation:
+      varname: strd
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: ssrd
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: str
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: ssr
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: sutr
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: susr
+      varunit: W m-2
+    Precipitation:
+      varname: tp
+      varunit: mm
+    Surface_Soil_Moisture:
+      varname: swvl1
+      varunit: m3 m-3
+    Soil_Moisture_Lev2:
+      varname: swvl2
+      varunit: m**3 m**-3
+    Surface_Air_Temperature:
+      varname: t2m
+      varunit: K
+    Diurnal_Max_Temperature:
+      varname: mx2t
+      varunit: K
+    Diurnal_Min_Temperature:
+      varname: mn2t
+      varunit: K
+    Surface_Pressure:
+      varname: sp
+      varunit: Pa
+    Surface_Specific_Humidity:
+      varname: Q
+      varunit: kg/kg
+    Surface_Wind_Speed:
+      varname: ws
+      varunit: m s**-1
+    Surface_Wind_Speed_U10:
+      varname: u10
+      varunit: m s**-1
+    Surface_Wind_Speed_V10:
+      varname: v10
+      varunit: m s**-1
+    Total_Runoff:
+      varname: ro
+      varunit: mm
+
+CLARA_3:
+  description: CM SAF CLARA-A3 radiation dataset
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: W m-2
+    Surface_Albedo:
+      varname: blue_sky_albedo_all_mean
+      varunit: "%"
+    Surface_Downward_LW_Radiation:
+      varname: SDL
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: SIS
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: SNL
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: SNS
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: SUL
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: SUS
+      varunit: W m-2
+
+FLUXCOM-X-BASE:
+  description: FLUXCOM-X machine learning flux estimates
+  variables:
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: gC m-2 d-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: gC m-2 d-1
+    Evapotranspiration:
+      varname: ET
+      varunit: mm hr-1
+    Transpiration:
+      varname: ET_T
+      varunit: mm hr-1
+
+_Ignore_FLUXCOM_raw_composite:
+  scan:
+    layout: ignore
+    root_sub_dir: Grid/LowRes/Composite/FLUXCOM
+
+GDHY2019ver:
+  scan:
+    layout: grid_nested_root
+    root_sub_dir: Grid/LowRes/Anth/Crop/GDHY2019ver
+  description: GDHY2019 harvested area and yield crop masks
+  category: Urban
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Crop:
+      varname: Crop
+      varunit: ''
+
+GRUN_ENSEMBLE:
+  description: G-RUN ENSEMBLE global runoff
+  variables:
+    Total_Runoff:
+      varname: Runoff
+      varunit: mm day-1
+
+GLDAS-2.2:
+  description: GLDAS-2.2 land surface reanalysis
+  variables:
+    Ground_Heat:
+      varname: Qg_tavg
+      varunit: W m-2
+AH4GUC:
+  description: AH4GUC reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Urban_Anthropogenic_Heat_Flux:
+      varname: AHE
+      varunit: W m-2
+CERES_EBAF_Ed4.2:
+  description: CERES_EBAF_Ed4.2 reference dataset (LowRes)
+  category: Energy
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Net_Radiation:
+      varname: sfc_net_tot_all_mon
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      varname: sfc_sw_up_all_mon
+      varunit: W m-2
+    Surface_Upward_LW_Radiation:
+      varname: sfc_lw_up_all_mon
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: sfc_net_sw_all_mon
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: sfc_net_lw_all_mon
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: sfc_sw_down_all_mon
+      varunit: W m-2
+    Surface_Downward_LW_Radiation:
+      varname: sfc_lw_down_all_mon
+      varunit: W m-2
+CLASS:
+  description: CLASS reference dataset (LowRes)
+  category: Energy
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Ground_Heat:
+      varname: hfdsl
+      varunit: W m-2
+CRU4.02:
+  description: CRU4.02 reference dataset (LowRes)
+  category: Meteorology
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Surface_Relative_Humidity:
+      varname: rhums
+      varunit: percent
+CRU_TS_4.08:
+  description: CRU_TS_4.08 reference dataset (LowRes)
+  category: Meteorology
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Surface_Air_Temperature:
+      varname: tmp
+      varunit: degC
+    Diurnal_Max_Temperature:
+      varname: tmx
+      varunit: degC
+    Diurnal_Min_Temperature:
+      varname: tmn
+      varunit: degC
+    Cloud_Cover:
+      varname: cld
+      varunit: percent
+    Ground_Frost_Frequency:
+      varname: frs
+      varunit: days
+    Precipitation:
+      varname: pre
+      varunit: mm day-1
+ESACCI-BIOMASS-L4:
+  description: ESACCI-BIOMASS-L4 reference dataset (LowRes)
+  category: Carbon
+  tim_res: Year
+  data_groupby: Single
+  variables:
+    Biomass:
+      varname: agb
+      varunit: Mg ha-1
+ESACCI-L4_FIRE-BA-MODIS:
+  description: ESACCI-L4_FIRE-BA-MODIS reference dataset (LowRes)
+  category: Carbon
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Burned_Area:
+      varname: burned_area
+      varunit: ha
+ETMonitor:
+  description: ETMonitor reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Urban_Latent_Heat_Flux:
+      varname: LE
+      varunit: W m-2
+FLUXCOM:
+  description: FLUXCOM reference dataset (LowRes)
+  category: Energy
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Latent_Heat:
+      varname: le
+      varunit: W m-2
+GCOS:
+  description: GCOS reference dataset (LowRes)
+  category: Meteorology
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Lake_Surface_Water_Temperature:
+      varname: lake_surface_water_temperature
+      varunit: K
+GGMSEUD:
+  description: GGMSEUD reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Total_Irrigation_Amount:
+      varname: withd_irr
+      varunit: mm month-1
+GIEMS_MC:
+  description: GIEMS-MC Global Inundation Extent (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Inundation_Fraction:
+      varname: total_water_fraction
+      varunit: m
+    Inundation_Area:
+      varname: water_surface_area
+      varunit: m
+GIWUED:
+  description: GIWUED reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Total_Irrigation_Amount:
+      varname: IWUens
+      varunit: mm month-1
+GLASS:
+  description: GLASS reference dataset (LowRes)
+  category: Carbon
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Net_Primary_Production:
+      varname: NPP
+      varunit: gC m-2 day-1
+GPCC:
+  description: GPCC Global Precipitation Climatology Centre (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Precipitation:
+      varname: precip
+      varunit: mm day-1
+GPCPv3.2:
+  description: GPCPv3.2 reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Precipitation:
+      varname: sat_gauge_precip
+      varunit: mm day-1
+GRAiCE:
+  description: GRAiCE reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Terrestrial_Water_Storage_Change:
+      varname: twsc
+      varunit: cm
+GRFR:
+  description: GRFR reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Runoff:
+      varname: ro
+      varunit: mm day-1
+GloFlux:
+  description: GloFlux reference dataset (LowRes)
+  category: Carbon
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Gross_Primary_Productivity:
+      varname: gpp
+      varunit: gC m-2 day-1
+    Net_Ecosystem_Exchange:
+      varname: nee
+      varunit: gC m-2 day-1
+    Ecosystem_Respiration:
+      varname: reco
+      varunit: gC m-2 day-1
+HOMTS:
+  description: HOMTS reference dataset (LowRes)
+  category: Meteorology
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Surface_Soil_Temperature:
+      varname: TS
+      varunit: degC
+LGS_Reco:
+  description: LGS_Reco reference dataset (LowRes)
+  category: Carbon
+  tim_res: Day
+  data_groupby: Year
+  variables:
+    Ecosystem_Respiration:
+      varname: Reco
+      varunit: gC m-2 day-1
+Linetal2023:
+  description: Linetal2023 reference dataset (LowRes)
+  category: Carbon
+  tim_res: 8Day
+  data_groupby: Year
+  variables:
+    Leaf_Area_Index:
+      varname: lai
+      varunit: m2 m-2
+MCD43A3:
+  description: MCD43A3 reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Urban_Albedo:
+      varname: Albedo_wsa
+      varunit: '1'
+MODIS_LST:
+  description: MODIS_LST reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Urban_Surface_Temperature:
+      varname: LST_D
+      varunit: degC
+MODIS_MOD10CM:
+  description: MODIS_MOD10CM reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Snow_Cover_Extent:
+      varname: Snow_Cover_Monthly_CMG
+      varunit: percent
+SMAPL3:
+  description: SMAPL3 reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_0_5
+      varunit: m3 m-3
+SMAP_L4:
+  description: SMAP_L4 reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Snow_Depth:
+      varname: snow_depth
+      varunit: m
+TEMP_Zhang_etal_2022:
+  description: TEMP_Zhang_etal_2022 reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Urban_Air_Temperature_Max:
+      varname: TMAX
+      varunit: K
+    Urban_Air_Temperature_Min:
+      varname: TMIN
+      varunit: K
+TRIMS:
+  description: TRIMS reference dataset (LowRes)
+  category: Urban
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Urban_Surface_Temperature:
+      varname: LST_N
+      varunit: K
+UpCH4:
+  description: UpCH4 reference dataset (LowRes)
+  category: Carbon
+  tim_res: Month
+  data_groupby: Year
+  variables:
+    Wetland_Methane_Emission:
+      varname: mean_ch4
+      varunit: gC m-2 day-1
+globsnow_v3:
+  description: globsnow_v3 reference dataset (LowRes)
+  category: Water
+  tim_res: Month
+  data_groupby: Single
+  variables:
+    Snow_Water_Equivalent:
+      varname: swe
+      varunit: mm
+CAMELSH_Hourly:
+  description: CAMELS-H hourly streamflow (China)
+  category: Water
+  tim_res: Hour
+  data_groupby: single
+  station_matching:
+    area_var: drainage_area
+    dataset_file: CAMELSH_hourly.nc
+    discharge_var: streamflow
+    lat_var: lat
+    lon_var: lon
+    method: cama_allocation
+    station_id_var: station
+    time_var: time
+  variables:
+    Streamflow:
+      varname: streamflow
+      varunit: m3 s-1
+ResOpsUS:
+  description: ResOpsUS reference dataset (Station)
+  category: Urban
+  tim_res: Day
+  data_groupby: single
+  variables:
+    Dam_Inflow:
+      varname: inflow
+      varunit: m3 s-1
+    Dam_Outflow:
+      varname: outflow
+      varunit: m3 s-1
+    Dam_Water_Storage:
+      varname: storage
+      varunit: million cubic meters
+    Dam_Water_Elevation:
+      varname: elevation
+      varunit: m

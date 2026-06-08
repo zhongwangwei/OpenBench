@@ -11,11 +11,15 @@ Date: July 2025
 """
 
 import hashlib
+import hmac
 import json
 import logging
+import os
 import pickle
+import secrets
 import threading
 import time
+import uuid
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -44,7 +48,10 @@ except ImportError:
 
 try:
     from openbench.util.exceptions import CacheError, error_handler
-    from openbench.util.logging_system import get_logging_manager, performance_logged
+    from openbench.util.logging_system import (  # noqa: F401  feature detection
+        get_logging_manager,
+        performance_logged,
+    )
 
     _HAS_DEPENDENCIES = True
 except ImportError:
@@ -84,17 +91,18 @@ class CacheKey:
         elif isinstance(obj, (dict, list, tuple)):
             content = json.dumps(obj, sort_keys=True, default=str)
         elif _HAS_DATA_LIBS and isinstance(obj, (xr.Dataset, xr.DataArray)):
-            # For xarray objects, use coordinates and shape
-            content = f"{obj.dims}_{obj.shape}_{list(obj.coords.keys())}"
+            content = CacheKey._fingerprint_xarray(obj)
         elif _HAS_DATA_LIBS and isinstance(obj, pd.DataFrame):
-            # For pandas DataFrame, use shape and columns
-            content = f"{obj.shape}_{list(obj.columns)}"
+            content = CacheKey._fingerprint_dataframe(obj)
         else:
             content = str(obj)
 
-        # Generate hash
+        # Generate hash. Use full SHA-256 (64 hex chars) — the prior 16-char
+        # truncation combined with shape-only xarray fingerprints caused
+        # collisions across datasets with identical structure but different
+        # values (e.g., ref vs sim with same grid).
         hash_obj = hashlib.sha256(content.encode())
-        key = hash_obj.hexdigest()[:16]  # Use first 16 chars
+        key = hash_obj.hexdigest()
 
         if prefix:
             key = f"{prefix}_{key}"
@@ -108,6 +116,99 @@ class CacheKey:
         args_key = CacheKey.generate(args)
         kwargs_key = CacheKey.generate(kwargs)
         return f"{func_name}_{args_key}_{kwargs_key}"
+
+    @staticmethod
+    def _fingerprint_xarray(obj) -> str:
+        """Build a content fingerprint for xr.Dataset / xr.DataArray.
+
+        Uses dims, shape, dtypes, variable names, and coord-value hashes —
+        never materialises data variable values (which may be lazy/huge).
+        Coordinate arrays are always small enough to read.
+        """
+        parts = []
+        # Dims as ordered tuple of (name, size)
+        if isinstance(obj, xr.Dataset):
+            dim_pairs = sorted(dict(obj.sizes).items())
+        else:
+            dim_pairs = list(zip(obj.dims, obj.shape))
+        parts.append(f"dims={dim_pairs}")
+
+        # Coordinates: name + dtype + size + first/last/hash-of-edges
+        for cname in sorted(obj.coords.keys()):
+            try:
+                cv = obj.coords[cname].values
+                if cv.size == 0:
+                    parts.append(f"c:{cname}=empty")
+                    continue
+                # Hash all coord values — coordinates are small; avoids
+                # collisions between e.g. 2000-2010 vs 2010-2020 monthly grids.
+                cv_bytes = np.ascontiguousarray(cv).tobytes()
+                cv_hash = hashlib.sha256(cv_bytes).hexdigest()[:16]
+                parts.append(f"c:{cname}={cv.dtype}|n={cv.size}|h={cv_hash}")
+            except Exception:
+                parts.append(f"c:{cname}=unhashable")
+
+        # Variable structure (names + dtypes + shapes), no data read
+        if isinstance(obj, xr.Dataset):
+            for vn in sorted(obj.data_vars.keys()):
+                v = obj.data_vars[vn]
+                parts.append(f"v:{vn}|{v.dtype}|{v.shape}")
+        else:
+            parts.append(f"v:{obj.name}|{obj.dtype}|{obj.shape}")
+
+        # Top-level attrs (often carry units / source) — keep deterministic
+        if obj.attrs:
+            parts.append(f"attrs={json.dumps(obj.attrs, sort_keys=True, default=str)}")
+
+        return "|".join(parts)
+
+    @staticmethod
+    def _fingerprint_xarray_content(obj) -> str:
+        """Build a content fingerprint for xr.Dataset / xr.DataArray.
+
+        This is intentionally stronger than the structural fingerprint used by
+        generic function-call caching. `DataCache.cache_dataset()` is explicitly
+        persisting the dataset object, so including data bytes in the key avoids
+        same-name/same-shape datasets returning stale content.
+        """
+        parts = [CacheKey._fingerprint_xarray(obj)]
+        variables = obj.data_vars.items() if isinstance(obj, xr.Dataset) else [(obj.name or "data", obj)]
+        for name, var in variables:
+            try:
+                values = np.ascontiguousarray(var.values)
+                parts.append(f"data:{name}={hashlib.sha256(values.tobytes()).hexdigest()}")
+            except Exception as exc:
+                parts.append(f"data:{name}=unhashable:{type(exc).__name__}")
+        return "|".join(parts)
+
+    @staticmethod
+    def _fingerprint_dataframe(obj) -> str:
+        """Build a content fingerprint for pd.DataFrame.
+
+        Hashes column names+dtypes, shape, and the index values. Does not
+        hash full data (potentially large) but does include a digest of the
+        first and last rows so that two frames with the same schema but
+        different content do not collide.
+        """
+        parts = [
+            f"shape={obj.shape}",
+            f"cols={[(c, str(obj[c].dtype)) for c in obj.columns]}",
+        ]
+        try:
+            idx_vals = np.ascontiguousarray(obj.index.values).tobytes()
+            parts.append(f"idx_h={hashlib.sha256(idx_vals).hexdigest()[:16]}")
+        except Exception:
+            parts.append(f"idx_n={len(obj.index)}")
+        # Sample first and last row to break ties between same-schema frames
+        if len(obj) > 0:
+            try:
+                head_bytes = obj.head(1).to_csv(index=False).encode()
+                tail_bytes = obj.tail(1).to_csv(index=False).encode()
+                parts.append(f"head_h={hashlib.sha256(head_bytes).hexdigest()[:16]}")
+                parts.append(f"tail_h={hashlib.sha256(tail_bytes).hexdigest()[:16]}")
+            except Exception:
+                pass
+        return "|".join(parts)
 
 
 class CacheStats:
@@ -233,8 +334,16 @@ class MemoryCache:
                 self.stats.record_miss()
                 return None
 
-            # Check expiry
+            # Check expiry. Decrement _current_size BEFORE removing the
+            # entry; the previous code dropped sizes[key] but never
+            # subtracted from _current_size, so the running total drifted
+            # upward over the lifetime of the process and eventually
+            # blocked all set() calls because the apparent budget was
+            # exhausted while the actual cache was empty.
             if self._is_expired(key):
+                self._current_size -= self.sizes.get(key, 0)
+                if self._current_size < 0:
+                    self._current_size = 0
                 del self.cache[key]
                 del self.access_times[key]
                 del self.sizes[key]
@@ -252,16 +361,22 @@ class MemoryCache:
         with self._lock:
             # Estimate size
             size = self._estimate_size(value)
+            old_size = self.sizes.get(key, 0)
+
+            if size > self.max_size:
+                logging.warning("Cache item %s exceeds memory cache size limit; not caching", key)
+                return False
 
             # Check if we need to evict
-            if self._current_size + size > self.max_size:
+            if self._current_size - old_size + size > self.max_size:
                 self._evict_lru(size)
+                old_size = self.sizes.get(key, 0)
 
             # Store value
             self.cache[key] = value
             self.access_times[key] = time.time()
             self.sizes[key] = size
-            self._current_size += size
+            self._current_size = max(0, self._current_size - old_size) + size
 
             self.stats.update_size(self._current_size)
             return True
@@ -287,6 +402,12 @@ class MemoryCache:
             }
 
 
+# Magic header tagging cache files written by this version of the format.
+# Bumping this string invalidates older entries automatically.
+_PICKLE_MAGIC = b"OBPKL\x01"
+_HMAC_LEN = 32  # sha256
+
+
 class FileSystemCache:
     """File system based cache."""
 
@@ -301,10 +422,22 @@ class FileSystemCache:
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Restrict cache directory to owner-only on POSIX. Defense in depth
+        # against another local user dropping a malicious .pkl into the
+        # cache. Best-effort: chmod can fail on some shared filesystems.
+        try:
+            self.cache_dir.chmod(0o700)
+        except OSError:
+            pass
         self.max_size = max_size_mb * 1024 * 1024
         self.ttl = ttl_seconds
         self.stats = CacheStats()
         self._lock = threading.RLock()
+        # Per-user HMAC key. Required for the manual pickle fallback so that
+        # an attacker who can write into cache_dir cannot trigger arbitrary
+        # code execution via pickle.load() of a poisoned file. Stored under
+        # the cache root with mode 0600.
+        self._hmac_key = self._load_or_create_hmac_key()
 
         # Initialize disk cache if available
         if _HAS_DISKCACHE:
@@ -314,6 +447,35 @@ class FileSystemCache:
         else:
             self.disk_cache = None
 
+    def _load_or_create_hmac_key(self) -> bytes:
+        """Load the cache HMAC key, creating it on first use."""
+        key_path = self.cache_dir / ".cache_hmac_key"
+        try:
+            if key_path.exists():
+                data = key_path.read_bytes()
+                if len(data) == 32:
+                    return data
+                logging.warning(
+                    "cache HMAC key at %s is the wrong length (%d); regenerating",
+                    key_path,
+                    len(data),
+                )
+            key = secrets.token_bytes(32)
+            tmp = key_path.with_name(key_path.name + ".tmp")
+            tmp.write_bytes(key)
+            try:
+                tmp.chmod(0o600)
+            except OSError:
+                pass
+            os.replace(tmp, key_path)
+            return key
+        except OSError as exc:
+            # If we can't persist a key (read-only fs), use an in-memory one.
+            # Cache entries written this session won't be reusable later, but
+            # we still get the integrity guarantee within the session.
+            logging.warning("cache HMAC key unavailable on disk (%s); using ephemeral key", exc)
+            return secrets.token_bytes(32)
+
     def _get_file_path(self, key: str) -> Path:
         """Get file path for cache key."""
         return self.cache_dir / f"{key}.pkl"
@@ -322,12 +484,11 @@ class FileSystemCache:
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache."""
         if self.disk_cache:
-            value = self.disk_cache.get(key)
-            if value is not None:
+            if key in self.disk_cache:
                 self.stats.record_hit()
-            else:
-                self.stats.record_miss()
-            return value
+                return self.disk_cache.get(key)
+            self.stats.record_miss()
+            return None
 
         # Fallback to manual file handling
         file_path = self._get_file_path(key)
@@ -337,7 +498,7 @@ class FileSystemCache:
             return None
 
         # Check expiry
-        if self.ttl:
+        if self.ttl is not None:
             age = time.time() - file_path.stat().st_mtime
             if age > self.ttl:
                 file_path.unlink()
@@ -346,7 +507,30 @@ class FileSystemCache:
 
         try:
             with open(file_path, "rb") as f:
-                value = pickle.load(f)
+                blob = f.read()
+            # Strict verification: header + HMAC must match before any
+            # pickle.loads() is invoked. A poisoned file dropped by another
+            # process cannot pass HMAC verification without our per-user
+            # key, so it is rejected before deserialization.
+            magic_len = len(_PICKLE_MAGIC)
+            if len(blob) < magic_len + _HMAC_LEN or blob[:magic_len] != _PICKLE_MAGIC:
+                logging.warning(
+                    "Cache entry %s missing magic header; treating as miss (stale or untrusted file).",
+                    file_path,
+                )
+                self.stats.record_miss()
+                return None
+            sig = blob[magic_len : magic_len + _HMAC_LEN]
+            payload = blob[magic_len + _HMAC_LEN :]
+            expected = hmac.new(self._hmac_key, payload, hashlib.sha256).digest()
+            if not hmac.compare_digest(sig, expected):
+                logging.warning(
+                    "Cache entry %s failed HMAC verification; rejecting.",
+                    file_path,
+                )
+                self.stats.record_miss()
+                return None
+            value = pickle.loads(payload)
             self.stats.record_hit()
             return value
         except Exception as e:
@@ -361,16 +545,40 @@ class FileSystemCache:
             self.disk_cache.set(key, value, expire=self.ttl)
             return True
 
-        # Fallback to manual file handling
+        # Fallback to manual file handling. Write to a unique temp path
+        # in the same directory and atomically rename — without this, two
+        # processes computing the same cache miss would interleave bytes
+        # into the same file and produce a corrupt pickle that every
+        # subsequent reader silently treats as a miss.
         file_path = self._get_file_path(key)
+        tmp_path = file_path.with_name(f".{file_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
 
         try:
-            with open(file_path, "wb") as f:
-                pickle.dump(value, f, protocol=pickle.HIGHEST_PROTOCOL)
+            payload = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+            sig = hmac.new(self._hmac_key, payload, hashlib.sha256).digest()
+            with open(tmp_path, "wb") as f:
+                f.write(_PICKLE_MAGIC)
+                f.write(sig)
+                f.write(payload)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass  # fsync not supported on all filesystems
+            try:
+                os.chmod(tmp_path, 0o600)
+            except OSError:
+                pass
+            os.replace(tmp_path, file_path)
             return True
         except Exception as e:
             logging.error(f"Cache write error: {e}")
             self.stats.record_error()
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
             return False
 
     def clear(self):
@@ -477,7 +685,7 @@ class CacheManager:
         if level in ["memory", "both"] or (level is None and self.use_memory):
             success &= self.memory_cache.set(key, value)
 
-        if level in ["disk", "both"] or (level is None and self.use_disk and not self.memory_first):
+        if level in ["disk", "both"] or (level is None and self.use_disk):
             success &= self.disk_cache.set(key, value)
 
         return success
@@ -584,10 +792,15 @@ class DataCache:
             Cache key for retrieval
         """
         if not _HAS_DATA_LIBS:
-            raise ImportError("xarray required for dataset caching")
+            raise CacheError("xarray required for dataset caching")
 
-        # Generate key
-        key = CacheKey.generate(name, prefix="dataset")
+        # Generate key from both the caller's logical name and dataset content.
+        # Name-only keys collide for different slices/versions stored under the
+        # same label and can return stale scientific data.
+        key = CacheKey.generate(
+            {"name": name, "dataset": CacheKey._fingerprint_xarray_content(dataset)},
+            prefix="dataset",
+        )
 
         # Store dataset and metadata
         cache_data = {

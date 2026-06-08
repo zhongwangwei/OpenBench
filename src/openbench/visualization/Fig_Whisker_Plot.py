@@ -1,20 +1,26 @@
 import logging
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from ._sampling import sample_distribution_series
+from openbench.visualization._figure_io import save_figure
+from openbench.visualization._filenames import join_filename_components
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import rcParams
+from matplotlib.artist import setp
 from matplotlib.lines import Line2D
 
 
+@with_isolated_rc
 def make_scenarios_comparison_Whisker_Plot(
     basedir, evaluation_item, ref_source, sim_sources, varname, datasets_filtered, option
 ):
+    option = option.copy()
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "xtick.labelsize": option["xtick"],
         "xtick.direction": "in",
@@ -57,6 +63,8 @@ def make_scenarios_comparison_Whisker_Plot(
         if "color" in key:
             option[key] = colors(value)
 
+    datasets_filtered = sample_distribution_series(datasets_filtered, option)
+
     boxprops = dict(linewidth=option["boxpropslinewidth"])
     if option["patch_artist"]:
         boxprops = dict(linewidth=option["boxpropslinewidth"], edgecolor=option["boxpropsedgecolor"])
@@ -67,7 +75,7 @@ def make_scenarios_comparison_Whisker_Plot(
                 datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
 
     # Create the whisker plot
-    bp = plt.boxplot(
+    bp = ax.boxplot(
         datasets_filtered,
         labels=[f"{i}" for i in sim_sources],
         vert=option["vert"],
@@ -105,7 +113,8 @@ def make_scenarios_comparison_Whisker_Plot(
     )
 
     for box, color in zip(bp["boxes"], facecolors[: len(sim_sources)]):
-        box.set_facecolor(color)
+        if hasattr(box, "set_facecolor"):
+            box.set_facecolor(color)
 
     # Create the whisker plot
     def remove_outliers(data_list):
@@ -137,14 +146,15 @@ def make_scenarios_comparison_Whisker_Plot(
         elif "Score" in varname:
             max_value = 1
             min_value = 0
-    except:
+    except Exception:
         min_value, max_value = None, None
-        logging.error(
-            f"Error: {evaluation_item} {ref_source} {varname} Kernel Density Estimate failed!"
-        )  # ValueError: array must not contain infs or NaNs
+        logging.warning(
+            f"Could not estimate whisker axis bounds for {evaluation_item} {ref_source} {varname}; using Matplotlib autoscaling.",
+            exc_info=True,
+        )
 
     if option["vert"]:
-        plt.xticks(rotation=option["x_rotation"], ha=option["ha"])
+        setp(ax.get_xticklabels(), rotation=option["x_rotation"], ha=option["ha"])
 
         ax.xaxis.set_ticks_position("both")
         ax.yaxis.set_ticks_position("both")
@@ -152,16 +162,21 @@ def make_scenarios_comparison_Whisker_Plot(
         ax.tick_params(axis="y", color="k", width=1.5, length=4, which="major")
 
         # Add labels and title
-        plt.xlabel(option["xticklabel"], fontsize=option["xtick"] + 1)
+        ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1)
         ylabel = option["yticklabel"]
         if not option["yticklabel"] or len(option["yticklabel"]) == 0:
             ylabel = f"{varname}"
-        plt.ylabel(ylabel.replace("_", " "), fontsize=option["ytick"] + 1, weight="bold")
+        ax.set_ylabel(ylabel.replace("_", " "), fontsize=option["ytick"] + 1, weight="bold")
 
         if option["grid"]:
             ax.yaxis.grid(True, linestyle=option["grid_style"], alpha=0.7, linewidth=option["grid_linewidth"])
 
         if option["limit_on"]:
+            if option["value_min"] is None or option["value_max"] is None:
+                raise ValueError(
+                    "limit_on=True requires both value_min and value_max; got "
+                    f"value_min={option['value_min']!r}, value_max={option['value_max']!r}"
+                )
             if option["value_min"] > option["value_max"]:
                 raise ValueError("Invalid limit settings: value_min must be less than or equal to value_max")
             else:
@@ -170,18 +185,23 @@ def make_scenarios_comparison_Whisker_Plot(
         else:
             ax.set(ylim=(min_value, max_value))
     else:
-        plt.yticks(rotation=option["y_rotation"], ha=option["ha"])
+        setp(ax.get_yticklabels(), rotation=option["y_rotation"], ha=option["ha"])
 
         xlabel = option["xticklabel"]
         if not option["xticklabel"] or len(option["xticklabel"]) == 0:
             xlabel = f"{varname}"
-        plt.xlabel(xlabel, fontsize=option["xtick"] + 1)
-        plt.ylabel(option["yticklabel"], fontsize=option["ytick"] + 1)
+        ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
+        ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1)
 
         if option["grid"]:
             ax.xaxis.grid(True, linestyle=option["grid_style"], alpha=0.7, linewidth=option["grid_linewidth"])
 
         if option["limit_on"]:
+            if option["value_min"] is None or option["value_max"] is None:
+                raise ValueError(
+                    "limit_on=True requires both value_min and value_max; got "
+                    f"value_min={option['value_min']!r}, value_max={option['value_max']!r}"
+                )
             if option["value_min"] > option["value_max"]:
                 raise ValueError("Invalid limit settings: value_min must be less than or equal to value_max")
             else:
@@ -193,13 +213,13 @@ def make_scenarios_comparison_Whisker_Plot(
     title = option["title"]
     if not option["title"] or len(option["title"]) == 0:
         title = f"{evaluation_item.replace('_', ' ')}"
-    plt.title(title, fontsize=option["title_fontsize"], weight="bold")
+    ax.set_title(title, fontsize=option["title_fontsize"], weight="bold")
 
     legend_elements = [
         Line2D([0], [0], linestyle="-", color=option["medianpropscolor"], label="Median"),
         Line2D([0], [0], linestyle="--", color=option["meanpropscolor"], label="Mean"),
     ]
-    plt.legend(
+    ax.legend(
         handles=legend_elements,
         loc="best",
         frameon=False,
@@ -210,8 +230,8 @@ def make_scenarios_comparison_Whisker_Plot(
         prop={"size": 12},
     )
 
-    output_file_path = f"{basedir}/Whisker_Plot_{evaluation_item}_{ref_source}_{varname}.{option['saving_format']}"
-    plt.savefig(output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
-    plt.close()  # Close the figure to free up memory
+    output_file_path = f"{basedir}/{join_filename_components('Whisker_Plot', evaluation_item, ref_source, varname)}.{option['saving_format']}"
+    save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
+    plt.close(fig)  # Close the figure to free up memory
 
     return

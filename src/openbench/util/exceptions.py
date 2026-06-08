@@ -127,6 +127,32 @@ class ResourceError(OpenBenchException):
         super().__init__(message, error_code="RESOURCE", **kwargs)
 
 
+class CacheError(OpenBenchException):
+    """Exception for cache read/write and cache-manager errors."""
+
+    def __init__(self, message: str, **kwargs):
+        super().__init__(message, error_code="CACHE", **kwargs)
+
+
+class ParallelProcessingError(OpenBenchException):
+    """Exception for parallel scheduling or execution errors."""
+
+    def __init__(self, message: str, **kwargs):
+        super().__init__(message, error_code="PARALLEL", **kwargs)
+
+
+class OutputError(OpenBenchException):
+    """Exception for output write / format errors.
+
+    util/output.py imports this name; without the class defined here the
+    import would silently fall back to a stub (OutputError = Exception)
+    and disable the rest of the output module's type checking.
+    """
+
+    def __init__(self, message: str, **kwargs):
+        super().__init__(message, error_code="OUTPUT", **kwargs)
+
+
 def error_handler(
     reraise: bool = True, log_level: int = logging.ERROR, return_value: Any = None, error_types: Optional[tuple] = None
 ) -> Callable:

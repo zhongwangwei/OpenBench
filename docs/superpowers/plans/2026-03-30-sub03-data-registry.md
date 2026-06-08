@@ -228,12 +228,12 @@ variables:
     prefix: "E_"
     suffix: "_GLEAM_v4.2a"
     sub_dir: "Evapotranspiration/GLEAM_v4.2a"
-  Canopy_Interception:
+  Canopy_Evaporation:
     varname: Ei
     varunit: "mm day-1"
     prefix: "Ei_"
     suffix: "_GLEAM_v4.2a"
-    sub_dir: "Canopy_Interception/GLEAM_v4.2a"
+    sub_dir: "Canopy_Evaporation/GLEAM_v4.2a"
   Canopy_Transpiration:
     varname: Et
     varunit: "mm day-1"
@@ -717,7 +717,7 @@ def _guess_category(path: Path) -> str:
         "Evapotranspiration", "Runoff", "Total_Runoff", "Streamflow",
         "Soil_Moisture", "Surface_Soil_Moisture", "Root_Zone_Soil_Moisture",
         "Snow_Depth", "Snow_Water_Equivalent", "Precipitation",
-        "Canopy_Interception", "Canopy_Transpiration", "Bare_Soil_Evaporation",
+        "Canopy_Evaporation", "Canopy_Transpiration", "Bare_Soil_Evaporation",
         "Terrestrial_Water_Storage_Change", "Water_Table_Depth",
         "Groundwater_Recharge_Rate", "Inundation_Fraction", "Inundation_Area",
         "Depth_Of_Surface_Water",

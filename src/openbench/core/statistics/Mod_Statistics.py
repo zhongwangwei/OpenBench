@@ -3,8 +3,6 @@ import logging
 import os
 import re
 import shutil
-import time
-import warnings
 from typing import Any, Dict, List
 
 import numpy as np
@@ -12,13 +10,10 @@ import xarray as xr
 from joblib import Parallel, delayed
 
 from openbench.util.converttype import Convert_Type
+from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 from openbench.core.statistics import statistics_calculate
 from openbench.data.processing import BaseDatasetProcessing
-
-warnings.simplefilter(action="ignore", category=RuntimeWarning)
-warnings.simplefilter(action="ignore", category=FutureWarning)
-warnings.simplefilter(action="ignore", category=UserWarning)
 
 
 class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
@@ -166,8 +161,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
 
             if remapped is None:
                 raise RuntimeError(
-                    f"All remapping methods failed for dataset {i}. "
-                    f"Tried: {[m.__name__ for m in remapping_methods]}"
+                    f"All remapping methods failed for dataset {i}. Tried: {[m.__name__ for m in remapping_methods]}"
                 )
 
             # Skip resampling for climatology mode
@@ -185,7 +179,11 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
 
                 data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
-            except:
+            except Exception as exc:
+                # Catch Exception (not bare `except:`) so KeyboardInterrupt and
+                # SystemExit can still propagate; log why xesmf failed so the
+                # silent scipy fallback is at least diagnosable.
+                logging.warning("xesmf regrid failed (%s); falling back to scipy.", exc)
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_scipy
 
                 data = convert_to_wgs84_scipy(data, self.compare_grid_res)
@@ -243,28 +241,43 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
-        import subprocess
         import tempfile
+        import subprocess
 
-        with (
-            tempfile.NamedTemporaryFile(suffix=".nc") as temp_input,
-            tempfile.NamedTemporaryFile(suffix=".nc") as temp_output,
-            tempfile.NamedTemporaryFile(suffix=".txt") as temp_grid,
-        ):
-            data.to_netcdf(temp_input.name)
-            self.create_target_grid_file(temp_grid.name, new_grid)
+        temp_input_name = None
+        temp_output_name = None
+        temp_grid_name = None
+        try:
+            temp_input = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
+            temp_input_name = temp_input.name
+            temp_input.close()
+
+            temp_output = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
+            temp_output_name = temp_output.name
+            temp_output.close()
+
+            temp_grid = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
+            temp_grid_name = temp_grid.name
+            temp_grid.close()
+
+            _write_netcdf_atomic(data, temp_input_name, compression=False)
+            self.create_target_grid_file(temp_grid_name, new_grid)
 
             # List form (shell=False default) avoids shell injection on paths
-            cmd = ["cdo", "-s", f"remapcon,{temp_grid.name}", temp_input.name, temp_output.name]
+            cmd = ["cdo", "-s", f"remapcon,{temp_grid_name}", temp_input_name, temp_output_name]
             subprocess.run(cmd, check=True)
-            # Eagerly load and close the dataset BEFORE the surrounding `with`
-            # exits and deletes temp_output. Previously returned a lazy
-            # DataArray pointing at a deleted file — silent failure on later
-            # access. .load() materializes data into memory; .close()
-            # releases the file handle.
-            with xr.open_dataset(temp_output.name) as ds:
+            # Eagerly load and close the dataset BEFORE deleting temp_output.
+            # Previously returned a lazy DataArray pointing at a deleted file.
+            with xr.open_dataset(temp_output_name) as ds:
                 ds = ds.load()
             return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
+        finally:
+            for file_name in (temp_input_name, temp_output_name, temp_grid_name):
+                if file_name and os.path.exists(file_name):
+                    try:
+                        os.unlink(file_name)
+                    except OSError:
+                        logging.debug("Could not delete temporary file %s", file_name)
 
     def create_target_grid_file(self, filename: str, new_grid: xr.Dataset) -> None:
         min_lon = self.main_nml["general"]["min_lon"]
@@ -302,35 +315,33 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             result["lon"].attrs["long_name"] = "longitude"
             result["lon"].attrs["units"] = "degrees_east"
             result["lon"].attrs["axis"] = "X"
-            result.to_netcdf(output_file)
+            _write_netcdf_atomic(result, output_file)
         else:
             # If the result is not xarray object, we might need to handle it differently
             # For now, let's just print it
             logging.info(f"Result of {method_name}: {result}")
         return output_file
 
-    from openbench.data.coordinates import COORDINATE_MAP
-    coordinate_map = dict(COORDINATE_MAP)
-    coordinate_map.update({
-        "elevation": "elev", "height": "elev",
-        "z": "elev", "Z": "elev", "h": "elev", "H": "elev",
-        "ELEV": "elev", "HEIGHT": "elev",
-    })
+    from openbench.data.coordinates import COORDINATE_MAP_WITH_VERTICAL
+
+    coordinate_map = dict(COORDINATE_MAP_WITH_VERTICAL)
     freq_map = {
         "month": "ME",
         "mon": "ME",
         "monthly": "ME",
         "day": "D",
         "daily": "D",
-        "hour": "H",
-        "Hour": "H",
-        "hr": "H",
-        "Hr": "H",
-        "h": "H",
-        "hourly": "H",
-        "year": "Y",
-        "yr": "Y",
-        "yearly": "Y",
+        "hour": "h",
+        "Hour": "h",
+        "hr": "h",
+        "Hr": "h",
+        "h": "h",
+        "hourly": "h",
+        "y": "YE",
+        "ye": "YE",
+        "year": "YE",
+        "yr": "YE",
+        "yearly": "YE",
         "week": "W",
         "wk": "W",
         "weekly": "W",
@@ -356,7 +367,7 @@ class StatisticsProcessing(BasicProcessing):
 
         # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
-        self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
+        self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "Month").lower()
 
         # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
@@ -536,8 +547,10 @@ class StatisticsProcessing(BasicProcessing):
             data_sources = data_source_config  # If it's already a list, no need to split
         for source in data_sources:
             sources = [source.strip()]
-            output_file = self.run_analysis(source.strip(), sources, statistic_method)
-            # make_Z_Score(output_file, statistic_method, [source], self.main_nml['general'], statistic_nml, option)
+            # `run_analysis` writes the Z-score NetCDF; no plot is produced
+            # for this method (the previous `make_Z_Score` visualisation
+            # was removed as dead code in Fig_Z_Score cleanup).
+            self.run_analysis(source.strip(), sources, statistic_method)
 
     def scenarios_Three_Cornered_Hat_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -559,8 +572,12 @@ class StatisticsProcessing(BasicProcessing):
         for source in data_sources:
             nX = int(statistic_nml[f"{source}_nX"])
             if nX < 3:
-                logging.error("Error: Three Cornered Hat method must be at least 3 dataset.")
-                exit(1)
+                # Raise rather than exit(1): exit() terminates the entire
+                # interpreter and bypasses any caller-level try/except (the
+                # rest of the codebase uses `raise ValueError` for this).
+                raise ValueError(
+                    f"Three Cornered Hat method requires at least 3 datasets; got nX={nX} for source {source!r}."
+                )
             sources = [f"{source}{i}" for i in range(1, nX + 1)]
             output_file = self.run_analysis(source.strip(), sources, statistic_method)
             from openbench.visualization.Fig_Three_Cornered_Hat import make_Three_Cornered_Hat
@@ -625,8 +642,19 @@ class StatisticsProcessing(BasicProcessing):
             make_Functional_Response(output_file, statistic_method, [source], self.main_nml["general"], option)
 
     def scenarios_False_Discovery_Rate_analysis(self, statistic_method, statistic_nml, option):
-        logging.warning("False_Discovery_Rate analysis is not yet implemented, skipping")
-        return
+        self.setup_output_directories(statistic_method)
+        data_sources_key = f"{statistic_method}_data_source"
+        if data_sources_key not in self.general_config:
+            logging.warning(f"Warning: No data sources found for '{statistic_method}' in stats.nml [general] section.")
+            return
+
+        data_source_config = self.general_config.get(data_sources_key, "")
+        data_sources = data_source_config.split(",") if isinstance(data_source_config, str) else data_source_config
+        for source in data_sources:
+            sources = [f"{source.strip()}1", f"{source.strip()}2"]
+            # FDR currently produces a NetCDF statistical output only; no
+            # dedicated figure module exists for this method.
+            self.run_analysis(source.strip(), sources, statistic_method)
 
     def scenarios_ANOVA_analysis(self, statistic_method, statistic_nml, option):
         self.setup_output_directories(statistic_method)
@@ -661,8 +689,8 @@ class StatisticsProcessing(BasicProcessing):
 
             if statistic_method == "Partial_Least_Squares_Regression":
                 try:
-                    Y_vars = self.process_data_source(sources[0].strip(), self.stats_nml[statistic_method])
-                except:
+                    self.process_data_source(sources[0].strip(), self.stats_nml[statistic_method])
+                except Exception:
                     logging.error(
                         "No dependent variable (Y) found. Ensure at least one variable has '_Y_' in its name."
                     )
@@ -682,34 +710,3 @@ class StatisticsProcessing(BasicProcessing):
             return output_file
         else:
             logging.warning(f"Warning: Analysis method '{statistic_method}' not implemented.")
-
-
-def wait_for_file(file_path, max_wait_time=30, check_interval=1):
-    """
-    Wait for a file to exist and be readable.
-
-    Args:
-        file_path: Path to the file
-        max_wait_time: Maximum time to wait in seconds
-        check_interval: Time between checks in seconds
-
-    Returns:
-        bool: True if file exists and is readable, False if timeout
-    """
-    start_time = time.time()
-    while time.time() - start_time < max_wait_time:
-        if os.path.exists(file_path):
-            try:
-                # Try to get file size to ensure it's complete
-                size = os.path.getsize(file_path)
-                if size > 0:
-                    logging.info(f"File found and ready: {file_path} ({size} bytes)")
-                    return True
-            except (OSError, IOError):
-                pass
-
-        logging.debug(f"Waiting for file: {file_path}")
-        time.sleep(check_interval)
-
-    logging.error(f"Timeout waiting for file: {file_path}")
-    return False

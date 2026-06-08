@@ -9,16 +9,14 @@ remotely using SSHManager for file transfer and command execution.
 import os
 import re
 import shlex
-import tempfile
 import threading
-import time
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
+from collections import deque
+from typing import Dict, Any
 
 from PySide6.QtCore import QThread, Signal
 
 from openbench.remote.ssh import SSHManager, SSHConnectionError
-from openbench.gui.runner import RunnerStatus, RunnerProgress
+from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_partial_completion
 
 
 class RemoteRunner(QThread):
@@ -180,7 +178,10 @@ class RemoteRunner(QThread):
                 )
                 self.finished_signal.emit(True, "Evaluation completed successfully")
             else:
-                self._emit_progress(RunnerStatus.FAILED, self.PROGRESS_MAX, "Failed", "", "", message)
+                if _looks_like_partial_completion([message]):
+                    self._emit_progress(RunnerStatus.PARTIAL, self.PROGRESS_MAX, "Partial", "", "", message)
+                else:
+                    self._emit_progress(RunnerStatus.FAILED, self.PROGRESS_MAX, "Failed", "", "", message)
                 self.finished_signal.emit(False, message)
 
         except SSHConnectionError as e:
@@ -214,16 +215,23 @@ class RemoteRunner(QThread):
             True if successful, False otherwise
         """
         try:
-            # Create temp directory under /tmp with unique name
-            timestamp = int(time.time())
-            temp_name = f"openbench_wizard_{timestamp}"
-            self._remote_temp_dir = f"/tmp/{temp_name}"
-
-            quoted_dir = shlex.quote(self._remote_temp_dir)
-            stdout, stderr, exit_code = self._ssh_manager.execute(f"mkdir -p {quoted_dir}", timeout=30)
+            # Create a truly unique temp directory.  A second-level timestamp
+            # collides for concurrent GUI users sharing one HPC account and
+            # cleanup can then remove another run's staging directory.
+            stdout, stderr, exit_code = self._ssh_manager.execute(
+                "mktemp -d /tmp/openbench_wizard_XXXXXXXXXX",
+                timeout=30,
+            )
 
             if exit_code != 0:
                 error_msg = f"Failed to create remote temp directory: {stderr}"
+                self.log_message.emit(error_msg)
+                self.finished_signal.emit(False, error_msg)
+                return False
+
+            self._remote_temp_dir = stdout.strip()
+            if not self._remote_temp_dir:
+                error_msg = "Failed to create remote temp directory: mktemp returned an empty path"
                 self.log_message.emit(error_msg)
                 self.finished_signal.emit(False, error_msg)
                 return False
@@ -266,26 +274,51 @@ class RemoteRunner(QThread):
             self.finished_signal.emit(False, error_msg)
             return False
 
-    def _upload_related_files(self, config_dir: str):
+    def _upload_related_files(self, config_dir: str) -> None:
         """Upload related YAML/JSON files from the config directory.
 
-        Args:
-            config_dir: Local directory containing config files
+        Raises:
+            OSError: If the config directory cannot be scanned.
+            Exception: If any related file upload fails.
         """
-        try:
-            # Upload any additional .yaml/.yml/.json files in the config directory
-            for filename in os.listdir(config_dir):
-                if filename.endswith((".yaml", ".yml", ".json")):
-                    local_path = os.path.join(config_dir, filename)
-                    if os.path.isfile(local_path) and local_path != self.config_path:
-                        remote_path = f"{self._remote_temp_dir}/{filename}"
-                        try:
-                            self._ssh_manager.upload_file(local_path, remote_path)
-                            self.log_message.emit(f"Uploaded: {filename}")
-                        except Exception as e:
-                            self.log_message.emit(f"Warning: Could not upload {filename}: {e}")
-        except Exception as e:
-            self.log_message.emit(f"Warning: Could not scan config directory: {e}")
+        config_path = os.path.abspath(self.config_path)
+        related_files = []
+        for filename in sorted(os.listdir(config_dir)):
+            if filename.endswith((".yaml", ".yml", ".json")):
+                local_path = os.path.abspath(os.path.join(config_dir, filename))
+                if os.path.isfile(local_path) and local_path != config_path:
+                    related_files.append((filename, local_path))
+
+        # Surface the scope of the implicit "upload every sibling YAML/JSON"
+        # behavior — if the user is running from a shared configs/ folder
+        # with dozens of unrelated projects, this would silently upload all
+        # of them. A proper include-graph parse is a larger change; for
+        # now, warn loudly when the count looks abnormal.
+        if len(related_files) > 10:
+            self.log_message.emit(
+                f"Warning: uploading {len(related_files)} YAML/JSON files alongside "
+                f"{os.path.basename(self.config_path)} from {config_dir}. "
+                "Consider isolating the active run's config into its own directory "
+                "to avoid uploading unrelated project files."
+            )
+
+        for filename, local_path in related_files:
+            remote_path = f"{self._remote_temp_dir}/{filename}"
+            self._ssh_manager.upload_file(local_path, remote_path)
+            self.log_message.emit(f"Uploaded: {filename}")
+
+    @staticmethod
+    def _format_remote_failure(message: str, output_tail) -> str:
+        """Append recent remote output to a failure message when available."""
+        tail = [line for line in output_tail if line]
+        if not tail:
+            return message
+        return f"{message}\n\nRecent output:\n" + "\n".join(tail)
+
+    @staticmethod
+    def _format_command_context(message: str, command: str) -> str:
+        """Append the remote command to unexpected execution errors."""
+        return f"{message}\n\nCommand: {command}"
 
     def _execute_remote_openbench(self) -> tuple:
         """Execute OpenBench on the remote server.
@@ -293,83 +326,129 @@ class RemoteRunner(QThread):
         Returns:
             Tuple of (success: bool, message: str)
         """
+        import shlex
+
         python_path = self._remote_config.get("python_path", "python3")
         conda_env = self._remote_config.get("conda_env", "")
         openbench_path = self._remote_config.get("openbench_path", "")
 
-        # Build the OpenBench script path
-        openbench_script = f"{openbench_path}/openbench/openbench.py"
+        # Quote each user-supplied component so paths with spaces are
+        # respected and shell metacharacters in config values cannot
+        # inject extra commands.
+        q_python = shlex.quote(python_path)
+        q_openbench = shlex.quote(openbench_path)
+        q_config = shlex.quote(self._remote_config_path)
 
-        # Build the command with unbuffered output for real-time logging
-        # PYTHONUNBUFFERED=1 ensures output is not buffered
+        # v3 entry point is the installed openbench package; the legacy
+        # path (openbench/openbench.py) was removed during the v3.0 repo
+        # restructuring and no longer exists, so the remote process must
+        # invoke the module directly via "python -m openbench run".
+        invocation = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench run {q_config}"
+
+        # Build the command with unbuffered output for real-time logging.
+        # PYTHONUNBUFFERED=1 ensures output is not buffered.
         if conda_env:
+            q_env = shlex.quote(conda_env)
             # Derive conda base from python path (e.g., /path/to/miniconda3/bin/python -> /path/to/miniconda3)
-            # This works for paths like: .../miniconda3/bin/python or .../miniconda3/envs/myenv/bin/python
-            conda_base_match = re.search(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)", python_path)
+            conda_base_match = re.search(
+                r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)",
+                python_path,
+            )
             if conda_base_match:
-                conda_base = conda_base_match.group(1)
-                cmd = f"source {conda_base}/etc/profile.d/conda.sh && conda activate {conda_env} && cd {openbench_path} && PYTHONUNBUFFERED=1 {python_path} -u {openbench_script} {self._remote_config_path}"
+                q_conda_base = shlex.quote(conda_base_match.group(1))
+                cmd = (
+                    f"source {q_conda_base}/etc/profile.d/conda.sh && "
+                    f"conda activate {q_env} && cd {q_openbench} && {invocation}"
+                )
             else:
-                # Fallback: try using bash login shell to get conda in PATH
-                cmd = f"bash -l -c 'conda activate {conda_env} && cd {openbench_path} && PYTHONUNBUFFERED=1 {python_path} -u {openbench_script} {self._remote_config_path}'"
+                # Fallback: build the inner command then wrap with shlex.quote
+                # for the outer `bash -l -c` so nested quoting is safe.
+                inner = f"conda activate {q_env} && cd {q_openbench} && {invocation}"
+                cmd = f"bash -l -c {shlex.quote(inner)}"
         else:
-            cmd = f"cd {openbench_path} && PYTHONUNBUFFERED=1 {python_path} -u {openbench_script} {self._remote_config_path}"
+            cmd = f"cd {q_openbench} && {invocation}"
 
         self.log_message.emit(f"Executing: {cmd}")
 
         # Execute and stream output
         try:
             progress = self.PROGRESS_INIT
+            output_tail = deque(maxlen=5)
+            saw_partial_completion = False
+
+            # `execute_stream` yields output lines and `return`s the exit
+            # code. We need to capture the StopIteration.value to know
+            # whether the remote process succeeded; iterating with `for`
+            # discards the return value, so drive the generator manually.
+            stream = self._ssh_manager.execute_stream(cmd)
             exit_code = 0
+            stopped_by_user = False
+            try:
+                while True:
+                    line = next(stream)
+                    if self._is_stop_requested():
+                        # Close the generator to signal we don't want
+                        # more output, then attempt remote kill.
+                        try:
+                            stream.close()
+                        except Exception as exc:
+                            self.log_message.emit(f"Warning: could not close remote output stream: {exc}")
+                        self._kill_remote_process()
+                        stopped_by_user = True
+                        break
 
-            # Use execute_stream to get real-time output
-            for line in self._ssh_manager.execute_stream(cmd):
-                # Check for stop request
-                if self._is_stop_requested():
-                    # Try to kill remote process
-                    self._kill_remote_process()
-                    return (False, "Stopped by user")
-
-                line = line.rstrip("\n\r")
-                if line:
-                    self.log_message.emit(line)
-
-                    # Parse progress from log
-                    progress, var, stage = self._parse_progress(line, progress)
-                    self._emit_progress(
-                        RunnerStatus.RUNNING, progress, f"{var} - {stage}" if var else "Processing", var, stage, line
+                    line = line.rstrip("\n\r")
+                    if line:
+                        output_tail.append(line)
+                        saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
+                        self.log_message.emit(line)
+                        progress, var, stage = self._parse_progress(line, progress)
+                        self._emit_progress(
+                            RunnerStatus.RUNNING,
+                            progress,
+                            f"{var} - {stage}" if var else "Processing",
+                            var,
+                            stage,
+                            line,
+                        )
+            except StopIteration as stop:
+                # Generator finished naturally — its return value is the
+                # remote process exit code (paramiko channel.recv_exit_status).
+                if isinstance(stop.value, int):
+                    exit_code = stop.value
+                else:
+                    exit_code = 1
+                    self.log_message.emit(
+                        "Warning: remote process did not report a numeric exit code; treating as failure."
                     )
 
-            # Get exit code from the generator (returned by execute_stream)
-            # Note: The generator's return value is the exit code
-            # We need to check if process completed successfully
-            # Since execute_stream is a generator, we can check if there was an error
-            # by examining the last line or checking for error patterns
-
-            # Verify completion by checking for error patterns in the logs
-            # A more robust check: try to get the exit status
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                "echo $?",  # Get last exit code
-                timeout=10,
-            )
-
-            # This won't work reliably since we're in a new shell context
-            # Instead, we'll re-run with exit status capture
-            # For now, assume success if no exception occurred
-            # and we received output
-
-            return (True, "Completed")
+            if stopped_by_user:
+                return (False, "Stopped by user")
+            if exit_code == 0:
+                return (True, "Completed")
+            message = self._format_remote_failure(f"Remote OpenBench exited with code {exit_code}", output_tail)
+            if saw_partial_completion and not _looks_like_partial_completion([message]):
+                message = "Evaluation completed with errors\n" + message
+            return (False, message)
 
         except SSHConnectionError as e:
-            return (False, f"SSH error: {e}")
+            return (False, self._format_command_context(f"SSH error while running remote command: {e}", cmd))
         except Exception as e:
-            return (False, f"Execution error: {e}")
+            return (False, self._format_command_context(f"Execution error while running remote command: {e}", cmd))
 
     def _kill_remote_process(self):
         """Attempt to kill the remote OpenBench process."""
         try:
-            # Try to find and kill the Python process running openbench
-            self._ssh_manager.execute("pkill -f 'openbench.py' || true", timeout=10)
+            if not self._remote_config_path:
+                self.log_message.emit("Warning: No remote config path available; skipping remote process kill")
+                return
+            # Match only this run's uploaded config path, not every OpenBench
+            # run owned by the same shared HPC account.
+            pattern = f"python.*-m openbench run .*{re.escape(self._remote_config_path)}"
+            self._ssh_manager.execute(
+                f"pkill -f -- {shlex.quote(pattern)} || true",
+                timeout=10,
+            )
             self.log_message.emit("Sent kill signal to remote process")
         except Exception as e:
             self.log_message.emit(f"Warning: Could not kill remote process: {e}")
@@ -380,127 +459,43 @@ class RemoteRunner(QThread):
         if self._remote_temp_dir and not self._config_already_remote:
             try:
                 quoted_dir = shlex.quote(self._remote_temp_dir)
-                self._ssh_manager.execute(f"rm -rf {quoted_dir}", timeout=30)
-                self.log_message.emit(f"Cleaned up remote directory: {self._remote_temp_dir}")
+                stdout, stderr, exit_code = self._ssh_manager.execute(f"rm -rf {quoted_dir}", timeout=30)
+                if exit_code == 0:
+                    self.log_message.emit(f"Cleaned up remote directory: {self._remote_temp_dir}")
+                else:
+                    detail = stderr.strip() or stdout.strip() or f"exit code {exit_code}"
+                    self.log_message.emit(
+                        f"Warning: Could not clean up remote directory {self._remote_temp_dir}: {detail}"
+                    )
             except Exception as e:
-                self.log_message.emit(f"Warning: Could not clean up remote directory: {e}")
+                self.log_message.emit(f"Warning: Could not clean up remote directory {self._remote_temp_dir}: {e}")
 
     def _parse_progress(self, line: str, current_progress: float) -> tuple:
-        """Parse progress from log line with detailed task tracking.
+        """Parse progress from log line (delegates to shared parser)."""
+        from openbench.gui.progress_parser import parse_progress_line
 
-        This method mirrors EvaluationRunner._parse_progress() for consistency.
-
-        Args:
-            line: Log line to parse
-            current_progress: Current progress value
-
-        Returns:
-            Tuple of (progress, variable, stage)
-        """
-        var = self._current_variable
-        stage = ""
-
-        line_lower = line.lower()
-
-        # Detect variable being processed
-        if "processing" in line_lower or "evaluating" in line_lower:
-            for keyword in ["Processing", "Evaluating", "processing", "evaluating"]:
-                if keyword in line:
-                    parts = line.split(keyword)
-                    if len(parts) > 1:
-                        remaining = parts[1].strip()
-                        if remaining:
-                            var_name = remaining.split()[0].strip(".:,")
-                            if var_name and len(var_name) > 2:
-                                self._current_variable = var_name
-                                var = var_name
-                        break
-
-        # Detect reference/simulation source being processed
-        if "ref_source" in line_lower or "reference" in line_lower or " ref:" in line_lower:
-            if " ref:" in line:
-                match = re.search(r"[-\s]ref:\s*(\S+)", line)
-                if match:
-                    self._current_ref = match.group(1).strip(",:")
-            else:
-                parts = line.split(":")
-                if len(parts) > 1:
-                    self._current_ref = parts[-1].strip().split()[0] if parts[-1].strip() else ""
-
-        if "sim_source" in line_lower or "simulation" in line_lower or " sim:" in line_lower:
-            if " sim:" in line:
-                match = re.search(r"[-\s]sim:\s*(\S+)", line)
-                if match:
-                    self._current_sim = match.group(1).strip(",:")
-            else:
-                parts = line.split(":")
-                if len(parts) > 1:
-                    self._current_sim = parts[-1].strip().split()[0] if parts[-1].strip() else ""
-
-        # Detect stage
-        if "evaluation" in line_lower and "item" not in line_lower:
-            stage = "Evaluation"
-        elif "comparison" in line_lower or "groupby" in line_lower:
-            stage = "Comparison"
-            if "done running" in line_lower and "comparison" in line_lower:
-                match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
-                if match:
-                    comp_name = match.group(1)
-                    if comp_name not in self._completed_comparison_tasks:
-                        self._completed_comparison_tasks.add(comp_name)
-        elif "statistic" in line_lower:
-            stage = "Statistics"
-
-        # Detect task completions
-        task_completed = False
-
-        if stage == "Evaluation" and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
-            task_key = (self._current_variable, self._current_ref, self._current_sim)
-            if task_key not in self._completed_eval_tasks and self._current_variable:
-                self._completed_eval_tasks.add(task_key)
-                task_completed = True
-
-        # Groupby task completion
-        for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-            if groupby_type in line_lower and (
-                "completed" in line_lower or "finished" in line_lower or "done" in line_lower
-            ):
-                task_key = (self._current_variable, groupby_type)
-                if task_key not in self._completed_groupby_tasks:
-                    self._completed_groupby_tasks.add(task_key)
-                    task_completed = True
-
-        if stage == "Statistics" and ("completed" in line_lower or "finished" in line_lower):
-            comp_name = self._current_variable or "comparison"
-            if comp_name not in self._completed_comparison_tasks:
-                self._completed_comparison_tasks.add(comp_name)
-                task_completed = True
-
-        # Calculate progress
-        if self._total_tasks > 0:
-            total_completed = (
-                len(self._completed_eval_tasks)
-                + len(self._completed_groupby_tasks)
-                + len(self._completed_comparison_tasks)
-            )
-            task_progress = (total_completed / max(1, self._total_tasks)) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + task_progress, self.PROGRESS_MAX)
-        elif self._num_comparisons > 0 and len(self._completed_comparison_tasks) > 0:
-            comparison_progress = (
-                len(self._completed_comparison_tasks) / max(1, self._num_comparisons)
-            ) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + comparison_progress, self.PROGRESS_MAX)
-        elif self._num_variables > 0:
-            completed_vars = len(set(t[0] for t in self._completed_eval_tasks if t[0]))
-            variable_progress = (completed_vars / max(1, self._num_variables)) * self.PROGRESS_WORK
-            current_progress = min(self.PROGRESS_INIT + variable_progress, self.PROGRESS_MAX)
-        else:
-            if task_completed or stage or "complete" in line_lower or "done" in line_lower:
-                current_progress = min(current_progress + self.PROGRESS_INCREMENT * 2, self.PROGRESS_MAX)
-            elif stage == "Comparison":
-                current_progress = min(current_progress + self.PROGRESS_INCREMENT, self.PROGRESS_MAX)
-
-        return current_progress, var, stage
+        state = {
+            "current_variable": self._current_variable,
+            "current_ref": self._current_ref,
+            "current_sim": self._current_sim,
+            "completed_eval_tasks": self._completed_eval_tasks,
+            "completed_groupby_tasks": self._completed_groupby_tasks,
+            "completed_comparison_tasks": self._completed_comparison_tasks,
+            "total_tasks": self._total_tasks,
+            "num_comparisons": self._num_comparisons,
+            "num_variables": self._num_variables,
+        }
+        constants = {
+            "PROGRESS_INIT": self.PROGRESS_INIT,
+            "PROGRESS_WORK": self.PROGRESS_WORK,
+            "PROGRESS_MAX": self.PROGRESS_MAX,
+            "PROGRESS_INCREMENT": self.PROGRESS_INCREMENT,
+        }
+        progress, var, stage = parse_progress_line(line, current_progress, state, constants)
+        self._current_variable = state["current_variable"]
+        self._current_ref = state["current_ref"]
+        self._current_sim = state["current_sim"]
+        return progress, var, stage
 
     def set_total_variables(self, count: int):
         """Set the total number of variables to process (legacy method)."""

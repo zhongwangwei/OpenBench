@@ -47,28 +47,76 @@ COORDINATE_MAP: dict[str, str] = {
     "soil_layers_stag": "soil",
 }
 
+VERTICAL_COORDINATE_MAP: dict[str, str] = {
+    "elevation": "elev",
+    "Elevation": "elev",
+    "ELEV": "elev",
+    "height": "elev",
+    "HEIGHT": "elev",
+    "z": "elev",
+    "Z": "elev",
+    "h": "elev",
+    "H": "elev",
+    "alt": "elev",
+    "altitude": "elev",
+}
+
+COORDINATE_MAP_WITH_VERTICAL: dict[str, str] = {
+    **COORDINATE_MAP,
+    **VERTICAL_COORDINATE_MAP,
+}
+
 # Ordered lists for probing — first match wins.
 # Use these when searching for a coordinate in an unknown dataset.
 LAT_NAMES: tuple[str, ...] = (
-    "lat", "latitude", "Latitude", "LAT", "LATITUDE",
-    "lat_cama", "lat_ucat", "lat0", "nav_lat",
-    "y", "Y", "XLAT",
+    "lat",
+    "latitude",
+    "Latitude",
+    "LAT",
+    "LATITUDE",
+    "lat_cama",
+    "lat_ucat",
+    "lat0",
+    "nav_lat",
+    "y",
+    "Y",
+    "XLAT",
 )
 
 LON_NAMES: tuple[str, ...] = (
-    "lon", "longitude", "Longitude", "LON", "LONGITUDE",
-    "long", "Long", "LONG",
-    "lon_cama", "lon_ucat", "lon0", "nav_lon",
-    "x", "X", "XLONG",
+    "lon",
+    "longitude",
+    "Longitude",
+    "LON",
+    "LONGITUDE",
+    "long",
+    "Long",
+    "LONG",
+    "lon_cama",
+    "lon_ucat",
+    "lon0",
+    "nav_lon",
+    "x",
+    "X",
+    "XLONG",
 )
 
 # Station/site dimension names (lowercase for case-insensitive matching)
-STN_DIM_NAMES: frozenset[str] = frozenset({
-    "station", "site", "sites", "stations",
-    "nstations", "nstation",
-    "location", "locations",
-    "point", "points", "stid",
-})
+STN_DIM_NAMES: frozenset[str] = frozenset(
+    {
+        "station",
+        "site",
+        "sites",
+        "stations",
+        "nstations",
+        "nstation",
+        "location",
+        "locations",
+        "point",
+        "points",
+        "stid",
+    }
+)
 
 
 def find_lat_name(names) -> str | None:
@@ -91,7 +139,7 @@ def find_lon_name(names) -> str | None:
 
 # --- NetCDF file extensions ---
 
-NC_EXTENSIONS: tuple[str, ...] = ("*.nc", "*.nc4")
+NC_EXTENSIONS: tuple[str, ...] = ("*.nc", "*.nc4", "*.NC", "*.NC4")
 
 
 def glob_nc(directory, recursive: bool = False) -> list:
@@ -117,7 +165,7 @@ def glob_nc(directory, recursive: bool = False) -> list:
 
 
 # Raw extension strings for use in regex and os.path patterns.
-NC_SUFFIXES: tuple[str, ...] = (".nc", ".nc4")
+NC_SUFFIXES: tuple[str, ...] = (".nc", ".nc4", ".NC", ".NC4")
 
 
 def glob_nc_pattern(pattern: str) -> list[str]:
@@ -134,6 +182,12 @@ def glob_nc_pattern(pattern: str) -> list[str]:
     results = _glob.glob(pattern)
     if pattern.endswith(".nc"):
         results += _glob.glob(pattern + "4")
+        results += _glob.glob(pattern[:-3] + ".NC")
+        results += _glob.glob(pattern[:-3] + ".NC4")
+    elif pattern.endswith(".NC"):
+        results += _glob.glob(pattern + "4")
+        results += _glob.glob(pattern[:-3] + ".nc")
+        results += _glob.glob(pattern[:-3] + ".nc4")
     return sorted(set(results))
 
 
@@ -147,11 +201,22 @@ def nc_exists(path: str) -> str | None:
         The actual path that exists (.nc or .nc4), or None.
     """
     import os
+    from pathlib import Path
 
     if os.path.exists(path):
         return path
-    if path.endswith(".nc"):
-        alt = path + "4"
-        if os.path.exists(alt):
-            return alt
+    candidate = Path(path)
+    if candidate.suffix.lower() in {".nc", ".nc4"} and candidate.parent.exists():
+        stem_lower = candidate.stem.lower()
+        for sibling in candidate.parent.iterdir():
+            if sibling.is_file() and sibling.stem.lower() == stem_lower and sibling.suffix in NC_SUFFIXES:
+                return str(sibling)
+    for suffix in NC_SUFFIXES:
+        if path.endswith(suffix):
+            stem = path[: -len(suffix)]
+            for alt_suffix in NC_SUFFIXES:
+                alt = stem + alt_suffix
+                if os.path.exists(alt):
+                    return alt
+            break
     return None

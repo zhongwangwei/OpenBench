@@ -1,4 +1,9 @@
 import math
+import os
+
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
+from openbench.util.filenames import filename_component
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -7,9 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
-from matplotlib import cm, colors, rcParams
+from matplotlib import colors, rcParams
 
 from openbench.util.converttype import Convert_Type
+from openbench.visualization._validation import finite_min_max
 
 
 def get_index(vmin, vmax, colormap):
@@ -51,18 +57,19 @@ def get_index(vmin, vmax, colormap):
     elif mticks[0] < vmin and mticks[-1] > vmax:
         mticks = mticks[1:-1]
 
-    cmap = cm.get_cmap(colormap)
+    cmap = matplotlib.colormaps.get_cmap(colormap)
     bnd = np.arange(vmin, vmax + colorbar_ticks / 2, colorbar_ticks / 2)
     norm = colors.BoundaryNorm(bnd, cmap.N)
     return mticks, norm, bnd
 
 
+@with_isolated_rc
 def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, option):
+    option = option.copy()
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -135,7 +142,7 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
         option["title"] = f"Mann-Kendall Test Results ({title})"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"])
+    ax.set_title(option["title"], fontsize=option["title_size"])
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()  # .bounds
@@ -162,14 +169,21 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
     )
     cb.solids.set_edgecolor("face")
     # 绘制地图
-    file2 = file[:-3]
-    plt.savefig(f"{file2}_{title}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
-    plt.close()
+    file2 = os.path.splitext(file)[0]
+    save_figure(
+        fig,
+        f"{file2}_{filename_component(title)}.{option['saving_format']}",
+        format=f"{option['saving_format']}",
+        dpi=option["dpi"],
+    )
+    plt.close(fig)
 
 
 def make_ANOVA(file, method_name, data_sources, main_nml, statistic_nml, option):  # outpath, source
+    option = option.copy()
 
-    ds = xr.open_dataset(f"{file}")
+    with xr.open_dataset(f"{file}") as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
     ilat = ds.lat.values
     ilon = ds.lon.values
@@ -179,15 +193,14 @@ def make_ANOVA(file, method_name, data_sources, main_nml, statistic_nml, option)
     if F_statistic.ndim == 3 and F_statistic.shape[0] == 1:
         F_statistic = F_statistic.squeeze(axis=0)
     if p_value.ndim == 3 and p_value.shape[0] == 1:
-        p_value = tau.squeeze(axis=0)
+        # Was `tau.squeeze` — copy-paste bug from a Mann-Kendall template.
+        p_value = p_value.squeeze(axis=0)
 
     option["extend"] = "neither"
     option["vmin"], option["vmax"] = 0, 1
     map(file, method_name, data_sources, ilon, ilat, p_value, "p_value", main_nml, option)
 
     option["extend"] = "both"
-    option["vmin"], option["vmax"] = (
-        math.floor(F_statistic.min(skipna=True).values),
-        math.ceil(F_statistic.max(skipna=True).values),
-    )
+    f_min, f_max = finite_min_max(F_statistic, label="ANOVA F_statistic")
+    option["vmin"], option["vmax"] = math.floor(f_min), math.ceil(f_max)
     map(file, method_name, data_sources, ilon, ilat, F_statistic, "F_statistic", main_nml, option)

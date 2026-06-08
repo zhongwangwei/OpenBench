@@ -102,7 +102,7 @@ def _guess_category(path: Path) -> str:
         "Snow_Depth",
         "Snow_Water_Equivalent",
         "Precipitation",
-        "Canopy_Interception",
+        "Canopy_Evaporation",
         "Canopy_Transpiration",
         "Bare_Soil_Evaporation",
         "Terrestrial_Water_Storage_Change",

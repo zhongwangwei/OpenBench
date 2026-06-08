@@ -3,10 +3,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import openbench.config as config_module
-import openbench.data.registry as registry_package
-import openbench.data.registry.manager as registry_manager_module
+import pytest
+
 import openbench.cli.check as check_module
+import openbench.config as config_module
+import openbench.data.registry.manager as registry_manager_module
 from openbench.config.adapter import build_legacy_namelists
 from openbench.config.schema import (
     ComparisonConfig,
@@ -17,7 +18,511 @@ from openbench.config.schema import (
     SimulationEntry,
 )
 from openbench.data.registry.manager import RegistryManager, _auto_resolve_variant
-from openbench.data.registry.schema import ReferenceDataset
+from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+
+
+def _load_builtin_yaml(filename: str) -> dict:
+    import yaml
+
+    path = registry_manager_module.REGISTRY_DIR / filename
+    return yaml.safe_load(path.read_text()) or {}
+
+
+def _load_legacy_yaml_dir(dirname: str) -> dict[str, dict]:
+    import yaml
+
+    root = _legacy_openbench_wei_root() / "nml" / "nml-yaml" / dirname
+    if not root.exists():
+        pytest.skip(f"legacy OpenBench-wei definitions not available: {root}")
+
+    return {path.stem: yaml.safe_load(path.read_text()) or {} for path in sorted(root.glob("*.yaml"))}
+
+
+def _legacy_openbench_wei_root() -> Path:
+    return Path(__file__).resolve().parents[2] / "bk" / "external" / "OpenBench-wei"
+
+
+def _legacy_variable_names(data: dict) -> set[str]:
+    return {
+        _canonical_variable_name(name)
+        for name, value in data.items()
+        if name != "general" and isinstance(value, dict) and ("varname" in value or "varunit" in value)
+    }
+
+
+def _canonical_variable_name(name: str) -> str:
+    legacy_canopy_name = "Canopy_" + "Interception"
+    renamed = {
+        legacy_canopy_name: "Canopy_Evaporation",
+    }
+    return renamed.get(name, name)
+
+
+def _catalog_variable_names(data: dict) -> set[str]:
+    return {name for name in data.get("variables", {})}
+
+
+def _reference_entry_for_legacy_lowres(catalog: dict, legacy_name: str) -> str | None:
+    aliases = {
+        "CRU_TS_4.08_LowRes_Precipitation": "CRU_TS_4.08_LowRes",
+        "GIEMS-MC": "GIEMS_MC_LowRes",
+    }
+    candidates = [
+        aliases.get(legacy_name),
+        legacy_name,
+        f"{legacy_name}_LowRes",
+        f"{legacy_name.replace('-', '_')}_LowRes",
+    ]
+    return next((name for name in candidates if name and name in catalog), None)
+
+
+def test_builtin_reference_catalog_includes_legacy_lowres_variable_definitions():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    missing_entries = []
+    missing_variables = {}
+
+    for legacy_name, legacy_data in _load_legacy_yaml_dir("Ref_variables_definition_LowRes").items():
+        entry_name = _reference_entry_for_legacy_lowres(catalog, legacy_name)
+        if entry_name is None:
+            missing_entries.append(legacy_name)
+            continue
+
+        missing = _legacy_variable_names(legacy_data) - _catalog_variable_names(catalog[entry_name])
+        if missing:
+            missing_variables[f"{legacy_name}->{entry_name}"] = sorted(missing)
+
+    assert missing_entries == []
+    assert missing_variables == {}
+
+
+def test_legacy_lowres_aliases_use_current_reference_tree_subdirs():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    data_root = _legacy_openbench_wei_root() / "dataset" / "Reference" / "Grid" / "LowRes"
+    if not data_root.exists():
+        pytest.skip(f"legacy reference data tree not available: {data_root}")
+
+    expected_subdirs = {
+        ("AH4GUC_LowRes", "Urban_Anthropogenic_Heat_Flux"): "Anth/Urban/AH4GUC",
+        ("ERA5LAND_LowRes", "Surface_Wind_Speed"): "Meteo/Surface_Wind_Speed/ERA5LAND",
+        ("ETMonitor_LowRes", "Urban_Latent_Heat_Flux"): "Anth/Urban/ETMonitor",
+        ("GGMSEUD_LowRes", "Total_Irrigation_Amount"): "Anth/Crop/GGMSEUD",
+        ("GIWUED_LowRes", "Total_Irrigation_Amount"): "Anth/Crop/GIWUED",
+        ("GLEAM_v4.2a_LowRes", "Canopy_Transpiration"): "Water/Transpiration/GLEAM_v4.2a",
+        ("GRFR_LowRes", "Runoff"): "Water/Total_Runoff/GRFR",
+        ("MCD43A3_LowRes", "Urban_Albedo"): "Anth/Urban/MCD43A3",
+        ("MODIS_LST_LowRes", "Urban_Surface_Temperature"): "Anth/Urban/MODIS_LST",
+        ("TEMP_Zhang_etal_2022_LowRes", "Urban_Air_Temperature_Max"): "Anth/Urban/TEMP_Zhang_etal_2022",
+        ("TEMP_Zhang_etal_2022_LowRes", "Urban_Air_Temperature_Min"): "Anth/Urban/TEMP_Zhang_etal_2022",
+        ("TRIMS_LowRes", "Urban_Surface_Temperature"): "Anth/Urban/TRIMS",
+    }
+
+    mismatches = {}
+    for (entry_name, variable_name), expected in expected_subdirs.items():
+        actual = catalog[entry_name]["variables"][variable_name].get("sub_dir")
+        if actual != expected or not (data_root / expected).exists():
+            mismatches[f"{entry_name}.{variable_name}"] = actual
+
+    assert mismatches == {}
+
+
+def test_builtin_reference_catalog_omits_scanner_placeholder_variables():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    placeholders = {
+        "AH4GUC_LowRes": {"Urban"},
+        "ETMonitor_LowRes": {"Urban"},
+        "GGMSEUD_LowRes": {"Crop"},
+        "GIWUED_LowRes": {"Crop"},
+        "GRFR_LowRes": {"Total_Runoff"},
+        "MCD43A3_LowRes": {"Urban"},
+        "MODIS_LST_LowRes": {"Urban"},
+        "ResOpsUS": {"Dam"},
+        "TEMP_Zhang_etal_2022_LowRes": {"Urban"},
+        "TRIMS_LowRes": {"Urban"},
+    }
+
+    offenders = {
+        name: sorted(disallowed & set(catalog[name].get("variables", {})))
+        for name, disallowed in placeholders.items()
+        if disallowed & set(catalog[name].get("variables", {}))
+    }
+
+    assert offenders == {}
+
+
+def test_fluxnet_plumber2_does_not_advertise_latent_heat_as_evapotranspiration():
+    """FLUXNET/PLUMBER2 Qle_cor is an energy flux, not an ET depth flux."""
+
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+
+    assert "Evapotranspiration" not in catalog["FLUXNET_PLUMBER2"]["variables"]
+    assert "Evapotranspiration" not in profiles["FLUXNET_PLUMBER2"]["variables"]
+    assert catalog["FLUXNET_PLUMBER2"]["variables"]["Latent_Heat"]["varname"] == "Qle_cor"
+    assert catalog["FLUXNET_PLUMBER2"]["variables"]["Latent_Heat"]["varunit"].lower() == "w m-2"
+
+
+def test_builtin_reference_catalog_includes_legacy_station_variable_definitions():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    aliases = {"GRDC_daily": "GRDC_Daily"}
+    missing_entries = []
+    missing_variables = {}
+
+    for legacy_name, legacy_data in _load_legacy_yaml_dir("Ref_variables_definition_station").items():
+        entry_name = aliases.get(legacy_name, legacy_name)
+        if entry_name not in catalog:
+            missing_entries.append(legacy_name)
+            continue
+
+        missing = _legacy_variable_names(legacy_data) - set(catalog[entry_name].get("variables", {}))
+        if missing:
+            missing_variables[f"{legacy_name}->{entry_name}"] = sorted(missing)
+
+    assert missing_entries == []
+    assert missing_variables == {}
+
+
+def test_plain_reference_profiles_do_not_override_scanned_file_paths():
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    path_keys = {"sub_dir", "prefix", "suffix", "fulllist", "data_groupby"}
+    offenders = {}
+
+    for profile_name, profile in profiles.items():
+        if not isinstance(profile, dict) or profile.get("scan"):
+            continue
+        for variable_name, variable in (profile.get("variables") or {}).items():
+            if not isinstance(variable, dict):
+                continue
+            present = sorted(path_keys & set(variable))
+            if present:
+                offenders[f"{profile_name}.{variable_name}"] = present
+
+    assert offenders == {}
+
+
+def test_builtin_model_catalog_includes_legacy_model_variable_definitions():
+    catalog = _load_builtin_yaml("model_catalog.yaml")
+    missing_entries = []
+    missing_variables = {}
+
+    for legacy_name, legacy_data in _load_legacy_yaml_dir("Mod_variables_definition").items():
+        if legacy_name == "empty":
+            continue
+        if legacy_name not in catalog:
+            missing_entries.append(legacy_name)
+            continue
+
+        missing = _legacy_variable_names(legacy_data) - _catalog_variable_names(catalog[legacy_name])
+        if missing:
+            missing_variables[legacy_name] = sorted(missing)
+
+    assert missing_entries == []
+    assert missing_variables == {}
+
+
+def test_reference_loader_skips_reserved_overlay_files(tmp_path, caplog):
+    """reference_profiles.yaml belongs to scanner profiles, not reference entries."""
+    import logging
+
+    import yaml
+
+    references_dir = tmp_path / "references"
+    references_dir.mkdir()
+    (references_dir / "reference_profiles.yaml").write_text(
+        yaml.dump(
+            {
+                "DemoProfile": {
+                    "variables": {
+                        "Runoff": {"varname": "ro", "varunit": "mm day-1"},
+                    }
+                }
+            }
+        )
+    )
+
+    with caplog.at_level(logging.WARNING):
+        RegistryManager(user_dir=tmp_path)
+
+    assert "reference_profiles.yaml" not in caplog.text
+
+
+def test_user_reference_overlay_partial_variable_update_preserves_existing_fields(tmp_path):
+    import yaml
+
+    references_dir = tmp_path / "references"
+    references_dir.mkdir()
+    (references_dir / "reference_catalog.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "CARE_LowRes": {
+                    "variables": {
+                        "Surface_Downward_LW_Radiation": {
+                            "varunit": "PATCHED_UNIT",
+                        }
+                    }
+                }
+            }
+        )
+    )
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    ref = mgr.get_reference("CARE_LowRes")
+    mapping = ref.variables["Surface_Downward_LW_Radiation"]
+
+    assert mapping.varname == "LWDR"
+    assert mapping.varunit == "PATCHED_UNIT"
+    assert mapping.sub_dir == "Heat/Surface_Downward_LW_Radiation/CARE"
+
+
+def test_user_reference_overlay_empty_new_variable_uses_blank_varname(tmp_path):
+    import yaml
+
+    references_dir = tmp_path / "references"
+    references_dir.mkdir()
+    (references_dir / "reference_catalog.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "CARE_LowRes": {
+                    "variables": {
+                        "Custom_Diagnostic": {},
+                    }
+                }
+            }
+        )
+    )
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    ref = mgr.get_reference("CARE_LowRes")
+    mapping = ref.variables["Custom_Diagnostic"]
+
+    assert mapping.varname == ""
+    assert mapping.varunit == ""
+
+
+def test_user_model_overlay_partial_variable_update_preserves_existing_fields(tmp_path):
+    import yaml
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "model_catalog.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "CoLM2024": {
+                    "variables": {
+                        "Gross_Primary_Productivity": {
+                            "varunit": "PATCHED_UNIT",
+                        }
+                    }
+                }
+            }
+        )
+    )
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    model = mgr.get_model("CoLM2024")
+    mapping = model.variables["Gross_Primary_Productivity"]
+
+    assert mapping.varname == "f_gpp"
+    assert mapping.varunit == "PATCHED_UNIT"
+    assert mapping.fallbacks[0].varname == "f_assim"
+
+
+def test_user_model_overlay_empty_new_variable_uses_blank_varname(tmp_path):
+    import yaml
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "model_catalog.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "CoLM2024": {
+                    "variables": {
+                        "Custom_Diagnostic": {},
+                    }
+                }
+            }
+        )
+    )
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    model = mgr.get_model("CoLM2024")
+    mapping = model.variables["Custom_Diagnostic"]
+
+    assert mapping.varname == ""
+    assert mapping.varunit == ""
+
+
+def test_user_model_overlay_delete_variables_tombstone_removes_bundled_variable(tmp_path):
+    import yaml
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "model_catalog.yaml").write_text(yaml.safe_dump({"CoLM2024": {"_delete_variables": ["Snow_Depth"]}}))
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    model = mgr.get_model("CoLM2024")
+
+    assert "Snow_Depth" not in model.variables
+    assert "Evapotranspiration" in model.variables
+
+
+def test_save_model_rejects_case_insensitive_catalog_conflict(tmp_path, monkeypatch):
+    import yaml
+
+    catalog_path = tmp_path / "model_catalog.yaml"
+    catalog_path.write_text(
+        yaml.safe_dump(
+            {
+                "MyModel": {
+                    "name": "MyModel",
+                    "description": "demo",
+                    "data_type": "grid",
+                    "tim_res": "Month",
+                    "variables": {"Runoff": {"varname": "ro", "varunit": "mm"}},
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(
+        registry_manager_module,
+        "get_writable_model_catalog_path",
+        lambda: catalog_path,
+    )
+    mgr = RegistryManager(user_dir=tmp_path)
+    profile = ModelProfile(
+        name="mymodel",
+        description="conflict",
+        data_type="grid",
+        tim_res="Month",
+        variables={"Runoff": VariableMapping(varname="ro2", varunit="mm")},
+    )
+
+    with pytest.raises(ValueError, match="case-insensitive"):
+        mgr.save_model("mymodel", profile)
+
+
+def test_builtin_reference_catalog_has_no_developer_station_list_paths():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    bad = {
+        name: data["fulllist"]
+        for name, data in catalog.items()
+        if isinstance(data, dict)
+        and isinstance(data.get("fulllist"), str)
+        and (
+            data["fulllist"].startswith("/Volumes/")
+            or "/src/openbench/data/registry/station_lists/" in data["fulllist"]
+        )
+    }
+
+    assert bad == {}
+
+
+def test_gleam_open_water_profile_subdir_matches_catalog_variants():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+
+    profile_subdir = profiles["GLEAM_v4.2a"]["variables"]["Open_Water_Evaporation"]["sub_dir"]
+    catalog_subdirs = {
+        variant: catalog[variant]["variables"]["Open_Water_Evaporation"]["sub_dir"]
+        for variant in ("GLEAM_v4.2a_LowRes", "GLEAM_v4.2a_MidRes")
+    }
+
+    assert catalog_subdirs == {
+        "GLEAM_v4.2a_LowRes": profile_subdir,
+        "GLEAM_v4.2a_MidRes": profile_subdir,
+    }
+
+
+def test_station_catalog_entries_have_a_station_list_matching_or_filter():
+    import openbench.data.custom as custom_package
+
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    custom_dir = Path(custom_package.__file__).parent
+    incomplete = []
+
+    for name, data in catalog.items():
+        if not isinstance(data, dict) or data.get("data_type") != "stn":
+            continue
+        has_station_source = data.get("fulllist") or data.get("station_matching")
+        has_custom_filter = (custom_dir / f"{name}_filter.py").exists()
+        if not has_station_source and not has_custom_filter:
+            incomplete.append(name)
+
+    assert incomplete == []
+
+
+def test_streamflow_aggregate_entries_use_existing_station_matching_aliases():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    expected = {
+        "Daily": ("Station/Water/StreamFlow/Daily", "OpenBench_Streamflow_Daily.nc"),
+        "Hourly": ("Station/Water/StreamFlow/Hourly", "OpenBench_Streamflow_Hourly_full.nc"),
+        "Monthly": ("Station/Water/StreamFlow/Monthly", "OpenBench_Streamflow_Monthly_full.nc"),
+    }
+
+    for name, (root_suffix, dataset_file) in expected.items():
+        entry = catalog[name]
+        assert "fulllist" not in entry
+        assert entry["root_dir"] == f"${{OPENBENCH_REF_ROOT}}/{root_suffix}"
+        assert entry["station_matching"]["dataset_file"] == dataset_file
+        assert profiles[name]["station_matching"]["dataset_file"] == dataset_file
+
+
+def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+):
+    import logging
+
+    import yaml
+
+    home = tmp_path / "home"
+    settings_dir = home / ".openbench"
+    settings_dir.mkdir(parents=True)
+    (settings_dir / "settings.yaml").write_text(yaml.safe_dump({"reference_root": str(tmp_path / "Reference")}))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
+    registry_manager_module._UNRESOLVED_ENV_VARS_WARNED.clear()
+
+    with caplog.at_level(logging.WARNING):
+        expanded = registry_manager_module._expand_env_path(
+            "${OPENBENCH_REF_ROOT}/Grid/LowRes",
+            context="Demo.root_dir",
+        )
+
+    assert expanded == str(tmp_path / "Reference" / "Grid" / "LowRes")
+    assert "OPENBENCH_REF_ROOT" not in caplog.text
+
+
+def test_profile_station_matching_dataset_files_match_catalog():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    mismatches = {}
+
+    for name, profile in profiles.items():
+        if not isinstance(profile, dict) or name not in catalog:
+            continue
+        profile_matching = profile.get("station_matching")
+        catalog_matching = catalog[name].get("station_matching")
+        if profile_matching and catalog_matching:
+            profile_file = profile_matching.get("dataset_file")
+            catalog_file = catalog_matching.get("dataset_file")
+            if profile_file != catalog_file:
+                mismatches[name] = (profile_file, catalog_file)
+
+    assert mismatches == {}
+
+
+def test_era5land_profile_covers_catalog_variables():
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+
+    catalog_variables = set()
+    for variant in ("ERA5LAND_LowRes", "ERA5LAND_MidRes"):
+        catalog_variables.update(catalog[variant]["variables"])
+
+    profile_variables = set(profiles["ERA5LAND"]["variables"])
+    assert catalog_variables <= profile_variables
 
 
 def test_list_references():
@@ -129,16 +634,20 @@ def test_get_reference_auto_resolve_prefers_lower_time_waste_on_spatial_tie():
     assert ref.name == "Demo_LowRes"
 
 
-def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_entry(monkeypatch):
+def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_entry(monkeypatch, tmp_path):
+    s1 = tmp_path / "s1"
+    s2 = tmp_path / "s2"
+    s1.mkdir()
+    s2.mkdir()
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="fallback", output_dir="/out", years=[2000, 2001]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
         reference=ReferenceConfig(sources={"Evapotranspiration": "CARE"}),
         simulation={
-            "First": SimulationEntry(model="FirstModel", root_dir="/s1"),
+            "First": SimulationEntry(model="FirstModel", root_dir=str(s1)),
             "Second": SimulationEntry(
                 model="SecondModel",
-                root_dir="/s2",
+                root_dir=str(s2),
                 tim_res="Month",
                 grid_res=0.25,
             ),
@@ -156,6 +665,7 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
                 data_type="grid",
                 tim_res=sim_tim_res,
                 grid_res=sim_grid_res,
+                root_dir=str(tmp_path),
                 variables={"Evapotranspiration": SimpleNamespace(varname="E", varunit="mm")},
             )
 
@@ -252,6 +762,49 @@ def test_auto_resolve_variant_applies_time_filter_grid_priority_and_secondary_wa
     assert reason  # should contain decision trace
 
 
+def test_auto_resolve_variant_handles_climatology_time_resolution_aliases():
+    variants = {
+        "LowRes": ReferenceDataset(
+            name="Demo_LowRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Year",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.25,
+        ),
+        "MidRes": ReferenceDataset(
+            name="Demo_MidRes",
+            description="",
+            category="Water",
+            data_type="grid",
+            tim_res="Month",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2001],
+            variables={},
+            grid_res=0.25,
+        ),
+    }
+
+    monthly, _ = _auto_resolve_variant(
+        variants,
+        sim_tim_res="climatology-month",
+        sim_grid_res=0.25,
+    )
+    yearly, _ = _auto_resolve_variant(
+        variants,
+        sim_tim_res="climatology-year",
+        sim_grid_res=0.25,
+    )
+
+    assert monthly.name == "Demo_MidRes"
+    assert yearly.name == "Demo_LowRes"
+
+
 def test_get_reference_not_found():
     mgr = RegistryManager()
     ref = mgr.get_reference("NonExistentDataset")
@@ -274,6 +827,47 @@ def test_get_model():
     assert model.name == "CoLM2024"
     assert "Evapotranspiration" in model.variables
     assert model.variables["Evapotranspiration"].varname == "f_fevpa"
+
+
+def test_legacy_colm_profile_matches_colm2024_runtime_mapping():
+    mgr = RegistryManager()
+
+    legacy = mgr.get_model("CoLM")
+    modern = mgr.get_model("CoLM2024")
+
+    assert legacy is not None
+    assert modern is not None
+    assert legacy.name == "CoLM"
+    assert legacy.data_type == modern.data_type
+    assert legacy.grid_res == modern.grid_res
+    assert legacy.tim_res == modern.tim_res
+    assert legacy.time_offset == modern.time_offset
+    assert {name: mapping.to_dict() for name, mapping in legacy.variables.items()} == {
+        name: mapping.to_dict() for name, mapping in modern.variables.items()
+    }
+    assert legacy.variables["Canopy_Evaporation"].compute == "ds['f_fevpl'] - ds['f_etr']"
+
+
+def test_colm2024_routing_prefix_fallback_variables_include_unitcat_varnames():
+    model = RegistryManager().get_model("CoLM2024")
+
+    expected = {
+        "Dam_Elevation": ["f_sfcelv"],
+        "Dam_Storage": ["volresv"],
+        "Dam_Water_Elevation": ["f_sfcelv"],
+        "Depth_Of_Surface_Water": ["f_flddph"],
+        "Inundation_Area": ["f_floodarea"],
+        "Inundation_Fraction": ["f_floodfrc"],
+        "River_Water_Level": ["f_sfcelv", "f_wdpth_ucat"],
+        "Streamflow_Ocean": ["f_discharge_rivermouth"],
+        "Total_Water_Storage": ["f_storge"],
+    }
+
+    for variable, fallback_names in expected.items():
+        mapping = model.variables[variable]
+        actual = [mapping.varname] + [fallback.varname for fallback in mapping.fallbacks or []]
+        assert all(name in actual for name in fallback_names)
+        assert mapping.prefix_fallback == ["_cama_", "_unitcat_"]
 
 
 def test_registry_manager_normalizes_legacy_list_varnames_into_fallbacks(tmp_path: Path):
@@ -333,6 +927,12 @@ def test_get_model_not_found():
     mgr = RegistryManager()
     model = mgr.get_model("NonExistentModel")
     assert model is None
+
+
+def test_registry_manager_initializes_last_resolve_reason(tmp_path):
+    mgr = RegistryManager(user_dir=tmp_path / "does-not-exist")
+
+    assert mgr.last_resolve_reason == ""
 
 
 def test_references_for_variable():

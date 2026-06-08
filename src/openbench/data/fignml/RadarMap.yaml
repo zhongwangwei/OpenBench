@@ -15,6 +15,7 @@ general:
   legend_fontsize: 12
   legend_title: Simulations
   ticks_format: .2f
+  cmap: Spectral
   vmin_max_on: false
   vmin: 0
   vmax: 1

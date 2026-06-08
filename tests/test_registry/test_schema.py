@@ -1,6 +1,6 @@
 """Tests for registry schema dataclasses."""
 
-from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+from openbench.data.registry.schema import ModelProfile, ReferenceDataset, StationMatchingConfig, VariableMapping
 
 
 def test_variable_mapping():
@@ -65,6 +65,28 @@ def test_reference_dataset_station():
     assert ref.data_type == "stn"
     assert ref.fulllist == "GRDC_Monthly.csv"
     assert ref.grid_res is None
+
+
+def test_reference_dataset_to_dict_preserves_station_matching_and_provenance():
+    ref = ReferenceDataset(
+        name="GRDC_Monthly",
+        description="GRDC Monthly Streamflow",
+        category="Water",
+        data_type="stn",
+        tim_res="Month",
+        data_groupby="single",
+        timezone=0,
+        years=[1950, 2023],
+        variables={"Streamflow": VariableMapping(varname="streamflow", varunit="m3 s-1")},
+        station_matching=StationMatchingConfig(method="direct", dataset_file="stations.nc"),
+        _provenance={"station_matching": "profile"},
+    )
+
+    data = ref.to_dict()
+
+    assert data["station_matching"]["method"] == "direct"
+    assert data["station_matching"]["dataset_file"] == "stations.nc"
+    assert data["_provenance"] == {"station_matching": "profile"}
 
 
 def test_model_profile():

@@ -7,7 +7,7 @@ import os
 from typing import Optional, TYPE_CHECKING
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QPushButton, QFileDialog
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 if TYPE_CHECKING:

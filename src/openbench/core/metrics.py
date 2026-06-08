@@ -2,17 +2,19 @@
 import logging
 
 import numpy as np
+import pandas as pd
 import xarray as xr
+from scipy.stats import linregress  # used by br2 metric
 
 # Import CacheSystem - CacheSystem is mandatory for metrics calculation
 try:
-    from openbench.data.cache import cached, get_cache_manager
+    from openbench.data.cache import cached, get_cache_manager  # noqa: F401  feature detection
 
     _HAS_CACHE = True
 except ImportError:
     raise RuntimeError(
         "CacheSystem is required for metrics calculation (务必使用CacheSystem). "
-        "Please ensure openbench.data.Mod_CacheSystem is available."
+        "Please ensure openbench.data.cache is available."
     )
 
 
@@ -31,8 +33,12 @@ class metrics:
         self.date = "March 2024"
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
 
-        # Suppress numpy warnings
-        np.seterr(all="ignore")
+        # NOTE: We deliberately do NOT call `np.seterr(all="ignore")`
+        # here. That is a process-wide setting and would silence
+        # legitimate runtime warnings in unrelated code (and tests).
+        # Individual metrics that need to suppress divide-by-zero or
+        # invalid-value warnings use `xr.where(...)` guards or a local
+        # `with np.errstate(...)` context.
 
     def _validate_inputs(self, s, o):
         """
@@ -86,8 +92,9 @@ class metrics:
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
-        # Calculate absolute percent bias
-        apb = 100.0 * abs((s - o).sum(dim="time")) / o.sum(dim="time")
+        # Calculate absolute percent bias (guard against zero observed sum)
+        o_sum = o.sum(dim="time")
+        apb = xr.where(o_sum != 0, 100.0 * abs((s - o).sum(dim="time")) / o_sum, np.nan)
         return apb
 
     def RMSE(self, s, o):
@@ -139,7 +146,13 @@ class metrics:
         """
         # If observed data is not provided, use the mean of simulated data as reference
         if o is None:
-            o = s.mean(dim="time")
+            if not isinstance(s, xr.DataArray):
+                logging.error("Input must be an xarray DataArray")
+                raise TypeError("Input must be an xarray DataArray")
+            if "time" not in s.dims:
+                raise ValueError("CRMSD requires a 'time' dimension")
+            s = s.where(np.isfinite(s))
+            return np.sqrt(((s - s.mean(dim="time")) ** 2).mean(dim="time"))
 
         # Validate and align inputs
         s, o = self._validate_inputs(s, o)
@@ -151,8 +164,11 @@ class metrics:
         # Calculate correlations
         correlations = xr.corr(s, o, dim="time")
 
-        # Apply the CRMSD formula
-        crmsd = np.sqrt(std_s**2 + std_o**2 - 2 * std_s * std_o * correlations)
+        # Apply the CRMSD formula. Clamp the radicand to ≥ 0 — floating-point
+        # error can make std_s² + std_o² − 2·std_s·std_o·r slightly negative
+        # when std_s ≈ std_o and r ≈ 1, which would otherwise yield NaN.
+        radicand = std_s**2 + std_o**2 - 2 * std_s * std_o * correlations
+        crmsd = np.sqrt(np.maximum(radicand, 0))
         return crmsd
 
     def mean_absolute_error(self, s, o):
@@ -164,6 +180,7 @@ class metrics:
         output:
             maes: mean absolute error
         """
+        s, o = self._validate_inputs(s, o)
         # np.mean(abs(self.s-self.o))
         k1 = s - o
         var = (abs(k1)).mean(dim="time")
@@ -178,6 +195,7 @@ class metrics:
         output:
             bias: bias
         """
+        s, o = self._validate_inputs(s, o)
         # np.mean(s-o)
         var = (s - o).mean(dim="time")
         return var
@@ -191,10 +209,12 @@ class metrics:
         output:
             L: likelihood
         """
+        s, o = self._validate_inputs(s, o)
         # np.exp(-N*sum((self.s-self.o)**2)/sum((self.o-np.mean(self.o))**2))
         tmp1 = ((o - o.mean(dim="time")) ** 2).sum(dim="time")
         tmp2 = -N * (((s - o) ** 2).sum(dim="time"))
-        var = np.exp(tmp2 / tmp1)
+        # Guard against constant-observation series (tmp1 == 0)
+        var = xr.where(tmp1 != 0, np.exp(tmp2 / tmp1), np.nan)
         return var
 
     def correlation(self, s, o):
@@ -206,6 +226,7 @@ class metrics:
         output:
             correlation: correlation coefficient
         """
+        s, o = self._validate_inputs(s, o)
         corr = xr.corr(s, o, dim=["time"])
 
         return corr
@@ -219,7 +240,7 @@ class metrics:
         output:
             correlation: correlation coefficient
         """
-
+        s, o = self._validate_inputs(s, o)
         return xr.corr(s, o, dim=["time"]) ** 2
 
     def NSE(self, s, o):
@@ -231,6 +252,7 @@ class metrics:
         output:
             nse: Nash Sutcliffe efficient coefficient
         """
+        s, o = self._validate_inputs(s, o)
         # 1 - sum((s-o)**2)/sum((o-np.mean(o))**2)
         _tmp1 = ((o - o.mean(dim="time")) ** 2).sum(dim="time")
         _tmp2 = ((s - o) ** 2).sum(dim="time")
@@ -249,11 +271,15 @@ class metrics:
             alpha: ratio of the standard deviation
             beta: ratio of the mean
         """
+        s, o = self._validate_inputs(s, o)
         cc = self.correlation(s, o)
-        alpha = s.std(dim="time") / o.std(dim="time")
-        # alpha = np.std(s)/np.std(o)
-        beta = s.mean(dim="time") / o.mean(dim="time")
-        # beta = np.sum(s)/np.sum(o)
+        # Guard against constant observation (std=0) and zero-mean observation
+        # (e.g. precipitation in a dry month). Without these guards alpha/beta
+        # become inf and kge becomes -inf, silently polluting downstream output.
+        o_std = o.std(dim="time")
+        o_mean = o.mean(dim="time")
+        alpha = xr.where(o_std != 0, s.std(dim="time") / o_std, np.nan)
+        beta = xr.where(o_mean != 0, s.mean(dim="time") / o_mean, np.nan)
         kge = 1 - ((cc - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2) ** 0.5
         return kge  # , cc, alpha, beta
 
@@ -284,48 +310,51 @@ class metrics:
         output:
             ia: index of agreement
         """
-        _tmp1 = ((o - s) ** 2).sum(dim="time")
-        _tmp2 = ((np.abs(s - o.mean(dim="time")) + np.abs(o - o.mean(dim="time"))) ** 2).sum(dim="time")
-        ia = 1 - _tmp1 / _tmp2
-        return ia.squeeze()
+        from openbench.core.scores import scores
+
+        return scores.index_agreement(self, s, o)
 
     def kappa_coeff(self, s, o):
-        """
-        Calculate Kappa coefficient with division by zero protection.
-        """
-        s = (s).astype(int)
-        o = (o).astype(int)
-        n = len(s)
-        foo1 = np.unique(s)
-        foo2 = np.unique(o)
-        unique_data = np.unique(np.hstack([foo1, foo2]).flatten())
-        self.unique_data = unique_data
-        kappa_mat = np.zeros((len(unique_data), len(unique_data)))
-        ind1 = np.empty(n, dtype=int)
-        ind2 = np.empty(n, dtype=int)
-        for i in range(len(unique_data)):
-            ind1[s == unique_data[i]] = i
-            ind2[o == unique_data[i]] = i
-        for i in range(n):
-            kappa_mat[ind1[i], ind2[i]] += 1
-        self.kappa_mat = kappa_mat
-        # compute kappa coefficient
-        # formula for kappa coefficient taken from
-        # http://adorio-research.org/wordpress/?p=2301
-        tot = np.sum(kappa_mat)
-        Pa = np.sum(np.diag(kappa_mat)) / tot
-        PA = np.sum(kappa_mat, axis=0) / tot
-        PB = np.sum(kappa_mat, axis=1) / tot
-        Pe = np.sum(PA * PB)
+        """Calculate Cohen's kappa along time with multi-dimensional support."""
+        s, o = xr.align(s, o, join="inner")
 
-        # Protect against division by zero when Pe ≈ 1
-        if abs(1 - Pe) < 1e-10:
-            logging.warning("Pe is approximately 1, kappa coefficient is undefined. Returning NaN.")
-            kappa_coeff = np.nan
-        else:
-            kappa_coeff = (Pa - Pe) / (1 - Pe)
+        def _kappa_1d(s_values, o_values):
+            mask = np.isfinite(s_values) & np.isfinite(o_values)
+            s_flat = s_values[mask].astype(int)
+            o_flat = o_values[mask].astype(int)
+            if s_flat.size == 0:
+                return np.nan
+            unique_data = np.unique(np.concatenate([s_flat, o_flat]))
+            kappa_mat = np.zeros((len(unique_data), len(unique_data)), dtype=float)
+            index = {value: idx for idx, value in enumerate(unique_data)}
+            for sv, ov in zip(s_flat, o_flat):
+                kappa_mat[index[sv], index[ov]] += 1
+            total = kappa_mat.sum()
+            if total == 0:
+                return np.nan
+            pa = np.trace(kappa_mat) / total
+            pred = kappa_mat.sum(axis=0) / total
+            obs = kappa_mat.sum(axis=1) / total
+            pe = np.sum(pred * obs)
+            if abs(1 - pe) < 1e-10:
+                return np.nan
+            return (pa - pe) / (1 - pe)
 
-        return kappa_mat, kappa_coeff
+        if "time" in getattr(s, "dims", ()) and "time" in getattr(o, "dims", ()):
+            if hasattr(s, "chunks") and s.chunks is not None:
+                s = s.chunk({"time": -1})
+            if hasattr(o, "chunks") and o.chunks is not None:
+                o = o.chunk({"time": -1})
+            return xr.apply_ufunc(
+                _kappa_1d,
+                s,
+                o,
+                input_core_dims=[["time"], ["time"]],
+                vectorize=True,
+                dask="parallelized",
+                output_dtypes=[float],
+            )
+        return xr.DataArray(_kappa_1d(np.asarray(s), np.asarray(o)))
 
     def rv(self, s, o):
         """
@@ -339,12 +368,10 @@ class metrics:
         Reference:
         ****
         """
+        s, o = self._validate_inputs(s, o)
         o_std = o.std(dim="time")
-        # Protect against division by zero when observed std is 0 or very small
-        if np.any(o_std == 0) or np.any(np.isnan(o_std)):
-            logging.warning("Observed data has zero or NaN standard deviation. Returning NaN for relative variability.")
-            return xr.where(o_std == 0, np.nan, s.std(dim="time") / o_std - 1.0)
-        return s.std(dim="time") / o_std - 1.0
+        # Protect against division by zero when observed std is 0 or very small.
+        return xr.where(o_std != 0, s.std(dim="time") / o_std - 1.0, np.nan)
 
     def ubNSE(self, s, o):
         """
@@ -355,9 +382,12 @@ class metrics:
         output:
             ubnse: Unbiased Nash Sutcliffe efficient coefficient
         """
+        s, o = self._validate_inputs(s, o)
         _tmp1 = ((o - o.mean(dim="time")) ** 2).sum(dim="time")
         _tmp2 = (((s - s.mean(dim="time")) - (o - o.mean(dim="time"))) ** 2).sum(dim="time")
-        var = 1 - _tmp2 / _tmp1
+        # Mirror the NSE guard above — constant observations would otherwise
+        # produce ±inf instead of NaN.
+        var = xr.where(_tmp1 != 0, 1 - _tmp2 / _tmp1, np.nan)
         return var
 
     def ubKGE(self, s, o):
@@ -371,8 +401,12 @@ class metrics:
 
         """
         s, o = self.rm_mean(s, o)
-        var = self.KGE(s, o)
-        return var
+        cc = self.correlation(s, o)
+        o_std = o.std(dim="time")
+        alpha = xr.where(o_std != 0, s.std(dim="time") / o_std, np.nan)
+        # With mean-zero inputs beta is undefined (0/0), so ubKGE uses the
+        # two-component unbiased form rather than delegating to KGE.
+        return 1 - ((cc - 1) ** 2 + (alpha - 1) ** 2) ** 0.5
 
     def ubcorrelation(self, s, o):
         """
@@ -401,54 +435,50 @@ class metrics:
         return var
 
     def rm_mean(self, s, o):
-        t1 = s - min(s.min(dim="time"), o.min(dim="time"))
-        t2 = o - min(s.min(dim="time"), o.min(dim="time"))
-        s = t1
-        o = t2
-        return s, o
+        # Subtract each series' own mean (i.e. "remove bias" so that the
+        # series have zero mean). The previous implementation shifted both
+        # series by min(s.min, o.min), which is a common-shift, not a mean
+        # removal. Note that downstream:
+        #   * ubcorrelation / ubcorrelation_R2: correlation is invariant
+        #     under a common shift AND under per-series mean removal, so
+        #     these return the same value as correlation / correlation_R2.
+        #   * ubKGE: with mean-zero inputs, KGE's beta = mean_s / mean_o
+        #     becomes 0/0, so ubKGE uses an explicit 2-component
+        #     (cc, alpha) reformulation.
+        return s - s.mean(dim="time"), o - o.mean(dim="time")
 
     def pc_max(self, s, o):
-        mask1 = np.isnan(s) | np.isnan(o)
-        s.values[mask1] = np.nan
-        o.values[mask1] = np.nan
-        # remove the nan values
-        s = s.dropna(dim="time").astype(np.float32)
-        o = o.dropna(dim="time").astype(np.float32)
+        s, o = self._validate_inputs(s, o)
+        s = s.astype(np.float32)
+        o = o.astype(np.float32)
 
-        return (s.max(dim="time") - o.max(dim="time")) / o.max(dim="time")  # (np.max(s)-np.max(o))/np.max(o)
+        o_max = o.max(dim="time")
+        return xr.where(o_max != 0, (s.max(dim="time") - o_max) / np.abs(o_max), np.nan)
 
     def pc_min(self, s, o):
+        s, o = self._validate_inputs(s, o)
+        s = s.astype(np.float32)
+        o = o.astype(np.float32)
 
-        mask1 = np.isnan(s) | np.isnan(o)
-        s.values[mask1] = np.nan
-        o.values[mask1] = np.nan
-        # remove the nan values
-        s = s.dropna(dim="time").astype(np.float32)
-        o = o.dropna(dim="time").astype(np.float32)
-
+        # Normalize by |o_min| so a negative observed minimum (e.g. winter
+        # temperature minima) doesn't flip the sign of the relative-bias
+        # interpretation: a model warmer than obs should always read as a
+        # positive deviation, regardless of the absolute reference sign.
         o_min = o.min(dim="time")
-        return xr.where(o_min != 0, (s.min(dim="time") - o_min) / o_min, np.nan)  # (np.min(s)-np.min(o))/np.min(o)
+        return xr.where(o_min != 0, (s.min(dim="time") - o_min) / np.abs(o_min), np.nan)
 
     def pc_ampli(self, s, o):
-        mask1 = np.isnan(s) | np.isnan(o)
-        s.values[mask1] = np.nan
-        o.values[mask1] = np.nan
-        # remove the nan values
-        s = s.dropna(dim="time").astype(np.float32)
-        o = o.dropna(dim="time").astype(np.float32)
+        s, o = self._validate_inputs(s, o)
+        s = s.astype(np.float32)
+        o = o.astype(np.float32)
 
-        # Calculate amplitude (range) for observed data
+        # Calculate amplitude (range) for observed data. Keep the guard
+        # element-wise and lazy: a global ``np.any`` over a dask-backed grid
+        # triggers eager computation during metric graph construction.
         o_range = o.max(dim="time") - o.min(dim="time")
-
-        # Protect against division by zero when observed data has zero range (constant data)
-        if np.any(o_range == 0) or np.any(np.isnan(o_range)):
-            logging.warning("Observed data has zero or NaN range. Returning NaN for amplitude ratio.")
-            s_range = s.max(dim="time") - s.min(dim="time")
-            return xr.where(o_range == 0, np.nan, s_range / o_range - 1.0)
-
-        return (
-            s.max(dim="time") - s.min(dim="time")
-        ) / o_range - 1.0  # (np.max(s) - np.min(s)) / (np.max(o) - np.min(o)) - 1.0
+        s_range = s.max(dim="time") - s.min(dim="time")
+        safe_o_range = o_range.where((o_range != 0) & o_range.notnull())
+        return s_range / safe_o_range - 1.0
 
     def rSD(self, s, o):
         # Ratio of standard deviations
@@ -496,13 +526,69 @@ class metrics:
             float or dict: Mean APFB or a dictionary with mean APFB and yearly APFB values.
         """
 
-        # Align and handle missing values
-        common_time = obs_array.time.values.astype("datetime64[D]")
-        data_array = data_array.sel(time=common_time)
-        obs_array = obs_array.sel(time=common_time)
-        valid_indices = np.isfinite(data_array) & np.isfinite(obs_array)
-        data_array = data_array.where(valid_indices)
-        obs_array = obs_array.where(valid_indices)
+        # Align and handle missing values. Use inner coordinate alignment
+        # rather than selecting sim by every obs timestamp; real model/ref
+        # streams can have offset or partial time coverage.
+        data_array, obs_array = self._validate_inputs(data_array, obs_array)
+        if data_array.sizes.get("time", 0) == 0:
+            return {"APFB_value": np.nan, "APFB_per_year": np.nan} if out_per_year else np.nan
+
+        if not out_per_year and "time" in data_array.dims and data_array.ndim > 1:
+            if hasattr(data_array, "chunks") and data_array.chunks is not None:
+                data_array = data_array.chunk({"time": -1})
+            if hasattr(obs_array, "chunks") and obs_array.chunks is not None:
+                obs_array = obs_array.chunk({"time": -1})
+            time_values = xr.DataArray(
+                data_array["time"].values,
+                coords={"time": data_array["time"]},
+                dims=("time",),
+            )
+
+            def _apfb_1d(sim_values, obs_values, times):
+                mask = np.isfinite(sim_values) & np.isfinite(obs_values)
+                sim_values = sim_values[mask]
+                obs_values = obs_values[mask]
+                times = times[mask]
+                if sim_values.size == 0 or obs_values.size == 0:
+                    return np.nan
+                if fun is not None:
+                    if epsilon_type == "Pushpalatha2012":
+                        epsilon = np.nanmean(obs_values) / 100
+                    elif epsilon_type == "otherFactor":
+                        epsilon = np.nanmean(obs_values) * epsilon_value
+                    elif epsilon_type == "otherValue":
+                        epsilon = epsilon_value
+                    else:
+                        epsilon = 0
+                    sim_values = fun(sim_values + epsilon)
+                    obs_values = fun(obs_values + epsilon)
+                try:
+                    index = pd.DatetimeIndex(times)
+                except Exception:
+                    return np.nan
+                years = index.year
+                if start_month != 1:
+                    years = years + (index.month >= start_month).astype(int)
+                values = []
+                for year in np.intersect1d(np.unique(years), np.unique(years)):
+                    year_mask = years == year
+                    obs_peak = np.nanmax(obs_values[year_mask])
+                    if obs_peak == 0 or np.isnan(obs_peak):
+                        continue
+                    sim_peak = np.nanmax(sim_values[year_mask])
+                    values.append((sim_peak - obs_peak) / obs_peak)
+                return float(np.nanmean(values)) if values else np.nan
+
+            return xr.apply_ufunc(
+                _apfb_1d,
+                data_array,
+                obs_array,
+                time_values,
+                input_core_dims=[["time"], ["time"], ["time"]],
+                vectorize=True,
+                dask="parallelized",
+                output_dtypes=[float],
+            )
 
         # Convert to pandas for easier time grouping
         df_sim = data_array.to_pandas().to_frame(name="simulated")
@@ -522,14 +608,26 @@ class metrics:
             df_sim["simulated"] = df_sim["simulated"].apply(lambda x: fun(x + epsilon))
             df_obs["observed"] = df_obs["observed"].apply(lambda x: fun(x + epsilon))
 
-        # Group by hydrological year and calculate peak flows
-        df_sim["year"] = df_sim.index.to_period(f"{start_month}MS").year
-        df_obs["year"] = df_obs.index.to_period(f"{start_month}MS").year
+        # Group by hydrological year and calculate peak flows. Pandas
+        # Period does not support frequencies like "1MS"; compute the water
+        # year directly so shifted model/ref timelines still work.
+        sim_year = df_sim.index.year
+        obs_year = df_obs.index.year
+        if start_month != 1:
+            sim_year = sim_year + (df_sim.index.month >= start_month).astype(int)
+            obs_year = obs_year + (df_obs.index.month >= start_month).astype(int)
+        df_sim["year"] = sim_year
+        df_obs["year"] = obs_year
         annual_peaks_sim = df_sim.groupby("year")["simulated"].max()
         annual_peaks_obs = df_obs.groupby("year")["observed"].max()
 
-        # Calculate APFB for each year
-        apfb_per_year = (annual_peaks_sim - annual_peaks_obs) / annual_peaks_obs
+        # Calculate APFB for each year. Guard zero observed peaks (dry
+        # years) so the per-year ratio falls to NaN instead of inf, which
+        # would otherwise propagate into the mean and silently corrupt
+        # the multi-year aggregate.
+        apfb_per_year = (annual_peaks_sim - annual_peaks_obs).where(annual_peaks_obs != 0) / annual_peaks_obs.where(
+            annual_peaks_obs != 0
+        )
 
         if out_per_year:
             return {"APFB_value": apfb_per_year.mean(), "APFB_per_year": apfb_per_year}
@@ -553,13 +651,10 @@ class metrics:
             xr.DataArray: An array containing the br2 values for each time step.
         """
 
-        # Align and handle missing values
-        common_time = obs_array.time.values.astype("datetime64[D]")
-        data_array = data_array.sel(time=common_time)
-        obs_array = obs_array.sel(time=common_time)
-        valid_indices = np.isfinite(data_array) & np.isfinite(obs_array)
-        data_array = data_array.where(valid_indices)
-        obs_array = obs_array.where(valid_indices)
+        # Align and handle missing values. Do not require identical time
+        # axes; compute over the overlap and let the vectorized kernel drop
+        # pairwise NaNs.
+        data_array, obs_array = self._validate_inputs(data_array, obs_array)
 
         # Apply transformation function
         if fun is not None:
@@ -577,8 +672,23 @@ class metrics:
 
         # Calculate R-squared and regression slope
         def calculate_for_single_time(sim, obs):
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim = sim[mask]
+            obs = obs[mask]
+            if len(sim) < 2 or len(obs) < 2:
+                return np.nan
+            if np.nanstd(sim) == 0 or np.nanstd(obs) == 0:
+                return np.nan
             r_squared = np.corrcoef(sim, obs)[0, 1] ** 2
-            slope, _, _, _, _ = linregress(obs, sim)  # Force intercept to zero
+            try:
+                slope, _, _, _, _ = linregress(obs, sim)  # Force intercept to zero
+            except ValueError:
+                return np.nan
+            # scipy ≥ 1.13 returns NaN (rather than raising) for degenerate
+            # inputs; the std==0 guards above should catch most cases, but
+            # keep an explicit NaN check before any comparison/arithmetic.
+            if np.isnan(slope):
+                return np.nan
             if use_abs:
                 slope = abs(slope)
             br2_value = r_squared * slope if slope <= 1 else r_squared / slope
@@ -597,6 +707,7 @@ class metrics:
             input_core_dims=[["time"], ["time"]],
             vectorize=True,
             dask="parallelized",
+            output_dtypes=[float],
         )
 
         return br2_values
@@ -616,13 +727,9 @@ class metrics:
             xr.DataArray: An array containing the CP values for each time step.
         """
 
-        # Align and handle missing values
-        common_time = obs_array.time.values.astype("datetime64[D]")
-        data_array = data_array.sel(time=common_time)
-        obs_array = obs_array.sel(time=common_time)
-        valid_indices = np.isfinite(data_array) & np.isfinite(obs_array)
-        data_array = data_array.where(valid_indices)
-        obs_array = obs_array.where(valid_indices)
+        # Align on the overlapping timestamps; missing pairs remain NaN and
+        # are skipped by xarray reductions below.
+        data_array, obs_array = self._validate_inputs(data_array, obs_array)
 
         # Apply transformation function
         if fun is not None:
@@ -638,17 +745,24 @@ class metrics:
             data_array = fun(data_array + epsilon)
             obs_array = fun(obs_array + epsilon)
 
-        # Calculate differences
-        diff_sim_obs = data_array.diff(dim="time")
-        diff_obs_obs = obs_array.diff(dim="time")
+        # Numerator: model-vs-observation residual squared, summed over the
+        # N-1 timesteps for which a persistence baseline exists (t >= 1).
+        # Denominator: observed first-difference squared (persistence
+        # baseline) over the same N-1 timesteps. Previously the numerator
+        # was data_array.diff(dim="time") — that is S_t - S_{t-1}, which is
+        # not a model-vs-obs residual and gives an undefined statistic.
+        sim_t = data_array.isel(time=slice(1, None))
+        obs_t = obs_array.isel(time=slice(1, None))
+        obs_prev = obs_array.shift(time=1).isel(time=slice(1, None))
+        valid_pairs = np.isfinite(sim_t) & np.isfinite(obs_t) & np.isfinite(obs_prev)
 
-        # Calculate numerator and denominator
-        numerator = (diff_sim_obs**2).sum(dim="time")
+        sim_minus_obs = (sim_t - obs_t).where(valid_pairs)
+        diff_obs_obs = (obs_t - obs_prev).where(valid_pairs)
+
+        numerator = (sim_minus_obs**2).sum(dim="time")
         denominator = (diff_obs_obs**2).sum(dim="time")
 
-        # Calculate CP
-        cp = 1 - (numerator / denominator)
-
+        cp = xr.where(denominator != 0, 1 - (numerator / denominator), np.nan)
         return cp
 
     def dr(self, data_array, obs_array, fun=None, epsilon_type="none", epsilon_value=None):
@@ -666,13 +780,9 @@ class metrics:
             xr.DataArray: An array containing the dr values for each time step.
         """
 
-        # Align and handle missing values
-        common_time = obs_array.time.values.astype("datetime64[D]")
-        data_array = data_array.sel(time=common_time)
-        obs_array = obs_array.sel(time=common_time)
-        valid_indices = np.isfinite(data_array) & np.isfinite(obs_array)
-        data_array = data_array.where(valid_indices)
-        obs_array = obs_array.where(valid_indices)
+        # Align on the overlapping timestamps; missing pairs remain NaN and
+        # are skipped by xarray reductions below.
+        data_array, obs_array = self._validate_inputs(data_array, obs_array)
 
         # Apply transformation function
         if fun is not None:
@@ -696,42 +806,59 @@ class metrics:
         A = diff.sum(dim="time")
         B = 2 * np.abs(obs_array - obs_mean).sum(dim="time")
 
-        # Calculate dr
-        dr = 1 - (A / B)
-        dr = xr.where(A > B, 1 - (B / A), dr)  # Handle cases where A > B
+        # Calculate dr. A constant observed series makes B=0, so the
+        # agreement ratio is undefined; returning 1.0 would falsely mark
+        # any non-zero model error as perfect agreement.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dr = 1 - (A / B)
+            dr = xr.where(A > B, (B / A) - 1, dr)  # Handle cases where A > B
+        dr = xr.where(B != 0, dr, np.nan)
 
         return dr
 
-    def smpi(self, s, o, n_bootstrap=100):
-        # Calculate the Single Model Performance Index (SMPI)
+    def smpi(self, s, o, n_bootstrap=100, seed=None):
+        # Calculate the Single Model Performance Index (SMPI).
+        #
+        # The comparison workflow defines SMPI from the climatological mean
+        # model-observation difference normalized by observed temporal
+        # variance. Keep this API consistent with that path instead of using
+        # instantaneous per-time-step differences.
+        #
+        # `seed` makes the bootstrap reproducible; pass an int (or pre-seeded
+        # Generator) for regression tests. Default None keeps prior behavior.
+        s, o = self._validate_inputs(s, o)
+        obs_var = o.var(dim="time", ddof=1)
+        s_climate = s.mean(dim="time")
+        o_climate = o.mean(dim="time")
 
-        # Calculate observational variance
-        obs_var = o.var(dim="time")
-        # Calculate squared differences
-        diff_squared = (s - o) ** 2
-        # Normalize by observational variance
-        normalized_diff = diff_squared / obs_var
-        # Calculate SMPI without weighting
-        smpi = normalized_diff.mean(dim=["time", "lat", "lon"])
-        # Calculate SMPI with latitude weighting
-        # note: We don't think the latitude weighting is necessary for the SMPI calculation
-        # note: this will give too much weight to the poles
-        # weights = np.cos(np.deg2rad(model.lat))
-        # weights = weights / weights.sum()
-        # weights = weights.expand_dims({'lon': mod.lon.size})
-        # smpi = (normalized_diff* weights).sum()
+        diff_squared = (s_climate - o_climate) ** 2
+        normalized_diff = xr.where(obs_var != 0, diff_squared / obs_var, np.nan)
 
-        # Bootstrap for uncertainty estimation
+        smpi_dims = list(normalized_diff.dims)
+        smpi = normalized_diff.mean(dim=smpi_dims, skipna=True) if smpi_dims else normalized_diff
+
+        rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
         bootstrap_smpi = []
-        normalized_diff_values = normalized_diff.values
-        n_times = normalized_diff.sizes["time"]
+        n_times = s.sizes["time"]
+        dask_backed = getattr(s, "chunks", None) is not None or getattr(o, "chunks", None) is not None
         for _ in range(n_bootstrap):
-            bootstrap_indices = np.random.choice(n_times, size=n_times, replace=True)
-            bootstrap_sample = normalized_diff_values[bootstrap_indices]
-            bootstrap_smpi.append(np.mean(bootstrap_sample))
+            bootstrap_indices = rng.choice(n_times, size=n_times, replace=True)
+            s_boot = s.isel(time=bootstrap_indices)
+            o_boot = o.isel(time=bootstrap_indices)
+            obs_var_boot = o_boot.var(dim="time", ddof=1)
+            diff_boot = (s_boot.mean(dim="time") - o_boot.mean(dim="time")) ** 2
+            normalized_boot = xr.where(obs_var_boot != 0, diff_boot / obs_var_boot, np.nan)
+            boot_dims = list(normalized_boot.dims)
+            boot_mean = normalized_boot.mean(dim=boot_dims, skipna=True) if boot_dims else normalized_boot
+            bootstrap_smpi.append(boot_mean if dask_backed else float(boot_mean))
 
-        bootstrap_smpi = np.array(bootstrap_smpi)
-        smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
+        if dask_backed:
+            bootstrap_da = xr.concat(bootstrap_smpi, dim="bootstrap").chunk({"bootstrap": -1})
+            smpi_lower = bootstrap_da.quantile(0.05, dim="bootstrap", skipna=True)
+            smpi_upper = bootstrap_da.quantile(0.95, dim="bootstrap", skipna=True)
+        else:
+            bootstrap_array = np.array(bootstrap_smpi)
+            smpi_lower, smpi_upper = np.percentile(bootstrap_array, [5, 95])
 
         return smpi, smpi_lower, smpi_upper
 
@@ -836,14 +963,23 @@ class metrics:
             fft_obs = np.fft.fft(obs)
             fft_sim = np.fft.fft(sim)
 
-            freqs = np.fft.fftfreq(N, d=1.0)
+            np.fft.fftfreq(N, d=1.0)
 
             # Find dominant frequency
             if N // 2 < 1:
                 return 0.0
 
             if len(sim) > 365:
-                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1 : N // 2 + 1])), 33) + 1
+                # Skip the very lowest Fourier bins (periods longer than
+                # ~N/11 samples) before picking the dominant frequency: those
+                # bins capture the trend / multi-year drift rather than the
+                # sub-seasonal phase we want for MFM. The previous code
+                # hard-coded 33, which is ~N/11 for a 1-year daily series
+                # but became arbitrarily small relative to N on longer
+                # series; scale the floor with N so the cutoff tracks the
+                # dataset resolution instead of being a magic number.
+                low_freq_floor = max(1, N // 11)
+                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1 : N // 2 + 1])), low_freq_floor) + 1
             else:
                 dominant_freq_idx = np.argmax(np.abs(fft_obs[1 : N // 2 + 1])) + 1
 

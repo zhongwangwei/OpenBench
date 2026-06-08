@@ -1,0 +1,87 @@
+project:
+  name: openbench_initial_test_smoke
+  output_dir: "{output_dir}"
+  years: [2004, 2005]
+  min_year_threshold: 1
+  lat_range: [-90, 90]
+  lon_range: [-180, 180]
+  tim_res: Month
+  grid_res: 2.0
+  weight: none
+  num_cores: 1
+  time_alignment: intersection
+  unified_mask: true
+  generate_report: false
+  IGBP_groupby: false
+  PFT_groupby: false
+  climate_zone_groupby: false
+
+evaluation:
+  variables:
+    - Evapotranspiration
+    - Latent_Heat
+    - Sensible_Heat
+
+reference:
+  data_root: "{reference_root}"
+  Evapotranspiration:
+    - OpenBench_Smoke_GLEAM4_2a
+    - OpenBench_Smoke_GLEAM_hybrid_PLUMBER2
+  Latent_Heat:
+    - OpenBench_Smoke_ILAMB_monthly
+    - OpenBench_Smoke_PLUMBER2
+  Sensible_Heat:
+    - OpenBench_Smoke_ILAMB_monthly
+    - OpenBench_Smoke_PLUMBER2
+
+simulation:
+  grid_case:
+    model: CoLM
+    root_dir: "{simulation_root}"
+    data_type: grid
+    tim_res: Month
+    data_groupby: Month
+    grid_res: 2.0
+    prefix: grid_case_hist_
+    suffix: ""
+    variables:
+      Evapotranspiration:
+        varname: f_fevpa
+        varunit: mm s-1
+      Latent_Heat:
+        varname: f_lfevpa
+        varunit: W m-2
+      Sensible_Heat:
+        varname: f_fsena
+        varunit: W m-2
+
+  station_case:
+    model: CoLM
+    root_dir: "{station_simulation_root}"
+    data_type: stn
+    tim_res: Day
+    data_groupby: single
+    grid_res: 1.0
+    fulllist: "{station_simulation_list}"
+    prefix: ""
+    suffix: ""
+    variables:
+      Evapotranspiration:
+        varname: f_fevpa
+        varunit: mm s-1
+      Latent_Heat:
+        varname: f_lfevpa
+        varunit: W m-2
+      Sensible_Heat:
+        varname: f_fsena
+        varunit: W m-2
+
+metrics: [bias, RMSE, correlation]
+scores: [Overall_Score]
+
+comparison:
+  enabled: true
+  items: [HeatMap]
+
+statistics:
+  enabled: false

@@ -2,7 +2,6 @@
 
 import click
 
-
 _AMBIGUOUS_TARGET_RESOLUTION = "Reference resolution is ambiguous across simulations:"
 
 

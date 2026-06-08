@@ -4,6 +4,7 @@ Dialog for editing data source configuration.
 """
 
 import logging
+import shlex
 from typing import Dict, Any, Optional
 
 from PySide6.QtWidgets import (
@@ -412,7 +413,7 @@ class DataSourceEditor(QDialog):
             dialog.accept()
 
         browser.file_selected.connect(on_path_selected)
-        dialog.exec_()
+        dialog.exec()
 
     def _on_data_type_changed(self):
         """Show/hide fields based on data type selection."""
@@ -637,32 +638,32 @@ class DataSourceEditor(QDialog):
             return self._prompt_for_remote_yaml_file()
 
         openbench_root = self._get_local_openbench_path()
-        default_dir = os.path.join(openbench_root, "nml", "nml-yaml")
-
-        if self.source_type == "ref":
-            ref_dir = os.path.join(default_dir, "Ref_variables_definition_LowRes")
-            if os.path.exists(ref_dir):
-                default_dir = ref_dir
-        else:
-            user_dir = os.path.join(default_dir, "user")
-            if os.path.exists(user_dir):
-                default_dir = user_dir
+        # Open at the user's last-used dir if available, then the
+        # detected install/root, then HOME. Do not infer source-tree
+        # resource folders; wheel installs may not have them.
+        candidates = [
+            getattr(self, "_last_yaml_dir", None),
+            openbench_root,
+            os.path.expanduser("~"),
+        ]
+        default_dir = next(
+            (c for c in candidates if c and os.path.isdir(c)),
+            os.path.expanduser("~"),
+        )
 
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Load Configuration from YAML", default_dir, "YAML Files (*.yaml *.yml);;All Files (*)"
         )
+        if file_path:
+            self._last_yaml_dir = os.path.dirname(file_path)
         return file_path
 
     def _prompt_for_remote_yaml_file(self) -> str:
         """Open remote file browser to select a YAML file."""
-        # Get OpenBench path from remote config or use home
+        # Start remote browsing at HOME. v3 installs are not guaranteed to
+        # have any source-tree style data folders on the remote host.
         try:
-            home = self._ssh_manager._get_home_dir()
-            # Try to find OpenBench nml directory
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"ls -d {home}/OpenBench/nml/nml-yaml 2>/dev/null || echo {home}", timeout=10
-            )
-            start_path = stdout.strip() if exit_code == 0 else home
+            start_path = self._ssh_manager._get_home_dir()
         except Exception as e:
             logger.debug("Failed to get remote OpenBench path: %s", e)
             start_path = "/"
@@ -687,7 +688,7 @@ class DataSourceEditor(QDialog):
                 QMessageBox.warning(dialog, "Invalid File", "Please select a YAML file (.yaml or .yml)")
 
         browser.file_selected.connect(on_path_selected)
-        dialog.exec_()
+        dialog.exec()
 
         return selected_path[0] or ""
 
@@ -711,7 +712,7 @@ class DataSourceEditor(QDialog):
         import yaml
 
         try:
-            stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{file_path}'", timeout=30)
+            stdout, stderr, exit_code = self._ssh_manager.execute(f"cat {shlex.quote(file_path)}", timeout=30)
             if exit_code != 0:
                 QMessageBox.warning(self, "Load Error", f"Failed to load remote file:\n{file_path}\n\nError: {stderr}")
                 return None
@@ -844,7 +845,7 @@ class DataSourceEditor(QDialog):
         if self._is_remote_mode():
             # Load from remote server
             try:
-                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{path}'", timeout=30)
+                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat {shlex.quote(path)}", timeout=30)
                 if exit_code == 0 and stdout.strip():
                     content = yaml.safe_load(stdout) or {}
             except Exception:
@@ -892,7 +893,7 @@ class DataSourceEditor(QDialog):
         if self._is_remote_mode():
             # Remote mode: load file from remote server
             try:
-                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat '{model_path}'", timeout=30)
+                stdout, stderr, exit_code = self._ssh_manager.execute(f"cat {shlex.quote(model_path)}", timeout=30)
                 if exit_code != 0:
                     QMessageBox.warning(
                         self, "Load Error", f"Failed to load remote file:\n{model_path}\n\nError: {stderr}"

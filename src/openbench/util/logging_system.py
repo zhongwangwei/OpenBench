@@ -134,7 +134,7 @@ class PerformanceFilter(logging.Filter):
                 process = psutil.Process()
                 record.memory_mb = process.memory_info().rss / 1024 / 1024
                 record.cpu_percent = process.cpu_percent()
-            except:
+            except Exception:
                 record.memory_mb = 0
                 record.cpu_percent = 0
         else:
@@ -175,8 +175,17 @@ class AsyncHandler(logging.Handler):
             except queue.Empty:
                 continue
             except Exception:
-                # Ignore errors in worker thread
-                pass
+                # The async worker must keep running, but emitting failures
+                # to stderr lets users discover handler bugs (broken
+                # formatter, file descriptor closed) instead of seeing
+                # silent log loss.
+                import sys, traceback
+
+                try:
+                    sys.stderr.write("AsyncHandler worker error:\n")
+                    traceback.print_exc(file=sys.stderr)
+                except Exception:
+                    pass
 
     def emit(self, record: logging.LogRecord):
         """Queue record for asynchronous processing."""
@@ -448,6 +457,7 @@ class LoggingManager:
 
 # Global logging manager instance
 _logging_manager = None
+_logging_manager_lock = threading.Lock()
 
 
 def get_logging_manager(base_dir: Optional[str] = None) -> LoggingManager:
@@ -462,9 +472,12 @@ def get_logging_manager(base_dir: Optional[str] = None) -> LoggingManager:
     """
     global _logging_manager
 
+    # Double-checked lock so two threads racing through the None check
+    # don't both construct managers and leak file handlers.
     if _logging_manager is None:
-        _logging_manager = LoggingManager(base_dir or "./logs")
-
+        with _logging_manager_lock:
+            if _logging_manager is None:
+                _logging_manager = LoggingManager(base_dir or "./logs")
     return _logging_manager
 
 

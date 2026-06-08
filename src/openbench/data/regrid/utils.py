@@ -30,8 +30,7 @@ class Grid:
         """Validate the initialized SpatialBounds class."""
         msg = None
         if self.south > self.north:
-            msg = "Value of north bound is greater than south bound.\nPlease check the bounds input."
-            pass
+            msg = "Value of south bound is greater than north bound.\nPlease check the bounds input."
         if self.west > self.east:
             msg = "Value of west bound is greater than east bound.\nPlease check the bounds input."
         if msg is not None:
@@ -70,7 +69,7 @@ def create_lat_lon_coords(grid: Grid) -> tuple[np.ndarray, np.ndarray]:
     else:
         lat_coords = np.arange(grid.south, grid.north + grid.resolution_lat, grid.resolution_lat)
 
-    if np.remainder((grid.east - grid.west), grid.resolution_lat) > 0:
+    if np.remainder((grid.east - grid.west), grid.resolution_lon) > 0:
         lon_coords = np.arange(grid.west, grid.east, grid.resolution_lon)
     else:
         lon_coords = np.arange(grid.west, grid.east + grid.resolution_lon, grid.resolution_lon)
@@ -149,10 +148,17 @@ def overlap(a: pd.IntervalIndex, b: pd.IntervalIndex) -> np.ndarray:
 
 
 def normalize_overlap(overlap: np.ndarray) -> np.ndarray:
-    """Normalize overlap values so they sum up to 1.0 along the first axis."""
+    """Normalize overlap values so they sum up to 1.0 along the first axis.
+
+    Target cells with no source overlap keep an all-zero weight column.  The
+    conservative regridder masks those targets to NaN explicitly; keeping the
+    weight column zero avoids manufacturing tiny denominators that can hide the
+    no-support state from downstream coverage checks.
+    """
     overlap_sum: np.ndarray = overlap.sum(axis=0)
-    overlap_sum[overlap_sum == 0] = 1e-12  # Avoid dividing by 0.
-    return overlap / overlap_sum  # type: ignore
+    normalized = np.zeros_like(overlap, dtype=np.result_type(overlap, float))
+    np.divide(overlap, overlap_sum, out=normalized, where=overlap_sum != 0)
+    return normalized
 
 
 def create_dot_dataarray(

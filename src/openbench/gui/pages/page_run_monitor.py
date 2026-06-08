@@ -11,12 +11,13 @@ import logging
 import os
 import subprocess
 import platform
+import shlex
 
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import ProgressDashboard, TaskStatus
-from openbench.gui.runner import EvaluationRunner, RunnerStatus
+from openbench.gui.runner import EvaluationRunner
 from openbench.gui.remote_runner import RemoteRunner
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class PageRunMonitor(BasePage):
 
     def __init__(self, controller, parent=None):
         self._runner = None
+        self._last_ssh_manager_error = ""
         super().__init__(controller, parent)
         # Remove the trailing stretch added by BasePage so dashboard can expand
         self._remove_trailing_stretch()
@@ -91,15 +93,28 @@ class PageRunMonitor(BasePage):
         # Calculate task counts for accurate progress
         num_variables = len(selected)
 
-        # Count reference sources
+        # Count reference sources. The new scan-based ref page stores
+        # per-(variable, source) entries in `source_configs` keyed
+        # "<variable>::<source>"; legacy `def_nml` is no longer populated
+        # by PageRefData and counting it gave 0 → progress bar stuck at
+        # 95% for multi-source runs.
         ref_data = config.get("ref_data", {})
-        ref_def_nml = ref_data.get("def_nml", {})
-        num_ref_sources = len([k for k, v in ref_def_nml.items() if v])
+        ref_source_configs = ref_data.get("source_configs", {})
+        if ref_source_configs:
+            num_ref_sources = len({k.split("::", 1)[1] for k in ref_source_configs if "::" in k})
+        else:
+            ref_def_nml = ref_data.get("def_nml", {})
+            num_ref_sources = len([k for k, v in ref_def_nml.items() if v])
 
-        # Count simulation sources
+        # Count simulation sources. Same situation: PageSimData writes
+        # source_configs and leaves def_nml empty.
         sim_data = config.get("sim_data", {})
-        sim_def_nml = sim_data.get("def_nml", {})
-        num_sim_sources = len([k for k, v in sim_def_nml.items() if v])
+        sim_source_configs = sim_data.get("source_configs", {})
+        if sim_source_configs:
+            num_sim_sources = len(sim_source_configs)
+        else:
+            sim_def_nml = sim_data.get("def_nml", {})
+            num_sim_sources = len([k for k, v in sim_def_nml.items() if v])
 
         # Count metrics and scores
         metrics = config.get("metrics", {})
@@ -132,6 +147,7 @@ class PageRunMonitor(BasePage):
             if self._runner is None:
                 # Error creating remote runner - message already shown
                 self.dashboard.stop_monitoring()
+                self._refresh_parent_navigation()
                 return
         else:
             # Local execution mode (default)
@@ -156,7 +172,9 @@ class PageRunMonitor(BasePage):
         self._runner.progress_updated.connect(self._on_progress)
         self._runner.log_message.connect(self._on_log)
         self._runner.finished_signal.connect(self._on_finished)
+        self._runner.finished.connect(self._refresh_parent_navigation)
         self._runner.start()
+        self._refresh_parent_navigation()
 
     def _create_remote_runner(self, config_path: str, general: dict):
         """Create a RemoteRunner for SSH-based execution.
@@ -232,31 +250,38 @@ class PageRunMonitor(BasePage):
         Returns:
             SSHManager instance if available and connected, None otherwise
         """
+        self._last_ssh_manager_error = ""
         try:
             # Access the main window through the controller's parent
             # The controller is created by MainWindow with 'self' as parent
             main_window = self.controller.parent()
             if main_window is None:
+                self._last_ssh_manager_error = "main window is not available"
                 return None
 
             # Get the pages dictionary from the main window
             pages = getattr(main_window, "pages", None)
             if pages is None:
+                self._last_ssh_manager_error = "main window has no pages registry"
                 return None
 
             # Get the runtime page which contains the remote config widget
             runtime_page = pages.get("runtime")
             if runtime_page is None:
+                self._last_ssh_manager_error = "runtime page is not available"
                 return None
 
             # The remote config widget is a child of the runtime page
             remote_config_widget = getattr(runtime_page, "remote_config_widget", None)
             if remote_config_widget is None:
+                self._last_ssh_manager_error = "remote config widget is not available"
                 return None
 
             # Get the SSH manager from the remote config widget
             return remote_config_widget.get_ssh_manager()
-        except Exception:
+        except Exception as exc:
+            self._last_ssh_manager_error = str(exc)
+            logger.warning("Failed to retrieve SSH manager: %s", exc)
             return None
 
     def _on_progress(self, progress):
@@ -275,6 +300,7 @@ class PageRunMonitor(BasePage):
     def _on_finished(self, success: bool, message: str):
         """Handle run completion."""
         self.dashboard.stop_monitoring()
+        self._refresh_parent_navigation()
 
         if success:
             self.dashboard.set_progress(100)
@@ -283,8 +309,16 @@ class PageRunMonitor(BasePage):
             # Check if it's an OpenBench not found error
             if "Could not find OpenBench" in message:
                 self._prompt_openbench_location()
+            elif "Evaluation completed with errors" in message:
+                QMessageBox.warning(self, "Completed with Errors", message)
             else:
                 QMessageBox.warning(self, "Failed", message)
+
+    def _refresh_parent_navigation(self):
+        """Refresh main-window navigation buttons after runner state changes."""
+        main_window = self.controller.parent() if self.controller is not None else None
+        if main_window is not None and hasattr(main_window, "_update_navigation"):
+            main_window._update_navigation()
 
     def _prompt_openbench_location(self):
         """Prompt user to select OpenBench directory."""
@@ -301,9 +335,15 @@ class PageRunMonitor(BasePage):
             )
 
             if dir_path:
-                # Verify it's a valid OpenBench directory
-                script_path = os.path.join(dir_path, "openbench", "openbench.py")
-                if os.path.exists(script_path):
+                # Verify it's a valid v3 OpenBench directory using the
+                # shared marker helper (editable layout or pyproject.toml
+                # declaring the openbench package). The previous check
+                # required `openbench/openbench.py`, a v2 layout that no
+                # longer exists in v3 — so every valid v3 directory was
+                # being rejected with no "Use anyway" fallback.
+                from openbench.gui.path_utils import looks_like_openbench_root
+
+                if looks_like_openbench_root(dir_path):
                     # Save the path
                     self._save_openbench_path(dir_path)
                     QMessageBox.information(
@@ -313,7 +353,10 @@ class PageRunMonitor(BasePage):
                     QMessageBox.warning(
                         self,
                         "Invalid Directory",
-                        f"The selected directory does not contain openbench/openbench.py:\n{dir_path}",
+                        "The selected directory does not look like an OpenBench v3 "
+                        "installation (no src/openbench/cli/main.py and no "
+                        "pyproject.toml declaring the openbench package):\n"
+                        f"{dir_path}",
                     )
 
     def _save_openbench_path(self, path: str):
@@ -330,7 +373,10 @@ class PageRunMonitor(BasePage):
 
     def _on_stop(self):
         """Handle stop request."""
-        if self._runner:
+        # Skip the confirm dialog (and the redundant stop()/kill round-trip)
+        # when the runner has already finished naturally — `self._runner` is
+        # still set but `isRunning()` is False after the worker exited.
+        if self._runner and self._runner.isRunning():
             reply = QMessageBox.question(
                 self, "Confirm Stop", "Are you sure you want to stop the evaluation?", QMessageBox.Yes | QMessageBox.No
             )
@@ -368,18 +414,30 @@ class PageRunMonitor(BasePage):
 
     def _open_remote_output(self, output_dir: str):
         """Open remote output directory in file browser with download option."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton
         from openbench.gui.widgets.remote_config import RemoteFileBrowser
 
         ssh_manager = self._get_ssh_manager()
         if not ssh_manager or not ssh_manager.is_connected:
-            QMessageBox.warning(
-                self, "Not Connected", f"SSH connection is not available.\n\nRemote output directory:\n{output_dir}"
-            )
+            message = f"SSH connection is not available.\n\nRemote output directory:\n{output_dir}"
+            detail = getattr(self, "_last_ssh_manager_error", "")
+            if detail:
+                message += f"\n\nDetails: {detail}"
+            QMessageBox.warning(self, "Not Connected", message)
             return
 
         # Check if directory exists on remote
-        stdout, stderr, exit_code = ssh_manager.execute(f"test -d '{output_dir}' && echo 'exists'", timeout=10)
+        try:
+            stdout, stderr, exit_code = ssh_manager.execute(
+                f"test -d {shlex.quote(output_dir)} && echo 'exists'", timeout=10
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Remote Output Error",
+                f"Failed to check remote output directory:\n{output_dir}\n\nError: {exc}",
+            )
+            return
         if exit_code != 0 or "exists" not in stdout:
             QMessageBox.warning(self, "Directory Not Found", f"Remote output directory does not exist:\n{output_dir}")
             return
@@ -415,6 +473,27 @@ class PageRunMonitor(BasePage):
 
         dialog.exec()
 
+    @staticmethod
+    def _remote_download_relpath(remote_file: str, remote_dir: str) -> str | None:
+        """Return a safe relative path for a remote download entry.
+
+        `find <remote_dir> -type f` should only return files inside
+        `remote_dir`, but validate the invariant before joining with a local
+        destination so malformed remote output cannot escape `local_target`.
+        """
+        import posixpath
+
+        remote_dir_norm = posixpath.normpath(remote_dir)
+        remote_file_norm = posixpath.normpath(remote_file)
+        if remote_file_norm == remote_dir_norm:
+            return None
+        if not remote_file_norm.startswith(remote_dir_norm.rstrip("/") + "/"):
+            return None
+        rel_path = posixpath.relpath(remote_file_norm, remote_dir_norm)
+        if rel_path in ("", ".") or rel_path.startswith("../") or rel_path == ".." or posixpath.isabs(rel_path):
+            return None
+        return rel_path
+
     def _download_remote_folder(self, ssh_manager, remote_dir: str, parent_dialog):
         """Download entire remote folder to local."""
         from PySide6.QtWidgets import QFileDialog, QProgressDialog
@@ -441,7 +520,7 @@ class PageRunMonitor(BasePage):
 
         try:
             # Get list of files to download
-            stdout, stderr, exit_code = ssh_manager.execute(f"find '{remote_dir}' -type f", timeout=60)
+            stdout, stderr, exit_code = ssh_manager.execute(f"find {shlex.quote(remote_dir)} -type f", timeout=60)
             if exit_code != 0:
                 QMessageBox.warning(parent_dialog, "Error", f"Failed to list remote files:\n{stderr}")
                 return
@@ -454,29 +533,29 @@ class PageRunMonitor(BasePage):
             total_files = len(files)
             progress.setMaximum(total_files)
 
-            # Open SFTP connection
-            sftp = ssh_manager._client.open_sftp()
-            try:
-                for i, remote_file in enumerate(files):
-                    if progress.wasCanceled():
-                        break
+            # Open SFTP connection. The sftp client is owned by SSHManager
+            # (cached, reused), so we must NOT close it here.
+            sftp = ssh_manager.open_sftp()
+            for i, remote_file in enumerate(files):
+                if progress.wasCanceled():
+                    break
 
-                    # Calculate relative path
-                    rel_path = os.path.relpath(remote_file, remote_dir)
-                    local_file = os.path.join(local_target, rel_path)
+                # Calculate relative path, validating that remote output did
+                # not escape the requested directory before writing locally.
+                rel_path = self._remote_download_relpath(remote_file, remote_dir)
+                if rel_path is None:
+                    raise ValueError(f"Remote file is outside the requested directory: {remote_file}")
+                local_file = os.path.join(local_target, rel_path)
 
-                    # Create local directory if needed
-                    local_file_dir = os.path.dirname(local_file)
-                    os.makedirs(local_file_dir, exist_ok=True)
+                # Create local directory if needed
+                local_file_dir = os.path.dirname(local_file)
+                os.makedirs(local_file_dir, exist_ok=True)
 
-                    # Download file
-                    progress.setLabelText(f"Downloading: {rel_path}")
-                    sftp.get(remote_file, local_file)
+                # Download file
+                progress.setLabelText(f"Downloading: {rel_path}")
+                sftp.get(remote_file, local_file)
 
-                    progress.setValue(i + 1)
-
-            finally:
-                sftp.close()
+                progress.setValue(i + 1)
 
             if not progress.wasCanceled():
                 QMessageBox.information(

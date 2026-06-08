@@ -1,7 +1,8 @@
-import itertools
 import logging
 import os
-import sys
+from openbench.visualization._combinations import limited_product
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import matplotlib
 import matplotlib.pylab as pylab
@@ -9,11 +10,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
+from matplotlib.artist import setp
 
-# import seaborn as sns
+# seaborn is only used by the optional split-violin plot path. Keep the
+# import optional so missing-seaborn doesn't block the rest of the
+# parallel-coordinates plotting logic; raise a clear error only when the
+# split-violin branch is actually requested.
+try:
+    import seaborn as sns
+except ImportError:  # pragma: no cover - optional dep
+    sns = None
+
 from matplotlib.cbook import flatten
 
 from openbench.util.converttype import Convert_Type
+from openbench.visualization._validation import require_finite_columns
+from openbench.visualization._filenames import join_filename_components
+
+logger = logging.getLogger(__name__)
 
 
 def _read_comparison_file(file):
@@ -49,7 +63,9 @@ def _read_comparison_file(file):
     return df
 
 
+@with_isolated_rc
 def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics, option):
+    option = option.copy()
     # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
@@ -62,7 +78,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": option["axes_linewidth"],
         "font.size": 15,
         "xtick.labelsize": option["xticksize"],
@@ -137,12 +152,14 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_title(option["title"], fontsize=option["title_size"])
                 # Save the plot
 
-                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_scores_{evaluation_item}_{ref_source}.{option['saving_format']}"
-                fig.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot_scores', evaluation_item, ref_source)}.{option['saving_format']}"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-            except:
-                logging.error(f"Error in {evaluation_item} - {ref_source}, Scores contains Na  (Removing)")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {evaluation_item} - {ref_source}, Scores plot failed")
+                raise
 
     # -------第二种情况：多个item，多个模型，一个score，每幅图一个score
     option["situation"] = 2
@@ -163,7 +180,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # scores = sco['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df["Reference"]))
+    all_combinations = list(limited_product(filtered_df["Reference"], option, context="Parallel Coordinates scores"))
 
     # Iterate over each score
     for score in scores:
@@ -176,9 +193,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
-
-            # Create a new figure
-            plt.subplots(figsize=figsize)
 
             # Create an empty list to store the data for each simulation
             data_list = []
@@ -229,12 +243,14 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 # Save the plot
-                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{score}_{'_'.join(item_combination)}.{option['saving_format']}"
-                fig.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot', score, *item_combination)}.{option['saving_format']}"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-            except:
-                logging.error(f"Error in {score} - {item_combination} ")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {score} - {item_combination} plot failed")
+                raise
     # ------------in the end of the function----------------
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -274,8 +290,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
             # Select the columns with the names of the score
             data = df_selected[metrics].values
             try:
-                plt.subplots(figsize=figsize)
-
                 # # Create the parallel coordinate plot
                 fig, ax = parallel_coordinate_plot(
                     data,
@@ -302,12 +316,14 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 ax.set_title(option["title"], fontsize=option["title_size"])
 
-                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_metrics_{evaluation_item}_{ref_source}.{option['saving_format']}"
-                fig.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot_metrics', evaluation_item, ref_source)}.{option['saving_format']}"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-            except:
-                logging.error(f"Error in {evaluation_item} - {ref_source}, metrics contains Nan (Removing) ")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {evaluation_item} - {ref_source}, metrics plot failed")
+                raise
 
     option["situation"] = 2
     if not option["set_legend"]:
@@ -332,7 +348,7 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # scores = ['nBiasScore', 'overall_score']
 
     # Generate all combinations of `Reference` values from `filtered_df`.
-    all_combinations = list(itertools.product(*filtered_df["Reference"]))
+    all_combinations = list(limited_product(filtered_df["Reference"], option, context="Parallel Coordinates metrics"))
 
     # Iterate over each metric
     for metric in metrics:
@@ -345,9 +361,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
 
             # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
-
-            # Create a new figure
-            plt.subplots(figsize=figsize)
 
             # Create an empty list to store the data for each simulation
             data_list = []
@@ -397,29 +410,31 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 # Save the plot
-                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/Parallel_Coordinates_Plot_{metric}_{'_'.join(item_combination)}.{option['saving_format']}"
-                fig.savefig(
-                    output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
+                output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot', metric, *item_combination)}.{option['saving_format']}"
+                save_figure(
+                    fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
                 )
-            except:
-                logging.error(f"Error in {metric} - {item_combination} -4")
+                plt.close(fig)
+            except Exception:
+                logging.exception(f"Error in {metric} - {item_combination} plot failed")
+                raise
 
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):
     # Quick initial QC
     if data.shape[0] != len(model_names):
-        sys.exit(
+        raise ValueError(
             "Error: data.shape[0], " + str(data.shape[0]) + ", mismatch to len(model_names), " + str(len(model_names))
         )
     if data.shape[1] != len(metric_names):
-        sys.exit(
+        raise ValueError(
             "Error: data.shape[1], " + str(data.shape[1]) + ", mismatch to len(metric_names), " + str(len(metric_names))
         )
     if model_names2 is not None:
         # Check: model_names2 should be a subset of model_names
         for model in model_names2:
             if model not in model_names:
-                sys.exit(
+                raise ValueError(
                     "Error: model_names2 should be a subset of model_names, but " + model + " is not in model_names"
                 )
     # print("Passed a quick QC")
@@ -439,6 +454,7 @@ def _data_transform(
     # Data to plot
     ys = data  # stacked y-axis values
     N = ys.shape[1]  # number of vertical axis (i.e., =len(metric_names))
+    require_finite_columns(ys, metric_names, label="Parallel Coordinates")
 
     if ymax is None:
         ymaxs = np.nanmax(ys, axis=0)  # maximum (ignore nan value)
@@ -448,9 +464,8 @@ def _data_transform(
                 ymaxs = np.nanpercentile(ys, 95, axis=0)
             else:
                 ymaxs = np.repeat(ymax, N)
-        except ValueError:
-            print(f"Invalid input for ymax: {ymax}")
-
+        except ValueError as exc:
+            raise ValueError(f"Invalid input for ymax: {ymax}") from exc
     if ymin is None:
         ymins = np.nanmin(ys, axis=0)  # minimum (ignore nan value)
     else:
@@ -459,9 +474,8 @@ def _data_transform(
                 ymins = np.nanpercentile(ys, 5, axis=0)
             else:
                 ymins = np.repeat(ymin, N)
-        except ValueError:
-            print(f"Invalid input for ymin: {ymin}")
-
+        except ValueError as exc:
+            raise ValueError(f"Invalid input for ymin: {ymin}") from exc
     ymeds = np.nanmedian(ys, axis=0)  # median
     ymean = np.nanmean(ys, axis=0)  # mean
 
@@ -509,8 +523,7 @@ def _data_transform(
         zs_middle = (ymaxs[:] - ymins[:]) / 2 / dys[:] * dys[0] + ymins[0]
 
     if model_names2 is not None:
-        print("Models in the second group:", model_names2)
-
+        logger.info("Models in the second group:", model_names2)
     # Pandas dataframe for seaborn plotting
     df_stacked = _to_pd_dataframe(
         data,
@@ -554,15 +567,16 @@ def _to_pd_dataframe(
     return df_stacked
 
 
+@with_isolated_rc
 def parallel_coordinate_plot(
     data,
     metric_names,
     model_names,
-    models_to_highlight=list(),
+    models_to_highlight=None,
     models_to_highlight_by_line=True,
     models_to_highlight_colors=None,
     models_to_highlight_labels=None,
-    models_to_highlight_markers=["s", "o", "^", "*"],
+    models_to_highlight_markers=None,
     models_to_highlight_markers_size=22,
     fig=None,
     ax=None,
@@ -603,7 +617,7 @@ def parallel_coordinate_plot(
     ymax=None,
     ymin=None,
     debug=False,
-    option={},
+    option=None,
 ):
     """
     Parameters
@@ -673,6 +687,9 @@ def parallel_coordinate_plot(
     2024-03 parameter added for violin plot label
     2024-04 parameters added for arrow and option added for ymax/ymin setting
     """
+    models_to_highlight = list(models_to_highlight or [])
+    models_to_highlight_markers = list(models_to_highlight_markers or ["s", "o", "^", "*"])
+    option = dict(option or {})
     params = {
         "legend.fontsize": "large",
         "axes.labelsize": "x-large",
@@ -699,9 +716,8 @@ def parallel_coordinate_plot(
     )
 
     if debug:
-        print("ymins:", ymins)
-        print("ymaxs:", ymaxs)
-
+        logger.info("ymins:", ymins)
+        logger.info("ymaxs:", ymaxs)
     # Prepare plot
     if N > 20:
         if xtick_labelsize is None:
@@ -724,6 +740,10 @@ def parallel_coordinate_plot(
 
     if fig is None and ax is None:
         fig, ax = plt.subplots(figsize=figsize)
+    elif ax is None:
+        ax = fig.add_subplot(111)
+    elif fig is None:
+        fig = ax.figure
 
     axes = [ax] + [ax.twinx() for i in range(N - 1)]
 
@@ -747,9 +767,9 @@ def parallel_coordinate_plot(
         if show_boxplot:
             box = ax.boxplot(y_filtered, positions=range(N), patch_artist=True, widths=0.15)
             for item in ["boxes", "whiskers", "fliers", "medians", "caps"]:
-                plt.setp(box[item], color="darkgrey")
-            plt.setp(box["boxes"], facecolor="None")
-            plt.setp(box["fliers"], markeredgecolor="darkgrey")
+                setp(box[item], color="darkgrey")
+            setp(box["boxes"], facecolor="None")
+            setp(box["fliers"], markeredgecolor="darkgrey")
 
         # Violin plot
         if show_violin:
@@ -772,6 +792,11 @@ def parallel_coordinate_plot(
                     pc.set_alpha(0.8)
             else:
                 # seaborn for split violin plot
+                if sns is None:
+                    raise ImportError(
+                        "seaborn is required for split-violin plots in "
+                        "parallel coordinates; install with `pip install seaborn`."
+                    )
                 violin = sns.violinplot(
                     data=df2_stacked,
                     x="Metric",
@@ -790,7 +815,8 @@ def parallel_coordinate_plot(
 
     # Line or marker
 
-    colors = [plt.get_cmap(colormap)(c) for c in np.linspace(0, 1, len(model_names) + 1)]
+    colormap_obj = matplotlib.colormaps.get_cmap(colormap) if isinstance(colormap, str) else colormap
+    colors = [colormap_obj(c) for c in np.linspace(0, 1, len(model_names) + 1)]
 
     if "markers" in option:
         marker_types = [option["markers"]]
@@ -833,7 +859,7 @@ def parallel_coordinate_plot(
                     c=color,
                     label=label,
                     markersize=models_to_highlight_markers_size,
-                    alpha=option["markersalpha"],
+                    alpha=option.get("markersalpha", 1),
                 )
 
             mh_index += 1
@@ -911,7 +937,7 @@ def parallel_coordinate_plot(
                         zorder=999,
                     )
 
-    if option["situation"] == 2:
+    if option.get("situation") == 2:
         if "x_rotation" in option:
             x_rotation = option["x_rotation"]
         else:

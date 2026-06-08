@@ -3,8 +3,10 @@
 Dialog for creating and editing model definition files.
 """
 
+import base64
 import logging
 import os
+import shlex
 import yaml
 from typing import Dict, Any, Optional
 
@@ -23,7 +25,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QHeaderView,
     QLabel,
-    QInputDialog,
 )
 from PySide6.QtCore import Qt
 
@@ -223,7 +224,8 @@ class ModelDefinitionEditor(QDialog):
             yaml_content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
             try:
-                cmd = f"cat > '{self.file_path}' << 'YAML_EOF'\n{yaml_content}YAML_EOF"
+                encoded = base64.b64encode(yaml_content.encode("utf-8")).decode("ascii")
+                cmd = f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(self.file_path)}"
                 stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
 
                 if exit_code != 0:
@@ -266,9 +268,16 @@ class ModelDefinitionEditor(QDialog):
 
     def _save_file_local(self, model_name: str):
         """Save model definition to a local file."""
-        # Suggest default path
-        default_dir = os.path.join(os.getcwd(), "nml", "nml-yaml", "Mod_variables_definition")
-        os.makedirs(default_dir, exist_ok=True)
+        # Suggest default path without assuming any source-tree/v2 layout.
+        candidates = [
+            getattr(self, "_last_save_dir", None),
+            os.getcwd(),
+            os.path.expanduser("~"),
+        ]
+        default_dir = next(
+            (c for c in candidates if c and os.path.isdir(c)),
+            os.path.expanduser("~"),
+        )
         default_path = os.path.join(default_dir, f"{model_name}.yaml")
 
         file_path, _ = QFileDialog.getSaveFileName(self, "Save Model Definition", default_path, "YAML Files (*.yaml)")
@@ -285,6 +294,7 @@ class ModelDefinitionEditor(QDialog):
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
             self._saved_path = file_path
+            self._last_save_dir = os.path.dirname(file_path)
             QMessageBox.information(self, "Success", f"Model definition saved to:\n{file_path}")
             self.accept()
 
@@ -336,8 +346,14 @@ class ModelDefinitionEditor(QDialog):
 
         # Save to remote server
         try:
-            # Create directory if needed and write file
-            cmd = f"mkdir -p '{remote_dir}' && cat > '{remote_file}' << 'YAML_EOF'\n{yaml_content}YAML_EOF"
+            # Create directory if needed and write file. Encode the payload
+            # so YAML content cannot terminate a here-doc or be interpreted
+            # by the remote shell.
+            encoded = base64.b64encode(yaml_content.encode("utf-8")).decode("ascii")
+            cmd = (
+                f"mkdir -p {shlex.quote(remote_dir)} && "
+                f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(remote_file)}"
+            )
             stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
 
             if exit_code != 0:

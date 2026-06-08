@@ -7,7 +7,7 @@ Three variable resolution mechanisms (priority high → low):
 
 Filter search order:
 1. User: ~/.openbench/custom/<name>_filter.py  (or OPENBENCH_CUSTOM_DIR)
-2. Built-in: openbench/data/custom/<name>_filter.py (station filters shipped with package)
+2. Built-in: openbench/data/custom/<name>_filter.py (remaining package filters; most station matching is registry-driven)
 """
 
 import importlib
@@ -26,12 +26,7 @@ def _get_user_custom_dir() -> Path:
     env_dir = os.environ.get("OPENBENCH_CUSTOM_DIR")
     if env_dir:
         return Path(env_dir)
-    try:
-        from platformdirs import user_config_dir
-
-        return Path(user_config_dir("openbench")) / "custom"
-    except ImportError:
-        return Path.home() / ".openbench" / "custom"
+    return Path.home() / ".openbench" / "custom"
 
 
 def load_filter(name: str) -> Optional[ModuleType]:
@@ -50,9 +45,7 @@ def load_filter(name: str) -> Optional[ModuleType]:
     user_file = user_dir / f"{name}_filter.py"
     if user_file.exists():
         try:
-            spec = importlib.util.spec_from_file_location(
-                f"openbench_user_filter.{name}_filter", user_file
-            )
+            spec = importlib.util.spec_from_file_location(f"openbench_user_filter.{name}_filter", user_file)
             if spec and spec.loader:
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
@@ -65,4 +58,29 @@ def load_filter(name: str) -> Optional[ModuleType]:
     try:
         return importlib.import_module(f"openbench.data.custom.{name}_filter")
     except ImportError:
-        return None
+        pass
+
+    # 3. Fallback: strip trailing version digits (CoLM2024 → CoLM, BCC_AVIM2 → BCC_AVIM)
+    import re
+
+    base_name = re.sub(r"[\d.]+$", "", name)
+    if base_name and base_name != name:
+        user_file_base = user_dir / f"{base_name}_filter.py"
+        if user_file_base.exists():
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    f"openbench_user_filter.{base_name}_filter", user_file_base
+                )
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    logger.debug("Loaded user filter (base name): %s", user_file_base)
+                    return mod
+            except Exception as e:
+                logger.warning("Failed to load user filter %s: %s", user_file_base, e)
+        try:
+            return importlib.import_module(f"openbench.data.custom.{base_name}_filter")
+        except ImportError:
+            pass
+
+    return None

@@ -5,28 +5,36 @@ project:
   min_year_threshold: 5
   lat_range: [-60, 90]
   lon_range: [-180, 180]
+  grid_res: 0.5
+  num_cores: 16
+  time_alignment: per_pair
+  unified_mask: true
+  debug_mode: false
 
 evaluation:
   variables:
     - Evapotranspiration
-    - GPP
+    - Gross_Primary_Productivity
     - Latent_Heat
 
 reference:
   Evapotranspiration: GLEAM_v4.2a
-  GPP: FLUXCOM
+  Gross_Primary_Productivity: FLUXCOM-X-BASE
   Latent_Heat: FLUXCOM
 
 simulation:
   CoLM2024:
     model: CoLM2024
     root_dir: /data/CoLM2024
+    variables:
+      Gross_Primary_Productivity:
+        varname: GPP
 
   CLM5:
     model: CLM5
     root_dir: /data/CLM5
     variables:
-      GPP:
+      Gross_Primary_Productivity:
         varname: FPSN
 
 metrics: [bias, RMSE, correlation]
@@ -38,9 +46,3 @@ comparison:
 statistics:
   enabled: true
   items: [Z_Score, ANOVA]
-
-options:
-  num_cores: 16
-  time_alignment: per_pair
-  unified_mask: true
-  debug_mode: false

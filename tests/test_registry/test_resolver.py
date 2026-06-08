@@ -13,8 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,10 +31,10 @@ from openbench.config.schema import (
 )
 from openbench.data.registry.schema import ReferenceDataset, VariableMapping
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: minimal config and fake registry
 # ---------------------------------------------------------------------------
+
 
 def _make_cfg(
     variables: list[str],
@@ -45,16 +44,19 @@ def _make_cfg(
     sim_grid_res: float | None = None,
     comparison_tim_res: str | None = None,
     comparison_grid_res: float | None = None,
+    sim_root: str = "/tmp/sim",
 ) -> OpenBenchConfig:
     sim_entry = SimulationEntry(
         model="test_model",
-        root_dir="/tmp/sim",
+        root_dir=sim_root,
         tim_res=sim_tim_res,
         grid_res=sim_grid_res,
     )
     return OpenBenchConfig(
         project=ProjectConfig(
-            name="test", output_dir="/tmp/out", years=[2000, 2010],
+            name="test",
+            output_dir="/tmp/out",
+            years=[2000, 2010],
             strict_reference=strict,
             tim_res=comparison_tim_res,
             grid_res=comparison_grid_res,
@@ -84,7 +86,9 @@ def _make_cfg_multi_sim(
     }
     return OpenBenchConfig(
         project=ProjectConfig(
-            name="test", output_dir="/tmp/out", years=[2000, 2010],
+            name="test",
+            output_dir="/tmp/out",
+            years=[2000, 2010],
             strict_reference=strict,
             tim_res=comparison_tim_res,
             grid_res=comparison_grid_res,
@@ -138,6 +142,17 @@ class FakeRegistry:
         return None
 
 
+class ModelAwareRegistry(FakeRegistry):
+    """Fake registry that also resolves model profiles."""
+
+    def __init__(self, datasets: dict[str, ReferenceDataset], models: dict[str, object]):
+        super().__init__(datasets)
+        self._models = {k.lower(): v for k, v in models.items()}
+
+    def get_model(self, name: str):
+        return self._models.get(name.lower())
+
+
 def _make_ref(
     name: str,
     variables: dict[str, VariableMapping] | None = None,
@@ -174,36 +189,61 @@ class TestResolveReference:
     """Tests for the single-variable resolve_reference() function."""
 
     def test_exact_name_ok(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={"Evapotranspiration": _var("E", "mm day-1")},
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={"Evapotranspiration": _var("E", "mm day-1")},
+                ),
+            }
+        )
         r = resolve_reference("Evapotranspiration", "GLEAM_v4.2a_LowRes", reg)
         assert r.status == "ok"
         assert r.resolved_name == "GLEAM_v4.2a_LowRes"
         assert r.var_map.varname == "E"
 
     def test_base_name_auto_resolve(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={"Evapotranspiration": _var("E")},
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                ),
+            }
+        )
         r = resolve_reference(
-            "Evapotranspiration", "GLEAM_v4.2a", reg,
-            target_tim_res="Month", target_grid_res=0.5,
+            "Evapotranspiration",
+            "GLEAM_v4.2a",
+            reg,
+            target_tim_res="Month",
+            target_grid_res=0.5,
         )
         assert r.status == "ok"
         assert r.resolved_name == "GLEAM_v4.2a_LowRes"
 
+    def test_base_name_single_variant_resolves_without_context(self):
+        reg = FakeRegistry(
+            {
+                "TEST_LowRes": _make_ref(
+                    "TEST_LowRes",
+                    variables={"SomeVar": _var("some_var")},
+                ),
+            }
+        )
+
+        r = resolve_reference("SomeVar", "TEST", reg)
+
+        assert r.status == "ok"
+        assert r.resolved_name == "TEST_LowRes"
+        assert r.var_map.varname == "some_var"
+
     def test_ambiguous_no_sim_context(self):
-        reg = FakeRegistry({
-            "TEST_LowRes": _make_ref("TEST_LowRes"),
-            "TEST_MidRes": _make_ref("TEST_MidRes"),
-        })
+        reg = FakeRegistry(
+            {
+                "TEST_LowRes": _make_ref("TEST_LowRes"),
+                "TEST_MidRes": _make_ref("TEST_MidRes"),
+            }
+        )
         r = resolve_reference("SomeVar", "TEST", reg)
         assert r.status == "ambiguous"
         assert "multiple resolutions" in r.message.lower() or "resolutions" in r.message.lower()
@@ -215,9 +255,11 @@ class TestResolveReference:
         assert "not found" in r.message.lower()
 
     def test_no_variable(self):
-        reg = FakeRegistry({
-            "ERA5": _make_ref("ERA5", variables={"Precipitation": _var("tp")}),
-        })
+        reg = FakeRegistry(
+            {
+                "ERA5": _make_ref("ERA5", variables={"Precipitation": _var("tp")}),
+            }
+        )
         r = resolve_reference("Evapotranspiration", "ERA5", reg)
         assert r.status == "no_variable"
         assert "Evapotranspiration" in r.message
@@ -232,15 +274,17 @@ class TestResolveAllReferences:
     """Tests for the multi-variable resolve_all_references() function."""
 
     def test_all_ok(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={
-                    "Evapotranspiration": _var("E"),
-                    "Surface_Soil_Moisture": _var("SMs"),
-                },
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={
+                        "Evapotranspiration": _var("E"),
+                        "Surface_Soil_Moisture": _var("SMs"),
+                    },
+                ),
+            }
+        )
         cfg = _make_cfg(
             variables=["Evapotranspiration", "Surface_Soil_Moisture"],
             reference={
@@ -253,12 +297,14 @@ class TestResolveAllReferences:
         assert len(results) == 2
 
     def test_mixed_statuses_lenient(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={"Evapotranspiration": _var("E")},
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                ),
+            }
+        )
         cfg = _make_cfg(
             variables=["Evapotranspiration", "Missing_Var"],
             reference={
@@ -287,9 +333,11 @@ class TestResolveAllReferences:
     def test_strict_mode_raises_on_no_variable(self):
         from openbench.config import ConfigError
 
-        reg = FakeRegistry({
-            "ERA5": _make_ref("ERA5", variables={"Precipitation": _var("tp")}),
-        })
+        reg = FakeRegistry(
+            {
+                "ERA5": _make_ref("ERA5", variables={"Precipitation": _var("tp")}),
+            }
+        )
         cfg = _make_cfg(
             variables=["Evapotranspiration"],
             reference={"Evapotranspiration": "ERA5"},
@@ -301,10 +349,12 @@ class TestResolveAllReferences:
     def test_strict_mode_raises_on_ambiguous(self):
         from openbench.config import ConfigError
 
-        reg = FakeRegistry({
-            "TEST_LowRes": _make_ref("TEST_LowRes"),
-            "TEST_MidRes": _make_ref("TEST_MidRes"),
-        })
+        reg = FakeRegistry(
+            {
+                "TEST_LowRes": _make_ref("TEST_LowRes"),
+                "TEST_MidRes": _make_ref("TEST_MidRes"),
+            }
+        )
         cfg = _make_cfg(
             variables=["SomeVar"],
             reference={"SomeVar": "TEST"},
@@ -331,6 +381,24 @@ class TestResolveAllReferences:
         with pytest.raises(ConfigError, match="strict_reference"):
             resolve_all_references(cfg, reg)
 
+    def test_strict_mode_checks_extended_low_confidence_provenance(self):
+        from openbench.config import ConfigError
+
+        ref = _make_ref(
+            "GLEAM_v4.2a_LowRes",
+            variables={"Evapotranspiration": _var("E")},
+        )
+        ref._provenance = {"years": "default"}
+        reg = FakeRegistry({"GLEAM_v4.2a_LowRes": ref})
+        cfg = _make_cfg(
+            variables=["Evapotranspiration"],
+            reference={"Evapotranspiration": "GLEAM_v4.2a_LowRes"},
+            strict=True,
+        )
+
+        with pytest.raises(ConfigError, match="years"):
+            resolve_all_references(cfg, reg)
+
     def test_no_reference_configured(self):
         reg = FakeRegistry({})
         cfg = _make_cfg(
@@ -342,12 +410,14 @@ class TestResolveAllReferences:
         assert results[0].source_name == ""
 
     def test_auto_resolve_uses_comparison_resolution(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={"Evapotranspiration": _var("E")},
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                ),
+            }
+        )
         cfg = _make_cfg(
             variables=["Evapotranspiration"],
             reference={"Evapotranspiration": "GLEAM_v4.2a"},
@@ -359,12 +429,14 @@ class TestResolveAllReferences:
         assert results[0].resolved_name == "GLEAM_v4.2a_LowRes"
 
     def test_auto_resolve_uses_sim_resolution_fallback(self):
-        reg = FakeRegistry({
-            "GLEAM_v4.2a_LowRes": _make_ref(
-                "GLEAM_v4.2a_LowRes",
-                variables={"Evapotranspiration": _var("E")},
-            ),
-        })
+        reg = FakeRegistry(
+            {
+                "GLEAM_v4.2a_LowRes": _make_ref(
+                    "GLEAM_v4.2a_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                ),
+            }
+        )
         cfg = _make_cfg(
             variables=["Evapotranspiration"],
             reference={"Evapotranspiration": "GLEAM_v4.2a"},
@@ -374,11 +446,124 @@ class TestResolveAllReferences:
         results = resolve_all_references(cfg, reg)
         assert results[0].status == "ok"
 
+    def test_auto_resolve_uses_model_profile_resolution_fallback(self):
+        reg = ModelAwareRegistry(
+            {
+                "CARE_LowRes": _make_ref(
+                    "CARE_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Day",
+                    grid_res=0.1,
+                ),
+                "CARE_MidRes": _make_ref(
+                    "CARE_MidRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Month",
+                    grid_res=0.25,
+                ),
+            },
+            {
+                "test_model": SimpleNamespace(
+                    name="test_model",
+                    tim_res="Month",
+                    grid_res=0.25,
+                    variables={"Evapotranspiration": _var("E")},
+                )
+            },
+        )
+        cfg = _make_cfg(
+            variables=["Evapotranspiration"],
+            reference={"Evapotranspiration": "CARE"},
+        )
+
+        results = resolve_all_references(cfg, reg)
+
+        assert results[0].status == "ok"
+        assert results[0].resolved_name == "CARE_MidRes"
+
+    def test_auto_resolve_uses_variable_inline_resolution_fallback(self):
+        reg = ModelAwareRegistry(
+            {
+                "CARE_LowRes": _make_ref(
+                    "CARE_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Day",
+                    grid_res=0.1,
+                ),
+                "CARE_MidRes": _make_ref(
+                    "CARE_MidRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Month",
+                    grid_res=0.25,
+                ),
+            },
+            {
+                "test_model": SimpleNamespace(
+                    name="test_model",
+                    tim_res="Month",
+                    grid_res=0.25,
+                    variables={"Evapotranspiration": _var("E")},
+                )
+            },
+        )
+        cfg = _make_cfg(
+            variables=["Evapotranspiration"],
+            reference={"Evapotranspiration": "CARE"},
+        )
+        cfg.simulation["sim1"].variables = {"Evapotranspiration": {"tim_res": "Day", "grid_res": 0.1}}
+
+        results = resolve_all_references(cfg, reg)
+
+        assert results[0].status == "ok"
+        assert results[0].resolved_name == "CARE_LowRes"
+
+    def test_exact_reference_requires_model_profile_resolution_agreement(self):
+        from openbench.config import ConfigError
+
+        reg = ModelAwareRegistry(
+            {
+                "CARE_LowRes": _make_ref(
+                    "CARE_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Month",
+                    grid_res=0.5,
+                ),
+            },
+            {
+                "model_a": SimpleNamespace(name="model_a", tim_res="Month", grid_res=0.5),
+                "model_b": SimpleNamespace(name="model_b", tim_res="Month", grid_res=0.25),
+            },
+        )
+        cfg = OpenBenchConfig(
+            project=ProjectConfig(name="test", output_dir="/tmp/out", years=[2000, 2010]),
+            evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
+            reference=ReferenceConfig(sources={"Evapotranspiration": "CARE_LowRes"}),
+            simulation={
+                "sim_a": SimulationEntry(model="model_a", root_dir="/tmp/a"),
+                "sim_b": SimulationEntry(model="model_b", root_dir="/tmp/b"),
+            },
+        )
+
+        with pytest.raises(ConfigError, match="ambiguous across simulations"):
+            resolve_all_references(cfg, reg)
+
     def test_explicit_comparison_resolution_wins_with_mixed_simulations(self):
-        reg = FakeRegistry({
-            "CARE_LowRes": _make_ref("CARE_LowRes", variables={"Evapotranspiration": _var("E")}, tim_res="Day", grid_res=0.1),
-            "CARE_MidRes": _make_ref("CARE_MidRes", variables={"Evapotranspiration": _var("E")}, tim_res="Month", grid_res=0.25),
-        })
+        reg = FakeRegistry(
+            {
+                "CARE_LowRes": _make_ref(
+                    "CARE_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Day",
+                    grid_res=0.1,
+                ),
+                "CARE_MidRes": _make_ref(
+                    "CARE_MidRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Month",
+                    grid_res=0.25,
+                ),
+            }
+        )
         cfg = _make_cfg_multi_sim(
             variables=["Evapotranspiration"],
             reference={"Evapotranspiration": "CARE"},
@@ -397,10 +582,22 @@ class TestResolveAllReferences:
     def test_multi_sim_resolution_conflict_requires_explicit_comparison_target(self):
         from openbench.config import ConfigError
 
-        reg = FakeRegistry({
-            "CARE_LowRes": _make_ref("CARE_LowRes", variables={"Evapotranspiration": _var("E")}, tim_res="Day", grid_res=0.1),
-            "CARE_MidRes": _make_ref("CARE_MidRes", variables={"Evapotranspiration": _var("E")}, tim_res="Month", grid_res=0.25),
-        })
+        reg = FakeRegistry(
+            {
+                "CARE_LowRes": _make_ref(
+                    "CARE_LowRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Day",
+                    grid_res=0.1,
+                ),
+                "CARE_MidRes": _make_ref(
+                    "CARE_MidRes",
+                    variables={"Evapotranspiration": _var("E")},
+                    tim_res="Month",
+                    grid_res=0.25,
+                ),
+            }
+        )
         cfg = _make_cfg_multi_sim(
             variables=["Evapotranspiration"],
             reference={"Evapotranspiration": "CARE"},
@@ -454,9 +651,11 @@ class TestCheckEntrySmoke:
         config_file.write_text("dummy: true")
 
         # Patch at the source modules (lazy imports inside function body)
-        with patch("openbench.config.load_config", return_value=cfg), \
-             patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve, \
-             patch("openbench.data.registry.manager.get_registry", return_value=FakeRegistry({})):
+        with (
+            patch("openbench.config.load_config", return_value=cfg),
+            patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve,
+            patch("openbench.data.registry.manager.get_registry", return_value=FakeRegistry({})),
+        ):
             runner = CliRunner()
             result = runner.invoke(check, [str(config_file)])
 
@@ -485,17 +684,22 @@ class TestRunDryRunSmoke:
             provenance="registry",
         )
 
+        sim_root = tmp_path / "sim"
+        sim_root.mkdir()
         cfg = _make_cfg(
             variables=["ET"],
             reference={"ET": "TestRef"},
+            sim_root=str(sim_root),
         )
 
         config_file = tmp_path / "test.yaml"
         config_file.write_text("dummy: true")
 
-        with patch("openbench.config.load_config", return_value=cfg), \
-             patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve, \
-             patch("openbench.data.registry.manager.get_registry", return_value=FakeRegistry({})):
+        with (
+            patch("openbench.config.load_config", return_value=cfg),
+            patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve,
+            patch("openbench.data.registry.manager.get_registry", return_value=FakeRegistry({})),
+        ):
             runner = CliRunner()
             result = runner.invoke(run, [str(config_file), "--dry-run"])
 
@@ -541,9 +745,11 @@ class TestAdapterSmoke:
         fake_model.tim_res = "Month"
         fake_model.time_offset = None
 
-        with patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve, \
-             patch("openbench.data.registry.manager.get_registry", return_value=fake_registry), \
-             patch.object(fake_registry, "get_model", return_value=fake_model):
+        with (
+            patch("openbench.config.resolver.resolve_all_references", return_value=[fake_resolved]) as mock_resolve,
+            patch("openbench.data.registry.manager.get_registry", return_value=fake_registry),
+            patch.object(fake_registry, "get_model", return_value=fake_model),
+        ):
             try:
                 main_nl, ref_nml, sim_nml = build_legacy_namelists(cfg)
             except (KeyError, AttributeError, TypeError):
@@ -557,17 +763,15 @@ def test_resolve_all_references_multi_source_per_variable():
 
     Regression for the v3.0a1 multi-ref capability lost during schema simplification.
     """
-    from openbench.config.schema import (
-        OpenBenchConfig, ProjectConfig, EvaluationConfig,
-        ReferenceConfig, SimulationEntry,
-    )
-    from openbench.config.resolver import resolve_all_references
     from unittest.mock import MagicMock
 
     cfg = OpenBenchConfig(
         project=ProjectConfig(
-            name="test", output_dir="/tmp/x", years=[2010, 2014],
-            tim_res="Month", grid_res=0.5,
+            name="test",
+            output_dir="/tmp/x",
+            years=[2010, 2014],
+            tim_res="Month",
+            grid_res=0.5,
         ),
         evaluation=EvaluationConfig(variables=["ET"]),
         reference=ReferenceConfig(sources={"ET": ["GLEAM", "FLUXCOM"]}),

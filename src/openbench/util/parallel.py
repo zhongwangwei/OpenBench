@@ -55,7 +55,10 @@ except ImportError:
 
 try:
     from openbench.util.exceptions import ParallelProcessingError, error_handler
-    from openbench.util.logging_system import get_logging_manager, performance_logged
+    from openbench.util.logging_system import (  # noqa: F401  feature detection
+        get_logging_manager,
+        performance_logged,
+    )
 
     _HAS_DEPENDENCIES = True
 except ImportError:
@@ -292,13 +295,27 @@ class ParallelEngine:
 
         # Select implementation based on backend
         if self.backend == "dask":
-            return self._map_dask(func, items, n_workers, task_name)
+            results = self._map_dask(func, items, n_workers, task_name)
         elif self.backend == "joblib":
-            return self._map_joblib(func, items, n_workers, task_name)
+            results = self._map_joblib(func, items, n_workers, task_name)
         elif self.backend == "threading":
-            return self._map_threading(func, items, n_workers, task_name)
+            results = self._map_threading(func, items, n_workers, task_name)
         else:
-            return self._map_concurrent(func, items, n_workers, task_name)
+            results = self._map_concurrent(func, items, n_workers, task_name)
+        self._raise_for_task_errors(results, task_name)
+        return results
+
+    @staticmethod
+    def _raise_for_task_errors(results: List[Any], task_name: str) -> None:
+        failed = [result for result in results if isinstance(result, TaskError)]
+        if not failed:
+            return
+        summary = ParallelEngine.get_failure_summary(failed)
+        raise ParallelProcessingError(
+            f"{len(failed)} task(s) failed in {task_name}",
+            context=summary,
+            original_error=failed[0].error,
+        )
 
     def _map_dask(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """Map using Dask backend."""
@@ -309,10 +326,14 @@ class ParallelEngine:
         futures = self.dask_client.compute(tasks)
 
         if self.show_progress:
-            results = []
+            # Use index-preserving collection to maintain input order
+            # (dask_as_completed yields futures in completion order, not input order)
+            results = [None] * len(items)
+            future_to_index = {id(f): i for i, f in enumerate(futures)}
             with tqdm(total=len(items), desc=task_name) as pbar:
                 for future in dask_as_completed(futures):
-                    results.append(future.result())
+                    idx = future_to_index[id(future)]
+                    results[idx] = future.result()
                     pbar.update(1)
         else:
             results = [future.result() for future in futures]
@@ -380,7 +401,7 @@ class ParallelEngine:
 
             # Raise error if all tasks failed
             if len(failed_tasks) == len(items):
-                raise RuntimeError(f"All {len(items)} tasks failed in {task_name}")
+                raise ParallelProcessingError(f"All {len(items)} tasks failed in {task_name}")
 
             # Warn if more than 50% failed
             if failure_rate > 0.5:
@@ -391,7 +412,11 @@ class ParallelEngine:
         return results
 
     def _map_threading(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
-        """Map using threading backend (for I/O bound tasks)."""
+        """Map using threading backend (for I/O bound tasks).
+
+        Supports partial failure — failed tasks are recorded as TaskError
+        objects instead of aborting the entire batch.
+        """
         results = [None] * len(items)
 
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -403,12 +428,20 @@ class ParallelEngine:
                 with tqdm(total=len(items), desc=task_name) as pbar:
                     for future in as_completed(future_to_index):
                         index = future_to_index[future]
-                        results[index] = future.result()
+                        try:
+                            results[index] = future.result()
+                        except Exception as e:
+                            logging.error(f"Thread task {index} failed: {e}")
+                            results[index] = TaskError(index, items[index], e)
                         pbar.update(1)
             else:
                 for future in as_completed(future_to_index):
                     index = future_to_index[future]
-                    results[index] = future.result()
+                    try:
+                        results[index] = future.result()
+                    except Exception as e:
+                        logging.error(f"Thread task {index} failed: {e}")
+                        results[index] = TaskError(index, items[index], e)
 
         return results
 
@@ -437,12 +470,17 @@ class ParallelEngine:
         # Parallel map
         mapped_results = self.map(map_func, items, task_name=f"{task_name} (Map)")
 
-        # Reduce (could be parallelized for associative operations)
+        # Reduce (could be parallelized for associative operations).
+        # When `initial` is None the empty-input case must raise — there
+        # is no identity element to seed with — but the previous code
+        # raised a confusing IndexError on mapped_results[0] instead.
         if initial is not None:
             result = initial
             for item in mapped_results:
                 result = reduce_func(result, item)
         else:
+            if not mapped_results:
+                raise ValueError("parallel_map_reduce: empty input with no `initial` value; cannot reduce zero items")
             result = mapped_results[0]
             for item in mapped_results[1:]:
                 result = reduce_func(result, item)
@@ -570,11 +608,15 @@ class ParallelEngine:
         """Shutdown parallel engine and cleanup resources."""
         if self.backend == "dask" and self.dask_client:
             self.dask_client.close()
+            self.dask_client = None
             logging.info("Dask client closed")
+
+    close = shutdown
 
 
 # Global engine instance
 _parallel_engine = None
+_parallel_engine_lock = threading.Lock()
 
 
 def get_parallel_engine(backend: str = "auto", max_workers: Optional[int] = None) -> ParallelEngine:
@@ -590,10 +632,26 @@ def get_parallel_engine(backend: str = "auto", max_workers: Optional[int] = None
     """
     global _parallel_engine
 
-    if _parallel_engine is None:
-        _parallel_engine = ParallelEngine(backend, max_workers)
+    # Serialise singleton init so two threads racing through the None check
+    # don't both construct an engine and leak the loser's Dask client.
+    with _parallel_engine_lock:
+        if _parallel_engine is None:
+            _parallel_engine = ParallelEngine(backend, max_workers)
+        elif _parallel_engine.max_workers != max_workers or _parallel_engine.backend != backend:
+            logging.info(
+                "ParallelEngine config changed (workers: %s→%s, backend: %s→%s), recreating",
+                _parallel_engine.max_workers,
+                max_workers,
+                _parallel_engine.backend,
+                backend,
+            )
+            try:
+                _parallel_engine.shutdown()
+            except Exception:
+                pass
+            _parallel_engine = ParallelEngine(backend, max_workers)
 
-    return _parallel_engine
+        return _parallel_engine
 
 
 # Convenience functions

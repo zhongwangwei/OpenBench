@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.util.netcdf import write_file_atomic, write_netcdf_atomic
+
 # Import dependencies
 try:
     from openbench.util.exceptions import FileSystemError, OutputError, ValidationError, error_handler
@@ -94,19 +96,23 @@ class NetCDFFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for NetCDF formatting")
 
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # Ensure output directory exists (skip if path is bare filename:
+        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
+        # FileNotFoundError on some platforms).
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
 
         if isinstance(data, xr.DataArray):
             # Add metadata attributes
             if metadata:
                 data.attrs.update(metadata)
-            data.to_netcdf(output_path)
+            write_netcdf_atomic(data, output_path)
         elif isinstance(data, xr.Dataset):
             # Add metadata attributes
             if metadata:
                 data.attrs.update(metadata)
-            data.to_netcdf(output_path)
+            write_netcdf_atomic(data, output_path)
         else:
             raise ValidationError(f"NetCDF formatter requires xarray DataArray or Dataset, got {type(data)}")
 
@@ -129,22 +135,25 @@ class CSVFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for CSV formatting")
 
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # Ensure output directory exists (skip if path is bare filename:
+        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
+        # FileNotFoundError on some platforms).
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
 
         if isinstance(data, pd.DataFrame):
-            data.to_csv(output_path, index=False)
+            df = data
         elif isinstance(data, dict):
             # Convert dictionary to DataFrame
             df = pd.DataFrame(data)
-            df.to_csv(output_path, index=False)
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
             # Convert list of dictionaries to DataFrame
             df = pd.DataFrame(data)
-            df.to_csv(output_path, index=False)
         else:
             raise ValidationError(f"CSV formatter requires DataFrame, dict, or list of dicts, got {type(data)}")
 
+        write_file_atomic(output_path, lambda tmp_path: df.to_csv(tmp_path, index=False), suffix=".tmp.csv")
         logging.info(f"Saved CSV file: {output_path}")
 
     def validate_data(self, data: Any) -> bool:
@@ -164,8 +173,12 @@ class JSONFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for JSON formatting")
 
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # Ensure output directory exists (skip if path is bare filename:
+        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
+        # FileNotFoundError on some platforms).
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
 
         # Convert numpy types to native Python types for JSON serialization
         def convert_numpy(obj):
@@ -191,8 +204,11 @@ class JSONFormatter(OutputFormatter):
         else:
             json_data = {"data": convert_numpy(data), "metadata": convert_numpy(metadata) if metadata else {}}
 
-        with open(output_path, "w") as f:
-            json.dump(json_data, f, indent=2, default=str)
+        def write_json(tmp_path):
+            with open(tmp_path, "w") as f:
+                json.dump(json_data, f, indent=2, default=str)
+
+        write_file_atomic(output_path, write_json, suffix=".tmp.json")
 
         logging.info(f"Saved JSON file: {output_path}")
 
@@ -274,7 +290,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             super().__init__(name)
         else:
             self.name = name
-            self._formatters_registry = {}
+        self._formatters_registry = {}
 
         self.base_dir = base_dir
         self.structure = OutputStructure(base_dir)
@@ -297,10 +313,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 
     def register_formatter(self, formatter: IOutputFormatter) -> None:
         """Register an output formatter."""
-        if _HAS_DEPENDENCIES:
-            super().register_formatter(formatter)
-        else:
-            self._formatters_registry[formatter.get_name()] = formatter
+        self._formatters_registry[formatter.get_name()] = formatter
 
         logging.debug(f"Registered formatter: {formatter.get_name()}")
 
@@ -314,10 +327,7 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 
     def get_supported_formats(self) -> List[str]:
         """Get list of supported output formats."""
-        if _HAS_DEPENDENCIES:
-            return super().get_supported_formats()
-        else:
-            return list(self._formatters_registry.keys())
+        return list(self._formatters_registry.keys())
 
     def get_formatter_info(self, formatter_name: str) -> Dict[str, str]:
         """Get information about a specific formatter."""

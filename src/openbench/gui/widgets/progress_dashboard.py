@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QGroupBox,
-    QGridLayout,
 )
 from PySide6.QtCore import Signal, QTimer
 
@@ -172,6 +171,7 @@ class ProgressDashboard(QWidget):
 
     def set_progress(self, value: int, eta_seconds: Optional[int] = None):
         """Set overall progress."""
+        value = max(0, min(100, int(value)))
         self.progress_bar.setValue(value)
         self.progress_label.setText(f"{value}%")
 
@@ -201,7 +201,8 @@ class ProgressDashboard(QWidget):
         completed = sum(1 for t in self._tasks if t.status == TaskStatus.COMPLETED)
         total = len(self._tasks)
         progress = int(completed / total * 100)
-        self.set_progress(progress)
+        if progress >= self.progress_bar.value():
+            self.set_progress(progress)
 
     def _update_resource_usage(self):
         """Update resource usage display."""

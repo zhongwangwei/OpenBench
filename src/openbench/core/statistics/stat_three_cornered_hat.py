@@ -1,6 +1,77 @@
 # -*- coding: utf-8 -*-
+import os
+
 import numpy as np
 import xarray as xr
+
+_TCH_NEGATIVE_VARIANCE_RTOL = 1e-10
+_TCH_MEAN_ABS_EPS = 1e-10
+
+
+def _tch_uncertainty_from_samples(samples: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate per-source uncertainty with the classical TCH equations.
+
+    The classical Three-Cornered Hat method estimates individual error
+    variances from variances of pairwise differences.  For exactly three
+    sources this is the Gray-Allan closed form; for more than three sources we
+    solve the standard overdetermined N-cornered system in least squares form.
+    Correlated-error GTCH minimization is intentionally not claimed here.
+    """
+    arr = np.asarray(samples, dtype=float)
+    if arr.ndim != 2:
+        raise ValueError("TCH samples must be a 2-D array shaped (time, source)")
+
+    _, n_sources = arr.shape
+    if n_sources < 3:
+        return np.full(n_sources, np.nan), np.full(n_sources, np.nan)
+
+    arr = arr[np.isfinite(arr).all(axis=1)]
+    if arr.shape[0] < 3:
+        return np.full(n_sources, np.nan), np.full(n_sources, np.nan)
+
+    pair_rows: list[np.ndarray] = []
+    pair_variances: list[float] = []
+    pair_lookup: dict[tuple[int, int], float] = {}
+    for i in range(n_sources):
+        for j in range(i + 1, n_sources):
+            variance = float(np.var(arr[:, i] - arr[:, j], ddof=1))
+            if not np.isfinite(variance):
+                return np.full(n_sources, np.nan), np.full(n_sources, np.nan)
+            row = np.zeros(n_sources)
+            row[i] = 1.0
+            row[j] = 1.0
+            pair_rows.append(row)
+            pair_variances.append(variance)
+            pair_lookup[(i, j)] = variance
+
+    if n_sources == 3:
+        variances = np.array(
+            [
+                0.5 * (pair_lookup[(0, 1)] + pair_lookup[(0, 2)] - pair_lookup[(1, 2)]),
+                0.5 * (pair_lookup[(0, 1)] + pair_lookup[(1, 2)] - pair_lookup[(0, 2)]),
+                0.5 * (pair_lookup[(0, 2)] + pair_lookup[(1, 2)] - pair_lookup[(0, 1)]),
+            ],
+            dtype=float,
+        )
+    else:
+        design = np.vstack(pair_rows)
+        rhs = np.asarray(pair_variances, dtype=float)
+        variances, *_ = np.linalg.lstsq(design, rhs, rcond=None)
+
+    max_pair_variance = max(pair_variances) if pair_variances else 0.0
+    tolerance = max(1e-12, max_pair_variance * _TCH_NEGATIVE_VARIANCE_RTOL)
+    if np.any(~np.isfinite(variances)) or np.any(variances < -tolerance):
+        return np.full(n_sources, np.nan), np.full(n_sources, np.nan)
+
+    variances = np.where(variances < 0, 0.0, variances)
+    uncertainty = np.sqrt(variances)
+
+    mean_abs = np.mean(np.abs(arr), axis=0)
+    relative_denominator = np.where(mean_abs < _TCH_MEAN_ABS_EPS, np.nan, mean_abs)
+    relative_uncertainty = uncertainty / relative_denominator * 100.0
+    if np.isnan(relative_denominator).any():
+        relative_uncertainty = np.full(n_sources, np.nan)
+    return uncertainty, relative_uncertainty
 
 
 def stat_three_cornered_hat(self, *variables):
@@ -14,13 +85,7 @@ def stat_three_cornered_hat(self, *variables):
     Returns:
         xarray.Dataset: Dataset containing uncertainty and relative uncertainty
     """
-    try:
-        import gc
-
-        from scipy import optimize
-    except ImportError as e:
-        logging.error(f"Required package not found: {e}")
-        raise ImportError(f"Required package not found: {e}")
+    import gc
 
     # Check if we have enough variables
     if len(variables) < 3:
@@ -29,103 +94,10 @@ def stat_three_cornered_hat(self, *variables):
     def cal_uct(arr):
         """Calculate uncertainty using Three-Cornered Hat method for one grid point."""
         try:
-            # Check if we have enough valid data
-            if np.isnan(arr).any() or arr.shape[0] < 3 or arr.shape[1] < 3:
-                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-            def my_fun(r):
-                """Objective function for optimization."""
-                try:
-                    S = np.cov(arr.T)
-                    f = np.sum(r[:-1] ** 2)
-                    for j in range(len(S)):
-                        for k in range(j + 1, len(S)):
-                            f += (S[j, k] - r[-1] + r[j] + r[k]) ** 2
-                    K = np.linalg.det(S)
-                    # Avoid division by zero or very small determinants
-                    if abs(K) < 1e-10:
-                        return np.inf
-                    F = f / (K ** (2 * len(S)))
-                    return F
-                except Exception as e:
-                    logging.debug(f"Error in objective function: {e}")
-                    return np.inf
-
-            S = np.cov(arr.T)
-            # Check if covariance matrix is valid
-            if np.isnan(S).any() or np.isinf(S).any():
-                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-            det_S = np.linalg.det(S)
-            # Check if matrix is singular or nearly singular
-            if abs(det_S) < 1e-10:
-                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-            N = arr.shape[1]
-            u = np.ones((1, N - 1))
-            R = np.zeros((N, N))
-
-            try:
-                inv_S = np.linalg.inv(S)
-                inv_S_sub = inv_S[: N - 1, : N - 1]  # Submatrix for calculations involving u
-                # Use inv_S_sub for dot product with u
-                R[N - 1, N - 1] = 1 / (2 * np.dot(np.dot(u, inv_S_sub), u.T))
-            except np.linalg.LinAlgError:
-                print("DEBUG: cal_uct returning NaN - LinAlgError during initial R calculation")
-                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-            x0 = R[:, N - 1]
-            Denominator = det_S ** (2 / len(S))
-
-            # Set up constraint
-            # Use inv_S_sub in the constraint lambda function as well
-            cons = {
-                "type": "ineq",
-                "fun": lambda r: (
-                    (r[-1] - np.dot(np.dot(r[:-1] - r[-1] * u, inv_S_sub), (r[:-1] - r[-1] * u).T)) / Denominator
-                ),
-            }
-
-            # Perform optimization with error handling
-            try:
-                x = optimize.minimize(my_fun, x0, method="COBYLA", tol=2e-10, constraints=cons)
-                if not x.success:
-                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-                R[:, N - 1] = x.x
-                for i in range(N - 1):
-                    for j in range(i, N - 1):
-                        R[i, j] = S[i, j] - R[N - 1, N - 1] + R[i, N - 1] + R[j, N - 1]
-                R += R.T - np.diag(R.diagonal())
-
-                diag_R = np.diag(R)
-                # Check if R has negative values on diagonal (invalid results)
-                if np.any(diag_R < 0):
-                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-                uct = np.sqrt(diag_R)  # Use pre-calculated diagonal
-
-                # Safely calculate relative uncertainty
-                mean_abs = np.mean(np.abs(arr), axis=0)
-                # Avoid division by zero
-                mean_abs_safe = np.where(mean_abs < 1e-10, np.nan, mean_abs)
-
-                if np.isnan(mean_abs_safe).any():
-                    print(f"DEBUG: cal_uct returning NaN - mean_abs is NaN (near zero: {mean_abs})")
-                    return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-
-                r_uct = uct / mean_abs_safe * 100
-
-                return uct, r_uct
-            except Exception:
-                # Optionally re-raise or log traceback here for more detail
-                import traceback
-
-                traceback.print_exc()
-                return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
-        except Exception as e:
-            print(f"DEBUG: cal_uct returning NaN due to outer exception: {e}")
-            return np.full(arr.shape[1], np.nan), np.full(arr.shape[1], np.nan)
+            return _tch_uncertainty_from_samples(arr)
+        except Exception:
+            source_count = arr.shape[1] if getattr(arr, "ndim", 0) == 2 else len(variables)
+            return np.full(source_count, np.nan), np.full(source_count, np.nan)
 
     try:
         # Extract data from each dataset if it's a Dataset
@@ -141,8 +113,6 @@ def stat_three_cornered_hat(self, *variables):
 
         # Combine all variables into a single array
         combined_data = xr.concat(data_arrays, dim="variable")
-        # save the combined_data
-        combined_data.to_netcdf("combined_data.nc")
         # Get dimensions for processing
         lats = combined_data.lat.values
         lons = combined_data.lon.values
@@ -191,8 +161,8 @@ def stat_three_cornered_hat(self, *variables):
             for chunk_results in all_results:
                 for lat, lon, uct_values, r_uct_values in chunk_results:
                     # Use .loc indexing to set values
-                    lat_idx = np.where(lats == lat)[0][0]
-                    lon_idx = np.where(lons == lon)[0][0]
+                    lat_idx = int(np.argmin(np.abs(lats - lat)))
+                    lon_idx = int(np.argmin(np.abs(lons - lon)))
                     uct.values[:, lat_idx, lon_idx] = uct_values
                     r_uct.values[:, lat_idx, lon_idx] = r_uct_values
 
@@ -201,8 +171,8 @@ def stat_three_cornered_hat(self, *variables):
             gc.collect()
         else:
             # For smaller datasets, use simple loop
-            for lat in lats:
-                for lon in lons:
+            for lat_iter_idx, lat in enumerate(lats):
+                for lon_iter_idx, lon in enumerate(lons):
                     arr = combined_data.sel(lat=lat, lon=lon).values
                     if isinstance(arr, np.ndarray) and arr.size > 0 and not np.isnan(arr).all():
                         # For Three-Cornered Hat method, transpose the data
@@ -210,14 +180,20 @@ def stat_three_cornered_hat(self, *variables):
 
                         uct_values, r_uct_values = cal_uct(arr)
 
-                        # Use direct indexing
-                        lat_idx = np.where(lats == lat)[0][0]
-                        lon_idx = np.where(lons == lon)[0][0]
+                        # Use loop indices directly; the previous
+                        # `np.where(lats == lat)[0][0]` pattern relied on
+                        # exact float equality and grabbed only the first
+                        # match when lats contained repeated values.
+                        lat_idx = lat_iter_idx
+                        lon_idx = lon_iter_idx
                         uct.values[:, lat_idx, lon_idx] = uct_values
                         r_uct.values[:, lat_idx, lon_idx] = r_uct_values
 
-                # Periodically collect garbage to manage memory
-                if lat % 10 == 0:
+                # Periodically collect garbage to manage memory. Trigger by
+                # iteration index so sub-degree grids (lat values like
+                # -89.75, -89.25) actually hit this path — the previous
+                # `lat % 10 == 0` test was never true on fractional grids.
+                if lat_iter_idx % 32 == 0:
                     gc.collect()
 
         # Create output dataset

@@ -1,9 +1,5 @@
-import warnings
-
 import numpy as np
 import xarray as xr
-
-warnings.filterwarnings("ignore", category=FutureWarning)  # Suppress numpy runtime warnings
 
 
 def stat_functional_response(self, v, u):
@@ -28,7 +24,7 @@ def stat_functional_response(self, v, u):
 
     try:
         nbins = self.stats_nml["Functional_Response"]["nbins"]
-    except:
+    except (AttributeError, KeyError, TypeError):
         nbins = self.compare_nml["Functional_Response"]["nbins"]
 
     def calc_functional_response(v_series, u_series):
@@ -60,8 +56,13 @@ def stat_functional_response(self, v, u):
         # Calculate RMSE
         rmse = np.sqrt(np.mean((df["v_binned"].astype(float) - df["v"].astype(float)) ** 2))
 
-        # Calculate relative error
-        relative_error = rmse / np.mean(v_valid)
+        # Calculate relative error. Use absolute mean as the scale so
+        # negative dependent-variable means do not produce scores > 1, and
+        # mark zero-mean series undefined instead of returning exp(-inf)=0.
+        v_mean = np.mean(v_valid)
+        if abs(v_mean) < 1e-12:
+            return np.nan
+        relative_error = rmse / abs(v_mean)
 
         # Calculate score
         score = np.exp(-relative_error)

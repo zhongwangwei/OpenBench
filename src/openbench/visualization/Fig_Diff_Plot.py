@@ -1,5 +1,8 @@
 import logging
 import math
+import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -14,16 +17,73 @@ from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
 
 from openbench.util.converttype import Convert_Type
+from openbench.util.filenames import (
+    diff_grid_anomaly_filename,
+    diff_grid_difference_filename,
+    diff_station_anomaly_filename,
+    diff_station_difference_filename,
+)
 
 from .Fig_toolbox import get_index, process_unit
+from ._downsample import downsample_for_plot
+from ._validation import finite_min_max, finite_values
+
+logger = logging.getLogger(__name__)
 
 
+def _legacy_diff_filename(data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type):
+    if ref_data_type == "stn":
+        if data_type == "anomaly":
+            return f"{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{item_type}_anomaly.csv"
+        sim1, sim2 = sim_source
+        sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
+        sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
+        return (
+            f"{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{item_type}_diff.csv"
+        )
+
+    if data_type == "anomaly":
+        return f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{item_type}_anomaly.nc"
+    sim1, sim2 = sim_source
+    return f"{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{item_type}_diff.nc"
+
+
+def _safe_diff_filename(data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type):
+    if ref_data_type == "stn":
+        if data_type == "anomaly":
+            return diff_station_anomaly_filename(evaluation_item, ref_source, sim_source, item_type)
+        sim1, sim2 = sim_source
+        sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
+        sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
+        return diff_station_difference_filename(
+            evaluation_item, ref_source, sim1, sim_varname_1, sim2, sim_varname_2, item_type
+        )
+
+    if data_type == "anomaly":
+        return diff_grid_anomaly_filename(evaluation_item, ref_source, sim_source, item_type)
+    sim1, sim2 = sim_source
+    return diff_grid_difference_filename(evaluation_item, ref_source, sim1, sim2, item_type)
+
+
+def _diff_input_filename(
+    basedir, data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type
+):
+    """Return the safe Diff Plot input filename, falling back to pre-migration legacy names."""
+    safe_filename = _safe_diff_filename(
+        data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type
+    )
+    if os.path.exists(os.path.join(basedir, safe_filename)):
+        return safe_filename
+    return _legacy_diff_filename(data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type)
+
+
+@with_isolated_rc
 def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
+    option = option.copy()
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -38,15 +98,19 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     rcParams.update(params)
 
     # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    ds = xr.open_dataset(f"{basedir}/{filename}")
+    with xr.open_dataset(f"{basedir}/{filename}") as _ds:
+        ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
 
-    # Extract variables
-    ilat = ds.lat.values
-    ilon = ds.lon.values
+    data = downsample_for_plot(ds[xitem], option)
+    finite_values(data, label=f"Diff Plot grid {filename}/{xitem}")
+
+    # Extract variables after plot-only downsampling.
+    ilat = data.lat.values
+    ilon = data.lon.values
     lat, lon = np.meshgrid(ilat[::-1], ilon)
 
-    var = ds[xitem].transpose("lon", "lat")[:, ::-1].values
+    var = data.transpose("lon", "lat")[:, ::-1].values
     if not option["vmin_max_on"]:
         if metric in [
             "bias",
@@ -61,29 +125,26 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
             "kappa_coeff",
             "rSpearman",
         ]:
-            quantiles = ds[xitem].quantile([0.05, 0.95], dim=["lat", "lon"])
-            max_value = math.ceil(quantiles[1].values)
-            min_value = math.floor(quantiles[0].values)
+            min_value, max_value = finite_min_max(data, label=f"Diff Plot grid {filename}/{xitem}", percentile=(5, 95))
+            max_value = math.ceil(max_value)
+            min_value = math.floor(min_value)
             if metric == "percent_bias":
                 if max_value > 100:
                     max_value = 100
                 if min_value < -100:
                     min_value = -100
         else:
-            min_value, max_value = np.nanmin(var), np.nanmax(var)
-        if min_value == max_value:
-            max_value = max_value + 1
+            min_value, max_value = finite_min_max(var, label=f"Diff Plot grid {filename}/{xitem}")
+    else:
+        min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
     option["vmin"], option["vmax"] = mticks[0], mticks[-1]
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    # `get_index` already computed `extend` against the *original* min/max
+    # (before we overwrote option["vmin"]/vmax with mticks bounds); reuse it
+    # instead of re-deriving from the now-clamped bounds, which made the
+    # "min"/"both" branches unreachable.
+    option["extend"] = extend
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -97,7 +158,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(ds[xitem].values, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(var.T, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -143,7 +204,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
-    plt.title(option["title"], fontsize=option["title_size"], weight="bold")
+    ax.set_title(option["title"], fontsize=option["title_size"], weight="bold")
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -182,18 +243,19 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     cb.solids.set_edgecolor("face")
 
     filename2 = filename[:-3]
-    plt.savefig(
-        f"{basedir}/{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+    save_figure(
+        fig, f"{basedir}/{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
     )
-    plt.close()
+    plt.close(fig)
 
 
+@with_isolated_rc
 def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, varname, option):
+    option = option.copy()
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.labelsize": option["labelsize"],
         "grid.linewidth": 0.2,
         "font.size": option["labelsize"],
@@ -206,10 +268,7 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         "text.usetex": False,
     }
     rcParams.update(params)
-    # Add check for empty or all-NaN array
-    if len(metric) == 0 or np.all(np.isnan(metric)):
-        print(f"Warning: No valid data for {varname}. Skipping plot.")
-        return
+    finite_values(metric, label=f"Diff Plot station {filename}/{varname}")
 
     if not option["vmin_max_on"]:
         if var in [
@@ -225,18 +284,20 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
             "kappa_coeff",
             "rSpearman",
         ]:
-            quantiles = [np.nanpercentile(metric, 5), np.nanpercentile(metric, 95)]
-            max_value = math.ceil(quantiles[1])
-            min_value = math.floor(quantiles[0])
+            min_value, max_value = finite_min_max(
+                metric, label=f"Diff Plot station {filename}/{varname}", percentile=(5, 95)
+            )
+            max_value = math.ceil(max_value)
+            min_value = math.floor(min_value)
             if var == "percent_bias":
                 if max_value > 100:
                     max_value = 100
                 if min_value < -100:
                     min_value = -100
         else:
-            min_value, max_value = np.nanmin(metric), np.nanmax(metric)
-        if min_value == max_value:
-            max_value = max_value + 1
+            min_value, max_value = finite_min_max(metric, label=f"Diff Plot station {filename}/{varname}")
+    else:
+        min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
     option["vmin"], option["vmax"] = mticks[0], mticks[-1]
@@ -300,7 +361,7 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=50)
-    plt.title(option["title"], fontsize=option["title_size"], weight="bold")
+    ax.set_title(option["title"], fontsize=option["title_size"], weight="bold")
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()
@@ -340,10 +401,10 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
     cb.solids.set_edgecolor("face")
     # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
     filename2 = filename[:-4]
-    plt.savefig(
-        f"{basedir}/{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
+    save_figure(
+        fig, f"{basedir}/{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"]
     )
-    plt.close()
+    plt.close(fig)
 
 
 # Add plotting function for anomalies and differences
@@ -355,21 +416,10 @@ def plot_diff_results(
     data_type: 'anomaly' or 'difference'
     item_type: 'metric' or 'score'
     """
-    plot_option = option
-    if ref_data_type == "stn":
-        if data_type == "anomaly":
-            filename = f"{evaluation_item}_stn_{ref_source}_sim_{sim_source}_{item_type}_anomaly.csv"
-        else:
-            sim1, sim2 = sim_source
-            sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
-            sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
-            filename = f"{evaluation_item}_stn_{ref_source}_{sim1}_{sim_varname_1}_vs_{sim2}_{sim_varname_2}_{item_type}_diff.csv"
-    else:
-        if data_type == "anomaly":
-            filename = f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{item_type}_anomaly.nc"
-        else:
-            sim1, sim2 = sim_source
-            filename = f"{evaluation_item}_ref_{ref_source}_{sim1}_vs_{sim2}_{item_type}_diff.nc"
+    plot_option = option.copy()
+    filename = _diff_input_filename(
+        basedir, data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type
+    )
 
     # plot_option.update(option)
     # Set plot parameters based on data type
@@ -455,8 +505,11 @@ def make_scenarios_comparison_Diff_Plot(
                             ref_data_type,
                             option,
                         )
-                    except:
-                        logging.error(f"{evaluation_item}:{metric} - {ref_source} {sim1} vs {sim2} anomaly error")
+                    except Exception:
+                        logging.exception(
+                            f"{evaluation_item}:{metric} - {ref_source} {sim1} vs {sim2} difference error"
+                        )
+                        raise
 
     for score in scores:
         # After calculating anomalies for scores
@@ -474,8 +527,9 @@ def make_scenarios_comparison_Diff_Plot(
                     ref_data_type,
                     option,
                 )
-            except:
-                logging.error(f"{evaluation_item}:{score} - {ref_source} {sim_source} anomaly error")
+            except Exception:
+                logging.exception(f"{evaluation_item}:{score} - {ref_source} {sim_source} anomaly error")
+                raise
 
         # After calculating differences for scores
         if len(sim_sources) >= 2:
@@ -494,5 +548,6 @@ def make_scenarios_comparison_Diff_Plot(
                             ref_data_type,
                             option,
                         )
-                    except:
-                        logging.error(f"{evaluation_item}:{score} - {ref_source} {sim1} vs {sim2} anomaly error")
+                    except Exception:
+                        logging.exception(f"{evaluation_item}:{score} - {ref_source} {sim1} vs {sim2} difference error")
+                        raise

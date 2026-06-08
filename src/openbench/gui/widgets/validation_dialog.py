@@ -4,7 +4,8 @@
 Dialogs for data validation progress and results.
 """
 
-from typing import List, Callable, Optional
+from copy import deepcopy
+from typing import Optional
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QColor
 
-from openbench.gui.data_validator import DataValidator, DataValidationReport, SourceValidationResult
+from openbench.gui.data_validator import DataValidator, DataValidationReport
 
 
 class ValidationWorker(QThread):
@@ -34,8 +35,11 @@ class ValidationWorker(QThread):
     def __init__(self, validator: DataValidator, sources: dict, general_config: dict, parent=None):
         super().__init__(parent)
         self._validator = validator
-        self._sources = sources
-        self._general_config = general_config
+        # Validate an immutable snapshot. GUI pages save opportunistically on
+        # field changes/navigation, and those mutations can otherwise race the
+        # worker thread while it is iterating nested source dictionaries.
+        self._sources = deepcopy(sources)
+        self._general_config = deepcopy(general_config)
         self._cancelled = False
 
     def run(self):
@@ -113,6 +117,9 @@ class ValidationProgressDialog(QDialog):
         """Handle progress update."""
         if self._closing:
             return
+
+        total = max(0, int(total))
+        current = max(0, min(int(current), total))
 
         if total > 0:
             percent = int(current / total * 100)

@@ -5,6 +5,7 @@ Main window with sidebar navigation and page container.
 
 import logging
 import os
+import shlex
 import yaml
 
 from PySide6.QtWidgets import (
@@ -23,23 +24,21 @@ from PySide6.QtWidgets import (
     QSplitter,
     QDialog,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt
 
 from openbench.gui.controller import WizardController
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
 from openbench.gui.widgets.sync_status import SyncStatusWidget
-from openbench.remote.storage import ProjectStorage, LocalStorage, RemoteStorage
-from openbench.remote.sync import SyncStatus
+from openbench.remote.storage import LocalStorage, RemoteStorage
 from openbench.gui.path_utils import (
     get_openbench_root,
     to_absolute_path,
     convert_paths_in_dict,
     validate_paths_in_dict,
-    normalize_path_separators,
 )
 from openbench.gui.pages import (
-    PageRuntime,
     PageGeneral,
+    PageRegistry,
     PageEvaluation,
     PageMetrics,
     PageScores,
@@ -49,6 +48,7 @@ from openbench.gui.pages import (
     PageSimData,
     PagePreview,
     PageRunMonitor,
+    PageRuntime,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,10 @@ logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     """Main application window."""
+
+    # Maximum seconds to wait for an evaluation runner to clean up its
+    # subprocess on window close before forcing the close anyway.
+    _RUNNER_SHUTDOWN_TIMEOUT_MS = 5000
 
     def __init__(self):
         super().__init__()
@@ -219,15 +223,16 @@ class MainWindow(QMainWindow):
         self.pages = {}
 
         page_classes = {
-            "runtime": PageRuntime,
             "general": PageGeneral,
+            "registry": PageRegistry,
+            "sim_data": PageSimData,
+            "ref_data": PageRefData,
             "evaluation_items": PageEvaluation,
             "metrics": PageMetrics,
             "scores": PageScores,
             "comparisons": PageComparisons,
             "statistics": PageStatistics,
-            "ref_data": PageRefData,
-            "sim_data": PageSimData,
+            "runtime": PageRuntime,
             "preview": PagePreview,
             "run_monitor": PageRunMonitor,
         }
@@ -240,6 +245,10 @@ class MainWindow(QMainWindow):
         # Connect preview page run signal to monitor page
         if "preview" in self.pages and "run_monitor" in self.pages:
             self.pages["preview"].run_requested.connect(self.pages["run_monitor"].start_run)
+
+        # Connect sim page → propagate available variables to ref/eval pages
+        if "sim_data" in self.pages:
+            self.pages["sim_data"].available_variables_changed.connect(self._on_available_variables_changed)
 
     def _connect_signals(self):
         """Connect signals to slots."""
@@ -269,7 +278,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(self.controller.get_page_name(page_id))
             item.setData(Qt.UserRole, page_id)
 
-            if page_id not in visible_pages:
+            if page_id not in visible_pages or (self._runner_is_active() and page_id != current):
                 item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
                 item.setForeground(Qt.gray)
 
@@ -282,12 +291,58 @@ class MainWindow(QMainWindow):
         self._update_buttons()
         self._update_page_indicator()
 
+    def closeEvent(self, event):
+        """Stop any running evaluation before closing.
+
+        Without this, closing the window while an EvaluationRunner is
+        active leaves an orphan OpenBench subprocess running. We ask the
+        runner to stop, wait a bounded time for it to terminate, then
+        accept the close. If the user cancels via the confirmation
+        dialog the close is rejected.
+        """
+        runner = None
+        run_monitor = self.pages.get("run_monitor") if hasattr(self, "pages") else None
+        if run_monitor is not None:
+            runner = getattr(run_monitor, "_runner", None)
+
+        if runner is not None and hasattr(runner, "isRunning") and runner.isRunning():
+            reply = QMessageBox.question(
+                self,
+                "Evaluation Running",
+                "An evaluation is still running. Stop it and exit?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                event.ignore()
+                return
+
+            try:
+                if hasattr(runner, "stop"):
+                    runner.stop()
+                # QThread.wait expects ms; runner.stop sets a flag and the
+                # subprocess loop in run() should exit on the next poll.
+                if hasattr(runner, "wait"):
+                    runner.wait(self._RUNNER_SHUTDOWN_TIMEOUT_MS)
+            except Exception as e:
+                logger.warning("Error during runner shutdown on close: %s", e)
+
+        super().closeEvent(event)
+
+    def _runner_is_active(self) -> bool:
+        """Return True while the run monitor owns a live runner thread."""
+        run_monitor = self.pages.get("run_monitor") if hasattr(self, "pages") else None
+        runner = getattr(run_monitor, "_runner", None) if run_monitor is not None else None
+        return bool(runner is not None and hasattr(runner, "isRunning") and runner.isRunning())
+
     def _update_buttons(self):
         """Update Back/Next button states."""
-        self.btn_back.setEnabled(self.controller.prev_page() is not None)
+        runner_active = self._runner_is_active()
+        self.btn_back.setEnabled((self.controller.prev_page() is not None) and not runner_active)
 
         # Show Rerun button only on run_monitor page
         self.btn_rerun.setVisible(self.controller.current_page == "run_monitor")
+        self.btn_rerun.setEnabled(not runner_active)
 
         next_page = self.controller.next_page()
         if next_page is None:
@@ -296,6 +351,7 @@ class MainWindow(QMainWindow):
             self.btn_next.setText("Run")
         else:
             self.btn_next.setText("Next")
+        self.btn_next.setEnabled(not runner_active)
 
     def _update_page_indicator(self):
         """Update the step indicator."""
@@ -307,24 +363,47 @@ class MainWindow(QMainWindow):
         except ValueError:
             self.page_indicator.setText("")
 
+    def _on_available_variables_changed(self, variables: list):
+        """Handle sim page reporting which variables are available from model profiles."""
+        # Cache as a MainWindow attribute. The previous implementation wrote
+        # this into a fake `_internal` section of the controller config dict,
+        # which then leaked into any saved YAML and was never actually read
+        # back from there (page_sim_data recomputes via _get_available_variables).
+        self._available_variables = list(variables)
+
+        # Update evaluation_items: auto-select newly available variables
+        eval_items = dict(self.controller.config.get("evaluation_items", {}))
+        # Add new variables (default checked), keep existing selections
+        for var in variables:
+            if var not in eval_items:
+                eval_items[var] = True
+        # Remove variables no longer available
+        for var in list(eval_items.keys()):
+            if var not in variables:
+                del eval_items[var]
+        self.controller.update_section("evaluation_items", eval_items)
+
     def _on_nav_selected(self, row: int):
-        """Handle sidebar navigation selection."""
+        """Handle sidebar navigation selection.
+
+        Sidebar navigation is always free — no validation required.
+        Validation only triggers on Next button (forward progression).
+        """
         item = self.nav_list.item(row)
         if item and item.flags() & Qt.ItemIsEnabled:
-            # Get page_id first before any operations that might invalidate the item
             page_id = item.data(Qt.UserRole)
 
-            # Don't validate if navigating to current page (no change)
             if page_id == self.controller.current_page:
                 return
 
-            # Validate current page before navigating away
-            current_page = self.pages.get(self.controller.current_page)
-            if current_page and callable(getattr(current_page, "validate", None)):
-                if not current_page.validate():
-                    # Validation failed - restore sidebar selection to current page
-                    self._restore_nav_selection()
-                    return
+            if self._runner_is_active():
+                QMessageBox.warning(
+                    self,
+                    "Evaluation Running",
+                    "Stop the running evaluation before leaving the Run & Monitor page.",
+                )
+                self._restore_nav_selection()
+                return
 
             # Save current page before switching (without triggering sync)
             self._save_current_page(trigger_sync=False)
@@ -364,12 +443,27 @@ class MainWindow(QMainWindow):
 
     def _on_back_clicked(self):
         """Handle Back button click."""
+        if self._runner_is_active():
+            QMessageBox.warning(
+                self,
+                "Evaluation Running",
+                "Stop the running evaluation before going back.",
+            )
+            return
         # Save current page before going back (without triggering sync)
         self._save_current_page(trigger_sync=False)
         self.controller.go_prev()
 
     def _on_next_clicked(self):
         """Handle Next button click."""
+        if self._runner_is_active():
+            QMessageBox.warning(
+                self,
+                "Evaluation Running",
+                "Stop the running evaluation before navigating or starting another run.",
+            )
+            return
+
         # Validate current page before proceeding
         current_page = self.pages.get(self.controller.current_page)
         if current_page and callable(getattr(current_page, "validate", None)):
@@ -397,6 +491,13 @@ class MainWindow(QMainWindow):
 
     def _on_rerun_clicked(self):
         """Handle Rerun button click - re-export and run."""
+        if self._runner_is_active():
+            QMessageBox.warning(
+                self,
+                "Evaluation Running",
+                "Stop the running evaluation before rerunning.",
+            )
+            return
         preview_page = self.pages.get("preview")
         if preview_page:
             preview_page.export_and_run()
@@ -492,7 +593,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(dialog, "Invalid File", "Please select a YAML file (.yaml or .yml)")
 
         browser.file_selected.connect(on_path_selected)
-        dialog.exec_()
+        dialog.exec()
 
         return selected_path[0] or ""
 
@@ -524,7 +625,12 @@ class MainWindow(QMainWindow):
             # Check if this is a main config file (has reference_nml and simulation_nml)
             general = loaded_config.get("general", {})
 
-            if "reference_nml" in general or "simulation_nml" in general:
+            if self.controller._config_manager.is_unified_config(loaded_config):
+                # v3 openbench.yaml uses top-level project/evaluation/reference/
+                # simulation sections. Convert it back to the GUI's legacy-shaped
+                # internal dict so pages can render the loaded values.
+                new_config.update(self.controller._config_manager.unified_to_gui_config(loaded_config))
+            elif "reference_nml" in general or "simulation_nml" in general:
                 # This is a main config file
                 self._load_main_config(loaded_config, new_config, config_dir, base_dir)
             elif any(key.endswith("_ref_source") for key in general.keys()):
@@ -693,14 +799,16 @@ class MainWindow(QMainWindow):
 
         # If absolute, check if exists and return
         if path.startswith("/"):
-            stdout, stderr, exit_code = ssh_manager.execute(f"test -e '{path}' && echo 'exists'", timeout=10)
+            stdout, stderr, exit_code = ssh_manager.execute(f"test -e {shlex.quote(path)} && echo 'exists'", timeout=10)
             if exit_code == 0 and "exists" in stdout:
                 return path
             return path
 
         # Helper to check if path exists on remote
         def remote_exists(check_path):
-            stdout, stderr, exit_code = ssh_manager.execute(f"test -e '{check_path}' && echo 'exists'", timeout=10)
+            stdout, stderr, exit_code = ssh_manager.execute(
+                f"test -e {shlex.quote(check_path)} && echo 'exists'", timeout=10
+            )
             return exit_code == 0 and "exists" in stdout
 
         # Try relative to base_dir first (for paths like ./nml/nml-yaml/...)
@@ -754,10 +862,15 @@ class MainWindow(QMainWindow):
 
     def _find_project_root(self, start_dir: str) -> str:
         """Find the OpenBench project root directory."""
+        # Use the shared strict v3-root marker check; the old loose "has
+        # openbench/ or nml/ subdir" test matched any random folder that
+        # happened to contain an `nml/` directory and silently misconfigured
+        # downstream paths.
+        from openbench.gui.path_utils import looks_like_openbench_root
+
         current = start_dir
         for _ in range(10):  # Max 10 levels up
-            # Check if this looks like OpenBench root
-            if os.path.exists(os.path.join(current, "openbench")) or os.path.exists(os.path.join(current, "nml")):
+            if looks_like_openbench_root(current):
                 return current
             parent = os.path.dirname(current)
             if parent == current:  # Reached filesystem root
@@ -773,7 +886,7 @@ class MainWindow(QMainWindow):
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(f"cat '{file_path}'", timeout=30)
+            stdout, stderr, exit_code = ssh_manager.execute(f"cat {shlex.quote(file_path)}", timeout=30)
             if exit_code != 0:
                 QMessageBox.critical(self, "Error", f"Failed to read remote file:\n{file_path}\n\nError: {stderr}")
                 return None
@@ -792,7 +905,8 @@ class MainWindow(QMainWindow):
         for _ in range(10):  # Max 10 levels up
             # Check if this looks like OpenBench root
             stdout, stderr, exit_code = ssh_manager.execute(
-                f"ls -d '{current}/openbench' '{current}/nml' 2>/dev/null | head -1", timeout=10
+                f"ls -d {shlex.quote(current + '/openbench')} {shlex.quote(current + '/nml')} 2>/dev/null | head -1",
+                timeout=10,
             )
             if exit_code == 0 and stdout.strip():
                 return current
@@ -827,7 +941,7 @@ class MainWindow(QMainWindow):
 
     def _prompt_for_missing_path(self, description: str, path_type: str = "file") -> str:
         """Prompt user to select a path when it's missing."""
-        msg = f"The following path was not found:\n\nPlease select the correct location."
+        msg = "The following path was not found:\n\nPlease select the correct location."
         QMessageBox.warning(self, "Path Not Found", msg)
 
         if path_type == "file":

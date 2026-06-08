@@ -33,3 +33,6 @@ general:
   saving_format: jpg
   font: DejaVu Sans
   dpi: 300
+  render_resolution: auto
+  max_pixels: 1000000
+  downsample_method: coarsen_mean

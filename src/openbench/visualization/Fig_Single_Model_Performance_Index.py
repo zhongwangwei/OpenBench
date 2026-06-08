@@ -1,6 +1,8 @@
 import logging
 import math
 import os
+from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
+from openbench.visualization._figure_io import save_figure
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -8,6 +10,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 from matplotlib import rcParams
+from matplotlib.ticker import MultipleLocator
 from matplotlib.lines import Line2D
 
 from openbench.util.converttype import Convert_Type
@@ -46,13 +49,13 @@ def _read_comparison_file(file):
     return df
 
 
+@with_isolated_rc
 def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option):
     # Read the SMPI data
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
     params = {
-        "backend": "ps",
         "axes.linewidth": 1,
         "font.size": option["fontsize"],
         "xtick.labelsize": option["xtick"],
@@ -109,15 +112,25 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             I2_values = item_data["SMPI"].tolist()
             labels = item_data["Simulation"].tolist()
 
-            # Calculate confidence intervals
+            # Calculate confidence intervals. Need ≥2 samples for a t-based
+            # CI; with a single sim, st.sem/st.t.ppf(., 0) would raise or
+            # produce NaN before reaching the np.isnan(size) fallback below.
             mean = np.mean(I2_values)
-            sem = st.sem(I2_values)
-            conf_interval = sem * st.t.ppf((1 + 0.95) / 2.0, len(I2_values) - 1)
+            if len(I2_values) >= 2:
+                sem = st.sem(I2_values)
+                conf_interval = sem * st.t.ppf((1 + 0.95) / 2.0, len(I2_values) - 1)
+            else:
+                sem = 0.0
+                conf_interval = 0.0
             sizes = [150 * conf_interval] * len(I2_values)  # Reduced circle size
 
             # Get color for this subplot
 
-            # Plot
+            # Plot. Pre-initialize k so the later `generate_colors(k+1, j)`
+            # call doesn't raise NameError if the inner loop never executes
+            # (the empty-data path is already short-circuited above, but
+            # belt-and-suspenders is cheap here).
+            k = -1
             for k, (value, size) in enumerate(zip(I2_values, sizes)):
                 if np.isnan(size):
                     size = 2
@@ -184,13 +197,13 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             ax.set_xlim([min_I2, max_I2])
             if max_I2 > 2:
                 ax.set_xticks(np.arange(min_I2, max_I2 + 0.5, 0.5))
-                ax.xaxis.set_minor_locator(plt.MultipleLocator(0.25))
+                ax.xaxis.set_minor_locator(MultipleLocator(0.25))
             elif max_I2 > 1:
                 ax.set_xticks(np.arange(min_I2, max_I2 + 0.25, 0.25))
-                ax.xaxis.set_minor_locator(plt.MultipleLocator(0.125))
+                ax.xaxis.set_minor_locator(MultipleLocator(0.125))
             else:
                 ax.set_xticks(np.arange(min_I2, max_I2 + 0.125, 0.125))
-                ax.xaxis.set_minor_locator(plt.MultipleLocator(0.0625))
+                ax.xaxis.set_minor_locator(MultipleLocator(0.0625))
 
             # Set titles
             # if i == 0:
@@ -318,13 +331,14 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
 
     fig.suptitle("Single Model Performance Index Comparison", fontsize=16, weight="bold", y=0.95)
 
-    plt.savefig(
+    save_figure(
+        fig,
         f"{basedir}/comparisons/Single_Model_Performance_Index/SMPI_comparison_plot_comprehensive.{option['saving_format']}",
         format=f"{option['saving_format']}",
         dpi=option["dpi"],
         bbox_inches="tight",
     )
-    plt.close()
+    plt.close(fig)
 
 
 def generate_colors(color_index, list_index, name="selected_color"):
