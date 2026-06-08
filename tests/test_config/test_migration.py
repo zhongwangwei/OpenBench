@@ -4,7 +4,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 import yaml
 from click.testing import CliRunner
 

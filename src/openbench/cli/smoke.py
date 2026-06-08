@@ -266,9 +266,7 @@ def _collect_total_score_artifacts(case_dir: Path) -> tuple[list[Path], list[Pat
     score_dir = case_dir / "scores"
     figure_suffixes = {".jpg", ".jpeg", ".png", ".pdf", ".svg"}
     spatial_maps = sorted(
-        path
-        for path in score_dir.rglob("*Overall_Score*")
-        if path.is_file() and path.suffix.lower() in figure_suffixes
+        path for path in score_dir.rglob("*Overall_Score*") if path.is_file() and path.suffix.lower() in figure_suffixes
     )
     return heatmap_figures, heatmap_tables, spatial_maps
 
@@ -284,9 +282,7 @@ def _report_total_score_artifacts(config_path: Path) -> None:
         missing.append("Overall score spatial maps")
     if missing:
         raise click.ClickException(
-            "Smoke run did not produce required result artifact(s): "
-            + ", ".join(missing)
-            + f". Checked: {case_dir}"
+            "Smoke run did not produce required result artifact(s): " + ", ".join(missing) + f". Checked: {case_dir}"
         )
 
     click.echo("Smoke result artifacts:")

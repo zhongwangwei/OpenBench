@@ -110,6 +110,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.4.0",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 all = ["colm-openbench[gui,remote,report,migration]"]
 

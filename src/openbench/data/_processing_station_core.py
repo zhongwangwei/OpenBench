@@ -72,11 +72,7 @@ def _station_value_to_string(value: Any) -> str:
 
     flat = arr.ravel()
     if arr.dtype.kind in {"S", "U"}:
-        return "".join(
-            _station_value_to_string(item)
-            for item in flat
-            if _station_value_to_string(item)
-        ).strip()
+        return "".join(_station_value_to_string(item) for item in flat if _station_value_to_string(item)).strip()
     if arr.dtype.kind == "O" and all(np.asarray(item).ndim == 0 for item in flat):
         parts = [_station_value_to_string(item) for item in flat]
         if len([part for part in parts if part]) > 1 and all(len(part) == 1 for part in parts if part):

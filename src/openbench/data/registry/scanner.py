@@ -3054,11 +3054,7 @@ def _merged_station_dimension(ds, time_dim: str | None) -> str | None:
         "strlen",
         "string_length",
     }
-    named_dims = [
-        dim
-        for dim in ds.dims
-        if dim.lower() in STN_DIM_NAMES and dim.lower() not in ignored_dims
-    ]
+    named_dims = [dim for dim in ds.dims if dim.lower() in STN_DIM_NAMES and dim.lower() not in ignored_dims]
     if named_dims:
         return named_dims[0]
 
