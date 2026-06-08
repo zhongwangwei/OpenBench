@@ -558,6 +558,8 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     # --- project (required) ---
     if "project" not in raw:
         raise ConfigError("Missing required section: 'project'")
+    if not isinstance(raw["project"], dict):
+        raise ConfigError("'project' must be a mapping")
 
     # Backward compatibility: merge old 'options' section into project
     raw_project = dict(raw["project"])
@@ -593,6 +595,8 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     # --- evaluation (required) ---
     if "evaluation" not in raw:
         raise ConfigError("Missing required section: 'evaluation'")
+    if not isinstance(raw["evaluation"], dict):
+        raise ConfigError("'evaluation' must be a mapping")
     evaluation = _build_evaluation(raw["evaluation"])
     evaluation_lookup = _evaluation_variable_lookup(evaluation.variables)
 
@@ -635,6 +639,8 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     # --- simulation (required) ---
     if "simulation" not in raw:
         raise ConfigError("Missing required section: 'simulation'")
+    if not isinstance(raw["simulation"], dict):
+        raise ConfigError("'simulation' must be a mapping")
     simulation = _build_simulation(raw["simulation"])
     for label, entry in simulation.items():
         entry.variables = _canonicalize_variable_mapping_keys(

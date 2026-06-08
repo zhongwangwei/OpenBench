@@ -141,6 +141,23 @@ def test_null_reference_section_raises_config_error():
         _build_config(raw)
 
 
+@pytest.mark.parametrize("section", ["project", "evaluation", "simulation"])
+def test_non_mapping_required_section_raises_config_error(section):
+    """Malformed required sections must raise ConfigError, not a bare traceback (M3)."""
+    from openbench.config.loader import _build_config
+
+    raw = {
+        "project": {"name": "t", "output_dir": ".", "years": [2000, 2010]},
+        "evaluation": {"variables": ["GPP"]},
+        "reference": {"GPP": "RefA"},
+        "simulation": {"M": {"model": "M", "root_dir": "/d"}},
+    }
+    raw[section] = "not-a-mapping"
+
+    with pytest.raises(ConfigError, match=f"'{section}' must be a mapping"):
+        _build_config(raw)
+
+
 def test_invalid_time_alignment():
     """Construct a config dict with bad time_alignment."""
     from openbench.config.loader import _build_config
