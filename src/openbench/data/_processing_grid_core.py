@@ -146,8 +146,11 @@ class GridProcessingCoreMixin:
                 force_refresh=True,
             )
         else:
+            # Same as the grid branch: these scratch files may have just been written,
+            # so bypass the glob cache to avoid a stale listing (consistency with above).
             var_files = cached_glob(
-                os.path.join(data_dir, f"{data_source}_{data_params['prefix']}*{data_params['suffix']}.nc")
+                os.path.join(data_dir, f"{data_source}_{data_params['prefix']}*{data_params['suffix']}.nc"),
+                force_refresh=True,
             )
 
         self.combine_and_save_data(var_files, data_params)

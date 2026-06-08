@@ -1904,8 +1904,8 @@ class ReportGenerator:
             Path to generated PDF file, or None if generation failed
         """
         if not PDF_AVAILABLE:
-            logger.warning("PDF generation not available. Please install xhtml2pdf.")
-            logger.warning("Run: pip install xhtml2pdf (or install xhtml2pdf in your conda environment)")
+            logger.warning("PDF generation not available. Please install the report extra.")
+            logger.warning("Run: pip install 'colm-openbench[report]' (or install xhtml2pdf in your conda env)")
             return None
 
         try:

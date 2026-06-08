@@ -53,7 +53,7 @@ class LazyGroup(click.Group):
 
 
 @click.group(cls=LazyGroup)
-@click.version_option(version=__version__, prog_name="openbench")
+@click.version_option(version=__version__, prog_name="openbench", message="openbench %(version)s")
 def cli():
     """OpenBench: Land Surface Model Benchmarking System."""
 
