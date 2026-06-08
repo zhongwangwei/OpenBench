@@ -252,6 +252,22 @@ def test_processing_atomic_netcdf_write_preserves_existing_file_on_failure(tmp_p
     assert not list(tmp_path.glob(".existing.nc.*.tmp.nc"))
 
 
+def test_data_cache_raises_when_disk_store_fails():
+    import pytest
+
+    from openbench.data.cache import CacheError, DataCache
+
+    class FailingManager:
+        def set(self, key, value, level=None):
+            return False
+
+    ds = xr.Dataset({"value": ("time", np.array([1.0]))})
+    data_cache = DataCache(FailingManager())
+
+    with pytest.raises(CacheError, match="Failed to cache dataset"):
+        data_cache.cache_dataset(ds, "sample")
+
+
 def test_find_data_files_escapes_glob_metachars_in_prefix_suffix(tmp_path):
     """Prefix/suffix containing glob metacharacters ([, ?, *) must be matched
     literally, not interpreted as wildcards. The intentional wildcard is only

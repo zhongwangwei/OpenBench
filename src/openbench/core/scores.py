@@ -122,7 +122,14 @@ class scores:
         s, o = self._validate_inputs(s, o)
         ref_monthly = o.groupby("time.month").mean("time")
         sim_monthly = s.groupby("time.month").mean("time")
-        valid = ref_monthly.notnull().any("month") & sim_monthly.notnull().any("month")
+        ref_amplitude = ref_monthly.max("month") - ref_monthly.min("month")
+        sim_amplitude = sim_monthly.max("month") - sim_monthly.min("month")
+        valid = (
+            ref_monthly.notnull().any("month")
+            & sim_monthly.notnull().any("month")
+            & (ref_amplitude > 0)
+            & (sim_amplitude > 0)
+        )
         ref_max_month = ref_monthly.idxmax("month")
         sim_max_month = sim_monthly.idxmax("month")
         phase_shift = (sim_max_month - ref_max_month) * 365 / 12

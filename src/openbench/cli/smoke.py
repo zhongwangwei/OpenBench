@@ -319,8 +319,8 @@ def smoke_test(work_dir: Path | None, keep: bool, run_evaluation: bool):
         created_temp_dir = True
     else:
         work_dir = work_dir.expanduser().resolve()
-        if work_dir.exists():
-            shutil.rmtree(work_dir)
+        if work_dir.exists() and any(work_dir.iterdir()):
+            raise click.ClickException(f"Smoke work directory already exists and is not empty: {work_dir}")
 
     try:
         sample_root, home, config_path = _prepare_work_dir(work_dir)

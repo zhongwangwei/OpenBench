@@ -110,13 +110,15 @@ gui = ["PySide6>=6.5.0"]
 remote = ["paramiko>=3.0.0", "cryptography>=41.0.0"]
 report = ["xhtml2pdf>=0.2.5"]
 migration = ["f90nml>=1.4.4"]
+statistics = ["scikit-learn>=1.0", "statsmodels>=0.13"]
+plot = ["seaborn>=0.12"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.4.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
-all = ["colm-openbench[gui,remote,report,migration]"]
+all = ["colm-openbench[gui,remote,report,migration,statistics,plot]"]
 
 [project.scripts]
 openbench = "openbench.cli.main:cli"

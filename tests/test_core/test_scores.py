@@ -162,3 +162,15 @@ def test_nphase_score_returns_nan_for_all_nan_cells():
 
     assert np.isnan(float(result.sel(lat=0)))
     assert np.isfinite(float(result.sel(lat=1)))
+
+
+def test_nphase_score_returns_nan_for_flat_seasonal_cycles():
+    from openbench.core.scores import scores
+
+    scorer = scores()
+    obs = make_da([1.0] * 24)
+    sim = make_da([1.0] * 24)
+
+    result = scorer.nPhaseScore(sim, obs)
+
+    assert np.isnan(float(result))

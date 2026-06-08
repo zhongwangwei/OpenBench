@@ -331,7 +331,7 @@ class RunnerBindings:
                 "Hellinger_Distance": {"nbins": 25},
                 "Functional_Response": {"nbins": 25},
                 "Mann_Kendall_Trend_Test": {"significance_level": 0.05},
-                "ANOVA": {"n_jobs": -1, "analysis_type": "one-way"},
+                "ANOVA": {"n_jobs": -1, "analysis_type": "oneway"},
                 "Partial_Least_Squares_Regression": {
                     "max_components": 10,
                     "n_splits": 5,

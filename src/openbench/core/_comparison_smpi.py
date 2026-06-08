@@ -33,6 +33,67 @@ def _smpi_normalized_diff(s, o):
     return xr.where(obs_var != 0, diff_squared / obs_var, np.nan)
 
 
+def _smpi_scalar(value) -> float:
+    arr = np.asarray(value).squeeze()
+    if arr.size != 1:
+        return np.nan
+    return float(arr.item())
+
+
+def _smpi_spatial_weights(weight: str, reference: xr.DataArray) -> xr.DataArray | None:
+    mode = str(weight or "none").lower()
+    if mode == "area":
+        return xr.DataArray(
+            np.cos(np.deg2rad(reference["lat"])),
+            coords={"lat": reference["lat"]},
+            dims=("lat",),
+        )
+    if mode == "mass":
+        area_weights = xr.DataArray(
+            np.cos(np.deg2rad(reference["lat"])),
+            coords={"lat": reference["lat"]},
+            dims=("lat",),
+        )
+        combined_weights = area_weights * np.abs(reference.mean("time"))
+        total = _smpi_scalar(combined_weights.sum(skipna=True).values)
+        if not np.isfinite(total) or total == 0:
+            return combined_weights.fillna(0)
+        return (combined_weights / total).fillna(0)
+    return None
+
+
+def _smpi_weighted_mean(normalized_diff: xr.DataArray, weights: xr.DataArray | None) -> float:
+    normalized_diff = normalized_diff.where(np.isfinite(normalized_diff))
+    if weights is None:
+        return _smpi_scalar(normalized_diff.mean(skipna=True).values)
+    return _smpi_scalar(normalized_diff.weighted(weights).mean(skipna=True).values)
+
+
+def _smpi_grid_summary(s, o, *, weight: str, n_bootstrap: int = 1000):
+    normalized_diff = _smpi_normalized_diff(s, o)
+    weights = _smpi_spatial_weights(weight, o)
+    smpi = _smpi_weighted_mean(normalized_diff, weights)
+
+    if n_bootstrap <= 0 or s.sizes.get("time", 0) == 0:
+        return smpi, np.nan, np.nan, normalized_diff
+
+    bootstrap_smpi = []
+    n_time = len(s["time"])
+    for _ in range(n_bootstrap):
+        idx = np.random.choice(n_time, size=n_time, replace=True)
+        s_boot = s.isel(time=idx)
+        o_boot = o.isel(time=idx)
+        smpi_boot = _smpi_weighted_mean(_smpi_normalized_diff(s_boot, o_boot), weights)
+        if np.isfinite(smpi_boot):
+            bootstrap_smpi.append(smpi_boot)
+
+    if not bootstrap_smpi:
+        return smpi, np.nan, np.nan, normalized_diff
+
+    smpi_lower, smpi_upper = np.percentile(np.asarray(bootstrap_smpi), [5, 95])
+    return smpi, smpi_lower, smpi_upper, normalized_diff
+
+
 class SingleModelPerformanceIndexComparisonMixin:
     def scenarios_Single_Model_Performance_Index_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
@@ -65,25 +126,12 @@ class SingleModelPerformanceIndexComparisonMixin:
             return smpi, smpi_lower, smpi_upper
 
         def process_smpi(casedir, item, ref_source, sim_source, s, o):
-            normalized_diff = _smpi_normalized_diff(s, o)
-
-            # Calculate overall SMPI
-            smpi = normalized_diff.mean(skipna=True).values
-            # Bootstrap for uncertainty estimation — flatten to sample grid points
-            n_bootstrap = 1000
-            flat_diff = normalized_diff.values.ravel()
-            flat_diff = flat_diff[~np.isnan(flat_diff)]
-            n_points = len(flat_diff)
-            bootstrap_smpi = []
-            if n_points == 0:
-                smpi_lower, smpi_upper = np.nan, np.nan
-            else:
-                for _ in range(n_bootstrap):
-                    bootstrap_indices = np.random.choice(n_points, size=n_points, replace=True)
-                    bootstrap_smpi.append(np.nanmean(flat_diff[bootstrap_indices]))
-
-                bootstrap_smpi = np.array(bootstrap_smpi)
-                smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
+            smpi, smpi_lower, smpi_upper, normalized_diff = _smpi_grid_summary(
+                s,
+                o,
+                weight=self.weight,
+                n_bootstrap=1000,
+            )
 
             # Save grid-based SMPI
             try:

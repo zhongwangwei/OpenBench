@@ -94,7 +94,7 @@ class metrics:
 
         # Calculate absolute percent bias (guard against zero observed sum)
         o_sum = o.sum(dim="time")
-        apb = xr.where(o_sum != 0, 100.0 * abs((s - o).sum(dim="time")) / o_sum, np.nan)
+        apb = xr.where(o_sum != 0, 100.0 * abs((s - o).sum(dim="time")) / np.abs(o_sum), np.nan)
         return apb
 
     def RMSE(self, s, o):

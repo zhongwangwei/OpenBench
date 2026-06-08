@@ -106,6 +106,16 @@ def test_pc_max_negative_observed_max_uses_absolute_denominator():
     assert float(m.pc_max(sim, obs)) == 0.5
 
 
+def test_absolute_percent_bias_uses_absolute_observed_sum():
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    obs = make_da([-2.0, -3.0])
+    sim = make_da([-1.0, -2.0])
+
+    assert float(m.absolute_percent_bias(sim, obs)) == 40.0
+
+
 def test_hydrologic_metrics_align_on_inner_time_before_calculating():
     """br2/cp/dr/APFB should align timestamps instead of requiring identical axes."""
     from openbench.core.metrics import metrics
@@ -170,6 +180,75 @@ def test_smpi_uses_climatological_mean_difference_not_instantaneous_error():
     assert abs(float(value)) < 1e-12
     assert np.isfinite(lower) or np.isnan(lower)
     assert np.isfinite(upper) or np.isnan(upper)
+
+
+def test_taylor_grid_summary_uses_pairwise_mask_for_all_three_terms():
+    from openbench.core._comparison_taylor import _taylor_grid_summary_statistics
+    from openbench.core.metrics import metrics
+
+    times = pd.date_range("2000-01-01", periods=3, freq="MS")
+    sim = xr.DataArray(
+        np.array(
+            [
+                [[1.0, 10.0]],
+                [[2.0, np.nan]],
+                [[3.0, 30.0]],
+            ]
+        ),
+        dims=("time", "lat", "lon"),
+        coords={"time": times, "lat": [0.0], "lon": [0.0, 1.0]},
+    )
+    obs = xr.DataArray(
+        np.array(
+            [
+                [[1.0, 10.0]],
+                [[2.0, 20.0]],
+                [[3.0, 30.0]],
+            ]
+        ),
+        dims=("time", "lat", "lon"),
+        coords={"time": times, "lat": [0.0], "lon": [0.0, 1.0]},
+    )
+
+    summary = _taylor_grid_summary_statistics(
+        sim,
+        obs,
+        metric_handler=metrics(),
+        weight="none",
+    )
+
+    assert abs(summary.std_sim - summary.std_ref) < 1e-12
+    assert abs(summary.cor_sim - 1.0) < 1e-12
+    assert abs(summary.diagram_crmsd) < 1e-12
+
+
+def test_smpi_grid_summary_respects_area_weights():
+    from openbench.core._comparison_smpi import _smpi_grid_summary
+
+    times = pd.date_range("2000-01-01", periods=3, freq="MS")
+    lat = [0.0, 80.0]
+    lon = [0.0]
+    obs = xr.DataArray(
+        np.array(
+            [
+                [[0.0], [0.0]],
+                [[1.0], [1.0]],
+                [[2.0], [2.0]],
+            ]
+        ),
+        dims=("time", "lat", "lon"),
+        coords={"time": times, "lat": lat, "lon": lon},
+    )
+    sim = obs.copy(deep=True)
+    sim.loc[{"lat": 0.0}] = obs.sel(lat=0.0) + 2.0
+    sim.loc[{"lat": 80.0}] = obs.sel(lat=80.0)
+
+    smpi, _lower, _upper, _grid = _smpi_grid_summary(sim, obs, weight="area", n_bootstrap=0)
+
+    area_weights = np.cos(np.deg2rad(np.array(lat)))
+    expected = 4.0 / obs.var(dim="time", ddof=1).isel(lon=0).values[0]
+    expected = expected * area_weights[0] / area_weights.sum()
+    assert abs(float(smpi) - expected) < 1e-12
 
 
 def test_dr_returns_nan_for_constant_observations_with_error():

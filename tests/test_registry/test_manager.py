@@ -416,6 +416,18 @@ def test_builtin_reference_catalog_has_no_developer_station_list_paths():
     assert bad == {}
 
 
+def test_packaged_station_lists_do_not_embed_developer_absolute_paths():
+    root = registry_manager_module.REGISTRY_DIR / "station_lists"
+    bad = {}
+    for path in sorted(root.glob("*.csv")):
+        text = path.read_text(encoding="utf-8")
+        matches = [needle for needle in ("/Volumes/", "/Users/", "/tera11/") if needle in text]
+        if matches:
+            bad[path.name] = matches
+
+    assert bad == {}
+
+
 def test_gleam_open_water_profile_subdir_matches_catalog_variants():
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")

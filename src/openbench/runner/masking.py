@@ -45,9 +45,9 @@ def apply_unified_mask(
     ref_path = os.path.abspath(ref_path)
     sim_path = os.path.abspath(sim_path)
 
-    if not os.path.exists(ref_path) or not os.path.exists(sim_path):
-        logger.debug("Unified mask skipped: ref or sim file not found")
-        return
+    missing_paths = [path for path in (ref_path, sim_path) if not os.path.exists(path)]
+    if missing_paths:
+        raise FileNotFoundError(f"Unified mask input file not found: {', '.join(missing_paths)}")
 
     ref_ds = None
     sim_ds = None
@@ -91,8 +91,7 @@ def apply_unified_mask(
         else:
             o_aligned, s_aligned = xr.align(o, s, join="inner")
             if o_aligned.sizes.get("time", 0) == 0:
-                logger.warning("Unified mask: no overlapping timestamps for %s, skipping", var_name)
-                return
+                raise ValueError(f"Unified mask: no overlapping timestamps for {var_name}")
 
         # Apply mask: NaN where either is NaN
         mask = np.isnan(s_aligned.values) | np.isnan(o_aligned.values)

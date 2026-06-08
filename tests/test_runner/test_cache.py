@@ -124,3 +124,48 @@ def test_posix_file_lock_failure_does_not_continue_without_lock(monkeypatch, tmp
             raise AssertionError("unlocked body must not run")
 
     assert "fcntl.flock unavailable" in caplog.text
+
+
+def test_input_file_signature_includes_ctime_ns(tmp_path):
+    from openbench.runner.hashing import input_file_signature
+
+    source_root = tmp_path / "input"
+    source_root.mkdir()
+    data_file = source_root / "sample.nc"
+    data_file.write_bytes(b"abcdef")
+
+    signature = input_file_signature({"Case_dir": str(source_root)}, "Case")
+
+    assert len(signature["files"]) == 1
+    assert "ctime_ns" in signature["files"][0]
+
+
+def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons():
+    from openbench.runner.hashing import ALGORITHM_SOURCE_MODULES
+
+    modules = set(ALGORITHM_SOURCE_MODULES)
+
+    assert "openbench.core.evaluation" in modules
+    assert "openbench.core._comparison_helpers" in modules
+    assert "openbench.runner.masking" in modules
+    assert "openbench.data._processing_grid_regrid" in modules
+
+
+def test_unified_mask_missing_inputs_raise(tmp_path):
+    from openbench.runner.masking import apply_unified_mask
+
+    info = {
+        "casedir": str(tmp_path),
+        "ref_varname": "ref",
+        "sim_varname": "sim",
+        "time_alignment": "intersection",
+    }
+
+    with pytest.raises(FileNotFoundError, match="Unified mask input file not found"):
+        apply_unified_mask(
+            info,
+            "GPP",
+            "RefA",
+            "SimA",
+            write_netcdf_atomic_fn=lambda *args, **kwargs: None,
+        )

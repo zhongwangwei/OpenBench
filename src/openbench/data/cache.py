@@ -811,7 +811,8 @@ class DataCache:
             "variables": list(dataset.data_vars),
         }
 
-        self.cache_manager.set(key, cache_data, level="disk")
+        if not self.cache_manager.set(key, cache_data, level="disk"):
+            raise CacheError(f"Failed to cache dataset {name!r} with key {key!r}")
         return key
 
     def get_dataset(self, key: str) -> Optional[Tuple["xr.Dataset", Dict[str, Any]]]:

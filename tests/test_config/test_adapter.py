@@ -211,6 +211,8 @@ def test_full_config_adapter():
         statistics=StatisticsConfig(enabled=True, items=["ANOVA"]),
     )
     legacy = to_legacy_config(cfg)
+    bindings = adapter_module.build_runner_bindings(cfg)
+    stats_ctx = bindings.build_statistics_context(["ANOVA"], ["GPP"])
 
     assert legacy["general"]["num_cores"] == 8
     assert legacy["general"]["comparison"] is True
@@ -220,6 +222,7 @@ def test_full_config_adapter():
     assert legacy["scores"] == {"nBiasScore": True}
     assert legacy["comparisons"] == {"Taylor_Diagram": True}
     assert legacy["statistics"] == {"ANOVA": True}
+    assert stats_ctx.stats_nml["ANOVA"]["analysis_type"] == "oneway"
 
 
 def test_defaults_applied():

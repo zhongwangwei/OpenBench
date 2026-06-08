@@ -69,6 +69,58 @@ def _taylor_summary_statistics(std_sim, cor_sim, mean_crmsd, std_ref) -> TaylorS
     )
 
 
+def _taylor_spatial_weights(weight: str, reference: xr.DataArray) -> xr.DataArray | None:
+    mode = str(weight or "none").lower()
+    if mode == "area":
+        return xr.DataArray(
+            np.cos(np.deg2rad(reference["lat"])),
+            coords={"lat": reference["lat"]},
+            dims=("lat",),
+        )
+    if mode == "mass":
+        area_weights = xr.DataArray(
+            np.cos(np.deg2rad(reference["lat"])),
+            coords={"lat": reference["lat"]},
+            dims=("lat",),
+        )
+        combined_weights = area_weights * np.abs(reference.mean("time"))
+        total = _to_scalar_float(combined_weights.sum(skipna=True).values)
+        if not np.isfinite(total) or total == 0:
+            return combined_weights.fillna(0)
+        return (combined_weights / total).fillna(0)
+    return None
+
+
+def _weighted_spatial_mean(data: xr.DataArray, weights: xr.DataArray | None):
+    data = data.where(np.isfinite(data))
+    if weights is None:
+        return data.mean(skipna=True).values
+    return data.weighted(weights).mean(skipna=True).values
+
+
+def _taylor_grid_summary_statistics(
+    simfile: xr.DataArray,
+    reffile: xr.DataArray,
+    *,
+    metric_handler,
+    weight: str,
+) -> TaylorSummaryStatistics:
+    sim_valid, ref_valid = _apply_pairwise_valid_mask(simfile, reffile)
+    weights = _taylor_spatial_weights(weight, ref_valid)
+
+    std_sim_result = _taylor_standard_deviation(sim_valid)
+    std_ref_result = _taylor_standard_deviation(ref_valid)
+    cor_result = metric_handler.correlation(sim_valid, ref_valid)
+    rms_result = metric_handler.CRMSD(sim_valid, ref_valid)
+
+    return _taylor_summary_statistics(
+        std_sim=_weighted_spatial_mean(std_sim_result, weights),
+        cor_sim=_weighted_spatial_mean(cor_result, weights),
+        mean_crmsd=_weighted_spatial_mean(rms_result, weights),
+        std_ref=_weighted_spatial_mean(std_ref_result, weights),
+    )
+
+
 def _write_taylor_summary(output_file, stds, cors, RMSs, index: int, summary: TaylorSummaryStatistics) -> None:
     output_file.write(f"{summary.std_sim}\t")
     output_file.write(f"{summary.cor_sim}\t")
@@ -129,6 +181,7 @@ class TaylorDiagramComparisonMixin:
                                 stds = np.zeros(len(sim_sources) + 1)
                                 cors = np.zeros(len(sim_sources) + 1)
                                 RMSs = np.zeros(len(sim_sources) + 1)
+                                stds[0] = np.nan
                                 for i, sim_source in enumerate(sim_sources):
                                     try:
                                         ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -276,8 +329,6 @@ class TaylorDiagramComparisonMixin:
                                                 mean_crmsd=mean_crmsd,
                                                 std_ref=std_ref,
                                             )
-                                            _write_taylor_summary(output_file, stds, cors, RMSs, i + 1, summary)
-
                                         else:
                                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
                                             sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
@@ -300,109 +351,38 @@ class TaylorDiagramComparisonMixin:
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
-                                            std_sim_result = _taylor_standard_deviation(simfile)
-                                            cor_result = self.correlation(simfile, reffile)
-                                            RMS_result = self.CRMSD(simfile, reffile)
-
-                                            if self.weight.lower() == "area":
-                                                weights = np.cos(np.deg2rad(reffile.lat))
-                                                std_sim = (
-                                                    std_sim_result.where(np.isfinite(std_sim_result))
-                                                    .weighted(weights)
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                                cor_sim = (
-                                                    cor_result.where(np.isfinite(cor_result))
-                                                    .weighted(weights)
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                                mean_crmsd = (
-                                                    RMS_result.where(np.isfinite(RMS_result))
-                                                    .weighted(weights)
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                            elif self.weight.lower() == "mass":
-                                                # Calculate area weights (cosine of latitude)
-                                                area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                # Calculate absolute flux weights
-                                                flux_weights = np.abs(reffile.mean("time"))
-                                                # Combine area and flux weights
-                                                combined_weights = area_weights * flux_weights
-                                                # Normalize weights to sum to 1
-                                                normalized_weights = combined_weights / combined_weights.sum()
-                                                # Calculate weighted mean
-                                                std_sim = (
-                                                    std_sim_result.where(np.isfinite(std_sim_result))
-                                                    .weighted(normalized_weights.fillna(0))
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                                cor_sim = (
-                                                    cor_result.where(np.isfinite(cor_result))
-                                                    .weighted(normalized_weights.fillna(0))
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                                mean_crmsd = (
-                                                    RMS_result.where(np.isfinite(RMS_result))
-                                                    .weighted(normalized_weights.fillna(0))
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                            else:
-                                                std_sim = (
-                                                    std_sim_result.where(np.isfinite(std_sim_result))
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                                cor_sim = (
-                                                    cor_result.where(np.isfinite(cor_result)).mean(skipna=True).values
-                                                )
-                                                mean_crmsd = (
-                                                    RMS_result.where(np.isfinite(RMS_result)).mean(skipna=True).values
-                                                )
-
-                                            if self.weight.lower() == "area":
-                                                weights = np.cos(np.deg2rad(reffile.lat))
-                                                std_ref = (
-                                                    _taylor_standard_deviation(reffile)
-                                                    .where(np.isfinite(_taylor_standard_deviation(reffile)))
-                                                    .weighted(weights)
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                            elif self.weight.lower() == "mass":
-                                                # Calculate area weights (cosine of latitude)
-                                                area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                # Calculate absolute flux weights
-                                                flux_weights = np.abs(reffile.mean("time"))
-                                                # Combine area and flux weights
-                                                combined_weights = area_weights * flux_weights
-                                                # Normalize weights to sum to 1
-                                                normalized_weights = combined_weights / combined_weights.sum()
-                                                # Calculate weighted mean
-                                                std_ref = (
-                                                    _taylor_standard_deviation(reffile)
-                                                    .where(np.isfinite(_taylor_standard_deviation(reffile)))
-                                                    .weighted(normalized_weights.fillna(0))
-                                                    .mean(skipna=True)
-                                                    .values
-                                                )
-                                            else:
-                                                std_ref = _taylor_standard_deviation(reffile).mean(skipna=True).values
-
-                                            summary = _taylor_summary_statistics(
-                                                std_sim=std_sim,
-                                                cor_sim=cor_sim,
-                                                mean_crmsd=mean_crmsd,
-                                                std_ref=std_ref,
+                                            summary = _taylor_grid_summary_statistics(
+                                                simfile,
+                                                reffile,
+                                                metric_handler=self,
+                                                weight=self.weight,
                                             )
-                                            _write_taylor_summary(output_file, stds, cors, RMSs, i + 1, summary)
 
-                                        stds[0] = _to_scalar_float(std_ref)
+                                        if not np.isfinite(stds[0]) and np.isfinite(summary.std_ref):
+                                            stds[0] = summary.std_ref
+                                        elif (
+                                            np.isfinite(stds[0])
+                                            and np.isfinite(summary.std_ref)
+                                            and not np.isclose(stds[0], summary.std_ref)
+                                        ):
+                                            logging.warning(
+                                                "Taylor reference std differs across simulations for %s/%s: "
+                                                "using first reference std %.6g for the diagram reference, "
+                                                "current pair std_ref is %.6g",
+                                                evaluation_item,
+                                                ref_source,
+                                                stds[0],
+                                                summary.std_ref,
+                                            )
+                                            summary = summary._replace(
+                                                std_ref=stds[0],
+                                                diagram_crmsd=_taylor_implied_crmsd(
+                                                    summary.std_sim,
+                                                    summary.cor_sim,
+                                                    stds[0],
+                                                ),
+                                            )
+                                        _write_taylor_summary(output_file, stds, cors, RMSs, i + 1, summary)
                                     finally:
                                         pass  # Memory cleanup handled at method level
                                 output_file.write(f"{stds[0]}\t")
