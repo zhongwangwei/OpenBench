@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.0.0b2] - 2026-06-09
+
+Bug-fix and hardening release over 3.0.0b1 (deep code review + full cross-platform CI).
+
+### Fixed
+- Target diagram plotted total RMSE on the uRMSD axis; now passes centered CRMSD so
+  points satisfy RMSD² = bias² + uRMSD² (with an invariant guard)
+- `absolute_percent_bias` normalizes by `|Σo|` so a negative observed sum no longer yields a negative APB
+- ANOVA default `analysis_type` corrected to `oneway` (was the non-accepted `one-way`)
+- `br2` uses `|slope|` (Krause 2005), keeping it in `[0, r²]` for negative slopes
+- SMPI grid path applies area weights and uses a consistent bootstrap dimension
+- Taylor grid summary computes std/correlation/CRMSD over one pairwise finite mask
+- NetCDF writes are serialized with a lock (netCDF4/HDF5 is not thread-safe) — fixes a segfault
+- Registry catalog writes hold a cross-process lock; `delete_reference` writes a tombstone
+- Config rejects non-mapping `project`/`evaluation`/`simulation` sections with a clean error
+- Cross-platform path handling (POSIX paths in catalogs/configs; Windows file reads)
+
+### Changed
+- Version is a single source of truth (`__init__.__version__`, hatchling dynamic)
+- The full test suite (84 files) now runs on CI across Linux/macOS/Windows
+
+### Added
+- 30-minute (half-hour) time-resolution detection
+- Expanded reference dataset metadata; `CITATION.cff`
+
 ## [3.0.0b1] - 2026-06-07
 
 First public beta of the 3.0 line. APIs and config schema may still change

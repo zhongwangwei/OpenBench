@@ -5,9 +5,12 @@ from pathlib import Path
 
 def test_import_openbench():
     """Verify that the openbench package can be imported."""
+    import re
+
     import openbench
 
-    assert openbench.__version__ == "3.0.0b1"
+    # Format check rather than a hard-coded value, so releases don't need to edit this.
+    assert re.match(r"^\d+\.\d+\.\d+", openbench.__version__)
     assert openbench.__title__ == "OpenBench"
 
 
