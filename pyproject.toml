@@ -2,6 +2,9 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/openbench/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/openbench"]
 # Defense in depth: even if a developer accidentally creates one of
@@ -62,7 +65,8 @@ exclude = [
 
 [project]
 name = "colm-openbench"
-version = "3.0.0b1"
+# Single source of truth: src/openbench/__init__.py __version__ (see [tool.hatch.version]).
+dynamic = ["version"]
 description = "Open Source Land Surface Model Benchmarking System"
 readme = "README.md"
 requires-python = ">=3.10"
