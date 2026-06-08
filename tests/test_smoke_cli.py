@@ -79,28 +79,29 @@ def test_smoke_test_extracts_fixture_and_invokes_check(tmp_path, monkeypatch):
         "Sensible_Heat",
     ]
     assert config["reference"] == {
-        "data_root": str(sample_root / "Reference" / "Initial_test"),
+        "data_root": (sample_root / "Reference" / "Initial_test").as_posix(),
         "Evapotranspiration": ["OpenBench_Smoke_GLEAM4_2a", "OpenBench_Smoke_GLEAM_hybrid_PLUMBER2"],
         "Latent_Heat": ["OpenBench_Smoke_ILAMB_monthly", "OpenBench_Smoke_PLUMBER2"],
         "Sensible_Heat": ["OpenBench_Smoke_ILAMB_monthly", "OpenBench_Smoke_PLUMBER2"],
     }
     assert set(config["simulation"]) == {"grid_case", "station_case"}
-    assert config["simulation"]["station_case"]["fulllist"] == str(work_dir / "lists" / "station_case.csv")
+    assert config["simulation"]["station_case"]["fulllist"] == (work_dir / "lists" / "station_case.csv").as_posix()
 
     catalog = yaml.safe_load(
         (work_dir / "home" / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
     )
-    assert catalog["OpenBench_Smoke_GLEAM4_2a"]["root_dir"] == str(sample_root / "Reference" / "Initial_test")
+    assert catalog["OpenBench_Smoke_GLEAM4_2a"]["root_dir"] == (sample_root / "Reference" / "Initial_test").as_posix()
     assert set(catalog) == {
         "OpenBench_Smoke_GLEAM4_2a",
         "OpenBench_Smoke_GLEAM_hybrid_PLUMBER2",
         "OpenBench_Smoke_ILAMB_monthly",
         "OpenBench_Smoke_PLUMBER2",
     }
-    assert catalog["OpenBench_Smoke_GLEAM_hybrid_PLUMBER2"]["fulllist"] == str(
-        work_dir / "lists" / "GLEAM_hybrid_PLUMBER2.csv"
+    assert (
+        catalog["OpenBench_Smoke_GLEAM_hybrid_PLUMBER2"]["fulllist"]
+        == (work_dir / "lists" / "GLEAM_hybrid_PLUMBER2.csv").as_posix()
     )
-    assert catalog["OpenBench_Smoke_PLUMBER2"]["fulllist"] == str(work_dir / "lists" / "PLUMBER2.csv")
+    assert catalog["OpenBench_Smoke_PLUMBER2"]["fulllist"] == (work_dir / "lists" / "PLUMBER2.csv").as_posix()
 
     station_list = pd.read_csv(work_dir / "lists" / "station_case.csv")
     ref_list = pd.read_csv(work_dir / "lists" / "PLUMBER2.csv")
