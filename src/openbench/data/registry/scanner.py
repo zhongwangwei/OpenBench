@@ -913,7 +913,7 @@ def _scan_grid_composite_children_profile(
         if status != "found" or nc_dir is None:
             continue
 
-        variables[var_name] = str(nc_dir.relative_to(res_dir))
+        variables[var_name] = nc_dir.relative_to(res_dir).as_posix()
         file_glob = var_profile.get("file_glob") or scan.get("file_glob")
         if file_glob:
             file_globs[var_name] = file_glob
@@ -999,7 +999,7 @@ def _scan_grid_composite_files_profile(
         if not files:
             continue
 
-        variables[var_name] = str(nc_dir.relative_to(res_dir))
+        variables[var_name] = nc_dir.relative_to(res_dir).as_posix()
         file_glob = var_profile.get("file_glob") or scan.get("file_glob")
         if file_glob:
             file_globs[var_name] = file_glob
@@ -1060,7 +1060,7 @@ def _scan_grid_nested_root_profile(
         return None, set()
 
     res_dir = ref_root / "Grid" / res_name
-    default_sub_dir = str(dataset_root.relative_to(res_dir))
+    default_sub_dir = dataset_root.relative_to(res_dir).as_posix()
     variables: dict[str, str] = {}
     file_globs: dict[str, str | list[str]] = {}
     for var_name, var_profile in (profile.get("variables") or {}).items():
@@ -1078,7 +1078,7 @@ def _scan_grid_nested_root_profile(
                 max_descent=DEFAULT_NC_DESCENT,
             )
             if status == "found" and nc_dir is not None:
-                sub_dir = str(nc_dir.relative_to(res_dir))
+                sub_dir = nc_dir.relative_to(res_dir).as_posix()
                 files = _matching_nc_files(nc_dir, file_glob)
         if not files:
             logger.warning(
@@ -1116,7 +1116,7 @@ def _scan_grid_nested_root_profile(
                 ),
             )
             return None, {dataset_root}
-        variables[profile_name] = str(nc_dir.relative_to(res_dir))
+        variables[profile_name] = nc_dir.relative_to(res_dir).as_posix()
 
     scanned = ScannedDataset(
         name=_profile_dataset_name(profile_name, profile),
@@ -1177,7 +1177,7 @@ def _scan_grid_dataset_choice_profile(
     file_globs = {}
     default_var = Path(root_sub_dir).parts[3] if len(Path(root_sub_dir).parts) >= 5 else profile_name
     for var_name, var_profile in (profile.get("variables") or {default_var: {}}).items():
-        variables[var_name] = str(nc_dir.relative_to(res_dir))
+        variables[var_name] = nc_dir.relative_to(res_dir).as_posix()
         file_glob = scan.get("file_glob")
         if isinstance(var_profile, dict):
             file_glob = var_profile.get("file_glob") or file_glob
@@ -1398,7 +1398,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
 
                         # Detect tim_res and record sub_dir from the actual NC location
                         tim_res = _detect_tim_res(nc_dir)
-                        sub_dir = str(nc_dir.relative_to(res_dir))
+                        sub_dir = nc_dir.relative_to(res_dir).as_posix()
 
                         if dataset_name not in groups:
                             groups[dataset_name] = DatasetGroup(base_name=dataset_name)
@@ -1546,7 +1546,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
                         # to ds_root. Previously hardcoded to dataset_dir's path,
                         # which mismatched when NCs lived in a deeper subdir
                         # (e.g., MyStn/data/*.nc) — finalize couldn't locate them.
-                        scanned.variables[var_name] = str(nc_dir.relative_to(category_dir.parent))
+                        scanned.variables[var_name] = nc_dir.relative_to(category_dir.parent).as_posix()
                     scanned.file_count += nc_count
 
     return sorted(groups.values(), key=lambda g: g.base_name)
