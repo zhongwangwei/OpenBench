@@ -318,6 +318,10 @@ class RegistryManager:
             for name, data in catalog.items():
                 try:
                     key = normalize_name(name)
+                    if isinstance(data, dict) and data.get("_deleted"):
+                        self._references.pop(key, None)
+                        logger.debug("Deleted reference '%s' via user overlay tombstone", name)
+                        continue
                     if key in self._references:
                         self._references[key] = _deep_merge_reference(self._references[key], data)
                         logger.debug("Merged user overlay for reference '%s'", name)
@@ -349,6 +353,10 @@ class RegistryManager:
                     entries = data
                 for name, entry in entries.items():
                     key = normalize_name(name)
+                    if isinstance(entry, dict) and entry.get("_deleted"):
+                        self._references.pop(key, None)
+                        logger.debug("Deleted reference '%s' via overlay tombstone (%s)", name, path.name)
+                        continue
                     if key in self._references:
                         self._references[key] = _deep_merge_reference(self._references[key], entry)
                         logger.debug("Merged user overlay for reference '%s' from %s", name, path.name)
@@ -547,62 +555,84 @@ class RegistryManager:
 
     def save_model(self, name: str, profile: ModelProfile) -> None:
         """Save or update a model profile to the catalog."""
+        from openbench.data.registry.scanner import _catalog_write_lock
+
         catalog_path = get_writable_model_catalog_path()
-        catalog = self._read_catalog(catalog_path)
-        existing_key = next(
-            (candidate for candidate in catalog if normalize_name(candidate) == normalize_name(name)),
-            None,
-        )
-        if existing_key is not None and existing_key != name:
-            raise ValueError(
-                f"Model name '{name}' conflicts with existing catalog entry '{existing_key}' case-insensitively"
+        # Hold the cross-process lock across read->modify->write so concurrent
+        # writers (GUI + CLI, HPC shared registry) cannot lose each other's edits.
+        with _catalog_write_lock(catalog_path):
+            catalog = self._read_catalog(catalog_path)
+            existing_key = next(
+                (candidate for candidate in catalog if normalize_name(candidate) == normalize_name(name)),
+                None,
             )
-        catalog[name] = profile.to_dict()
-        self._write_catalog(catalog_path, catalog)
+            if existing_key is not None and existing_key != name:
+                raise ValueError(
+                    f"Model name '{name}' conflicts with existing catalog entry '{existing_key}' case-insensitively"
+                )
+            catalog[name] = profile.to_dict()
+            self._write_catalog(catalog_path, catalog)
         self._models[normalize_name(name)] = profile
         logger.info("Saved model '%s' to %s", name, catalog_path)
 
     def delete_model(self, name: str) -> None:
         """Delete a model profile from the catalog."""
+        from openbench.data.registry.scanner import _catalog_write_lock
+
         catalog_path = get_writable_model_catalog_path()
-        catalog = self._read_catalog(catalog_path)
         key = normalize_name(name)
         canonical = self._model_aliases.get(canonical_model_key(name), canonical_model_key(name))
-        catalog_key = None
-        for candidate in list(catalog):
-            if normalize_name(candidate) in {key, canonical}:
-                catalog_key = candidate
-                break
-        if catalog_key is not None:
-            catalog.pop(catalog_key, None)
-            self._write_catalog(catalog_path, catalog)
-        elif canonical in self._models:
-            profile = self._models[canonical]
-            catalog[profile.name] = {"name": profile.name, "_deleted": True}
-            self._write_catalog(catalog_path, catalog)
+        with _catalog_write_lock(catalog_path):
+            catalog = self._read_catalog(catalog_path)
+            catalog_key = None
+            for candidate in list(catalog):
+                if normalize_name(candidate) in {key, canonical}:
+                    catalog_key = candidate
+                    break
+            if catalog_key is not None:
+                catalog.pop(catalog_key, None)
+                self._write_catalog(catalog_path, catalog)
+            elif canonical in self._models:
+                profile = self._models[canonical]
+                catalog[profile.name] = {"name": profile.name, "_deleted": True}
+                self._write_catalog(catalog_path, catalog)
         self._models.pop(canonical, None)
         self._models.pop(key, None)
         logger.info("Deleted model '%s'", name)
 
     def save_reference(self, name: str, dataset: ReferenceDataset) -> None:
         """Save or update a reference dataset to the catalog."""
+        from openbench.data.registry.scanner import _catalog_write_lock
+
         catalog_path = get_writable_reference_catalog_path()
-        catalog = self._read_catalog(catalog_path)
-        catalog[name] = dataset.to_dict()
-        self._write_catalog(catalog_path, catalog)
+        with _catalog_write_lock(catalog_path):
+            catalog = self._read_catalog(catalog_path)
+            catalog[name] = dataset.to_dict()
+            self._write_catalog(catalog_path, catalog)
         self._references[normalize_name(name)] = dataset
         self._build_var_index()
         logger.info("Saved reference '%s' to %s", name, catalog_path)
 
     def delete_reference(self, name: str) -> None:
         """Delete a reference dataset from the catalog."""
+        from openbench.data.registry.scanner import _catalog_write_lock
+
         catalog_path = get_writable_reference_catalog_path()
-        catalog = self._read_catalog(catalog_path)
-        catalog_key = get_mapping_key_case_insensitive(catalog, name)
-        removed = catalog.pop(catalog_key, None) if catalog_key is not None else None
-        if removed is not None:
-            self._write_catalog(catalog_path, catalog)
-        self._references.pop(normalize_name(name), None)
+        key = normalize_name(name)
+        with _catalog_write_lock(catalog_path):
+            catalog = self._read_catalog(catalog_path)
+            catalog_key = get_mapping_key_case_insensitive(catalog, name)
+            removed = catalog.pop(catalog_key, None) if catalog_key is not None else None
+            if removed is not None:
+                self._write_catalog(catalog_path, catalog)
+            elif key in self._references:
+                # Built-in-only reference: write a tombstone so the deletion survives
+                # a restart (mirrors delete_model; otherwise _load_reference_catalog
+                # would silently resurrect it).
+                ref = self._references[key]
+                catalog[ref.name] = {"name": ref.name, "_deleted": True}
+                self._write_catalog(catalog_path, catalog)
+        self._references.pop(key, None)
         self._build_var_index()
         logger.info("Deleted reference '%s'", name)
 

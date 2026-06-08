@@ -954,3 +954,35 @@ def test_get_resolution_variants():
     variants = mgr.get_resolution_variants("GLEAM_v4.2a")
     assert isinstance(variants, dict)
     assert "LowRes" in variants
+
+
+def test_delete_builtin_reference_writes_tombstone_and_survives_reload(tmp_path, monkeypatch):
+    """Deleting a built-in-only reference must persist across a manager reload (M1)."""
+    # Writable overlay path must match where __init__ merges the user catalog from:
+    # <user_dir>/references/reference_catalog.yaml.
+    refs_dir = tmp_path / "references"
+    refs_dir.mkdir()
+    catalog_path = refs_dir / "reference_catalog.yaml"
+    monkeypatch.setattr(
+        registry_manager_module,
+        "get_writable_reference_catalog_path",
+        lambda: catalog_path,
+    )
+
+    builtin = _load_builtin_yaml("reference_catalog.yaml")
+    target = next(name for name, data in builtin.items() if isinstance(data, dict) and not data.get("_deleted"))
+
+    mgr = RegistryManager(user_dir=tmp_path)
+    assert mgr.get_reference(target) is not None
+
+    mgr.delete_reference(target)
+    assert mgr.get_reference(target) is None
+    # A tombstone must have been written to the user overlay catalog.
+    import yaml
+
+    written = yaml.safe_load(catalog_path.read_text())
+    assert any(isinstance(v, dict) and v.get("_deleted") for v in written.values())
+
+    # A fresh manager (reload) must NOT resurrect the deleted built-in reference.
+    reloaded = RegistryManager(user_dir=tmp_path)
+    assert reloaded.get_reference(target) is None
