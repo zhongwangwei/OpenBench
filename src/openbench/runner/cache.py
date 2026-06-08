@@ -159,8 +159,11 @@ class EvaluationCache:
 
     def is_cached(self, key: str, config_hash: str) -> bool:
         """Check if an evaluation with this config hash is already done."""
-        # Re-load from disk to pick up writes from other processes
-        self._cache = self._load()
+        # Re-load from disk to pick up writes from other processes. Hold the lock
+        # so a corrupted-file rename inside _load() is serialized with
+        # mark_done()/invalidate() instead of racing a concurrent rename.
+        with _file_lock(self._lock_file):
+            self._cache = self._load()
         return self._cache.get(key) == config_hash
 
     def mark_done(self, key: str, config_hash: str) -> None:

@@ -272,9 +272,16 @@ class RegistryManager:
             try:
                 with _open_yaml_resource(path) as f:
                     data = yaml.safe_load(f)
-                if data and "name" in data:
-                    ref = _build_reference(data)
-                    self._references[normalize_name(data["name"])] = ref
+                if not data:
+                    continue
+                # Accept both {name: ..., variables: ...} and {Name: {...}, ...}
+                # mapping formats (consistent with _merge_reference_dir).
+                entries = {data["name"]: data} if "name" in data else data
+                for name, entry in entries.items():
+                    if not isinstance(entry, dict) or entry.get("_deleted"):
+                        continue
+                    ref = _build_reference(entry)
+                    self._references[normalize_name(name)] = ref
             except Exception as e:
                 logger.warning("Failed to load reference from %s: %s", path.name, e)
 
