@@ -2546,7 +2546,10 @@ def _detect_tim_res(dataset_dir: Path, file_glob: str | list[str] | tuple[str, .
         return ""
 
     name = nc_files[0].stem.lower()
-    dir_str = str(dataset_dir).lower()
+    # Only the dataset folder's own name — NOT the full absolute path. Scanning the
+    # whole path lets unrelated parent components (e.g. macOS temp dirs under
+    # /var/folders/8d/...) trip the short resolution tokens and mis-detect "8Day".
+    dir_str = dataset_dir.name.lower()
 
     # Check specific sub-daily BEFORE generic "hourly"/"daily" to avoid substring false matches
     # e.g., "3hourly" contains "hourly" — must check "3hour" first
