@@ -673,8 +673,7 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             assert profile["variables"]["Lake_Level"]["varname"] == "LakeLevel"
         if name == "GLAST_LakeSurfaceWaterTemperature":
             assert (
-                entry["station_matching"]["dataset_file"]
-                == "OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc"
+                entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc"
             )
             assert entry["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
             assert profile["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
