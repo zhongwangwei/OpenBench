@@ -622,6 +622,27 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             "Station/Bio/Net_Primary_Production/Rodai2025",
             ["Net_Primary_Production"],
         ),
+        "G_REALM_LakeLevel": (
+            "stn",
+            "mixed",
+            "${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Level/G_REALM",
+            "Station/Lake/Lake_Level/G_REALM",
+            ["Lake_Level"],
+        ),
+        "GLAST_LakeSurfaceWaterTemperature": (
+            "stn",
+            "Day",
+            "${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Surface_Water_Temperature/GLAST",
+            "Station/Lake/Lake_Surface_Water_Temperature/GLAST",
+            ["Lake_Surface_Water_Temperature"],
+        ),
+        "ReaLSAT_LakeArea": (
+            "stn",
+            "Month",
+            "${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Area/ReaLSAT",
+            "Station/Lake/Lake_Area/ReaLSAT",
+            ["Lake_Area"],
+        ),
         "Rn-Xu2022_0p25_MidRes": (
             "grid",
             "Month",
@@ -646,6 +667,21 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
         if name == "Rodai2025_NPP":
             assert entry["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
             assert profile["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
+        if name == "G_REALM_LakeLevel":
+            assert entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc"
+            assert entry["variables"]["Lake_Level"]["varname"] == "LakeLevel"
+            assert profile["variables"]["Lake_Level"]["varname"] == "LakeLevel"
+        if name == "GLAST_LakeSurfaceWaterTemperature":
+            assert (
+                entry["station_matching"]["dataset_file"]
+                == "OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc"
+            )
+            assert entry["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
+            assert profile["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
+        if name == "ReaLSAT_LakeArea":
+            assert entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc"
+            assert entry["variables"]["Lake_Area"]["varname"] == "LakeArea"
+            assert profile["variables"]["Lake_Area"]["varname"] == "LakeArea"
 
 
 def test_gleam_midres_raw_composite_is_ignored_because_standardized_entry_exists():

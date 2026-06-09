@@ -442,6 +442,57 @@ Rodai2025_NPP:
       varname: NPP_total_best
       varunit: g C m-2 yr-1
 
+G_REALM_LakeLevel:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Lake/Lake_Level/G_REALM
+    file_glob: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
+  station_matching:
+    dataset_file: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
+  description: G-REALM station lake level observations
+  category: Lake
+  tim_res: mixed
+  data_groupby: single
+  variables:
+    Lake_Level:
+      sub_dir: ''
+      varname: LakeLevel
+      varunit: m
+
+GLAST_LakeSurfaceWaterTemperature:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Lake/Lake_Surface_Water_Temperature/GLAST
+    file_glob: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
+  station_matching:
+    dataset_file: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
+  description: GLAST station lake surface water temperature observations
+  category: Lake
+  tim_res: Day
+  data_groupby: single
+  variables:
+    Lake_Surface_Water_Temperature:
+      sub_dir: ''
+      varname: LakeSurfaceWaterTemperature
+      varunit: K
+
+ReaLSAT_LakeArea:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Lake/Lake_Area/ReaLSAT
+    file_glob: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
+  station_matching:
+    dataset_file: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
+  description: ReaLSAT station lake area observations
+  category: Lake
+  tim_res: Month
+  data_groupby: single
+  variables:
+    Lake_Area:
+      sub_dir: ''
+      varname: LakeArea
+      varunit: m2
+
 LAI_Yuan2011:
   scan:
     layout: station_direct

@@ -3590,6 +3590,63 @@ Rodai2025_NPP:
   _provenance:
     data_groupby: profile
     tim_res: profile
+G_REALM_LakeLevel:
+  name: G_REALM_LakeLevel
+  description: G-REALM station lake level observations
+  category: Lake
+  data_type: stn
+  tim_res: mixed
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Level/G_REALM
+  station_matching:
+    dataset_file: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
+  variables:
+    Lake_Level:
+      sub_dir: ''
+      varname: LakeLevel
+      varunit: m
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+GLAST_LakeSurfaceWaterTemperature:
+  name: GLAST_LakeSurfaceWaterTemperature
+  description: GLAST station lake surface water temperature observations
+  category: Lake
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Surface_Water_Temperature/GLAST
+  station_matching:
+    dataset_file: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
+  variables:
+    Lake_Surface_Water_Temperature:
+      sub_dir: ''
+      varname: LakeSurfaceWaterTemperature
+      varunit: K
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+ReaLSAT_LakeArea:
+  name: ReaLSAT_LakeArea
+  description: ReaLSAT station lake area observations
+  category: Lake
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Area/ReaLSAT
+  station_matching:
+    dataset_file: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
+  variables:
+    Lake_Area:
+      sub_dir: ''
+      varname: LakeArea
+      varunit: m2
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
 Rn-Xu2022_0p25_MidRes:
   name: Rn-Xu2022_0p25_MidRes
   description: Rn-Xu2022 0.25 degree net radiation
