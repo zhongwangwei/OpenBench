@@ -164,12 +164,12 @@ def test_repeated_migrate_on_modern_yaml_is_idempotent(tmp_path: Path):
     assert yaml.safe_load(second.read_text(encoding="utf-8")) == data
 
 
-def test_f90nml_is_declared_for_namelist_migration_extra():
+def test_f90nml_is_declared_for_namelist_migration():
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    optional = pyproject["project"]["optional-dependencies"]
+    dependencies = pyproject["project"]["dependencies"]
 
-    assert any(requirement.startswith("f90nml") for requirement in optional["migration"])
-    assert "migration" in optional["all"][0]
+    # Legacy NML migration is part of the default install: f90nml ships in base deps.
+    assert any(requirement.startswith("f90nml") for requirement in dependencies)
 
 
 def test_migrated_config_validation_and_run_dry_run_agree(tmp_path: Path, monkeypatch):

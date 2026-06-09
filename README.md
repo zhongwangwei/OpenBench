@@ -103,8 +103,8 @@ python -m pip install --upgrade pip
 Install from PyPI:
 
 ```bash
-# Default install — fully featured (CLI, statistics, plotting, PDF/HTML
-# reports, legacy migration). Best for HPC/servers.
+# Default install — fully featured (CLI, statistics, plotting, HTML reports,
+# legacy migration). Best for HPC/servers.
 pip install colm-openbench
 
 # Optional: graphical configuration wizard (PySide6/Qt)
@@ -113,7 +113,10 @@ pip install "colm-openbench[gui]"
 # Optional: remote SSH execution (paramiko)
 pip install "colm-openbench[remote]"
 
-# Optional: both of the above
+# Optional: PDF reports (xhtml2pdf; builds pycairo, needs system cairo)
+pip install "colm-openbench[report]"
+
+# Optional: all of the above
 pip install "colm-openbench[all]"
 ```
 

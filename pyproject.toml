@@ -103,13 +103,13 @@ dependencies = [
     "click>=8.0",
     "tqdm>=4.0",
     "packaging>=21.0",
-    # Analysis / plotting / reporting / migration features ship in the default
-    # install so `pip install colm-openbench` is fully featured. Only the GUI
-    # and remote-execution stacks stay optional (see optional-dependencies).
+    # Analysis / plotting / migration features ship in the default install so
+    # `pip install colm-openbench` is fully featured. GUI, remote, and PDF
+    # reports (report/xhtml2pdf — it builds pycairo, which needs system cairo)
+    # stay optional (see optional-dependencies).
     "scikit-learn>=1.0",
     "statsmodels>=0.13",
     "seaborn>=0.12",
-    "xhtml2pdf>=0.2.5",
     "f90nml>=1.4.4",
 ]
 
@@ -120,7 +120,13 @@ dependencies = [
 # still resolves and never errors.
 gui = ["PySide6>=6.5.0"]
 remote = ["paramiko>=3.0.0", "cryptography>=41.0.0"]
-report = []
+# PDF reports need xhtml2pdf, which pulls pycairo (requires system cairo to
+# build), so it stays optional to keep the base `pip install` lightweight and
+# portable. Without it, evaluation still produces HTML reports.
+report = ["xhtml2pdf>=0.2.5"]
+# migration/statistics/plot are now in the base install; these extras are kept
+# (empty) for backward compatibility so e.g. `pip install colm-openbench[plot]`
+# still resolves and never errors.
 migration = []
 statistics = []
 plot = []
@@ -130,7 +136,7 @@ dev = [
     "ruff>=0.4.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
-all = ["colm-openbench[gui,remote]"]
+all = ["colm-openbench[gui,remote,report]"]
 
 [project.scripts]
 openbench = "openbench.cli.main:cli"
