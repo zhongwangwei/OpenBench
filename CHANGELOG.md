@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.0.0b3] - 2026-06-09
+
+### Changed
+- `pip install colm-openbench` is now fully featured by default: statistics
+  (scikit-learn, statsmodels), plotting (seaborn), legacy migration (f90nml)
+  and HTML reports ship in the base install. Only `[gui]` (PySide6), `[remote]`
+  (paramiko) and `[report]` (xhtml2pdf — needs system cairo) remain optional;
+  `[all]` = gui + remote + report.
+
+### Added
+- Reference datasets: `Rodai2025_NPP` (station NPP) and lake stations
+  `G_REALM_LakeLevel`, `GLAST_LakeSurfaceWaterTemperature`, `ReaLSAT_LakeArea`
+- 30-minute (half-hour) time-resolution detection
+
+### Docs
+- User's Guide (CN+EN): climatology added to the `tim_res` field table; a
+  multi-model `simulation` example; `timezone` flagged as not-yet-implemented;
+  default `io`/`dask` sub-blocks shown; detailed cases for unresolvable
+  reference profiles and `sim scan` model inference
+
 ## [3.0.0b2] - 2026-06-09
 
 Bug-fix and hardening release over 3.0.0b1 (deep code review + full cross-platform CI).
