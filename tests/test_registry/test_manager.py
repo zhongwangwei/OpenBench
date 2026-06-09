@@ -615,6 +615,13 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             "Station/Water/Transpiration/SAPFLUXNET",
             ["Canopy_Transpiration", "Transpiration"],
         ),
+        "Rodai2025_NPP": (
+            "stn",
+            "Year",
+            "${OPENBENCH_REF_ROOT}/Station/Bio/Net_Primary_Production/Rodai2025",
+            "Station/Bio/Net_Primary_Production/Rodai2025",
+            ["Net_Primary_Production"],
+        ),
         "Rn-Xu2022_0p25_MidRes": (
             "grid",
             "Month",
@@ -636,6 +643,9 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
         for variable in variables:
             assert variable in entry["variables"]
             assert variable in profile["variables"]
+        if name == "Rodai2025_NPP":
+            assert entry["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
+            assert profile["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
 
 
 def test_gleam_midres_raw_composite_is_ignored_because_standardized_entry_exists():

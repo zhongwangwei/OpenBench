@@ -424,6 +424,24 @@ CH4_FluxnetANN:
     FCH4:
       varname: FCH4
       varunit: g C m-2 d-1
+
+Rodai2025_NPP:
+  scan:
+    layout: station_direct
+    root_sub_dir: Station/Bio/Net_Primary_Production/Rodai2025
+    file_glob: OpenBench_NPP_Rodai2025.nc
+  station_matching:
+    dataset_file: OpenBench_NPP_Rodai2025.nc
+  description: Rodai 2025 station net primary productivity observations
+  category: Bio
+  tim_res: Year
+  data_groupby: single
+  variables:
+    Net_Primary_Production:
+      sub_dir: ''
+      varname: NPP_total_best
+      varunit: g C m-2 yr-1
+
 LAI_Yuan2011:
   scan:
     layout: station_direct

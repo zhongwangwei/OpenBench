@@ -3571,6 +3571,25 @@ Transpiration_SAPFLUXNET_Daily:
   _provenance:
     data_groupby: profile
     tim_res: profile
+Rodai2025_NPP:
+  name: Rodai2025_NPP
+  description: Rodai 2025 station net primary productivity observations
+  category: Bio
+  data_type: stn
+  tim_res: Year
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Net_Primary_Production/Rodai2025
+  station_matching:
+    dataset_file: OpenBench_NPP_Rodai2025.nc
+  variables:
+    Net_Primary_Production:
+      sub_dir: ''
+      varname: NPP_total_best
+      varunit: g C m-2 yr-1
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
 Rn-Xu2022_0p25_MidRes:
   name: Rn-Xu2022_0p25_MidRes
   description: Rn-Xu2022 0.25 degree net radiation
