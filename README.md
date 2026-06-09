@@ -103,22 +103,17 @@ python -m pip install --upgrade pip
 Install from PyPI:
 
 ```bash
-# Core install (CLI-only, HPC-friendly)
+# Default install — fully featured (CLI, statistics, plotting, PDF/HTML
+# reports, legacy migration). Best for HPC/servers.
 pip install colm-openbench
 
-# With GUI
+# Optional: graphical configuration wizard (PySide6/Qt)
 pip install "colm-openbench[gui]"
 
-# With remote SSH execution
+# Optional: remote SSH execution (paramiko)
 pip install "colm-openbench[remote]"
 
-# With PDF report generation
-pip install "colm-openbench[report]"
-
-# With legacy Fortran NML migration support
-pip install "colm-openbench[migration]"
-
-# Everything (gui + remote + report + migration)
+# Optional: both of the above
 pip install "colm-openbench[all]"
 ```
 

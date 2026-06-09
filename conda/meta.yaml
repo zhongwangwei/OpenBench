@@ -39,6 +39,12 @@ requirements:
     - click >=8.0
     - tqdm >=4.0
     - packaging >=21.0
+    # Analysis / plotting / reporting / migration features (part of the default install)
+    - scikit-learn >=1.0
+    - statsmodels >=0.13
+    - seaborn >=0.12
+    - xhtml2pdf >=0.2.5
+    - f90nml >=1.4.4
 
 test:
   imports:
