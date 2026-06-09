@@ -8,9 +8,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ dist_name }}-{{ version }}.tar.gz
-  # conda-forge 必填：提交前用 PyPI 上该版本 sdist 的校验和填入
-  #   计算：  curl -L <url> | openssl sha256
-  # sha256: <填入对应 sdist 的 sha256>
+  sha256: e83d216b6037e70d46cb80c867ebca4e5c5a0a22d05bade6966b801ff76b424d
 
 build:
   noarch: python
