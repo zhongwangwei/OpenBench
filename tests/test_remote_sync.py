@@ -230,3 +230,66 @@ def test_sync_engine_commands_expand_tilde_project_dir():
     assert commands
     assert '"$HOME"/OpenBench' in joined
     assert "'~/" not in joined
+
+
+def test_sync_engine_sftp_paths_expand_tilde_project_dir():
+    """SFTP does not run through a shell, so SyncEngine must resolve
+    '~/OpenBench' to an absolute remote path before read/write."""
+
+    class RemoteFile:
+        def __init__(self, sftp, path, mode):
+            self.sftp = sftp
+            self.path = path
+            self.mode = mode
+            self.parts = []
+
+        def read(self):
+            return b"cached: true\n"
+
+        def write(self, data):
+            self.parts.append(data)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            if exc_type is None and "w" in self.mode:
+                self.sftp.files[self.path] = b"".join(self.parts)
+            return False
+
+    class SFTP:
+        def __init__(self):
+            self.opens = []
+            self.files = {}
+
+        def open(self, path, mode):
+            self.opens.append((path, mode))
+            return RemoteFile(self, path, mode)
+
+    class HomeSSH:
+        def __init__(self):
+            self.commands = []
+            self.sftp = SFTP()
+
+        def _get_home_dir(self):
+            return "/home/openbench"
+
+        def execute(self, command, timeout=None):
+            self.commands.append(command)
+            return "", "", 0
+
+        def open_sftp(self):
+            return self.sftp
+
+    ssh = HomeSSH()
+    sync = SyncEngine(ssh, "~/OpenBench")
+
+    assert sync.read("nml/main.yaml") == "cached: true\n"
+    sync.write("nml/ref.yaml", "ref: true\n")
+    assert sync._sync_file("nml/ref.yaml") is True
+
+    assert ssh.sftp.opens == [
+        ("/home/openbench/OpenBench/nml/main.yaml", "rb"),
+        ("/home/openbench/OpenBench/nml/ref.yaml", "wb"),
+    ]
+    assert all(not path.startswith("~") for path, _mode in ssh.sftp.opens)

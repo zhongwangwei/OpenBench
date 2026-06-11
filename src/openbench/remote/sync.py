@@ -19,6 +19,26 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+def _expand_remote_home(ssh_manager, path: str) -> str:
+    """Expand a leading remote ``~`` for APIs that do not invoke a shell.
+
+    Shell commands can use :func:`quote_remote_path` and let ``$HOME`` expand
+    remotely, but SFTP calls receive the path literally. Resolve the project
+    root once so ``sftp.open()`` never sees ``~/...``.
+    """
+    if path == "~" or path.startswith("~/"):
+        get_home = getattr(ssh_manager, "_get_home_dir", None)
+        if callable(get_home):
+            try:
+                home = str(get_home()).rstrip("/")
+                if home:
+                    suffix = "" if path == "~" else path[1:]
+                    return home + suffix
+            except Exception as exc:
+                logger.debug("Failed to expand remote home for %s: %s", path, exc)
+    return path
+
+
 class SyncStatus(Enum):
     """Sync status for a file."""
 
@@ -61,7 +81,8 @@ class SyncEngine:
             on_status_changed: Callback when file sync status changes
         """
         self._ssh = ssh_manager
-        normalized_remote_dir = posixpath.normpath(remote_project_dir or ".")
+        expanded_remote_dir = _expand_remote_home(ssh_manager, remote_project_dir or ".")
+        normalized_remote_dir = posixpath.normpath(expanded_remote_dir)
         self._remote_dir = "/" if normalized_remote_dir == "/" else normalized_remote_dir.rstrip("/")
         self._on_status_changed = on_status_changed
 
