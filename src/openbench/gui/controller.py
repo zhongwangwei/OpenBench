@@ -27,9 +27,11 @@ class WizardController(QObject):
         "runtime",
         "general",
         "registry",
-        "sim_data",
-        "ref_data",
+        # Match the CLI/config contract: choose evaluation variables first,
+        # then configure per-variable reference and simulation sources.
         "evaluation_items",
+        "ref_data",
+        "sim_data",
         "metrics",
         "scores",
         "comparisons",

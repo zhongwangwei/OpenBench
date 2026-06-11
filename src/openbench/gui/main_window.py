@@ -226,9 +226,9 @@ class MainWindow(QMainWindow):
         page_classes = {
             "general": PageGeneral,
             "registry": PageRegistry,
-            "sim_data": PageSimData,
-            "ref_data": PageRefData,
             "evaluation_items": PageEvaluation,
+            "ref_data": PageRefData,
+            "sim_data": PageSimData,
             "metrics": PageMetrics,
             "scores": PageScores,
             "comparisons": PageComparisons,
