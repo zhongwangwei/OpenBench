@@ -13,6 +13,7 @@ import shlex
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.path_utils import to_absolute_path, get_openbench_root
 
 logger = logging.getLogger(__name__)
@@ -204,7 +205,7 @@ class FilePathGenerator:
         try:
             # Use find command to match files
             cmd = f"find {shlex.quote(base_dir)} -maxdepth 1 -name {shlex.quote(pattern)} -type f 2>/dev/null | sort"
-            stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
+            stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
             if exit_code == 0 and stdout.strip():
                 return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
             if exit_code != 0:
@@ -414,7 +415,7 @@ except Exception as e:
     def check_file_exists(self, path: str) -> ValidationCheck:
         """Check if file exists on remote server."""
         try:
-            stdout, stderr, exit_code = self._ssh.execute(f"test -f {shlex.quote(path)}", timeout=10)
+            stdout, stderr, exit_code = execute_responsive(self._ssh, f"test -f {shlex.quote(path)}", timeout=10)
             if exit_code == 0:
                 return ValidationCheck("file_exists", True, f"File exists: {path}")
             return ValidationCheck("file_exists", False, f"File not found: {path}")
@@ -429,7 +430,7 @@ except Exception as e:
         cmd = build_remote_python_command(script, python_path=self._python_path, conda_env=self._conda_env)
 
         try:
-            stdout, stderr, exit_code = self._ssh.execute(cmd, timeout=30)
+            stdout, stderr, exit_code = execute_responsive(self._ssh, cmd, timeout=30)
             if exit_code == 0 and stdout.strip():
                 return json.loads(stdout.strip())
         except Exception:

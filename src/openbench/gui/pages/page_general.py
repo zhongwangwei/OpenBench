@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
 )
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
 from openbench.gui.pages.base_page import BasePage
@@ -520,7 +521,7 @@ class PageGeneral(BasePage):
                 f"{shlex.quote(output_dir + '/nml/sim')} "
                 f"{shlex.quote(output_dir + '/nml/ref')}"
             )
-            stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=30)
+            stdout, stderr, exit_code = execute_responsive(ssh_manager, cmd, timeout=30)
 
             if exit_code == 0:
                 QMessageBox.information(

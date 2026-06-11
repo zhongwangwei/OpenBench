@@ -15,6 +15,7 @@ import shlex
 
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import ProgressDashboard, TaskStatus
 from openbench.gui.runner import EvaluationRunner
@@ -428,8 +429,8 @@ class PageRunMonitor(BasePage):
 
         # Check if directory exists on remote
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"test -d {shlex.quote(output_dir)} && echo 'exists'", timeout=10
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"test -d {shlex.quote(output_dir)} && echo 'exists'", timeout=10
             )
         except Exception as exc:
             QMessageBox.warning(
@@ -520,7 +521,9 @@ class PageRunMonitor(BasePage):
 
         try:
             # Get list of files to download
-            stdout, stderr, exit_code = ssh_manager.execute(f"find {shlex.quote(remote_dir)} -type f", timeout=60)
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"find {shlex.quote(remote_dir)} -type f", timeout=60
+            )
             if exit_code != 0:
                 QMessageBox.warning(parent_dialog, "Error", f"Failed to list remote files:\n{stderr}")
                 return

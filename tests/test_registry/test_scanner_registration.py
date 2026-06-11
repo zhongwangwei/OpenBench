@@ -4191,3 +4191,55 @@ def test_finalize_descriptor_uses_remote_fulllist_for_remote_station_dataset(tmp
     _finalize_descriptor(scanned, descriptor, prov={})
 
     assert descriptor["fulllist"] == "/remote/home/.openbench/station_lists/RemoteStations.csv"
+
+
+def test_build_variables_prefers_remote_inspection_over_coincidental_local_dir(tmp_path):
+    """A remote root_dir that happens to exist locally must not shadow shipped results."""
+    from openbench.data.registry.scanner import ScannedDataset, _build_variables
+
+    (tmp_path / "Runoff" / "RemoteSet").mkdir(parents=True)  # exists locally, but empty
+
+    scanned = ScannedDataset(
+        name="RemoteSet",
+        resolution="LowRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path),
+        variables={"Runoff": "Runoff/RemoteSet"},
+        nc_inspections={
+            "Runoff": {
+                "varname": "ro",
+                "varunit": "mm/day",
+                "all_data_vars": [{"name": "ro", "unit": "mm/day"}],
+                "nc_file_count": 1,
+            }
+        },
+    )
+
+    variables = _build_variables(scanned, {}, None, None)
+
+    assert variables["Runoff"]["varname"] == "ro"
+    assert variables["Runoff"]["varunit"] == "mm/day"
+
+
+def test_finalize_descriptor_prefers_remote_fulllist_over_local_regeneration(tmp_path):
+    from openbench.data.registry.scanner import ScannedDataset, _finalize_descriptor
+
+    nc_dir = tmp_path / "Q"
+    nc_dir.mkdir(parents=True)
+    (nc_dir / "station1.nc").write_bytes(b"not a real nc")  # local glob would match
+
+    scanned = ScannedDataset(
+        name="RemoteStations",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Streamflow": "Q"},
+        remote_fulllist="/remote/home/.openbench/station_lists/RemoteStations.csv",
+    )
+    descriptor = {"data_type": "stn"}
+
+    _finalize_descriptor(scanned, descriptor, prov={})
+
+    assert descriptor["fulllist"] == "/remote/home/.openbench/station_lists/RemoteStations.csv"

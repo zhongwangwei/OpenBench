@@ -10,9 +10,11 @@ from PySide6.QtCore import QThread, Signal
 
 def _local_reference_names() -> set[str]:
     """Names already registered in the LOCAL catalog (the one we write to)."""
-    from openbench.data.registry.manager import RegistryManager
+    from openbench.data.registry.manager import get_registry
 
-    return {r.name for r in RegistryManager().list_references()}
+    # get_registry() is cached and both registration paths invalidate the
+    # cache after writing, so this is always fresh without a full re-parse.
+    return {r.name for r in get_registry().list_references()}
 
 
 def remote_scan_caveats(variants) -> str:
@@ -41,6 +43,7 @@ def scan_reference_datasets_remote(
     conda_env: str = "",
     openbench_path: str = "",
     timeout: int = 900,
+    should_abort=None,
 ):
     """Run reference registry discovery on the remote host and rehydrate groups.
 
@@ -58,11 +61,13 @@ def scan_reference_datasets_remote(
     bootstrap = ""
     if openbench_path:
         root = openbench_path.rstrip("/")
-        # The GUI's own install flow is git clone + conda env update — it
-        # never pip-installs the package — so make the checkout importable.
+        # Make a plain git checkout importable even when the pip-install
+        # dependency step was skipped or failed on the remote host.
         bootstrap = (
+            "import os\n"
             "import sys\n"
             f"for _path in ({json.dumps(root)}, {json.dumps(root + '/src')}):\n"
+            "    _path = os.path.expanduser(_path)\n"  # '~/OpenBench' is the documented default
             "    if _path not in sys.path:\n"
             "        sys.path.insert(0, _path)\n"
         )
@@ -145,6 +150,7 @@ print(json.dumps(payload, default=_json_default))
         python_path=python_path,
         conda_env=conda_env,
         timeout=timeout,
+        should_abort=should_abort,
     )
 
     # Rehydrate tolerantly: the remote checkout may be a different OpenBench
@@ -197,6 +203,7 @@ class FindDatasetsWorker(QThread):
                     python_path=self._python_path,
                     conda_env=self._conda_env,
                     openbench_path=self._openbench_path,
+                    should_abort=self.isInterruptionRequested,
                 )
             else:
                 from openbench.data.registry.scanner import find_new_datasets

@@ -114,9 +114,33 @@ def test_remote_python_command_uses_conda_sh_when_base_derivable():
 
     cmd = build_remote_python_command("print(1)", python_path="/opt/miniconda3/envs/ob/bin/python", conda_env="ob")
 
-    assert "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate ob && " in cmd
+    assert ". /opt/miniconda3/etc/profile.d/conda.sh && conda activate ob && " in cmd
     assert "~/.bashrc" not in cmd
     assert cmd.endswith("| base64 -d | /opt/miniconda3/envs/ob/bin/python")
+
+
+def test_conda_wrapped_commands_stay_posix_under_sh_wrapper():
+    """SSHManager wraps every command in `sh -c`; `source` is a bashism that
+    dash/ash reject, so the conda activation chain must stay pure POSIX."""
+    from openbench.gui.remote_python import build_remote_python_command
+    from openbench.remote.ssh import SSHManager
+
+    cmd = build_remote_python_command("print(1)", python_path="/opt/miniconda3/bin/python", conda_env="ob")
+    final = SSHManager._shell_agnostic(cmd)
+
+    assert "source " not in final
+    assert final.startswith("sh -c ")
+
+
+def test_conda_base_with_tilde_expands_to_remote_home():
+    from openbench.gui.remote_python import build_remote_python_command
+
+    cmd = build_remote_python_command("print(1)", python_path="~/miniconda3/envs/ob/bin/python", conda_env="ob")
+
+    # shlex-quoting a literal '~' would make the shell look for a directory
+    # named '~'; the conda base must expand to the remote $HOME instead.
+    assert '. "$HOME"/miniconda3/etc/profile.d/conda.sh && conda activate ob && ' in cmd
+    assert "'~/miniconda3'" not in cmd
 
 
 def test_remote_python_command_falls_back_to_login_shell_without_conda_base():
@@ -160,18 +184,20 @@ def test_data_validator_inspect_uses_shared_remote_python_command(monkeypatch):
 
     assert validator._run_inspect_script("/remote/x.nc") == {}
     command = validator._ssh.commands[0]
-    assert "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate ob && " in command
+    assert ". /opt/miniconda3/etc/profile.d/conda.sh && conda activate ob && " in command
+    assert "source " not in command
     assert "~/.bashrc" not in command
 
 
 def _capture_remote_json(monkeypatch, result=None):
     captured = {}
 
-    def fake_run(ssh_manager, script, *, python_path="", conda_env="", timeout=60):
+    def fake_run(ssh_manager, script, *, python_path="", conda_env="", timeout=60, should_abort=None):
         captured["script"] = script
         captured["python_path"] = python_path
         captured["conda_env"] = conda_env
         captured["timeout"] = timeout
+        captured["should_abort"] = should_abort
         return [] if result is None else result
 
     monkeypatch.setattr("openbench.gui.remote_python.run_remote_python_json", fake_run)
@@ -192,6 +218,36 @@ def test_remote_scan_script_bootstraps_openbench_path_and_local_names(monkeypatc
     assert "Already_LowRes" in script
     assert "existing_names=" in script
     assert captured["timeout"] == 900
+
+
+def test_remote_scan_bootstrap_expands_tilde_openbench_path(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch)
+    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: set())
+
+    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_path="~/OpenBench")
+
+    script = captured["script"]
+    # Python never expands '~' in sys.path entries; the script must do it.
+    assert "expanduser" in script
+    compile(script, "<remote-scan-script>", "exec")
+
+
+def test_find_datasets_worker_passes_interruption_probe(qapp, monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = {}
+    monkeypatch.setattr(
+        _scan_worker,
+        "scan_reference_datasets_remote",
+        lambda *args, **kwargs: captured.update(kwargs) or [],
+    )
+
+    worker = _scan_worker.FindDatasetsWorker("/remote/ref", ssh_manager=object())
+    worker.run()
+
+    assert callable(captured.get("should_abort"))
 
 
 def test_remote_scan_script_attaches_remote_inspections(monkeypatch):

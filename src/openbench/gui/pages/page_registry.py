@@ -777,7 +777,6 @@ class PageRegistry(BasePage):
         path = browse_directory(self.controller, self, "Select Directory to Scan")
         if not path:
             return
-        self._scan_button_was_enabled = True
         progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
         progress.setWindowTitle("Scanning")
         progress.setWindowModality(Qt.WindowModal)

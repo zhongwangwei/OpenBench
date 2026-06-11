@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
+
 logger = logging.getLogger(__name__)
 
 
@@ -226,7 +228,7 @@ class ModelDefinitionEditor(QDialog):
             try:
                 encoded = base64.b64encode(yaml_content.encode("utf-8")).decode("ascii")
                 cmd = f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(self.file_path)}"
-                stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
+                stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
 
                 if exit_code != 0:
                     QMessageBox.critical(self, "Error", f"Failed to save file on remote server:\n{stderr or stdout}")
@@ -354,7 +356,7 @@ class ModelDefinitionEditor(QDialog):
                 f"mkdir -p {shlex.quote(remote_dir)} && "
                 f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(remote_file)}"
             )
-            stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=30)
+            stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
 
             if exit_code != 0:
                 QMessageBox.critical(self, "Error", f"Failed to save file on remote server:\n{stderr or stdout}")

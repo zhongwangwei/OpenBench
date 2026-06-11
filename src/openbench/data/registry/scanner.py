@@ -1975,14 +1975,13 @@ def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_va
         suppress_multi_var_prompt = profile_defines_varname or profile_replaces_placeholder_variables
 
         dataset_path = _expand_path(scanned.root_dir) / sub_dir
-        nc_info = None
-        if dataset_path.is_dir():
+        # Remote-scanned datasets ship inspection results computed where the
+        # data lives; those are authoritative even when the remote root_dir
+        # string happens to exist locally too (shared mounts, coincidences).
+        nc_info = (getattr(scanned, "nc_inspections", None) or {}).get(var_name)
+        if nc_info is None and dataset_path.is_dir():
             file_glob = getattr(scanned, "file_globs", {}).get(var_name)
             nc_info = _inspect_nc_file(dataset_path, file_glob=file_glob)
-        else:
-            # Remote-scanned dataset: the data lives on the remote host, so
-            # use the inspection results the remote scan shipped along.
-            nc_info = (getattr(scanned, "nc_inspections", None) or {}).get(var_name)
         if nc_info is not None:
             if nc_info.get("inspection_failed") and existing_var is None and not suppress_multi_var_prompt:
                 raise RuntimeError(
@@ -2389,6 +2388,14 @@ def _finalize_descriptor(
             descriptor["fulllist"] = existing_fulllist
             return
 
+        # Remote-scanned dataset: the CSV was generated on the remote host
+        # (where the station files live) and evaluation runs there too, so
+        # the remote path is authoritative — even when a same-named local
+        # directory with NC files exists (shared mounts).
+        if getattr(scanned, "remote_fulllist", ""):
+            descriptor["fulllist"] = scanned.remote_fulllist
+            return
+
         nc_dir = _expand_path(scanned.root_dir)
         if scanned.variables:
             first_sub = next(iter(scanned.variables.values()), "")
@@ -2412,11 +2419,6 @@ def _finalize_descriptor(
                 descriptor["fulllist"] = _portable_path(output_csv)
             except Exception as e:
                 logger.warning("Failed to generate station list for %s: %s", scanned.name, e)
-        elif getattr(scanned, "remote_fulllist", ""):
-            # Remote-scanned dataset: the CSV was generated on the remote
-            # host (where the station files live), and evaluation runs there
-            # too, so the remote path is the correct catalog value.
-            descriptor["fulllist"] = scanned.remote_fulllist
 
 
 def _fulllist_path_exists(path_value: str, *roots: str | None) -> bool:

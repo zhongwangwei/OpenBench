@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,8 @@ def _glob_nc_local(directory: str):
 
 
 def _remote_is_dir(ssh_manager, path: str) -> bool:
-    stdout, _, exit_code = ssh_manager.execute(
+    stdout, _, exit_code = execute_responsive(
+        ssh_manager,
         f"test -d {shlex.quote(path)} && echo dir",
         timeout=10,
     )
@@ -86,7 +88,7 @@ def _remote_first_nc_file(ssh_manager, directory: str) -> str:
         f"find {quoted} -maxdepth 1 -type f "
         r"\( -name '*.nc' -o -name '*.nc4' \) | sort | head -n 1"
     )
-    stdout, _, exit_code = ssh_manager.execute(cmd, timeout=30)
+    stdout, _, exit_code = execute_responsive(ssh_manager, cmd, timeout=30)
     if exit_code != 0:
         return ""
     return stdout.strip().splitlines()[0] if stdout.strip() else ""
@@ -113,7 +115,8 @@ def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
 
 def _remote_list_child_dirs(ssh_manager, root: str) -> list[str]:
     quoted = shlex.quote(root)
-    stdout, _, exit_code = ssh_manager.execute(
+    stdout, _, exit_code = execute_responsive(
+        ssh_manager,
         f"find {quoted} -mindepth 1 -maxdepth 1 -type d -print | sort",
         timeout=30,
     )
@@ -314,6 +317,22 @@ class PageSimData(BasePage):
             self._root_input.setText(path)
 
     def _do_scan(self):
+        """Scan the simulation root (re-entrancy-guarded entry point).
+
+        The remote branch keeps the event loop alive via execute_responsive,
+        so a second click would re-enter mid-scan without the guard.
+        """
+        if getattr(self, "_scan_in_progress", False):
+            return
+        self._scan_in_progress = True
+        self._scan_btn.setEnabled(False)
+        try:
+            self._do_scan_flow()
+        finally:
+            self._scan_in_progress = False
+            self._scan_btn.setEnabled(True)
+
+    def _do_scan_flow(self):
         root = self._root_input.text().strip()
 
         from openbench.remote.storage import RemoteStorage
@@ -330,11 +349,9 @@ class PageSimData(BasePage):
 
         self._clear_cases()
 
-        # Scanning runs synchronously on the GUI thread (full QThread
-        # refactor is a separate item); show a wait cursor and pump the
-        # event loop between subdirectories so the window stays painted
-        # and the cursor visible during multi-thousand-entry scans
-        # rather than appearing frozen.
+        # Remote SSH calls go through execute_responsive (worker thread +
+        # live event loop), so the window stays painted without manual
+        # event pumping; the wait cursor signals the ongoing scan.
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             discovered = []
@@ -345,7 +362,6 @@ class PageSimData(BasePage):
                     if nc_dir:
                         prefix = _remote_detect_prefix(ssh_manager, full)
                         discovered.append((label, nc_dir, prefix))
-                    QApplication.processEvents()
             else:
                 try:
                     entries = sorted(os.listdir(root))
@@ -361,7 +377,6 @@ class PageSimData(BasePage):
                     if nc_dir:
                         prefix = _detect_prefix(full)
                         discovered.append((entry, nc_dir, prefix))
-                    QApplication.processEvents()
         finally:
             QApplication.restoreOverrideCursor()
 

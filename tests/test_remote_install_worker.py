@@ -96,6 +96,25 @@ def test_ssh_execute_worker_streaming_honors_interruption(qapp):
     assert ssh.closed
 
 
+def test_streaming_worker_flushes_buffered_lines_on_failure(qapp):
+    class FailingSSH:
+        def execute_stream(self, command, total_timeout=None, should_abort=None):
+            yield "important error context\n"
+            raise RuntimeError("link down")
+
+    worker = SshExecuteWorker(FailingSSH(), "cmd", timeout=5)
+    lines = []
+    failures = []
+    worker.line.connect(lines.append)
+    worker.failed.connect(failures.append)
+
+    worker.run()
+
+    assert failures and "link down" in failures[0]
+    # The buffered tail of the log is exactly what explains the failure.
+    assert "important error context" in "".join(lines)
+
+
 def test_conda_create_task_aborts_between_steps_when_interrupted():
     from openbench.gui.widgets.remote_config import _build_conda_create_task
 
@@ -132,6 +151,152 @@ def test_remote_config_main_thread_ssh_inventory():
     assert text.count("self._ssh_manager.execute(") == 0
     assert text.count("self._ssh_manager.detect_conda_envs()") == 0
     assert text.count("self._ssh_manager.detect_python_interpreters()") == 0
+
+
+def test_gui_modules_have_no_main_thread_ssh_band_aids():
+    """processEvents pumps and raw SSH executes are banned outside known worker contexts."""
+    from pathlib import Path
+
+    gui_root = Path("src/openbench/gui")
+    # page_runtime's remaining processEvents pumps a LOCAL subprocess install
+    # loop (not SSH) — tracked separately. _ssh_worker only MENTIONS the
+    # pattern in its docstring (it is the replacement for it).
+    process_events_allowlist = {"page_runtime.py", "_ssh_worker.py"}
+    # Raw executes allowed only where the call already runs off the GUI
+    # thread or is the responsive layer itself.
+    raw_execute_allowlist = {"_ssh_worker.py", "remote_config.py", "remote_runner.py", "remote_python.py"}
+
+    offenders = []
+    for path in sorted(gui_root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if path.name not in process_events_allowlist and "QApplication.processEvents()" in text:
+            offenders.append(f"{path.name}: QApplication.processEvents()")
+        if path.name not in raw_execute_allowlist:
+            for line in text.splitlines():
+                if ("ssh_manager.execute(" in line or "._ssh.execute(" in line) and "execute_responsive" not in line:
+                    offenders.append(f"{path.name}: {line.strip()[:80]}")
+
+    assert offenders == []
+
+
+def test_node_connect_is_blocked_while_main_handshake_runs(qapp):
+    from types import SimpleNamespace
+
+    calls = []
+    widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
+    widget._ssh_manager = SimpleNamespace(is_connected=True, connect_with_jump=lambda **kwargs: calls.append(kwargs))
+    widget._handshake_active = True  # main-server handshake in flight
+
+    widget._confirm_node_connection()
+
+    assert calls == []
+
+
+def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
+    from types import SimpleNamespace
+
+    from openbench.gui.widgets import remote_config
+
+    class FakeCombo:
+        def __init__(self, text, data):
+            self._text = text
+            self._data = data
+
+        def currentText(self):
+            return self._text
+
+        def itemData(self, index):
+            return self._data
+
+    class FakePythonCombo:
+        def __init__(self):
+            self.current = ""
+            self.items = []
+
+        def findText(self, text):
+            return -1
+
+        def addItem(self, text):
+            self.items.append(text)
+
+        def setCurrentText(self, text):
+            self.current = text
+
+    widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
+    widget._ssh_manager = SimpleNamespace(is_connected=True)
+    widget.conda_combo = FakeCombo("envA", "/envs/A")
+    widget.python_combo = FakePythonCombo()
+
+    def fake_exec(ssh_manager, command, timeout=None, should_abort=None):
+        # Simulate the user picking another env while this query is in flight.
+        widget._conda_env_sync_seq += 1
+        return "/envs/A/bin/python\n", "", 0
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
+
+    widget._on_conda_env_changed(1)
+
+    # The superseded query must not apply its (now stale) result.
+    assert widget.python_combo.current == ""
+
+
+def test_create_conda_env_uses_guarded_dialog_and_blocks_reentry(qapp, monkeypatch):
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QObject, Signal
+
+    from openbench.gui.widgets import remote_config
+
+    created = []
+
+    class FakeCallable:
+        def __init__(self, func, parent=None):
+            class Signals(QObject):
+                finished_with_result = Signal(object)
+                failed = Signal(str)
+                finished = Signal()
+
+            self._signals = Signals()
+            self.finished_with_result = self._signals.finished_with_result
+            self.failed = self._signals.failed
+            self.finished = self._signals.finished
+            created.append(self)
+
+        def start(self):
+            pass
+
+        def isRunning(self):
+            return True
+
+        def deleteLater(self):
+            pass
+
+        def requestInterruption(self):
+            pass
+
+    monkeypatch.setattr("openbench.gui.widgets._task_worker.CallableWorker", FakeCallable)
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(remote_config.QMessageBox, "information", staticmethod(lambda *a, **k: None))
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SimpleNamespace(is_connected=True, detect_conda_envs=lambda: [])
+    widget.python_combo.setCurrentText("/opt/miniconda3/bin/python")
+
+    widget._create_conda_env()
+
+    assert len(created) == 1
+    dialog = widget.findChild(remote_config._InstallProgressDialog)
+    assert dialog is not None and dialog.isVisible()
+
+    dialog.reject()  # Esc while conda create runs
+    assert dialog.isVisible(), "Esc must not close the conda-create dialog mid-run"
+
+    widget._create_conda_env()  # re-entry while a worker is active
+    assert len(created) == 1
+
+    created[0].finished_with_result.emit({"exit_code": 1, "output": "boom", "envs": []})
+    dialog.reject()
+    assert not dialog.isVisible()
 
 
 def test_call_on_gui_thread_marshals_from_worker(qapp):

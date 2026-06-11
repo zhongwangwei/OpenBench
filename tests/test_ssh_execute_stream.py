@@ -127,6 +127,40 @@ def test_execute_wraps_command_for_posix_sh():
     assert client.commands == ["sh -c " + shlex.quote("echo $X && true")]
 
 
+def test_execute_should_abort_stops_silent_command():
+    from openbench.remote.ssh import SSHConnectionError
+
+    class SilentChannel(FakeChannel):
+        def __init__(self):
+            super().__init__([])
+
+        def exit_status_ready(self):
+            return False
+
+    channel = SilentChannel()
+
+    class FakeExecClient:
+        def exec_command(self, command, timeout=None):
+            stdin = SimpleNamespace(close=lambda: None)
+            stdout = SimpleNamespace(channel=channel, close=lambda: None)
+            stderr = SimpleNamespace(close=lambda: None)
+            return stdin, stdout, stderr
+
+    manager = SSHManager.__new__(SSHManager)
+    manager._state_lock = threading.Lock()
+    manager._timeout = 30
+    manager.get_active_client = lambda: FakeExecClient()
+
+    probes = []
+
+    def should_abort():
+        probes.append(1)
+        return len(probes) >= 2
+
+    with pytest.raises(SSHConnectionError, match="abort"):
+        manager.execute("hang", should_abort=should_abort)
+
+
 def test_execute_stream_should_abort_stops_silent_command():
     from openbench.remote.ssh import SSHConnectionError
 

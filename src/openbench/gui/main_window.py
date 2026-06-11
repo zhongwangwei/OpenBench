@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.controller import WizardController
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
 from openbench.gui.widgets.sync_status import SyncStatusWidget
@@ -793,15 +794,17 @@ class MainWindow(QMainWindow):
 
         # If absolute, check if exists and return
         if path.startswith("/"):
-            stdout, stderr, exit_code = ssh_manager.execute(f"test -e {shlex.quote(path)} && echo 'exists'", timeout=10)
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"test -e {shlex.quote(path)} && echo 'exists'", timeout=10
+            )
             if exit_code == 0 and "exists" in stdout:
                 return path
             return path
 
         # Helper to check if path exists on remote
         def remote_exists(check_path):
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"test -e {shlex.quote(check_path)} && echo 'exists'", timeout=10
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"test -e {shlex.quote(check_path)} && echo 'exists'", timeout=10
             )
             return exit_code == 0 and "exists" in stdout
 
@@ -880,7 +883,7 @@ class MainWindow(QMainWindow):
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(f"cat {shlex.quote(file_path)}", timeout=30)
+            stdout, stderr, exit_code = execute_responsive(ssh_manager, f"cat {shlex.quote(file_path)}", timeout=30)
             if exit_code != 0:
                 QMessageBox.critical(self, "Error", f"Failed to read remote file:\n{file_path}\n\nError: {stderr}")
                 return None
@@ -898,7 +901,8 @@ class MainWindow(QMainWindow):
         current = start_dir
         for _ in range(10):  # Max 10 levels up
             # Check if this looks like OpenBench root
-            stdout, stderr, exit_code = ssh_manager.execute(
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager,
                 f"ls -d {shlex.quote(current + '/openbench')} {shlex.quote(current + '/nml')} 2>/dev/null | head -1",
                 timeout=10,
             )

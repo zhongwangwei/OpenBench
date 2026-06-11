@@ -555,7 +555,12 @@ class SSHManager:
         """
         return f"sh -c {shlex.quote(command)}"
 
-    def execute(self, command: str, timeout: Optional[int] = None) -> Tuple[str, str, int]:
+    def execute(
+        self,
+        command: str,
+        timeout: Optional[int] = None,
+        should_abort: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[str, str, int]:
         """Execute command on remote server.
 
         Uses the active client (jump client if connected, otherwise main client).
@@ -563,6 +568,9 @@ class SSHManager:
         Args:
             command: Command to execute
             timeout: Command timeout in seconds
+            should_abort: Optional probe checked every poll iteration; return
+                True to abort (lets worker-thread callers honor
+                requestInterruption instead of blocking out the full timeout)
 
         Returns:
             Tuple of (stdout, stderr, exit_code)
@@ -588,6 +596,12 @@ class SSHManager:
             out_chunks: list[bytes] = []
             err_chunks: list[bytes] = []
             while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
+                if should_abort is not None and should_abort():
+                    try:
+                        channel.close()
+                    except Exception:
+                        pass
+                    raise SSHConnectionError("execute aborted by caller")
                 if (time.monotonic() - start) > total_timeout:
                     try:
                         channel.close()
@@ -712,26 +726,26 @@ class SSHManager:
                 select.select([channel], [], [], 0.1)
 
                 if channel.recv_ready():
-                    for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(4096))):
+                    for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(65536))):
                         if callback:
                             callback(line)
                         yield line
 
                 if channel.recv_stderr_ready():
-                    for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(4096))):
+                    for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(65536))):
                         if callback:
                             callback(line)
                         yield line
 
             # Read any remaining data after exit
             while channel.recv_ready():
-                for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(4096))):
+                for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(65536))):
                     if callback:
                         callback(line)
                     yield line
 
             while channel.recv_stderr_ready():
-                for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(4096))):
+                for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(65536))):
                     if callback:
                         callback(line)
                     yield line

@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.path_utils import browse_directory, to_absolute_path
 
@@ -698,7 +699,7 @@ class PageRefData(BasePage):
             return None
 
         try:
-            stdout, stderr, exit_code = ssh_manager.execute(f"cat {shlex.quote(def_nml_path)}", timeout=30)
+            stdout, stderr, exit_code = execute_responsive(ssh_manager, f"cat {shlex.quote(def_nml_path)}", timeout=30)
             if exit_code == 0 and stdout.strip():
                 return yaml.safe_load(stdout) or {}
             else:
@@ -920,33 +921,21 @@ class PageRefData(BasePage):
         # Get general config
         general_config = self.controller.config.get("general", {})
 
-        # Check if in remote mode using storage type
-        from openbench.remote.storage import RemoteStorage
+        # Remote execution context (shared gathering point for scan/import/validate)
+        from openbench.gui.path_utils import remote_exec_context
 
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
-        ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
-
-        if is_remote and not ssh_manager:
-            QMessageBox.warning(self, "Not Connected", "Remote mode requires connecting to the server first.")
+        context = remote_exec_context(self.controller, self)
+        if context is None:
             return
-
-        # Get remote config for remote mode
-        remote_openbench_root = ""
-        python_path = ""
-        conda_env = ""
-        if is_remote:
-            remote_config = self.controller.remote_settings()
-            remote_openbench_root = remote_config.get("openbench_path", "")
-            python_path = remote_config.get("python_path", "")
-            conda_env = remote_config.get("conda_env", "")
+        is_remote = bool(context)
 
         # Create validator
         validator = DataValidator(
             is_remote=is_remote,
-            ssh_manager=ssh_manager,
-            remote_openbench_root=remote_openbench_root,
-            python_path=python_path,
-            conda_env=conda_env,
+            ssh_manager=context.get("ssh_manager"),
+            remote_openbench_root=context.get("openbench_path", ""),
+            python_path=context.get("python_path", ""),
+            conda_env=context.get("conda_env", ""),
         )
 
         # Show progress dialog

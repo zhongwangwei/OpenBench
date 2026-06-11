@@ -26,8 +26,15 @@ def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") 
     q_env = shlex.quote(conda_env)
     match = _CONDA_BASE_PATTERN.search(python_path or "")
     if match:
-        q_base = shlex.quote(match.group(1))
-        return f"source {q_base}/etc/profile.d/conda.sh && conda activate {q_env} && {inner}"
+        base = match.group(1)
+        # SSHManager wraps everything in `sh -c`, so use the POSIX dot
+        # command (`source` is a bashism that dash/ash reject) and expand a
+        # leading tilde to the remote $HOME (shlex would quote it literally).
+        if base == "~" or base.startswith("~/"):
+            q_base = '"$HOME"' + (shlex.quote(base[1:]) if len(base) > 1 else "")
+        else:
+            q_base = shlex.quote(base)
+        return f". {q_base}/etc/profile.d/conda.sh && conda activate {q_env} && {inner}"
     return f"bash -l -c {shlex.quote(f'conda activate {q_env} && {inner}')}"
 
 
@@ -46,13 +53,14 @@ def run_remote_python_json(
     python_path: str = "",
     conda_env: str = "",
     timeout: int = 60,
+    should_abort=None,
 ) -> Any:
     """Execute ``script`` remotely and parse a JSON value from stdout."""
     command = build_remote_python_command(script, python_path=python_path, conda_env=conda_env)
     try:
         from openbench.gui.widgets._ssh_worker import execute_responsive
 
-        stdout, stderr, exit_code = execute_responsive(ssh_manager, command, timeout=timeout)
+        stdout, stderr, exit_code = execute_responsive(ssh_manager, command, timeout=timeout, should_abort=should_abort)
     except ImportError:  # pragma: no cover - GUI extra not installed
         stdout, stderr, exit_code = ssh_manager.execute(command, timeout=timeout)
     if exit_code != 0:

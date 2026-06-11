@@ -12,6 +12,7 @@ import tempfile
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox
 from PySide6.QtCore import Signal
 
+from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import YamlPreview
 from openbench.gui.config_manager import ConfigManager
@@ -143,8 +144,10 @@ class PagePreview(BasePage):
             sim_nml_dir = f"{nml_dir}/sim"
             ref_nml_dir = f"{nml_dir}/ref"
 
-            stdout, stderr, exit_code = ssh_manager.execute(
-                f"mkdir -p {shlex.quote(nml_dir)} {shlex.quote(sim_nml_dir)} {shlex.quote(ref_nml_dir)}", timeout=30
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager,
+                f"mkdir -p {shlex.quote(nml_dir)} {shlex.quote(sim_nml_dir)} {shlex.quote(ref_nml_dir)}",
+                timeout=30,
             )
             if exit_code != 0:
                 QMessageBox.critical(self, "Error", f"Failed to create remote directories:\n{stderr}")
@@ -471,8 +474,8 @@ class PagePreview(BasePage):
                 for try_path in paths_to_try:
                     try:
                         quoted_path = shlex.quote(try_path)
-                        stdout, stderr, exit_code = ssh_manager.execute(
-                            f"test -f {quoted_path} && echo 'exists'", timeout=10
+                        stdout, stderr, exit_code = execute_responsive(
+                            ssh_manager, f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
                         if exit_code == 0 and "exists" in stdout:
                             return try_path
@@ -517,8 +520,8 @@ class PagePreview(BasePage):
                 for try_path in paths_to_try:
                     try:
                         quoted_path = shlex.quote(try_path)
-                        stdout, stderr, exit_code = ssh_manager.execute(
-                            f"test -f {quoted_path} && echo 'exists'", timeout=10
+                        stdout, stderr, exit_code = execute_responsive(
+                            ssh_manager, f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
                         if exit_code == 0 and "exists" in stdout:
                             return try_path
@@ -567,7 +570,9 @@ class PagePreview(BasePage):
             last_error = ""
             for path in paths_to_try:
                 try:
-                    stdout, stderr, exit_code = ssh_manager.execute(f"cat {shlex.quote(path)} 2>/dev/null", timeout=30)
+                    stdout, stderr, exit_code = execute_responsive(
+                        ssh_manager, f"cat {shlex.quote(path)} 2>/dev/null", timeout=30
+                    )
                 except Exception as exc:
                     raise RemoteNamelistSyncError(f"Failed to read remote model definition {path}: {exc}") from exc
                 if exit_code == 0 and stdout.strip():

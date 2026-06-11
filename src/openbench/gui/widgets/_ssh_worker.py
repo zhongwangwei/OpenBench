@@ -98,11 +98,9 @@ class SshExecuteWorker(QThread):  # type: ignore[misc]
                     # interruption then only lands between output lines.
                     stream = self._ssh_manager.execute_stream(self._command, total_timeout=self._timeout)
                 while True:
-                    # Interruption is only observable between lines: a hung
-                    # command that produces no output keeps next() blocked
-                    # until total_timeout.
                     if self.isInterruptionRequested():
                         stream.close()
+                        _flush_lines()
                         self.failed.emit("Interrupted")
                         return
                     try:
@@ -110,6 +108,11 @@ class SshExecuteWorker(QThread):  # type: ignore[misc]
                     except StopIteration as done:
                         exit_code = int(done.value or 0)
                         break
+                    except Exception:
+                        # The buffered tail is exactly the output that
+                        # explains the failure — deliver it before the error.
+                        _flush_lines()
+                        raise
                     stdout_chunks.append(raw)
                     if raw.strip():
                         batch.append(raw)
@@ -182,9 +185,15 @@ def call_responsive(func):
     return result["value"]
 
 
-def execute_responsive(ssh_manager, command: str, timeout: Optional[int] = None):
-    """``ssh_manager.execute`` via :func:`call_responsive` — same return tuple."""
-    return call_responsive(lambda: ssh_manager.execute(command, timeout=timeout))
+def execute_responsive(ssh_manager, command: str, timeout: Optional[int] = None, should_abort=None):
+    """``ssh_manager.execute`` via :func:`call_responsive` — same return tuple.
+
+    ``should_abort`` is only forwarded when provided, so fakes and older
+    managers without the parameter keep working.
+    """
+    if should_abort is None:
+        return call_responsive(lambda: ssh_manager.execute(command, timeout=timeout))
+    return call_responsive(lambda: ssh_manager.execute(command, timeout=timeout, should_abort=should_abort))
 
 
 class _GuiInvoker(QObject):  # type: ignore[misc]

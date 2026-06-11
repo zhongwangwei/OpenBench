@@ -960,6 +960,8 @@ class RemoteConfigWidget(QWidget):
 
     def _confirm_node_connection(self):
         """Connect to compute node via SSH."""
+        if getattr(self, "_handshake_active", False):
+            return  # the main-server handshake is mid-auth; don't race it
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to the main server first using the Confirm button above")
             return
@@ -969,6 +971,7 @@ class RemoteConfigWidget(QWidget):
             QMessageBox.warning(self, "Error", "Please enter the compute node name")
             return
 
+        self._handshake_active = True
         try:
             self.btn_confirm_node.setEnabled(False)
             self.node_status_label.setText("Connecting...")
@@ -1020,10 +1023,16 @@ class RemoteConfigWidget(QWidget):
                 self.btn_confirm_node.setEnabled(True)
 
         except Exception as e:
+            import shiboken6
+
+            if not shiboken6.isValid(self):
+                return  # widget destroyed while the handshake event loop ran
             self.node_status_label.setText(f"✗ {str(e)[:50]}")
             self.node_status_label.setStyleSheet("color: red;")
             self.btn_confirm_node.setEnabled(True)
             QMessageBox.warning(self, "Connection Failed", str(e))
+        finally:
+            self._handshake_active = False
 
     def _on_config_changed(self):
         """Handle any configuration change."""
@@ -1045,9 +1054,10 @@ class RemoteConfigWidget(QWidget):
 
         # Get Python path directly from conda
         if self._ssh_manager and self._ssh_manager.is_connected:
-            if getattr(self, "_conda_env_sync_busy", False):
-                return  # combo changed again while the previous query is in flight
-            self._conda_env_sync_busy = True
+            # A combo change during the in-flight round trip supersedes this
+            # query; the stale result must not be applied afterwards.
+            seq = getattr(self, "_conda_env_sync_seq", 0) + 1
+            self._conda_env_sync_seq = seq
             try:
                 # Use conda run to get the actual Python path. Build the
                 # inner bash -c argument with shlex.quote on env_name, then
@@ -1055,6 +1065,8 @@ class RemoteConfigWidget(QWidget):
                 inner = f"conda run -n {shlex.quote(env_name)} which python 2>/dev/null"
                 cmd = f"bash -i -l -c {shlex.quote(inner)}"
                 stdout, _, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
+                if seq != self._conda_env_sync_seq:
+                    return  # superseded by a newer selection
                 if exit_code == 0 and stdout.strip():
                     # Pick the last absolute path in the output; `conda run`
                     # under some shells appends an empty line or `(env) `
@@ -1073,8 +1085,8 @@ class RemoteConfigWidget(QWidget):
                         return
             except Exception:
                 pass
-            finally:
-                self._conda_env_sync_busy = False
+            if seq != self._conda_env_sync_seq:
+                return  # a newer selection owns the fallback too
 
         # Fallback: construct path from env_path
         python_path = f"{env_path}/bin/python"
@@ -1150,12 +1162,15 @@ class RemoteConfigWidget(QWidget):
         if not host:
             QMessageBox.warning(self, "Error", "Please enter host address")
             return
+        if getattr(self, "_handshake_active", False):
+            return  # another handshake is mid-auth; don't race it
 
         # Update status
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #f39c12;")  # Orange
         self.btn_test.setEnabled(False)
 
+        self._handshake_active = True
         try:
             self._ssh_manager = SSHManager(host_key_callback=self._confirm_host_key)
             manager = self._ssh_manager
@@ -1179,6 +1194,11 @@ class RemoteConfigWidget(QWidget):
                         node_password = self.node_password_input.text()
                     call_responsive(lambda: manager.connect_with_jump(main_host=node, main_password=node_password))
 
+            import shiboken6
+
+            if not shiboken6.isValid(self):
+                return  # widget destroyed while the handshake event loop ran
+
             # Update status to connected
             self.status_label.setText("Connected")
             self.status_label.setStyleSheet("color: #27ae60;")  # Green
@@ -1198,17 +1218,27 @@ class RemoteConfigWidget(QWidget):
             QMessageBox.information(self, "Success", "Connection successful!")
 
         except SSHConnectionError as e:
+            import shiboken6
+
+            if not shiboken6.isValid(self):
+                return
             self.status_label.setText("Connection failed")
             self.status_label.setStyleSheet("color: #e74c3c;")  # Red
             self.connection_status_changed.emit(False)
             self.btn_test.setEnabled(True)
             QMessageBox.critical(self, "Connection Failed", str(e))
         except Exception as e:
+            import shiboken6
+
+            if not shiboken6.isValid(self):
+                return
             self.status_label.setText("Error")
             self.status_label.setStyleSheet("color: #e74c3c;")  # Red
             self.connection_status_changed.emit(False)
             self.btn_test.setEnabled(True)
             QMessageBox.critical(self, "Error", f"Unexpected error: {e}")
+        finally:
+            self._handshake_active = False
 
     def _disconnect_server(self):
         """Disconnect from SSH server."""
@@ -1383,8 +1413,25 @@ class RemoteConfigWidget(QWidget):
             self.btn_refresh_conda.setEnabled(True)
 
     def _create_conda_env(self):
+        """Create OpenBench conda environment (re-entrancy-guarded entry point)."""
+        if getattr(self, "_conda_create_worker", None) is not None:
+            return
+        if getattr(self, "_conda_create_flow_active", False):
+            return
+        self._conda_create_flow_active = True
+        self.btn_new_conda.setEnabled(False)
+        try:
+            self._create_conda_env_flow()
+        finally:
+            self._conda_create_flow_active = False
+            import shiboken6
+
+            if shiboken6.isValid(self) and getattr(self, "_conda_create_worker", None) is None:
+                self.btn_new_conda.setEnabled(True)
+
+    def _create_conda_env_flow(self):
         """Create OpenBench conda environment."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit
+        from PySide6.QtWidgets import QVBoxLayout, QTextEdit
 
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
@@ -1451,8 +1498,8 @@ class RemoteConfigWidget(QWidget):
         conda_base = conda_match.group(1)
         conda_exe = f"{conda_base}/bin/conda"
 
-        # Progress dialog
-        progress_dialog = QDialog(self)
+        # Progress dialog (Esc/close stays blocked until the worker finishes)
+        progress_dialog = _InstallProgressDialog(self)
         progress_dialog.setWindowTitle("Creating Conda Environment")
         progress_dialog.resize(600, 400)
         progress_layout = QVBoxLayout(progress_dialog)
@@ -1470,7 +1517,6 @@ class RemoteConfigWidget(QWidget):
         close_btn.clicked.connect(progress_dialog.accept)
         progress_layout.addWidget(close_btn)
 
-        self.btn_new_conda.setEnabled(False)
         self._conda_create_dialog = progress_dialog
         create_state = {"active": True}
 
@@ -1494,6 +1540,7 @@ class RemoteConfigWidget(QWidget):
         )
 
         def finish_create_env(result):
+            progress_dialog.allow_close = True
             if not create_state["active"]:
                 self._conda_create_worker = None
                 self._conda_create_dialog = None
@@ -1518,6 +1565,7 @@ class RemoteConfigWidget(QWidget):
             self._conda_create_dialog = None
 
         def fail_create_env(message: str):
+            progress_dialog.allow_close = True
             if not create_state["active"]:
                 self._conda_create_worker = None
                 self._conda_create_dialog = None
@@ -1657,7 +1705,10 @@ class RemoteConfigWidget(QWidget):
             self._install_openbench_flow()
         finally:
             self._install_flow_active = False
-            if getattr(self, "_install_worker", None) is None:
+            import shiboken6
+
+            # The nested event loops can outlive the widget (app quit mid-install).
+            if shiboken6.isValid(self) and getattr(self, "_install_worker", None) is None:
                 self.btn_install_ob.setEnabled(True)
 
     def _install_openbench_flow(self):
@@ -1785,7 +1836,6 @@ class RemoteConfigWidget(QWidget):
 
         # Progress dialog
         progress_dialog = _InstallProgressDialog(self)
-        self._install_progress_dialog = progress_dialog
         progress_dialog.setWindowTitle("Installing OpenBench" if not is_update else "Updating OpenBench")
         progress_dialog.resize(600, 400)
         progress_layout = QVBoxLayout(progress_dialog)
@@ -1898,7 +1948,6 @@ class RemoteConfigWidget(QWidget):
         progress_dialog.finished.connect(progress_dialog.deleteLater)
         start_install_worker(cmd, 300, on_git_done)
         progress_dialog.exec()
-        self._install_progress_dialog = None
 
     def get_ssh_manager(self) -> Optional[SSHManager]:
         """Get the current SSH manager instance.
