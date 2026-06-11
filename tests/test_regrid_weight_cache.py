@@ -219,3 +219,30 @@ def test_conservative_regrid_masks_targets_with_no_actual_overlap(monkeypatch):
     )
 
     assert np.isnan(float(result["v"].item()))
+
+
+def test_format_lon_handles_read_only_padded_coordinate_values(monkeypatch):
+    """Global-lon padding must not mutate xarray's coordinate view in-place."""
+    import xarray as xr
+
+    from openbench.data.regrid.utils import format_lon
+
+    lon = np.arange(0.5, 360.0, 1.0)
+    data = xr.Dataset({"v": ("lon", np.arange(lon.size, dtype=float))}, coords={"lon": lon})
+    target = xr.Dataset(coords={"lon": np.arange(-179.5, 180.0, 1.0)})
+
+    original_pad = xr.Dataset.pad
+
+    def readonly_pad(self, *args, **kwargs):
+        padded = original_pad(self, *args, **kwargs)
+        padded_lon = padded["lon"].values
+        padded_lon.flags.writeable = False
+        return padded
+
+    monkeypatch.setattr(xr.Dataset, "pad", readonly_pad)
+    result = format_lon(data, target, {"lon": "lon"})
+
+    assert result["lon"].values.flags.writeable
+    assert result.sizes["lon"] == 362
+    assert result["lon"].values[0] == -180.5
+    assert result["lon"].values[-1] == 180.5

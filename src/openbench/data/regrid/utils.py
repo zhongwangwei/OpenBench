@@ -364,7 +364,10 @@ def format_lon(
         left_pad = int(np.ceil(np.max([left_pad, 0])))
         right_pad = int(np.ceil(np.max([right_pad, 0])))
         obj = obj.pad({lon_coord: (left_pad, right_pad)}, mode="wrap", keep_attrs=True)
-        lon_vals = obj.coords[lon_coord].values
+        # xarray/netCDF/dask-backed coordinate arrays can expose read-only
+        # NumPy views after pad/wrap.  The longitude padding below is a new
+        # coordinate vector, so copy before assigning wraparound edge values.
+        lon_vals = obj.coords[lon_coord].values.copy()
         if left_pad:
             lon_vals[:left_pad] = source_lon.values[-left_pad:] - 360
         if right_pad:
