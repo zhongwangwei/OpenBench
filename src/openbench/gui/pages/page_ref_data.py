@@ -296,14 +296,10 @@ class PageRefData(BasePage):
         worker = getattr(self, "_scan_worker", None)
         if worker is not None:
             if cancel:
-                for signal, slot in (
-                    (worker.finished_with_result, self._on_scan_data_root_finished),
-                    (worker.failed, self._on_scan_data_root_failed),
-                ):
-                    try:
-                        signal.disconnect(slot)
-                    except (RuntimeError, TypeError):
-                        pass
+                from openbench.gui.widgets._task_worker import safe_disconnect
+
+                # The page slots are the only receivers of these signals.
+                safe_disconnect(worker.finished_with_result, worker.failed)
                 if worker.isRunning():
                     worker.requestInterruption()
                     worker.quit()

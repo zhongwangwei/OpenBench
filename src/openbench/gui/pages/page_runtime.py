@@ -625,11 +625,9 @@ class PageRuntime(BasePage):
         """Disconnect a running local install worker from this page's UI."""
         worker = getattr(self, "_local_install_worker", None)
         if worker is not None:
-            for signal in (worker.line, worker.finished_with_result, worker.failed):
-                try:
-                    signal.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
+            from openbench.gui.widgets._task_worker import safe_disconnect
+
+            safe_disconnect(worker.line, worker.finished_with_result, worker.failed)
             if worker.isRunning():
                 worker.stop()
                 if detach:

@@ -809,14 +809,10 @@ class PageRegistry(BasePage):
             progress.deleteLater()
         worker = getattr(self, "_scan_worker", None)
         if cancel and worker is not None and worker.isRunning():
-            for signal, slot in (
-                (worker.finished_with_result, self._on_scan_directory_finished),
-                (worker.failed, self._on_scan_directory_failed),
-            ):
-                try:
-                    signal.disconnect(slot)
-                except (RuntimeError, TypeError):
-                    pass
+            from openbench.gui.widgets._task_worker import safe_disconnect
+
+            # The page slots are the only receivers of these signals.
+            safe_disconnect(worker.finished_with_result, worker.failed)
             worker.requestInterruption()
             worker.quit()
             worker.wait(3000)

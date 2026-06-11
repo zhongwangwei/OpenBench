@@ -111,6 +111,33 @@ def test_streaming_worker_flushes_buffered_lines_on_failure(qapp):
     assert "important error context" in "".join(lines)
 
 
+def test_safe_disconnect_tolerates_unconnected_signals_under_warning_errors(qapp):
+    """PySide6 warns (SystemError under -W error) when disconnecting a signal
+    with no receivers; cleanup must shrug that off while still detaching
+    connected slots."""
+    import warnings
+
+    from PySide6.QtCore import QObject, Signal
+
+    from openbench.gui.widgets._task_worker import safe_disconnect
+
+    class Worker(QObject):
+        connected = Signal(str)
+        unconnected = Signal(str)
+
+    received = []
+    worker = Worker()
+    worker.connected.connect(received.append)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # the strictest caller environment
+        safe_disconnect(worker.connected, worker.unconnected)
+
+    worker.connected.emit("late")
+    worker.unconnected.emit("late")
+    assert received == []
+
+
 def test_conda_create_task_aborts_between_steps_when_interrupted():
     from openbench.gui.widgets.remote_config import _build_conda_create_task
 

@@ -1614,13 +1614,11 @@ class RemoteConfigWidget(QWidget):
 
     def _cleanup_conda_create_worker(self, detach: bool = False):
         """Disconnect a long-running conda-create worker from this widget."""
+        from openbench.gui.widgets._task_worker import safe_disconnect
+
         worker = getattr(self, "_conda_create_worker", None)
         if worker is not None:
-            for signal in (worker.finished_with_result, worker.failed):
-                try:
-                    signal.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
+            safe_disconnect(worker.finished_with_result, worker.failed)
             if worker.isRunning():
                 worker.requestInterruption()
                 if detach:
@@ -1639,13 +1637,11 @@ class RemoteConfigWidget(QWidget):
 
     def _cleanup_install_worker(self, detach: bool = False):
         """Disconnect a long-running OpenBench install/update worker from this widget."""
+        from openbench.gui.widgets._task_worker import safe_disconnect
+
         worker = getattr(self, "_install_worker", None)
         if worker is not None:
-            for signal in (worker.line, worker.finished_with_result, worker.failed):
-                try:
-                    signal.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
+            safe_disconnect(worker.line, worker.finished_with_result, worker.failed)
             if worker.isRunning():
                 worker.requestInterruption()
                 if detach:

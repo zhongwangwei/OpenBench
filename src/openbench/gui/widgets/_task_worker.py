@@ -28,6 +28,26 @@ class CallableWorker(QThread):
             self.failed.emit(f"{type(exc).__name__}: {exc}")
 
 
+def safe_disconnect(*signals) -> None:
+    """Disconnect all receivers from each signal, tolerating none being connected.
+
+    PySide6 emits a RuntimeWarning when disconnecting a signal that has no
+    receivers — and under warnings-as-errors that surfaces as a SystemError
+    wrapper — instead of the RuntimeError older versions raised. Cleanup is
+    best-effort either way: UI-bound slots must come off, already-detached
+    signals are harmless.
+    """
+    import warnings
+
+    for signal in signals:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            try:
+                signal.disconnect()
+            except (RuntimeError, TypeError, SystemError):
+                pass
+
+
 def detach_worker(worker, registry: list) -> None:
     """Keep an unparented running QThread alive until Qt emits finished.
 
