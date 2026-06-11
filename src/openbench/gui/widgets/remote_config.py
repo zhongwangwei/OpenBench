@@ -5,13 +5,18 @@ Remote server configuration widget.
 Provides UI for configuring SSH connection to remote servers,
 including authentication, compute node (multi-hop), and Python environment.
 
-KNOWN LIMITATION (tracked as a follow-up): SSH calls from this widget
-currently run on Qt's main thread with a `QApplication.processEvents()`
-loop pretending the UI is responsive. For long calls (`conda env update`,
-`git clone` over slow links — up to 900s timeout) the UI freezes; macOS
-may show "Application not responding". The recommended migration path is
-to use `_ssh_worker.SshExecuteWorker` (a QThread-based wrapper) and
-connect to its `line` / `finished_with_result` / `failed` signals.
+RemoteConfigWidget's long install/update flows (`git clone`, `git pull`,
+and `conda env update` over slow links — up to 900s timeout) run through
+`_ssh_worker.SshExecuteWorker` so the Qt main thread remains responsive.
+RemoteFileBrowser's directory/listing calls have been migrated to
+`_ssh_worker.execute_responsive`, which runs them on a worker thread
+while keeping the event loop alive.
+
+The SSH auth handshake (`_test_connection` / `_confirm_node_connection`)
+also runs via `call_responsive`; the host-key confirmation dialog that
+paramiko fires mid-handshake marshals itself back to the GUI thread via
+`_ssh_worker.call_on_gui_thread`, so no remote operation blocks the Qt
+main thread anymore.
 """
 
 import logging
@@ -33,10 +38,19 @@ def _safe_remote_path(path: str) -> str:
         raise ValueError("Remote path is empty.")
     if any(c in path for c in ("\x00", "\n", "\r")):
         raise ValueError("Remote path contains illegal characters.")
+    # Expand a leading tilde to the remote $HOME: shlex.quote would otherwise
+    # single-quote it and the shell would look for a literal '~' directory.
+    # The codebase's remote convention defaults to ~/OpenBench, so this is a
+    # mainstream input, not an edge case.
+    if path == "~":
+        return '"$HOME"'
+    if path.startswith("~/"):
+        return '"$HOME"' + shlex.quote(path[1:])
     return shlex.quote(path)
 
 
 from PySide6.QtWidgets import (
+    QDialog,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -56,6 +70,12 @@ from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollCom
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QListWidgetItem
 
+from openbench.gui.widgets._ssh_worker import (
+    SshExecuteWorker,
+    call_on_gui_thread,
+    call_responsive,
+    execute_responsive,
+)
 from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.remote.credentials import CredentialManager, CredentialStorageError
 
@@ -147,6 +167,61 @@ class ClickableLineEdit(QLineEdit):
             self.clicked.emit()
 
 
+# Delimits the resolve/ls/find sections of the combined listing command.
+_SECTION_MARKER = "__OPENBENCH_SECTION__"
+
+
+def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env_exists, interrupted):
+    """Build the conda-create worker task with cooperative interruption.
+
+    ``interrupted`` is probed before each blocking step so a detached worker
+    stops at the next step boundary instead of running the full sequence.
+    """
+
+    def create_env_task():
+        output_chunks = []
+        if env_exists:
+            if interrupted():
+                return {"exit_code": 130, "output": "Interrupted before environment removal.\n", "envs": []}
+            cmd = f"{quoted_conda_exe} env remove -n {quoted_env_name} -y 2>&1"
+            stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=120)
+            output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
+            if exit_code != 0:
+                return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": []}
+        if interrupted():
+            output_chunks.append("\nInterrupted before environment creation.\n")
+            return {"exit_code": 130, "output": "".join(output_chunks), "envs": []}
+        cmd = f"{quoted_conda_exe} create -n {quoted_env_name} python=3.12 -y 2>&1"
+        stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=300)
+        output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
+        envs = ssh_manager.detect_conda_envs() if exit_code == 0 and not interrupted() else []
+        return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": envs}
+
+    return create_env_task
+
+
+class _InstallProgressDialog(QDialog):
+    """Progress dialog that ignores Esc/close while the install worker runs.
+
+    A plain QDialog closes on Esc, leaving a 300-900s install running headless
+    with no way to see its log or completion state again.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.allow_close = False
+
+    def reject(self):
+        if self.allow_close:
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.allow_close:
+            super().closeEvent(event)
+        else:
+            event.ignore()
+
+
 class RemoteFileBrowser(QWidget):
     """Dialog for browsing files on remote server."""
 
@@ -165,6 +240,7 @@ class RemoteFileBrowser(QWidget):
         self._ssh_manager = ssh_manager
         self._current_path = start_path
         self._select_dirs = select_dirs
+        self._loading = False
         self._setup_ui()
         self._load_directory(start_path)
 
@@ -212,28 +288,43 @@ class RemoteFileBrowser(QWidget):
         layout.addLayout(btn_layout)
 
     def _load_directory(self, path: str):
-        """Load directory contents from remote server."""
+        """Load directory contents from remote server (UI stays responsive)."""
+        if self._loading:
+            return
+        self._loading = True
+        self.setEnabled(False)
+        try:
+            self._load_directory_now(path)
+        finally:
+            self._loading = False
+            self.setEnabled(True)
+
+    def _load_directory_now(self, path: str):
+        """Fetch and render a directory listing; only called via _load_directory."""
         previous_path = getattr(self, "_current_path", "/")
         previous_input = self.path_input.text() if hasattr(self, "path_input") else previous_path
 
         try:
-            # First resolve the path in case it's a symlink. Single-quote
-            # wrapping was insecure — a path containing a quote could break
-            # out of the quoting and execute arbitrary commands.
+            # _safe_remote_path validates and shell-quotes user input —
+            # single-quote wrapping alone was insecure (a quote in the path
+            # could break out and execute arbitrary commands).
             try:
                 quoted_path = _safe_remote_path(path)
             except ValueError as exc:
                 QMessageBox.warning(self, "Remote Browser", str(exc))
                 return
-            resolve_cmd = f"cd {quoted_path} 2>/dev/null && pwd -P"
-            stdout_resolve, _, exit_resolve = self._ssh_manager.execute(resolve_cmd, timeout=10)
-            if exit_resolve == 0 and stdout_resolve.strip():
-                path = stdout_resolve.strip()
-                quoted_path = _safe_remote_path(path)
 
-            # List directory contents with -L to follow symlinks for type detection
-            cmd = f"ls -la {quoted_path} 2>/dev/null"
-            stdout, _, exit_code = self._ssh_manager.execute(cmd, timeout=10)
+            # One round-trip for resolve + listing + bulk symlink probing.
+            # The previous three sequential calls cost 3x RTT per navigation
+            # on a high-latency link. Sections are delimited by a marker
+            # line; ls/find run after cd so the resolved path applies, and a
+            # find failure is tolerated (exit 0 forced) like before.
+            list_cmd = (
+                f"cd {quoted_path} 2>/dev/null || exit 21; pwd -P; echo {_SECTION_MARKER}; "
+                f"ls -la 2>/dev/null || exit 22; echo {_SECTION_MARKER}; "
+                f'find -L "$(pwd -P)" -maxdepth 1 -type d -print 2>/dev/null; exit 0'
+            )
+            stdout, _, exit_code = execute_responsive(self._ssh_manager, list_cmd, timeout=20)
 
             if exit_code != 0:
                 self._current_path = previous_path
@@ -241,23 +332,24 @@ class RemoteFileBrowser(QWidget):
                 QMessageBox.warning(self, "Remote Browser", f"Failed to list remote directory:\n{path}")
                 return
 
-            # Bulk-resolve "symlink → directory?" with one extra RTT so we
-            # avoid the per-entry test -d below. Previously each symlink in
-            # the listing cost a round-trip (100 symlinks → ~30s of UI
-            # freeze on a high-latency link).
             import posixpath as _pp
 
-            symlink_dir_paths: set[str] = set()
-            try:
-                find_cmd = f"find -L {quoted_path} -maxdepth 1 -type d -print 2>/dev/null"
-                find_stdout, _, find_exit = self._ssh_manager.execute(find_cmd, timeout=15)
-                if find_exit == 0:
-                    symlink_dir_paths = {
-                        _pp.normpath(line.strip()) for line in find_stdout.splitlines() if line.strip()
-                    }
-            except Exception:
-                # Fall back to per-entry probes if the bulk find fails.
-                symlink_dir_paths = set()
+            sections: list[list[str]] = [[]]
+            for line in stdout.splitlines():
+                if line.strip() == _SECTION_MARKER:
+                    sections.append([])
+                else:
+                    sections[-1].append(line)
+
+            # `pwd -P` output is necessarily the LAST line before the first
+            # marker; anything earlier is rc-file/motd noise from the remote
+            # shell (bash under sshd sources ~/.bashrc non-interactively).
+            resolved = next((line.strip() for line in reversed(sections[0]) if line.strip()), "")
+            if resolved:
+                path = resolved
+            ls_text = "\n".join(sections[1]).strip() if len(sections) > 1 else ""
+            find_lines = sections[2] if len(sections) > 2 else []
+            symlink_dir_paths: set[str] = {_pp.normpath(line.strip()) for line in find_lines if line.strip()}
 
             self.file_list.clear()
             self._current_path = path
@@ -276,7 +368,7 @@ class RemoteFileBrowser(QWidget):
             # commands won't find it. The 9th column is where the name
             # begins in `ls -la`, so re-split with maxsplit=8 to preserve
             # the original spacing in the filename portion.
-            for line in stdout.strip().split("\n")[1:]:  # Skip total line
+            for line in ls_text.split("\n")[1:]:  # Skip total line
                 if not line.strip():
                     continue
                 parts = line.split(maxsplit=8)
@@ -312,7 +404,7 @@ class RemoteFileBrowser(QWidget):
                         except ValueError:
                             continue
                         check_cmd = f"test -d {quoted_full} && echo 'dir'"
-                        check_stdout, _, check_exit = self._ssh_manager.execute(check_cmd, timeout=5)
+                        check_stdout, _, check_exit = execute_responsive(self._ssh_manager, check_cmd, timeout=5)
                         if check_exit == 0 and "dir" in check_stdout:
                             is_dir = True
 
@@ -338,6 +430,8 @@ class RemoteFileBrowser(QWidget):
 
     def _on_item_double_clicked(self, item):
         """Handle double-click on item."""
+        if self._loading:
+            return
         data = item.data(Qt.UserRole)
         if not data:
             return
@@ -357,7 +451,7 @@ class RemoteFileBrowser(QWidget):
                 # Join paths with forward slash
                 new_path = f"{self._current_path.rstrip('/')}/{name}"
             self._load_directory(new_path)
-        elif is_link:
+        elif is_link and not self._select_dirs:
             # For symlinked files, resolve the target and select it
             full_path = f"{self._current_path.rstrip('/')}/{name}"
             try:
@@ -367,7 +461,7 @@ class RemoteFileBrowser(QWidget):
                 except ValueError:
                     return
                 resolve_cmd = f"readlink -f {quoted_full} 2>/dev/null"
-                stdout, _, exit_code = self._ssh_manager.execute(resolve_cmd, timeout=5)
+                stdout, _, exit_code = execute_responsive(self._ssh_manager, resolve_cmd, timeout=5)
                 if exit_code == 0 and stdout.strip():
                     resolved_path = stdout.strip()
                     # Emit the resolved path
@@ -399,7 +493,11 @@ class RemoteFileBrowser(QWidget):
                 if self._select_dirs:
                     # In directory mode, select directory or current path
                     if is_dir:
-                        full_path = f"{self._current_path.rstrip('/')}/{data['name']}"
+                        import posixpath
+
+                        # The synthetic ".." row must resolve to the parent,
+                        # not be emitted verbatim as "<current>/..".
+                        full_path = posixpath.normpath(f"{self._current_path.rstrip('/')}/{data['name']}")
                     else:
                         # If file selected in dir mode, use current directory
                         full_path = self._current_path
@@ -438,7 +536,7 @@ class RemoteFileBrowser(QWidget):
                     QMessageBox.warning(self, "Invalid Folder Name", str(exc))
                     return
                 cmd = f"mkdir -p {quoted_new_path}"
-                stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=10)
+                stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
 
                 if exit_code == 0:
                     # Refresh directory and navigate to new folder
@@ -488,8 +586,10 @@ class RemoteConfigWidget(QWidget):
         self._credential_manager = CredentialManager()
         self._conda_create_worker = None
         self._conda_create_dialog = None
+        self._install_worker = None
         self._setup_ui()
         self.destroyed.connect(lambda *_: self._cleanup_conda_create_worker(detach=True))
+        self.destroyed.connect(lambda *_: self._cleanup_install_worker(detach=True))
 
     def _setup_ui(self):
         """Setup the widget UI."""
@@ -873,9 +973,6 @@ class RemoteConfigWidget(QWidget):
             self.btn_confirm_node.setEnabled(False)
             self.node_status_label.setText("Connecting...")
             self.node_status_label.setStyleSheet("color: orange;")
-            from PySide6.QtWidgets import QApplication
-
-            QApplication.processEvents()
 
             # Get authentication details
             node_password = None
@@ -900,9 +997,13 @@ class RemoteConfigWidget(QWidget):
                     self.node_status_label.setStyleSheet("color: red;")
                     return
 
-            # Connect to compute node through jump
-            self._ssh_manager.connect_with_jump(
-                main_host=node_name, main_password=node_password, main_key_file=node_key_file
+            # Connect to compute node through jump (handshake off the GUI
+            # thread; host-key prompt marshals back to it)
+            manager = self._ssh_manager
+            call_responsive(
+                lambda: manager.connect_with_jump(
+                    main_host=node_name, main_password=node_password, main_key_file=node_key_file
+                )
             )
 
             if self._ssh_manager.is_jump_connected:
@@ -944,13 +1045,16 @@ class RemoteConfigWidget(QWidget):
 
         # Get Python path directly from conda
         if self._ssh_manager and self._ssh_manager.is_connected:
+            if getattr(self, "_conda_env_sync_busy", False):
+                return  # combo changed again while the previous query is in flight
+            self._conda_env_sync_busy = True
             try:
                 # Use conda run to get the actual Python path. Build the
                 # inner bash -c argument with shlex.quote on env_name, then
                 # shlex.quote the whole inner command for the outer shell.
                 inner = f"conda run -n {shlex.quote(env_name)} which python 2>/dev/null"
                 cmd = f"bash -i -l -c {shlex.quote(inner)}"
-                stdout, _, exit_code = self._ssh_manager.execute(cmd, timeout=10)
+                stdout, _, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
                 if exit_code == 0 and stdout.strip():
                     # Pick the last absolute path in the output; `conda run`
                     # under some shells appends an empty line or `(env) `
@@ -969,6 +1073,8 @@ class RemoteConfigWidget(QWidget):
                         return
             except Exception:
                 pass
+            finally:
+                self._conda_env_sync_busy = False
 
         # Fallback: construct path from env_path
         python_path = f"{env_path}/bin/python"
@@ -984,8 +1090,8 @@ class RemoteConfigWidget(QWidget):
 
         try:
             # Query CPU count on remote server (Linux: nproc, macOS: sysctl)
-            stdout, stderr, exit_code = self._ssh_manager.execute(
-                "nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null", timeout=10
+            stdout, stderr, exit_code = execute_responsive(
+                self._ssh_manager, "nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null", timeout=10
             )
             if exit_code == 0 and stdout.strip():
                 cpu_count = int(stdout.strip())
@@ -1013,6 +1119,15 @@ class RemoteConfigWidget(QWidget):
         Returns:
             True if user accepts the key, False otherwise
         """
+        from PySide6.QtCore import QThread
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None and QThread.currentThread() != app.thread():
+            # paramiko calls this mid-handshake on the call_responsive worker
+            # thread; the QMessageBox below must run on the GUI thread.
+            return bool(call_on_gui_thread(lambda: self._confirm_host_key(hostname, key_type, fingerprint)))
+
         msg = (
             f"The authenticity of host '{hostname}' can't be established.\n\n"
             f"Key type: {key_type}\n"
@@ -1041,21 +1156,19 @@ class RemoteConfigWidget(QWidget):
         self.status_label.setStyleSheet("color: #f39c12;")  # Orange
         self.btn_test.setEnabled(False)
 
-        # Force UI update
-        from PySide6.QtWidgets import QApplication
-
-        QApplication.processEvents()
-
         try:
             self._ssh_manager = SSHManager(host_key_callback=self._confirm_host_key)
+            manager = self._ssh_manager
 
-            # Connect based on auth type
+            # Connect based on auth type. The handshake runs on a worker
+            # thread (UI stays responsive); the host-key prompt marshals
+            # itself back to the GUI thread.
             if self.radio_password.isChecked():
                 password = self.password_input.text()
-                self._ssh_manager.connect(host, password=password)
+                call_responsive(lambda: manager.connect(host, password=password))
             else:
                 key_file = os.path.expanduser(self.key_input.text().strip())
-                self._ssh_manager.connect(host, key_file=key_file)
+                call_responsive(lambda: manager.connect(host, key_file=key_file))
 
             # Test jump connection if enabled
             if self.node_group.isChecked():
@@ -1064,7 +1177,7 @@ class RemoteConfigWidget(QWidget):
                     node_password = None
                     if self.radio_node_password.isChecked():
                         node_password = self.node_password_input.text()
-                    self._ssh_manager.connect_with_jump(main_host=node, main_password=node_password)
+                    call_responsive(lambda: manager.connect_with_jump(main_host=node, main_password=node_password))
 
             # Update status to connected
             self.status_label.setText("Connected")
@@ -1170,39 +1283,22 @@ class RemoteConfigWidget(QWidget):
 
     def _browse_python(self):
         """Open remote file browser to select Python path."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        from openbench.gui import path_utils
 
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
             return
 
-        # Get home directory as start path
-        try:
-            home = self._ssh_manager._get_home_dir()
-        except Exception as e:
-            logger.debug("Failed to get remote home directory: %s", e)
-            home = "/"
-
-        # Create dialog with remote file browser
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Select Python on Remote Server")
-        dialog.resize(500, 400)
-
-        layout = QVBoxLayout(dialog)
-        browser = RemoteFileBrowser(self._ssh_manager, home, dialog)
-        layout.addWidget(browser)
-
-        def on_file_selected(path):
-            # Add to combo if not already there
-            idx = self.python_combo.findText(path)
-            if idx < 0:
-                self.python_combo.addItem(path)
-            self.python_combo.setCurrentText(path)
-            dialog.accept()
-
-        browser.file_selected.connect(on_file_selected)
-
-        dialog.exec()
+        home = path_utils.remote_home_dir(self._ssh_manager)
+        path = path_utils.pick_remote_path(
+            self._ssh_manager, self, "Select Python on Remote Server", home, select_dirs=False
+        )
+        if not path:
+            return
+        # Add to combo if not already there
+        if self.python_combo.findText(path) < 0:
+            self.python_combo.addItem(path)
+        self.python_combo.setCurrentText(path)
 
     def _detect_python(self):
         """Detect Python interpreters on remote server."""
@@ -1212,24 +1308,25 @@ class RemoteConfigWidget(QWidget):
 
         try:
             self.btn_detect_python.setEnabled(False)
-            from PySide6.QtWidgets import QApplication
-
-            QApplication.processEvents()
 
             # Debug: Also run which python directly and show result
             debug_info = []
             try:
-                stdout, _, _ = self._ssh_manager.execute("bash -i -l -c 'which python3' 2>/dev/null", timeout=15)
+                stdout, _, _ = execute_responsive(
+                    self._ssh_manager, "bash -i -l -c 'which python3' 2>/dev/null", timeout=15
+                )
                 debug_info.append(f"bash -i -l python3: {stdout.strip()}")
             except Exception as e:
                 logger.debug("Failed to detect python3 via bash: %s", e)
             try:
-                stdout, _, _ = self._ssh_manager.execute("bash -i -l -c 'which python' 2>/dev/null", timeout=15)
+                stdout, _, _ = execute_responsive(
+                    self._ssh_manager, "bash -i -l -c 'which python' 2>/dev/null", timeout=15
+                )
                 debug_info.append(f"bash -i -l python: {stdout.strip()}")
             except Exception as e:
                 logger.debug("Failed to detect python via bash: %s", e)
 
-            pythons = self._ssh_manager.detect_python_interpreters()
+            pythons = call_responsive(self._ssh_manager.detect_python_interpreters)
             detection_errors = list(getattr(self._ssh_manager, "last_detection_errors", ()))
             self.python_combo.clear()
             if pythons:
@@ -1261,11 +1358,8 @@ class RemoteConfigWidget(QWidget):
 
         try:
             self.btn_refresh_conda.setEnabled(False)
-            from PySide6.QtWidgets import QApplication
 
-            QApplication.processEvents()
-
-            envs = self._ssh_manager.detect_conda_envs()
+            envs = call_responsive(self._ssh_manager.detect_conda_envs)
             detection_errors = list(getattr(self._ssh_manager, "last_detection_errors", ()))
             self.conda_combo.clear()
             self.conda_combo.addItem("(Not using conda environment)")
@@ -1290,7 +1384,7 @@ class RemoteConfigWidget(QWidget):
 
     def _create_conda_env(self):
         """Create OpenBench conda environment."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QApplication
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit
 
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
@@ -1300,7 +1394,7 @@ class RemoteConfigWidget(QWidget):
 
         # Check if environment already exists
         try:
-            envs = self._ssh_manager.detect_conda_envs()
+            envs = call_responsive(self._ssh_manager.detect_conda_envs)
             env_exists = any(name.lower() == env_name for name, _ in envs)
 
             if env_exists:
@@ -1385,26 +1479,19 @@ class RemoteConfigWidget(QWidget):
 
         progress_dialog.destroyed.connect(mark_dialog_closed)
         progress_dialog.show()
-        QApplication.processEvents()
 
         quoted_conda_exe = shlex.quote(conda_exe)
         quoted_env_name = shlex.quote(env_name)
 
-        def create_env_task():
-            output_chunks = []
-            exit_code = 0
-            if env_exists:
-                cmd = f"{quoted_conda_exe} env remove -n {quoted_env_name} -y 2>&1"
-                stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=120)
-                output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
-                if exit_code != 0:
-                    return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": []}
+        worker_box = {}
 
-            cmd = f"{quoted_conda_exe} create -n {quoted_env_name} python=3.12 -y 2>&1"
-            stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=300)
-            output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
-            envs = self._ssh_manager.detect_conda_envs() if exit_code == 0 else []
-            return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": envs}
+        def _interrupted():
+            worker = worker_box.get("worker")
+            return worker is not None and worker.isInterruptionRequested()
+
+        create_env_task = _build_conda_create_task(
+            self._ssh_manager, quoted_conda_exe, quoted_env_name, env_exists, _interrupted
+        )
 
         def finish_create_env(result):
             if not create_state["active"]:
@@ -1450,6 +1537,7 @@ class RemoteConfigWidget(QWidget):
         from openbench.gui.widgets._task_worker import CallableWorker
 
         worker = CallableWorker(create_env_task)
+        worker_box["worker"] = worker
         self._conda_create_worker = worker
         worker.finished_with_result.connect(finish_create_env)
         worker.failed.connect(fail_create_env)
@@ -1468,15 +1556,9 @@ class RemoteConfigWidget(QWidget):
             if worker.isRunning():
                 worker.requestInterruption()
                 if detach:
-                    _DETACHED_TASK_WORKERS.append(worker)
+                    from openbench.gui.widgets._task_worker import detach_worker
 
-                    def _forget_worker():
-                        try:
-                            _DETACHED_TASK_WORKERS.remove(worker)
-                        except ValueError:
-                            pass
-
-                    worker.finished.connect(_forget_worker)
+                    detach_worker(worker, _DETACHED_TASK_WORKERS)
         self._conda_create_worker = None
         dialog = getattr(self, "_conda_create_dialog", None)
         self._conda_create_dialog = None
@@ -1487,8 +1569,26 @@ class RemoteConfigWidget(QWidget):
             except RuntimeError:
                 pass
 
+    def _cleanup_install_worker(self, detach: bool = False):
+        """Disconnect a long-running OpenBench install/update worker from this widget."""
+        worker = getattr(self, "_install_worker", None)
+        if worker is not None:
+            for signal in (worker.line, worker.finished_with_result, worker.failed):
+                try:
+                    signal.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+            if worker.isRunning():
+                worker.requestInterruption()
+                if detach:
+                    from openbench.gui.widgets._task_worker import detach_worker
+
+                    detach_worker(worker, _DETACHED_TASK_WORKERS)
+        self._install_worker = None
+
     def closeEvent(self, event):
         self._cleanup_conda_create_worker(detach=True)
+        self._cleanup_install_worker(detach=True)
         super().closeEvent(event)
 
     def _infer_conda_from_python(self, python_path: str):
@@ -1534,37 +1634,33 @@ class RemoteConfigWidget(QWidget):
 
     def _browse_openbench(self):
         """Open remote file browser to select OpenBench installation path."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        from openbench.gui import path_utils
 
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
             return
 
-        # Get home directory as start path
-        try:
-            home = self._ssh_manager._get_home_dir()
-        except Exception as e:
-            logger.debug("Failed to get remote home directory: %s", e)
-            home = "/"
-
-        # Create dialog with remote file browser
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Select OpenBench Directory on Remote Server")
-        dialog.resize(500, 400)
-
-        layout = QVBoxLayout(dialog)
-        browser = RemoteFileBrowser(self._ssh_manager, home, dialog, select_dirs=True)
-        layout.addWidget(browser)
-
-        def on_file_selected(path):
+        home = path_utils.remote_home_dir(self._ssh_manager)
+        path = path_utils.pick_remote_path(
+            self._ssh_manager, self, "Select OpenBench Directory on Remote Server", home, select_dirs=True
+        )
+        if path:
             self.openbench_input.setText(path)
-            dialog.accept()
-
-        browser.file_selected.connect(on_file_selected)
-
-        dialog.exec()
 
     def _install_openbench(self):
+        """Install OpenBench on remote server (re-entrancy-guarded entry point)."""
+        if getattr(self, "_install_flow_active", False):
+            return
+        self._install_flow_active = True
+        self.btn_install_ob.setEnabled(False)
+        try:
+            self._install_openbench_flow()
+        finally:
+            self._install_flow_active = False
+            if getattr(self, "_install_worker", None) is None:
+                self.btn_install_ob.setEnabled(True)
+
+    def _install_openbench_flow(self):
         """Install OpenBench on remote server."""
         from PySide6.QtWidgets import (
             QDialog,
@@ -1575,7 +1671,6 @@ class RemoteConfigWidget(QWidget):
             QLabel,
             QRadioButton,
             QButtonGroup,
-            QApplication,
         )
 
         if not self._ssh_manager or not self._ssh_manager.is_connected:
@@ -1586,7 +1681,7 @@ class RemoteConfigWidget(QWidget):
         install_path = self.openbench_input.text().strip()
         if not install_path:
             try:
-                home = self._ssh_manager._get_home_dir()
+                home = call_responsive(self._ssh_manager._get_home_dir)
                 install_path = f"{home}/OpenBench"
                 self.openbench_input.setText(install_path)
             except Exception as e:
@@ -1595,7 +1690,7 @@ class RemoteConfigWidget(QWidget):
                 return
 
         # Check if git is available
-        stdout, stderr, exit_code = self._ssh_manager.execute("which git", timeout=10)
+        stdout, stderr, exit_code = execute_responsive(self._ssh_manager, "which git", timeout=10)
         if exit_code != 0:
             QMessageBox.warning(self, "Error", "Git is not installed on the remote server. Please install git first.")
             return
@@ -1607,14 +1702,14 @@ class RemoteConfigWidget(QWidget):
         except ValueError as exc:
             QMessageBox.warning(self, "Invalid Path", str(exc))
             return
-        stdout, stderr, exit_code = self._ssh_manager.execute(
-            f"test -d {quoted_install_path} && echo exists", timeout=10
+        stdout, stderr, exit_code = execute_responsive(
+            self._ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
         )
         if "exists" in stdout:
             # Check if it's a git repository
             quoted_git_dir = _safe_remote_path(f"{install_path}/.git")
-            stdout2, stderr2, exit_code2 = self._ssh_manager.execute(
-                f"test -d {quoted_git_dir} && echo is_git", timeout=10
+            stdout2, stderr2, exit_code2 = execute_responsive(
+                self._ssh_manager, f"test -d {quoted_git_dir} && echo is_git", timeout=10
             )
             if "is_git" in stdout2:
                 # It's a git repo, offer update
@@ -1640,8 +1735,8 @@ class RemoteConfigWidget(QWidget):
                 )
                 if reply == QMessageBox.Yes:
                     # Delete the directory first (path already validated above)
-                    stdout3, stderr3, exit_code3 = self._ssh_manager.execute(
-                        f"rm -rf {quoted_install_path}", timeout=30
+                    stdout3, stderr3, exit_code3 = execute_responsive(
+                        self._ssh_manager, f"rm -rf {quoted_install_path}", timeout=30
                     )
                     if exit_code3 != 0:
                         QMessageBox.warning(self, "Error", f"Failed to delete directory:\n{stderr3}")
@@ -1689,7 +1784,8 @@ class RemoteConfigWidget(QWidget):
             repo_url = None  # Not needed for update
 
         # Progress dialog
-        progress_dialog = QDialog(self)
+        progress_dialog = _InstallProgressDialog(self)
+        self._install_progress_dialog = progress_dialog
         progress_dialog.setWindowTitle("Installing OpenBench" if not is_update else "Updating OpenBench")
         progress_dialog.resize(600, 400)
         progress_layout = QVBoxLayout(progress_dialog)
@@ -1708,109 +1804,101 @@ class RemoteConfigWidget(QWidget):
         progress_layout.addWidget(close_btn)
 
         progress_dialog.show()
-        QApplication.processEvents()
 
         # Run installation
-        try:
-            self.btn_install_ob.setEnabled(False)
+        self.btn_install_ob.setEnabled(False)
 
-            if is_update:
-                cmd = f"cd {quoted_install_path} && git pull --ff-only 2>&1"
-                status_label.setText("Running git pull...")
-            else:
-                # repo_url comes from a fixed string (radio button choice),
-                # but quote it anyway in case the source ever becomes
-                # user-editable.
-                quoted_repo_url = shlex.quote(repo_url)
-                cmd = f"git clone --progress {quoted_repo_url} {quoted_install_path} 2>&1"
-                status_label.setText(f"Cloning from {repo_url}...")
+        if is_update:
+            cmd = f"cd {quoted_install_path} && git pull --ff-only 2>&1"
+            status_label.setText("Running git pull...")
+        else:
+            # repo_url comes from a fixed string (radio button choice),
+            # but quote it anyway in case the source ever becomes
+            # user-editable.
+            quoted_repo_url = shlex.quote(repo_url)
+            cmd = f"git clone --progress {quoted_repo_url} {quoted_install_path} 2>&1"
+            status_label.setText(f"Cloning from {repo_url}...")
 
-            QApplication.processEvents()
+        def finish_install():
+            self.btn_install_ob.setEnabled(True)
+            close_btn.setEnabled(True)
+            progress_dialog.allow_close = True
+            self._install_worker = None
 
-            # Execute and capture output
-            stdout, stderr, exit_code = self._ssh_manager.execute(cmd, timeout=300)
+        def start_install_worker(command: str, timeout: int, on_done):
+            output_text.append(f"$ {command}\n")
+            # Deliberately unparented (like the conda-create worker): a child
+            # QThread would be destroyed with the widget mid-run, aborting the
+            # app. Lifetime is held by self._install_worker and, on detach,
+            # by _DETACHED_TASK_WORKERS.
+            worker = SshExecuteWorker(self._ssh_manager, command, timeout=timeout)
+            self._install_worker = worker
+            worker.line.connect(lambda line: output_text.append(str(line).rstrip("\n")))
+            worker.finished_with_result.connect(on_done)
+            worker.failed.connect(on_install_failed)
+            worker.finished.connect(worker.deleteLater)
+            worker.start()
 
-            # Display output
-            output = stdout + stderr
-            output_text.setPlainText(output)
+        def on_install_failed(message: str):
+            output_text.append(f"\nError: {message}")
+            status_label.setText("✗ Error occurred!")
+            status_label.setStyleSheet("color: red; font-weight: bold;")
+            finish_install()
 
+        def on_deps_done(exit_code: int, _stdout: str, _stderr: str):
             if exit_code == 0:
-                status_label.setText("✓ Clone successful! Checking dependencies...")
-                status_label.setStyleSheet("color: green;")
-                QApplication.processEvents()
+                status_label.setText("✓ Installation complete with all dependencies!")
+                status_label.setStyleSheet("color: green; font-weight: bold;")
+            else:
+                status_label.setText("⚠ Repository ready but 'pip install -e' failed — see log above")
+                status_label.setStyleSheet("color: orange; font-weight: bold;")
+            finish_install()
 
-                # Check and install dependencies using conda
+        def on_git_done(exit_code: int, _stdout: str, _stderr: str):
+            if exit_code != 0:
+                status_label.setText("✗ Installation failed!" if not is_update else "✗ Update failed!")
+                status_label.setStyleSheet("color: red; font-weight: bold;")
+                finish_install()
+                return
+
+            status_label.setText("✓ Repository ready! Checking dependencies...")
+            status_label.setStyleSheet("color: green;")
+
+            try:
+                # Install the package and its dependencies into the selected
+                # interpreter's environment. The repo declares dependencies in
+                # pyproject.toml (there is no requirements.yml), so
+                # `pip install -e` is the one step that makes openbench
+                # importable AND pulls xarray/netCDF4 for remote scans/runs.
                 install_path = self.openbench_input.text().strip()
                 python_path = self.python_combo.currentText().strip()
 
-                # Determine conda path from python path
-                conda_exe = None
                 if python_path:
-                    conda_match = re.search(
-                        r"(.*/(miniconda|miniforge|anaconda|mambaforge)[^/]*)/bin/python", python_path
-                    )
-                    if conda_match:
-                        conda_base = conda_match.group(1)
-                        conda_exe = f"{conda_base}/bin/conda"
-
-                # Check if requirements.yml exists
-                req_file = f"{install_path}/requirements.yml"
-                quoted_req_file = _safe_remote_path(req_file)
-                stdout2, _, exit_code2 = self._ssh_manager.execute(
-                    f"test -f {quoted_req_file} && echo exists", timeout=10
-                )
-
-                if "exists" in stdout2 and conda_exe:
-                    output_text.append("\n\n=== Installing dependencies with conda ===\n")
-                    status_label.setText("Installing packages with conda...")
-                    QApplication.processEvents()
-
-                    # Get current conda environment name (extract from "envname (type)" format)
-                    conda_env_text = self.conda_combo.currentText()
-                    conda_env = conda_env_text.split()[0] if conda_env_text else ""
-                    quoted_conda_exe = shlex.quote(conda_exe)
-                    if conda_env and conda_env != "(Not":
-                        # Use conda env update to install from requirements.yml
-                        conda_cmd = (
-                            f"{quoted_conda_exe} env update -n {shlex.quote(conda_env)} -f {quoted_req_file} 2>&1"
-                        )
-                    else:
-                        # Install in base environment
-                        conda_cmd = f"{quoted_conda_exe} env update -f {quoted_req_file} 2>&1"
-
-                    output_text.append(f"$ {conda_cmd}\n")
-                    QApplication.processEvents()
-
-                    stdout3, stderr3, exit_code3 = self._ssh_manager.execute(conda_cmd, timeout=900)
-                    output_text.append(stdout3 + stderr3)
-
-                    if exit_code3 == 0:
-                        status_label.setText("✓ Installation complete with all dependencies!")
-                        status_label.setStyleSheet("color: green; font-weight: bold;")
-                    else:
-                        status_label.setText("⚠ Clone OK but some packages failed to install")
-                        status_label.setStyleSheet("color: orange; font-weight: bold;")
-                elif "exists" not in stdout2:
-                    output_text.append("\n\nNo requirements.yml found, skipping dependency installation.")
-                    status_label.setText("✓ Installation successful!")
-                    status_label.setStyleSheet("color: green; font-weight: bold;")
+                    output_text.append("\n\n=== Installing package and dependencies (pip install -e) ===\n")
+                    status_label.setText("Installing dependencies with pip...")
+                    pip_cmd = f"{shlex.quote(python_path)} -m pip install -e {_safe_remote_path(install_path)} 2>&1"
+                    start_install_worker(pip_cmd, 900, on_deps_done)
                 else:
-                    output_text.append("\n\nNo conda detected, skipping dependency installation.")
-                    status_label.setText("✓ Clone successful! Configure conda to install dependencies.")
+                    output_text.append(
+                        "\n\nNo Python environment selected — skipped dependency installation.\n"
+                        "Configure Python/conda above, then run Install/Update again."
+                    )
+                    status_label.setText("✓ Clone successful! Select a Python environment to install dependencies.")
                     status_label.setStyleSheet("color: green; font-weight: bold;")
-            else:
-                status_label.setText("✗ Installation failed!" if not is_update else "✗ Update failed!")
+                    finish_install()
+            except Exception as e:
+                output_text.append(f"\nError: {e}")
+                status_label.setText("✗ Error occurred!")
                 status_label.setStyleSheet("color: red; font-weight: bold;")
+                finish_install()
 
-        except Exception as e:
-            output_text.append(f"\nError: {e}")
-            status_label.setText("✗ Error occurred!")
-            status_label.setStyleSheet("color: red; font-weight: bold;")
-        finally:
-            self.btn_install_ob.setEnabled(True)
-            close_btn.setEnabled(True)
-
+        # Reclaim the dialog once the user closes it (allow_close gates Esc
+        # until the worker finishes); a plain deleteLater after exec() would
+        # be swept early by nested event loops when exec is non-blocking.
+        progress_dialog.finished.connect(progress_dialog.deleteLater)
+        start_install_worker(cmd, 300, on_git_done)
         progress_dialog.exec()
+        self._install_progress_dialog = None
 
     def get_ssh_manager(self) -> Optional[SSHManager]:
         """Get the current SSH manager instance.

@@ -23,3 +23,26 @@ class CallableWorker(QThread):
             self.finished_with_result.emit(self._func())
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
+
+
+def detach_worker(worker, registry: list) -> None:
+    """Keep an unparented running QThread alive until Qt emits finished.
+
+    Appends the worker to ``registry`` (a module-level list) and removes it
+    when the thread finishes. Without that reference, Python could garbage
+    collect a running QThread, which aborts the whole process.
+    """
+    if worker is None:
+        return
+    registry.append(worker)
+
+    def _forget():
+        try:
+            registry.remove(worker)
+        except ValueError:
+            pass
+
+    try:
+        worker.finished.connect(_forget)
+    except RuntimeError:
+        pass

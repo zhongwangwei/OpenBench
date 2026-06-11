@@ -543,6 +543,18 @@ class SSHManager:
             return self._jump_client
         return self._client
 
+    @staticmethod
+    def _shell_agnostic(command: str) -> str:
+        """Run ``command`` under sh regardless of the user's login shell.
+
+        Every command OpenBench builds uses POSIX sh syntax (&&, ||,
+        2>/dev/null, $(...)); a csh/tcsh login shell — common on HPC
+        clusters — would reject them. ``sh -c <quoted>`` is itself a plain
+        word-list command that every login shell can run, and the inner
+        command inherits the login shell's exported environment (PATH etc.).
+        """
+        return f"sh -c {shlex.quote(command)}"
+
     def execute(self, command: str, timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Execute command on remote server.
 
@@ -558,6 +570,7 @@ class SSHManager:
         Raises:
             SSHConnectionError: If not connected
         """
+        command = self._shell_agnostic(command)
         with self._state_lock:
             client = self.get_active_client()
             if client is None:
@@ -613,6 +626,7 @@ class SSHManager:
         command: str,
         callback: Optional[Callable[[str], None]] = None,
         total_timeout: Optional[float] = None,
+        should_abort: Optional[Callable[[], bool]] = None,
     ) -> Generator[str, None, int]:
         """Execute command and stream output (both stdout and stderr).
 
@@ -624,6 +638,9 @@ class SSHManager:
             total_timeout: Wall-clock deadline (seconds) for the entire
                 streaming session. Default None preserves prior unbounded
                 behavior; pass a number to abort if the remote process hangs.
+            should_abort: Optional probe checked every poll iteration; return
+                True to abort the stream (works even when the remote command
+                produces no output, unlike consumer-side per-line checks).
 
         Yields:
             Lines of output (from both stdout and stderr)
@@ -631,7 +648,10 @@ class SSHManager:
         Returns:
             Exit code
         """
+        import codecs
         import select
+
+        command = self._shell_agnostic(command)
 
         with self._state_lock:
             client = self.get_active_client()
@@ -643,6 +663,25 @@ class SSHManager:
         # on the same SSHManager (e.g. a stop-button kill from another
         # thread) can still open their own session.
 
+        # Each stream needs its own incremental decoder and line buffer: a
+        # 4096-byte recv can cut a multi-byte UTF-8 character (independent
+        # per-chunk decoding turns it into U+FFFD) and can cut a line in two
+        # (each fragment would be yielded as a separate "line").
+        stdout_decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        stderr_decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        buffers = {"stdout": "", "stderr": ""}
+
+        def _complete_lines(stream_name: str, text: str) -> list[str]:
+            buffer = buffers[stream_name] + text
+            if not buffer:
+                return []
+            lines = buffer.splitlines(keepends=True)
+            if lines[-1].endswith("\n"):
+                buffers[stream_name] = ""
+                return lines
+            buffers[stream_name] = lines[-1]
+            return lines[:-1]
+
         start = time.monotonic()
         try:
             channel.exec_command(command)
@@ -652,6 +691,12 @@ class SSHManager:
 
             # Read output in real-time from both stdout and stderr
             while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
+                if should_abort is not None and should_abort():
+                    try:
+                        channel.close()
+                    except Exception:
+                        pass
+                    raise SSHConnectionError("execute_stream aborted by caller")
                 if total_timeout is not None and (time.monotonic() - start) > total_timeout:
                     try:
                         channel.close()
@@ -667,33 +712,39 @@ class SSHManager:
                 select.select([channel], [], [], 0.1)
 
                 if channel.recv_ready():
-                    data = channel.recv(4096).decode("utf-8", errors="replace")
-                    for line in data.splitlines(keepends=True):
+                    for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(4096))):
                         if callback:
                             callback(line)
                         yield line
 
                 if channel.recv_stderr_ready():
-                    data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
-                    for line in data.splitlines(keepends=True):
+                    for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(4096))):
                         if callback:
                             callback(line)
                         yield line
 
             # Read any remaining data after exit
             while channel.recv_ready():
-                data = channel.recv(4096).decode("utf-8", errors="replace")
-                for line in data.splitlines(keepends=True):
+                for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(4096))):
                     if callback:
                         callback(line)
                     yield line
 
             while channel.recv_stderr_ready():
-                data = channel.recv_stderr(4096).decode("utf-8", errors="replace")
-                for line in data.splitlines(keepends=True):
+                for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(4096))):
                     if callback:
                         callback(line)
                     yield line
+
+            # Flush trailing partial lines (output without a final newline).
+            for tail in (
+                buffers["stdout"] + stdout_decoder.decode(b"", final=True),
+                buffers["stderr"] + stderr_decoder.decode(b"", final=True),
+            ):
+                if tail:
+                    if callback:
+                        callback(tail)
+                    yield tail
 
             return channel.recv_exit_status()
         finally:
