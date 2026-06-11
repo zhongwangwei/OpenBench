@@ -190,14 +190,39 @@ def test_ssh_execute_worker_passes_interruption_probe_to_stream():
     captured = {}
 
     class SSH:
-        def execute_stream(self, command, total_timeout=None, should_abort=None):
+        def execute_stream(self, command, total_timeout=None, should_abort=None, on_idle=None):
             captured["should_abort"] = should_abort
+            captured["on_idle"] = on_idle
             return iter(())
 
     worker = SshExecuteWorker(SSH(), "cmd", timeout=5)
     worker.run()
 
     assert callable(captured.get("should_abort"))
+    assert callable(captured.get("on_idle"))
+
+
+def test_execute_stream_calls_on_idle_during_silence():
+    """on_idle lets the consumer flush buffered output while the remote is quiet."""
+
+    class SilentThenDoneChannel(FakeChannel):
+        def __init__(self):
+            super().__init__([b"line\n"])
+            self._ticks = 0
+
+        def exit_status_ready(self):
+            self._ticks += 1
+            return self._ticks > 3  # three idle iterations, then finish
+
+        def recv_ready(self):
+            return bool(self._stdout) and self._ticks > 3
+
+    idle_calls = []
+    channel = SilentThenDoneChannel()
+
+    list(_manager_with_channel(channel).execute_stream("cmd", on_idle=lambda: idle_calls.append(1)))
+
+    assert idle_calls  # the quiet iterations fired on_idle
 
 
 def test_execute_stream_returns_exit_code():

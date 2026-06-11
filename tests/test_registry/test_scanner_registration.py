@@ -4243,3 +4243,17 @@ def test_finalize_descriptor_prefers_remote_fulllist_over_local_regeneration(tmp
     _finalize_descriptor(scanned, descriptor, prov={})
 
     assert descriptor["fulllist"] == "/remote/home/.openbench/station_lists/RemoteStations.csv"
+
+
+def test_resolve_station_nc_dir_shared_helper(tmp_path):
+    """The remote scanner and _finalize_descriptor share one nc_dir selector."""
+    from openbench.data.registry.scanner import resolve_station_nc_dir
+
+    # root/sub holds no nc; root/sub/dataset does -> dataset wins
+    dataset = tmp_path / "Q" / "dataset"
+    dataset.mkdir(parents=True)
+    (dataset / "s1.nc").write_bytes(b"x")
+
+    nc_dir = resolve_station_nc_dir(str(tmp_path), {"Streamflow": "Q"})
+
+    assert nc_dir == dataset

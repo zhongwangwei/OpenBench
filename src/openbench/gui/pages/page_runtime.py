@@ -22,8 +22,43 @@ from PySide6.QtWidgets import (
     QLineEdit,
 )
 
+from PySide6.QtCore import QThread, Signal
+
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.widgets.remote_config import RemoteConfigWidget
+from openbench.gui.widgets.remote_config import RemoteConfigWidget, _InstallProgressDialog
+
+_DETACHED_INSTALL_WORKERS = []
+
+
+class _LocalInstallWorker(QThread):
+    """Stream a local git install/update subprocess off the GUI thread."""
+
+    line = Signal(str)
+    finished_with_result = Signal(int)
+    failed = Signal(str)
+
+    def __init__(self, cmd, parent=None):
+        super().__init__(parent)
+        self._cmd = cmd
+
+    def run(self) -> None:  # pragma: no cover - exercised via GUI integration
+        import subprocess
+
+        try:
+            process = subprocess.Popen(
+                self._cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+            )
+            for line in process.stdout:
+                if self.isInterruptionRequested():
+                    process.terminate()
+                    break
+                self.line.emit(line.rstrip())
+            process.wait()
+            self.finished_with_result.emit(process.returncode)
+        except Exception as exc:
+            self.failed.emit(f"{type(exc).__name__}: {exc}")
+
+
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollComboBox
 from openbench.gui.path_utils import is_cross_platform_path
 
@@ -419,9 +454,7 @@ class PageRuntime(BasePage):
             QLabel,
             QRadioButton,
             QButtonGroup,
-            QApplication,
         )
-        import subprocess
 
         # Get installation path from input field
         install_path = self.local_openbench_input.text().strip()
@@ -503,13 +536,24 @@ class PageRuntime(BasePage):
             if radio_ssh.isChecked():
                 repo_url = "git@github.com:zhongwangwei/OpenBench.git"
 
-        # Progress dialog
-        progress_dialog = QDialog(self)
+        # Build the git command up front so failures surface before the dialog.
+        if is_update:
+            cmd = ["git", "-C", install_path, "pull", "--ff-only"]
+            starting = "Running git pull..."
+        else:
+            parent_dir = os.path.dirname(install_path)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+            cmd = ["git", "clone", "--progress", repo_url, install_path]
+            starting = f"Cloning from {repo_url}..."
+
+        # Progress dialog (Esc/close stays blocked until the worker finishes).
+        progress_dialog = _InstallProgressDialog(self)
         progress_dialog.setWindowTitle("Installing OpenBench" if not is_update else "Updating OpenBench")
         progress_dialog.resize(600, 400)
         progress_layout = QVBoxLayout(progress_dialog)
 
-        status_label = QLabel("Starting..." if not is_update else "Updating...")
+        status_label = QLabel(starting)
         progress_layout.addWidget(status_label)
 
         output_text = QTextEdit()
@@ -522,53 +566,52 @@ class PageRuntime(BasePage):
         close_btn.clicked.connect(progress_dialog.accept)
         progress_layout.addWidget(close_btn)
 
-        progress_dialog.show()
-        QApplication.processEvents()
+        output_text.append(f"$ {' '.join(cmd)}\n")
+        self.btn_install_openbench.setEnabled(False)
 
-        # Run installation
-        try:
-            self.btn_install_openbench.setEnabled(False)
-
-            if is_update:
-                cmd = ["git", "-C", install_path, "pull", "--ff-only"]
-                status_label.setText("Running git pull...")
-            else:
-                # Create parent directory if needed
-                parent_dir = os.path.dirname(install_path)
-                if parent_dir and not os.path.exists(parent_dir):
-                    os.makedirs(parent_dir, exist_ok=True)
-                cmd = ["git", "clone", "--progress", repo_url, install_path]
-                status_label.setText(f"Cloning from {repo_url}...")
-
-            output_text.append(f"$ {' '.join(cmd)}\n")
-            QApplication.processEvents()
-
-            # Run git command
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-
-            for line in process.stdout:
-                output_text.append(line.rstrip())
-                QApplication.processEvents()
-
-            process.wait()
-
-            if process.returncode == 0:
+        def finish(returncode: int):
+            if returncode == 0:
                 status_label.setText("✓ Installation successful!" if not is_update else "✓ Update successful!")
                 status_label.setStyleSheet("color: green; font-weight: bold;")
                 output_text.append("\n\nOpenBench installed successfully!")
             else:
                 status_label.setText("✗ Installation failed!" if not is_update else "✗ Update failed!")
                 status_label.setStyleSheet("color: red; font-weight: bold;")
-
-        except Exception as e:
-            output_text.append(f"\nError: {e}")
-            status_label.setText("✗ Error occurred!")
-            status_label.setStyleSheet("color: red; font-weight: bold;")
-        finally:
             self.btn_install_openbench.setEnabled(True)
             close_btn.setEnabled(True)
+            progress_dialog.allow_close = True
+            self._local_install_worker = None
 
+        def fail(message: str):
+            output_text.append(f"\nError: {message}")
+            status_label.setText("✗ Error occurred!")
+            status_label.setStyleSheet("color: red; font-weight: bold;")
+            self.btn_install_openbench.setEnabled(True)
+            close_btn.setEnabled(True)
+            progress_dialog.allow_close = True
+            self._local_install_worker = None
+
+        worker = _LocalInstallWorker(cmd)
+        self._local_install_worker = worker
+        worker.line.connect(lambda text: output_text.append(text))
+        worker.finished_with_result.connect(finish)
+        worker.failed.connect(fail)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+        progress_dialog.finished.connect(progress_dialog.deleteLater)
+        progress_dialog.show()
         progress_dialog.exec()
+
+    def closeEvent(self, event):
+        worker = getattr(self, "_local_install_worker", None)
+        if worker is not None and worker.isRunning():
+            from openbench.gui.widgets._task_worker import detach_worker
+
+            worker.requestInterruption()
+            detach_worker(worker, _DETACHED_INSTALL_WORKERS)
+            self._local_install_worker = None
+        super().closeEvent(event)
 
     def _refresh_conda(self):
         """Refresh the list of available conda environments."""

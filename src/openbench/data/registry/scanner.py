@@ -2396,17 +2396,7 @@ def _finalize_descriptor(
             descriptor["fulllist"] = scanned.remote_fulllist
             return
 
-        nc_dir = _expand_path(scanned.root_dir)
-        if scanned.variables:
-            first_sub = next(iter(scanned.variables.values()), "")
-            candidate = _expand_path(scanned.root_dir) / first_sub
-            if candidate.is_dir():
-                if _glob_nc(candidate):
-                    nc_dir = candidate
-                else:
-                    ds_sub = candidate / "dataset"
-                    if ds_sub.is_dir() and _glob_nc(ds_sub):
-                        nc_dir = ds_sub
+        nc_dir = resolve_station_nc_dir(scanned.root_dir, scanned.variables)
         if _glob_nc(nc_dir):
             try:
                 if station_list_dir is None:
@@ -2419,6 +2409,27 @@ def _finalize_descriptor(
                 descriptor["fulllist"] = _portable_path(output_csv)
             except Exception as e:
                 logger.warning("Failed to generate station list for %s: %s", scanned.name, e)
+
+
+def resolve_station_nc_dir(root_dir: str, variables) -> Path:
+    """Pick the directory holding a station dataset's NetCDF files.
+
+    Tries the root, then the first variable's sub_dir, then that sub_dir's
+    ``dataset`` child. Shared by local registration and the remote scanner
+    so both agree on the station layout.
+    """
+    nc_dir = _expand_path(root_dir)
+    if variables:
+        first_sub = next(iter(variables.values()), "")
+        candidate = _expand_path(root_dir) / first_sub
+        if candidate.is_dir():
+            if _glob_nc(candidate):
+                nc_dir = candidate
+            else:
+                ds_sub = candidate / "dataset"
+                if ds_sub.is_dir() and _glob_nc(ds_sub):
+                    nc_dir = ds_sub
+    return nc_dir
 
 
 def _fulllist_path_exists(path_value: str, *roots: str | None) -> bool:

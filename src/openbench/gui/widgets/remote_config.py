@@ -76,6 +76,7 @@ from openbench.gui.widgets._ssh_worker import (
     call_responsive,
     execute_responsive,
 )
+from openbench.gui.widgets._task_worker import CallableWorker
 from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.remote.credentials import CredentialManager, CredentialStorageError
 
@@ -1581,8 +1582,6 @@ class RemoteConfigWidget(QWidget):
         status_label.setText(f"Creating '{env_name}' environment with Python 3.12...")
         if env_exists:
             output_text.append(f"Will delete existing '{env_name}' before creating it.\n")
-
-        from openbench.gui.widgets._task_worker import CallableWorker
 
         worker = CallableWorker(create_env_task)
         worker_box["worker"] = worker

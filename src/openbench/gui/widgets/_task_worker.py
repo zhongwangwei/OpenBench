@@ -9,10 +9,12 @@ from PySide6.QtCore import QThread, Signal
 
 
 class CallableWorker(QThread):
-    """Run a callable in a QThread and emit its return value or exception text."""
+    """Run a callable in a QThread and emit its return value or exception."""
 
     finished_with_result = Signal(object)
     failed = Signal(str)
+    # The raw exception, for callers (e.g. call_responsive) that re-raise it.
+    failed_with_exception = Signal(object)
 
     def __init__(self, func: Callable[[], Any], parent=None):
         super().__init__(parent)
@@ -22,6 +24,7 @@ class CallableWorker(QThread):
         try:
             self.finished_with_result.emit(self._func())
         except Exception as exc:
+            self.failed_with_exception.emit(exc)
             self.failed.emit(f"{type(exc).__name__}: {exc}")
 
 

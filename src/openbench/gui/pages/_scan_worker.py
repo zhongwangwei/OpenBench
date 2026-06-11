@@ -85,22 +85,15 @@ except ImportError:  # older remote checkout: scan still works, inspection degra
 
 try:
     from openbench.data.coordinates import glob_nc as _glob_nc
-    from openbench.data.registry.scanner import generate_station_list
+    from openbench.data.registry.scanner import generate_station_list, resolve_station_nc_dir
 except ImportError:  # older remote checkout: station fulllist degrades
-    generate_station_list = _glob_nc = None
+    generate_station_list = _glob_nc = resolve_station_nc_dir = None
 
 
 def _station_fulllist(variant):
-    if generate_station_list is None or _expand_path is None:
+    if generate_station_list is None or resolve_station_nc_dir is None:
         return ""
-    nc_dir = _expand_path(variant.root_dir)
-    first_sub = next(iter(variant.variables.values()), "")
-    if first_sub:
-        candidate = _expand_path(variant.root_dir) / first_sub
-        if candidate.is_dir() and _glob_nc(candidate):
-            nc_dir = candidate
-        elif (candidate / "dataset").is_dir() and _glob_nc(candidate / "dataset"):
-            nc_dir = candidate / "dataset"
+    nc_dir = resolve_station_nc_dir(variant.root_dir, variant.variables)
     if not _glob_nc(nc_dir):
         return ""
     import pathlib

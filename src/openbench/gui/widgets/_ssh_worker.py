@@ -92,10 +92,11 @@ class SshExecuteWorker(QThread):  # type: ignore[misc]
                         self._command,
                         total_timeout=self._timeout,
                         should_abort=self.isInterruptionRequested,
+                        on_idle=_flush_lines,
                     )
                 except TypeError:
-                    # Older/fake managers without the should_abort probe;
-                    # interruption then only lands between output lines.
+                    # Older/fake managers without the new kwargs; interruption
+                    # and idle-flush then only land between output lines.
                     stream = self._ssh_manager.execute_stream(self._command, total_timeout=self._timeout)
                 while True:
                     if self.isInterruptionRequested():
@@ -134,24 +135,6 @@ class SshExecuteWorker(QThread):  # type: ignore[misc]
             self.failed.emit(f"{type(exc).__name__}: {exc}")
 
 
-class _CallableWorker(QThread):  # type: ignore[misc]
-    """Run an arbitrary callable in a background thread for call_responsive."""
-
-    if Signal is not None:  # only define when Qt is available
-        done = Signal(object)
-        failed = Signal(object)
-
-    def __init__(self, func, parent=None):
-        super().__init__(parent)
-        self._func = func
-
-    def run(self) -> None:
-        try:
-            self.done.emit(self._func())
-        except Exception as exc:
-            self.failed.emit(exc)
-
-
 def call_responsive(func):
     """Run ``func`` on a worker thread while keeping the GUI event loop alive.
 
@@ -171,11 +154,13 @@ def call_responsive(func):
     if app is None or QThread.currentThread() != app.thread():
         return func()
 
+    from openbench.gui.widgets._task_worker import CallableWorker
+
     result: dict = {}
     loop = QEventLoop()
-    worker = _CallableWorker(func)
-    worker.done.connect(lambda value: result.setdefault("value", value))
-    worker.failed.connect(lambda exc: result.setdefault("error", exc))
+    worker = CallableWorker(func)
+    worker.finished_with_result.connect(lambda value: result.setdefault("value", value))
+    worker.failed_with_exception.connect(lambda exc: result.setdefault("error", exc))
     worker.finished.connect(loop.quit)
     worker.start()
     loop.exec()

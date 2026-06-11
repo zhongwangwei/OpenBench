@@ -158,10 +158,9 @@ def test_gui_modules_have_no_main_thread_ssh_band_aids():
     from pathlib import Path
 
     gui_root = Path("src/openbench/gui")
-    # page_runtime's remaining processEvents pumps a LOCAL subprocess install
-    # loop (not SSH) — tracked separately. _ssh_worker only MENTIONS the
-    # pattern in its docstring (it is the replacement for it).
-    process_events_allowlist = {"page_runtime.py", "_ssh_worker.py"}
+    # _ssh_worker only MENTIONS the pattern in its docstring (it is the
+    # replacement for it).
+    process_events_allowlist = {"_ssh_worker.py"}
     # Raw executes allowed only where the call already runs off the GUI
     # thread or is the responsive layer itself.
     raw_execute_allowlist = {"_ssh_worker.py", "remote_config.py", "remote_runner.py", "remote_python.py"}
@@ -274,7 +273,7 @@ def test_create_conda_env_uses_guarded_dialog_and_blocks_reentry(qapp, monkeypat
         def requestInterruption(self):
             pass
 
-    monkeypatch.setattr("openbench.gui.widgets._task_worker.CallableWorker", FakeCallable)
+    monkeypatch.setattr(remote_config, "CallableWorker", FakeCallable)
     monkeypatch.setattr(remote_config.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
     monkeypatch.setattr(remote_config.QMessageBox, "information", staticmethod(lambda *a, **k: None))
 

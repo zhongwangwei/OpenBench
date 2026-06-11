@@ -66,6 +66,49 @@ def test_remote_reference_scan_rehydrates_dataset_groups():
     assert timeout == 900
 
 
+def test_nc_importer_variable_rows_shared_between_local_and_remote(qapp):
+    """One extraction function backs both the local table and the remote script."""
+    import xarray as xr
+
+    from openbench.gui.widgets import nc_importer
+
+    ds = xr.Dataset(
+        {"tas": (("time", "lat", "lon"), [[[1.0, 2.0, 3.0]]])},
+        coords={"time": [0], "lat": [0.0], "lon": [0.0, 1.0, 2.0]},
+    )
+    ds["tas"].attrs["units"] = "K"
+
+    rows = nc_importer._variable_rows(ds)
+
+    tas = next(r for r in rows if r["name"] == "tas")
+    assert tas["units"] == "K"
+    assert tas["is_coord"] is False
+    # The remote inspector script embeds this exact function's source instead
+    # of re-hardcoding the extraction rules.
+    dlg = nc_importer.NCImporterDialog(ssh_manager=FakeSSH("{}"))
+    monkeyed = {}
+    dlg._python_path = ""
+    dlg._conda_env = ""
+
+    import openbench.gui.remote_python as rp
+
+    original = rp.run_remote_python_json
+    rp.run_remote_python_json = lambda ssh, script, **kw: (
+        monkeyed.setdefault("script", script)
+        or {
+            "path": "x",
+            "data_var_count": 0,
+            "variables": [],
+        }
+    )
+    try:
+        dlg._open_remote_file("/remote/x.nc")
+    finally:
+        rp.run_remote_python_json = original
+
+    assert "def _variable_rows" in monkeyed["script"]
+
+
 def test_nc_importer_opens_remote_netcdf_metadata(qapp):
     from openbench.gui.widgets.nc_importer import NCImporterDialog
 

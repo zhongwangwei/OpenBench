@@ -55,6 +55,39 @@ _COORD_NAMES = frozenset(
 )
 
 
+def _variable_rows(ds, coord_names=None):
+    """Extract import-table rows from an xarray Dataset.
+
+    Shared by the local table and the remote inspector script (embedded via
+    its source) so both classify variables and coordinates identically.
+    """
+    coord_names = (coord_names or set()) | set(str(name) for name in ds.coords) | _COORD_NAMES
+    rows = []
+    for name, var in ds.data_vars.items():
+        rows.append(
+            {
+                "name": str(name),
+                "dtype": str(var.dtype),
+                "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
+                "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+                "is_coord": str(name).lower() in coord_names or str(name) in coord_names,
+            }
+        )
+    for name, var in ds.coords.items():
+        if name in ds.data_vars or len(var.dims) <= 1:
+            continue
+        rows.append(
+            {
+                "name": str(name),
+                "dtype": str(var.dtype),
+                "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
+                "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+                "is_coord": True,
+            }
+        )
+    return rows
+
+
 class NCImporterDialog(QDialog):
     """Dialog to open a NetCDF file and select variables for import.
 
@@ -215,37 +248,30 @@ class NCImporterDialog(QDialog):
         return self._ssh_manager is not None and getattr(self._ssh_manager, "is_connected", False)
 
     def _open_remote_file(self, path: str) -> dict:
+        import inspect
+        import textwrap
+
         from openbench.gui.remote_python import run_remote_python_json
+
+        # Embed the exact local extraction function so remote and local
+        # imports classify variables identically.
+        rows_src = textwrap.dedent(inspect.getsource(_variable_rows))
+        coord_literal = json.dumps(sorted(_COORD_NAMES))
 
         script = f"""
 import json
 import xarray as xr
 
-path = {json.dumps(path)}
-coord_names = set({json.dumps(sorted(_COORD_NAMES))})
+_COORD_NAMES = set({coord_literal})
 
-variables = []
-with xr.open_dataset(path) as ds:
-    coord_names.update(str(name) for name in ds.coords)
-    for name, var in ds.data_vars.items():
-        variables.append({{
-            "name": str(name),
-            "dtype": str(var.dtype),
-            "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
-            "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
-            "is_coord": str(name).lower() in coord_names or str(name) in coord_names,
-        }})
-    for name, var in ds.coords.items():
-        if name in ds.data_vars or len(var.dims) <= 1:
-            continue
-        variables.append({{
-            "name": str(name),
-            "dtype": str(var.dtype),
-            "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
-            "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
-            "is_coord": True,
-        }})
-    payload = {{"path": path, "data_var_count": len(ds.data_vars), "variables": variables}}
+{rows_src}
+
+with xr.open_dataset({json.dumps(path)}) as ds:
+    payload = {{
+        "path": {json.dumps(path)},
+        "data_var_count": len(ds.data_vars),
+        "variables": _variable_rows(ds),
+    }}
 print(json.dumps(payload))
 """
         return run_remote_python_json(
@@ -258,31 +284,7 @@ print(json.dumps(payload))
 
     def _populate_table(self, ds):
         """Fill the table from an xarray Dataset."""
-        rows = []
-        coord_names = set(ds.coords) | _COORD_NAMES
-        for name, var in ds.data_vars.items():
-            rows.append(
-                {
-                    "name": str(name),
-                    "dtype": str(var.dtype),
-                    "dims": list(zip(var.dims, var.shape)),
-                    "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
-                    "is_coord": name.lower() in coord_names or name in coord_names,
-                }
-            )
-        for name, var in ds.coords.items():
-            if name in ds.data_vars or len(var.dims) <= 1:
-                continue
-            rows.append(
-                {
-                    "name": str(name),
-                    "dtype": str(var.dtype),
-                    "dims": list(zip(var.dims, var.shape)),
-                    "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
-                    "is_coord": True,
-                }
-            )
-        self._populate_rows(rows)
+        self._populate_rows(_variable_rows(ds))
 
     def _populate_rows(self, rows: list[dict]):
         """Fill the table from serialized NetCDF variable metadata."""

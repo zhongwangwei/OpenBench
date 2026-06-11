@@ -641,6 +641,7 @@ class SSHManager:
         callback: Optional[Callable[[str], None]] = None,
         total_timeout: Optional[float] = None,
         should_abort: Optional[Callable[[], bool]] = None,
+        on_idle: Optional[Callable[[], None]] = None,
     ) -> Generator[str, None, int]:
         """Execute command and stream output (both stdout and stderr).
 
@@ -725,17 +726,25 @@ class SSHManager:
                 # arrives or the timeout elapses, instead of busy-looping.
                 select.select([channel], [], [], 0.1)
 
+                got_data = False
                 if channel.recv_ready():
+                    got_data = True
                     for line in _complete_lines("stdout", stdout_decoder.decode(channel.recv(65536))):
                         if callback:
                             callback(line)
                         yield line
 
                 if channel.recv_stderr_ready():
+                    got_data = True
                     for line in _complete_lines("stderr", stderr_decoder.decode(channel.recv_stderr(65536))):
                         if callback:
                             callback(line)
                         yield line
+
+                # During output lulls, let the consumer flush its line batch
+                # so a burst followed by silence does not sit invisibly.
+                if not got_data and on_idle is not None:
+                    on_idle()
 
             # Read any remaining data after exit
             while channel.recv_ready():
