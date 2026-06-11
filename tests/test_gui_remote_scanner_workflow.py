@@ -717,3 +717,30 @@ def test_registry_scan_starts_remote_worker(monkeypatch):
         "openbench_path": "/remote/openbench",
     }
     assert captured["started"] is True
+
+
+def test_model_editor_inplace_save_expands_tilde_remote_path(qapp, monkeypatch):
+    """Editing '~/OpenBench/.../Model.yaml' remotely and clicking Save must
+    write through "$HOME", not a shlex-quoted literal tilde."""
+    from openbench.gui.widgets import model_definition_editor as mde
+
+    commands = []
+
+    class SaveSSH:
+        is_connected = True
+
+        def execute(self, command, timeout=None):
+            commands.append(command)
+            return "", "", 0
+
+    monkeypatch.setattr(mde.QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(mde.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+
+    dlg = mde.ModelDefinitionEditor(file_path="~/OpenBench/nml/Mod/CoLM.yaml", ssh_manager=SaveSSH())
+    dlg.model_name.setText("CoLM")
+
+    dlg._save_inplace()
+
+    assert commands
+    assert '> "$HOME"/OpenBench/nml/Mod/CoLM.yaml' in commands[0]
+    assert "'~/" not in commands[0]

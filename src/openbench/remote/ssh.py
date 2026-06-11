@@ -22,6 +22,21 @@ from paramiko.hostkeys import HostKeys
 logger = logging.getLogger(__name__)
 
 
+def quote_remote_path(path: str) -> str:
+    """shlex-quote a remote path, expanding a leading tilde to $HOME.
+
+    Plain ``shlex.quote('~/x')`` produces ``'~/x'`` — the shell then looks
+    for a literal ``~`` directory. ``~/...`` is the documented remote
+    default for openbench_path, so every quoted user path must go through
+    this helper.
+    """
+    if path == "~":
+        return '"$HOME"'
+    if path.startswith("~/"):
+        return '"$HOME"' + shlex.quote(path[1:])
+    return shlex.quote(path)
+
+
 class SSHConnectionError(Exception):
     """SSH connection error."""
 
@@ -1060,13 +1075,13 @@ class SSHManager:
                 module-import probe (defaults to "python3").
         """
         # Editable / repo-checkout marker first (cheap, no Python startup).
-        quoted_path = shlex.quote(path)
-        cli_marker = shlex.quote(f"{path}/src/openbench/cli/main.py")
+        quoted_path = quote_remote_path(path)
+        cli_marker = quote_remote_path(f"{path}/src/openbench/cli/main.py")
         stdout, _, exit_code = self.execute(f"test -f {cli_marker} && echo exists", timeout=5)
         if exit_code == 0 and "exists" in stdout:
             return True
         # Fall back to actually importing the module from that cwd.
-        quoted_python = shlex.quote(python_path)
+        quoted_python = quote_remote_path(python_path)
         _, _, exit_code = self.execute(
             f"cd {quoted_path} && {quoted_python} -m openbench --help >/dev/null 2>&1",
             timeout=15,

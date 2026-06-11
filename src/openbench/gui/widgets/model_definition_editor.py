@@ -228,7 +228,7 @@ class ModelDefinitionEditor(QDialog):
 
             try:
                 encoded = base64.b64encode(yaml_content.encode("utf-8")).decode("ascii")
-                cmd = f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(self.file_path)}"
+                cmd = f"printf %s {shlex.quote(encoded)} | base64 -d > {quote_remote_path(self.file_path)}"
                 stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
 
                 if exit_code != 0:

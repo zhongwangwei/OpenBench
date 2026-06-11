@@ -7,6 +7,8 @@ Sync engine for remote storage with local caching.
 import posixpath
 import re
 import shlex
+
+from openbench.remote.ssh import quote_remote_path
 import threading
 import logging
 import time
@@ -257,7 +259,9 @@ class SyncEngine:
                 # Ensure remote directory exists
                 remote_dir = posixpath.dirname(remote_path)
                 if remote_dir:
-                    _stdout, stderr, exit_code = self._ssh.execute(f"mkdir -p {shlex.quote(remote_dir)}", timeout=10)
+                    _stdout, stderr, exit_code = self._ssh.execute(
+                        f"mkdir -p {quote_remote_path(remote_dir)}", timeout=10
+                    )
                     if exit_code != 0:
                         raise Exception(f"Create remote directory failed: {stderr}")
 
@@ -325,7 +329,7 @@ class SyncEngine:
         # Don't swallow stderr in the shell — surface it on failure so
         # callers can tell "permission denied" / "no such directory" apart
         # from an empty directory.
-        stdout, stderr, exit_code = self._ssh.execute(f"ls -1 {shlex.quote(remote_path)}", timeout=30)
+        stdout, stderr, exit_code = self._ssh.execute(f"ls -1 {quote_remote_path(remote_path)}", timeout=30)
         if exit_code != 0:
             raise IOError(
                 f"list_dir({remote_path!r}) failed (exit {exit_code}): "
@@ -342,7 +346,7 @@ class SyncEngine:
 
         remote_path = self._remote_path(path)
         stdout, stderr, exit_code = self._ssh.execute(
-            f"test -e {shlex.quote(remote_path)} && echo 'exists'", timeout=10
+            f"test -e {quote_remote_path(remote_path)} && echo 'exists'", timeout=10
         )
         return exit_code == 0 and "exists" in stdout
 
@@ -358,7 +362,7 @@ class SyncEngine:
         # Wrap the whole inner script with shlex.quote to survive single
         # quotes in base_dir (the previous f"bash -c '{cmd}'" form broke).
         inner = (
-            f"cd {shlex.quote(base_dir)} && shopt -s globstar nullglob && "
+            f"cd {quote_remote_path(base_dir)} && shopt -s globstar nullglob && "
             f'for f in {pattern}; do [ -f "$f" ] && echo "$f"; done'
         )
         stdout, stderr, exit_code = self._ssh.execute(f"bash -c {shlex.quote(inner)}", timeout=30)
@@ -369,7 +373,7 @@ class SyncEngine:
     def mkdir(self, path: str) -> None:
         """Create remote directory."""
         remote_path = self._remote_path(path)
-        _stdout, stderr, exit_code = self._ssh.execute(f"mkdir -p {shlex.quote(remote_path)}", timeout=10)
+        _stdout, stderr, exit_code = self._ssh.execute(f"mkdir -p {quote_remote_path(remote_path)}", timeout=10)
         if exit_code != 0:
             raise Exception(f"Create remote directory failed: {stderr}")
 
@@ -391,7 +395,7 @@ class SyncEngine:
         remote_root = posixpath.normpath(self._remote_dir)
         if remote_path == remote_root:
             raise ValueError("Refusing to delete remote project root")
-        quoted = shlex.quote(remote_path)
+        quoted = quote_remote_path(remote_path)
         # Probe existence first so we can distinguish "not there" (no-op,
         # like POSIX rm -f) from "could not delete" (permission etc.).
         _, _, exit_code = self._ssh.execute(f"test -e {quoted}", timeout=10)

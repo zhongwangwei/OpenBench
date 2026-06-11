@@ -11,19 +11,9 @@ from typing import Any
 _CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)")
 
 
-def quote_remote_path(path: str) -> str:
-    """shlex-quote a remote path, expanding a leading tilde to $HOME.
-
-    Plain ``shlex.quote('~/x')`` produces ``'~/x'`` — the shell then looks
-    for a literal ``~`` directory. ``~/...`` is the documented remote
-    default for openbench_path, so every quoted user path must go through
-    this helper.
-    """
-    if path == "~":
-        return '"$HOME"'
-    if path.startswith("~/"):
-        return '"$HOME"' + shlex.quote(path[1:])
-    return shlex.quote(path)
+# Canonical implementation lives in the remote layer so non-GUI modules
+# (sync engine, SSH manager) can use it; re-exported here for the GUI imports.
+from openbench.remote.ssh import quote_remote_path  # noqa: F401
 
 
 def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") -> str:

@@ -199,3 +199,34 @@ def test_delete_uses_explicit_file_or_recursive_directory_command():
         f"test -e {quoted}",
         f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi",
     ]
+
+
+def test_sync_engine_commands_expand_tilde_project_dir():
+    """A '~/OpenBench' remote project dir must reach the shell as "$HOME",
+    not a shlex-quoted literal tilde, across the SyncEngine command surface."""
+    from openbench.remote.sync import SyncEngine
+
+    commands = []
+
+    class TildeSSH:
+        is_connected = True
+
+        def execute(self, command, timeout=None):
+            commands.append(command)
+            return "", "", 0
+
+        def read_file(self, path):
+            return ""
+
+        def write_file(self, path, content):
+            return None
+
+    engine = SyncEngine(TildeSSH(), "~/OpenBench")
+    engine.mkdir("nml")
+    engine.exists("nml/main.yaml")
+    engine.list_dir("nml")
+
+    joined = "\n".join(commands)
+    assert commands
+    assert '"$HOME"/OpenBench' in joined
+    assert "'~/" not in joined

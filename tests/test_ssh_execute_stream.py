@@ -238,3 +238,22 @@ def test_execute_stream_returns_exit_code():
             break
 
     assert collected == ["done\n"]
+
+
+def test_check_openbench_installed_expands_tilde_paths():
+    """'~/OpenBench' is the documented default install path; quoting the
+    tilde literally makes the marker probe and import probe always fail."""
+    manager = SSHManager.__new__(SSHManager)
+    commands = []
+
+    def fake_execute(command, timeout=None):
+        commands.append(command)
+        return "", "", 1
+
+    manager.execute = fake_execute
+
+    manager.check_openbench_installed("~/OpenBench", python_path="~/miniconda3/bin/python")
+
+    joined = "\n".join(commands)
+    assert '"$HOME"/OpenBench' in joined
+    assert "'~/" not in joined
