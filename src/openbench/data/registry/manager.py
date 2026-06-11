@@ -59,6 +59,18 @@ def _get_user_dir() -> Path:
     return get_user_config_dir()
 
 
+def user_reference_catalog_path(user_dir: str | Path | None = None) -> Path:
+    """Return the user-overlay reference catalog path for ``user_dir``.
+
+    This is the single source for the catalog layout: writers that prepare a
+    catalog for another process (e.g. the smoke-test fixture) must use it so
+    they stay in sync with the registry's reader below.
+    """
+    if user_dir is None:
+        user_dir = get_user_config_dir()
+    return Path(user_dir) / "references" / "reference_catalog.yaml"
+
+
 def get_writable_model_catalog_path() -> Path:
     """Return the user overlay path for writing model catalog entries.
 
@@ -219,7 +231,7 @@ class RegistryManager:
 
         if user_dir.exists() and not _same_concrete_path(user_dir, REGISTRY_DIR):
             # ~/.openbench/references/reference_catalog.yaml + individual YAML files
-            self._merge_reference_catalog(user_dir / "references" / "reference_catalog.yaml")
+            self._merge_reference_catalog(user_reference_catalog_path(user_dir))
             self._merge_reference_dir(user_dir / "references")
             # ~/.openbench/models/model_catalog.yaml + individual YAML files
             self._merge_model_catalog(user_dir / "models" / "model_catalog.yaml")

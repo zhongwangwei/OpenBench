@@ -112,7 +112,12 @@ def _safe_extract_tar(archive_path: Path, destination: Path) -> None:
 
 
 def _write_reference_catalog(home: Path, reference_root: Path, station_lists: dict[str, Path]) -> Path:
-    catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
+    from openbench.config.user_settings import USER_CONFIG_DIR_NAME
+    from openbench.data.registry.manager import user_reference_catalog_path
+
+    # The smoke subprocess resolves this same path via OPENBENCH_HOME=<home>,
+    # so derive it from the registry helpers instead of duplicating the layout.
+    catalog_path = user_reference_catalog_path(home / USER_CONFIG_DIR_NAME)
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     catalog_path.write_text(
         "\n".join(
@@ -235,6 +240,7 @@ def _prepare_work_dir(work_dir: Path) -> tuple[Path, Path, Path]:
 def _run_openbench_subcommand(config_path: Path, home: Path, run_evaluation: bool) -> int:
     env = os.environ.copy()
     env["HOME"] = str(home)
+    env["OPENBENCH_HOME"] = str(home)
     env["OPENBENCH_REF_ROOT"] = str(config_path.parent / "Initial_test" / "Reference" / "Initial_test")
     command = [sys.executable, "-m", "openbench", "run" if run_evaluation else "check", str(config_path)]
     if run_evaluation:

@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 SETTINGS_FILE_NAME = "settings.yaml"
+USER_CONFIG_DIR_NAME = ".openbench"
 
 
 def resolve_home_dir() -> Path:
@@ -24,7 +25,7 @@ def resolve_home_dir() -> Path:
 
 def get_user_config_dir(user_dir: str | Path | None = None) -> Path:
     """Return the per-user OpenBench config directory."""
-    return Path(user_dir).expanduser() if user_dir is not None else resolve_home_dir() / ".openbench"
+    return Path(user_dir).expanduser() if user_dir is not None else resolve_home_dir() / USER_CONFIG_DIR_NAME
 
 
 def get_user_settings_path(user_dir: str | Path | None = None) -> Path:

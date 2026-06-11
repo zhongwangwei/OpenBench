@@ -65,6 +65,8 @@ def test_smoke_test_extracts_fixture_and_invokes_check(tmp_path, monkeypatch):
     assert Path(cmd[4]).is_file()
     assert kwargs["check"] is False
     assert kwargs["env"]["HOME"] == str(work_dir / "home")
+    # Path.home() ignores HOME on Windows, so the registry override must ride along.
+    assert kwargs["env"]["OPENBENCH_HOME"] == str(work_dir / "home")
 
     sample_root = work_dir / "Initial_test"
     assert (sample_root / "Reference" / "Initial_test" / "GLEAM4.2a_monthly").is_dir()

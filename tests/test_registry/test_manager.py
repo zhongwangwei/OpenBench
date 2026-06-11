@@ -1218,3 +1218,13 @@ def test_delete_builtin_reference_writes_tombstone_and_survives_reload(tmp_path,
     # A fresh manager (reload) must NOT resurrect the deleted built-in reference.
     reloaded = RegistryManager(user_dir=tmp_path)
     assert reloaded.get_reference(target) is None
+
+
+def test_user_reference_catalog_path_follows_openbench_home(tmp_path, monkeypatch):
+    """The smoke-test parent and the registry child must agree on this layout."""
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path / "home"))
+
+    from openbench.data.registry.manager import user_reference_catalog_path
+
+    expected = tmp_path / "home" / ".openbench" / "references" / "reference_catalog.yaml"
+    assert user_reference_catalog_path() == expected
