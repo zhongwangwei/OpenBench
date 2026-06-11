@@ -40,23 +40,37 @@ class _LocalInstallWorker(QThread):
     def __init__(self, cmd, parent=None):
         super().__init__(parent)
         self._cmd = cmd
+        self._process = None
+
+    def stop(self) -> None:
+        """Terminate the subprocess directly; a silent process never reaches
+        the per-line interruption check (readline blocks until output)."""
+        self.requestInterruption()
+        process = self._process
+        if process is not None:
+            try:
+                process.terminate()
+            except Exception:
+                pass
 
     def run(self) -> None:  # pragma: no cover - exercised via GUI integration
         import subprocess
 
         try:
-            process = subprocess.Popen(
+            self._process = subprocess.Popen(
                 self._cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
             )
-            for line in process.stdout:
+            for line in self._process.stdout:
                 if self.isInterruptionRequested():
-                    process.terminate()
+                    self._process.terminate()
                     break
                 self.line.emit(line.rstrip())
-            process.wait()
-            self.finished_with_result.emit(process.returncode)
+            self._process.wait()
+            self.finished_with_result.emit(self._process.returncode)
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
+        finally:
+            self._process = None
 
 
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollComboBox
@@ -593,6 +607,10 @@ class PageRuntime(BasePage):
 
         worker = _LocalInstallWorker(cmd)
         self._local_install_worker = worker
+        if not getattr(self, "_install_destroy_hooked", False):
+            # Embedded pages don't get closeEvent on app quit; destroyed does fire.
+            self.destroyed.connect(lambda *_: self._cleanup_local_install_worker(detach=True))
+            self._install_destroy_hooked = True
         worker.line.connect(lambda text: output_text.append(text))
         worker.finished_with_result.connect(finish)
         worker.failed.connect(fail)
@@ -603,14 +621,25 @@ class PageRuntime(BasePage):
         progress_dialog.show()
         progress_dialog.exec()
 
-    def closeEvent(self, event):
+    def _cleanup_local_install_worker(self, detach: bool = False):
+        """Disconnect a running local install worker from this page's UI."""
         worker = getattr(self, "_local_install_worker", None)
-        if worker is not None and worker.isRunning():
-            from openbench.gui.widgets._task_worker import detach_worker
+        if worker is not None:
+            for signal in (worker.line, worker.finished_with_result, worker.failed):
+                try:
+                    signal.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+            if worker.isRunning():
+                worker.stop()
+                if detach:
+                    from openbench.gui.widgets._task_worker import detach_worker
 
-            worker.requestInterruption()
-            detach_worker(worker, _DETACHED_INSTALL_WORKERS)
-            self._local_install_worker = None
+                    detach_worker(worker, _DETACHED_INSTALL_WORKERS)
+        self._local_install_worker = None
+
+    def closeEvent(self, event):
+        self._cleanup_local_install_worker(detach=True)
         super().closeEvent(event)
 
     def _refresh_conda(self):

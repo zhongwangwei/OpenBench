@@ -181,9 +181,37 @@ def test_conda_base_with_tilde_expands_to_remote_home():
     cmd = build_remote_python_command("print(1)", python_path="~/miniconda3/envs/ob/bin/python", conda_env="ob")
 
     # shlex-quoting a literal '~' would make the shell look for a directory
-    # named '~'; the conda base must expand to the remote $HOME instead.
+    # named '~'; the conda base AND the runner python must both expand to
+    # the remote $HOME.
     assert '. "$HOME"/miniconda3/etc/profile.d/conda.sh && conda activate ob && ' in cmd
-    assert "'~/miniconda3'" not in cmd
+    assert cmd.endswith('| base64 -d | "$HOME"/miniconda3/envs/ob/bin/python')
+    assert "'~/" not in cmd
+
+
+def test_runner_python_with_tilde_expands_without_conda_env():
+    from openbench.gui.remote_python import build_remote_python_command
+
+    cmd = build_remote_python_command("print(1)", python_path="~/venv/bin/python")
+
+    assert cmd.endswith('| base64 -d | "$HOME"/venv/bin/python')
+    assert "'~/" not in cmd
+
+
+def test_remote_run_command_expands_tilde_paths():
+    from openbench.gui.remote_runner import build_remote_run_command
+
+    cmd = build_remote_run_command(
+        python_path="~/miniconda3/envs/ob/bin/python",
+        openbench_path="~/OpenBench",
+        config_path="/tmp/openbench.yaml",
+        conda_env="",
+    )
+
+    # '~/OpenBench' is the documented remote default; a shlex-quoted literal
+    # tilde would make both cd and the interpreter path fail remotely.
+    assert 'cd "$HOME"/OpenBench && ' in cmd
+    assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
+    assert "'~/" not in cmd
 
 
 def test_remote_python_command_falls_back_to_login_shell_without_conda_base():

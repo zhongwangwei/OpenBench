@@ -11,6 +11,21 @@ from typing import Any
 _CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)")
 
 
+def quote_remote_path(path: str) -> str:
+    """shlex-quote a remote path, expanding a leading tilde to $HOME.
+
+    Plain ``shlex.quote('~/x')`` produces ``'~/x'`` — the shell then looks
+    for a literal ``~`` directory. ``~/...`` is the documented remote
+    default for openbench_path, so every quoted user path must go through
+    this helper.
+    """
+    if path == "~":
+        return '"$HOME"'
+    if path.startswith("~/"):
+        return '"$HOME"' + shlex.quote(path[1:])
+    return shlex.quote(path)
+
+
 def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") -> str:
     """Wrap a shell command so it runs inside the given conda environment.
 
@@ -26,14 +41,9 @@ def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") 
     q_env = shlex.quote(conda_env)
     match = _CONDA_BASE_PATTERN.search(python_path or "")
     if match:
-        base = match.group(1)
         # SSHManager wraps everything in `sh -c`, so use the POSIX dot
-        # command (`source` is a bashism that dash/ash reject) and expand a
-        # leading tilde to the remote $HOME (shlex would quote it literally).
-        if base == "~" or base.startswith("~/"):
-            q_base = '"$HOME"' + (shlex.quote(base[1:]) if len(base) > 1 else "")
-        else:
-            q_base = shlex.quote(base)
+        # command (`source` is a bashism that dash/ash reject).
+        q_base = quote_remote_path(match.group(1))
         return f". {q_base}/etc/profile.d/conda.sh && conda activate {q_env} && {inner}"
     return f"bash -l -c {shlex.quote(f'conda activate {q_env} && {inner}')}"
 
@@ -42,7 +52,7 @@ def build_remote_python_command(script: str, python_path: str = "", conda_env: s
     """Return a shell command that pipes ``script`` into remote Python safely."""
     python = python_path or "python3"
     script_b64 = base64.b64encode(script.encode("utf-8")).decode("ascii")
-    runner = f"printf %s {shlex.quote(script_b64)} | base64 -d | {shlex.quote(python)}"
+    runner = f"printf %s {shlex.quote(script_b64)} | base64 -d | {quote_remote_path(python)}"
     return wrap_with_conda_env(runner, python_path=python_path, conda_env=conda_env)
 
 

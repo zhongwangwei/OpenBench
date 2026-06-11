@@ -578,3 +578,58 @@ def test_install_openbench_skips_dependency_step_without_python_env(qapp, monkey
     assert len(FakeWorker.created) == 1  # no pip worker without a configured interpreter
     # And no leftover requirements.yml probe either.
     assert all("test -f" not in command for command, _timeout in widget._ssh_manager.execute_calls)
+
+
+def test_local_install_worker_stop_terminates_silent_process(qapp):
+    """A hung git process (no output) must die on stop(), not on the next line."""
+    import sys
+    import time
+
+    from openbench.gui.pages.page_runtime import _LocalInstallWorker
+
+    worker = _LocalInstallWorker([sys.executable, "-c", "import time; time.sleep(60)"])
+    worker.start()
+    time.sleep(0.3)  # let Popen start and block on readline
+
+    worker.stop()
+
+    assert worker.wait(5000), "worker did not exit promptly after stop()"
+
+
+def test_runtime_local_install_cleanup_disconnects_and_detaches(qapp):
+    from PySide6.QtCore import QObject, Signal
+
+    from openbench.gui.pages import page_runtime
+    from openbench.gui.pages.page_runtime import PageRuntime
+
+    class FakeWorker(QObject):
+        line = Signal(str)
+        finished_with_result = Signal(int)
+        failed = Signal(str)
+        finished = Signal()
+
+        def __init__(self):
+            super().__init__()
+            self.stopped = False
+
+        def isRunning(self):
+            return True
+
+        def stop(self):
+            self.stopped = True
+
+    received = []
+    worker = FakeWorker()
+    worker.line.connect(received.append)
+
+    page = PageRuntime.__new__(PageRuntime)
+    page._local_install_worker = worker
+
+    page._cleanup_local_install_worker(detach=True)
+
+    worker.line.emit("late output")
+    assert received == []  # UI closures were disconnected
+    assert worker.stopped
+    assert worker in page_runtime._DETACHED_INSTALL_WORKERS
+    assert page._local_install_worker is None
+    page_runtime._DETACHED_INSTALL_WORKERS.remove(worker)

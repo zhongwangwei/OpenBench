@@ -19,6 +19,26 @@ from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_partial_completion
 
 
+def build_remote_run_command(python_path: str, openbench_path: str, config_path: str, conda_env: str) -> str:
+    """Build the remote evaluation invocation with tilde-safe path quoting.
+
+    PYTHONUNBUFFERED=1 keeps output unbuffered for real-time logging; the v3
+    entry point is ``python -m openbench run`` (the legacy openbench.py was
+    removed in the v3.0 restructuring).
+    """
+    from openbench.gui.remote_python import quote_remote_path, wrap_with_conda_env
+
+    q_python = quote_remote_path(python_path or "python3")
+    q_openbench = quote_remote_path(openbench_path)
+    q_config = shlex.quote(config_path)
+    invocation = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench run {q_config}"
+    return wrap_with_conda_env(
+        f"cd {q_openbench} && {invocation}",
+        python_path=python_path,
+        conda_env=conda_env,
+    )
+
+
 class RemoteRunner(QThread):
     """Thread for running OpenBench evaluation on a remote server.
 
@@ -326,33 +346,11 @@ class RemoteRunner(QThread):
         Returns:
             Tuple of (success: bool, message: str)
         """
-        import shlex
-
-        python_path = self._remote_config.get("python_path", "python3")
-        conda_env = self._remote_config.get("conda_env", "")
-        openbench_path = self._remote_config.get("openbench_path", "")
-
-        # Quote each user-supplied component so paths with spaces are
-        # respected and shell metacharacters in config values cannot
-        # inject extra commands.
-        q_python = shlex.quote(python_path)
-        q_openbench = shlex.quote(openbench_path)
-        q_config = shlex.quote(self._remote_config_path)
-
-        # v3 entry point is the installed openbench package; the legacy
-        # path (openbench/openbench.py) was removed during the v3.0 repo
-        # restructuring and no longer exists, so the remote process must
-        # invoke the module directly via "python -m openbench run".
-        invocation = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench run {q_config}"
-
-        # Build the command with unbuffered output for real-time logging.
-        # PYTHONUNBUFFERED=1 ensures output is not buffered.
-        from openbench.gui.remote_python import wrap_with_conda_env
-
-        cmd = wrap_with_conda_env(
-            f"cd {q_openbench} && {invocation}",
-            python_path=python_path,
-            conda_env=conda_env,
+        cmd = build_remote_run_command(
+            python_path=self._remote_config.get("python_path", "python3"),
+            openbench_path=self._remote_config.get("openbench_path", ""),
+            config_path=self._remote_config_path,
+            conda_env=self._remote_config.get("conda_env", ""),
         )
 
         self.log_message.emit(f"Executing: {cmd}")
