@@ -240,6 +240,21 @@ def test_execute_stream_returns_exit_code():
     assert collected == ["done\n"]
 
 
+def test_execute_stream_falls_back_when_select_rejects_channel(monkeypatch):
+    """Windows select() only accepts sockets, not Paramiko/fake channels."""
+    import select
+
+    def reject_channel(*_args, **_kwargs):
+        raise OSError("not a socket")
+
+    monkeypatch.setattr(select, "select", reject_channel)
+    channel = FakeChannel([b"done\n"], exit_code=0)
+
+    lines = list(_manager_with_channel(channel).execute_stream("cmd"))
+
+    assert lines == ["done\n"]
+
+
 def test_check_openbench_installed_expands_tilde_paths():
     """'~/OpenBench' is the documented default install path; quoting the
     tilde literally makes the marker probe and import probe always fail."""

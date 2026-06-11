@@ -739,7 +739,15 @@ class SSHManager:
                 # of truth — but the select call still serves as an
                 # event-driven sleep that yields the thread until data
                 # arrives or the timeout elapses, instead of busy-looping.
-                select.select([channel], [], [], 0.1)
+                #
+                # On Windows, select.select() only accepts sockets. Paramiko
+                # channels (and our fake test channels) can raise WinError
+                # 10038 there, so fall back to a short polling sleep while
+                # keeping recv_ready()/exit_status_ready() as the real state.
+                try:
+                    select.select([channel], [], [], 0.1)
+                except OSError:
+                    time.sleep(0.1)
 
                 got_data = False
                 if channel.recv_ready():
