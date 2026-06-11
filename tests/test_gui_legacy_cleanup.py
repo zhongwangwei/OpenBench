@@ -41,12 +41,9 @@ def test_path_utils_accepts_colm_openbench_distribution_name(tmp_path):
 
 def test_gui_widgets_do_not_prefer_v2_nml_yaml_defaults():
     """Dialogs should not actively default to v2 nml/nml-yaml directories."""
-    data_source_source = Path("src/openbench/gui/widgets/data_source_editor.py").read_text(encoding="utf-8")
     model_editor_source = Path("src/openbench/gui/widgets/model_definition_editor.py").read_text(encoding="utf-8")
 
-    assert "OpenBench/nml/nml-yaml" not in data_source_source
-    assert '"nml", "nml-yaml"' not in data_source_source
-    assert "Ref_variables_definition_LowRes" not in data_source_source
+    assert not Path("src/openbench/gui/widgets/data_source_editor.py").exists()
     assert '"nml", "nml-yaml"' not in model_editor_source
 
 

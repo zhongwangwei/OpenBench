@@ -1090,7 +1090,7 @@ class ConfigManager:
 
             filtered["general"] = general
 
-        # Extract variable mapping fields from top level (from DataSourceEditor)
+        # Extract legacy top-level variable mapping fields.
         var_mapping_keys = ["sub_dir", "varname", "varunit", "prefix", "suffix"]
         top_level_var_mapping = {}
         for key in var_mapping_keys:
