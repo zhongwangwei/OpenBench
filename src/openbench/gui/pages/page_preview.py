@@ -6,12 +6,12 @@ Preview and Export page.
 import logging
 import os
 import posixpath
-import shlex
 import tempfile
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox
 from PySide6.QtCore import Signal
 
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import YamlPreview
@@ -146,7 +146,7 @@ class PagePreview(BasePage):
 
             stdout, stderr, exit_code = execute_responsive(
                 ssh_manager,
-                f"mkdir -p {shlex.quote(nml_dir)} {shlex.quote(sim_nml_dir)} {shlex.quote(ref_nml_dir)}",
+                f"mkdir -p {quote_remote_path(nml_dir)} {quote_remote_path(sim_nml_dir)} {quote_remote_path(ref_nml_dir)}",
                 timeout=30,
             )
             if exit_code != 0:
@@ -454,7 +454,6 @@ class PagePreview(BasePage):
         - Check file existence and try .yaml extension
         """
         from openbench.gui.path_utils import to_absolute_path, to_posix_path
-        import shlex
 
         if not model_path:
             return ""
@@ -473,7 +472,7 @@ class PagePreview(BasePage):
 
                 for try_path in paths_to_try:
                     try:
-                        quoted_path = shlex.quote(try_path)
+                        quoted_path = quote_remote_path(try_path)
                         stdout, stderr, exit_code = execute_responsive(
                             ssh_manager, f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
@@ -519,7 +518,7 @@ class PagePreview(BasePage):
 
                 for try_path in paths_to_try:
                     try:
-                        quoted_path = shlex.quote(try_path)
+                        quoted_path = quote_remote_path(try_path)
                         stdout, stderr, exit_code = execute_responsive(
                             ssh_manager, f"test -f {quoted_path} && echo 'exists'", timeout=10
                         )
@@ -571,7 +570,7 @@ class PagePreview(BasePage):
             for path in paths_to_try:
                 try:
                     stdout, stderr, exit_code = execute_responsive(
-                        ssh_manager, f"cat {shlex.quote(path)} 2>/dev/null", timeout=30
+                        ssh_manager, f"cat {quote_remote_path(path)} 2>/dev/null", timeout=30
                     )
                 except Exception as exc:
                     raise RemoteNamelistSyncError(f"Failed to read remote model definition {path}: {exc}") from exc

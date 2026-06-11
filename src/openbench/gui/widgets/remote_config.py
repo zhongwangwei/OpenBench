@@ -1548,7 +1548,7 @@ class RemoteConfigWidget(QWidget):
         progress_dialog.destroyed.connect(mark_dialog_closed)
         progress_dialog.show()
 
-        quoted_conda_exe = shlex.quote(conda_exe)
+        quoted_conda_exe = _safe_remote_path(conda_exe)
         quoted_env_name = shlex.quote(env_name)
 
         worker_box = {}
@@ -1944,7 +1944,9 @@ class RemoteConfigWidget(QWidget):
                 if python_path:
                     output_text.append("\n\n=== Installing package and dependencies (pip install -e) ===\n")
                     status_label.setText("Installing dependencies with pip...")
-                    pip_cmd = f"{shlex.quote(python_path)} -m pip install -e {_safe_remote_path(install_path)} 2>&1"
+                    pip_cmd = (
+                        f"{_safe_remote_path(python_path)} -m pip install -e {_safe_remote_path(install_path)} 2>&1"
+                    )
                     start_install_worker(pip_cmd, 900, on_deps_done)
                 else:
                     output_text.append(

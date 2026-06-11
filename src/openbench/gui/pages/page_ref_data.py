@@ -15,7 +15,6 @@ Internal data structure:
 """
 
 import logging
-import shlex
 from typing import Dict, Any
 
 from PySide6.QtWidgets import (
@@ -35,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.path_utils import browse_directory, to_absolute_path
@@ -705,7 +705,9 @@ class PageRefData(BasePage):
             return None
 
         try:
-            stdout, stderr, exit_code = execute_responsive(ssh_manager, f"cat {shlex.quote(def_nml_path)}", timeout=30)
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"cat {quote_remote_path(def_nml_path)}", timeout=30
+            )
             if exit_code == 0 and stdout.strip():
                 return yaml.safe_load(stdout) or {}
             else:

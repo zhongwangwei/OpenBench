@@ -81,3 +81,20 @@ def test_save_to_config_preserves_simulation_source_metadata():
     assert saved["source_configs"]["CaseA"]["general"]["fulllist"] == "/sim/list.csv"
     assert saved["source_configs"]["CaseA"]["general"]["legacy_general"] == "keep"
     assert saved["source_configs"]["CaseA"]["variables"] == {"Runoff": {"varname": "q"}}
+
+
+def test_remote_sim_helpers_expand_tilde_paths():
+    """'~/Simulation' typed in the root field must reach the remote shell as
+    "$HOME"/Simulation, not a shlex-quoted literal tilde."""
+    commands = []
+
+    class FakeSSH:
+        def execute(self, command, timeout=30):
+            commands.append(command)
+            return "", "", 1
+
+    page_sim_data._remote_is_dir(FakeSSH(), "~/Simulation")
+
+    assert commands
+    assert '"$HOME"/Simulation' in commands[0]
+    assert "'~/" not in commands[0]

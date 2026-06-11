@@ -14,7 +14,6 @@ variables are available for evaluation downstream.
 import logging
 import os
 import re
-import shlex
 from typing import Any, Dict, List, Set
 
 from PySide6.QtWidgets import (
@@ -34,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 
@@ -76,14 +76,14 @@ def _glob_nc_local(directory: str):
 def _remote_is_dir(ssh_manager, path: str) -> bool:
     stdout, _, exit_code = execute_responsive(
         ssh_manager,
-        f"test -d {shlex.quote(path)} && echo dir",
+        f"test -d {quote_remote_path(path)} && echo dir",
         timeout=10,
     )
     return exit_code == 0 and "dir" in stdout
 
 
 def _remote_first_nc_file(ssh_manager, directory: str) -> str:
-    quoted = shlex.quote(directory)
+    quoted = quote_remote_path(directory)
     cmd = (
         f"find {quoted} -maxdepth 1 -type f "
         r"\( -name '*.nc' -o -name '*.nc4' \) | sort | head -n 1"
@@ -114,7 +114,7 @@ def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
 
 
 def _remote_list_child_dirs(ssh_manager, root: str) -> list[str]:
-    quoted = shlex.quote(root)
+    quoted = quote_remote_path(root)
     stdout, _, exit_code = execute_responsive(
         ssh_manager,
         f"find {quoted} -mindepth 1 -maxdepth 1 -type d -print | sort",

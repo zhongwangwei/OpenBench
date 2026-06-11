@@ -4,7 +4,6 @@ General settings page.
 """
 
 import logging
-import shlex
 
 from PySide6.QtWidgets import (
     QFormLayout,
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
 )
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
@@ -517,9 +517,9 @@ class PageGeneral(BasePage):
         try:
             # Create directories on remote server
             cmd = (
-                f"mkdir -p {shlex.quote(output_dir)} "
-                f"{shlex.quote(output_dir + '/nml/sim')} "
-                f"{shlex.quote(output_dir + '/nml/ref')}"
+                f"mkdir -p {quote_remote_path(output_dir)} "
+                f"{quote_remote_path(output_dir + '/nml/sim')} "
+                f"{quote_remote_path(output_dir + '/nml/ref')}"
             )
             stdout, stderr, exit_code = execute_responsive(ssh_manager, cmd, timeout=30)
 

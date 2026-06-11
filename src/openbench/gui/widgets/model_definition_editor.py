@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 
 logger = logging.getLogger(__name__)
@@ -353,8 +354,8 @@ class ModelDefinitionEditor(QDialog):
             # by the remote shell.
             encoded = base64.b64encode(yaml_content.encode("utf-8")).decode("ascii")
             cmd = (
-                f"mkdir -p {shlex.quote(remote_dir)} && "
-                f"printf %s {shlex.quote(encoded)} | base64 -d > {shlex.quote(remote_file)}"
+                f"mkdir -p {quote_remote_path(remote_dir)} && "
+                f"printf %s {shlex.quote(encoded)} | base64 -d > {quote_remote_path(remote_file)}"
             )
             stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
 

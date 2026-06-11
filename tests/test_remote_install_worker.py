@@ -596,6 +596,100 @@ def test_install_openbench_installs_package_with_pip_as_second_worker(qapp, monk
     assert all("test -f" not in command for command, _timeout in widget._ssh_manager.execute_calls)
 
 
+def test_install_pip_step_expands_tilde_python_path(qapp, monkeypatch):
+    """'~/miniconda3/...' is the common interpreter form; a shlex-quoted
+    literal tilde makes the remote shell look for a '~' directory."""
+    from openbench.gui.widgets import remote_config
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = GuardedInstallSSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+    widget.python_combo.setCurrentText("~/miniconda3/envs/ob/bin/python")
+    widget.conda_combo.setCurrentText("base")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+    FakeWorker.created[0].finished_with_result.emit(0, "git ok", "")
+
+    pip_worker = FakeWorker.created[1]
+    assert pip_worker.command == '"$HOME"/miniconda3/envs/ob/bin/python -m pip install -e /remote/OpenBench 2>&1'
+    assert "'~/" not in pip_worker.command
+
+
+def test_conda_create_commands_expand_tilde_conda_exe(qapp, monkeypatch):
+    """A '~/miniconda3/...' interpreter derives a '~/miniconda3/bin/conda'
+    exe; quoting it literally would break both conda commands remotely."""
+    from PySide6.QtCore import QObject, Signal
+
+    from openbench.gui.widgets import remote_config
+
+    created = []
+
+    class FakeCallable:
+        def __init__(self, func, parent=None):
+            class Signals(QObject):
+                finished_with_result = Signal(object)
+                failed = Signal(str)
+                finished = Signal()
+
+            self._signals = Signals()
+            self.finished_with_result = self._signals.finished_with_result
+            self.failed = self._signals.failed
+            self.finished = self._signals.finished
+            self.func = func
+            created.append(self)
+
+        def start(self):
+            pass
+
+        def isRunning(self):
+            return True
+
+        def deleteLater(self):
+            pass
+
+        def requestInterruption(self):
+            pass
+
+        def isInterruptionRequested(self):
+            return False
+
+    class RecordingSSH:
+        is_connected = True
+
+        def __init__(self):
+            self.commands = []
+
+        def detect_conda_envs(self):
+            return []
+
+        def execute(self, command, timeout=None):
+            self.commands.append(command)
+            return "ok", "", 0
+
+    monkeypatch.setattr(remote_config, "CallableWorker", FakeCallable)
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(remote_config.QMessageBox, "information", staticmethod(lambda *a, **k: None))
+
+    widget = RemoteConfigWidget()
+    ssh = RecordingSSH()
+    widget._ssh_manager = ssh
+    widget.python_combo.setCurrentText("~/miniconda3/bin/python")
+
+    widget._create_conda_env()
+
+    assert created
+    created[0].func()  # run the captured task against the recording manager
+
+    assert ssh.commands
+    assert ssh.commands[0].startswith('"$HOME"/miniconda3/bin/conda create')
+    assert "'~/" not in ssh.commands[0]
+
+
 def test_install_openbench_skips_dependency_step_without_python_env(qapp, monkeypatch):
     from openbench.gui.widgets import remote_config
 

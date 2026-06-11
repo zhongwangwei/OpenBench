@@ -5,7 +5,6 @@ Main window with sidebar navigation and page container.
 
 import logging
 import os
-import shlex
 import yaml
 
 from PySide6.QtWidgets import (
@@ -26,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.controller import WizardController
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
@@ -795,7 +795,7 @@ class MainWindow(QMainWindow):
         # If absolute, check if exists and return
         if path.startswith("/"):
             stdout, stderr, exit_code = execute_responsive(
-                ssh_manager, f"test -e {shlex.quote(path)} && echo 'exists'", timeout=10
+                ssh_manager, f"test -e {quote_remote_path(path)} && echo 'exists'", timeout=10
             )
             if exit_code == 0 and "exists" in stdout:
                 return path
@@ -804,7 +804,7 @@ class MainWindow(QMainWindow):
         # Helper to check if path exists on remote
         def remote_exists(check_path):
             stdout, stderr, exit_code = execute_responsive(
-                ssh_manager, f"test -e {shlex.quote(check_path)} && echo 'exists'", timeout=10
+                ssh_manager, f"test -e {quote_remote_path(check_path)} && echo 'exists'", timeout=10
             )
             return exit_code == 0 and "exists" in stdout
 
@@ -883,7 +883,9 @@ class MainWindow(QMainWindow):
             return None
 
         try:
-            stdout, stderr, exit_code = execute_responsive(ssh_manager, f"cat {shlex.quote(file_path)}", timeout=30)
+            stdout, stderr, exit_code = execute_responsive(
+                ssh_manager, f"cat {quote_remote_path(file_path)}", timeout=30
+            )
             if exit_code != 0:
                 QMessageBox.critical(self, "Error", f"Failed to read remote file:\n{file_path}\n\nError: {stderr}")
                 return None
@@ -903,7 +905,7 @@ class MainWindow(QMainWindow):
             # Check if this looks like OpenBench root
             stdout, stderr, exit_code = execute_responsive(
                 ssh_manager,
-                f"ls -d {shlex.quote(current + '/openbench')} {shlex.quote(current + '/nml')} 2>/dev/null | head -1",
+                f"ls -d {quote_remote_path(current + '/openbench')} {quote_remote_path(current + '/nml')} 2>/dev/null | head -1",
                 timeout=10,
             )
             if exit_code == 0 and stdout.strip():
