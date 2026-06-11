@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from openbench.gui.pages import page_sim_data
+from tests.gui_fakes import FakeLineEdit as _Text
 
 
 def test_gui_sim_scan_helpers_find_nc4_history_dir(tmp_path: Path):
@@ -33,17 +34,6 @@ def test_remote_sim_scan_helpers_quote_paths_and_find_nc4():
     assert page_sim_data._remote_find_nc_dir(ssh, case_dir) == f"{case_dir}/history"
     assert page_sim_data._remote_detect_prefix(ssh, case_dir) == "hist_"
     assert any(shlex.quote(f"{case_dir}/history") in command for command in commands)
-
-
-class _Text:
-    def __init__(self, value):
-        self._value = value
-
-    def text(self):
-        return self._value
-
-    def currentText(self):
-        return self._value
 
 
 class _Controller:

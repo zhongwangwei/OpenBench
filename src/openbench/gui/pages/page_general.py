@@ -16,14 +16,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QVBoxLayout,
-    QDialog,
 )
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
 from openbench.gui.pages.base_page import BasePage
+from openbench.gui.path_utils import browse_directory
 from openbench.gui.widgets import PathSelector
-from openbench.gui.widgets.remote_config import RemoteFileBrowser
 
 logger = logging.getLogger(__name__)
 
@@ -385,58 +383,12 @@ class PageGeneral(BasePage):
 
     def _browse_output_directory(self):
         """Handle output directory browse - uses remote browser if in remote mode."""
-        # Check if in remote mode using storage type
-        from openbench.remote.storage import RemoteStorage
+        from openbench.gui.widgets.path_selector import get_default_browse_path
 
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
-
-        if is_remote:
-            # Use remote file browser
-            self._browse_remote_directory()
-        else:
-            # Use local file dialog with OpenBench root as default
-            from PySide6.QtWidgets import QFileDialog
-            from openbench.gui.widgets.path_selector import get_default_browse_path
-
-            start_dir = self.basedir_input.path() or get_default_browse_path()
-            path = QFileDialog.getExistingDirectory(
-                self, "Select Output Directory", start_dir, QFileDialog.ShowDirsOnly
-            )
-            if path:
-                self.basedir_input.set_path(path)
-
-    def _browse_remote_directory(self):
-        """Browse remote server for output directory."""
-        # Get SSH manager from the runtime page
-        ssh_manager = self._get_remote_ssh_manager()
-        if not ssh_manager:
-            QMessageBox.warning(
-                self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
-            )
-            return
-
-        # Get home directory as start path
-        try:
-            home = ssh_manager._get_home_dir()
-        except Exception as e:
-            logger.debug("Failed to get remote home directory: %s", e)
-            home = "/"
-
-        # Create dialog with remote file browser
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Select Output Directory on Remote Server")
-        dialog.resize(500, 400)
-
-        layout = QVBoxLayout(dialog)
-        browser = RemoteFileBrowser(ssh_manager, home, dialog, select_dirs=True)
-        layout.addWidget(browser)
-
-        def on_path_selected(path):
+        current = self.basedir_input.path() or get_default_browse_path()
+        path = browse_directory(self.controller, self, "Select Output Directory", current)
+        if path:
             self.basedir_input.set_path(path)
-            dialog.accept()
-
-        browser.file_selected.connect(on_path_selected)
-        dialog.exec()
 
     def _get_remote_ssh_manager(self):
         """Get SSH manager from the runtime page."""
@@ -603,8 +555,7 @@ class PageGeneral(BasePage):
 
         if is_remote:
             # Remote mode: use remote OpenBench path for defaults
-            remote_config = general.get("remote", {})
-            remote_openbench = remote_config.get("openbench_path", "")
+            remote_openbench = self.controller.remote_settings().get("openbench_path", "")
 
             if not basedir or basedir == "./output":
                 # Set default to remote OpenBench/output

@@ -66,8 +66,7 @@ class PagePreview(BasePage):
         from openbench.remote.storage import RemoteStorage
 
         if isinstance(self.controller.storage, RemoteStorage):
-            remote_config = config.get("general", {}).get("remote", {})
-            remote_path_base = remote_config.get("openbench_path", "") or output_dir
+            remote_path_base = self.controller.remote_settings().get("openbench_path", "") or output_dir
             generate_kwargs["path_transform"] = lambda path: self._resolve_path_for_remote(path, remote_path_base)
 
         config_yaml = self.config_manager.generate_config_yaml(config, **generate_kwargs)
@@ -156,8 +155,7 @@ class PagePreview(BasePage):
                 openbench_root = self._get_openbench_root()
 
                 # Get remote OpenBench path from remote config
-                remote_config = self.controller.config.get("general", {}).get("remote", {})
-                remote_openbench_path = remote_config.get("openbench_path", "")
+                remote_openbench_path = self.controller.remote_settings().get("openbench_path", "")
 
                 # Generate config files with remote output_dir paths
                 # This ensures paths like reference_nml point to remote locations

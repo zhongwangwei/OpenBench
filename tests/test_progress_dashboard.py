@@ -6,16 +6,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
 PySide6 = pytest.importorskip("PySide6")
-from PySide6.QtWidgets import QApplication, QLabel, QProgressBar  # noqa: E402
+from PySide6.QtWidgets import QLabel, QProgressBar  # noqa: E402
 
 from openbench.gui.widgets.progress_dashboard import ProgressDashboard, TaskStatus  # noqa: E402
 from openbench.gui.widgets.validation_dialog import ValidationProgressDialog  # noqa: E402
-
-
-@pytest.fixture
-def qapp():
-    app = QApplication.instance() or QApplication([])
-    return app
 
 
 def test_set_progress_clamps_bar_and_label(qapp):

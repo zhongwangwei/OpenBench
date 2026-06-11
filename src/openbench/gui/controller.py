@@ -106,6 +106,16 @@ class WizardController(QObject):
 
         return isinstance(self._storage, RemoteStorage)
 
+    def remote_settings(self) -> Dict[str, Any]:
+        """Return ``general.remote`` as a dict, tolerating null YAML sections.
+
+        A hand-edited config may contain a bare ``general:`` or ``remote:``
+        key, which YAML loads as ``None`` — ``.get(..., {})`` alone does not
+        guard against that.
+        """
+        general = self._config.get("general") or {}
+        return general.get("remote") or {}
+
     def _default_config(self) -> Dict[str, Any]:
         """Return default configuration structure."""
         return {
@@ -312,7 +322,7 @@ class WizardController(QObject):
                     result = os.path.join(basedir, basename)
         else:
             if is_remote:
-                remote_config = general.get("remote", {})
+                remote_config = self.remote_settings()
                 remote_root = remote_config.get("openbench_path", "") or getattr(self.storage, "project_dir", "")
                 remote_root = str(remote_root or "~/OpenBench").rstrip("/").replace("\\", "/")
                 relative_basedir = basedir or "./output"
@@ -382,8 +392,7 @@ class WizardController(QObject):
         # Get remote OpenBench path if in remote mode
         remote_openbench_path = None
         if self.is_remote_mode():
-            remote_config = self._config.get("general", {}).get("remote", {})
-            remote_openbench_path = remote_config.get("openbench_path")
+            remote_openbench_path = self.remote_settings().get("openbench_path")
 
         # Generate YAML content
         main_content = self._config_manager.generate_main_nml(

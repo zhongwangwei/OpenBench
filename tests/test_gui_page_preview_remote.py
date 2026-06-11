@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from openbench.gui.pages.page_preview import PagePreview, RemoteNamelistSyncError
+from tests.gui_fakes import FakeControllerBase
 
 
 class FakeSSH:
@@ -99,7 +100,7 @@ def test_preview_uses_actual_case_output_dir_when_rendering_unified_yaml():
 def test_remote_preview_uses_same_remote_path_transform_as_export():
     from openbench.remote.storage import RemoteStorage
 
-    class FakeRemoteController:
+    class FakeRemoteController(FakeControllerBase):
         config = {
             "general": {
                 "basename": "demo",
@@ -243,7 +244,7 @@ def test_remote_export_fails_when_unified_config_was_not_created(monkeypatch, tm
         def open_sftp(self):
             return FakeSFTP()
 
-    class Controller:
+    class Controller(FakeControllerBase):
         config = {"general": {"basename": "demo"}}
         navigated = []
 
@@ -281,7 +282,7 @@ def test_remote_export_sftp_put_failure_does_not_enter_run_page(monkeypatch, tmp
         def open_sftp(self):
             return FakeSFTP(fail_put_for={"/remote/output/demo/openbench.yaml"})
 
-    class Controller:
+    class Controller(FakeControllerBase):
         config = {"general": {"basename": "demo"}}
         navigated = []
 
@@ -325,7 +326,7 @@ def test_remote_export_nml_upload_failure_does_not_enter_run_page(monkeypatch, t
         def open_sftp(self):
             return FakeSFTP(fail_put_for={"/remote/output/demo/nml/main-demo.yaml"})
 
-    class Controller:
+    class Controller(FakeControllerBase):
         config = {"general": {"basename": "demo"}}
         navigated = []
 
@@ -381,7 +382,7 @@ def test_remote_export_marks_direct_sftp_uploads_synced_in_remote_storage_cache(
     sync.write("output/demo/openbench.yaml", "old config")
     sync.write("output/demo/nml/main-demo.yaml", "old main")
 
-    class Controller:
+    class Controller(FakeControllerBase):
         config = {"general": {"basename": "demo"}}
         storage = RemoteStorage("/remote/project", sync)
         navigated = []

@@ -10,14 +10,7 @@ pytest.importorskip("PySide6")
 from openbench.gui.pages.page_general import PageGeneral  # noqa: E402
 from openbench.gui.pages.page_ref_data import PageRefData  # noqa: E402
 from openbench.gui.pages.page_sim_data import PageSimData  # noqa: E402
-
-
-class FakeText:
-    def __init__(self, value):
-        self.value = value
-
-    def text(self):
-        return self.value
+from tests.gui_fakes import FakeLineEdit as FakeText  # noqa: E402
 
 
 class FakeCombo:

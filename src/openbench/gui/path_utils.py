@@ -5,9 +5,12 @@ Cross-platform path utilities for converting and validating paths.
 
 import os
 import sys
+import logging
 from importlib.resources import files
 from pathlib import Path
 from typing import Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 _OPENBENCH_ROOT_MARKERS = [
@@ -310,6 +313,125 @@ def get_remote_ssh_manager(controller):
     if not isinstance(controller.storage, RemoteStorage):
         return None
     return controller.ssh_manager
+
+
+def _remote_directory_exists(ssh_manager, path: str) -> bool:
+    """Check that a directory exists on the remote host."""
+    from openbench.gui.widgets._ssh_worker import execute_responsive
+    from openbench.gui.widgets.remote_config import _safe_remote_path
+
+    try:
+        quoted = _safe_remote_path(path)
+        _, _, exit_code = execute_responsive(ssh_manager, f"test -d {quoted}", timeout=5)
+    except Exception as exc:
+        logger.debug("Remote directory check failed for %s: %s", path, exc)
+        return False
+    return exit_code == 0
+
+
+def remote_home_dir(ssh_manager) -> str:
+    """Best-effort remote home directory, falling back to '/'."""
+    from openbench.gui.widgets._ssh_worker import call_responsive
+
+    try:
+        return call_responsive(ssh_manager._get_home_dir)
+    except Exception as exc:
+        logger.debug("Failed to get remote home directory: %s", exc)
+        return "/"
+
+
+def _resolve_remote_start_path(controller, ssh_manager, current_path: str = "") -> str:
+    """Pick a start directory for the remote browser.
+
+    Every candidate is validated on the remote host: a stale path (e.g. a
+    local path left over from a local-mode session, or an outdated
+    openbench_path) must not seed the browser — RemoteFileBrowser would keep
+    it as its current path and the Select button could round-trip it back as
+    the "chosen" remote directory.
+    """
+    if current_path and _remote_directory_exists(ssh_manager, current_path):
+        return current_path
+    openbench_path = controller.remote_settings().get("openbench_path", "")
+    if openbench_path and _remote_directory_exists(ssh_manager, openbench_path):
+        return openbench_path
+    home = remote_home_dir(ssh_manager)
+    if home and home != "/" and _remote_directory_exists(ssh_manager, home):
+        return home
+    return "/"
+
+
+def pick_remote_path(ssh_manager, parent, title: str, start_path: str, select_dirs: bool = True) -> str:
+    """Run the remote file browser dialog and return the chosen path ('' if cancelled)."""
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    from openbench.gui.widgets.remote_config import RemoteFileBrowser
+
+    selected: list[str] = []
+    dialog = QDialog(parent)
+    dialog.setWindowTitle(title)
+    dialog.resize(500, 400)
+    layout = QVBoxLayout(dialog)
+    browser = RemoteFileBrowser(ssh_manager, start_path, dialog, select_dirs=select_dirs)
+    layout.addWidget(browser)
+
+    def on_path_selected(path):
+        selected.append(path)
+        dialog.accept()
+
+    browser.file_selected.connect(on_path_selected)
+    dialog.exec()
+    dialog.deleteLater()
+    return selected[0] if selected else ""
+
+
+def browse_remote_directory(controller, parent, title: str, current_path: str = "") -> str:
+    """Return a remote directory selected through the SSH browser."""
+    from PySide6.QtWidgets import QMessageBox
+
+    ssh_manager = get_remote_ssh_manager(controller)
+    if not ssh_manager or not getattr(ssh_manager, "is_connected", False):
+        QMessageBox.warning(
+            parent,
+            "Not Connected",
+            "Remote server is not connected.\nPlease connect on the Runtime Environment page first.",
+        )
+        return ""
+
+    start_path = _resolve_remote_start_path(controller, ssh_manager, current_path)
+    return pick_remote_path(ssh_manager, parent, title, start_path, select_dirs=True)
+
+
+def remote_exec_context(controller, parent):
+    """SSH manager + python/conda/openbench settings for remote execution.
+
+    Returns ``{}`` in local mode, ``None`` (after warning the user) when
+    remote mode is on but the server is not connected, and otherwise the
+    kwargs shared by every remote scan/import entry point.
+    """
+    if not controller.is_remote_mode():
+        return {}
+    ssh_manager = get_remote_ssh_manager(controller)
+    if not ssh_manager or not getattr(ssh_manager, "is_connected", False):
+        from PySide6.QtWidgets import QMessageBox
+
+        QMessageBox.warning(parent, "Not Connected", "Remote mode requires connecting to the server first.")
+        return None
+    remote_config = controller.remote_settings()
+    return {
+        "ssh_manager": ssh_manager,
+        "python_path": remote_config.get("python_path", ""),
+        "conda_env": remote_config.get("conda_env", ""),
+        "openbench_path": remote_config.get("openbench_path", ""),
+    }
+
+
+def browse_directory(controller, parent, title: str, current_path: str = "") -> str:
+    """Pick a directory with the dialog matching the controller's storage mode."""
+    if controller.is_remote_mode():
+        return browse_remote_directory(controller, parent, title, current_path)
+    from PySide6.QtWidgets import QFileDialog
+
+    return QFileDialog.getExistingDirectory(parent, title, current_path or "") or ""
 
 
 def to_absolute_path(path: str, base_dir: Optional[str] = None) -> str:

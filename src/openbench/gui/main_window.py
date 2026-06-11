@@ -558,21 +558,15 @@ class MainWindow(QMainWindow):
             )
             return ""
 
-        # Get start path from configured OpenBench path
-        general = self.controller.config.get("general", {})
-        remote_config = general.get("remote", {})
-        openbench_path = remote_config.get("openbench_path", "")
+        # Start in the configured OpenBench output directory when it exists
+        # on the remote host; _resolve_remote_start_path validates each
+        # candidate and falls back (openbench_path -> remote home -> /), so a
+        # stale path cannot strand the browser on a failed listing.
+        from openbench.gui.path_utils import _resolve_remote_start_path
 
-        if openbench_path:
-            # Use configured OpenBench output directory
-            start_path = f"{openbench_path.rstrip('/')}/output"
-        else:
-            # Fallback to home directory
-            try:
-                start_path = ssh_manager._get_home_dir()
-            except Exception as e:
-                logger.debug("Failed to get remote home directory: %s", e)
-                start_path = "/"
+        openbench_path = self.controller.remote_settings().get("openbench_path", "")
+        candidate = f"{openbench_path.rstrip('/')}/output" if openbench_path else ""
+        start_path = _resolve_remote_start_path(self.controller, ssh_manager, candidate)
 
         # Create dialog with remote file browser
         dialog = QDialog(self)

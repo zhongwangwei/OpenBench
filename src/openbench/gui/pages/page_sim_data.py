@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -40,7 +39,7 @@ from openbench.gui.pages.base_page import BasePage
 logger = logging.getLogger(__name__)
 
 
-from openbench.gui.path_utils import get_remote_ssh_manager
+from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +307,9 @@ class PageSimData(BasePage):
     # ------------------------------------------------------------------
 
     def _browse_root(self):
-        path = QFileDialog.getExistingDirectory(self, "Select Simulation Root Directory")
+        path = browse_directory(
+            self.controller, self, "Select Simulation Root Directory", self._root_input.text().strip()
+        )
         if path:
             self._root_input.setText(path)
 
