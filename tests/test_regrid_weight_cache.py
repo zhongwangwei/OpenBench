@@ -233,16 +233,24 @@ def test_format_lon_handles_read_only_padded_coordinate_values(monkeypatch):
 
     original_pad = xr.Dataset.pad
 
-    def readonly_pad(self, *args, **kwargs):
+    padded_lons = []
+
+    def readonly_pad_with_capture(self, *args, **kwargs):
         padded = original_pad(self, *args, **kwargs)
         padded_lon = padded["lon"].values
         padded_lon.flags.writeable = False
+        padded_lons.append(padded_lon)
         return padded
 
-    monkeypatch.setattr(xr.Dataset, "pad", readonly_pad)
+    monkeypatch.setattr(xr.Dataset, "pad", readonly_pad_with_capture)
     result = format_lon(data, target, {"lon": "lon"})
 
-    assert result["lon"].values.flags.writeable
+    # The portable contract is that format_lon does not mutate xarray's
+    # read-only padded coordinate view in place.  Some xarray/pandas versions
+    # expose dimension-coordinate index values as read-only after assignment,
+    # so do not assert the returned index buffer's private writeability flag.
+    assert padded_lons and not padded_lons[0].flags.writeable
+    assert not np.shares_memory(result["lon"].values, padded_lons[0])
     assert result.sizes["lon"] == 362
     assert result["lon"].values[0] == -180.5
     assert result["lon"].values[-1] == 180.5
