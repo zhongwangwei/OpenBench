@@ -518,6 +518,11 @@ class ScannedDataset:
     file_globs: dict[str, str | list[str]] = field(default_factory=dict)
     file_count: int = 0
     tim_res: str = ""  # Detected or empty
+    # Remote-scan support: when root_dir is not visible on this machine,
+    # registration consumes inspection results computed on the remote host.
+    nc_inspections: dict[str, dict] = field(default_factory=dict)  # var_name -> _inspect_nc_file result
+    detected_data_groupby: str = ""  # remote-computed _detect_data_groupby result
+    remote_fulllist: str = ""  # station fulllist CSV generated on the remote host
 
     @property
     def registry_name(self) -> str:
@@ -1877,6 +1882,11 @@ def _detect_data_groupby(scanned) -> str:
     breaking processing.py's monthly/daily file iteration when descriptor
     said "Year" but filenames were YYYYMM.
     """
+    injected = getattr(scanned, "detected_data_groupby", "")
+    if injected:
+        # Remote-scanned dataset: the filesystem walk below cannot see the
+        # remote files, so trust the value computed on the remote host.
+        return injected
     if not scanned.variables:
         return "Year"
 
@@ -1965,9 +1975,15 @@ def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_va
         suppress_multi_var_prompt = profile_defines_varname or profile_replaces_placeholder_variables
 
         dataset_path = _expand_path(scanned.root_dir) / sub_dir
+        nc_info = None
         if dataset_path.is_dir():
             file_glob = getattr(scanned, "file_globs", {}).get(var_name)
             nc_info = _inspect_nc_file(dataset_path, file_glob=file_glob)
+        else:
+            # Remote-scanned dataset: the data lives on the remote host, so
+            # use the inspection results the remote scan shipped along.
+            nc_info = (getattr(scanned, "nc_inspections", None) or {}).get(var_name)
+        if nc_info is not None:
             if nc_info.get("inspection_failed") and existing_var is None and not suppress_multi_var_prompt:
                 raise RuntimeError(
                     f"Failed to inspect NetCDF files for {scanned.registry_name}:{var_name} "
@@ -2396,6 +2412,11 @@ def _finalize_descriptor(
                 descriptor["fulllist"] = _portable_path(output_csv)
             except Exception as e:
                 logger.warning("Failed to generate station list for %s: %s", scanned.name, e)
+        elif getattr(scanned, "remote_fulllist", ""):
+            # Remote-scanned dataset: the CSV was generated on the remote
+            # host (where the station files live), and evaluation runs there
+            # too, so the remote path is the correct catalog value.
+            descriptor["fulllist"] = scanned.remote_fulllist
 
 
 def _fulllist_path_exists(path_value: str, *roots: str | None) -> bool:

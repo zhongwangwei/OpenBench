@@ -347,26 +347,13 @@ class RemoteRunner(QThread):
 
         # Build the command with unbuffered output for real-time logging.
         # PYTHONUNBUFFERED=1 ensures output is not buffered.
-        if conda_env:
-            q_env = shlex.quote(conda_env)
-            # Derive conda base from python path (e.g., /path/to/miniconda3/bin/python -> /path/to/miniconda3)
-            conda_base_match = re.search(
-                r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)",
-                python_path,
-            )
-            if conda_base_match:
-                q_conda_base = shlex.quote(conda_base_match.group(1))
-                cmd = (
-                    f"source {q_conda_base}/etc/profile.d/conda.sh && "
-                    f"conda activate {q_env} && cd {q_openbench} && {invocation}"
-                )
-            else:
-                # Fallback: build the inner command then wrap with shlex.quote
-                # for the outer `bash -l -c` so nested quoting is safe.
-                inner = f"conda activate {q_env} && cd {q_openbench} && {invocation}"
-                cmd = f"bash -l -c {shlex.quote(inner)}"
-        else:
-            cmd = f"cd {q_openbench} && {invocation}"
+        from openbench.gui.remote_python import wrap_with_conda_env
+
+        cmd = wrap_with_conda_env(
+            f"cd {q_openbench} && {invocation}",
+            python_path=python_path,
+            conda_env=conda_env,
+        )
 
         self.log_message.emit(f"Executing: {cmd}")
 

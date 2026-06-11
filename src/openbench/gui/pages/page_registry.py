@@ -13,7 +13,6 @@ from typing import Dict
 
 from PySide6.QtWidgets import (
     QComboBox,
-    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -34,6 +33,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from openbench.gui.pages.base_page import BasePage
+from openbench.gui.path_utils import browse_directory
 
 logger = logging.getLogger(__name__)
 
@@ -294,9 +294,16 @@ class PageRegistry(BasePage):
         self.model_list.clearSelection()
 
     def _import_model_from_nc(self):
+        from openbench.gui.path_utils import remote_exec_context
         from openbench.gui.widgets.nc_importer import NCImporterDialog
 
-        dlg = NCImporterDialog(parent=self)
+        context = remote_exec_context(self.controller, self)
+        if context is None:
+            return
+        kwargs = {"parent": self, **context}
+        kwargs.pop("openbench_path", None)  # the importer inspects files, not the package
+
+        dlg = NCImporterDialog(**kwargs)
         if dlg.exec():
             selected = dlg.get_selected_variables()
             if not selected:
@@ -765,7 +772,9 @@ class PageRegistry(BasePage):
         self.dataset_list.clearSelection()
 
     def _scan_directory(self):
-        path = QFileDialog.getExistingDirectory(self, "Select Directory to Scan")
+        if getattr(self, "_scan_worker", None) is not None:
+            return
+        path = browse_directory(self.controller, self, "Select Directory to Scan")
         if not path:
             return
         self._scan_button_was_enabled = True
@@ -776,8 +785,16 @@ class PageRegistry(BasePage):
         progress.setCancelButton(None)
 
         from openbench.gui.pages._scan_worker import FindDatasetsWorker
+        from openbench.gui.path_utils import remote_exec_context
 
-        worker = FindDatasetsWorker(path)
+        worker_kwargs = remote_exec_context(self.controller, self)
+        if worker_kwargs is None:
+            progress.close()
+            progress.deleteLater()
+            return
+        self._scan_was_remote = bool(worker_kwargs)
+
+        worker = FindDatasetsWorker(path, **worker_kwargs)
         self._scan_worker = worker
         self._scan_progress = progress
         worker.finished_with_result.connect(self._on_scan_directory_finished)
@@ -805,15 +822,9 @@ class PageRegistry(BasePage):
             worker.quit()
             worker.wait(3000)
         if worker is not None and worker.isRunning():
-            _DETACHED_SCAN_WORKERS.append(worker)
+            from openbench.gui.widgets._task_worker import detach_worker
 
-            def _forget_worker():
-                try:
-                    _DETACHED_SCAN_WORKERS.remove(worker)
-                except ValueError:
-                    pass
-
-            worker.finished.connect(_forget_worker)
+            detach_worker(worker, _DETACHED_SCAN_WORKERS)
         self._scan_progress = None
         self._scan_worker = None
 
@@ -866,11 +877,14 @@ class PageRegistry(BasePage):
             )
             _clear_cache()
             self._refresh_dataset_list()
-            QMessageBox.information(
-                self,
-                "Scan Complete",
-                f"Registered {len(variants)} new dataset(s).",
-            )
+            message = f"Registered {len(variants)} new dataset(s)."
+            if getattr(self, "_scan_was_remote", False):
+                from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+                caveats = remote_scan_caveats(variants)
+                if caveats:
+                    message += f"\n\n{caveats}"
+            QMessageBox.information(self, "Scan Complete", message)
         except Exception as exc:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning:\n{exc}")
             logger.exception("Directory scan registration failed")
@@ -897,7 +911,7 @@ class PageRegistry(BasePage):
                 QMessageBox.critical(self, "Error", f"Failed to delete dataset:\n{exc}")
 
     def _browse_ds_root(self):
-        path = QFileDialog.getExistingDirectory(self, "Select root_dir")
+        path = browse_directory(self.controller, self, "Select root_dir", self.ds_root_dir.text().strip())
         if path:
             self.ds_root_dir.setText(path)
 

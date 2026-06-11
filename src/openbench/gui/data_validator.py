@@ -423,23 +423,10 @@ except Exception as e:
 
     def _run_inspect_script(self, path: str) -> Optional[Dict[str, Any]]:
         """Run inspection script on remote server."""
-        import base64
+        from openbench.gui.remote_python import build_remote_python_command
 
         script = self.INSPECT_SCRIPT.format(path_json=json.dumps(path))
-
-        # Encode script as base64 to avoid shell quoting issues
-        script_b64 = base64.b64encode(script.encode()).decode()
-
-        # Build command with proper Python environment
-        if self._conda_env:
-            # Activate conda environment before running
-            cmd = (
-                "source ~/.bashrc 2>/dev/null; "
-                f"conda activate {shlex.quote(self._conda_env)} 2>/dev/null; "
-                f"printf %s {shlex.quote(script_b64)} | base64 -d | {shlex.quote(self._python_path)}"
-            )
-        else:
-            cmd = f"printf %s {shlex.quote(script_b64)} | base64 -d | {shlex.quote(self._python_path)}"
+        cmd = build_remote_python_command(script, python_path=self._python_path, conda_env=self._conda_env)
 
         try:
             stdout, stderr, exit_code = self._ssh.execute(cmd, timeout=30)

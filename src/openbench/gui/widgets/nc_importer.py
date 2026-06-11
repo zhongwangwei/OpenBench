@@ -4,6 +4,8 @@ Dialog that opens a NetCDF file and lets the user pick variables to import.
 """
 
 import logging
+import json
+import os
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -60,13 +62,16 @@ class NCImporterDialog(QDialog):
     to retrieve the chosen variables as a list of dicts.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ssh_manager=None, python_path: str = "", conda_env: str = ""):
         super().__init__(parent)
         self.setWindowTitle("Import Variables from NetCDF")
         self.setMinimumSize(680, 480)
         self.setModal(True)
 
         self._selected: list[dict] = []
+        self._ssh_manager = ssh_manager
+        self._python_path = python_path
+        self._conda_env = conda_env
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -141,6 +146,17 @@ class NCImporterDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _browse(self):
+        if self._is_remote_mode():
+            from openbench.gui.path_utils import pick_remote_path, remote_home_dir
+
+            current = self.edit_path.text().strip()
+            start = os.path.dirname(current) if current else remote_home_dir(self._ssh_manager)
+            path = pick_remote_path(self._ssh_manager, self, "Select NetCDF File", start, select_dirs=False)
+            if path:
+                self.edit_path.setText(path)
+                self._open_file()
+            return
+
         path, _ = QFileDialog.getOpenFileName(
             self, "Select NetCDF File", "", "NetCDF files (*.nc *.nc4 *.hdf5);;All files (*)"
         )
@@ -149,9 +165,30 @@ class NCImporterDialog(QDialog):
             self._open_file()
 
     def _open_file(self):
+        if getattr(self, "_busy", False):
+            return
         path = self.edit_path.text().strip()
         if not path:
             QMessageBox.warning(self, "No File", "Please enter or browse for a NetCDF file.")
+            return
+
+        if self._is_remote_mode():
+            # The remote inspection spins a nested event loop (up to 60s);
+            # keep the dialog inert so a second click cannot overwrite the
+            # fresh result with a stale one.
+            self._busy = True
+            self.setEnabled(False)
+            try:
+                payload = self._open_remote_file(path)
+                self.info_label.setText(
+                    f"Opened: {payload.get('path', path)}  ({payload.get('data_var_count', 0)} data variables)"
+                )
+                self._populate_rows(payload.get("variables") or [])
+            except Exception as exc:
+                QMessageBox.critical(self, "Open Failed", f"Could not open remote file:\n{exc}")
+            finally:
+                self._busy = False
+                self.setEnabled(True)
             return
 
         try:
@@ -174,80 +211,115 @@ class NCImporterDialog(QDialog):
             QMessageBox.critical(self, "Open Failed", f"Could not open file:\n{exc}")
             return
 
+    def _is_remote_mode(self) -> bool:
+        return self._ssh_manager is not None and getattr(self._ssh_manager, "is_connected", False)
+
+    def _open_remote_file(self, path: str) -> dict:
+        from openbench.gui.remote_python import run_remote_python_json
+
+        script = f"""
+import json
+import xarray as xr
+
+path = {json.dumps(path)}
+coord_names = set({json.dumps(sorted(_COORD_NAMES))})
+
+variables = []
+with xr.open_dataset(path) as ds:
+    coord_names.update(str(name) for name in ds.coords)
+    for name, var in ds.data_vars.items():
+        variables.append({{
+            "name": str(name),
+            "dtype": str(var.dtype),
+            "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
+            "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+            "is_coord": str(name).lower() in coord_names or str(name) in coord_names,
+        }})
+    for name, var in ds.coords.items():
+        if name in ds.data_vars or len(var.dims) <= 1:
+            continue
+        variables.append({{
+            "name": str(name),
+            "dtype": str(var.dtype),
+            "dims": [[str(dim), int(size)] for dim, size in zip(var.dims, var.shape)],
+            "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+            "is_coord": True,
+        }})
+    payload = {{"path": path, "data_var_count": len(ds.data_vars), "variables": variables}}
+print(json.dumps(payload))
+"""
+        return run_remote_python_json(
+            self._ssh_manager,
+            script,
+            python_path=self._python_path,
+            conda_env=self._conda_env,
+            timeout=60,
+        )
+
     def _populate_table(self, ds):
         """Fill the table from an xarray Dataset."""
+        rows = []
+        coord_names = set(ds.coords) | _COORD_NAMES
+        for name, var in ds.data_vars.items():
+            rows.append(
+                {
+                    "name": str(name),
+                    "dtype": str(var.dtype),
+                    "dims": list(zip(var.dims, var.shape)),
+                    "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+                    "is_coord": name.lower() in coord_names or name in coord_names,
+                }
+            )
+        for name, var in ds.coords.items():
+            if name in ds.data_vars or len(var.dims) <= 1:
+                continue
+            rows.append(
+                {
+                    "name": str(name),
+                    "dtype": str(var.dtype),
+                    "dims": list(zip(var.dims, var.shape)),
+                    "units": str(var.attrs.get("units", var.attrs.get("unit", ""))),
+                    "is_coord": True,
+                }
+            )
+        self._populate_rows(rows)
+
+    def _populate_rows(self, rows: list[dict]):
+        """Fill the table from serialized NetCDF variable metadata."""
         self.table.setRowCount(0)
 
-        # Gather coordinate names from the dataset itself
-        coord_names = set(ds.coords) | _COORD_NAMES
-
-        row = 0
-        for name, var in ds.data_vars.items():
+        for row, record in enumerate(rows):
             self.table.insertRow(row)
 
             # Checkbox
             chk = QCheckBox()
             # Auto-uncheck coordinates and 1-D variables
-            is_coord = name.lower() in coord_names or name in coord_names
-            is_1d = len(var.dims) <= 1
+            dims = record.get("dims") or []
+            is_coord = bool(record.get("is_coord")) or str(record.get("name", "")).lower() in _COORD_NAMES
+            is_1d = len(dims) <= 1
             chk.setChecked(not is_coord and not is_1d)
             self.table.setCellWidget(row, 0, chk)
 
             # Variable name
-            item_name = QTableWidgetItem(str(name))
+            item_name = QTableWidgetItem(str(record.get("name", "")))
             item_name.setFlags(item_name.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 1, item_name)
 
             # dtype
-            item_dtype = QTableWidgetItem(str(var.dtype))
+            item_dtype = QTableWidgetItem(str(record.get("dtype", "")))
             item_dtype.setFlags(item_dtype.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 2, item_dtype)
 
             # dimensions
-            dims_str = ", ".join(f"{d}({s})" for d, s in zip(var.dims, var.shape))
+            dims_str = ", ".join(f"{dim}({size})" for dim, size in dims)
             item_dims = QTableWidgetItem(dims_str)
             item_dims.setFlags(item_dims.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 3, item_dims)
 
             # units from attributes
-            units = var.attrs.get("units", var.attrs.get("unit", ""))
-            item_units = QTableWidgetItem(str(units))
+            item_units = QTableWidgetItem(str(record.get("units", "")))
             item_units.setFlags(item_units.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 4, item_units)
-
-            row += 1
-
-        # Also add coordinate variables that might hold data (dims > 1)
-        for name, var in ds.coords.items():
-            if name in ds.data_vars:
-                continue  # Already listed
-            if len(var.dims) <= 1:
-                continue  # Skip pure coordinates
-            self.table.insertRow(row)
-
-            chk = QCheckBox()
-            chk.setChecked(False)
-            self.table.setCellWidget(row, 0, chk)
-
-            item_name = QTableWidgetItem(str(name))
-            item_name.setFlags(item_name.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 1, item_name)
-
-            item_dtype = QTableWidgetItem(str(var.dtype))
-            item_dtype.setFlags(item_dtype.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 2, item_dtype)
-
-            dims_str = ", ".join(f"{d}({s})" for d, s in zip(var.dims, var.shape))
-            item_dims = QTableWidgetItem(dims_str)
-            item_dims.setFlags(item_dims.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 3, item_dims)
-
-            units = var.attrs.get("units", var.attrs.get("unit", ""))
-            item_units = QTableWidgetItem(str(units))
-            item_units.setFlags(item_units.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 4, item_units)
-
-            row += 1
 
     def _select_all(self):
         for row in range(self.table.rowCount()):

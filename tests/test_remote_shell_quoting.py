@@ -64,10 +64,14 @@ def test_remote_inspect_script_embeds_path_as_json_and_quotes_environment():
 
     assert result.passed is True
     command = ssh.commands[-1]
-    assert f"conda activate {shlex.quote(conda_env)}" in command
-    assert f"| base64 -d | {shlex.quote(python_path)}" in command
+    # No derivable conda base from this python_path -> login-shell fallback,
+    # with the entire inner command shlex-quoted once more for bash -l -c.
+    assert command.startswith("bash -l -c ")
+    inner = shlex.split(command.split("bash -l -c ", 1)[1])[0]
+    assert f"conda activate {shlex.quote(conda_env)}" in inner
+    assert f"| base64 -d | {shlex.quote(python_path)}" in inner
 
-    encoded_arg = command.split("printf %s ", 1)[1].split(" | base64 -d", 1)[0]
+    encoded_arg = inner.split("printf %s ", 1)[1].split(" | base64 -d", 1)[0]
     encoded = shlex.split(encoded_arg)[0]
     script = base64.b64decode(encoded).decode("utf-8")
     assert f"safe_open({json.dumps(path)})" in script

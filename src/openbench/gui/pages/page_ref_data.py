@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.path_utils import to_absolute_path
+from openbench.gui.path_utils import browse_directory, to_absolute_path
 
 logger = logging.getLogger(__name__)
 
@@ -208,75 +208,74 @@ class PageRefData(BasePage):
 
     def _browse_data_root(self):
         """Browse for reference data root directory."""
-        from PySide6.QtWidgets import QFileDialog
-
-        path = QFileDialog.getExistingDirectory(self, "Select Reference Data Root")
+        path = browse_directory(
+            self.controller, self, "Select Reference Data Root", self.data_root_input.text().strip()
+        )
         if path:
             self.data_root_input.setText(path)
 
     def _scan_data_root(self):
         """Scan the data root for new reference datasets."""
+        if getattr(self, "_scan_worker", None) is not None:
+            return
         data_root = self.data_root_input.text().strip()
         if not data_root:
             QMessageBox.warning(self, "No Path", "Please enter or browse for the reference data root directory.")
             return
 
-        # Refuse to silently scan a local path while the controller is wired
-        # to a remote storage backend — the worker only knows the local FS,
-        # so a remote path would either fail os.path.isdir or match an
-        # unrelated local directory of the same name.
-        try:
-            from openbench.remote.storage import RemoteStorage
-
-            if isinstance(getattr(self.controller, "storage", None), RemoteStorage):
-                QMessageBox.warning(
-                    self,
-                    "Remote mode",
-                    "Reference scanning currently only supports local paths.\n"
-                    f"Path {data_root!r} would be checked on this machine, not the remote host.",
-                )
-                return
-        except Exception:
-            # Storage backend not importable in non-remote builds — proceed.
-            pass
-
-        import os
-
-        if not os.path.isdir(data_root):
-            QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
-            return
-
+        # Disable before any remote round trip: the existence check below
+        # spins a nested event loop, so a second click would re-enter this
+        # handler and orphan the first worker.
         self.btn_scan.setEnabled(False)
-        progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
-        progress.setWindowTitle("Scanning")
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
+        started = False
+        try:
+            from openbench.gui.path_utils import remote_exec_context
 
-        from openbench.gui.pages._scan_worker import FindDatasetsWorker
+            worker_kwargs = remote_exec_context(self.controller, self)
+            if worker_kwargs is None:
+                return
 
-        worker = FindDatasetsWorker(data_root)
-        self._scan_worker = worker
-        self._scan_progress = progress
-        worker.finished_with_result.connect(self._on_scan_data_root_finished)
-        worker.failed.connect(self._on_scan_data_root_failed)
-        worker.finished.connect(worker.deleteLater)
-        worker.start()
-        progress.show()
+            if worker_kwargs:
+                from openbench.gui.path_utils import _remote_directory_exists
+
+                if not _remote_directory_exists(worker_kwargs["ssh_manager"], data_root):
+                    QMessageBox.warning(self, "Invalid Path", f"Remote directory not found: {data_root}")
+                    return
+            else:
+                import os
+
+                if not os.path.isdir(data_root):
+                    QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
+                    return
+
+            progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
+            progress.setWindowTitle("Scanning")
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setCancelButton(None)
+
+            from openbench.gui.pages._scan_worker import FindDatasetsWorker
+
+            self._scan_was_remote = bool(worker_kwargs)
+
+            worker = FindDatasetsWorker(data_root, **worker_kwargs)
+            self._scan_worker = worker
+            self._scan_progress = progress
+            worker.finished_with_result.connect(self._on_scan_data_root_finished)
+            worker.failed.connect(self._on_scan_data_root_failed)
+            worker.finished.connect(worker.deleteLater)
+            worker.start()
+            progress.show()
+            started = True
+        finally:
+            if not started:
+                self.btn_scan.setEnabled(True)
 
     def _detach_scan_worker(self, worker):
         """Keep an unparented QThread alive until Qt emits finished."""
-        if worker is None:
-            return
-        _DETACHED_SCAN_WORKERS.append(worker)
+        from openbench.gui.widgets._task_worker import detach_worker
 
-        def _forget_worker():
-            try:
-                _DETACHED_SCAN_WORKERS.remove(worker)
-            except ValueError:
-                pass
-
-        worker.finished.connect(_forget_worker)
+        detach_worker(worker, _DETACHED_SCAN_WORKERS)
 
     def _finish_scan_worker(self, cancel: bool = False):
         progress = getattr(self, "_scan_progress", None)
@@ -351,11 +350,16 @@ class PageRefData(BasePage):
                 self._rebuild_variable_groups()
                 self.load_from_config()
 
-                QMessageBox.information(
-                    self,
-                    "Scan Complete",
-                    f"Registered {registered} new dataset(s).\nThey are now available in the dropdown menus below.",
+                message = (
+                    f"Registered {registered} new dataset(s).\nThey are now available in the dropdown menus below."
                 )
+                if getattr(self, "_scan_was_remote", False):
+                    from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+                    caveats = remote_scan_caveats(variants)
+                    if caveats:
+                        message += f"\n\n{caveats}"
+                QMessageBox.information(self, "Scan Complete", message)
 
         except Exception as e:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning: {e}")
@@ -718,9 +722,7 @@ class PageRefData(BasePage):
             return ""
 
         # Get remote OpenBench path from config
-        general = self.controller.config.get("general", {})
-        remote_config = general.get("remote", {})
-        remote_openbench_path = remote_config.get("openbench_path", "")
+        remote_openbench_path = self.controller.remote_settings().get("openbench_path", "")
 
         if not remote_openbench_path:
             return def_nml_path
@@ -933,7 +935,7 @@ class PageRefData(BasePage):
         python_path = ""
         conda_env = ""
         if is_remote:
-            remote_config = general_config.get("remote", {})
+            remote_config = self.controller.remote_settings()
             remote_openbench_root = remote_config.get("openbench_path", "")
             python_path = remote_config.get("python_path", "")
             conda_env = remote_config.get("conda_env", "")

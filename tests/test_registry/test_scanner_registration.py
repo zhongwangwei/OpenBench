@@ -4116,3 +4116,78 @@ def test_parse_merged_station_file_uses_first_non_time_dimension(tmp_path: Path)
     rows = _parse_merged_station_file(path, tmp_path)
 
     assert [row[0] for row in rows] == ["A", "B"]
+
+
+def test_build_variables_uses_injected_remote_inspection(tmp_path):
+    """Remote-scanned datasets ship NC inspection results computed on the remote host."""
+    from openbench.data.registry.scanner import ScannedDataset, _build_variables
+
+    scanned = ScannedDataset(
+        name="RemoteSet",
+        resolution="LowRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path / "definitely-missing"),
+        variables={"Runoff": "Runoff/RemoteSet"},
+        nc_inspections={
+            "Runoff": {
+                "varname": "ro",
+                "varunit": "mm/day",
+                "all_data_vars": [
+                    {"name": "ro", "unit": "mm/day"},
+                    {"name": "ro2", "unit": "mm/d"},
+                ],
+                "nc_file_count": 3,
+                "detected_grid_res": 0.5,
+            }
+        },
+    )
+    chooser_calls = []
+
+    def on_multi_var(var_name, sub_dir, all_vars):
+        chooser_calls.append((var_name, sub_dir, [v["name"] for v in all_vars]))
+        return "ro2"
+
+    descriptor = {}
+    variables = _build_variables(scanned, descriptor, None, on_multi_var)
+
+    assert chooser_calls == [("Runoff", "Runoff/RemoteSet", ["ro", "ro2"])]
+    assert variables["Runoff"]["varname"] == "ro2"
+    assert variables["Runoff"]["varunit"] == "mm/d"
+    assert variables["Runoff"]["_nc_grid_res"] == 0.5
+
+
+def test_detect_data_groupby_prefers_injected_value(tmp_path):
+    from openbench.data.registry.scanner import ScannedDataset, _detect_data_groupby
+
+    scanned = ScannedDataset(
+        name="RemoteSet",
+        resolution="LowRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path / "missing"),
+        variables={"Runoff": "sub"},
+        detected_data_groupby="Month",
+    )
+
+    assert _detect_data_groupby(scanned) == "Month"
+
+
+def test_finalize_descriptor_uses_remote_fulllist_for_remote_station_dataset(tmp_path):
+    """Remote-scanned stn datasets carry a fulllist generated on the remote host."""
+    from openbench.data.registry.scanner import ScannedDataset, _finalize_descriptor
+
+    scanned = ScannedDataset(
+        name="RemoteStations",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path / "missing"),
+        variables={"Streamflow": "Q"},
+        remote_fulllist="/remote/home/.openbench/station_lists/RemoteStations.csv",
+    )
+    descriptor = {"data_type": "stn"}
+
+    _finalize_descriptor(scanned, descriptor, prov={})
+
+    assert descriptor["fulllist"] == "/remote/home/.openbench/station_lists/RemoteStations.csv"
