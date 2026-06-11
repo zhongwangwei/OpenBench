@@ -1,5 +1,42 @@
 # Changelog
 
+## [3.0.0b4] - 2026-06-11
+
+Remote-workflow hardening release: the GUI's remote mode was reworked end to
+end (responsive SSH layer + three review rounds over it).
+
+### Fixed
+- Conda activation on remote hosts uses the POSIX `.` command — the `source`
+  bashism broke every conda-env remote flow on hosts whose `/bin/sh` is
+  dash/ash (commands are wrapped in `sh -c` for csh/tcsh login shells)
+- Remote paths starting with `~` (including the documented `~/OpenBench`
+  default) now expand to `$HOME` everywhere a path reaches the remote shell:
+  the evaluation run command, pip dependency step, conda create, the
+  OpenBench install check, the sync engine, scanners, validators, NML/model
+  editors and file browsers. Bare `shlex.quote` turned them into literal-`~`
+  paths that no remote shell resolves
+- Remote dataset scanning trusts the inspection results shipped from the
+  remote host instead of coincidentally same-named local directories
+  (wrong-machine inspection on shared mounts), and station fulllists are
+  generated remotely for `stn` references
+- A dropped SSH session is reported as "Connection Lost" instead of the
+  misleading "Remote directory not found"
+- The remote scan bootstrap `expanduser()`s the checkout path so a plain-git
+  `~/OpenBench` install is importable even without the pip step
+
+### Changed
+- Every SSH call made from the GUI thread now routes through a responsive
+  worker layer: the window keeps painting during connects, scans and
+  installs; long installs stream output into Esc-guarded progress dialogs;
+  scans and installs are cancellable mid-command
+- Remote installs run `pip install -e` for dependencies (the old
+  requirements.yml flow targeted a file that no longer exists)
+- Browse start-path resolution and symlink-target classification each probe
+  the remote host in a single compound round trip (was up to N serial
+  round trips per click)
+- The Runtime page's local git install/update streams through a worker
+  thread with a stoppable subprocess (no more event-loop pumping)
+
 ## [3.0.0b3] - 2026-06-09
 
 ### Changed
