@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.0.0b7] - 2026-06-11
+
+Patch release over 3.0.0b6 for GUI selection behavior.
+
+### Fixed
+- Multi-resolution reference selection now allows lower-frequency variants such
+  as LowRes/Month instead of forcing the highest-frequency available variant.
+- Simulation dataset scanning no longer auto-selects every model-profile
+  variable or expands the user's Evaluation Variables selection in the preview.
+
 ## [3.0.0b6] - 2026-06-11
 
 Patch release over 3.0.0b5 for GUI wizard flow alignment.

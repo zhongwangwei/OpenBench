@@ -372,17 +372,9 @@ class MainWindow(QMainWindow):
         # back from there (page_sim_data recomputes via _get_available_variables).
         self._available_variables = list(variables)
 
-        # Update evaluation_items: auto-select newly available variables
-        eval_items = dict(self.controller.config.get("evaluation_items", {}))
-        # Add new variables (default checked), keep existing selections
-        for var in variables:
-            if var not in eval_items:
-                eval_items[var] = True
-        # Remove variables no longer available
-        for var in list(eval_items.keys()):
-            if var not in variables:
-                del eval_items[var]
-        self.controller.update_section("evaluation_items", eval_items)
+        # Simulation/model profile discovery is informational only.
+        # Evaluation Variables is the user's source of truth; do not auto-add
+        # newly available model variables or remove manually selected ones.
 
     def _on_nav_selected(self, row: int):
         """Handle sidebar navigation selection.

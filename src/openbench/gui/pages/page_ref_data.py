@@ -557,25 +557,13 @@ class PageRefData(BasePage):
         if not variants:
             return None
 
-        # Check time resolution constraints using frequency hierarchy
-        # Rule: only the highest-frequency variant is allowed
-        from openbench.data.registry.scanner import _tim_res_rank
-
-        max_rank = max(
-            (_tim_res_rank(getattr(v, "tim_res", "")) for v in variants.values()),
-            default=-1,
-        )
-        compatible = None
-        if max_rank > 0:
-            compatible = [
-                res_label
-                for res_label, ref in variants.items()
-                if _tim_res_rank(getattr(ref, "tim_res", "")) >= max_rank
-            ]
-
+        # Let the user choose any registered resolution. A lower-frequency
+        # variant such as LowRes/Month is a valid CLI/config choice and should
+        # not be disabled just because a higher-frequency MidRes/Day variant
+        # is also present.
         from openbench.gui.dialogs.data_discovery import ResolutionPickerDialog
 
-        dlg = ResolutionPickerDialog(base_name, variants, compatible=compatible, parent=self)
+        dlg = ResolutionPickerDialog(base_name, variants, compatible=None, parent=self)
         if dlg.exec():
             res = dlg.selected_resolution()
             if res:

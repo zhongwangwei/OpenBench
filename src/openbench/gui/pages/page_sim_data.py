@@ -565,12 +565,11 @@ class PageSimData(BasePage):
             existing_source["general"] = source_general
             source_configs[c["label"]] = existing_source
 
-        # For every selected evaluation variable, all selected cases are sources
+        # For every selected evaluation variable, all selected cases are sources.
+        # Do not fall back to all model-profile variables: Evaluation Variables
+        # is the user's source of truth, and an empty selection must stay empty.
         eval_items = self.controller.config.get("evaluation_items", {})
         selected_vars = [k for k, v in eval_items.items() if v]
-        # If no eval items selected yet, use the derived variable list
-        if not selected_vars:
-            selected_vars = sorted(self._get_available_variables())
 
         # Preserve user-set fields inside sim_data["general"] (e.g. `data_root`
         # or other non-*_sim_source keys) so they survive scan/checkbox saves.
