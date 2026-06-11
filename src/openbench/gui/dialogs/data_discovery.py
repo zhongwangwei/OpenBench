@@ -191,7 +191,7 @@ class ResolutionPickerDialog(QDialog):
         for res_name, variant in sorted(variants.items()):
             is_compatible = compatible is None or res_name in compatible
 
-            if hasattr(variant, "tim_res"):
+            if hasattr(variant, "file_count"):
                 # ScannedDataset
                 info = f"{variant.data_type}, {variant.tim_res or '?'}, {len(variant.variables)} variables, {variant.file_count} files"
             else:

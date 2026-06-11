@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0b5] - 2026-06-11
+
+Patch release over 3.0.0b4 for GUI reference selection and remote SSH hardening.
+
+### Fixed
+- Multi-resolution reference selection no longer crashes when the dialog is
+  populated from registry `ReferenceDataset` entries, which do not carry the
+  scan-only `file_count` field.
+- SSH output streaming falls back to short polling when `select.select()`
+  rejects Paramiko-like channels on platforms such as Windows.
+
 ## [3.0.0b4] - 2026-06-11
 
 Remote-workflow hardening release: the GUI's remote mode was reworked end to
