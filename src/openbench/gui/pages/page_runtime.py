@@ -769,7 +769,7 @@ class PageRuntime(BasePage):
             self.local_openbench_input.setText(local_openbench_path)
 
         # Load remote config
-        remote_config = general.get("remote", {})
+        remote_config = general.get("remote") or {}
         if remote_config:
             self.remote_config_widget.set_config(remote_config)
 
@@ -920,7 +920,7 @@ class PageRuntime(BasePage):
             self.local_openbench_input.setText(local_openbench_path)
 
         # Apply remote config
-        remote_config = settings.get("remote", {})
+        remote_config = settings.get("remote") or {}
         if remote_config:
             self.remote_config_widget.set_config(remote_config)
 
@@ -951,7 +951,7 @@ class PageRuntime(BasePage):
             settings["local_openbench_path"] = ""
 
         # Check remote config paths
-        remote = settings.get("remote", {})
+        remote = settings.get("remote") or {}
         if remote:
             # openbench_path in remote config should be Unix-style (for remote server)
             # so we don't need to clean it - it's expected to be a Linux path

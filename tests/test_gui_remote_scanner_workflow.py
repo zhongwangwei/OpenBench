@@ -1,15 +1,12 @@
 import json
-import os
 from types import SimpleNamespace
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
 PySide6 = pytest.importorskip("PySide6")
 
 from openbench.remote.storage import RemoteStorage  # noqa: E402
-from tests.gui_fakes import FakeControllerBase  # noqa: E402
+from tests.gui_fakes import FakeButton, FakeControllerBase  # noqa: E402
 
 
 class FakeSSH:
@@ -499,14 +496,6 @@ class FakeProgress:
         pass
 
 
-class FakeButton:
-    def __init__(self):
-        self.enabled = None
-
-    def setEnabled(self, value):
-        self.enabled = value
-
-
 def test_ref_scan_starts_remote_worker(monkeypatch):
     from openbench.gui.pages import page_ref_data
     from openbench.gui.pages.page_ref_data import PageRefData
@@ -577,6 +566,36 @@ def test_ref_scan_disables_button_before_remote_existence_check(monkeypatch):
     assert observed["button_enabled_during_check"] is False
     # Early-return path must hand the button back.
     assert page.btn_scan.enabled is True
+
+
+def test_ref_scan_reports_connection_loss_distinctly(monkeypatch):
+    """A dropped SSH session must not be reported as 'directory not found'."""
+    from openbench.gui.pages.page_ref_data import PageRefData
+    from openbench.remote.ssh import SSHConnectionError
+    from tests.gui_fakes import FakeLineEdit
+
+    def dead_exists(ssh, path):
+        raise SSHConnectionError("session dropped")
+
+    warnings = []
+    monkeypatch.setattr("openbench.gui.path_utils._remote_directory_exists", dead_exists)
+    monkeypatch.setattr(
+        "PySide6.QtWidgets.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    page = PageRefData.__new__(PageRefData)
+    page.controller = RemoteController()
+    page.data_root_input = FakeLineEdit("/remote/ref")
+    page.btn_scan = FakeButton()
+
+    PageRefData._scan_data_root(page)
+
+    assert warnings
+    title, message = warnings[0]
+    assert "onnect" in title + message  # mentions the connection
+    assert "not found" not in message
+    assert page.btn_scan.enabled is True  # button handed back
 
 
 def test_ref_scan_ignores_reentrant_invocation(monkeypatch):

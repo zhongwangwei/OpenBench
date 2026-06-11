@@ -369,6 +369,7 @@ class RemoteFileBrowser(QWidget):
             # commands won't find it. The 9th column is where the name
             # begins in `ls -la`, so re-split with maxsplit=8 to preserve
             # the original spacing in the filename portion.
+            entries = []
             for line in ls_text.split("\n")[1:]:  # Skip total line
                 if not line.strip():
                     continue
@@ -390,37 +391,51 @@ class RemoteFileBrowser(QWidget):
 
                 is_dir = perms.startswith("d")
                 is_exec = "x" in perms and not is_dir and not is_link
+                entries.append({"name": display_name, "is_dir": is_dir, "is_exec": is_exec, "is_link": is_link})
 
-                # For symlinks, check if target is a directory. Prefer the
-                # bulk find result; only fall back to a per-entry RTT if
-                # the bulk lookup didn't run.
-                if is_link:
-                    full_path = f"{path.rstrip('/')}/{display_name}"
-                    if symlink_dir_paths:
-                        if _pp.normpath(full_path) in symlink_dir_paths:
-                            is_dir = True
-                    else:
-                        try:
-                            quoted_full = _safe_remote_path(full_path)
-                        except ValueError:
-                            continue
-                        check_cmd = f"test -d {quoted_full} && echo 'dir'"
-                        check_stdout, _, check_exit = execute_responsive(self._ssh_manager, check_cmd, timeout=5)
-                        if check_exit == 0 and "dir" in check_stdout:
-                            is_dir = True
+            # Symlink targets: prefer the bulk find result; if that lookup
+            # failed (empty set), probe ALL symlinks in one compound round
+            # trip instead of one test -d per entry.
+            link_paths = [f"{path.rstrip('/')}/{e['name']}" for e in entries if e["is_link"]]
+            if link_paths and not symlink_dir_paths:
+                quoted_links = []
+                for link_path in link_paths:
+                    try:
+                        quoted_links.append(_safe_remote_path(link_path))
+                    except ValueError:
+                        continue
+                if quoted_links:
+                    probe = (
+                        "for p in " + " ".join(quoted_links) + '; do [ -d "$p" ] && printf \'%s\\n\' "$p"; done; exit 0'
+                    )
+                    try:
+                        probe_stdout, _, _ = execute_responsive(self._ssh_manager, probe, timeout=10)
+                        symlink_dir_paths = {
+                            _pp.normpath(line.strip()) for line in probe_stdout.splitlines() if line.strip()
+                        }
+                    except Exception:
+                        symlink_dir_paths = set()
+
+            for entry in entries:
+                is_dir = entry["is_dir"]
+                if entry["is_link"]:
+                    full_path = f"{path.rstrip('/')}/{entry['name']}"
+                    if _pp.normpath(full_path) in symlink_dir_paths:
+                        is_dir = True
 
                 if is_dir:
-                    icon = "🔗" if is_link else "📁"
-                elif is_link:
+                    icon = "🔗" if entry["is_link"] else "📁"
+                elif entry["is_link"]:
                     icon = "🔗"
-                elif is_exec:
-                    icon = "🐍" if "python" in display_name.lower() else "⚡"
+                elif entry["is_exec"]:
+                    icon = "🐍" if "python" in entry["name"].lower() else "⚡"
                 else:
                     icon = "📄"
 
-                item = QListWidgetItem(f"{icon} {display_name}")
+                item = QListWidgetItem(f"{icon} {entry['name']}")
                 item.setData(
-                    Qt.UserRole, {"name": display_name, "is_dir": is_dir, "is_exec": is_exec, "is_link": is_link}
+                    Qt.UserRole,
+                    {"name": entry["name"], "is_dir": is_dir, "is_exec": entry["is_exec"], "is_link": entry["is_link"]},
                 )
                 self.file_list.addItem(item)
 
@@ -1333,6 +1348,8 @@ class RemoteConfigWidget(QWidget):
 
     def _detect_python(self):
         """Detect Python interpreters on remote server."""
+        if getattr(self, "_handshake_active", False):
+            return  # SSH auth in flight; don't open channels mid-handshake
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
             return
@@ -1383,6 +1400,8 @@ class RemoteConfigWidget(QWidget):
 
     def _refresh_conda(self):
         """Refresh conda environments from remote server."""
+        if getattr(self, "_handshake_active", False):
+            return  # SSH auth in flight; don't open channels mid-handshake
         if not self._ssh_manager or not self._ssh_manager.is_connected:
             QMessageBox.warning(self, "Error", "Please connect to server first using the Test button")
             return
@@ -1415,6 +1434,8 @@ class RemoteConfigWidget(QWidget):
 
     def _create_conda_env(self):
         """Create OpenBench conda environment (re-entrancy-guarded entry point)."""
+        if getattr(self, "_handshake_active", False):
+            return  # SSH auth in flight; don't open channels mid-handshake
         if getattr(self, "_conda_create_worker", None) is not None:
             return
         if getattr(self, "_conda_create_flow_active", False):
@@ -1696,6 +1717,8 @@ class RemoteConfigWidget(QWidget):
 
     def _install_openbench(self):
         """Install OpenBench on remote server (re-entrancy-guarded entry point)."""
+        if getattr(self, "_handshake_active", False):
+            return  # SSH auth in flight; don't open channels mid-handshake
         if getattr(self, "_install_flow_active", False):
             return
         self._install_flow_active = True

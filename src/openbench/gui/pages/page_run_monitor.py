@@ -188,7 +188,7 @@ class PageRunMonitor(BasePage):
             RemoteRunner instance, or None if SSH connection not available
         """
         # Get remote configuration
-        remote_config = general.get("remote", {})
+        remote_config = general.get("remote") or {}
 
         if not remote_config:
             QMessageBox.critical(

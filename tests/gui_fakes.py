@@ -15,6 +15,24 @@ class FakeControllerBase:
         return general.get("remote") or {}
 
 
+class FakeButton:
+    """Stand-in for QPushButton state APIs: setEnabled/setVisible/setText."""
+
+    def __init__(self):
+        self.enabled = None
+        self.visible = None
+        self.text = None
+
+    def setEnabled(self, value):
+        self.enabled = value
+
+    def setVisible(self, value):
+        self.visible = value
+
+    def setText(self, value):
+        self.text = value
+
+
 class FakeLineEdit:
     """Stand-in for QLineEdit/QComboBox text APIs: text()/setText()/currentText()."""
 

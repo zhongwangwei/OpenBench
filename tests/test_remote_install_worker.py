@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
 
 PySide6 = pytest.importorskip("PySide6")
@@ -176,6 +172,20 @@ def test_gui_modules_have_no_main_thread_ssh_band_aids():
                     offenders.append(f"{path.name}: {line.strip()[:80]}")
 
     assert offenders == []
+
+
+def test_env_actions_are_blocked_while_handshake_runs(qapp):
+    """is_connected turns true mid-auth; env/install entry points must not
+    open channels on a transport that is still authenticating."""
+    widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
+    widget._handshake_active = True
+
+    # Without a guard-first implementation these would blow up on the
+    # missing widget attributes (none are set on this bare instance).
+    widget._detect_python()
+    widget._refresh_conda()
+    widget._create_conda_env()
+    widget._install_openbench()
 
 
 def test_node_connect_is_blocked_while_main_handshake_runs(qapp):

@@ -1,7 +1,5 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
 
 pytest.importorskip("PySide6")
@@ -64,7 +62,18 @@ class FakeBrowseSSH:
         self.commands = []
 
     def execute(self, command, timeout=30):
+        import shlex
+
         self.commands.append(command)
+        if command.startswith("for p in "):
+            # Emulate the compound probe: first listed candidate that exists
+            # wins; "$HOME" expands to the remote home.
+            listed = command[len("for p in ") :].split(";", 1)[0]
+            for candidate in shlex.split(listed):
+                candidate = candidate.replace("$HOME", self._home)
+                if candidate in self._existing:
+                    return candidate, "", 0
+            return "/", "", 0
         if command.startswith("test -d "):
             path = command[len("test -d ") :].strip().strip("'\"")
             return "", "", (0 if path in self._existing else 1)
@@ -137,6 +146,9 @@ def test_remote_start_path_keeps_existing_remote_current_path():
     start = path_utils._resolve_remote_start_path(_remote_controller(), ssh, "/remote/data")
 
     assert start == "/remote/data"
+    # All candidates are probed in ONE compound round trip.
+    assert len(ssh.commands) == 1
+    assert ssh.commands[0].startswith("for p in ")
 
 
 def test_remote_start_path_falls_back_when_current_path_is_stale():
@@ -147,6 +159,7 @@ def test_remote_start_path_falls_back_when_current_path_is_stale():
     start = path_utils._resolve_remote_start_path(_remote_controller(), ssh, "C:\\old\\local\\path")
 
     assert start == "/remote/openbench"
+    assert len(ssh.commands) == 1
 
 
 def test_remote_start_path_skips_stale_openbench_path():
@@ -157,14 +170,32 @@ def test_remote_start_path_skips_stale_openbench_path():
     start = path_utils._resolve_remote_start_path(_remote_controller(), ssh, "")
 
     assert start == "/home/me"
+    assert len(ssh.commands) == 1
 
 
 def test_remote_start_path_falls_back_to_root_when_everything_is_stale():
     from openbench.gui import path_utils
 
-    start = path_utils._resolve_remote_start_path(_remote_controller(), FakeBrowseSSH(), "")
+    ssh = FakeBrowseSSH()
+
+    start = path_utils._resolve_remote_start_path(_remote_controller(), ssh, "")
 
     assert start == "/"
+    assert len(ssh.commands) == 1
+
+
+def test_remote_directory_exists_propagates_connection_loss():
+    from openbench.gui import path_utils
+    from openbench.remote.ssh import SSHConnectionError
+
+    class DeadSSH:
+        def execute(self, command, timeout=30):
+            raise SSHConnectionError("session dropped")
+
+    # 'Connection lost' must not be folded into 'directory does not exist' —
+    # callers turn that into a misleading 'not found' message.
+    with pytest.raises(SSHConnectionError):
+        path_utils._remote_directory_exists(DeadSSH(), "/remote/data")
 
 
 def test_remote_start_path_survives_null_remote_config_section():

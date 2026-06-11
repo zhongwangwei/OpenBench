@@ -316,13 +316,25 @@ def get_remote_ssh_manager(controller):
 
 
 def _remote_directory_exists(ssh_manager, path: str) -> bool:
-    """Check that a directory exists on the remote host."""
+    """Check that a directory exists on the remote host.
+
+    Raises SSHConnectionError instead of returning False on a dropped
+    session — callers turn False into 'directory not found', which would
+    misattribute a connection problem.
+    """
     from openbench.gui.widgets._ssh_worker import execute_responsive
     from openbench.gui.widgets.remote_config import _safe_remote_path
+    from openbench.remote.ssh import SSHConnectionError
 
     try:
         quoted = _safe_remote_path(path)
+    except ValueError as exc:
+        logger.debug("Remote directory check rejected %s: %s", path, exc)
+        return False
+    try:
         _, _, exit_code = execute_responsive(ssh_manager, f"test -d {quoted}", timeout=5)
+    except SSHConnectionError:
+        raise
     except Exception as exc:
         logger.debug("Remote directory check failed for %s: %s", path, exc)
         return False
@@ -341,23 +353,43 @@ def remote_home_dir(ssh_manager) -> str:
 
 
 def _resolve_remote_start_path(controller, ssh_manager, current_path: str = "") -> str:
-    """Pick a start directory for the remote browser.
+    """Pick a start directory for the remote browser — in ONE round trip.
 
     Every candidate is validated on the remote host: a stale path (e.g. a
     local path left over from a local-mode session, or an outdated
     openbench_path) must not seed the browser — RemoteFileBrowser would keep
     it as its current path and the Select button could round-trip it back as
-    the "chosen" remote directory.
+    the "chosen" remote directory. The candidates (field text ->
+    openbench_path -> $HOME -> /) are probed with a single compound command
+    instead of serial test -d calls, which cost seconds per Browse click on
+    high-latency links.
     """
-    if current_path and _remote_directory_exists(ssh_manager, current_path):
-        return current_path
-    openbench_path = controller.remote_settings().get("openbench_path", "")
-    if openbench_path and _remote_directory_exists(ssh_manager, openbench_path):
-        return openbench_path
-    home = remote_home_dir(ssh_manager)
-    if home and home != "/" and _remote_directory_exists(ssh_manager, home):
-        return home
-    return "/"
+    from openbench.gui.widgets._ssh_worker import execute_responsive
+    from openbench.gui.widgets.remote_config import _safe_remote_path
+
+    quoted_candidates = []
+    for candidate in (current_path, controller.remote_settings().get("openbench_path", "")):
+        if not candidate:
+            continue
+        try:
+            quoted_candidates.append(_safe_remote_path(candidate))
+        except ValueError:
+            continue
+    quoted_candidates.append('"$HOME"')
+
+    probe = (
+        "for p in " + " ".join(quoted_candidates) + '; do [ -d "$p" ] && { printf %s "$p"; exit 0; }; done; printf %s /'
+    )
+    try:
+        stdout, _, exit_code = execute_responsive(ssh_manager, probe, timeout=10)
+    except Exception as exc:
+        logger.debug("Remote start-path probe failed: %s", exc)
+        return "/"
+    if exit_code != 0:
+        return "/"
+    # rc-file banners may precede the result; the probe's printf is last.
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    return lines[-1] if lines else "/"
 
 
 def pick_remote_path(ssh_manager, parent, title: str, start_path: str, select_dirs: bool = True) -> str:

@@ -1,30 +1,12 @@
-import os
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
+
+from tests.gui_fakes import FakeButton  # noqa: E402
 
 pytest.importorskip("PySide6")
 
 from openbench.gui.main_window import MainWindow  # noqa: E402
 from openbench.gui.pages.page_preview import PagePreview  # noqa: E402
 from openbench.gui.widgets.validation_dialog import ValidationWorker  # noqa: E402
-
-
-class FakeButton:
-    def __init__(self):
-        self.enabled = None
-        self.visible = None
-        self.text = None
-
-    def setEnabled(self, value):
-        self.enabled = value
-
-    def setVisible(self, value):
-        self.visible = value
-
-    def setText(self, value):
-        self.text = value
 
 
 class FakeController:

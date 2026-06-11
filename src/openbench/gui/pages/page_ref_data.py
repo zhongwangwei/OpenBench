@@ -238,8 +238,18 @@ class PageRefData(BasePage):
 
             if worker_kwargs:
                 from openbench.gui.path_utils import _remote_directory_exists
+                from openbench.remote.ssh import SSHConnectionError
 
-                if not _remote_directory_exists(worker_kwargs["ssh_manager"], data_root):
+                try:
+                    exists = _remote_directory_exists(worker_kwargs["ssh_manager"], data_root)
+                except SSHConnectionError:
+                    QMessageBox.warning(
+                        self,
+                        "Connection Lost",
+                        "The SSH session dropped. Reconnect on the Runtime Environment page and try again.",
+                    )
+                    return
+                if not exists:
                     QMessageBox.warning(self, "Invalid Path", f"Remote directory not found: {data_root}")
                     return
             else:

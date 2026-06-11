@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import pytest
 
 PySide6 = pytest.importorskip("PySide6")
@@ -192,6 +188,33 @@ def test_symlink_double_click_is_guarded_while_loading(qapp, monkeypatch):
 
     assert emitted == []
     assert ssh.commands == []
+
+
+def test_symlink_fallback_probes_in_one_round_trip(qapp, monkeypatch):
+    """When the bulk find fails, symlink targets are probed with ONE compound
+    command instead of one test -d round trip per symlink."""
+    from PySide6.QtCore import Qt
+
+    _silence_warnings(monkeypatch)
+    listing = (
+        "total 2\n"
+        "lrwxrwxrwx 1 u g 1 Jan 1 00:00 dirlink -> target_dir\n"
+        "lrwxrwxrwx 1 u g 1 Jan 1 00:00 filelink -> target_file"
+    )
+    ssh = FakeSSH(
+        {
+            # find section empty => the bulk lookup failed
+            "cd /remote ": (f"/remote\n{SECTION}\n{listing}\n{SECTION}\n", "", 0),
+            "for p in ": ("/remote/dirlink\n", "", 0),
+        }
+    )
+
+    browser = RemoteFileBrowser(ssh, "/remote")
+
+    assert sum(1 for command in ssh.commands if "test -d" in command) == 0
+    assert sum(1 for command in ssh.commands if command.startswith("for p in ")) == 1
+    assert _first_browser_item(browser, "dirlink").data(Qt.UserRole)["is_dir"] is True
+    assert _first_browser_item(browser, "filelink").data(Qt.UserRole)["is_dir"] is False
 
 
 def test_load_directory_ignores_reentrant_calls(qapp, monkeypatch):
