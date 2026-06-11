@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.0b6] - 2026-06-11
+
+Patch release over 3.0.0b5 for GUI wizard flow alignment.
+
+### Changed
+- GUI setup now follows the CLI/config order: choose Evaluation Variables first,
+  then configure reference datasets and simulation datasets for those variables.
+
 ## [3.0.0b5] - 2026-06-11
 
 Patch release over 3.0.0b4 for GUI reference selection and remote SSH hardening.
