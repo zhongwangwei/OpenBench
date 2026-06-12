@@ -150,6 +150,49 @@ def remote_basename(path: str) -> str:
     return path.split("/")[-1]
 
 
+# Mirrors the data-directory hints used by the CLI simulation scanner
+# (openbench.data.sim_scanner._DATA_DIR_HINTS): directories whose name marks
+# them as a data subfolder of a case rather than the case directory itself.
+_SCAN_DATA_DIR_HINTS = {"data", "hist", "history", "lnd", "nc", "output", "outputs"}
+
+
+def infer_common_scan_root(paths) -> str:
+    """Infer the scan root directory from per-case/per-source data paths.
+
+    CLI-generated ``openbench.yaml`` files carry only per-case ``root_dir``
+    entries (e.g. ``/data/Sim/Case01/history``); the GUI scan pages need the
+    common parent the user originally scanned. Pure string logic on both
+    ``/`` and ``\\`` separators so remote POSIX paths are handled on any
+    local platform.
+
+    Returns "" when nothing can be inferred.
+    """
+    candidates = []
+    for path in paths or []:
+        if not path:
+            continue
+        parts = to_posix_path(str(path)).rstrip("/").split("/")
+        if len(parts) > 1 and parts[-1].lower() in _SCAN_DATA_DIR_HINTS:
+            parts = parts[:-1]  # drop history/output leaf → case directory
+        if len(parts) > 1:
+            parts = parts[:-1]  # case directory → its parent (scan root)
+        if parts:
+            candidates.append(parts)
+    if not candidates:
+        return ""
+
+    common = candidates[0]
+    for parts in candidates[1:]:
+        limit = min(len(common), len(parts))
+        index = 0
+        while index < limit and common[index] == parts[index]:
+            index += 1
+        common = common[:index]
+    if not common:
+        return ""
+    return "/".join(common) or "/"
+
+
 def looks_like_openbench_root(root: str) -> bool:
     """Detect a valid OpenBench v3 root in any supported install layout.
 

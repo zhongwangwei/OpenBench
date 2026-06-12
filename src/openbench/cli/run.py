@@ -130,7 +130,15 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
             results = run_evaluation(cfg, force=force, comparison_only=comparison_only)
         except Exception as e:
             logging.getLogger(__name__).exception("Evaluation failed")
+            _release_worker_pools()
+            _arm_exit_watchdog(1)
             raise click.ClickException(f"Evaluation failed: {e}") from e
+
+    # Evaluation results are final; tear down worker pools now so lingering
+    # workers (e.g. joblib/loky's reusable executor) cannot keep the process
+    # alive after the summary below is printed. The GUI and remote runners
+    # wait on process exit, so a hang here looks like a stuck run.
+    _release_worker_pools()
 
     status = results.get("status", "success")
     if status == "success":
@@ -138,6 +146,7 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         click.echo(f"  Output: {results.get('output_dir', 'unknown')}")
         click.echo(f"  Variables: {len(results.get('variables', []))}")
         click.echo(f"  Simulations: {len(results.get('simulations', []))}")
+        _arm_exit_watchdog(0)
         return
 
     heading = "Evaluation completed with errors" if status == "partial" else "Evaluation failed"
@@ -148,7 +157,87 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         message = error.get("message", "unknown error")
         click.echo(f"  - [{phase}] {message}")
     # Per-error context emitted above; exit silently with non-zero status.
+    _arm_exit_watchdog(1)
     raise SystemExit(1)
+
+
+def _release_worker_pools() -> None:
+    """Best-effort teardown of worker pools so the interpreter can exit.
+
+    joblib's loky backend keeps a reusable executor (and its worker
+    processes) alive after ``Parallel()`` returns. A stuck or slow worker
+    then blocks interpreter shutdown — and because the workers inherit
+    stdout/stderr, an orphaned worker also keeps the SSH channel of a remote
+    run open even after the main process dies. Kill the pools explicitly
+    once results are final.
+    """
+    try:
+        from openbench.util.parallel import shutdown_parallel_engine
+
+        shutdown_parallel_engine()
+    except Exception:
+        pass
+    try:
+        from joblib.externals.loky import get_reusable_executor
+
+        get_reusable_executor().shutdown(kill_workers=True)
+    except Exception:
+        pass
+    try:
+        import multiprocessing as mp
+
+        for child in mp.active_children():
+            child.terminate()
+    except Exception:
+        pass
+
+
+def _is_standalone_cli_process() -> bool:
+    """True when this process exists only to run the openbench CLI.
+
+    The watchdog below force-exits the whole process; that is only safe when
+    the process is ``python -m openbench`` / the ``openbench`` console script.
+    Embedders (pytest's CliRunner, API users) keep running after the command
+    returns and must never be killed by a leftover timer.
+    """
+    import sys
+
+    main_module = sys.modules.get("__main__")
+    spec = getattr(main_module, "__spec__", None)
+    if spec is not None and getattr(spec, "name", "") in {"openbench", "openbench.__main__"}:
+        return True
+    argv0 = os.path.basename(sys.argv[0] or "")
+    return argv0 in {"openbench", "openbench.exe"}
+
+
+def _arm_exit_watchdog(exit_code: int, timeout: float = 20.0) -> None:
+    """Force process exit if interpreter shutdown hangs after a finished run.
+
+    Armed only in a standalone CLI process, after results are printed. The
+    daemon timer cannot keep a healthy process alive; it only fires when
+    shutdown (e.g. joining a wedged worker thread) blocks an exit that
+    should already be over.
+    """
+    import sys
+    import threading
+
+    if not _is_standalone_cli_process():
+        return
+
+    def _force_exit():
+        sys.stderr.write(
+            f"openbench: shutdown did not complete within {timeout:.0f}s (lingering workers); forcing exit.\n"
+        )
+        try:
+            sys.stderr.flush()
+            sys.stdout.flush()
+        except Exception:
+            pass
+        os._exit(exit_code)
+
+    timer = threading.Timer(timeout, _force_exit)
+    timer.daemon = True
+    timer.start()
 
 
 def _expand_path_value(value):

@@ -116,11 +116,24 @@ class SelectionMixin:
                                         target_var = actual_fb_var
                                         actual_target_var = actual_fb_var
                                         setattr(self, f"{datasource}_varname", [target_var])
-                                        if fb.varunit:
-                                            setattr(self, f"{datasource}_varunit", fb.varunit)
-                                        # Apply conversion expression if defined
+                                        # A convert expression transforms the fallback
+                                        # variable into the PRIMARY variable's unit (same
+                                        # contract as
+                                        # config.adapter._resolve_varname_from_profile), so
+                                        # the primary varunit must drive downstream unit
+                                        # conversion. Setting fb.varunit here would let
+                                        # process_units re-apply the conversion the
+                                        # expression already did (e.g. mol→gC ×12.011),
+                                        # inflating NEE/GPP fallbacks by ~12×.
                                         if fb.convert:
                                             setattr(self, f"_fb_convert_{datasource}", fb.convert)
+                                            setattr(
+                                                self,
+                                                f"{datasource}_varunit",
+                                                var_mapping.varunit or fb.varunit,
+                                            )
+                                        elif fb.varunit:
+                                            setattr(self, f"{datasource}_varunit", fb.varunit)
                                         fallback_found = True
                                         break
                     except Exception as e:
@@ -164,6 +177,21 @@ class SelectionMixin:
                 _validate_expression(fb_convert, allowed_names=ns.keys())
                 ds.values = eval(fb_convert, {"__builtins__": {}}, ns)  # noqa: S307
                 logging.info("Applied fallback conversion: %s", fb_convert)
+                # The expression yields a DERIVED quantity (e.g. NEE from
+                # f_respc and f_assim), but `ds` still carries the source
+                # variable's name and long_name (e.g. "respiration
+                # (plant+soil)"), which then mislabels the derived field in
+                # output files and plots. Relabel to the evaluation item,
+                # mirroring the compute path (which sets result.name = item).
+                fb_item = getattr(self, "item", "")
+                if fb_item and hasattr(ds, "attrs"):
+                    try:
+                        ds.name = fb_item
+                    except Exception:
+                        pass
+                    for _stale_attr in ("long_name", "standard_name", "original_name"):
+                        ds.attrs.pop(_stale_attr, None)
+                    ds.attrs["long_name"] = fb_item.replace("_", " ")
             except Exception as e:
                 raise RuntimeError(
                     f"Fallback conversion {fb_convert!r} failed; refusing to continue with unconverted units"

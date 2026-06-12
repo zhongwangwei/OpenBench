@@ -654,6 +654,22 @@ def get_parallel_engine(backend: str = "auto", max_workers: Optional[int] = None
         return _parallel_engine
 
 
+def shutdown_parallel_engine() -> None:
+    """Shut down the global parallel engine (if one was created).
+
+    Releases backend resources (e.g. a Dask client) so the interpreter can
+    exit promptly once a run finishes.
+    """
+    global _parallel_engine
+    with _parallel_engine_lock:
+        engine, _parallel_engine = _parallel_engine, None
+    if engine is not None:
+        try:
+            engine.shutdown()
+        except Exception as exc:
+            logging.warning(f"Could not shut down parallel engine cleanly: {exc}")
+
+
 # Convenience functions
 @error_handler(reraise=True)
 def parallel_map(

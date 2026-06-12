@@ -623,7 +623,7 @@ ERA5LAND_LowRes:
       suffix: _swvl1_1D_0p25
     Total_Runoff:
       varname: ro
-      varunit: m
+      varunit: m day-1
       sub_dir: Water/Total_Runoff/ERA5LAND
       prefix: ERA5LAND_
       suffix: _runoff_1D_0p25
@@ -773,7 +773,7 @@ ERA5LAND_MidRes:
       suffix: _swvl1_1D_0p25
     Total_Runoff:
       varname: ro
-      varunit: m
+      varunit: m day-1
       sub_dir: Water/Total_Runoff/ERA5LAND
       prefix: ERA5LAND_
       suffix: _runoff_1D_0p25

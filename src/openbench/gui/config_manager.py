@@ -11,6 +11,78 @@ import yaml
 
 from openbench.gui.path_utils import convert_paths_in_dict, get_openbench_root, to_absolute_path
 
+_BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
+
+
+def registry_model_profile(model_name: str):
+    """Return the registry ModelProfile for a bare model name, else None.
+
+    The scan-based Simulation Data page stores registry model names (e.g.
+    ``CoLM2024``) in ``model_namelist``, not file paths. Anything that looks
+    like a path or a definition file is not resolved here.
+    """
+    name = str(model_name or "")
+    if not name or "/" in name or "\\" in name or name.endswith((".yaml", ".nml")):
+        return None
+    try:
+        from openbench.data.registry.manager import get_registry
+
+        return get_registry().get_model(name)
+    except Exception:
+        return None
+
+
+def model_definition_from_registry(model_name: str, selected_items: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """Build a model definition dict from the registry for export.
+
+    Returns the legacy-shaped mapping (``general`` + one section per
+    evaluation item) used by the exported ``nml/sim/models/*.yaml`` files,
+    or None when ``model_name`` is not a bare registry model name.
+    """
+    profile = registry_model_profile(model_name)
+    if profile is None:
+        return None
+    content: Dict[str, Any] = {"general": {"model": getattr(profile, "name", model_name)}}
+    variables = getattr(profile, "variables", {}) or {}
+    for item in selected_items or sorted(variables):
+        mapping = variables.get(item)
+        if mapping is not None:
+            content[item] = mapping.to_dict()
+    return content
+
+
+def is_builtin_model(model_name: str) -> bool:
+    """True when the model ships with the OpenBench package registry.
+
+    Built-in models exist on every install (including remote servers), so
+    they never need their profile uploaded; user-registered models do.
+    """
+    global _BUILTIN_MODEL_KEYS
+    if _BUILTIN_MODEL_KEYS is None:
+        names: Set[str] = set()
+        try:
+            from openbench.data.registry.manager import REGISTRY_DIR
+            from openbench.util.names import normalize_name
+
+            catalog = REGISTRY_DIR / "model_catalog.yaml"
+            if catalog.is_file():
+                data = yaml.safe_load(catalog.read_text(encoding="utf-8")) or {}
+                names.update(normalize_name(key) for key in data)
+            models_dir = REGISTRY_DIR / "models"
+            if models_dir.is_dir():
+                for entry in models_dir.iterdir():
+                    if entry.name.endswith(".yaml"):
+                        names.add(normalize_name(entry.name[: -len(".yaml")]))
+        except Exception:
+            return False
+        _BUILTIN_MODEL_KEYS = names
+    try:
+        from openbench.util.names import normalize_name
+
+        return normalize_name(str(model_name or "")) in _BUILTIN_MODEL_KEYS
+    except Exception:
+        return False
+
 
 class ConfigManager:
     """Manages NML configuration loading, saving, and validation."""
@@ -163,6 +235,14 @@ class ConfigManager:
                 "variables": variables_override,
             }
 
+        # CLI configs have no scan-root concept (only per-case root_dir), but
+        # the GUI's Simulation Data page needs one to restore its scan field.
+        from openbench.gui.path_utils import infer_common_scan_root
+
+        sim_scan_root = infer_common_scan_root(
+            [cfg.get("general", {}).get("root_dir", "") for cfg in sim_source_configs.values()]
+        )
+
         return {
             "general": general,
             "evaluation_items": evaluation_items,
@@ -175,6 +255,7 @@ class ConfigManager:
                 "general": sim_general,
                 "def_nml": {},
                 "source_configs": sim_source_configs,
+                **({"_scan_root": sim_scan_root} if sim_scan_root else {}),
             },
         }
 
@@ -930,6 +1011,19 @@ class ConfigManager:
                     model_name = os.path.splitext(os.path.basename(actual_path))[0] + ".yaml"
                     dest_path = os.path.join(sim_models_dir, model_name)
                     self._copy_model_definition(actual_path, dest_path, selected_items)
+                    copied_files[f"model_{model_name}"] = dest_path
+                    continue
+                # Bare registry model names (scan-based assignment) have no
+                # definition file on disk — generate one from the registry.
+                registry_content = model_definition_from_registry(model_path, selected_items)
+                if registry_content is not None:
+                    model_name = f"{model_path}.yaml"
+                    dest_path = os.path.join(sim_models_dir, model_name)
+                    os.makedirs(sim_models_dir, exist_ok=True)
+                    with open(dest_path, "w", encoding="utf-8") as f:
+                        yaml.dump(
+                            registry_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2
+                        )
                     copied_files[f"model_{model_name}"] = dest_path
 
         # Process reference data namelists

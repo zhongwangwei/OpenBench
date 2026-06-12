@@ -53,3 +53,42 @@ def test_latent_heat_flux_uses_documented_2p5e6_factor():
 
     assert base_unit == "mm day-1"
     assert converted == 86400.0 / 2.5e6
+
+
+def test_metre_per_day_runoff_converts_to_mm_per_day():
+    """ERA5-Land 'ro' is a daily runoff depth in metres (m/day); it must map to
+    the mm day-1 base so it lines up with model runoff in mm s-1, not be left as
+    a bare length 1000x off."""
+    unit._UNIT_LOOKUP_CACHE = None
+    for alias in ["m day-1", "m d-1"]:
+        converted, base_unit = UnitProcessing.convert_unit(2.0, alias)
+        assert base_unit == "mm day-1"
+        assert converted == 2000.0
+
+
+def test_cm_equivalent_water_thickness_converts_to_mm():
+    """GRAiCE/GRACE TWSC in 'cm of equivalent water thickness' must reach the mm
+    base (x10) to match model TWSC in mm, not stay 10x off."""
+    unit._UNIT_LOOKUP_CACHE = None
+    converted, base_unit = UnitProcessing.convert_unit(3.0, "cm of equivalent water thickness")
+    assert base_unit == "mm"
+    assert converted == 30.0
+
+
+def test_bare_cm_remains_a_length_in_metres():
+    """A bare 'cm' must stay a length (base metre), so adding the water-thickness
+    string above does not hijack centimetre lengths into the mm depth base."""
+    unit._UNIT_LOOKUP_CACHE = None
+    converted, base_unit = UnitProcessing.convert_unit(100.0, "cm")
+    assert base_unit == "m"
+    assert converted == 1.0
+
+
+def test_dimensionless_dash_is_recognized_as_unitless():
+    """Albedo computed as f_sr/f_solarin is labelled '-'; it must be recognized
+    as unitless (passthrough), not trigger a no-conversion warning."""
+    unit._UNIT_LOOKUP_CACHE = None
+    for alias in ["-", "none"]:
+        converted, base_unit = UnitProcessing.convert_unit(0.15, alias)
+        assert base_unit == "unitless"
+        assert converted == 0.15

@@ -87,6 +87,13 @@ class UnitProcessing:
                 "kg m-2": lambda x: x,
                 "kg/m2": lambda x: x,
                 "kg m**-2": lambda x: x,
+                # Equivalent-water-thickness depth (e.g. GRAiCE/GRACE TWSC in
+                # centimetres). 1 cm = 10 mm. Matched on the full descriptive
+                # string the catalogue uses so a bare "cm" stays a length
+                # (mapped to metres below), not a water depth.
+                "cm of equivalent water thickness": lambda x: x * 10,
+                "cm of water": lambda x: x * 10,
+                "cm water equivalent": lambda x: x * 10,
             },
             "mm day-1": {
                 "kg m-2 s-1": lambda x: x * 86400,
@@ -99,6 +106,10 @@ class UnitProcessing:
                 "mm month-1": lambda x: _per_month_to_per_day(x),
                 "w m-2 heat": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
                 "mm 3hour-1": lambda x: x * 8,
+                # Daily runoff/flux depth expressed in metres of water
+                # (e.g. ERA5-Land "ro"). 1 m = 1000 mm.
+                "m day-1": lambda x: x * 1000,
+                "m d-1": lambda x: x * 1000,
             },
             "w m-2": {
                 "w/m2": lambda x: x,
@@ -119,6 +130,8 @@ class UnitProcessing:
                 "g g-1": lambda x: x,
                 "1": lambda x: x,  # Dimensionless (numeric representation)
                 "0": lambda x: x,  # Sometimes used as placeholder for unitless
+                "-": lambda x: x,  # Dimensionless ratio (e.g. albedo "f_sr/f_solarin")
+                "none": lambda x: x,  # Sometimes written for unitless fields
             },
             "k": {
                 "c": lambda x: x + 273.15,

@@ -47,6 +47,39 @@ _DETACHED_SCAN_WORKERS = []
 from openbench.gui.path_utils import get_remote_ssh_manager
 
 
+def _infer_ref_data_root(general_section, selected_vars) -> str:
+    """Fallback scan root when the loaded config has no reference.data_root.
+
+    CLI-generated openbench.yaml files usually omit data_root (sources are
+    resolved through the registry), so derive the common parent of the
+    selected sources' registry root_dir entries instead of leaving the
+    scan field empty after loading a config.
+    """
+    try:
+        from openbench.data.registry.manager import get_registry
+
+        registry = get_registry()
+    except Exception:
+        return ""
+    roots = []
+    for var_name in selected_vars:
+        raw = general_section.get(f"{var_name}_ref_source", "")
+        names = raw if isinstance(raw, list) else [raw]
+        for name in names:
+            if not name:
+                continue
+            try:
+                dataset = registry.get_reference(name)
+            except Exception:
+                dataset = None
+            root_dir = getattr(dataset, "root_dir", "") if dataset else ""
+            if root_dir:
+                roots.append(str(root_dir))
+    from openbench.gui.path_utils import infer_common_scan_root
+
+    return infer_common_scan_root(roots)
+
+
 class PageRefData(BasePage):
     """Reference Data configuration page."""
 
@@ -596,7 +629,14 @@ class PageRefData(BasePage):
 
         # Restore the data root text box from the persisted general
         # section so reloading a project doesn't lose the user's path.
+        # CLI configs carry no data_root, so fall back to the common parent
+        # of the selected sources' registry directories.
         saved_data_root = general_section.get("data_root", "")
+        if not saved_data_root:
+            eval_items_cfg = self.controller.config.get("evaluation_items", {})
+            saved_data_root = _infer_ref_data_root(
+                general_section, [k for k, v in eval_items_cfg.items() if v]
+            )
         if saved_data_root:
             self.data_root_input.setText(saved_data_root)
 

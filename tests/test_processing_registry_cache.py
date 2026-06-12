@@ -135,7 +135,9 @@ def test_select_var_fallback_uses_cached_registry(monkeypatch):
 
     np.testing.assert_array_equal(result.values, [2.0, 4.0])
     assert processor.sim_varname == ["fallback_runoff"]
-    assert processor.sim_varunit == "kg"
+    # convert is present, so the data is now in the PRIMARY unit (mm), not the
+    # fallback's native kg — process_units must not re-convert from kg.
+    assert processor.sim_varunit == "mm"
 
 
 def test_select_var_fallback_conversion_can_reference_peer_variables(monkeypatch):
@@ -184,7 +186,14 @@ def test_select_var_fallback_conversion_can_reference_peer_variables(monkeypatch
 
     np.testing.assert_allclose(result.values, [12.011, 18.0165])
     assert processor.sim_varname == ["f_respc"]
-    assert processor.sim_varunit == "mol m-2 s-1"
+    # The fallback convert already applied the mol→gC molar mass (×12.011), so
+    # the unit driving downstream process_units must be the PRIMARY unit
+    # (g m-2 s-1), NOT the fallback's native mol m-2 s-1. Using mol m-2 s-1
+    # would let process_units re-apply ×12.01, inflating NEE/GPP by ~12×.
+    assert processor.sim_varunit == "g m-2 s-1"
+    # The derived NEE must not keep the source variable's identity/label.
+    assert result.name == "Net_Ecosystem_Exchange"
+    assert result.attrs.get("long_name") == "Net Ecosystem Exchange"
 
 
 def test_select_var_raises_if_materialization_fails(monkeypatch):
