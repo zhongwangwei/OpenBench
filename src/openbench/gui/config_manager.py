@@ -32,7 +32,9 @@ def registry_model_profile(model_name: str):
         return None
 
 
-def model_definition_from_registry(model_name: str, selected_items: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+def model_definition_from_registry(
+    model_name: str, selected_items: Optional[List[str]] = None
+) -> Optional[Dict[str, Any]]:
     """Build a model definition dict from the registry for export.
 
     Returns the legacy-shaped mapping (``general`` + one section per

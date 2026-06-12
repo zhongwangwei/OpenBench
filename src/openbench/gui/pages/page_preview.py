@@ -445,7 +445,9 @@ class PagePreview(BasePage):
                 raise RemoteNamelistSyncError(stderr.strip() or f"mkdir exit code {exit_code}")
 
             with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
-                _yaml.dump(profile.to_dict(), tmp, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
+                _yaml.dump(
+                    profile.to_dict(), tmp, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2
+                )
                 tmp_path = tmp.name
             try:
                 remote_path = f"{remote_models_dir}/{model_name}.yaml"
