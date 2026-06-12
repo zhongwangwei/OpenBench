@@ -13,6 +13,7 @@ from joblib import delayed
 
 from openbench.core._comparison_helpers import _apply_pairwise_valid_mask, _require_stat_method, _write_csv_atomic
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 
 
 def _comparison_callable(name: str):
@@ -46,9 +47,9 @@ class BasicComparisonMixin:
             ref_path = os.path.join(basedir, "data", f"stn_{ref_source}_{sim_source}", ref_filename)
 
             with xr.open_dataset(sim_path) as sim_ds:
-                s = sim_ds[sim_varname].squeeze().load()
+                s = select_data_array(sim_ds, sim_varname).squeeze().load()
             with xr.open_dataset(ref_path) as ref_ds:
-                o = ref_ds[ref_varname].squeeze().load()
+                o = select_data_array(ref_ds, ref_varname).squeeze().load()
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 

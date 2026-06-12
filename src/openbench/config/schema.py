@@ -69,7 +69,7 @@ class ProjectConfig:
     years: list[int]  # [start_year, end_year], inclusive — exactly 2 ints
 
     # --- Spatial-temporal bounds ---
-    min_year_threshold: int = 3  # Per-station filter: drop stations whose valid span < N years (stn ref only)
+    min_year_threshold: int = 1  # Per-station filter: drop stations whose valid span < N years (stn ref only)
     lat_range: list[float] = field(default_factory=lambda: [-90.0, 90.0])  # Spatial bounds, default global
     lon_range: list[float] = field(default_factory=lambda: [-180.0, 180.0])  # Spatial bounds, default global
 

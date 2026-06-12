@@ -24,6 +24,7 @@ class LazyGroup(click.Group):
         "gui": "openbench.cli.gui:gui",
         "cache": "openbench.cli.cache:cache",
         "smoke-test": "openbench.cli.smoke:smoke_test",
+        "registry": "openbench.cli.registry_cmd:registry",
     }
 
     def list_commands(self, ctx):
@@ -35,6 +36,7 @@ class LazyGroup(click.Group):
             "ref",
             "sim",
             "model",
+            "registry",
             "migrate",
             "cache",
             "gui",
@@ -56,6 +58,15 @@ class LazyGroup(click.Group):
 @click.version_option(version=__version__, prog_name="openbench", message="openbench %(version)s")
 def cli():
     """OpenBench: Land Surface Model Benchmarking System."""
+    # Throttled, silent-when-clean notice if the user registry overlay shadows
+    # the bundled catalog (e.g. a legacy full snapshot hiding bundled fixes).
+    # Never raises; skipped entirely when nothing changed since the last check.
+    try:
+        from openbench.data.registry.overlay_audit import maybe_emit_overlay_notice
+
+        maybe_emit_overlay_notice()
+    except Exception:
+        pass
 
 
 @cli.command()

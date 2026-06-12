@@ -13,6 +13,7 @@ import xarray as xr
 
 from openbench.core._comparison_helpers import _finite_reduced_value, _write_csv_atomic
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 
 
@@ -134,9 +135,9 @@ class ParallelCoordinatesComparisonMixin:
                                                 )
 
                                                 with xr.open_dataset(ref_path) as ref_ds:
-                                                    reffile = ref_ds[ref_varname].load()
+                                                    reffile = select_data_array(ref_ds, ref_varname).load()
                                                 with xr.open_dataset(sim_path) as sim_ds:
-                                                    simfile = sim_ds[sim_varname].load()
+                                                    simfile = select_data_array(sim_ds, sim_varname).load()
                                                 reffile = Convert_Type.convert_nc(reffile)
                                                 simfile = Convert_Type.convert_nc(simfile)
 

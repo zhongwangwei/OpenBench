@@ -19,6 +19,7 @@ from openbench.core._comparison_helpers import (
     _write_csv_atomic,
 )
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 from openbench.util.filenames import join_filename_components
 
 
@@ -136,9 +137,9 @@ class TargetDiagramComparisonMixin:
                                                     )
 
                                                     with xr.open_dataset(sim_path) as sim_ds:
-                                                        s = sim_ds[sim_varname].squeeze().load()
+                                                        s = select_data_array(sim_ds, sim_varname).squeeze().load()
                                                     with xr.open_dataset(ref_path) as ref_ds:
-                                                        o = ref_ds[ref_varname].squeeze().load()
+                                                        o = select_data_array(ref_ds, ref_varname).squeeze().load()
                                                     o = Convert_Type.convert_nc(o)
                                                     s = Convert_Type.convert_nc(s)
 
@@ -237,9 +238,9 @@ class TargetDiagramComparisonMixin:
                                             )
 
                                             with xr.open_dataset(ref_path) as ref_ds:
-                                                reffile = ref_ds[ref_varname].load()
+                                                reffile = select_data_array(ref_ds, ref_varname).load()
                                             with xr.open_dataset(sim_path) as sim_ds:
-                                                simfile = sim_ds[sim_varname].load()
+                                                simfile = select_data_array(sim_ds, sim_varname).load()
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
