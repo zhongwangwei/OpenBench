@@ -251,7 +251,7 @@ CLARA_3_LowRes:
       prefix: Rnmm
     Surface_Albedo:
       varname: blue_sky_albedo_all_mean
-      varunit: '%'
+      varunit: '1'
       sub_dir: Heat/Surface_Albedo/CLARA_3
       prefix: SALmm
     Surface_Downward_LW_Radiation:

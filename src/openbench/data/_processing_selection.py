@@ -139,6 +139,32 @@ class SelectionMixin:
                     except Exception as e:
                         logging.debug("Fallback lookup failed: %s", e)
 
+                    # Final fallback: the data file may already carry the OpenBench
+                    # standard variable name (e.g. 'Net_Ecosystem_Exchange') instead
+                    # of the model's native name (f_nee/f_respc). This is common when
+                    # users pre-process model output to standard names — the same way
+                    # CoLM's Surface_Albedo profile uses 'Surface_Albedo' as its
+                    # primary varname. If the standard item-named variable is present,
+                    # use it directly and DROP any adapter-resolved convert expression:
+                    # the data is already the final derived quantity, so re-applying a
+                    # native-variable convert (e.g. f_respc → NEE) would corrupt it.
+                    if not fallback_found:
+                        item = getattr(self, "item", "")
+                        actual_item_var = get_xarray_key_case_insensitive(ds, item) if item else None
+                        if actual_item_var is not None:
+                            logging.warning(
+                                "Variable '%s' not found, using standard item-named "
+                                "variable '%s' already present in the data file",
+                                target_var,
+                                actual_item_var,
+                            )
+                            target_var = actual_item_var
+                            actual_target_var = actual_item_var
+                            setattr(self, f"{datasource}_varname", [target_var])
+                            if hasattr(self, f"_fb_convert_{datasource}"):
+                                delattr(self, f"_fb_convert_{datasource}")
+                            fallback_found = True
+
                     if not fallback_found:
                         available_vars = list(ds.data_vars) + list(ds.coords)
                         logging.error(f"Variable '{varname[0]}' not found in dataset")

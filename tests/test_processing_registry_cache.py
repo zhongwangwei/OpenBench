@@ -196,6 +196,61 @@ def test_select_var_fallback_conversion_can_reference_peer_variables(monkeypatch
     assert result.attrs.get("long_name") == "Net Ecosystem Exchange"
 
 
+def test_select_var_falls_back_to_standard_item_name(monkeypatch):
+    """Data files that already use the OpenBench standard variable name must be
+    read directly when the model's native varname (and fallbacks) are absent.
+
+    Mirrors the real-world case where CoLM output is pre-processed to standard
+    names: NEE maps to f_nee/f_respc in the profile, but the file only contains
+    'Net_Ecosystem_Exchange'. The stale adapter-resolved convert (f_respc → NEE)
+    must be dropped so the already-final data is not corrupted.
+    """
+    import openbench.data.processing as processing
+    import openbench.data.registry as registry_pkg
+    import openbench.data.registry.manager as registry_manager
+
+    processor = _make_processor(processing)
+    processor.item = "Net_Ecosystem_Exchange"
+    processor.sim_varname = ["f_respc"]
+    processor.sim_varunit = "g m-2 s-1"
+    # Adapter resolved f_respc from a probe file, leaving a stale convert behind.
+    processor._fb_convert_sim = "value * 12.011 - f_assim * 12.011"
+    ds = xr.Dataset({"Net_Ecosystem_Exchange": xr.DataArray(np.array([1.5, 2.5]))})
+    profile = ModelProfile(
+        name="ModelA",
+        description="test model",
+        variables={
+            "Net_Ecosystem_Exchange": VariableMapping(
+                varname="f_nee",
+                varunit="g m-2 s-1",
+                fallbacks=[
+                    FallbackVar(
+                        varname="f_respc",
+                        varunit="mol m-2 s-1",
+                        convert="value * 12.011 - f_assim * 12.011",
+                    )
+                ],
+            )
+        },
+    )
+
+    def _raise_filter_error(datasource, opened_ds, varname):
+        raise KeyError("force fallback lookup")
+
+    monkeypatch.setattr(registry_pkg, "RegistryManager", _bomb_registry_manager)
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(profile))
+    monkeypatch.setattr(processing.xr, "open_dataset", lambda *args, **kwargs: ds)
+    monkeypatch.setattr(processing.Convert_Type, "convert_nc", lambda obj: obj)
+    processor.apply_custom_filter = _raise_filter_error
+
+    result = processing.BaseDatasetProcessing.select_var(processor, 2000, 2000, "Day", "dummy.nc", ["f_respc"], "sim")
+
+    # Data is used verbatim — NOT run through the f_respc convert expression.
+    np.testing.assert_array_equal(result.values, [1.5, 2.5])
+    assert processor.sim_varname == ["Net_Ecosystem_Exchange"]
+    assert not hasattr(processor, "_fb_convert_sim")
+
+
 def test_select_var_raises_if_materialization_fails(monkeypatch):
     """select_var must not return a lazy object after closing its source dataset."""
     import pytest

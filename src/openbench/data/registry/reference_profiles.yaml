@@ -1271,7 +1271,7 @@ CLARA_3:
       varunit: W m-2
     Surface_Albedo:
       varname: blue_sky_albedo_all_mean
-      varunit: "%"
+      varunit: "1"
     Surface_Downward_LW_Radiation:
       varname: SDL
       varunit: W m-2
