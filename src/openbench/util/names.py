@@ -125,6 +125,43 @@ def get_xarray_key_case_insensitive(
     return None
 
 
+def select_data_array(ds, *preferred):
+    """Pull one data variable out of a (flat/preprocessed) dataset robustly.
+
+    Tries each name in ``preferred`` (case-insensitive). If none match, falls
+    back to the single data variable when the dataset has exactly one — which is
+    always the case for OpenBench flat ``<item>_<src>_<varname>.nc`` files.
+
+    This decouples the *configured* variable name (e.g. ``f_respc``) from the
+    name the data is actually stored under (e.g. the relabelled evaluation item
+    ``Net_Ecosystem_Exchange``, produced when a fallback/convert derives the
+    variable). Readers must not hard-index ``ds[sim_varname]`` because the saved
+    variable is intentionally relabelled to the item for output correctness.
+
+    Raises KeyError if nothing matches and the dataset is not single-variable.
+    Each ``preferred`` arg may be a name or a list/tuple of names.
+    """
+    names: list = []
+    for item in preferred:
+        if isinstance(item, (list, tuple)):
+            names.extend(item)
+        elif item:
+            names.append(item)
+    for name in names:
+        if not name:
+            continue
+        actual = get_xarray_key_case_insensitive(ds, name)
+        if actual is not None:
+            return ds[actual]
+    data_vars = list(getattr(ds, "data_vars", []))
+    if len(data_vars) == 1:
+        return ds[data_vars[0]]
+    raise KeyError(
+        f"None of {[n for n in preferred if n]} found in dataset; it has "
+        f"{len(data_vars)} data variables {data_vars}, cannot disambiguate."
+    )
+
+
 def resolve_many_case_insensitive(
     requested: Iterable[object],
     candidates: Iterable[object],

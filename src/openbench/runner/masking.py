@@ -57,8 +57,14 @@ def apply_unified_mask(
         ref_ds = xr.open_dataset(ref_path)
         sim_ds = xr.open_dataset(sim_path)
 
-        o = ref_ds[ref_varname]
-        s = sim_ds[sim_varname]
+        # The flat file stores the variable under the configured name OR the
+        # relabelled evaluation item (when a fallback/convert derived it, e.g.
+        # NEE from f_respc). Resolve robustly instead of hard-indexing the
+        # possibly-stale config varname. (var_name is the evaluation item.)
+        from openbench.util.names import select_data_array
+
+        o = select_data_array(ref_ds, ref_varname, var_name)
+        s = select_data_array(sim_ds, sim_varname, var_name)
 
         # Convert types if needed
         try:

@@ -3090,7 +3090,7 @@ def test_init_passes_explicit_sim_model_to_scan(tmp_path, monkeypatch):
     assert config["simulation"]["grid"]["model"] == "CoLM"
 
 
-def test_init_caps_min_year_threshold_to_project_span(tmp_path, monkeypatch):
+def test_init_min_year_threshold_defaults_to_one(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
     import openbench.data.registry as registry_package
     import openbench.data.sim_scanner as sim_scanner
@@ -3158,7 +3158,8 @@ def test_init_caps_min_year_threshold_to_project_span(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
-    assert project["min_year_threshold"] == 2
+    # Default is now 1 for every project span (min(1, span) == 1).
+    assert project["min_year_threshold"] == 1
 
 
 def test_init_sets_project_resolution_from_selected_reference_when_sim_scan_is_mixed(
@@ -5458,7 +5459,20 @@ def test_all_commands_registered():
     # Use list_commands() for LazyGroup compatibility
     ctx = click.Context(cli)
     command_names = set(cli.list_commands(ctx))
-    expected = {"run", "check", "ref", "sim", "model", "migrate", "init", "cache", "gui", "version", "smoke-test"}
+    expected = {
+        "run",
+        "check",
+        "ref",
+        "sim",
+        "model",
+        "registry",
+        "migrate",
+        "init",
+        "cache",
+        "gui",
+        "version",
+        "smoke-test",
+    }
     assert expected == command_names, f"Missing: {expected - command_names}, Extra: {command_names - expected}"
 
 

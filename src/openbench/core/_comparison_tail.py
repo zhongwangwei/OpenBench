@@ -17,6 +17,7 @@ from openbench.core._comparison_helpers import (
     _station_csv_column_mean,
 )
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 
 
 def _comparison_callable(name: str):
@@ -150,7 +151,7 @@ class TailComparisonMixin:
                                     f"{evaluation_item}/{sim_source}: {sim_path}"
                                 )
                             with xr.open_dataset(sim_path) as sim_ds:
-                                sim = sim_ds[sim_varname].load()
+                                sim = select_data_array(sim_ds, sim_varname).load()
                             sim = Convert_Type.convert_nc(sim)
 
                             result = method_function(*[sim])
@@ -192,7 +193,7 @@ class TailComparisonMixin:
                                     f"{evaluation_item}/{ref_source}: {ref_path}"
                                 )
                             with xr.open_dataset(ref_path) as ref_ds:
-                                ref = ref_ds[ref_varname].load()
+                                ref = select_data_array(ref_ds, ref_varname).load()
                             ref = Convert_Type.convert_nc(ref)
 
                             result = method_function(*[ref])
@@ -255,7 +256,7 @@ class TailComparisonMixin:
                                 basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                             )
                             with xr.open_dataset(ref_path) as ref_ds:
-                                ref = ref_ds[ref_varname].load()
+                                ref = select_data_array(ref_ds, ref_varname).load()
                             ref = Convert_Type.convert_nc(ref)
 
                             for sim_source in sim_sources:
@@ -268,7 +269,7 @@ class TailComparisonMixin:
                                             basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                         )
                                         with xr.open_dataset(sim_path) as sim_ds:
-                                            sim = sim_ds[sim_varname].load()
+                                            sim = select_data_array(sim_ds, sim_varname).load()
                                         sim = Convert_Type.convert_nc(sim)
 
                                         result = method_function(*[ref, sim])

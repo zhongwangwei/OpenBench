@@ -719,7 +719,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         # literally and fail at directory creation time on HPC.
         output_dir=str(Path(os.path.expandvars(str(raw["output_dir"]))).expanduser()),
         years=years,
-        min_year_threshold=raw.get("min_year_threshold", 3),
+        min_year_threshold=raw.get("min_year_threshold", 1),
         lat_range=lat_range,
         lon_range=lon_range,
         # Target resolution

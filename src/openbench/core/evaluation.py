@@ -296,8 +296,14 @@ class Evaluation_grid(metrics, scores):
             # Open datasets and keep references for proper cleanup
             ref_ds = open_dataset_chunked(ref_path)
             sim_ds = open_dataset_chunked(sim_path)
-            o = ref_ds[f"{self.ref_varname}"]
-            s = sim_ds[f"{self.sim_varname}"]
+            # Resolve the variable robustly: a fallback/convert may have stored
+            # the data under the relabelled item name (e.g. Net_Ecosystem_Exchange)
+            # rather than the configured varname (e.g. f_respc). Flat files hold a
+            # single data variable, so fall back to the item name / sole variable.
+            from openbench.util.names import select_data_array
+
+            o = select_data_array(ref_ds, self.ref_varname, self.item)
+            s = select_data_array(sim_ds, self.sim_varname, self.item)
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 

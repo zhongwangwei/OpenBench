@@ -17,7 +17,7 @@ def test_project_config_defaults():
     assert p.name == "test"
     assert p.output_dir == "./output"
     assert p.years == [2004, 2010]
-    assert p.min_year_threshold == 3
+    assert p.min_year_threshold == 1
     assert p.lat_range == [-90.0, 90.0]
     assert p.lon_range == [-180.0, 180.0]
 

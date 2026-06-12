@@ -14,6 +14,7 @@ from joblib import delayed
 
 from openbench.core._comparison_helpers import _apply_pairwise_valid_mask, _atomic_text_writer
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 
@@ -203,9 +204,9 @@ class SingleModelPerformanceIndexComparisonMixin:
                                         f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
                                     )
                                     with xr.open_dataset(sim_path) as sim_ds:
-                                        s = sim_ds[sim_varname].squeeze().load()
+                                        s = select_data_array(sim_ds, sim_varname).squeeze().load()
                                     with xr.open_dataset(ref_path) as ref_ds:
-                                        o = ref_ds[ref_varname].squeeze().load()
+                                        o = select_data_array(ref_ds, ref_varname).squeeze().load()
                                     o = Convert_Type.convert_nc(o)
                                     s = Convert_Type.convert_nc(s)
 
