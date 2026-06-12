@@ -634,9 +634,7 @@ class PageRefData(BasePage):
         saved_data_root = general_section.get("data_root", "")
         if not saved_data_root:
             eval_items_cfg = self.controller.config.get("evaluation_items", {})
-            saved_data_root = _infer_ref_data_root(
-                general_section, [k for k, v in eval_items_cfg.items() if v]
-            )
+            saved_data_root = _infer_ref_data_root(general_section, [k for k, v in eval_items_cfg.items() if v])
         if saved_data_root:
             self.data_root_input.setText(saved_data_root)
 

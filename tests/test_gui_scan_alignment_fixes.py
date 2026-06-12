@@ -25,7 +25,6 @@ from openbench.gui.config_manager import (
 from openbench.gui.pages import page_sim_data
 from tests.gui_fakes import FakeLineEdit as _Text
 
-
 # ---------------------------------------------------------------------------
 # Bug 1 — scan root inference
 # ---------------------------------------------------------------------------
