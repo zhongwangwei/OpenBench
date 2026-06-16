@@ -526,7 +526,7 @@ ERA5LAND_LowRes:
       prefix: ERA5LAND_
       suffix: _daymean_surface_sensible_heat_flux_1D_0p25
     Surface_Albedo:
-      varname: fal
+      varname: albedo
       varunit: '1'
       sub_dir: Heat/Surface_Albedo/ERA5LAND
       prefix: ERA5LAND_
@@ -670,9 +670,11 @@ ERA5LAND_MidRes:
       prefix: ERA5LAND_
       suffix: _daymean_surface_sensible_heat_flux_1D_0p25
     Surface_Albedo:
-      varname: fal
+      varname: albedo
       varunit: '1'
-      sub_dir: Heat/Surface_Albedo/ERA5LAND
+      sub_dir: Heat/Surface_Albedo/ERA5LAND/0p25deg_daily/
+      prefix: ERA5LAND_
+      suffix: _albedo_1D_0p25
     Surface_Downward_LW_Radiation:
       varname: strd
       varunit: W m-2
@@ -700,11 +702,15 @@ ERA5LAND_MidRes:
     Surface_Upward_LW_Radiation:
       varname: sutr
       varunit: W m-2
-      sub_dir: Heat/Surface_Upward_LW_Radiation/ERA5LAND
+      sub_dir: Heat/Surface_Upward_LW_Radiation/ERA5LAND/0p25deg_daily
+      prefix: ERA5LAND_
+      suffix: _sutr_1D_0p25
     Surface_Upward_SW_Radiation:
       varname: susr
       varunit: W m-2
-      sub_dir: Heat/Surface_Upward_SW_Radiation/ERA5LAND
+      sub_dir: Heat/Surface_Upward_SW_Radiation/ERA5LAND/0p25deg_daily
+      prefix: ERA5LAND_
+      suffix: _susr_1D_0p25
     Diurnal_Max_Temperature:
       varname: mx2t
       varunit: K
@@ -755,7 +761,7 @@ ERA5LAND_MidRes:
       suffix: _v10_1D_0p25
     Precipitation:
       varname: tp
-      varunit: mm
+      varunit: m hr-1
       sub_dir: Water/Precipitation/ERA5LAND
       prefix: ERA5LAND_
       suffix: _tp_1D_0p25
@@ -1881,6 +1887,9 @@ GRUN_ENSEMBLE_LowRes:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
   grid_res: 0.5
+  years:
+    - 1901
+    - 2019
   variables:
     Total_Runoff:
       varname: Runoff
@@ -2022,8 +2031,8 @@ HOMTS_MidRes:
       varname: TS
       varunit: Degrees C
       sub_dir: Meteo/Surface_Soil_Temperature/HOMTS
-      prefix: HOM_TS0cm_daily_025x025_
-      suffix: _2017
+      prefix: HOM_TS0cm_daily_025x025_1960_2017
+      suffix:
   _provenance:
     data_groupby: profile
     tim_res: nc
@@ -2164,7 +2173,8 @@ LGS_Reco_LowRes:
     Ecosystem_Respiration:
       varname: Reco
       varunit: gC m-2 day-1
-      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco
+      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco/0p25deg
+      prefix: LGS_Reco_
   _provenance:
     data_groupby: profile
     tim_res: nc
@@ -2299,7 +2309,7 @@ MSWEP_MidRes:
     Precipitation:
       varname: precipitation
       varunit: mm d-1
-      sub_dir: Water/Precipitation/MSWEP
+      sub_dir: Water/Precipitation/MSWEP_0p25
       prefix: Precipitation_
   _provenance:
     data_groupby: scan
@@ -2514,47 +2524,47 @@ MSWX_MidRes:
     Surface_Downward_LW_Radiation:
       varname: downward_longwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
       prefix: LWd_
     Surface_Downward_SW_Radiation:
       varname: downward_shortwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
       prefix: SWd_
     Diurnal_Max_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
       prefix: Tmax_
     Diurnal_Min_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
       prefix: Tmin_
     Surface_Air_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Surface_Air_Temperature/MSWX
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
       prefix: Temp_
     Surface_Specific_Humidity:
       varname: specific_humidity
       varunit: kg kg-1
-      sub_dir: Meteo/Surface_Specific_Humidity/MSWX
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
       prefix: SpecHum_
     Surface_Wind_Speed:
       varname: wind_speed
       varunit: m s-1
-      sub_dir: Meteo/Surface_Wind_Speed/MSWX
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
       prefix: Wind_
     Precipitation:
       varname: precipitation
       varunit: mm 3h-1
-      sub_dir: Water/Precipitation/MSWX
+      sub_dir: Water/Precipitation/MSWX_0p25
       prefix: Precipitation_
   _provenance:
     data_groupby: scan
     tim_res: nc
-    grid_res: scan
+    grid_res: nc
 Monthly:
   name: Monthly
   description: OpenBench consolidated monthly streamflow alias
@@ -2810,7 +2820,7 @@ Rn-Xu2022_MidRes:
     grid_res: default
     tim_res: default
   category: Energy
-  data_groupby: Year
+  data_groupby: Month
   data_type: grid
   description: Rn-Xu2022 reference dataset (MidRes)
   grid_res: 0.25
@@ -2818,11 +2828,15 @@ Rn-Xu2022_MidRes:
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
   tim_res: Month
   timezone: 0
+  years:
+    - 1982
+    - 2019
   variables:
     Net_Radiation:
-      sub_dir: Heat/Net_Radiation/Rn-Xu2022
-      varname: Net_Radiation
+      sub_dir: Heat/Net_Radiation/Rn-Xu2022_0p25/process_data/
+      varname: Rn
       varunit: ''
+      prefix: AVHRR_Rn_
 SMAPL3_LowRes:
   name: SMAPL3_LowRes
   description: SMAPL3 reference dataset (LowRes)
@@ -3179,9 +3193,11 @@ globsnow_v3_MidRes:
   grid_res: 0.25
   variables:
     Snow_Water_Equivalent:
-      varname: Snow_Water_Equivalent
+      varname: swe
       varunit: mm
-      sub_dir: Water/Snow_Water_Equivalent/globsnow_v3
+      sub_dir: Water/Snow_Water_Equivalent/globsnow_v3/0p25deg_daily/
+      prefix: globsnow_swe_daily_lonlat_0.25deg_standardized_
+      suffix:
   _provenance:
     data_groupby: profile
     tim_res: profile
@@ -3203,7 +3219,7 @@ LGS_Reco_MidRes:
       varname: Reco
       varunit: gC m-2 day-1
       sub_dir: Bio/Ecosystem_Respiration/LGS_Reco/0p25deg/0p25deg
-      prefix: ._LGS_Reco_
+      prefix: LGS_Reco_
       suffix: _0p25
   grid_res: 0.25
   _provenance:
