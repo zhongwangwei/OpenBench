@@ -143,14 +143,14 @@ class TimeIntegrityWorkflowMixin:
                 return ds
             elif time_unit.lower() in ["h", "hour", "1h", "1hour"]:
                 # Normalize to hourly resolution (set to HH:30), and fill missing hours by reindexing.
-                hour_mid = pd.to_datetime(pd.Series(time_index).dt.floor("H").dt.strftime("%Y-%m-%dT%H:30:00"))
+                hour_mid = pd.to_datetime(pd.Series(time_index).dt.floor("h").dt.strftime("%Y-%m-%dT%H:30:00"))
                 try:
-                    ds["time"] = pd.to_datetime(pd.Series(ds["time"]).dt.floor("H").dt.strftime("%Y-%m-%dT%H:30:00"))
+                    ds["time"] = pd.to_datetime(pd.Series(ds["time"]).dt.floor("h").dt.strftime("%Y-%m-%dT%H:30:00"))
                 except (ValueError, AttributeError, TypeError):
                     try:
                         ds["time"] = pd.to_datetime(ds["time"].values)
                         ds["time"] = pd.to_datetime(
-                            pd.Series(ds["time"]).dt.floor("H").dt.strftime("%Y-%m-%dT%H:30:00")
+                            pd.Series(ds["time"]).dt.floor("h").dt.strftime("%Y-%m-%dT%H:30:00")
                         )
                     except Exception:
                         ds["time"] = hour_mid
