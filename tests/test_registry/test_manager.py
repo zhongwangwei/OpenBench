@@ -645,7 +645,7 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
         ),
         "Rn-Xu2022_0p25_MidRes": (
             "grid",
-            "Month",
+            "Day",
             "${OPENBENCH_REF_ROOT}/Grid/MidRes",
             "Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022_0p25",
             ["Net_Radiation"],

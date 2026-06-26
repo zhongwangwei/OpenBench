@@ -1181,8 +1181,8 @@ Rn-Xu2022_0p25:
     file_glob: AVHRR_Rn_*.nc
   description: Rn-Xu2022 0.25 degree net radiation
   category: Energy
-  tim_res: Month
-  data_groupby: Year
+  tim_res: Day
+  data_groupby: Month
   variables:
     Net_Radiation:
       varname: Rn
