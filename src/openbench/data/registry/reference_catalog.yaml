@@ -332,7 +332,7 @@ CN05.1_MidRes:
       varname: pre
       varunit: ''
       sub_dir: Water/Precipitation/CN05.1
-      prefix: CN05.1_Pre_
+      prefix: CN05.1_Pre_1961
       suffix: _2021_daily_0P25
   _provenance:
     data_groupby: scan
@@ -1168,6 +1168,7 @@ GCOS_MidRes:
       varname: Lake_Surface_Water_Temperature
       varunit: K
       sub_dir: Meteo/Lake_Surface_Water_Temperature/GCOS
+      prefix: LAKES-L3S-LSWT-
   _provenance:
     data_groupby: profile
     tim_res: nc
@@ -1965,7 +1966,10 @@ GloFlux_LowRes:
   data_groupby: Single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
-  grid_res: 0.5
+  grid_res: 0.25
+  years:
+    - 2001
+    - 2023
   variables:
     Ecosystem_Respiration:
       varname: reco
@@ -1986,6 +1990,39 @@ GloFlux_LowRes:
     data_groupby: profile
     tim_res: profile
     grid_res: scan
+GloFlux_HigRes:
+  name: GloFlux_HigRes
+  description: GloFlux reference dataset (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/HigRes
+  grid_res: 0.0999
+  years:
+    - 2001
+    - 2023
+  variables:
+    Ecosystem_Respiration:
+      varname: reco
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Ecosystem_Respiration/GloFlux/0p1deg
+      prefix: GloFlux_RECO
+    Gross_Primary_Productivity:
+      varname: gpp
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Gross_Primary_Productivity/GloFlux/0p1deg
+      prefix: GloFlux_GPP
+    Net_Ecosystem_Exchange:
+      varname: nee
+      varunit: gC m-2 day-1
+      sub_dir: Bio/Net_Ecosystem_Exchange/GloFlux/0p1deg
+      prefix: GloFlux_NEE
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+    grid_res: nc
 HOMTS_LowRes:
   name: HOMTS_LowRes
   description: HOMTS reference dataset (LowRes)
@@ -2026,7 +2063,8 @@ HOMTS_MidRes:
     Root_Zone_Soil_Temperature:
       varname: Root_Zone_Soil_Temperature
       varunit: ''
-      sub_dir: Meteo/Root_Zone_Soil_Temperature/HOMTS
+      sub_dir: Meteo/Root_Zone_Soil_Temperature/HOMTS/
+      prefix: HOM_TS0cm_daily_025x025_1960_2017
     Surface_Soil_Temperature:
       varname: TS
       varunit: Degrees C
@@ -2197,6 +2235,8 @@ Linetal2023_LowRes:
       varname: lai
       varunit: m2 m-2
       sub_dir: Bio/Leaf_Area_Index/Linetal2023
+      prefix: lai_8-day_
+      suffix: _0p25
   _provenance:
     data_groupby: profile
     tim_res: nc
@@ -2231,7 +2271,7 @@ MODIS_LST_LowRes:
   category: Urban
   data_type: grid
   tim_res: Month
-  data_groupby: Year
+  data_groupby: Single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
   years:
@@ -3184,7 +3224,7 @@ globsnow_v3_MidRes:
   category: Water
   data_type: grid
   tim_res: Month
-  data_groupby: Single
+  data_groupby: Year
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
   years:
@@ -3243,6 +3283,10 @@ SMAP_L4_0p25_MidRes:
     SMAP_L4_0p25:
       varname: baseflow_flux
       varunit: kg m-2 s-1
+      prefix: SMAP_L4_SM_gph_
+    Snow_Depth:
+      varname: snow_depth
+      varunit: ''
       prefix: SMAP_L4_SM_gph_
   _provenance:
     data_groupby: scan
@@ -3668,8 +3712,8 @@ Rn-Xu2022_0p25_MidRes:
   description: Rn-Xu2022 0.25 degree net radiation
   category: Energy
   data_type: grid
-  tim_res: Month
-  data_groupby: Year
+  tim_res: Day
+  data_groupby: Month
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
   grid_res: 0.25
@@ -3683,3 +3727,49 @@ Rn-Xu2022_0p25_MidRes:
     data_groupby: profile
     tim_res: profile
     grid_res: default
+Rn-Xu2022_HigRes:
+  name: Rn-Xu2022_HigRes
+  description: Rn-Xu2022 reference dataset (HigRes)
+  category: Energy
+  data_type: grid
+  tim_res: Day
+  data_groupby: Day
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/HigRes
+  years:
+  - 1982
+  - 2019
+  grid_res: 0.05
+  variables:
+    Net_Radiation:
+      varname: Rn
+      varunit: ''
+      sub_dir: Heat/Net_Radiation/Rn-Xu2022/netcdf
+      prefix: AVHRR_Rn_
+  _provenance:
+    data_groupby: scan
+    tim_res: default
+    grid_res: nc
+GRFR_HigRes:
+  name: GRFR_HigRes
+  description: GRFR reference dataset (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/HigRes
+  years:
+    - 1979
+    - 2019
+  grid_res: 0.05
+  variables:
+    Runoff:
+      varname: ro
+      varunit: mm day-1
+      sub_dir: Water/Total_Runoff/GRFR/0p05_daily/
+      prefix: RUNOFF_
+  _provenance:
+    data_groupby: profile
+    tim_res: profile
+    grid_res: nc

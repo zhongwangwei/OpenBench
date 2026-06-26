@@ -106,6 +106,8 @@ class UnitProcessing:
                 "mm month-1": lambda x: _per_month_to_per_day(x),
                 "w m-2 heat": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
                 "mm 3hour-1": lambda x: x * 8,
+                "mm 3h-1": lambda x: x * 8,
+                "m hr-1": lambda x: x * 1000 * 24,
                 # Daily runoff/flux depth expressed in metres of water
                 # (e.g. ERA5-Land "ro"). 1 m = 1000 mm.
                 "m day-1": lambda x: x * 1000,
@@ -138,6 +140,7 @@ class UnitProcessing:
                 "degc": lambda x: x + 273.15,
                 "degreec": lambda x: x + 273.15,
                 "degree c": lambda x: x + 273.15,
+                "degree_celsius": lambda x: x + 273.15,
                 "celsius": lambda x: x + 273.15,
                 "f": lambda x: (x - 32) * 5 / 9 + 273.15,
                 "degf": lambda x: (x - 32) * 5 / 9 + 273.15,
