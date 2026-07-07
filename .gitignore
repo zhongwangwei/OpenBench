@@ -72,4 +72,3 @@ openbench_init_*.yaml
 /test_*.yaml
 
 docs/superpowers/
-/tests
