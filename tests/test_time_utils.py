@@ -1,9 +1,10 @@
 """Tests for non-standard time decoding helpers."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
-from openbench.data.time_utils import decode_nonstandard_time
+from openbench.data.time_utils import decode_nonstandard_time, normalize_cftime_axis
 
 
 def test_decode_nonstandard_te_month_axis_as_monthly_year():
@@ -36,3 +37,23 @@ def test_legacy_timelib_class_is_removed():
     import openbench.data.time_utils as time_utils
 
     assert not hasattr(time_utils, "timelib")
+
+
+def test_normalize_cftime_axis_clamps_invalid_360_day_dates():
+    cftime = pytest.importorskip("cftime")
+    ds = xr.Dataset(
+        {"value": ("time", [1.0, 2.0])},
+        coords={
+            "time": [
+                cftime.Datetime360Day(2001, 2, 30),
+                cftime.Datetime360Day(2001, 3, 30),
+            ]
+        },
+    )
+    ds["time"].attrs["calendar"] = "360_day"
+
+    decoded = normalize_cftime_axis(ds, source_path="test_360_day.nc")
+
+    assert np.issubdtype(decoded.time.dtype, np.datetime64)
+    assert decoded.time.values[0] == np.datetime64("2001-02-28T00:00:00")
+    assert decoded.time.attrs["original_calendar"] == "360_day"

@@ -1,3 +1,5 @@
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -125,6 +127,17 @@ def test_water_depth_units_do_not_collapse_to_annual_rate():
     assert converted_rate == pytest.approx(np.array([86400.0]))
 
 
+def test_umol_carbon_flux_alias_converts_to_daily_grams_carbon():
+    import openbench.data.unit as unit_mod
+    from openbench.data.unit import UnitProcessing
+
+    unit_mod._UNIT_LOOKUP_CACHE = None
+    converted, base_unit = UnitProcessing.convert_unit(np.array([1.0]), "umol/m2/s")
+
+    assert base_unit == "gc m-2 day-1"
+    assert converted == pytest.approx(np.array([12e-6 * 86400]))
+
+
 def test_taylor_summary_uses_geometrically_consistent_crmsd_for_diagram():
     from openbench.core._comparison_taylor import _taylor_summary_statistics
 
@@ -177,6 +190,75 @@ def test_accumulated_precipitation_resamples_with_sum():
     result = Processor()._resample_to_compare_resolution(data, "test precip")
 
     np.testing.assert_allclose(result.values, [3.0, 7.0])
+
+
+def test_accumulated_runoff_resamples_with_sum():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "Total_Runoff"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 2.0, 3.0, 4.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=4, freq="D")},
+        attrs={"units": "mm"},
+    )
+
+    result = Processor()._resample_to_compare_resolution(data, "test runoff")
+
+    np.testing.assert_allclose(result.values, [3.0, 7.0])
+
+
+def test_open_dataset_decode_false_fallback_decodes_nonstandard_time(tmp_path, monkeypatch):
+    from openbench.util import dataset_loader
+
+    path = tmp_path / "bad_time.nc"
+    path.write_bytes(b"placeholder")
+
+    def fake_open_dataset(_path, **kwargs):
+        if kwargs.get("decode_times") is False:
+            ds = xr.Dataset({"value": ("time", [1.0])}, coords={"time": [0]})
+            ds["time"].attrs["units"] = "calendar months since 2000-01-01"
+            return ds
+        raise ValueError("bad calendar")
+
+    monkeypatch.setattr(dataset_loader.xr, "open_dataset", fake_open_dataset)
+
+    ds = dataset_loader.open_dataset(str(path), use_chunking=False)
+
+    assert ds.time.values[0] == np.datetime64("2000-01-01T00:00:00")
+
+
+def test_curvilinear_xesmf_defaults_to_conservative(monkeypatch):
+    from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
+
+    methods = []
+
+    class FakeRegridder:
+        def __init__(self, _source, target_grid, method):
+            self.target_grid = target_grid
+            methods.append(method)
+
+        def __call__(self, _data):
+            return xr.DataArray(
+                np.zeros((self.target_grid.sizes["lat"], self.target_grid.sizes["lon"])),
+                dims=("lat", "lon"),
+            )
+
+    monkeypatch.setitem(sys.modules, "xesmf", types.SimpleNamespace(Regridder=FakeRegridder))
+    ds = xr.Dataset(
+        {"flux": (("y", "x"), np.ones((2, 2)))},
+        coords={
+            "lat": (("y", "x"), np.array([[0.0, 0.0], [1.0, 1.0]])),
+            "lon": (("y", "x"), np.array([[10.0, 11.0], [10.0, 11.0]])),
+        },
+    )
+
+    convert_to_wgs84_xesmf(ds, resolution=1.0)
+
+    assert methods == ["conservative"]
 
 
 def test_unified_mask_non_strict_uses_overlapping_times(tmp_path):

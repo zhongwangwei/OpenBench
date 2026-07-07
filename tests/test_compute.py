@@ -71,6 +71,34 @@ def test_fillna():
     np.testing.assert_array_equal(result.values, [1.0, 0.0, 3.0])
 
 
+def test_compute_rejects_io_calls_from_allowed_roots(tmp_path):
+    ds = _make_ds()
+    out = tmp_path / "out.nc"
+
+    with pytest.raises(ComputeError, match="xarray function 'open_dataset' is not allowed"):
+        execute_compute(ds, f"xr.open_dataset('{out}')", "test")
+
+    with pytest.raises(ComputeError, match="numpy function 'fromfile' is not allowed"):
+        execute_compute(ds, f"np.fromfile('{out}', dtype=np.uint8)", "test")
+
+    with pytest.raises(ComputeError, match="method 'to_netcdf' is not allowed"):
+        execute_compute(ds, f"ds['a'].to_netcdf('{out}')", "test")
+
+    assert not out.exists()
+
+
+def test_compute_allows_catalog_method_chain():
+    ds = xr.Dataset({"resp": xr.DataArray(np.array([31536000.0]), attrs={"units": "gC year-1"})})
+
+    result = execute_compute(
+        ds,
+        "ds['resp'] / 31536000.0 if 'year' in ds['resp'].attrs.get('units', '').lower() else ds['resp']",
+        "Respiration",
+    )
+
+    np.testing.assert_allclose(result.values, [1.0])
+
+
 def test_te_total_runoff_compute_handles_zdepth_dimension():
     from openbench.data.registry.manager import get_registry
 

@@ -194,7 +194,10 @@ def _open_dataset_with_fallback(path: str, **kwargs) -> xr.Dataset:
             logging.warning(f"Failed to open {path} with default time decoding: {e}. Retrying with decode_times=False")
             retry_kwargs = {k: v for k, v in kwargs.items() if k != "decode_times"}
             try:
-                return xr.open_dataset(path, decode_times=False, **retry_kwargs)
+                ds = xr.open_dataset(path, decode_times=False, **retry_kwargs)
+                from openbench.data.time_utils import decode_nonstandard_time
+
+                return decode_nonstandard_time(ds, source_path=str(path))
             except Exception as e2:
                 logging.error(f"Failed to open {path} even with decode_times=False: {e2}")
                 raise e2

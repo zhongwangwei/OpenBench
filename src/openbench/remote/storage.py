@@ -7,6 +7,7 @@ Unified storage interface for local and remote file operations.
 import os
 import glob as glob_module
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -123,16 +124,16 @@ class LocalStorage(ProjectStorage):
         Raises:
             ValueError: If path attempts to escape project directory
         """
+        project_root = Path(self._project_dir).resolve()
         if not path:
-            return self._project_dir
-        # Resolve the full path and check it's within project directory
-        full_path = os.path.normpath(os.path.join(self._project_dir, path))
-        # Security check: ensure path doesn't escape project directory
-        if not full_path.startswith(os.path.normpath(self._project_dir) + os.sep) and full_path != os.path.normpath(
-            self._project_dir
-        ):
+            return str(project_root)
+
+        full_path = (project_root / path).resolve(strict=False)
+        try:
+            full_path.relative_to(project_root)
+        except ValueError:
             raise ValueError(f"Path escapes project directory: {path}")
-        return full_path
+        return str(full_path)
 
     def read_file(self, path: str) -> str:
         full_path = self._full_path(path)

@@ -18,6 +18,28 @@ _CFTIME_CALENDARS = {
 }
 
 
+def _cftime_values_to_safe_nptime(values: np.ndarray) -> np.ndarray:
+    """Map cftime objects to valid Gregorian timestamps, clamping invalid days."""
+    arr = np.asarray(values, dtype=object)
+    converted = []
+    for value in arr.ravel():
+        year = int(getattr(value, "year"))
+        month = int(getattr(value, "month"))
+        day = int(getattr(value, "day"))
+        last_day = pd.Timestamp(year=year, month=month, day=1).days_in_month
+        timestamp = pd.Timestamp(
+            year=year,
+            month=month,
+            day=min(day, last_day),
+            hour=int(getattr(value, "hour", 0)),
+            minute=int(getattr(value, "minute", 0)),
+            second=int(getattr(value, "second", 0)),
+            microsecond=int(getattr(value, "microsecond", 0)),
+        )
+        converted.append(timestamp.to_datetime64())
+    return np.asarray(converted, dtype="datetime64[ns]").reshape(arr.shape)
+
+
 def normalize_cftime_axis(
     ds: xr.Dataset,
     *,
@@ -62,14 +84,25 @@ def normalize_cftime_axis(
 
         new_values = cftime_to_nptime(time_var.values)
     except Exception as exc:
+        try:
+            new_values = _cftime_values_to_safe_nptime(time_var.values)
+        except Exception:
+            logging.warning(
+                "Could not convert cftime axis (%s, calendar=%s): %s. "
+                "Downstream time alignment may produce inconsistent results.",
+                source_path or "<dataset>",
+                calendar,
+                exc,
+            )
+            return ds
         logging.warning(
-            "Could not convert cftime axis (%s, calendar=%s): %s. "
-            "Downstream time alignment may produce inconsistent results.",
+            "Converted cftime axis (%s, calendar=%s) by clamping invalid "
+            "non-Gregorian month days to valid Gregorian dates after native "
+            "conversion failed: %s",
             source_path or "<dataset>",
             calendar,
             exc,
         )
-        return ds
 
     new_time = xr.DataArray(
         new_values,

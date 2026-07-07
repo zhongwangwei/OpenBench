@@ -80,6 +80,13 @@ class UnitProcessing:
                 "g m-2 s-1": lambda x: x * 86400,  # Carbon-implicit (common in models)
                 "mol m-2 s-1": lambda x: x * (86400 * 12.01),  # Molar carbon
                 "mumolco2 m-2 s-1": lambda x: x * (12e-6 * 86400),  # CO2 flux
+                "umol/m2/s": lambda x: x * (12e-6 * 86400),  # micromol CO2/C flux
+                "umol m-2 s-1": lambda x: x * (12e-6 * 86400),
+                "umol m^-2 s^-1": lambda x: x * (12e-6 * 86400),
+                "umolco2 m-2 s-1": lambda x: x * (12e-6 * 86400),
+                "umol co2 m-2 s-1": lambda x: x * (12e-6 * 86400),
+                "µmol/m2/s": lambda x: x * (12e-6 * 86400),
+                "μmol/m2/s": lambda x: x * (12e-6 * 86400),
             },
             "mm": {
                 # Water-equivalent depth/stock. Keep this separate from

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
 
@@ -134,6 +135,43 @@ def test_station_matching_accepts_string_station_ids(tmp_path):
     assert Path(info.stn_list["ref_dir"].iloc[0]).exists()
 
 
+def test_station_matching_counts_single_year_and_wraps_longitude(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("2000-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["A"], dtype=object)),
+            "lon": ("station", np.array([190.0])),
+            "lat": ("station", np.array([20.0])),
+            "discharge": (("station", "time"), np.array([[1.0, 2.0]])),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2000,
+        sim_eyear=2000,
+        syear=2000,
+        eyear=2000,
+        min_year=1,
+        min_lon=-180,
+        max_lon=180,
+        min_lat=-90,
+        max_lat=90,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+
+    assert info.stn_list["ID"].tolist() == ["A"]
+    assert info.stn_list["use_syear"].tolist() == [2000]
+    assert info.stn_list["use_eyear"].tolist() == [2000]
+    assert info.stn_list["ref_lon"].tolist() == [-170.0]
+
+
 def test_station_matching_reports_missing_cama_companion_fields(tmp_path):
     from openbench.data.station_matcher import run_station_matching
     from openbench.util.exceptions import DataProcessingError
@@ -207,6 +245,24 @@ def test_station_matching_honors_station_dim_for_transposed_discharge(tmp_path):
 
     with xr.open_dataset(info.stn_list.loc[info.stn_list["ID"] == "B", "ref_dir"].iloc[0]) as station_ds:
         np.testing.assert_allclose(station_ds["discharge"].values, [10.0, 20.0, 30.0])
+
+
+def test_station_extraction_manual_fallback_uses_cyclic_longitude_distance():
+    from openbench.data._processing_station_extract import StationExtractionMixin
+
+    class Processor(StationExtractionMixin):
+        compare_grid_res = 1.0
+
+    dataset = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.array([[[42.0]]]))},
+        coords={"time": pd.date_range("2000-01-01", periods=1), "lat": [0.0], "lon": [-170.0]},
+    )
+    station = pd.Series({"ID": "A", "ref_lat": 0.0, "ref_lon": 190.0})
+
+    extracted = Processor().extract_single_station_data(dataset, station, "sim")
+
+    assert float(extracted["lon"].values[0]) == -170.0
+    assert float(extracted["value"].values[0, 0, 0]) == pytest.approx(42.0)
 
 
 def test_cama_station_matching_treats_negative_999_as_missing(tmp_path):

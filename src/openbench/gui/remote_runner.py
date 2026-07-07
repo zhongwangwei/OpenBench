@@ -11,10 +11,12 @@ import re
 import shlex
 import threading
 from collections import deque
+from pathlib import Path
 from typing import Dict, Any
 
 from PySide6.QtCore import QThread, Signal
 
+from openbench.config.loader import collect_include_files
 from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_partial_completion
 
@@ -280,8 +282,7 @@ class RemoteRunner(QThread):
             self._ssh_manager.upload_file(self.config_path, self._remote_config_path)
             self.log_message.emit(f"Uploaded config to: {self._remote_config_path}")
 
-            # Also upload any additional files in the same directory
-            # (e.g., included YAML files or data mappings)
+            # Also upload the YAML files this config explicitly includes.
             config_dir = os.path.dirname(self.config_path)
             if config_dir:
                 self._upload_related_files(config_dir)
@@ -295,37 +296,35 @@ class RemoteRunner(QThread):
             return False
 
     def _upload_related_files(self, config_dir: str) -> None:
-        """Upload related YAML/JSON files from the config directory.
+        """Upload files explicitly referenced by YAML ``!include`` tags.
 
         Raises:
-            OSError: If the config directory cannot be scanned.
-            Exception: If any related file upload fails.
+            Exception: If include collection or upload fails.
         """
-        config_path = os.path.abspath(self.config_path)
-        related_files = []
-        for filename in sorted(os.listdir(config_dir)):
-            if filename.endswith((".yaml", ".yml", ".json")):
-                local_path = os.path.abspath(os.path.join(config_dir, filename))
-                if os.path.isfile(local_path) and local_path != config_path:
-                    related_files.append((filename, local_path))
+        config_root = Path(config_dir).resolve()
+        config_path = Path(self.config_path).resolve()
 
-        # Surface the scope of the implicit "upload every sibling YAML/JSON"
-        # behavior — if the user is running from a shared configs/ folder
-        # with dozens of unrelated projects, this would silently upload all
-        # of them. A proper include-graph parse is a larger change; for
-        # now, warn loudly when the count looks abnormal.
-        if len(related_files) > 10:
-            self.log_message.emit(
-                f"Warning: uploading {len(related_files)} YAML/JSON files alongside "
-                f"{os.path.basename(self.config_path)} from {config_dir}. "
-                "Consider isolating the active run's config into its own directory "
-                "to avoid uploading unrelated project files."
-            )
+        for local_path in collect_include_files(config_path):
+            try:
+                relative = local_path.relative_to(config_root)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Included config file is outside the upload root: {local_path} "
+                    f"(root: {config_root})"
+                ) from exc
 
-        for filename, local_path in related_files:
-            remote_path = f"{self._remote_temp_dir}/{filename}"
-            self._ssh_manager.upload_file(local_path, remote_path)
-            self.log_message.emit(f"Uploaded: {filename}")
+            relative_posix = relative.as_posix()
+            remote_path = f"{self._remote_temp_dir}/{relative_posix}"
+            remote_dir = os.path.dirname(remote_path)
+            if remote_dir and remote_dir != self._remote_temp_dir:
+                _stdout, stderr, exit_code = self._ssh_manager.execute(
+                    f"mkdir -p {shlex.quote(remote_dir)}",
+                    timeout=30,
+                )
+                if exit_code != 0:
+                    raise RuntimeError(f"Failed to create remote include directory {remote_dir}: {stderr}")
+            self._ssh_manager.upload_file(str(local_path), remote_path)
+            self.log_message.emit(f"Uploaded include: {relative_posix}")
 
     @staticmethod
     def _format_remote_failure(message: str, output_tail) -> str:

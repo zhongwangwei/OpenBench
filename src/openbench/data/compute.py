@@ -102,6 +102,42 @@ _SAFE_NODES = {
 # Anything else (especially names starting with `_`) is rejected — this
 # prevents `__import__(...)` style escapes even though __builtins__ is empty.
 _SAFE_ROOT_NAMES = frozenset({"ds", "np", "xr"})
+_SAFE_NUMPY_FUNCTIONS = frozenset({"sqrt"})
+_SAFE_DATA_METHODS = frozenset({"fillna", "get", "isel", "lower", "mean", "squeeze", "sum", "where"})
+
+
+def _root_name(node: ast.AST) -> str | None:
+    """Return the root identifier for an attribute/call/subscript chain."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return _root_name(node.value)
+    if isinstance(node, ast.Subscript):
+        return _root_name(node.value)
+    if isinstance(node, ast.Call):
+        return _root_name(node.func)
+    return None
+
+
+def _validate_call(node: ast.Call, allowed_names: set[str]) -> None:
+    """Allow only pure catalog compute calls, not arbitrary module/object APIs."""
+    func = node.func
+    if isinstance(func, ast.Name):
+        raise ComputeError(f"Unsafe expression: function '{func.id}' is not allowed.")
+    if not isinstance(func, ast.Attribute):
+        raise ComputeError("Unsafe expression: only whitelisted method calls are allowed.")
+
+    root = _root_name(func)
+    if root is not None and root not in allowed_names:
+        raise ComputeError(f"Unsafe expression: identifier '{root}' is not allowed.")
+    if root == "np":
+        if func.attr not in _SAFE_NUMPY_FUNCTIONS:
+            raise ComputeError(f"Unsafe expression: numpy function '{func.attr}' is not allowed.")
+        return
+    if root == "xr":
+        raise ComputeError(f"Unsafe expression: xarray function '{func.attr}' is not allowed.")
+    if func.attr not in _SAFE_DATA_METHODS:
+        raise ComputeError(f"Unsafe expression: method '{func.attr}' is not allowed.")
 
 
 def _validate_expression(expr: str, allowed_names: Iterable[str] | None = None) -> None:
@@ -134,6 +170,8 @@ def _validate_expression(expr: str, allowed_names: Iterable[str] | None = None) 
             # via `ds.__class__.__init__.__globals__["os"].system(...)`.
             if node.attr.startswith("_"):
                 raise ComputeError(f"Unsafe expression: attribute '{node.attr}' starts with underscore.")
+        if isinstance(node, ast.Call):
+            _validate_call(node, allowed)
         if isinstance(node, ast.Name):
             if node.id not in allowed:
                 raise ComputeError(f"Unsafe expression: identifier '{node.id}' is not allowed.")

@@ -69,6 +69,7 @@ class _IncludeLoader(yaml.SafeLoader):
 
 _INCLUDE_STACK: list[Path] = []
 _INCLUDE_ROOTS_STACK: list[tuple[Path, ...]] = []
+_INCLUDE_COLLECTOR_STACK: list[list[Path]] = []
 _INCLUDE_LOCK = threading.RLock()
 
 
@@ -122,6 +123,15 @@ def _assert_include_allowed(target: Path) -> Path:
     return resolved
 
 
+def _record_included_path(path: Path) -> None:
+    """Record an include dependency for collect_include_files(), preserving order."""
+    if not _INCLUDE_COLLECTOR_STACK:
+        return
+    collector = _INCLUDE_COLLECTOR_STACK[-1]
+    if path not in collector:
+        collector.append(path)
+
+
 def _include_constructor(loader: _IncludeLoader, node: yaml.Node) -> Any:
     """Handle !include tags in YAML files."""
     path_str = loader.construct_scalar(node)
@@ -145,6 +155,7 @@ def _include_constructor(loader: _IncludeLoader, node: yaml.Node) -> Any:
         result = {}
         for match in matches:
             resolved_match = _assert_include_allowed(Path(match))
+            _record_included_path(resolved_match)
             if resolved_match in _INCLUDE_STACK:
                 chain = " -> ".join(str(p) for p in [*_INCLUDE_STACK, resolved_match])
                 raise ConfigError(f"Recursive !include detected: {chain}")
@@ -170,6 +181,7 @@ def _include_constructor(loader: _IncludeLoader, node: yaml.Node) -> Any:
         if not target.exists():
             raise ConfigError(f"!include file not found: '{path_str}' (resolved to {target})")
         resolved_target = _assert_include_allowed(target)
+        _record_included_path(resolved_target)
         if resolved_target in _INCLUDE_STACK:
             chain = " -> ".join(str(p) for p in [*_INCLUDE_STACK, resolved_target])
             raise ConfigError(f"Recursive !include detected: {chain}")
@@ -551,6 +563,46 @@ def load_config(path: str | Path) -> OpenBenchConfig:
         raise ConfigError(f"Config file must be a YAML mapping, got {type(raw).__name__}")
 
     return _build_config(raw)
+
+
+def collect_include_files(path: str | Path) -> list[Path]:
+    """Return resolved files referenced by YAML ``!include`` tags.
+
+    This uses the same loader, path trust roots, glob expansion, and recursion
+    checks as load_config(), but does not validate the OpenBench schema. It is
+    meant for callers such as the GUI remote runner that need to stage exactly
+    the files the active config includes.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise ConfigError(f"Config file not found: {path}")
+    if path.suffix.lower() not in (".yaml", ".yml"):
+        raise ConfigError(f"Only YAML config files are supported (got {path.suffix}).")
+
+    resolved_path = path.resolve()
+    include_roots = _include_roots_for_config(resolved_path)
+    included: list[Path] = []
+    _INCLUDE_LOCK.acquire()
+    try:
+        _INCLUDE_STACK.append(resolved_path)
+        _INCLUDE_ROOTS_STACK.append(include_roots)
+        _INCLUDE_COLLECTOR_STACK.append(included)
+        with open(resolved_path) as f:
+            yaml.load(f, Loader=_IncludeLoader)
+    except OSError as e:
+        raise ConfigError(f"Failed to read config file {path}: {e}") from e
+    except yaml.YAMLError as e:
+        raise ConfigError(f"YAML parse error in {path}: {e}") from e
+    finally:
+        if _INCLUDE_COLLECTOR_STACK and _INCLUDE_COLLECTOR_STACK[-1] is included:
+            _INCLUDE_COLLECTOR_STACK.pop()
+        if _INCLUDE_STACK and _INCLUDE_STACK[-1] == resolved_path:
+            _INCLUDE_STACK.pop()
+        if _INCLUDE_ROOTS_STACK and _INCLUDE_ROOTS_STACK[-1] == include_roots:
+            _INCLUDE_ROOTS_STACK.pop()
+        _INCLUDE_LOCK.release()
+
+    return included
 
 
 def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:

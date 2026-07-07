@@ -73,7 +73,7 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
     return new_ds
 
 
-def convert_to_wgs84_xesmf(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
+def convert_to_wgs84_xesmf(ds: xr.Dataset, resolution=0.1, method: str = "conservative") -> xr.Dataset:
     # Step 2: Create a new regular lon-lat grid (WGS84)
     import xesmf as xe
 
@@ -92,7 +92,7 @@ def convert_to_wgs84_xesmf(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
     )
 
     # Create the regridder
-    regridder = xe.Regridder(ds, target_grid, "bilinear")
+    regridder = xe.Regridder(ds, target_grid, method)
 
     # Step 3: Perform the regridding
     new_data_vars = {}

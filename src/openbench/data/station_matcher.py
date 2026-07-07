@@ -138,6 +138,21 @@ def _valid_flow_mask(flow: np.ndarray, missing_sentinels: tuple[float, ...] = ()
     return mask
 
 
+def _normalize_lon_to_range(lon: float, min_lon: float, max_lon: float) -> float:
+    """Return an equivalent longitude inside the requested range when possible."""
+    lon = float(lon)
+    min_lon = float(min_lon)
+    max_lon = float(max_lon)
+    if not np.isfinite(lon) or not np.isfinite(min_lon) or not np.isfinite(max_lon):
+        return lon
+    if min_lon <= lon <= max_lon or max_lon - min_lon > 360:
+        return lon
+    for candidate in (lon - 360.0, lon + 360.0):
+        if min_lon <= candidate <= max_lon:
+            return candidate
+    return lon
+
+
 def _station_matching_jobs(n_stations: int, requested: int | None = None) -> int:
     """Choose a conservative station-matching worker count."""
     if requested is not None:
@@ -185,6 +200,8 @@ def _process_site_cama(
     cama_lon = float(cama_lons[idx])
     cama_lat = float(cama_lats[idx])
     alloc_err = float(alloc_errs[idx])
+    lon_for_bounds = _normalize_lon_to_range(lon, info.min_lon, info.max_lon)
+    cama_lon = _normalize_lon_to_range(cama_lon, -180.0, 180.0)
 
     # Skip invalid CaMA allocations
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lon > 180 or cama_lat < -90 or cama_lat > 90:
@@ -207,9 +224,9 @@ def _process_site_cama(
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
     # Time / spatial / area filters
-    if (use_eyear - use_syear) < info.min_year:
+    if (use_eyear - use_syear + 1) < info.min_year:
         return None
-    if lon < info.min_lon or lon > info.max_lon or lat < info.min_lat or lat > info.max_lat:
+    if lon_for_bounds < info.min_lon or lon_for_bounds > info.max_lon or lat < info.min_lat or lat > info.max_lat:
         return None
     if area > 0 and area < min_uparea:
         return None
@@ -249,6 +266,7 @@ def _process_site_direct(
     lon = float(lons[idx])
     lat = float(lats[idx])
     area = float(areas[idx]) if not np.isnan(areas[idx]) else -9999.0
+    lon = _normalize_lon_to_range(lon, info.min_lon, info.max_lon)
 
     valid_mask = _valid_flow_mask(flow, missing_sentinels)
     if not valid_mask.any():
@@ -268,7 +286,7 @@ def _process_site_direct(
     use_syear = max(start_year, int(info.sim_syear), int(info.syear))
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
-    if (use_eyear - use_syear) < info.min_year:
+    if (use_eyear - use_syear + 1) < info.min_year:
         return None
     if lon < info.min_lon or lon > info.max_lon or lat < info.min_lat or lat > info.max_lat:
         return None

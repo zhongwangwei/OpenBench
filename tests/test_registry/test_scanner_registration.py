@@ -2522,6 +2522,55 @@ def test_generate_station_list_handles_scalar_lat_lon(tmp_path: Path):
     assert rows.loc[0, "LON"] == 1.0
 
 
+def test_generate_station_list_preserves_existing_csv_on_write_failure(tmp_path: Path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from openbench.data.registry.scanner import generate_station_list
+
+    ds = xr.Dataset(
+        {
+            "Q": (["time"], np.array([1.0], dtype=np.float32)),
+            "lat": ((), 2.0),
+            "lon": ((), 1.0),
+        },
+        coords={"time": np.array(["2001-01-01"], dtype="datetime64[ns]")},
+    )
+    ds.to_netcdf(tmp_path / "S1.nc")
+    output = tmp_path / "stations.csv"
+    original = "ID,SYEAR,EYEAR,LON,LAT,DIR\nold,1999,1999,0,0,old.nc\n"
+    output.write_text(original, encoding="utf-8")
+
+    def fail_to_csv(self, path, *args, **kwargs):
+        Path(path).write_text("partial", encoding="utf-8")
+        raise OSError("simulated csv failure")
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", fail_to_csv)
+
+    with pytest.raises(OSError, match="simulated csv failure"):
+        generate_station_list(tmp_path, output)
+
+    assert output.read_text(encoding="utf-8") == original
+
+
+def test_catalog_write_lock_fails_closed_when_lock_file_cannot_be_created(tmp_path: Path, monkeypatch):
+    from openbench.data.registry import scanner
+
+    original_touch = Path.touch
+
+    def fail_lock_touch(self, *args, **kwargs):
+        if str(self).endswith(".lock"):
+            raise OSError("lock unavailable")
+        return original_touch(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "touch", fail_lock_touch)
+
+    with pytest.raises(RuntimeError, match="failed to acquire catalog lock"):
+        with scanner._catalog_write_lock(tmp_path / "catalog.yaml"):
+            raise AssertionError("lock body should not run")
+
+
 def test_parse_single_station_file_decodes_char_array_station_id(tmp_path: Path):
     """Classic NetCDF S1 char arrays should decode to a station ID."""
     import netCDF4

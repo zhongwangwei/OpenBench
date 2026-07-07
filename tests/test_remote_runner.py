@@ -12,6 +12,7 @@ class FakeSSH:
 
     def __init__(self, fail_upload_names=None):
         self.uploads = []
+        self.commands = []
         self.fail_upload_names = set(fail_upload_names or [])
 
     def upload_file(self, local_path, remote_path):
@@ -20,6 +21,7 @@ class FakeSSH:
             raise RuntimeError(f"upload failed for {os.path.basename(local_path)}")
 
     def execute(self, command, timeout=30):
+        self.commands.append(command)
         return "", "", 0
 
 
@@ -35,7 +37,7 @@ def _runner(config_path, ssh):
 
 def test_upload_config_fails_when_related_yaml_upload_fails(tmp_path):
     config = tmp_path / "main.yaml"
-    config.write_text("include: related.yaml\n", encoding="utf-8")
+    config.write_text("include: !include related.yaml\n", encoding="utf-8")
     related = tmp_path / "related.yaml"
     related.write_text("x: 1\n", encoding="utf-8")
     ssh = FakeSSH(fail_upload_names={"related.yaml"})
@@ -54,8 +56,10 @@ def test_upload_config_fails_when_related_yaml_upload_fails(tmp_path):
 
 def test_upload_config_uploads_related_files_successfully(tmp_path):
     config = tmp_path / "main.yaml"
-    config.write_text("include: related.yaml\n", encoding="utf-8")
+    config.write_text("include: !include related.yaml\n", encoding="utf-8")
     (tmp_path / "related.yaml").write_text("x: 1\n", encoding="utf-8")
+    (tmp_path / "secret.json").write_text('{"token": "ignored"}\n', encoding="utf-8")
+    (tmp_path / "unused.yaml").write_text("ignored: true\n", encoding="utf-8")
     (tmp_path / "notes.txt").write_text("ignored\n", encoding="utf-8")
     ssh = FakeSSH()
     runner = _runner(config, ssh)
@@ -66,6 +70,44 @@ def test_upload_config_uploads_related_files_successfully(tmp_path):
         (str(config), "/tmp/openbench_test/main.yaml"),
         (str(tmp_path / "related.yaml"), "/tmp/openbench_test/related.yaml"),
     ]
+
+
+def test_upload_config_preserves_nested_include_paths(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("include: !include nml/related.yaml\n", encoding="utf-8")
+    nml = tmp_path / "nml"
+    nml.mkdir()
+    related = nml / "related.yaml"
+    related.write_text("x: 1\n", encoding="utf-8")
+    ssh = FakeSSH()
+    runner = _runner(config, ssh)
+
+    assert runner._upload_config() is True
+
+    assert ssh.commands == ["mkdir -p /tmp/openbench_test/nml"]
+    assert ssh.uploads == [
+        (str(config), "/tmp/openbench_test/main.yaml"),
+        (str(related.resolve()), "/tmp/openbench_test/nml/related.yaml"),
+    ]
+
+
+def test_upload_config_rejects_include_outside_config_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_INCLUDE_ROOTS", str(tmp_path))
+    outside = tmp_path / "shared.yaml"
+    outside.write_text("x: 1\n", encoding="utf-8")
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    config = config_dir / "main.yaml"
+    config.write_text("include: !include ../shared.yaml\n", encoding="utf-8")
+    ssh = FakeSSH()
+    runner = _runner(config, ssh)
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    assert runner._upload_config() is False
+
+    assert ssh.uploads == [(str(config), "/tmp/openbench_test/main.yaml")]
+    assert finished and "outside the upload root" in finished[0][1]
 
 
 class ExecuteSSH(FakeSSH):

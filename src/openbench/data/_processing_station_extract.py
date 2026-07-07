@@ -28,6 +28,11 @@ def _delayed():
     return _processing_attr("delayed", delayed)
 
 
+def _cyclic_lon_delta(lon_values, target_lon: float):
+    """Shortest absolute distance between longitudes, accounting for wrap."""
+    return np.abs((np.asarray(lon_values, dtype=float) - float(target_lon) + 180.0) % 360.0 - 180.0)
+
+
 class StationExtractionMixin:
     """Split station processing helpers."""
 
@@ -95,9 +100,10 @@ class StationExtractionMixin:
             lon_values = dataset[lon_coord].values
 
             lat_idx = int(np.argmin(np.abs(lat_values - target_lat)))
-            lon_idx = int(np.argmin(np.abs(lon_values - target_lon)))
+            lon_distances = _cyclic_lon_delta(lon_values, target_lon)
+            lon_idx = int(np.argmin(lon_distances))
             lat_delta = abs(float(lat_values[lat_idx]) - target_lat)
-            lon_delta = abs(float(lon_values[lon_idx]) - target_lon)
+            lon_delta = float(lon_distances[lon_idx])
             if lat_delta > tolerance or lon_delta > tolerance:
                 raise ValueError(
                     f"Nearest grid cell for station {station['ID']} is outside tolerance "

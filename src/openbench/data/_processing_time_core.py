@@ -85,7 +85,15 @@ class TimeCoreMixin:
             }
             units = next(iter(data_units)) if len(data_units) == 1 else ""
 
-        accumulation_items = {"precipitation", "total_irrigation_amount"}
+        accumulation_items = {
+            "precipitation",
+            "runoff",
+            "snowfall",
+            "subsurface_runoff",
+            "surface_runoff",
+            "total_irrigation_amount",
+            "total_runoff",
+        }
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)

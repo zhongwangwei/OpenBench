@@ -386,14 +386,26 @@ class SelectionMixin:
             escaped_prefix = glob.escape(try_prefix)
             escaped_suffix = glob.escape(suffix)
             # Try primary path (.nc and .nc4)
-            var_files = cached_glob(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
+            var_files = cached_glob(
+                os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
+                force_refresh=True,
+            )
             if not var_files:
-                var_files = cached_glob(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc4"))
+                var_files = cached_glob(
+                    os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc4"),
+                    force_refresh=True,
+                )
             # Try subdirectory path
             if not var_files:
-                var_files = cached_glob(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
+                var_files = cached_glob(
+                    os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
+                    force_refresh=True,
+                )
             if not var_files:
-                var_files = cached_glob(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc4"))
+                var_files = cached_glob(
+                    os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc4"),
+                    force_refresh=True,
+                )
 
             # Filter: only keep files where part between prefix+year and suffix has no letters
             if var_files:

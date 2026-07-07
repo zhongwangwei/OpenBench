@@ -25,6 +25,7 @@ import yaml
 
 from openbench.config.user_settings import resolve_reference_root
 from openbench.util.names import AmbiguousNameError
+from openbench.util.netcdf import write_file_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -308,19 +309,15 @@ def _catalog_write_lock(catalog_path: Path):
     overwrites the first writer's new entries. Common in HPC shared-registry
     scenarios where multiple users scan their reference roots in parallel.
 
-    Uses fcntl.flock on POSIX and msvcrt.locking on Windows. Falls back
-    gracefully where neither is available (e.g. NFS without nlockmgr): logs a
-    debug note and proceeds without serialization. Single-user local installs
-    see no behavior change.
+    Uses fcntl.flock on POSIX and msvcrt.locking on Windows. If the lock
+    cannot be acquired, fail closed instead of writing without serialization.
     """
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = Path(str(catalog_path) + ".lock")
     try:
         lock_path.touch(exist_ok=True)
     except OSError as e:
-        logger.debug("Could not create lock file %s: %s", lock_path, e)
-        yield
-        return
+        raise RuntimeError(f"failed to acquire catalog lock {lock_path}: {e}") from e
 
     lock_file = open(lock_path, "a+")
     have_lock = False
@@ -346,11 +343,7 @@ def _catalog_write_lock(catalog_path: Path):
 
             have_lock = True
         except (OSError, ImportError) as e:
-            logger.debug(
-                "catalog lock unavailable for %s (%s); proceeding without lock",
-                lock_path,
-                e,
-            )
+            raise RuntimeError(f"failed to acquire catalog lock {lock_path}: {e}") from e
         yield
     finally:
         if have_lock and release is not None:
@@ -2999,7 +2992,7 @@ def generate_station_list(dataset_dir: Path, output_csv: Path | None = None) -> 
         raise ValueError(f"Could not extract station info from {dataset_dir}")
 
     df = pd.DataFrame(rows, columns=["ID", "SYEAR", "EYEAR", "LON", "LAT", "DIR"])
-    df.to_csv(output_csv, index=False)
+    write_file_atomic(output_csv, lambda tmp_path: df.to_csv(tmp_path, index=False), suffix=".tmp.csv")
     logger.info("Generated station list: %s (%d stations)", output_csv, len(df))
 
     return output_csv
