@@ -230,13 +230,147 @@ BCC_AVIM:
     Surface_Air_Temperature:
       varname: TSA
       varunit: K
+CABLE:
+  data_type: grid
+  description: Community Atmosphere Biosphere Land Exchange Land Surface Model
+  name: CABLE
+  tim_res: Month
+  variables:
+    Albedo:
+      varname: Albedo
+      varunit: unitless
+    Canopy_Evaporation:
+      varname: ECanop
+      varunit: kg m-2 s-1
+    Canopy_Sensible_Heat:
+      varname: HVeg
+      varunit: W m-2
+    Canopy_Transpiration:
+      varname: TVeg
+      varunit: kg m-2 s-1
+    Ecosystem_Respiration:
+      compute: "ds['AutoResp'] + ds['HeteroResp']"
+      varname: Ecosystem_Respiration
+      varunit: mumolco2 m-2 s-1
+    Evapotranspiration:
+      varname: Evap
+      varunit: kg m-2 s-1
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: mumolco2 m-2 s-1
+    Ground_Evaporation:
+      varname: ESoil
+      varunit: kg m-2 s-1
+    Ground_Heat:
+      varname: Qg
+      varunit: W m-2
+    Ground_Sensible_Heat:
+      varname: HSoil
+      varunit: W m-2
+    Groundwater_Recharge_Rate:
+      varname: Qrecharge
+      varunit: mm s-1
+    Latent_Heat:
+      varname: Qle
+      varunit: W m-2
+    Leaf_Area_Index:
+      varname: LAI
+      varunit: unitless
+    Net_Ecosystem Exchange:
+      varname: NEE
+      varunit: mumolco2 m-2 s-1
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: mumolco2 m-2 s-1
+    Net_Radiation:
+      varname: Rnet
+      varunit: W m-2
+    Precipitation:
+      varname: Rainf
+      varunit: kg m-2 s-1
+    Root-Zone_Soil_Moisture:
+      compute: "(ds['SoilMoist'] * ds['zse']).sum('soil') / ds['zse'].sum('soil') if 'SoilMoist' in ds and 'soil' in ds['SoilMoist'].dims and 'zse' in ds else ds['SoilMoist'].mean('soil') if 'SoilMoist' in ds and 'soil' in ds['SoilMoist'].dims else ds['SoilMoist']"
+      varname: Root-Zone_Soil_Moisture
+      varunit: m3 m-3
+    Root_Zone_Soil_Moisture:
+      compute: "(ds['SoilMoist'] * ds['zse']).sum('soil') / ds['zse'].sum('soil') if 'SoilMoist' in ds and 'soil' in ds['SoilMoist'].dims and 'zse' in ds else ds['SoilMoist'].mean('soil') if 'SoilMoist' in ds and 'soil' in ds['SoilMoist'].dims else ds['SoilMoist']"
+      varname: Root_Zone_Soil_Moisture
+      varunit: m3 m-3
+    Sensible_Heat:
+      varname: Qh
+      varunit: W m-2
+    Snow_Depth:
+      varname: SnowDepth
+      varunit: m
+    Snow_Water_Equivalent:
+      varname: SWE
+      varunit: kg m-2
+    Soil_Evaporation:
+      varname: ESoil
+      varunit: kg m-2 s-1
+    Subsurface_Runoff:
+      varname: Qsb
+      varunit: kg m-2 s-1
+    Surface_Air_Temperature:
+      varname: Tair
+      varunit: K
+    Surface_Albedo:
+      varname: Albedo
+      varunit: unitless
+    Surface_Downward_LW_Radiation:
+      varname: LWdown
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: SWdown
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: LWnet
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: SWnet
+      varunit: W m-2
+    Surface_Pressure:
+      varname: PSurf
+      varunit: hPa
+    Surface_Runoff:
+      varname: Qs
+      varunit: kg m-2 s-1
+    Surface_Soil_Moisture:
+      compute: "ds['SoilMoist'].isel(soil=0) if 'soil' in ds['SoilMoist'].dims else ds['SoilMoist']"
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+    Surface_Soil_Temperature:
+      compute: "ds['SoilTemp'].isel(soil=0) if 'soil' in ds['SoilTemp'].dims else ds['SoilTemp']"
+      varname: Surface_Soil_Temperature
+      varunit: K
+    Surface_Specific_Humidity:
+      varname: Qair
+      varunit: unitless
+    Surface_Upward_LW_Radiation:
+      compute: "ds['LWdown'] - ds['LWnet']"
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+    Surface_Upward_SW_Radiation:
+      compute: "ds['SWdown'] - ds['SWnet']"
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+    Surface_Wind_Speed:
+      varname: Wind
+      varunit: m s-1
+    Total_Runoff:
+      compute: "ds['Qs'] + ds['Qsb']"
+      varname: Total_Runoff
+      varunit: kg m-2 s-1
+    Water_Table_Depth:
+      varname: WatTable
+      varunit: m
 CLM5:
   data_type: grid
   description: Community Land Model version 5
   grid_res: 1.25
   name: CLM5
   tim_res: Month
-  time_offset:
+  time_offset: &clm_elm_time_offset
     Day:
       ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 days
@@ -249,7 +383,7 @@ CLM5:
       ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 months
       default: -1 months
-  variables:
+  variables: &clm_elm_variables
     Ecosystem_Respiration:
       varname: ER
       varunit: g m-2 s-1
@@ -433,6 +567,208 @@ CLM5:
     Surface_Wind_Speed:
       varname: ''
       varunit: m s-1 wind
+ELM:
+  data_type: grid
+  description: E3SM Land Model history output
+  name: ELM
+  tim_res: Month
+  time_offset: *clm_elm_time_offset
+  variables: &elm_land_variables
+    <<: *clm_elm_variables
+    Ground_Heat:
+      compute: (ds['SWdown'] if 'SWdown' in ds else ds['FSDS']) - ds['FSR'] + (ds['LWdown'] if 'LWdown' in ds else ds['FLDS']) - ds['FIRE'] - ds['FSH'] - ds['EFLX_LH_TOT']
+      varname: Ground_Heat
+      varunit: W m-2
+    Net_Radiation:
+      compute: (ds['SWdown'] if 'SWdown' in ds else ds['FSDS']) - ds['FSR'] + (ds['LWdown'] if 'LWdown' in ds else ds['FLDS']) - ds['FIRE']
+      varname: Net_Radiation
+      varunit: W m-2
+    Precipitation:
+      varname: Rainf
+      varunit: mm s-1
+      fallbacks:
+        - varname: RAIN
+          varunit: mm s-1
+    Surface_Albedo:
+      compute: ds['FSR'] / (ds['SWdown'] if 'SWdown' in ds else ds['FSDS'])
+      varname: Surface_Albedo
+      varunit: '-'
+    Surface_Air_Temperature:
+      varname: Tair
+      varunit: K
+      fallbacks:
+        - varname: TSA
+          varunit: K
+    Surface_Downward_LW_Radiation:
+      varname: LWdown
+      varunit: w m-2
+      fallbacks:
+        - varname: FLDS
+          varunit: w m-2
+    Surface_Downward_SW_Radiation:
+      varname: SWdown
+      varunit: w m-2
+      fallbacks:
+        - varname: FSDS
+          varunit: w m-2
+    Surface_Pressure:
+      varname: PSurf
+      varunit: Pa
+    Surface_Specific_Humidity:
+      varname: Qair
+      varunit: kg kg-1
+      fallbacks:
+        - varname: QBOT
+          varunit: kg kg-1
+    Surface_Wind_Speed:
+      varname: Wind
+      varunit: m s-1
+E3SM:
+  data_type: grid
+  description: E3SM land component history output
+  name: E3SM
+  tim_res: Month
+  time_offset: *clm_elm_time_offset
+  variables: *elm_land_variables
+ORCHIDEE:
+  data_type: grid
+  description: ORCHIDEE land surface model history output
+  name: ORCHIDEE
+  tim_res: Month
+  time_offset: *clm_elm_time_offset
+  variables:
+    Evapotranspiration:
+      varname: evap
+      varunit: mm day-1
+      fallbacks:
+        - varname: Evap
+          varunit: kg m-2 s-1
+    Gross_Primary_Productivity:
+      compute: "((ds['gpp'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['gpp'].dims and 'maxvegetfrac' in ds else ds['gpp'].sum('nvm') if 'nvm' in ds['gpp'].dims else ds['gpp'])"
+      varname: gpp
+      varunit: gC m-2 s-1
+    Ground_Evaporation:
+      varname: evapnu
+      varunit: mm day-1
+      fallbacks:
+        - varname: ESoil
+          varunit: kg m-2 s-1
+    Latent_Heat:
+      varname: fluxlat
+      varunit: W m-2
+      fallbacks:
+        - varname: Qle
+          varunit: W m-2
+    Leaf_Area_Index:
+      compute: "((ds['lai'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['lai'].dims and 'maxvegetfrac' in ds else ds['lai'].sum('nvm') if 'nvm' in ds['lai'].dims else ds['lai'])"
+      varname: lai
+      varunit: unitless
+    Net_Ecosystem_Exchange:
+      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims and 'maxvegetfrac' in ds else ds['nee'].sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'])"
+      varname: nee
+      varunit: gC m-2 s-1
+    Net_Ecosystem Exchange:
+      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims and 'maxvegetfrac' in ds else ds['nee'].sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'])"
+      varname: nee
+      varunit: gC m-2 s-1
+    Net_Radiation:
+      varname: netrad
+      varunit: W m-2
+    Precipitation:
+      varname: rain
+      varunit: mm day-1
+      fallbacks:
+        - varname: Rainf
+          varunit: kg m-2 s-1
+    Sensible_Heat:
+      varname: fluxsens
+      varunit: W m-2
+      fallbacks:
+        - varname: Qh
+          varunit: W m-2
+    Snow_Depth:
+      varname: SnowDepth
+      varunit: m
+    Snow_Water_Equivalent:
+      varname: snow
+      varunit: kg m-2
+      fallbacks:
+        - varname: SWE
+          varunit: kg m-2
+    Soil_Evaporation:
+      varname: evapnu
+      varunit: mm day-1
+      fallbacks:
+        - varname: ESoil
+          varunit: kg m-2 s-1
+    Subsurface_Runoff:
+      varname: drainage
+      varunit: mm day-1
+      fallbacks:
+        - varname: Qsb
+          varunit: kg m-2 s-1
+    Surface_Air_Temperature:
+      varname: tair
+      varunit: K
+      fallbacks:
+        - varname: Tair
+          varunit: K
+    Surface_Albedo:
+      compute: "(ds['albedo'].mean('albtyp') if 'albtyp' in ds['albedo'].dims else ds['albedo'])"
+      varname: albedo
+      varunit: unitless
+    Surface_Downward_LW_Radiation:
+      varname: lwdown
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: swdown
+      varunit: W m-2
+    Surface_Net_LW_Radiation:
+      varname: lwnet
+      varunit: W m-2
+      fallbacks:
+        - varname: LWnet
+          varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: swnet
+      varunit: W m-2
+      fallbacks:
+        - varname: SWnet
+          varunit: W m-2
+    Surface_Pressure:
+      varname: Psurf
+      varunit: Pa
+    Surface_Runoff:
+      varname: runoff
+      varunit: mm day-1
+      fallbacks:
+        - varname: Qs
+          varunit: kg m-2 s-1
+    Surface_Soil_Moisture:
+      compute: "ds['mrsos'] / 100.0"
+      varname: mrsos
+      varunit: m3 m-3
+    Surface_Soil_Temperature:
+      varname: temp_sol
+      varunit: C
+      fallbacks:
+        - varname: AvgSurfT
+          varunit: K
+        - varname: RadT
+          varunit: K
+    Surface_Specific_Humidity:
+      varname: qair
+      varunit: g g-1
+      fallbacks:
+        - varname: Qair
+          varunit: g g-1
+    Surface_Wind_Speed:
+      varname: Wind
+      varunit: m s-1
+    Total_Runoff:
+      compute: "(ds['runoff'] + ds['drainage']) if 'runoff' in ds and 'drainage' in ds else (ds['Qs'] + ds['Qsb']) * 86400"
+      varname: Total_Runoff
+      varunit: mm day-1
 CaMa:
   data_type: grid
   description: CaMa-Flood River Routing Model

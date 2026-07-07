@@ -17,6 +17,24 @@ from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_ke
 
 
 class ProcessingTransformMixin:
+    def _reduce_patch_dimension(self, data, source_ds=None):
+        """Collapse CABLE-style patch output to grid cells when patch fractions exist."""
+        patch_dims = [dim for dim in getattr(data, "dims", ()) if str(dim).lower() == "patch"]
+        if not patch_dims:
+            return data
+
+        patch_dim = patch_dims[0]
+        if getattr(data, "sizes", {}).get(patch_dim) == 1:
+            return data.squeeze(patch_dim, drop=True)
+
+        if source_ds is not None:
+            patchfrac_name = get_xarray_key_case_insensitive(source_ds, "patchfrac")
+            if patchfrac_name is not None and patch_dim in source_ds[patchfrac_name].dims:
+                return data.weighted(source_ds[patchfrac_name].fillna(0)).mean(patch_dim)
+
+        logging.warning("Leaving unreduced patch dimension because patchfrac is missing")
+        return data
+
     @staticmethod
     def _normalize_longitude_axis(ds: xr.Dataset) -> xr.Dataset:
         """Normalize 1-D longitude coordinates and remove duplicate seam cells."""
@@ -82,6 +100,7 @@ class ProcessingTransformMixin:
 
             if hasattr(result, "name"):
                 result.name = item
+            result = self._reduce_patch_dimension(result, ds)
 
             setattr(self, f"{datasource}_varname", [item])
             setattr(self, f"{datasource}_varunit", var_mapping.varunit)
@@ -144,9 +163,9 @@ class ProcessingTransformMixin:
                         var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
                         actual_extract = get_xarray_key_case_insensitive(ds_or_da, var_to_extract)
                         if actual_extract is not None:
-                            return ds_or_da[actual_extract]
+                            return self._reduce_patch_dimension(ds_or_da[actual_extract], ds_or_da)
                     elif ds_or_da is not None:
-                        return ds_or_da
+                        return self._reduce_patch_dimension(ds_or_da, ds)
             except Exception as e:
                 logging.debug("Filter failed for %s: %s", source_name, e)
 
@@ -155,7 +174,7 @@ class ProcessingTransformMixin:
             var_to_extract = current_varname[0] if isinstance(current_varname, list) else current_varname
             actual_extract = get_xarray_key_case_insensitive(ds, var_to_extract)
             if actual_extract is not None:
-                return ds[actual_extract]
+                return self._reduce_patch_dimension(ds[actual_extract], ds)
 
             raise KeyError(f"Variable '{var_to_extract}' not found in dataset")
         return ds

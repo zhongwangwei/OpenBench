@@ -93,11 +93,23 @@ class TimeCoreMixin:
         return data.resample(time=self.compare_tim_res).mean()
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
-        # Rename both coordinates and dimensions (e.g., WRF south_north → lat)
+        # Rename both coordinates and dimensions (e.g., WRF south_north → lat).
+        # Prefer dimension coordinates when several CABLE-style names point to
+        # the same target (x + longitude → lon, y + latitude → lat).
         rename_map = {}
-        for name in set(list(ds.coords) + list(ds.dims)):
-            if name in self.coordinate_map and self.coordinate_map[name] not in ds:
-                rename_map[name] = self.coordinate_map[name]
+        planned_targets = set(ds.coords) | set(ds.dims)
+
+        for name in ds.dims:
+            target = self.coordinate_map.get(name)
+            if target and target not in planned_targets:
+                rename_map[name] = target
+                planned_targets.add(target)
+
+        for name in ds.coords:
+            target = self.coordinate_map.get(name)
+            if target and target not in planned_targets:
+                rename_map[name] = target
+                planned_targets.add(target)
         if rename_map:
             ds = ds.rename(rename_map)
         return self._normalize_longitude_axis(ds)

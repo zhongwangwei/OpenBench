@@ -552,6 +552,23 @@ class RegistryManager:
         "cama-flood": "cama",
         "camaflood": "cama",
         "cama_flood": "cama",
+        "e3sm-land": "e3sm",
+        "e3sm_land": "e3sm",
+        "e3sm land": "e3sm",
+        "e3sm-lnd": "e3sm",
+        "e3sm_lnd": "e3sm",
+        "orchidee_2_0": "orchidee",
+        "orchidee-2-0": "orchidee",
+        "orchidee_2_2": "orchidee",
+        "orchidee-2-2": "orchidee",
+        "orchidee_3": "orchidee",
+        "orchidee-3": "orchidee",
+        "orchidee_4": "orchidee",
+        "orchidee-4": "orchidee",
+        "orchidee_4_3": "orchidee",
+        "orchidee-4-3": "orchidee",
+        "orchidee_ol": "orchidee",
+        "orchidee-ol": "orchidee",
     }
 
     def get_model(self, name: str) -> Optional[ModelProfile]:
