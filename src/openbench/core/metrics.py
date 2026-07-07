@@ -885,9 +885,9 @@ class metrics:
                 # series; scale the floor with N so the cutoff tracks the
                 # dataset resolution instead of being a magic number.
                 low_freq_floor = max(1, N // 11)
-                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1: N // 2 + 1])), low_freq_floor) + 1
+                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1 : N // 2 + 1])), low_freq_floor) + 1
             else:
-                dominant_freq_idx = np.argmax(np.abs(fft_obs[1: N // 2 + 1])) + 1
+                dominant_freq_idx = np.argmax(np.abs(fft_obs[1 : N // 2 + 1])) + 1
 
             # Calculate phase difference
             phase_obs = np.angle(fft_obs)
@@ -1097,7 +1097,6 @@ class metrics:
             mfm_eta_values = xr.full_like(s.isel(time=0) if "time" in s.dims else s, np.nan)
 
         return mfm_eta_values
-
 
     def MFM(self, s, o, p=1, bins_suse=10, bins_phi=10, phase_penalty_scaling=4, phase=True):
         """
