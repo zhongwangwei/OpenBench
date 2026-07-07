@@ -722,6 +722,10 @@ def _data_var_metadata_from_file(file_path: Path) -> list[dict[str, Any]]:
                 "lon_bounds",
                 "crs",
                 "spatial_ref",
+                "geolat_t",
+                "geolon_t",
+                "geolat",
+                "geolon",
             }
             known_coord_var_names = {
                 "lat",
@@ -747,6 +751,11 @@ def _data_var_metadata_from_file(file_path: Path) -> list[dict[str, Any]]:
                 "id",
                 "time",
                 "t",
+                "geolat_t",
+                "geolon_t",
+                "geolat",
+                "geolon",
+                "grid_index",
             }
             coord_names = set(nc.dimensions.keys())
             metadata: list[dict[str, Any]] = []

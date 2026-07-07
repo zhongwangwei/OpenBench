@@ -74,7 +74,7 @@ file changes. OpenBench turns that into one declarative config:
   setup of earlier versions, with `_defaults` merging and `!include` splitting.
 - **Reference data registry** — **101** built-in reference datasets (grid and
   station) you can list, inspect, scan, and register.
-- **Model profiles** — **22** built-in profiles (CoLM2024, CLM5, NoahMP5,
+- **Model profiles** — **28** built-in profiles (CoLM2024, CLM5, ECLand, LM4, NoahMP5,
   JULES7, VIC5, ERA5-Land, GLDAS2, MATSIRO, CaMa-Flood, WRF, …) supplying
   variable name mappings and unit conversions automatically.
 - **Rich science suite** — 25+ point-wise metrics, 8 normalized skill scores, and
@@ -501,7 +501,7 @@ ERA5-Land            grid   0.1°     12        ✓
 GLDAS                grid   0.25°    11        ✓
 NoahMP5              grid   ...      70        ⚠ 34
 ...
-Total: 22 model profiles
+Total: 28 model profiles
 ```
 
 When `simulation.<name>.model` matches a known profile, variable file-name

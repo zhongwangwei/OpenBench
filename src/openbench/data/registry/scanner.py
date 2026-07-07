@@ -2643,6 +2643,20 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
 
         with netCDF4.Dataset(str(nc_file), "r") as nc:
             dims = {k.lower(): nc.dimensions[k].size for k in nc.dimensions}
+            variables = {k.lower(): k for k in nc.variables}
+
+            # FMS/LM4-style unstructured land diagnostics carry grid cells on a
+            # grid_index axis plus auxiliary geolon_t/geolat_t coordinates,
+            # not lat/lon dimensions. Treat that as gridded, not station data.
+            grid_dim = next((name for name in ("grid_index", "grid_cell", "cell", "ncol") if name in dims), None)
+            if grid_dim and dims[grid_dim] > 1:
+                lon_name = variables.get("geolon_t") or variables.get("geolon")
+                lat_name = variables.get("geolat_t") or variables.get("geolat")
+                if lon_name and lat_name:
+                    lon_dims = {dim.lower() for dim in nc.variables[lon_name].dimensions}
+                    lat_dims = {dim.lower() for dim in nc.variables[lat_name].dimensions}
+                    if grid_dim in lon_dims and grid_dim in lat_dims:
+                        return "grid"
 
         from openbench.data.coordinates import LAT_NAMES, LON_NAMES, STN_DIM_NAMES
 
@@ -2751,6 +2765,10 @@ def _inspect_nc_file(
                     "lon_bounds",
                     "crs",
                     "spatial_ref",
+                    "geolat_t",
+                    "geolon_t",
+                    "geolat",
+                    "geolon",
                 }
                 known_coord_var_names = {
                     "lat",
@@ -2774,6 +2792,11 @@ def _inspect_nc_file(
                     "site_id",
                     "site_name",
                     "id",
+                    "geolat_t",
+                    "geolon_t",
+                    "geolat",
+                    "geolon",
+                    "grid_index",
                 }
                 coord_names = set(nc.dimensions.keys())
                 min_dims = 1 if result.get("detected_data_type") == "stn" else 2
