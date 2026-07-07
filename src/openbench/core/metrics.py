@@ -856,6 +856,249 @@ class metrics:
 
         return smpi, smpi_lower, smpi_upper
 
+    def MFM_omega(self, s, o, p=1, phase_penalty_scaling=4, phase=True):
+        """Return MFM's normalized error with phase penalty component (omega)."""
+        s, o = self._validate_inputs(s, o)
+
+        def FFT_component(sim, obs):
+            """Calculate phase difference using Fast Fourier Transform"""
+            N = len(obs)
+            if N != len(sim) or N < 3:
+                return 0.0
+
+            fft_obs = np.fft.fft(obs)
+            fft_sim = np.fft.fft(sim)
+
+            np.fft.fftfreq(N, d=1.0)
+
+            # Find dominant frequency
+            if N // 2 < 1:
+                return 0.0
+
+            if len(sim) > 365:
+                # Skip the very lowest Fourier bins (periods longer than
+                # ~N/11 samples) before picking the dominant frequency: those
+                # bins capture the trend / multi-year drift rather than the
+                # sub-seasonal phase we want for MFM. The previous code
+                # hard-coded 33, which is ~N/11 for a 1-year daily series
+                # but became arbitrarily small relative to N on longer
+                # series; scale the floor with N so the cutoff tracks the
+                # dataset resolution instead of being a magic number.
+                low_freq_floor = max(1, N // 11)
+                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1: N // 2 + 1])), low_freq_floor) + 1
+            else:
+                dominant_freq_idx = np.argmax(np.abs(fft_obs[1: N // 2 + 1])) + 1
+
+            # Calculate phase difference
+            phase_obs = np.angle(fft_obs)
+            phase_sim = np.angle(fft_sim)
+            phase_difference_rad = phase_sim[dominant_freq_idx] - phase_obs[dominant_freq_idx]
+            phase_difference_rad = (phase_difference_rad + np.pi) % (2 * np.pi) - np.pi
+
+            return phase_difference_rad
+
+        def calculate_mfm_omega_1d(sim, obs):
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim_clean = sim[mask]
+            obs_clean = obs[mask]
+
+            if len(sim_clean) < 3 or len(obs_clean) < 3:
+                return np.nan
+
+            if np.mean(obs_clean) == 0:
+                return np.nan
+
+            # Normalized error with phase penalty
+            nmaep = np.power(np.mean(np.power(np.abs(sim_clean - obs_clean), p)), 1 / p) / abs(np.mean(obs_clean))
+
+            if phase:
+                phase_difference_rad = FFT_component(sim_clean, obs_clean)
+                phase_penalty = np.cos(phase_difference_rad / phase_penalty_scaling)
+                mfm_omega = phase_penalty * np.e ** (-nmaep)
+            else:
+                mfm_omega = np.e ** (-nmaep)
+
+            return mfm_omega
+
+        if "time" in s.dims:
+            # Rechunk time dimension to single chunk for apply_ufunc with dask
+            # This is required because time is a core dimension
+            if hasattr(s, "chunks") and s.chunks is not None:
+                s = s.chunk({"time": -1})
+            if hasattr(o, "chunks") and o.chunks is not None:
+                o = o.chunk({"time": -1})
+
+            # Stack spatial dimensions for easier iteration
+            mfm_omega_values = xr.apply_ufunc(
+                calculate_mfm_omega_1d,
+                s,
+                o,
+                input_core_dims=[["time"], ["time"]],
+                vectorize=True,
+                dask="parallelized",
+                output_dtypes=[float],
+            )
+        else:
+            # No time dimension, return NaN
+            mfm_omega_values = xr.full_like(s.isel(time=0) if "time" in s.dims else s, np.nan)
+
+        return mfm_omega_values
+
+    def MFM_varphi(self, s, o, bins_suse=10):
+        """Return MFM's variability capture component (varphi)."""
+        s, o = self._validate_inputs(s, o)
+
+        def SUSE_component(sim, obs, bins_suse):
+            """Calculate Scaled and Unscaled Entropy difference"""
+            if len(sim) == 0 or len(obs) == 0:
+                return np.nan
+
+            # Scaled case
+            min_val = min(sim.min(), obs.min())
+            max_val = max(sim.max(), obs.max())
+            if min_val == max_val:
+                return 0.0  # No entropy difference if all values are the same
+            bin_edges_scaled = np.linspace(min_val, max_val, bins_suse + 1)
+
+            hist_sim_s, _ = np.histogram(sim, bins=bin_edges_scaled, density=False)
+            hist_obs_s, _ = np.histogram(obs, bins=bin_edges_scaled, density=False)
+
+            total_s_sim = np.sum(hist_sim_s)
+            total_s_obs = np.sum(hist_obs_s)
+
+            p_sim_s = hist_sim_s / total_s_sim if total_s_sim > 0 else np.zeros_like(hist_sim_s)
+            p_obs_s = hist_obs_s / total_s_obs if total_s_obs > 0 else np.zeros_like(hist_obs_s)
+
+            def entropy(p):
+                p = p[p > 0]
+                return -np.sum(p * np.log(p)) if len(p) > 0 else 0.0
+
+            Hs = abs(entropy(p_sim_s) - entropy(p_obs_s))
+
+            # Unscaled case
+            if sim.min() == sim.max():
+                Hu_sim = 0.0
+            else:
+                bin_edges_u_sim = np.linspace(sim.min(), sim.max(), bins_suse + 1)
+                hist_sim_u, _ = np.histogram(sim, bins=bin_edges_u_sim, density=False)
+                p_sim_u = hist_sim_u / np.sum(hist_sim_u) if np.sum(hist_sim_u) > 0 else np.zeros_like(hist_sim_u)
+                Hu_sim = entropy(p_sim_u)
+
+            if obs.min() == obs.max():
+                Hu_obs = 0.0
+            else:
+                bin_edges_u_obs = np.linspace(obs.min(), obs.max(), bins_suse + 1)
+                hist_obs_u, _ = np.histogram(obs, bins=bin_edges_u_obs, density=False)
+                p_obs_u = hist_obs_u / np.sum(hist_obs_u) if np.sum(hist_obs_u) > 0 else np.zeros_like(hist_obs_u)
+                Hu_obs = entropy(p_obs_u)
+
+            Hu = abs(Hu_sim - Hu_obs)
+
+            return max(Hs, Hu)
+
+        def calculate_mfm_varphi_1d(sim, obs):
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim_clean = sim[mask]
+            obs_clean = obs[mask]
+
+            if len(sim_clean) < 3 or len(obs_clean) < 3:
+                return np.nan
+
+            # Variability capture
+            suse = SUSE_component(sim_clean, obs_clean, bins_suse)
+            if np.isnan(suse):
+                return np.nan
+            mfm_varphi = np.e ** (-suse)
+
+            return mfm_varphi
+
+        if "time" in s.dims:
+            # Rechunk time dimension to single chunk for apply_ufunc with dask
+            # This is required because time is a core dimension
+            if hasattr(s, "chunks") and s.chunks is not None:
+                s = s.chunk({"time": -1})
+            if hasattr(o, "chunks") and o.chunks is not None:
+                o = o.chunk({"time": -1})
+
+            # Stack spatial dimensions for easier iteration
+            mfm_varphi_values = xr.apply_ufunc(
+                calculate_mfm_varphi_1d,
+                s,
+                o,
+                input_core_dims=[["time"], ["time"]],
+                vectorize=True,
+                dask="parallelized",
+                output_dtypes=[float],
+            )
+        else:
+            # No time dimension, return NaN
+            mfm_varphi_values = xr.full_like(s.isel(time=0) if "time" in s.dims else s, np.nan)
+
+        return mfm_varphi_values
+
+    def MFM_eta(self, s, o, bins_phi=10):
+        """Return MFM's distribution similarity component (eta)."""
+        s, o = self._validate_inputs(s, o)
+
+        # Helper functions for single time series
+        def PHI_component(sim, obs, bins_phi):
+            """Calculate Percentage of Histogram Intersection"""
+            if len(sim) == 0 or len(obs) == 0:
+                return np.nan
+            bin_min = min(np.min(sim), np.min(obs))
+            bin_max = max(np.max(sim), np.max(obs))
+            if bin_min == bin_max:
+                return 1.0  # Perfect match if all values are the same
+            bin_edges = np.linspace(bin_min, bin_max, bins_phi + 1)
+            hist_sim, _ = np.histogram(sim, bins=bin_edges, density=False)
+            hist_obs, _ = np.histogram(obs, bins=bin_edges, density=False)
+            min_sum = np.sum(np.minimum(hist_sim, hist_obs))
+            obs_total = np.sum(hist_obs)
+            if obs_total == 0:
+                return np.nan
+            return min_sum / obs_total
+
+        def calculate_mfm_eta_1d(sim, obs):
+            # Remove NaN values
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim_clean = sim[mask]
+            obs_clean = obs[mask]
+
+            if len(sim_clean) < 3 or len(obs_clean) < 3:
+                return np.nan
+
+            # Distribution similarity
+            mfm_eta = PHI_component(sim_clean, obs_clean, bins_phi)
+            if np.isnan(mfm_eta):
+                return np.nan
+
+            return mfm_eta
+
+        if "time" in s.dims:
+            # Rechunk time dimension to single chunk for apply_ufunc with dask
+            # This is required because time is a core dimension
+            if hasattr(s, "chunks") and s.chunks is not None:
+                s = s.chunk({"time": -1})
+            if hasattr(o, "chunks") and o.chunks is not None:
+                o = o.chunk({"time": -1})
+
+            # Stack spatial dimensions for easier iteration
+            mfm_eta_values = xr.apply_ufunc(
+                calculate_mfm_eta_1d,
+                s,
+                o,
+                input_core_dims=[["time"], ["time"]],
+                vectorize=True,
+                dask="parallelized",
+                output_dtypes=[float],
+            )
+        else:
+            # No time dimension, return NaN
+            mfm_eta_values = xr.full_like(s.isel(time=0) if "time" in s.dims else s, np.nan)
+
+        return mfm_eta_values
+
+
     def MFM(self, s, o, p=1, bins_suse=10, bins_phi=10, phase_penalty_scaling=4, phase=True):
         """
         Calculate Model Fidelity Metric (MFM) for each grid cell.
