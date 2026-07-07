@@ -289,3 +289,31 @@ def test_kappa_coeff_handles_multidimensional_time_series():
 
     assert result.dims == ("lat", "lon")
     assert np.allclose(result, 1.0)
+
+
+def test_mfm_components_recombine_to_mfm_value():
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    obs = make_da([1.0, 2.0, 4.0, 8.0, 16.0])
+    sim = make_da([1.1, 2.4, 3.6, 7.2, 15.5])
+
+    omega = m.MFM_omega(sim, obs, phase=False)
+    varphi = m.MFM_varphi(sim, obs)
+    eta = m.MFM_eta(sim, obs)
+    recomposed = 1 - np.sqrt(((1 - omega) ** 2 + (1 - varphi) ** 2 + (1 - eta) ** 2) / 3)
+
+    xr.testing.assert_allclose(recomposed, m.MFM(sim, obs, phase=False))
+
+
+def test_mfm_component_domains_only_require_observed_mean_for_omega():
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    obs = make_da([-1.0, 0.0, 1.0])
+    sim = make_da([-0.5, 0.5, 1.5])
+
+    assert np.isnan(float(m.MFM_omega(sim, obs)))
+    assert np.isfinite(float(m.MFM_varphi(sim, obs)))
+    assert np.isfinite(float(m.MFM_eta(sim, obs)))
+    assert np.isnan(float(m.MFM(sim, obs)))
