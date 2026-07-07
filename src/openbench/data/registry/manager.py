@@ -1,10 +1,9 @@
 """RegistryManager: loads and queries reference datasets and model profiles.
 
-All catalogs live in one place: the registry directory inside the package
-(src/openbench/data/registry/). User registrations are written directly
-to the same catalog files when the directory is writable (editable install).
-If the package directory is read-only (pip install), a fallback user
-directory is used.
+Built-in catalogs live in the package registry directory
+(src/openbench/data/registry/). User registrations are written to overlay
+catalogs under ~/.openbench/ so package files stay immutable in both editable
+and wheel installs.
 
 Loading order (later entries override earlier):
 1. Built-in catalog:  <package>/data/registry/reference_catalog.yaml

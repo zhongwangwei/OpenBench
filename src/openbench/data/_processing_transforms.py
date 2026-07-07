@@ -69,47 +69,42 @@ class ProcessingTransformMixin:
         Checks model profiles first, then reference datasets.
         Returns computed DataArray, or None if no compute expression applies.
         """
-        try:
-            from openbench.data.registry.manager import get_registry
+        from openbench.data.registry.manager import get_registry
 
-            mgr = get_registry()
-            item = getattr(self, "item", "")
-            if not item:
-                return None
-
-            # Check model profile first, then reference dataset
-            var_mapping = None
-            profile = mgr.get_model(source_name)
-            profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
-            if profile and profile_key is not None and profile.variables[profile_key].compute:
-                var_mapping = profile.variables[profile_key]
-
-            if var_mapping is None:
-                ref = mgr.get_reference(source_name)
-                ref_key = get_mapping_key_case_insensitive(ref.variables, item) if ref else None
-                if ref and ref_key is not None and ref.variables[ref_key].compute:
-                    var_mapping = ref.variables[ref_key]
-
-            if var_mapping is None:
-                return None
-
-            logging.info("Computing %s via catalog compute expression", item)
-            from openbench.data.compute import execute_compute
-
-            result = execute_compute(ds, var_mapping.compute, item)
-
-            if hasattr(result, "name"):
-                result.name = item
-            result = self._reduce_patch_dimension(result, ds)
-
-            setattr(self, f"{datasource}_varname", [item])
-            setattr(self, f"{datasource}_varunit", var_mapping.varunit)
-
-            return result
-
-        except Exception as e:
-            logging.debug(f"Compute from profile failed for {source_name}/{getattr(self, 'item', '?')}: {e}")
+        mgr = get_registry()
+        item = getattr(self, "item", "")
+        if not item:
             return None
+
+        # Check model profile first, then reference dataset.
+        var_mapping = None
+        profile = mgr.get_model(source_name)
+        profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+        if profile and profile_key is not None and profile.variables[profile_key].compute:
+            var_mapping = profile.variables[profile_key]
+
+        if var_mapping is None:
+            ref = mgr.get_reference(source_name)
+            ref_key = get_mapping_key_case_insensitive(ref.variables, item) if ref else None
+            if ref and ref_key is not None and ref.variables[ref_key].compute:
+                var_mapping = ref.variables[ref_key]
+
+        if var_mapping is None:
+            return None
+
+        logging.info("Computing %s via catalog compute expression", item)
+        from openbench.data.compute import execute_compute
+
+        result = execute_compute(ds, var_mapping.compute, item)
+
+        if hasattr(result, "name"):
+            result.name = item
+        result = self._reduce_patch_dimension(result, ds)
+
+        setattr(self, f"{datasource}_varname", [item])
+        setattr(self, f"{datasource}_varunit", var_mapping.varunit)
+
+        return result
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == "stat":

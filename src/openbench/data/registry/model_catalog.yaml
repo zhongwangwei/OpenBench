@@ -25,7 +25,7 @@ BCC_AVIM:
       varunit: mol m-2 s-1
     Evapotranspiration: &id001
       varname: QFLX_EVAP_TOT
-      varunit: mm day-1
+      varunit: mm s-1
     Gross_Primary_Productivity:
       varname: ''
       varunit: g m-2 s-1
@@ -644,7 +644,7 @@ ORCHIDEE:
         - varname: Evap
           varunit: kg m-2 s-1
     Gross_Primary_Productivity:
-      compute: "((ds['gpp'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['gpp'].dims and 'maxvegetfrac' in ds else ds['gpp'].sum('nvm') if 'nvm' in ds['gpp'].dims else ds['gpp'])"
+      compute: "((ds['gpp'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['gpp'].dims else ds['gpp'] * 1000.0 if 'kg' in ds['gpp'].attrs.get('units', '').lower() else ds['gpp'])"
       varname: gpp
       varunit: gC m-2 s-1
     Ground_Evaporation:
@@ -660,15 +660,15 @@ ORCHIDEE:
         - varname: Qle
           varunit: W m-2
     Leaf_Area_Index:
-      compute: "((ds['lai'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['lai'].dims and 'maxvegetfrac' in ds else ds['lai'].sum('nvm') if 'nvm' in ds['lai'].dims else ds['lai'])"
+      compute: "(ds['LAImean'] if 'LAImean' in ds else (ds['lai'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['lai'].dims else ds['lai'])"
       varname: lai
       varunit: unitless
     Net_Ecosystem_Exchange:
-      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims and 'maxvegetfrac' in ds else ds['nee'].sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'])"
+      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
       varname: nee
       varunit: gC m-2 s-1
     Net_Ecosystem Exchange:
-      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims and 'maxvegetfrac' in ds else ds['nee'].sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'])"
+      compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
       varname: nee
       varunit: gC m-2 s-1
     Net_Radiation:
@@ -714,7 +714,7 @@ ORCHIDEE:
         - varname: Tair
           varunit: K
     Surface_Albedo:
-      compute: "(ds['albedo'].mean('albtyp') if 'albtyp' in ds['albedo'].dims else ds['albedo'])"
+      compute: "(ds['Albedo'] if 'Albedo' in ds else ds['albedo'].mean('albtyp') if 'albtyp' in ds['albedo'].dims else ds['albedo'])"
       varname: albedo
       varunit: unitless
     Surface_Downward_LW_Radiation:
@@ -745,6 +745,7 @@ ORCHIDEE:
         - varname: Qs
           varunit: kg m-2 s-1
     Surface_Soil_Moisture:
+      # mrsos is the upper 0.1 m water column (kg m-2); divide by 100 kg m-2.
       compute: "ds['mrsos'] / 100.0"
       varname: mrsos
       varunit: m3 m-3

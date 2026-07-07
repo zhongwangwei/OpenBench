@@ -179,3 +179,6 @@ def test_publish_runs_build_artifact_contents_check_before_upload() -> None:
     assert "python -m build" in publish
     assert "unexpected wheel NetCDF members" in publish
     assert "unexpected sdist NetCDF members" in publish
+    assert "          if sdist_nc != expected_sdist_nc:" in publish
+    assert "\n          PY\n" in publish
+    assert "python -m pytest tests/test_build_artifacts.py -q" in publish

@@ -75,6 +75,8 @@ class UnitProcessing:
                 "gc m-2 s-1": lambda x: x * 86400,  # Carbon-specific (explicit)
                 "g c m-2 s-1": lambda x: x * 86400,  # Carbon-specific with space
                 "g c m-2 day-1": lambda x: x,  # Carbon-specific with day
+                "kg c m-2 s-1": lambda x: x * 1000 * 86400,
+                "kgc m-2 s-1": lambda x: x * 1000 * 86400,
                 "g m-2 s-1": lambda x: x * 86400,  # Carbon-implicit (common in models)
                 "mol m-2 s-1": lambda x: x * (86400 * 12.01),  # Molar carbon
                 "mumolco2 m-2 s-1": lambda x: x * (12e-6 * 86400),  # CO2 flux
@@ -99,6 +101,8 @@ class UnitProcessing:
                 "kg m-2 s-1": lambda x: x * 86400,
                 "kg/m2/s": lambda x: x * 86400,
                 "mm s-1": lambda x: x * 86400,
+                "mm h2o/s": lambda x: x * 86400,
+                "mm h2o s-1": lambda x: x * 86400,
                 "mm hr-1": lambda x: x * 24,
                 "mm h-1": lambda x: x * 24,
                 "mm hour-1": lambda x: x * 24,
@@ -126,6 +130,8 @@ class UnitProcessing:
                 "percentage": lambda x: x / 100,
                 "%": lambda x: x / 100,
                 "g kg-1": lambda x: x / 1000,
+                "kg kg-1": lambda x: x,
+                "kg/kg": lambda x: x,
                 "fraction": lambda x: x,
                 "m3 m-3": lambda x: x,
                 "m2 m-2": lambda x: x,
@@ -171,6 +177,11 @@ class UnitProcessing:
             "m": {
                 "cm": lambda x: x / 100,
                 "mm": lambda x: x / 1000,
+            },
+            "pa": {
+                "hpa": lambda x: x * 100,
+                "mbar": lambda x: x * 100,
+                "mb": lambda x: x * 100,
             },
             "km2": {
                 "m2": lambda x: x / 1.0e6,

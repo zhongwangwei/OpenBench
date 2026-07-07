@@ -92,3 +92,23 @@ def test_dimensionless_dash_is_recognized_as_unitless():
         converted, base_unit = UnitProcessing.convert_unit(0.15, alias)
         assert base_unit == "unitless"
         assert converted == 0.15
+
+
+def test_land_model_unit_aliases_normalize():
+    unit._UNIT_LOOKUP_CACHE = None
+
+    converted, base_unit = UnitProcessing.convert_unit(2.0, "mm H2O/s")
+    assert base_unit == "mm day-1"
+    assert converted == 172800.0
+
+    converted, base_unit = UnitProcessing.convert_unit(0.75, "kg kg-1")
+    assert base_unit == "unitless"
+    assert converted == 0.75
+
+    converted, base_unit = UnitProcessing.convert_unit(1013.25, "hPa")
+    assert base_unit == "pa"
+    assert converted == 101325.0
+
+    converted, base_unit = UnitProcessing.convert_unit(0.001, "kg C m-2 s-1")
+    assert base_unit == "gc m-2 day-1"
+    assert converted == 86400.0
