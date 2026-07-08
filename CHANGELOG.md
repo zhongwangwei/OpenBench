@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.0.0b8] - 2026-07-08
+
+Patch release over 3.0.0b7 for model coverage, audit fixes, and CI stability.
+
+### Added
+- Bundled ECLand and LM4 model profiles and aliases.
+
+### Fixed
+- Station simulation scanning now loads merged NetCDF sources before writing the
+  target file, avoiding platform-sensitive HDF5/netCDF CI hangs.
+- Hardened audit fixes for compute sandboxing, remote uploads, registry locking,
+  station lists, time decoding, station matching, and unit conversions.
+
 ## [3.0.0b7] - 2026-06-11
 
 Patch release over 3.0.0b6 for GUI selection behavior.

@@ -1,6 +1,6 @@
 {% set name = "colm-openbench" %}
 {% set dist_name = name|replace("-", "_") %}
-{% set version = "3.0.0b7" %}
+{% set version = "3.0.0b8" %}
 
 package:
   name: {{ name|lower }}
@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: dbb879762f3563fff3159ccb24075bdd3a47498f059cfd797ba3ce226c658feb
+  sha256: 5b83a941b71b2fb74d4983972acbd35e131502dcdf49f2c5461dcc52c327c02d
 
 build:
   noarch: python
