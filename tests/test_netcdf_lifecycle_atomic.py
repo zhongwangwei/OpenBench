@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import dask.array as da
 import numpy as np
 import pytest
 import xarray as xr
@@ -123,6 +124,48 @@ def test_evaluation_score_save_preserves_existing_netcdf_on_write_failure(tmp_pa
     with xr.open_dataset(target) as ds:
         np.testing.assert_allclose(ds["Overall_Score"].values, [[1.0]])
     assert not list(target_dir.glob(".Runoff_ref_TestRef_sim_SimA_Overall_Score.nc.*.tmp.nc"))
+
+
+@pytest.mark.parametrize(
+    ("method_name", "result_name", "output_name", "result"),
+    [
+        (
+            "process_metric",
+            "bias",
+            "Runoff_ref_TestRef_sim_SimA_bias.nc",
+            xr.DataArray(
+                da.from_array(np.array([[2.0, 3.0], [4.0, 5.0]]), chunks=(1, 2)),
+                coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+                dims=("lat", "lon"),
+            ),
+        ),
+        (
+            "process_score",
+            "Overall_Score",
+            "Runoff_ref_TestRef_sim_SimA_Overall_Score.nc",
+            da.from_array(np.array([[0.5, 0.6], [0.7, 0.8]]), chunks=(1, 2)),
+        ),
+    ],
+)
+def test_evaluation_netcdf_outputs_materialize_lazy_results_before_write(
+    tmp_path, monkeypatch, method_name, result_name, output_name, result
+):
+    import openbench.core.evaluation as evaluation_module
+
+    processor = _evaluation_processor(tmp_path)
+    setattr(processor, result_name, lambda _s, _o: result)
+    writes = []
+
+    def fake_write(data, output_path, **_kwargs):
+        writes.append((hasattr(data.data, "compute"), data.values.copy(), Path(output_path).name))
+
+    monkeypatch.setattr(evaluation_module, "_write_netcdf_atomic", fake_write)
+
+    getattr(processor, method_name)(result_name, _lat_lon_array(), _lat_lon_array())
+
+    assert writes[0][0] is False
+    assert writes[0][2] == output_name
+    np.testing.assert_allclose(writes[0][1], result.compute() if hasattr(result, "compute") else result.values)
 
 
 def test_core_comparison_uses_atomic_netcdf_writes_only():

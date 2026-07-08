@@ -231,6 +231,8 @@ class Evaluation_grid(metrics, scores):
                 pb_da = pb.rename(metric)
             else:
                 pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=metric)
+            # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
+            pb_da = pb_da.load()
 
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
@@ -261,6 +263,8 @@ class Evaluation_grid(metrics, scores):
             pb = getattr(self, score)(s, o)
             pb = pb.squeeze()
             pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=score)
+            # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
+            pb_da = pb_da.load()
 
             # Use output manager if available, otherwise fallback to original method
             if self.output_manager:
