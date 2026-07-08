@@ -309,8 +309,7 @@ class RemoteRunner(QThread):
                 relative = local_path.relative_to(config_root)
             except ValueError as exc:
                 raise ValueError(
-                    f"Included config file is outside the upload root: {local_path} "
-                    f"(root: {config_root})"
+                    f"Included config file is outside the upload root: {local_path} (root: {config_root})"
                 ) from exc
 
             relative_posix = relative.as_posix()

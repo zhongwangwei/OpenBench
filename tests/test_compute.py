@@ -74,15 +74,16 @@ def test_fillna():
 def test_compute_rejects_io_calls_from_allowed_roots(tmp_path):
     ds = _make_ds()
     out = tmp_path / "out.nc"
+    out_expr = out.as_posix()
 
     with pytest.raises(ComputeError, match="xarray function 'open_dataset' is not allowed"):
-        execute_compute(ds, f"xr.open_dataset('{out}')", "test")
+        execute_compute(ds, f"xr.open_dataset('{out_expr}')", "test")
 
     with pytest.raises(ComputeError, match="numpy function 'fromfile' is not allowed"):
-        execute_compute(ds, f"np.fromfile('{out}', dtype=np.uint8)", "test")
+        execute_compute(ds, f"np.fromfile('{out_expr}', dtype=np.uint8)", "test")
 
     with pytest.raises(ComputeError, match="method 'to_netcdf' is not allowed"):
-        execute_compute(ds, f"ds['a'].to_netcdf('{out}')", "test")
+        execute_compute(ds, f"ds['a'].to_netcdf('{out_expr}')", "test")
 
     assert not out.exists()
 
