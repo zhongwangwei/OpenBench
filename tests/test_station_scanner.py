@@ -388,6 +388,56 @@ def test_merge_site_uses_atomic_netcdf_write():
     assert ".to_netcdf(" not in source
 
 
+def test_nested_multi_station_merge_loads_before_atomic_write(tmp_path: Path, monkeypatch):
+    import openbench.data.station_scanner as scanner
+
+    root = tmp_path / "raw"
+    site = root / "US-AAA"
+    site.mkdir(parents=True)
+    for month in (1, 2):
+        xr.Dataset(
+            {"QFLX_EVAP_TOT": ("time", np.array([float(month)], dtype=np.float32))},
+            coords={"time": pd.to_datetime([f"2000-{month:02d}-01"]), "lat": 40.0, "lon": -100.0},
+        ).to_netcdf(site / f"part_{month}.nc")
+
+    original_write = scanner._write_netcdf_atomic
+    original_open_mfdataset = scanner._open_mfdataset_chunked
+    mfdataset_closed = {"value": False}
+    seen_writes = []
+
+    class TrackingContext:
+        def __init__(self, context):
+            self._context = context
+            self._dataset = None
+
+        def __enter__(self):
+            self._dataset = self._context.__enter__()
+            return self._dataset
+
+        def __exit__(self, exc_type, exc, tb):
+            mfdataset_closed["value"] = True
+            return self._context.__exit__(exc_type, exc, tb)
+
+    def spy_open_mfdataset(*args, **kwargs):
+        return TrackingContext(original_open_mfdataset(*args, **kwargs))
+
+    def spy_write(data, output_path, *args, **kwargs):
+        assert mfdataset_closed["value"]
+        seen_writes.append(Path(output_path))
+        for array in data.data_vars.values():
+            assert getattr(array, "chunks", None) is None
+            assert "dask" not in type(array.data).__module__.lower()
+        return original_write(data, output_path, *args, **kwargs)
+
+    monkeypatch.setattr(scanner, "_open_mfdataset_chunked", spy_open_mfdataset)
+    monkeypatch.setattr(scanner, "_write_netcdf_atomic", spy_write)
+
+    df = scanner.scan_station_sim_dir(str(root), output_dir=str(tmp_path / "merged"), num_workers=1)
+
+    assert len(seen_writes) == 1
+    assert Path(df.loc[0, "sim_dir"]).exists()
+
+
 def test_scan_station_sim_dir_parses_compact_year_range(tmp_path: Path):
     from openbench.data.station_scanner import scan_station_sim_dir
 

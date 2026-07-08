@@ -386,10 +386,11 @@ def _merge_site(
                 logger.warning("Using blank coordinates for site %s: %s", site_id, e)
                 lon = lat = float("nan")
 
-        # `with` guarantees close even if to_netcdf raises; otherwise the
-        # mfdataset handle leaks and HDF5 lock state lingers, which under
-        # joblib parallel scans manifests as random "file already open"
-        # / OSError on subsequent passes.
+        # Load before writing. ``open_mfdataset`` returns dask-backed arrays;
+        # passing that dataset directly to ``to_netcdf`` makes the write path
+        # read source NetCDF files while the target HDF5 write is active.  On
+        # some CI runners that can hang in netCDF4/HDF5.  Eager loading keeps
+        # the source-file read phase and target-file write phase separate.
         with _open_mfdataset_chunked(
             [str(f) for f in nc_files],
             combine="by_coords",
@@ -398,12 +399,16 @@ def _merge_site(
             coords="minimal",
             parallel=False,
         ) as ds:
+            loaded = ds.load()
             times = pd.to_datetime(ds.time.values)
             syear = int(times.min().year)
             eyear = int(times.max().year)
 
-            merged_path = output_dir / f"sim_{site_id}_{syear}_{eyear}.nc"
-            _write_netcdf_atomic(ds, merged_path)
+        merged_path = output_dir / f"sim_{site_id}_{syear}_{eyear}.nc"
+        try:
+            _write_netcdf_atomic(loaded, merged_path)
+        finally:
+            loaded.close()
 
         return {
             "ID": site_id,
