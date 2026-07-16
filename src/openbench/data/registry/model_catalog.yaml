@@ -2582,12 +2582,9 @@ TE:
   name: TE
   tim_res: Month
   variables:
-    Surface_Albedo:
-      varname: alb
+    Albedo:
+      varname: ALB
       varunit: percentage
-      fallbacks:
-        - varname: ALB
-          varunit: percentage
     Canopy_Evaporation:
       varname: EIFLX
       varunit: kg m-2 s-1

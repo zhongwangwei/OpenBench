@@ -1183,7 +1183,7 @@ class metrics:
             fft_sim = np.fft.rfft(sim)
 
             # Selects the strongest observed Fourier component representing at least two cycles across the record
-            dominant_freq_idx = np.argmax(np.abs(fft_obs[2 : ])) + 2
+            dominant_freq_idx = np.argmax(np.abs(fft_obs[2:])) + 2
 
             # Calculate phase difference
             phase_obs = np.angle(fft_obs)

@@ -410,12 +410,17 @@ def test_cli_scan_rejects_out_of_range_multi_variable_choice(monkeypatch, tmp_pa
     assert selected == []
 
 
-def test_register_scanned_dataset_writes_station_list_next_to_catalog(tmp_path: Path):
+def test_register_scanned_dataset_writes_station_list_to_openbench_home(
+    tmp_path: Path,
+    monkeypatch,
+):
     import numpy as np
     import xarray as xr
 
     from openbench.data.registry.scanner import register_scanned_dataset
 
+    home = tmp_path / "home"
+    monkeypatch.setenv("OPENBENCH_HOME", str(home))
     nc_root = tmp_path / "station_nc"
     nc_root.mkdir()
     ds = xr.Dataset(
@@ -442,8 +447,8 @@ def test_register_scanned_dataset_writes_station_list_next_to_catalog(tmp_path: 
     register_scanned_dataset(scanned, catalog_path=catalog_path)
 
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
-    expected = catalog_path.parent / "station_lists" / "DemoStation.csv"
-    assert catalog["DemoStation"]["fulllist"] == expected.as_posix()
+    expected = home / "station_lists" / "DemoStation.csv"
+    assert catalog["DemoStation"]["fulllist"] == "${OPENBENCH_HOME}/station_lists/DemoStation.csv"
     assert expected.exists()
 
 
@@ -3825,7 +3830,7 @@ def test_profile_scan_unknown_layout_warns(monkeypatch, tmp_path: Path, caplog):
     assert "Unknown scan layout 'staion_direct' in profile 'TypoProfile'" in caplog.text
 
 
-def test_station_generated_fulllist_uses_portable_reference_root(
+def test_station_generated_fulllist_uses_portable_openbench_home(
     monkeypatch,
     tmp_path: Path,
 ):
@@ -3847,6 +3852,8 @@ def test_station_generated_fulllist_uses_portable_reference_root(
     )
     ds.to_netcdf(nc_dir / "S01_2010.nc")
     monkeypatch.setenv("OPENBENCH_REF_ROOT", str(ref_root))
+    home = tmp_path / "home"
+    monkeypatch.setenv("OPENBENCH_HOME", str(home))
 
     scanned = ScannedDataset(
         name="DemoStation",
@@ -3861,8 +3868,8 @@ def test_station_generated_fulllist_uses_portable_reference_root(
     register_scanned_datasets_batch([scanned], catalog_path=catalog_path)
 
     entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["DemoStation"]
-    assert entry["fulllist"] == "${OPENBENCH_REF_ROOT}/station_lists/DemoStation.csv"
-    assert (ref_root / "station_lists" / "DemoStation.csv").exists()
+    assert entry["fulllist"] == "${OPENBENCH_HOME}/station_lists/DemoStation.csv"
+    assert (home / "station_lists" / "DemoStation.csv").exists()
 
 
 def test_profile_file_glob_is_used_for_registration_inspection(monkeypatch, tmp_path: Path):
