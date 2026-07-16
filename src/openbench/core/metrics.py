@@ -863,31 +863,14 @@ class metrics:
         def FFT_component(sim, obs):
             """Calculate phase difference using Fast Fourier Transform"""
             N = len(obs)
-            if N != len(sim) or N < 3:
+            if N != len(sim) or N < 4:
                 return 0.0
 
-            fft_obs = np.fft.fft(obs)
-            fft_sim = np.fft.fft(sim)
+            fft_obs = np.fft.rfft(obs)
+            fft_sim = np.fft.rfft(sim)
 
-            np.fft.fftfreq(N, d=1.0)
-
-            # Find dominant frequency
-            if N // 2 < 1:
-                return 0.0
-
-            if len(sim) > 365:
-                # Skip the very lowest Fourier bins (periods longer than
-                # ~N/11 samples) before picking the dominant frequency: those
-                # bins capture the trend / multi-year drift rather than the
-                # sub-seasonal phase we want for MFM. The previous code
-                # hard-coded 33, which is ~N/11 for a 1-year daily series
-                # but became arbitrarily small relative to N on longer
-                # series; scale the floor with N so the cutoff tracks the
-                # dataset resolution instead of being a magic number.
-                low_freq_floor = max(1, N // 11)
-                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1 : N // 2 + 1])), low_freq_floor) + 1
-            else:
-                dominant_freq_idx = np.argmax(np.abs(fft_obs[1 : N // 2 + 1])) + 1
+            # Selects the strongest observed Fourier component representing at least two cycles across the record
+            dominant_freq_idx = np.argmax(np.abs(fft_obs[2:])) + 2
 
             # Calculate phase difference
             phase_obs = np.angle(fft_obs)
@@ -1193,31 +1176,14 @@ class metrics:
         def FFT_component(sim, obs):
             """Calculate phase difference using Fast Fourier Transform"""
             N = len(obs)
-            if N != len(sim) or N < 3:
+            if N != len(sim) or N < 4:
                 return 0.0
 
-            fft_obs = np.fft.fft(obs)
-            fft_sim = np.fft.fft(sim)
+            fft_obs = np.fft.rfft(obs)
+            fft_sim = np.fft.rfft(sim)
 
-            np.fft.fftfreq(N, d=1.0)
-
-            # Find dominant frequency
-            if N // 2 < 1:
-                return 0.0
-
-            if len(sim) > 365:
-                # Skip the very lowest Fourier bins (periods longer than
-                # ~N/11 samples) before picking the dominant frequency: those
-                # bins capture the trend / multi-year drift rather than the
-                # sub-seasonal phase we want for MFM. The previous code
-                # hard-coded 33, which is ~N/11 for a 1-year daily series
-                # but became arbitrarily small relative to N on longer
-                # series; scale the floor with N so the cutoff tracks the
-                # dataset resolution instead of being a magic number.
-                low_freq_floor = max(1, N // 11)
-                dominant_freq_idx = max(np.argmax(np.abs(fft_obs[1 : N // 2 + 1])), low_freq_floor) + 1
-            else:
-                dominant_freq_idx = np.argmax(np.abs(fft_obs[1 : N // 2 + 1])) + 1
+            # Selects the strongest observed Fourier component representing at least two cycles across the record
+            dominant_freq_idx = np.argmax(np.abs(fft_obs[2 : ])) + 2
 
             # Calculate phase difference
             phase_obs = np.angle(fft_obs)
