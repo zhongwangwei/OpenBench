@@ -559,13 +559,54 @@ CLM5:
       varname: QBOT
       varunit: unitless
     Precipitation:
-      varname: ''
+      compute: ds['RAIN'] + ds['SNOW']
+      varname: Precipitation
       varunit: mm s-1
     Surface_Air_Temperature:
       varname: TSA
       varunit: K
+    FCH4:
+      varname: FCH4
+      varunit: kgC m-2 s-1
+    Methane:
+      varname: FCH4
+      varunit: kgC m-2 s-1
+    Net_Primary_Production:
+      varname: NPP
+      varunit: gC m-2 s-1
+    Burned_Area:
+      varname: FAREA_BURNED
+      varunit: s-1
+    Transpiration:
+      varname: QVEGT
+      varunit: mm s-1
+    Surface_Pressure:
+      varname: PBOT
+      varunit: Pa
     Surface_Wind_Speed:
-      varname: ''
+      varname: WIND
+      varunit: m s-1
+    Canopy_Interception:
+      varname: QINTR
+      varunit: mm s-1
+    Soil_Moisture_Lev2:
+      compute: ds['H2OSOI'].isel(levsoi=1)
+      varname: Soil_Moisture_Lev2
+      varunit: mm3 mm-3
+    Surface_Wind_Speed_U10:
+      varname: U10
+      varunit: m s-1
+    Longwave_Incoming_Radiation:
+      varname: FLDS
+      varunit: W m-2
+    Snowfall:
+      varname: SNOW
+      varunit: mm s-1
+    Runoff:
+      varname: QRUNOFF
+      varunit: mm s-1
+    Snow_Cover_Extent:
+      varname: FSNO_EFF
       varunit: m s-1 wind
 ELM:
   data_type: grid
@@ -1293,7 +1334,7 @@ CoLM2024:
     Snow_Water_Equivalent:
       varname: f_scv
       varunit: mm
-    Soil_Evaporation:
+    Bare_Soil_Evaporation:
       varname: f_fevpg
       varunit: mm s-1
     Streamflow:
@@ -1369,6 +1410,55 @@ CoLM2024:
     Water_Table_Depth:
       varname: f_zwt
       varunit: m
+    Canopy_Interception:
+      compute: ds['f_fevpl'] - ds['f_etr']
+      varname: Canopy_Interception
+      varunit: mm s-1
+    Runoff:
+      varname: f_rsur
+      varunit: mm s-1
+    Snowfall:
+      varname: f_xy_snow
+      varunit: mm s-1
+    Latent_Heat_Flux:
+      varname: f_lfevpa
+      varunit: W m-2
+    Sensible_Heat_Flux:
+      varname: f_fsena
+      varunit: W m-2
+    Soil_Moisture_Lev2:
+      compute: ds['f_h2osoi'].isel(soil=1)
+      varname: Soil_Moisture_Lev2
+      varunit: m3 m-3
+    Surface_Pressure:
+      varname: f_xy_pbot
+      varunit: Pa
+    Surface_Specific_Humidity:
+      varname: f_qref
+      varunit: kg kg-1
+    Surface_Wind_Speed_U10:
+      varname: f_us10m
+      varunit: m s-1
+    Surface_Wind_Speed_V10:
+      varname: f_vs10m
+      varunit: m s-1
+    Transpiration:
+      varname: f_etr
+      varunit: mm s-1
+    Urban_Latent_Heat_Flux:
+      varname: f_lfevpa
+      varunit: w m-2
+    Lake_Surface_Water_Temperature:
+      compute: ds['f_t_lake'].isel(lake=0)
+      varname: Lake_Surface_Water_Temperature
+      varunit: K
+    Net_Primary_Production:
+      compute: ds['f_gpp'] - ds['f_ar']
+      varname: Net_Primary_Production
+      varunit: gC m-2 s-1
+    Total_Irrigation_Amount:
+      varname: f_sum_irrig
+      varunit: kg m-2
 ERA5-Land:
   data_type: grid
   description: ECMWF ERA5-Land Reanalysis
@@ -1478,6 +1568,67 @@ GLDAS:
       compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
       varname: Total_Runoff
       varunit: mm 3hour-1
+    Transpiration:
+      varname: Tveg_tavg
+      varunit: W m-2
+    Precipitation:
+      varname: Rainf_f_tavg
+      varunit: kg m-2 s-1
+    Surface_Air_Temperature:
+      varname: Tair_f_inst
+      varunit: K
+    Surface_Downward_LW_Radiation:
+      varname: LWdown_f_tavg
+      varunit: W m-2
+    Surface_Downward_SW_Radiation:
+      varname: SWdown_f_tavg
+      varunit: W m-2
+    Surface_Pressure:
+      varname: Psurf_f_inst
+      varunit: Pa
+    Surface_Wind_Speed:
+      varname: Wind_f_inst
+      varunit: m s-1
+    Bare_Soil_Evaporation:
+      varname: ESoil_tavg
+      varunit: W m-2
+    Canopy_Evaporation:
+      varname: ECanop_tavg
+      varunit: W m-2
+    Canopy_Transpiration:
+      varname: Tveg_tavg
+      varunit: W m-2
+    Root_Zone_Soil_Moisture:
+      varname: RootMoist_inst
+      varunit: kg m-2
+    Soil_Moisture_Lev2:
+      varname: SoilMoi10_40cm_inst
+      varunit: kg m-2
+    Surface_Albedo:
+      varname: Albedo_inst
+      varunit: unitless
+    Surface_Net_LW_Radiation:
+      varname: Lwnet_tavg
+      varunit: W m-2
+    Surface_Net_SW_Radiation:
+      varname: Swnet_tavg
+      varunit: W m-2
+    Surface_Specific_Humidity:
+      varname: Qair_f_inst
+      varunit: kg kg-1
+    Latent_Heat_Flux:
+      varname: Qle_tavg
+      varunit: W m-2
+    Sensible_Heat_Flux:
+      varname: Qh_tavg
+      varunit: W m-2
+    Snowfall:
+      varname: Snowf_tavg
+      varunit: kg m-2 s-1
+    Runoff:
+      compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
+      varname: Runoff
+      varunit: kg m-2
 InteractiveModel:
   data_type: grid
   description: InteractiveModel model profile
@@ -2208,7 +2359,7 @@ NoahMP5:
       varname: HeatSensibleCanopy
       varunit: w m-2
     Canopy_Transpiration:
-      varname: Transpiration
+      varname: EvapGroundNet
       varunit: mm s-1
     Depth_Of_Surface_Water:
       varname: WaterHeadSfc
@@ -2431,9 +2582,12 @@ TE:
   name: TE
   tim_res: Month
   variables:
-    Albedo:
-      varname: ALB
+    Surface_Albedo:
+      varname: alb
       varunit: percentage
+      fallbacks:
+        - varname: ALB
+          varunit: percentage
     Canopy_Evaporation:
       varname: EIFLX
       varunit: kg m-2 s-1
@@ -2441,15 +2595,27 @@ TE:
       varname: GFLXTL
       varunit: W m-2
     Inundation_Area:
-      varname: FLDARE
+      varname: fldare
       varunit: m2
+      fallbacks:
+        - varname: FLDARE
+          varunit: m2
     Inundation_Fraction:
-      varname: FLDFRC
+      varname: fldfrc
       varunit: unitless
+      fallbacks:
+        - varname: FLDFRC
+          varunit: unitless
     Latent_Heat:
       varname: LTNT
       varunit: W m-2
     Sensible_Heat:
+      varname: SENS
+      varunit: W m-2
+    Latent_Heat_Flux:
+      varname: LTNT
+      varunit: W m-2
+    Sensible_Heat_Flux:
       varname: SENS
       varunit: W m-2
     Snow_Water_Equivalent:
@@ -2458,6 +2624,10 @@ TE:
     Streamflow:
       fallbacks:
         - varname: Streamflow
+          varunit: m3 s-1
+        - varname: rivout
+          varunit: m3 s-1
+        - varname: RFLOW
           varunit: m3 s-1
       varname: outflw
       varunit: m3 s-1
@@ -2471,8 +2641,11 @@ TE:
       varname: SNRAT
       varunit: unitless
     Surface_Specific_Humidity:
-      varname: GDQ
+      varname: q2
       varunit: unitless
+      fallbacks:
+        - varname: GDQ
+          varunit: unitless
     Surface_Upward_LW_Radiation:
       varname: SLRU
       varunit: W m-2
@@ -2487,14 +2660,17 @@ TE:
       varname: STORGE
       varunit: m3
     Net_Radiation:
-      varname: ''
-      varunit: ''
+      compute: ds['SSRD'] - ds['SSRU'] + ds['SLRD'] - ds['SLRU']
+      varname: Net_Radiation
+      varunit: W m-2
     Surface_Net_SW_Radiation:
-      varname: ''
-      varunit: ''
+      compute: ds['SSRD'] - ds['SSRU']
+      varname: Surface_Net_SW_Radiation
+      varunit: W m-2
     Surface_Net_LW_Radiation:
-      varname: ''
-      varunit: ''
+      compute: ds['SLRD'] - ds['SLRU']
+      varname: Surface_Net_LW_Radiation
+      varunit: W m-2
     Gross_Primary_Productivity:
       varname: ''
       varunit: ''
@@ -2517,8 +2693,8 @@ TE:
       varname: ''
       varunit: ''
     Evapotranspiration:
-      varname:
-      varunit: None
+      varname: evap
+      varunit: kg m-2 s-1
     Canopy_Evaporation_Canopy_Transpiration:
       varname: ''
       varunit: ''
@@ -2531,9 +2707,15 @@ TE:
     Snow_Evaporation:
       varname: ''
       varunit: ''
+    Transpiration:
+      varname: ETFLX
+      varunit: kg m-2 s-1
     Canopy_Transpiration:
-      varname:
-      varunit: None
+      varname: ETFLX
+      varunit: kg m-2 s-1
+    Runoff:
+      varname: RUNOFF
+      varunit: kg m-2 s-1
     Surface_Runoff:
       varname: ''
       varunit: ''
@@ -2552,9 +2734,12 @@ TE:
     Snow_Depth:
       varname: ''
       varunit: ''
-    Lake_temperature:
-      varname: ''
-      varunit: ''
+    Lake_Surface_Water_Temperature:
+      varname: tsil
+      varunit: K
+      fallbacks:
+        - varname: TSIL
+          varunit: K
     Lake_Ice_Fraction_Cover:
       varname: ''
       varunit: ''
@@ -2625,11 +2810,31 @@ TE:
       varname: ''
       varunit: ''
     Precipitation:
-      varname: ''
-      varunit: ''
+      varname: GPRCT
+      varunit: kg m-2 s-1
     Surface_Air_Temperature:
-      varname: ''
-      varunit: ''
+      varname: T2
+      varunit: K
+    Bare_Soil_Evaporation:
+      varname: EBFLX
+      varunit: kg m-2 s-1
+    Surface_Wind_Speed_U10:
+      varname: u10
+      varunit: m s-1
+    Surface_Wind_Speed_V10:
+      varname: v10
+      varunit: m s-1
+    Surface_Wind_Speed:
+      compute: (ds['u10']**2 + ds['v10']**2)**0.5
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+    Terrestrial_Water_Storage_Change:
+      compute: ds['STORGE'].diff('time')
+      varname: Terrestrial_Water_Storage_Change
+      varunit: m3
+    Water_Surface_Elevation:
+      varname: sfcelv
+      varunit: m
 VIC5:
   data_type: grid
   description: Variable Infiltration Capacity Model v5

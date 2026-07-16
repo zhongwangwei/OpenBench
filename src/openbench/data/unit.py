@@ -155,6 +155,7 @@ class UnitProcessing:
                 "degree c": lambda x: x + 273.15,
                 "degree_celsius": lambda x: x + 273.15,
                 "celsius": lambda x: x + 273.15,
+                "kelvin": lambda x: x,
                 "f": lambda x: (x - 32) * 5 / 9 + 273.15,
                 "degf": lambda x: (x - 32) * 5 / 9 + 273.15,
                 "degreef": lambda x: (x - 32) * 5 / 9 + 273.15,
@@ -195,6 +196,7 @@ class UnitProcessing:
             },
             "m s-1": {
                 "km h-1": lambda x: x / 3.6,
+                "m s**-1": lambda x: x,
             },
             "t ha-1": {
                 "kg ha-1": lambda x: x / 1000,
