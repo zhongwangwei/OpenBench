@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 import yaml
 
-from openbench.config.user_settings import resolve_reference_root
+from openbench.config.user_settings import resolve_home_dir, resolve_reference_root
 from openbench.util.names import AmbiguousNameError
 from openbench.util.netcdf import write_file_atomic
 
@@ -605,18 +605,35 @@ def _portable_root_dir(path: Path) -> str:
 
 
 def _portable_path(path: Path) -> str:
-    """Use OPENBENCH_REF_ROOT in generated catalog paths when possible."""
-    return _portable_root_dir(path)
+    """Use OPENBENCH_REF_ROOT or OPENBENCH_HOME in generated catalog paths when possible."""
+    ref_portable = _portable_root_dir(path)
+    if ref_portable != path.as_posix():
+        return ref_portable
+
+    home_env = os.environ.get("OPENBENCH_HOME")
+    if home_env:
+        home_root = resolve_home_dir()
+        try:
+            rel = path.resolve().relative_to(home_root.resolve())
+        except (OSError, ValueError):
+            return path.as_posix()
+
+        if str(rel) == ".":
+            return "${OPENBENCH_HOME}"
+        return "${OPENBENCH_HOME}/" + rel.as_posix()
+
+    return path.as_posix()
 
 
 def _station_list_dir_for_catalog(scanned: ScannedDataset, catalog_path: Path) -> Path:
-    ref_root = resolve_reference_root()
-    if ref_root:
-        expanded_root = _expand_path(ref_root)
-        scanned_root = _expand_path(scanned.root_dir)
-        if "${OPENBENCH_REF_ROOT}" in str(scanned.root_dir) or _is_within(scanned_root, expanded_root):
-            return expanded_root / "station_lists"
-    return catalog_path.parent / "station_lists"
+    """Return the default directory for generated station fulllist CSV files.
+
+    Keep generated station lists outside OPENBENCH_REF_ROOT so users can scan
+    read-only shared reference roots without needing write permission there.
+    OPENBENCH_HOME overrides the base directory via resolve_home_dir(); when it
+    is unset, this falls back to the real user home directory.
+    """
+    return resolve_home_dir() / "station_lists"
 
 
 def _profile_root(ref_root: Path, root_sub_dir: str, profile_name: str) -> Path | None:
