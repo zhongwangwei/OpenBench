@@ -1411,7 +1411,8 @@ CoLM2024:
       varname: f_zwt
       varunit: m
     Canopy_Interception:
-      varname: f_qintr
+      compute: ds['f_fevpl'] - ds['f_etr']
+      varname: Canopy_Interception
       varunit: mm s-1
     Runoff:
       varname: f_rsur
