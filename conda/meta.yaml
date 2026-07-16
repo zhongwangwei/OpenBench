@@ -1,6 +1,6 @@
 {% set name = "colm-openbench" %}
 {% set dist_name = name|replace("-", "_") %}
-{% set version = "3.0.0b8" %}
+{% set version = "3.0.0b9" %}
 
 package:
   name: {{ name|lower }}

@@ -137,7 +137,7 @@ conda install -c conda-forge colm-openbench
 mamba install -c conda-forge colm-openbench   # or the faster mamba
 ```
 
-> **Note:** the current release is a Beta pre-release (`3.0.0b8`) and is **not on
+> **Note:** the current release is a Beta pre-release (`3.0.0b9`) and is **not on
 > conda-forge yet**. Until it is, use one of the two paths below.
 
 If your platform does not have wheels for geospatial dependencies such as
