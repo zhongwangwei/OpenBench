@@ -125,6 +125,7 @@ def _validate_expression(expr: str, *, label: str, allowed_names: set[str] | Non
         return
     from openbench.data.compute import (
         ComputeError,
+        _split_assignment,
     )
     from openbench.data.compute import (
         _validate_expression as validate_one,
@@ -137,12 +138,11 @@ def _validate_expression(expr: str, *, label: str, allowed_names: set[str] | Non
         # unknown/dangerous identifiers.
         active_allowed_names = {"value", "np", *(allowed_names or set())}
         for part in parts:
-            if "=" in part and not part.startswith("("):
-                target, rhs = part.split("=", 1)
-                validate_one(rhs.strip(), allowed_names=active_allowed_names)
-                target = target.strip()
-                if target.isidentifier():
-                    active_allowed_names.add(target)
+            assignment = _split_assignment(part)
+            if assignment is not None:
+                target, rhs = assignment
+                validate_one(rhs, allowed_names=active_allowed_names)
+                active_allowed_names.add(target)
             else:
                 validate_one(part, allowed_names=active_allowed_names)
     except ComputeError as exc:
