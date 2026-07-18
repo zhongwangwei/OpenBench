@@ -599,7 +599,7 @@ Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 Monthly:
@@ -623,7 +623,7 @@ Monthly:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 Hourly:
@@ -694,7 +694,7 @@ Beck_2017_Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 Caravan_Daily:
@@ -718,7 +718,7 @@ Caravan_Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 Dai_Trenberth_Monthly:
@@ -765,7 +765,7 @@ GRDC_Caravan_extension_Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 GRDC_Daily:
@@ -789,7 +789,7 @@ GRDC_Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 GRDC_Monthly:
@@ -926,7 +926,7 @@ Hubei_Hydro_Daily:
     area_var: area
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 OpenBench_Streamflow_Daily:
@@ -950,7 +950,7 @@ OpenBench_Streamflow_Daily:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 OpenBench_Streamflow_Hourly:
@@ -996,7 +996,7 @@ OpenBench_Streamflow_Monthly:
     Streamflow:
       min_uparea: 1000.0
       max_uparea: 50000000000.0
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 R_ArcticNet_Daily:
@@ -1018,7 +1018,7 @@ R_ArcticNet_Daily:
     area_var: Upstream_Area
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 R_ArcticNet_Monthly:
@@ -1084,7 +1084,7 @@ YRC_Daily:
     area_var: area
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 
 # ─── Grid datasets ───────────────────────────────────────────────────────────
@@ -1644,7 +1644,7 @@ CAMELSH_Hourly:
     time_var: time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
 ResOpsUS:
   description: ResOpsUS reference dataset (Station)
