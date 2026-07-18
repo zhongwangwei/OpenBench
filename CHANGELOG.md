@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.0.0b10] - 2026-07-18
+
+Beta release over 3.0.0b9 for station-reference routing correctness.
+
+### Changed
+- Renamed the active configuration runtime module from `legacy_processors.py`
+  to `runtime_info.py` to reflect that it remains on the main execution path.
+
+### Fixed
+- Non-Streamflow station references no longer enter the discharge/CaMA-specific
+  `station_matching` engine.
+- Reference scans remove stale non-Streamflow matching blocks and generate
+  portable station-list catalogs instead.
+
 ## [3.0.0b9] - 2026-07-16
 
 Beta release over 3.0.0b8 for registry coverage and CI stability.

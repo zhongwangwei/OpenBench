@@ -1,6 +1,6 @@
 """OpenBench: Open Source Land Surface Model Benchmarking System."""
 
-__version__ = "3.0.0b9"
+__version__ = "3.0.0b10"
 __author__ = "Zhongwang Wei, CoLM-SYSU"
 __title__ = "OpenBench"
 __description__ = "Land Surface Model Benchmarking System"
