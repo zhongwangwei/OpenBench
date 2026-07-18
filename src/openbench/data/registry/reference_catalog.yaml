@@ -3352,8 +3352,6 @@ OpenBench_FLUX_30min:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/30min
   prefix: OpenBench_FLUX_30min_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_30min_full.nc
   variables: &openbench_flux_catalog_variables
     Ground_Heat:
       sub_dir: ''
@@ -3444,8 +3442,6 @@ OpenBench_FLUX_Hourly:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly
   prefix: OpenBench_FLUX_hourly_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_hourly_full.nc
   variables: *openbench_flux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3460,8 +3456,6 @@ OpenBench_FLUX_Daily:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily
   prefix: OpenBench_FLUX_daily_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_daily_full.nc
   variables: *openbench_flux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3476,8 +3470,6 @@ OpenBench_FLUX_Daily_Benchmark:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/daily_benchmark
   prefix: OpenBench_FLUX_daily_benchmark_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_daily_benchmark_full.nc
   variables: *openbench_flux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3492,8 +3484,6 @@ OpenBench_FLUX_Hourly_Benchmark:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly_benchmark
   prefix: OpenBench_FLUX_hourly_benchmark_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_hourly_benchmark_full.nc
   variables: *openbench_flux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3508,8 +3498,6 @@ OpenBench_FLUX_Monthly_Benchmark:
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/monthly_benchmark
   prefix: OpenBench_FLUX_monthly_benchmark_full
-  station_matching:
-    dataset_file: OpenBench_FLUX_monthly_benchmark_full.nc
   variables: *openbench_flux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3523,8 +3511,6 @@ UrbanFlux_30min:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/30min
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_30min.nc
   variables: &urbanflux_catalog_variables
     Sensible_Heat:
       sub_dir: ''
@@ -3590,8 +3576,6 @@ UrbanFlux_Hourly:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/hourly
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_Hourly.nc
   variables: *urbanflux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3605,8 +3589,6 @@ UrbanFlux_Daily:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/daily
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_Daily.nc
   variables: *urbanflux_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3620,8 +3602,6 @@ LAI_Yuan2011_8Day:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/8day
-  station_matching:
-    dataset_file: OpenBench_LAI_8day_Yuan2011.nc
   variables:
     Leaf_Area_Index:
       sub_dir: ''
@@ -3639,8 +3619,6 @@ LAI_Yuan2011_Monthly:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/monthly
-  station_matching:
-    dataset_file: OpenBench_LAI_monthly_Yuan2011.nc
   variables:
     Leaf_Area_Index:
       sub_dir: ''
@@ -3658,8 +3636,6 @@ Transpiration_OpenBench_Daily:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration
-  station_matching:
-    dataset_file: OpenBench_Transpiration_Daily_redist.nc
   variables: &transpiration_daily_catalog_variables
     Canopy_Transpiration:
       sub_dir: ''
@@ -3681,8 +3657,6 @@ Transpiration_SAPFLUXNET_Daily:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET
-  station_matching:
-    dataset_file: OpenBench_Transpiration_Benchmark_Daily.nc
   variables: *transpiration_daily_catalog_variables
   _provenance:
     data_groupby: profile
@@ -3696,8 +3670,6 @@ Rodai2025_NPP:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Net_Primary_Production/Rodai2025
-  station_matching:
-    dataset_file: OpenBench_NPP_Rodai2025.nc
   variables:
     Net_Primary_Production:
       sub_dir: ''
@@ -3715,8 +3687,6 @@ G_REALM_LakeLevel:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Level/G_REALM
-  station_matching:
-    dataset_file: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
   variables:
     Lake_Level:
       sub_dir: ''
@@ -3734,8 +3704,6 @@ GLAST_LakeSurfaceWaterTemperature:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Surface_Water_Temperature/GLAST
-  station_matching:
-    dataset_file: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
   variables:
     Lake_Surface_Water_Temperature:
       sub_dir: ''
@@ -3753,8 +3721,6 @@ ReaLSAT_LakeArea:
   data_groupby: single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Area/ReaLSAT
-  station_matching:
-    dataset_file: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
   variables:
     Lake_Area:
       sub_dir: ''

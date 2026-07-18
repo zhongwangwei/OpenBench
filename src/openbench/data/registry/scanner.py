@@ -1846,9 +1846,9 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     if "timezone" in existing:
         descriptor["timezone"] = existing["timezone"]
 
-    # station_matching is a manual runtime contract for station references.
-    # Scanner metadata cannot reconstruct it, so keep the existing block intact.
-    if existing.get("station_matching"):
+    # station_matching is a Streamflow-only runtime contract. Keep valid
+    # user-defined matchers, but drop invalid blocks from other station data.
+    if existing.get("station_matching") and "Streamflow" in descriptor.get("variables", {}):
         descriptor["station_matching"] = existing["station_matching"]
 
 

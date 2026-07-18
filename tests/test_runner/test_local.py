@@ -441,7 +441,7 @@ def test_runner_builds_runtime_context_without_mutating_reader_state(tmp_path, m
     main_nl, ref_nml, sim_nml = _namelists(tmp_path)
 
     import openbench.config.adapter as adapter
-    import openbench.config.legacy_processors as legacy_processors
+    import openbench.config.runtime_info as runtime_info
     import openbench.core.evaluation as evaluation
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
@@ -486,7 +486,7 @@ def test_runner_builds_runtime_context_without_mutating_reader_state(tmp_path, m
     monkeypatch.setattr(adapter, "to_legacy_config", lambda cfg: legacy)
     monkeypatch.setattr(adapter, "build_legacy_namelists", lambda cfg: (main_nl, ref_nml, sim_nml))
     monkeypatch.setattr(adapter, "build_fig_nml", lambda: {})
-    monkeypatch.setattr(legacy_processors, "GeneralInfoReader", FakeInfoReader)
+    monkeypatch.setattr(runtime_info, "GeneralInfoReader", FakeInfoReader)
     monkeypatch.setattr(local_runner, "_apply_unified_mask", lambda *args, **kwargs: None)
     monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessor)
     monkeypatch.setattr(evaluation, "Evaluation_grid", FakeGridEvaluation)
@@ -1892,7 +1892,7 @@ def test_preprocessing_errors_are_reported_and_skip_evaluation(tmp_path, monkeyp
     main_nl, ref_nml, sim_nml = _namelists(tmp_path)
 
     import openbench.config.adapter as adapter
-    import openbench.config.legacy_processors as legacy_processors
+    import openbench.config.runtime_info as runtime_info
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
 
@@ -1916,7 +1916,7 @@ def test_preprocessing_errors_are_reported_and_skip_evaluation(tmp_path, monkeyp
     monkeypatch.setattr(adapter, "to_legacy_config", lambda cfg: legacy)
     monkeypatch.setattr(adapter, "build_legacy_namelists", lambda cfg: (main_nl, ref_nml, sim_nml))
     monkeypatch.setattr(adapter, "build_fig_nml", lambda: {})
-    monkeypatch.setattr(legacy_processors, "GeneralInfoReader", FakeInfoReader)
+    monkeypatch.setattr(runtime_info, "GeneralInfoReader", FakeInfoReader)
     monkeypatch.setattr(processing, "DatasetProcessing", FailingProcessor)
     monkeypatch.setattr(local_runner, "_evaluate_single", lambda task: evaluated.append(task) or {})
     monkeypatch.setattr(local_runner, "_run_groupby", lambda *args, **kwargs: [])

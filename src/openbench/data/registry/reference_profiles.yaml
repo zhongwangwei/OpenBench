@@ -139,8 +139,6 @@ OpenBench_FLUX_30min:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/30min
     file_glob: OpenBench_FLUX_30min_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_30min_full.nc
   description: OpenBench FLUX tower composite (30-minute)
   category: Composite
   tim_res: 30min
@@ -228,8 +226,6 @@ OpenBench_FLUX_Hourly:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/hourly
     file_glob: OpenBench_FLUX_hourly_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_hourly_full.nc
   description: OpenBench FLUX tower composite (hourly)
   category: Composite
   tim_res: Hour
@@ -241,8 +237,6 @@ OpenBench_FLUX_Daily:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/daily
     file_glob: OpenBench_FLUX_daily_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_daily_full.nc
   description: OpenBench FLUX tower composite (daily)
   category: Composite
   tim_res: Day
@@ -254,8 +248,6 @@ OpenBench_FLUX_Daily_Benchmark:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/daily_benchmark
     file_glob: OpenBench_FLUX_daily_benchmark_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_daily_benchmark_full.nc
   description: OpenBench FLUX benchmark tower composite (daily)
   category: Composite
   tim_res: Day
@@ -267,8 +259,6 @@ OpenBench_FLUX_Hourly_Benchmark:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/hourly_benchmark
     file_glob: OpenBench_FLUX_hourly_benchmark_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_hourly_benchmark_full.nc
   description: OpenBench FLUX benchmark tower composite (hourly)
   category: Composite
   tim_res: Hour
@@ -280,8 +270,6 @@ OpenBench_FLUX_Monthly_Benchmark:
     layout: station_direct
     root_sub_dir: Station/Composite/OpenBench_FLUX/monthly_benchmark
     file_glob: OpenBench_FLUX_monthly_benchmark_full.nc
-  station_matching:
-    dataset_file: OpenBench_FLUX_monthly_benchmark_full.nc
   description: OpenBench FLUX benchmark tower composite (monthly)
   category: Composite
   tim_res: Month
@@ -293,8 +281,6 @@ UrbanFlux_30min:
     layout: station_direct
     root_sub_dir: Station/Anth/Urban/UrbanFlux/30min
     file_glob: OpenBench_UrbanFlux_30min.nc
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_30min.nc
   description: UrbanFlux station composite (30-minute)
   category: Urban
   tim_res: 30min
@@ -358,8 +344,6 @@ UrbanFlux_Hourly:
     layout: station_direct
     root_sub_dir: Station/Anth/Urban/UrbanFlux/hourly
     file_glob: OpenBench_UrbanFlux_Hourly.nc
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_Hourly.nc
   description: UrbanFlux station composite (hourly)
   category: Urban
   tim_res: Hour
@@ -371,8 +355,6 @@ UrbanFlux_Daily:
     layout: station_direct
     root_sub_dir: Station/Anth/Urban/UrbanFlux/daily
     file_glob: OpenBench_UrbanFlux_Daily.nc
-  station_matching:
-    dataset_file: OpenBench_UrbanFlux_Daily.nc
   description: UrbanFlux station composite (daily)
   category: Urban
   tim_res: Day
@@ -430,8 +412,6 @@ Rodai2025_NPP:
     layout: station_direct
     root_sub_dir: Station/Bio/Net_Primary_Production/Rodai2025
     file_glob: OpenBench_NPP_Rodai2025.nc
-  station_matching:
-    dataset_file: OpenBench_NPP_Rodai2025.nc
   description: Rodai 2025 station net primary productivity observations
   category: Bio
   tim_res: Year
@@ -447,8 +427,6 @@ G_REALM_LakeLevel:
     layout: station_direct
     root_sub_dir: Station/Lake/Lake_Level/G_REALM
     file_glob: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
-  station_matching:
-    dataset_file: OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc
   description: G-REALM station lake level observations
   category: Lake
   tim_res: mixed
@@ -464,8 +442,6 @@ GLAST_LakeSurfaceWaterTemperature:
     layout: station_direct
     root_sub_dir: Station/Lake/Lake_Surface_Water_Temperature/GLAST
     file_glob: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
-  station_matching:
-    dataset_file: OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc
   description: GLAST station lake surface water temperature observations
   category: Lake
   tim_res: Day
@@ -481,8 +457,6 @@ ReaLSAT_LakeArea:
     layout: station_direct
     root_sub_dir: Station/Lake/Lake_Area/ReaLSAT
     file_glob: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
-  station_matching:
-    dataset_file: OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc
   description: ReaLSAT station lake area observations
   category: Lake
   tim_res: Month
@@ -512,8 +486,6 @@ LAI_Yuan2011_8Day:
     layout: station_direct
     root_sub_dir: Station/Bio/Leaf_Area_Index/Yuan2011/8day
     file_glob: OpenBench_LAI_8day_Yuan2011.nc
-  station_matching:
-    dataset_file: OpenBench_LAI_8day_Yuan2011.nc
   description: Yuan et al. 2011 station LAI observations (8-day OpenBench format)
   category: Bio
   tim_res: 8Day
@@ -529,8 +501,6 @@ LAI_Yuan2011_Monthly:
     layout: station_direct
     root_sub_dir: Station/Bio/Leaf_Area_Index/Yuan2011/monthly
     file_glob: OpenBench_LAI_monthly_Yuan2011.nc
-  station_matching:
-    dataset_file: OpenBench_LAI_monthly_Yuan2011.nc
   description: Yuan et al. 2011 station LAI observations (monthly OpenBench format)
   category: Bio
   tim_res: Month
@@ -567,8 +537,6 @@ Transpiration_OpenBench_Daily:
     layout: station_direct
     root_sub_dir: Station/Water/Transpiration
     file_glob: OpenBench_Transpiration_Daily_redist.nc
-  station_matching:
-    dataset_file: OpenBench_Transpiration_Daily_redist.nc
   description: OpenBench station canopy transpiration (daily)
   category: Water
   tim_res: Day
@@ -588,8 +556,6 @@ Transpiration_SAPFLUXNET_Daily:
     layout: station_direct
     root_sub_dir: Station/Water/Transpiration/SAPFLUXNET
     file_glob: OpenBench_Transpiration_Benchmark_Daily.nc
-  station_matching:
-    dataset_file: OpenBench_Transpiration_Benchmark_Daily.nc
   description: SAPFLUXNET station canopy transpiration benchmark (daily)
   category: Water
   tim_res: Day

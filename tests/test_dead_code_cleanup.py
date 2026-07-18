@@ -25,7 +25,7 @@ def test_legacy_config_modules_are_removed():
 
 def test_general_info_reader_no_longer_inherits_namelist_reader():
     """GeneralInfoReader should stand alone once legacy reader modules are removed."""
-    from openbench.config.legacy_processors import GeneralInfoReader
+    from openbench.config.runtime_info import GeneralInfoReader
 
     assert "NamelistReader" not in {base.__name__ for base in GeneralInfoReader.__mro__[1:]}
 
@@ -110,10 +110,10 @@ def test_conventions_describe_adapter_output_without_legacy_bridge_wording():
     assert "Legacy bridge code uses" not in conventions
 
 
-def test_only_active_config_legacy_bridge_module_remains():
-    """No deleted config legacy modules should be reintroduced during cleanup."""
+def test_no_config_legacy_modules_remain():
+    """Active config modules should not be mislabeled as legacy."""
     legacy_modules = sorted(path.name for path in (ROOT / "src/openbench/config").glob("legacy_*.py"))
-    assert legacy_modules == ["legacy_processors.py"]
+    assert legacy_modules == []
 
 
 def test_orphaned_data_file_processing_module_is_removed():

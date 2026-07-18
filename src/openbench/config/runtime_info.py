@@ -666,7 +666,7 @@ class GeneralInfoReader:
         """Get custom filter function for the reference source.
 
         Priority:
-        1. station_matching config in reference_catalog.yaml → StationMatcher engine
+        1. Streamflow station_matching config in reference_catalog.yaml → StationMatcher engine
         2. Python filter file (built-in or user ~/.openbench/custom/)
         3. None → default filter
         """
@@ -677,30 +677,38 @@ class GeneralInfoReader:
             mgr = get_registry()
             ref = mgr.get_reference(self.ref_source)
             if ref and ref.station_matching:
-                sm = ref.station_matching
-
-                def _station_matcher_filter(info):
-                    from pathlib import Path
-                    from openbench.data.station_matcher import run_station_matching
-
-                    dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
-                    run_station_matching(
-                        info,
-                        dataset_path,
-                        method=sm.method,
-                        station_id_var=sm.station_id_var,
-                        lon_var=sm.lon_var,
-                        lat_var=sm.lat_var,
-                        area_var=sm.area_var,
-                        discharge_var=sm.discharge_var,
-                        time_var=sm.time_var,
-                        area_error_threshold=sm.area_error_threshold,
-                        min_uparea=sm.min_uparea,
-                        max_uparea=sm.max_uparea,
-                        time_format=sm.time_format,
+                if not any(str(name).casefold() == "streamflow" for name in ref.variables):
+                    logging.warning(
+                        "Ignoring station_matching for non-Streamflow reference %s; "
+                        "rescan the reference catalog to generate a station list.",
+                        self.ref_source,
                     )
+                else:
+                    sm = ref.station_matching
 
-                return _station_matcher_filter
+                    def _station_matcher_filter(info):
+                        from pathlib import Path
+
+                        from openbench.data.station_matcher import run_station_matching
+
+                        dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
+                        run_station_matching(
+                            info,
+                            dataset_path,
+                            method=sm.method,
+                            station_id_var=sm.station_id_var,
+                            lon_var=sm.lon_var,
+                            lat_var=sm.lat_var,
+                            area_var=sm.area_var,
+                            discharge_var=sm.discharge_var,
+                            time_var=sm.time_var,
+                            area_error_threshold=sm.area_error_threshold,
+                            min_uparea=sm.min_uparea,
+                            max_uparea=sm.max_uparea,
+                            time_format=sm.time_format,
+                        )
+
+                    return _station_matcher_filter
         except Exception as e:
             logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)
 

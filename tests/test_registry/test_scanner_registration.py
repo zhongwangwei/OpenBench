@@ -3152,6 +3152,11 @@ def test_station_direct_nc_layout_uses_reference_profile(monkeypatch, tmp_path: 
         "_REFERENCE_PROFILES",
         {
             "FlatStation": {
+                "scan": {
+                    "layout": "station_direct",
+                    "root_sub_dir": "Station/Heat/FlatStation",
+                    "file_glob": "FlatStation_monthly.nc",
+                },
                 "description": "flat station dataset",
                 "tim_res": "Month",
                 "data_groupby": "single",
@@ -3164,6 +3169,8 @@ def test_station_direct_nc_layout_uses_reference_profile(monkeypatch, tmp_path: 
             },
         },
     )
+    home = tmp_path / "home"
+    monkeypatch.setenv("OPENBENCH_HOME", str(home))
 
     ref_root = tmp_path / "Reference"
     nc_dir = ref_root / "Station" / "Heat" / "FlatStation"
@@ -3183,19 +3190,29 @@ def test_station_direct_nc_layout_uses_reference_profile(monkeypatch, tmp_path: 
     assert [g.base_name for g in groups] == ["FlatStation"]
     variant = groups[0].variants["Station"]
     assert variant.root_dir.endswith("Station/Heat/FlatStation")
-    assert variant.variables == {"FlatStation": ""}
+    assert variant.variables == {"Surface_Downward_SW_Radiation": ""}
 
     catalog_path = tmp_path / "reference_catalog.yaml"
+    catalog_path.write_text(
+        yaml.safe_dump(
+            {
+                "FlatStation": {
+                    "station_matching": {"dataset_file": "FlatStation_monthly.nc"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
     entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["FlatStation"]
 
     assert entry["description"] == "flat station dataset"
-    assert entry["variables"] == {
-        "Surface_Downward_SW_Radiation": {
-            "varname": "rsds",
-            "varunit": "W m-2",
-        }
-    }
+    assert "station_matching" not in entry
+    assert entry["fulllist"] == "${OPENBENCH_HOME}/station_lists/FlatStation.csv"
+    assert (home / "station_lists" / "FlatStation.csv").exists()
+    variable = entry["variables"]["Surface_Downward_SW_Radiation"]
+    assert variable["varname"] == "rsds"
+    assert variable["varunit"] == "W m-2"
 
 
 def test_profile_scan_station_direct_can_read_nested_nc_dir(monkeypatch, tmp_path: Path):

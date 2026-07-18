@@ -302,7 +302,7 @@ def test_conflicting_simulation_resolution_requires_explicit_comparison_context(
 
 def test_runner_bindings_build_runtime_info_is_self_contained(monkeypatch):
     """RunnerBindings should not depend on the free build_runtime_info helper anymore."""
-    import openbench.config.legacy_processors as legacy_processors
+    import openbench.config.runtime_info as runtime_info
 
     runner_cfg = adapter_module.RunnerConfig(
         basename="case",
@@ -343,7 +343,7 @@ def test_runner_bindings_build_runtime_info_is_self_contained(monkeypatch):
             self.comparison_vars = kwargs["comparison_vars"]
             self.statistic_vars = kwargs["statistic_vars"]
 
-    monkeypatch.setattr(legacy_processors, "GeneralInfoReader", FakeInfoReader)
+    monkeypatch.setattr(runtime_info, "GeneralInfoReader", FakeInfoReader)
 
     info = bindings.build_runtime_info_for("Runoff", "SimA", "TestRef")
 
@@ -362,7 +362,7 @@ def test_runner_bindings_build_runtime_info_is_self_contained(monkeypatch):
 
 def test_runner_bindings_build_runtime_info_without_reader_to_dict(monkeypatch):
     """Adapter should snapshot public reader attrs without depending on GeneralInfoReader.to_dict()."""
-    import openbench.config.legacy_processors as legacy_processors
+    import openbench.config.runtime_info as runtime_info
 
     runner_cfg = adapter_module.RunnerConfig(
         basename="case",
@@ -404,7 +404,7 @@ def test_runner_bindings_build_runtime_info_without_reader_to_dict(monkeypatch):
             self.statistic_vars = kwargs["statistic_vars"]
             self._private = "ignore-me"
 
-    monkeypatch.setattr(legacy_processors, "GeneralInfoReader", FakeInfoReader)
+    monkeypatch.setattr(runtime_info, "GeneralInfoReader", FakeInfoReader)
 
     info = bindings.build_runtime_info_for("Runoff", "SimA", "TestRef")
 

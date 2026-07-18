@@ -444,10 +444,11 @@ def test_gleam_open_water_profile_subdir_matches_catalog_variants():
     }
 
 
-def test_station_catalog_entries_have_a_station_list_matching_or_filter():
+def test_station_catalog_entries_have_a_station_list_matching_filter_or_scan_profile():
     import openbench.data.custom as custom_package
 
     catalog = _load_builtin_yaml("reference_catalog.yaml")
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
     custom_dir = Path(custom_package.__file__).parent
     incomplete = []
 
@@ -456,10 +457,31 @@ def test_station_catalog_entries_have_a_station_list_matching_or_filter():
             continue
         has_station_source = data.get("fulllist") or data.get("station_matching")
         has_custom_filter = (custom_dir / f"{name}_filter.py").exists()
-        if not has_station_source and not has_custom_filter:
+        scan_layout = (profiles.get(name, {}).get("scan") or {}).get("layout")
+        can_generate_station_list = scan_layout in {"station_direct", "station_shared_files"}
+        if not has_station_source and not has_custom_filter and not can_generate_station_list:
             incomplete.append(name)
 
     assert incomplete == []
+
+
+def test_station_matching_is_only_configured_for_streamflow():
+    offenders = {}
+
+    for filename in ("reference_catalog.yaml", "reference_profiles.yaml"):
+        entries = _load_builtin_yaml(filename)
+        offenders[filename] = [
+            name
+            for name, data in entries.items()
+            if isinstance(data, dict)
+            and data.get("station_matching")
+            and "Streamflow" not in (data.get("variables") or {})
+        ]
+
+    assert offenders == {
+        "reference_catalog.yaml": [],
+        "reference_profiles.yaml": [],
+    }
 
 
 def test_streamflow_aggregate_entries_use_existing_station_matching_aliases():
@@ -660,7 +682,8 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
         assert entry["root_dir"] == root_dir
         assert profile["scan"]["root_sub_dir"] == profile_root
         if data_type == "stn":
-            assert entry["station_matching"]["dataset_file"] == profile["station_matching"]["dataset_file"]
+            assert "station_matching" not in entry
+            assert "station_matching" not in profile
         for variable in variables:
             assert variable in entry["variables"]
             assert variable in profile["variables"]
@@ -668,17 +691,15 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             assert entry["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
             assert profile["variables"]["Net_Primary_Production"]["varname"] == "NPP_total_best"
         if name == "G_REALM_LakeLevel":
-            assert entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc"
+            assert profile["scan"]["file_glob"] == "OpenBench_LAKE_mixed_G-REALM_LakeLevel.nc"
             assert entry["variables"]["Lake_Level"]["varname"] == "LakeLevel"
             assert profile["variables"]["Lake_Level"]["varname"] == "LakeLevel"
         if name == "GLAST_LakeSurfaceWaterTemperature":
-            assert (
-                entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc"
-            )
+            assert profile["scan"]["file_glob"] == "OpenBench_LAKE_daily_GLAST_LakeSurfaceWaterTemperature.nc"
             assert entry["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
             assert profile["variables"]["Lake_Surface_Water_Temperature"]["varname"] == "LakeSurfaceWaterTemperature"
         if name == "ReaLSAT_LakeArea":
-            assert entry["station_matching"]["dataset_file"] == "OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc"
+            assert profile["scan"]["file_glob"] == "OpenBench_LAKE_monthly_ReaLSAT_LakeArea.nc"
             assert entry["variables"]["Lake_Area"]["varname"] == "LakeArea"
             assert profile["variables"]["Lake_Area"]["varname"] == "LakeArea"
 

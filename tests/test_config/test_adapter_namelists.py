@@ -1,13 +1,14 @@
 """Test legacy namelist building from new config."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 import openbench.config.adapter as adapter_module
 from openbench.config.adapter import build_legacy_namelists
-from openbench.config.legacy_processors import GeneralInfoReader
 from openbench.config.loader import load_config
+from openbench.config.runtime_info import GeneralInfoReader
 from openbench.config.schema import (
     EvaluationConfig,
     OpenBenchConfig,
@@ -15,6 +16,30 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
 )
+
+
+def test_non_streamflow_reference_ignores_stale_station_matching(monkeypatch, caplog):
+    import logging
+
+    import openbench.data.custom as custom_module
+    import openbench.data.registry.manager as registry_manager_module
+
+    reference = SimpleNamespace(
+        station_matching=SimpleNamespace(dataset_file="flux.nc"),
+        variables={"Latent_Heat": SimpleNamespace()},
+    )
+    registry = SimpleNamespace(get_reference=lambda _name: reference)
+    monkeypatch.setattr(registry_manager_module, "get_registry", lambda: registry)
+    monkeypatch.setattr(custom_module, "load_filter", lambda _name: None)
+
+    reader = GeneralInfoReader.__new__(GeneralInfoReader)
+    reader.ref_source = "OpenBench_FLUX_Daily"
+    reader._custom_filter_warnings_shown = set()
+
+    with caplog.at_level(logging.WARNING):
+        assert reader._get_custom_filter() is None
+
+    assert "Ignoring station_matching for non-Streamflow reference OpenBench_FLUX_Daily" in caplog.text
 
 
 def test_adapter_declares_legacy_root_section_contract():

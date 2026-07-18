@@ -380,7 +380,7 @@ class RunnerBindings:
 
     def build_runtime_info_for(self, var_name: str, sim_source: str, ref_source: str) -> "BridgeRuntimeInfo":
         """Build bridge-provided runtime info for one evaluation task."""
-        from openbench.config.legacy_processors import GeneralInfoReader
+        from openbench.config.runtime_info import GeneralInfoReader
 
         info_reader = GeneralInfoReader(
             main_nl=self.namelists.main,
