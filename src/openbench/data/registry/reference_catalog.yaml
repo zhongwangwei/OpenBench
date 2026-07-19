@@ -100,7 +100,7 @@ CAMELSH_Hourly:
   timezone: 0
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
   years:
   - 1980
@@ -427,7 +427,7 @@ Caravan_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -1757,7 +1757,7 @@ GRDC_Caravan_extension_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -2196,7 +2196,7 @@ Hubei_Hydro_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2843,7 +2843,7 @@ R_ArcticNet_Daily:
     time_var: Time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -3224,7 +3224,7 @@ YRC_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: streamflow
+      varname: discharge
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
