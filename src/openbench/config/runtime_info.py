@@ -240,7 +240,12 @@ class GeneralInfoReader:
                         setattr(self, f"{source_type}_fulllist", str(nml["general"][f"{source}_fulllist"]))
                     except (KeyError, TypeError) as e2:
                         setattr(self, f"{source_type}_fulllist", "")
-                        logging.error(f"read {source_type}_fulllist namelist error: {e2}")
+                        item_is_streamflow = str(self.item).casefold() == "streamflow"
+                        ref_has_filter = (
+                            not item_is_streamflow and source_type == "ref" and self._get_custom_filter() is not None
+                        )
+                        if not (item_is_streamflow or ref_has_filter):
+                            logging.error("read %s_fulllist namelist error: %s", source_type, e2)
 
             # Handle uparea attributes for station data
             try:
