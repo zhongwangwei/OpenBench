@@ -915,7 +915,7 @@ ET_Xu_etal_2025_0p25_MidRes:
   variables:
     Evapotranspiration:
       varname: ET
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025_0p25
       prefix: AutoML_predict_
       suffix: _1D_0p25
@@ -939,7 +939,7 @@ ET_Xu_etal_2025_LowRes:
   variables:
     Evapotranspiration:
       varname: ET
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025
       prefix: AutoML_predict_
       suffix: _1D_0p25
@@ -963,7 +963,7 @@ ET_Xu_etal_2025_MidRes:
   variables:
     Evapotranspiration:
       varname: ET
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025
       prefix: AutoML_predict_
       suffix: _1D_0p25
@@ -1657,7 +1657,7 @@ GPCPv3.2_LowRes:
   variables:
     Precipitation:
       varname: sat_gauge_precip
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Precipitation/GPCPv3.2
       prefix: GPCPMON_L3_
       suffix: 01_V3.2
@@ -1681,7 +1681,7 @@ GRADES_LowRes:
   variables:
     Total_Runoff:
       varname: runoff
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Total_Runoff/GRADES
       prefix: runoff_
   _provenance:
@@ -1704,7 +1704,7 @@ GRADES_MidRes:
   variables:
     Total_Runoff:
       varname: runoff
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Total_Runoff/GRADES
       prefix: runoff_
   _provenance:
@@ -2217,7 +2217,7 @@ IMERG_v7_LowRes:
   variables:
     Precipitation:
       varname: precipitation
-      varunit: mm/day
+      varunit: mm day-1
       sub_dir: Water/Precipitation/IMERG_v7
       prefix: IMERG_daily_
       suffix: _01
