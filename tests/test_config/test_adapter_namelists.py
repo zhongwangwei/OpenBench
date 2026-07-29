@@ -42,6 +42,46 @@ def test_non_streamflow_reference_ignores_stale_station_matching(monkeypatch, ca
     assert "Ignoring station_matching for non-Streamflow reference OpenBench_FLUX_Daily" in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("item", "has_filter", "reports_error"),
+    [
+        ("Streamflow", False, False),
+        ("Latent_Heat", True, False),
+        ("Latent_Heat", False, True),
+    ],
+)
+def test_missing_reference_fulllist_reports_only_when_runtime_cannot_generate_it(
+    monkeypatch, caplog, item, has_filter, reports_error
+):
+    """Streamflow and custom filters handle missing lists without a diagnostic."""
+    import logging
+
+    filter_checks = []
+
+    def fake_get_custom_filter(_reader):
+        filter_checks.append(True)
+        return (lambda _info: None) if has_filter else None
+
+    monkeypatch.setattr(GeneralInfoReader, "_get_custom_filter", fake_get_custom_filter)
+
+    reader = GeneralInfoReader.__new__(GeneralInfoReader)
+    reader.item = item
+    reader.ref_source = "RefA"
+    reader._custom_filter_warnings_shown = set()
+    ref_nml = {"general": {}, item: {"RefA_data_type": "stn"}}
+    sim_nml = {"general": {}, item: {"SimA_data_type": "grid"}}
+
+    with caplog.at_level(logging.DEBUG):
+        reader._set_source_attributes(sim_nml, ref_nml, item, "SimA", "RefA")
+
+    records = [record for record in caplog.records if "ref_fulllist namelist" in record.message]
+    assert len(records) == int(reports_error)
+    assert len(filter_checks) == int(item.casefold() != "streamflow")
+    if reports_error:
+        assert records[0].levelname == "ERROR"
+        assert "namelist error" in records[0].message
+
+
 def test_adapter_declares_legacy_root_section_contract():
     """The adapter should publish the legacy top-level sections it still emits."""
     assert adapter_module.LEGACY_ROOT_SECTION_KEYS == {
