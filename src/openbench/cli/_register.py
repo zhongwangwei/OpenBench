@@ -7,8 +7,20 @@ from pathlib import Path
 from typing import Callable
 
 import click
+import yaml
 
 from openbench.util.names import get_mapping_key_case_insensitive
+
+
+def _bundled_reference_descriptor(name: str) -> tuple[str, dict] | None:
+    """Return the normalized bundled descriptor used as the sparse-overlay base."""
+    from openbench.data.registry.manager import REGISTRY_DIR, _build_reference
+
+    catalog = yaml.safe_load((REGISTRY_DIR / "reference_catalog.yaml").read_text(encoding="utf-8")) or {}
+    key = get_mapping_key_case_insensitive(catalog, name)
+    if key is None:
+        return None
+    return key, _build_reference(catalog[key]).to_dict()
 
 
 def register_reference(
@@ -45,13 +57,13 @@ def register_reference(
 
     def _resolve_existing(catalog):
         catalog_name = name
+        existing_ref = RegistryManager().get_reference(name)
+        if existing_ref is not None:
+            return existing_ref.name, existing_ref.to_dict()
         existing_key = get_mapping_key_case_insensitive(catalog, name)
         existing = catalog.get(existing_key) if existing_key is not None else None
         if existing is not None:
             return existing_key, existing
-        existing_ref = RegistryManager().get_reference(name)
-        if existing_ref is not None:
-            return existing_ref.name, existing_ref.to_dict()
         return catalog_name, {}
 
     _, existing = _resolve_existing(existing_catalog)
@@ -194,7 +206,18 @@ def register_reference(
                 merged_vars[target_key] = var_descriptor
             descriptor["variables"] = merged_vars
 
-            latest_catalog[catalog_name] = descriptor
+            bundled = _bundled_reference_descriptor(catalog_name)
+            stored_descriptor = descriptor
+            if bundled is not None:
+                from openbench.data.registry.overlay_audit import _sparse_delta
+
+                catalog_name, bundled_descriptor = bundled
+                stored_descriptor = _sparse_delta(bundled_descriptor, descriptor)
+            overlay_key = get_mapping_key_case_insensitive(latest_catalog, catalog_name)
+            if overlay_key is not None:
+                latest_catalog.pop(overlay_key)
+            if stored_descriptor:
+                latest_catalog[catalog_name] = stored_descriptor
             backup_path = _backup_then_write(catalog_path, latest_catalog)
             wrote_catalog = True
     if wrote_catalog:

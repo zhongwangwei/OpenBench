@@ -19,20 +19,36 @@ def _local_reference_names() -> set[str]:
 
 def remote_scan_caveats(variants) -> str:
     """Describe what registration could not do for remote-scanned datasets."""
+    messages = []
+    inspection = sorted(
+        (
+            v.registry_name,
+            getattr(v, "remote_inspection_error", ""),
+        )
+        for v in variants
+        if getattr(v, "remote_inspection_error", "")
+    )
+    if inspection:
+        messages.append(
+            "Remote NetCDF metadata/data_groupby inspection degraded for: "
+            + ", ".join(f"{name} ({reason})" for name, reason in inspection)
+            + "."
+        )
     station = sorted(
-        {
-            v.registry_name
-            for v in variants
-            if getattr(v, "data_type", "") == "stn" and not getattr(v, "remote_fulllist", "")
-        }
+        (
+            v.registry_name,
+            getattr(v, "remote_fulllist_error", "") or "reason not reported by the remote checkout",
+        )
+        for v in variants
+        if getattr(v, "data_type", "") == "stn" and not getattr(v, "remote_fulllist", "")
     )
-    if not station:
-        return ""
-    return (
-        "Station fulllist generation failed on the remote host for: "
-        + ", ".join(station)
-        + ". Complete their fulllist manually in the Data Registry page."
-    )
+    if station:
+        messages.append(
+            "Station fulllist generation was unavailable for: "
+            + ", ".join(f"{name} ({reason})" for name, reason in station)
+            + ". Complete their fulllist manually in the Data Registry page."
+        )
+    return "\n".join(messages)
 
 
 def scan_reference_datasets_remote(
@@ -80,29 +96,33 @@ from openbench.data.registry.scanner import find_new_datasets
 
 try:
     from openbench.data.registry.scanner import _detect_data_groupby, _expand_path, _inspect_nc_file
-except ImportError:  # older remote checkout: scan still works, inspection degrades
+    _inspection_import_error = ""
+except ImportError as exc:  # older remote checkout: scan still works, inspection degrades
     _detect_data_groupby = _expand_path = _inspect_nc_file = None
+    _inspection_import_error = "missing scanner metadata API: %s" % exc
 
 try:
     from openbench.data.coordinates import glob_nc as _glob_nc
     from openbench.data.registry.scanner import generate_station_list, resolve_station_nc_dir
-except ImportError:  # older remote checkout: station fulllist degrades
+    _fulllist_import_error = ""
+except ImportError as exc:  # older remote checkout: station fulllist degrades
     generate_station_list = _glob_nc = resolve_station_nc_dir = None
+    _fulllist_import_error = "missing station-list API: %s" % exc
 
 
 def _station_fulllist(variant):
-    if generate_station_list is None or resolve_station_nc_dir is None:
-        return ""
+    if generate_station_list is None or resolve_station_nc_dir is None or _glob_nc is None:
+        return "", _fulllist_import_error or "station-list API unavailable"
     nc_dir = resolve_station_nc_dir(variant.root_dir, variant.variables)
     if not _glob_nc(nc_dir):
-        return ""
+        return "", "no NetCDF files found in %s" % nc_dir
     import pathlib
 
     lists_dir = pathlib.Path.home() / ".openbench" / "station_lists"
     lists_dir.mkdir(parents=True, exist_ok=True)
     output_csv = lists_dir / (variant.registry_name + ".csv")
     generate_station_list(nc_dir, output_csv)
-    return str(output_csv)
+    return str(output_csv), ""
 
 
 def _json_default(value):
@@ -118,6 +138,7 @@ for group in groups:
     variants = {{}}
     for resolution, variant in group.variants.items():
         data = dataclasses.asdict(variant)
+        data["remote_inspection_error"] = _inspection_import_error
         inspections = {{}}
         if _inspect_nc_file is not None:
             for var_name, sub_dir in variant.variables.items():
@@ -130,9 +151,10 @@ for group in groups:
             data["detected_data_groupby"] = _detect_data_groupby(variant)
         if variant.data_type == "stn":
             try:
-                data["remote_fulllist"] = _station_fulllist(variant)
-            except Exception:
+                data["remote_fulllist"], data["remote_fulllist_error"] = _station_fulllist(variant)
+            except Exception as exc:
                 data["remote_fulllist"] = ""
+                data["remote_fulllist_error"] = "generation failed: %s: %s" % (type(exc).__name__, exc)
         variants[resolution] = data
     payload.append({{"base_name": group.base_name, "variants": variants}})
 print(json.dumps(payload, default=_json_default))

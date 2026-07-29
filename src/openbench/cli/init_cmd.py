@@ -444,7 +444,14 @@ def _scan_reference_variants(ref_root: Path) -> list:
 
     click.echo()
     if not variants:
-        click.secho("[DRY RUN] No reference datasets found.", fg="yellow")
+        click.secho(
+            f"[DRY RUN] No datasets matching OpenBench reference layouts were found under {ref_root}.",
+            fg="yellow",
+        )
+        click.echo(
+            "Expected Station/<Category>/<Variable>/<Dataset>/... or "
+            "Grid/{LowRes,MidRes,HigRes}/<Category>/<Variable>/<Dataset>/..."
+        )
         return variants
 
     click.secho(
@@ -525,63 +532,72 @@ def _init_reference_registry_preflight(
             "`openbench ref scan ROOT --auto` after moving the broken file aside."
         )
 
-    must_scan = (not status.exists) or status.empty
-    if refresh_ref:
-        if must_scan:
-            click.echo("Skipping reference scan confirmation prompt because --refresh-ref was set.")
-        else:
-            click.echo("Refreshing reference catalog without prompt because --refresh-ref was set.")
-
-    if must_scan:
+    if not status.exists or status.empty:
         click.secho(
-            "Reference catalog is missing or empty. A reference scan is required before init can continue.",
+            "The user reference overlay has no entries; the bundled reference catalog is still available.",
             fg="yellow",
         )
-        root = _resolve_reference_root(ref_root)
-        variants = _scan_reference_variants(root)
-        if not variants:
-            raise click.ClickException(
-                "Reference scan found no datasets. Add reference data or pass --no-ref-check to skip."
-            )
-        if not refresh_ref and not click.confirm(
-            f"Register/update {len(variants)} reference dataset(s) now?",
-            default=True,
-        ):
-            raise click.ClickException("Reference scan is required before init can continue.")
-        written_path = _register_reference_variants(variants, status.catalog_path, ref_root=root)
-        settings_path = remember_reference_root(root)
-        click.secho(f"Reference catalog updated: {written_path}", fg="green")
-        click.echo(f"Saved reference root: {root} ({settings_path})")
-        click.echo()
-        return
-
-    if not refresh_ref:
-        if not click.confirm(
-            "Reference catalog exists. Refresh it from the data root now?",
-            default=False,
-        ):
-            return
 
     root = _resolve_reference_root(ref_root)
-    variants = _scan_reference_variants(root)
-    if not variants:
-        click.secho("Reference scan found no datasets to register/update.", fg="yellow")
-        settings_path = remember_reference_root(root)
-        click.echo(f"Saved reference root: {root} ({settings_path})")
+    settings_path = remember_reference_root(root)
+    click.echo(f"Saved reference root: {root} ({settings_path})")
+    if not refresh_ref:
         click.echo()
         return
-    if not refresh_ref and not click.confirm(
-        f"Register/update {len(variants)} reference dataset(s) now?",
-        default=True,
-    ):
-        click.echo("Reference catalog left unchanged.")
+
+    click.echo("Refreshing reference catalog without prompt because --refresh-ref was set.")
+    variants = _scan_reference_variants(root)
+    if not variants:
+        click.secho(
+            "No datasets were discovered to register; the bundled catalog remains available.",
+            fg="yellow",
+        )
         click.echo()
         return
     written_path = _register_reference_variants(variants, status.catalog_path, ref_root=root)
-    settings_path = remember_reference_root(root)
     click.secho(f"Reference catalog updated: {written_path}", fg="green")
-    click.echo(f"Saved reference root: {root} ({settings_path})")
     click.echo()
+
+
+def _validate_selected_reference_data(selected: dict[str, object]) -> None:
+    """Fail init when a selected registry entry does not resolve to local data."""
+    from openbench.cli.check import _expanded_reference_path, _has_nearby_netcdf_files
+    from openbench.config.adapter import _find_nc_dir
+
+    errors = []
+    for variable, ref in selected.items():
+        name = getattr(ref, "name", "<unknown>")
+        raw_root = getattr(ref, "root_dir", None)
+        if not raw_root:
+            errors.append(f"{variable} / {name}: reference root is not configured")
+            continue
+        root, error = _expanded_reference_path(str(raw_root))
+        if error or root is None:
+            errors.append(f"{variable} / {name}: {error or 'reference root could not be resolved'}")
+            continue
+
+        station_matching = getattr(ref, "station_matching", None)
+        dataset_file = getattr(station_matching, "dataset_file", "") if station_matching else ""
+        if dataset_file:
+            dataset_path = root / dataset_file
+            if not dataset_path.is_file():
+                errors.append(f"{variable} / {name}: dataset file does not exist: {dataset_path}")
+            continue
+
+        var_map = (getattr(ref, "variables", None) or {}).get(variable)
+        sub_dir = getattr(var_map, "sub_dir", None)
+        candidate = Path(_find_nc_dir(str(root / sub_dir), str(root), str(sub_dir))) if sub_dir else root
+        if not candidate.is_dir():
+            errors.append(f"{variable} / {name}: reference directory does not exist: {candidate}")
+        elif not _has_nearby_netcdf_files(candidate):
+            errors.append(f"{variable} / {name}: no NetCDF files found near: {candidate}")
+
+    if errors:
+        details = "\n".join(f"  - {error}" for error in errors)
+        raise click.ClickException(
+            f"Selected reference data is not ready:\n{details}\n"
+            "Correct OPENBENCH_REF_ROOT/the registry path, or use --no-ref-check to generate a template."
+        )
 
 
 def _parse_simulation_roots(value: str) -> list[str]:
@@ -1218,7 +1234,7 @@ def _render_init_config_template(config: dict, *, all_refs: list, all_vars: list
     "--ref-root",
     type=str,
     default=None,
-    help="Reference data root for the init scan/update preflight.",
+    help="Reference data root to use and remember during init.",
 )
 @click.option(
     "--refresh-ref",
@@ -1228,7 +1244,7 @@ def _render_init_config_template(config: dict, *, all_refs: list, all_vars: list
 @click.option(
     "--no-ref-check",
     is_flag=True,
-    help="Skip the reference catalog scan/update preflight.",
+    help="Skip reference root and selected-dataset readiness checks.",
 )
 @click.option(
     "--sim-root",
@@ -1403,6 +1419,8 @@ def init_cmd(
                 selected_vars.remove(var)
         if not selected_vars:
             raise click.ClickException("No reference data selected for evaluation variables.")
+        if not no_ref_check:
+            _validate_selected_reference_data(selected_reference_objects)
         _warn_reference_year_coverage(selected_reference_objects, (syear, eyear))
 
     # Simulation selection

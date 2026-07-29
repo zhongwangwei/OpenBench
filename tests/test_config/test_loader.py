@@ -649,6 +649,44 @@ def _minimal_raw_config(**project_overrides):
     }
 
 
+@pytest.mark.parametrize(
+    ("mutate", "path", "suggestion"),
+    [
+        (lambda raw: raw.update({"mterics": ["RMSE"]}), "mterics", "metrics"),
+        (lambda raw: raw["project"].update({"num_corez": 4}), "project.num_corez", "num_cores"),
+        (
+            lambda raw: raw["simulation"]["CaseA"].update({"tim_rez": "Month"}),
+            "simulation.CaseA.tim_rez",
+            "tim_res",
+        ),
+        (
+            lambda raw: raw["simulation"]["CaseA"].update({"variables": {"Runoff": {"varnme": "ro"}}}),
+            "simulation.CaseA.variables.Runoff.varnme",
+            "varname",
+        ),
+    ],
+)
+def test_unknown_config_keys_are_rejected_with_suggestion(mutate, path, suggestion):
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_raw_config()
+    mutate(raw)
+
+    with pytest.raises(ConfigError, match=rf"{path}.*{suggestion}"):
+        _build_config(raw)
+
+
+def test_legacy_options_data_root_is_migrated_without_becoming_a_project_key():
+    from openbench.config.loader import _build_config
+
+    raw = _minimal_raw_config()
+    raw["options"] = {"data_root": "/references"}
+
+    cfg = _build_config(raw)
+
+    assert cfg.reference.data_root == "/references"
+
+
 def test_dask_threads_per_worker_zero_is_preserved():
     from openbench.config.loader import _build_config
 

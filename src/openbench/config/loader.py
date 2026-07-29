@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import threading
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,87 @@ _MULTI_MONTH_RE = re.compile(r"[1-9]\d*month")
 
 class ConfigError(Exception):
     """Raised when config loading or validation fails."""
+
+
+_TOP_LEVEL_KEYS = {
+    "project",
+    "evaluation",
+    "reference",
+    "simulation",
+    "metrics",
+    "scores",
+    "comparison",
+    "statistics",
+    "options",
+}
+_PROJECT_KEYS = {
+    "name",
+    "output_dir",
+    "years",
+    "min_year_threshold",
+    "lat_range",
+    "lon_range",
+    "tim_res",
+    "grid_res",
+    "timezone",
+    "weight",
+    "num_cores",
+    "time_alignment",
+    "regrid_backend",
+    "unified_mask",
+    "generate_report",
+    "IGBP_groupby",
+    "PFT_groupby",
+    "climate_zone_groupby",
+    "debug_mode",
+    "only_drawing",
+    "force",
+    "strict_reference",
+    "dask",
+    "io",
+}
+_SIMULATION_KEYS = {
+    "model",
+    "root_dir",
+    "data_type",
+    "grid_res",
+    "tim_res",
+    "data_groupby",
+    "prefix",
+    "suffix",
+    "fulllist",
+    "variables",
+}
+_VARIABLE_OVERRIDE_KEYS = {
+    "varname",
+    "varunit",
+    "convert",
+    "prefix",
+    "suffix",
+    "data_type",
+    "grid_res",
+    "tim_res",
+    "data_groupby",
+    "timezone",
+    "fulllist",
+    "max_uparea",
+    "min_uparea",
+    "sub_dir",
+    "fallbacks",
+    "compute",
+    "prefix_fallback",
+}
+
+
+def _reject_unknown_keys(raw: dict[str, Any], allowed: set[str], path: str = "") -> None:
+    """Reject misspelled configuration keys instead of silently ignoring them."""
+    for key in raw:
+        if key in allowed:
+            continue
+        full_path = f"{path}.{key}" if path else key
+        match = get_close_matches(str(key), sorted(allowed), n=1)
+        hint = f" Did you mean '{match[0]}'?" if match else ""
+        raise ConfigError(f"Unknown configuration key '{full_path}'.{hint}")
 
 
 class _IncludeLoader(yaml.SafeLoader):
@@ -345,6 +427,22 @@ def _build_io(raw: Any) -> IOConfig:
         return IOConfig()
     if not isinstance(raw, dict):
         raise ConfigError(f"project.io must be a mapping, got {type(raw).__name__}")
+    _reject_unknown_keys(
+        raw,
+        {
+            "netcdf_compression",
+            "compression",
+            "netcdf_compression_level",
+            "compression_level",
+            "mfdataset_batch_size",
+            "mfdataset_auto_batch_min_files",
+            "mfdataset_auto_batch_min_size_mb",
+            "mfdataset_auto_batch_min_size",
+            "mfdataset_auto_batch_max_size",
+            "mfdataset_auto_batch_memory_fraction",
+        },
+        "project.io",
+    )
 
     netcdf_compression = _validated_optional_bool(
         raw.get("netcdf_compression", raw.get("compression")),
@@ -391,6 +489,21 @@ def _build_dask(raw: Any) -> DaskConfig:
         return DaskConfig()
     if not isinstance(raw, dict):
         raise ConfigError(f"project.dask must be a mapping, got {type(raw).__name__}")
+    _reject_unknown_keys(
+        raw,
+        {
+            "enabled",
+            "scheduler",
+            "n_workers",
+            "workers",
+            "threads_per_worker",
+            "processes",
+            "memory_limit",
+            "dashboard_address",
+            "local_directory",
+        },
+        "project.dask",
+    )
 
     enabled = _validated_optional_bool(raw.get("enabled"), "project.dask.enabled", default=False)
     scheduler = _validated_optional_string(raw.get("scheduler"), "project.dask.scheduler")
@@ -433,6 +546,19 @@ def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any
             raise ConfigError(f"{path} keys must be variable names (strings)")
         if not isinstance(override, dict):
             raise ConfigError(f"{path}.{var_name} must be a mapping")
+        _reject_unknown_keys(override, _VARIABLE_OVERRIDE_KEYS, f"{path}.{var_name}")
+        fallbacks = override.get("fallbacks")
+        if fallbacks is not None:
+            if not isinstance(fallbacks, list):
+                raise ConfigError(f"{path}.{var_name}.fallbacks must be a list")
+            for index, fallback in enumerate(fallbacks):
+                if not isinstance(fallback, dict):
+                    raise ConfigError(f"{path}.{var_name}.fallbacks[{index}] must be a mapping")
+                _reject_unknown_keys(
+                    fallback,
+                    {"varname", "varunit", "convert"},
+                    f"{path}.{var_name}.fallbacks[{index}]",
+                )
     return raw
 
 
@@ -607,6 +733,8 @@ def collect_include_files(path: str | Path) -> list[Path]:
 
 def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     """Build and validate an OpenBenchConfig from a raw dict."""
+    _reject_unknown_keys(raw, _TOP_LEVEL_KEYS)
+
     # --- project (required) ---
     if "project" not in raw:
         raise ConfigError("Missing required section: 'project'")
@@ -616,7 +744,10 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     # Backward compatibility: merge old 'options' section into project
     raw_project = dict(raw["project"])
     if "options" in raw:
-        migrated_keys = [k for k in raw["options"] if k not in raw_project]
+        if not isinstance(raw["options"], dict):
+            raise ConfigError("'options' must be a mapping")
+        _reject_unknown_keys(raw["options"], _PROJECT_KEYS | {"data_root"}, "options")
+        migrated_keys = [k for k in raw["options"] if k != "data_root" and k not in raw_project]
         if migrated_keys:
             logger.warning(
                 "Deprecated 'options' section detected — migrating keys %s into 'project'. "
@@ -624,7 +755,7 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
                 migrated_keys,
             )
         for key, value in raw["options"].items():
-            if key not in raw_project:
+            if key != "data_root" and key not in raw_project:
                 raw_project[key] = value
 
     # Backward compatibility: merge old comparison resolution fields into project
@@ -721,6 +852,8 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
 
 def _build_project(raw: dict[str, Any]) -> ProjectConfig:
     """Build and validate ProjectConfig (includes former options fields)."""
+    _reject_unknown_keys(raw, _PROJECT_KEYS, "project")
+
     required = ["name", "output_dir", "years"]
     for key in required:
         if key not in raw:
@@ -810,6 +943,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
 
 def _build_evaluation(raw: dict[str, Any]) -> EvaluationConfig:
     """Build and validate EvaluationConfig."""
+    _reject_unknown_keys(raw, {"variables"}, "evaluation")
     if "variables" not in raw:
         raise ConfigError("Missing required field: evaluation.variables")
     variables = raw["variables"]
@@ -882,6 +1016,7 @@ def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
         defaults = {}
     if not isinstance(defaults, dict):
         raise ConfigError(f"simulation._defaults must be a mapping, got {type(defaults).__name__}")
+    _reject_unknown_keys(defaults, _SIMULATION_KEYS, "simulation._defaults")
     if not raw_copy:
         raise ConfigError("'simulation' must contain at least one simulation entry (not just _defaults)")
     result = {}
@@ -889,6 +1024,7 @@ def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
     for label, entry in raw_copy.items():
         if not isinstance(entry, dict):
             raise ConfigError(f"simulation.{label} must be a mapping")
+        _reject_unknown_keys(entry, _SIMULATION_KEYS, f"simulation.{label}")
 
         default_variables = _validated_variables_mapping(
             defaults.get("variables"),
@@ -963,6 +1099,11 @@ def _build_comparison(raw: Any) -> ComparisonConfig:
         return ComparisonConfig()
     if not isinstance(raw, dict):
         raise ConfigError(f"'comparison' must be a mapping, got {type(raw).__name__}")
+    _reject_unknown_keys(
+        raw,
+        {"enabled", "items", "tim_res", "grid_res", "timezone", "weight"},
+        "comparison",
+    )
     return ComparisonConfig(
         enabled=_validated_optional_bool(raw.get("enabled"), "comparison.enabled", default=False),
         items=_validated_optional_string_list(raw.get("items"), "comparison.items"),
@@ -975,6 +1116,7 @@ def _build_statistics(raw: Any) -> StatisticsConfig:
         return StatisticsConfig()
     if not isinstance(raw, dict):
         raise ConfigError(f"'statistics' must be a mapping, got {type(raw).__name__}")
+    _reject_unknown_keys(raw, {"enabled", "items"}, "statistics")
     return StatisticsConfig(
         enabled=_validated_optional_bool(raw.get("enabled"), "statistics.enabled", default=False),
         items=_validated_optional_string_list(raw.get("items"), "statistics.items"),

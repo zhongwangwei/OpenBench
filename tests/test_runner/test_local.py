@@ -2462,6 +2462,99 @@ def test_task_config_hash_payload_serializes_simulation_entry_as_data(tmp_path):
     }
 
 
+def test_run_manifest_preserves_hash_evidence_without_mutating_worker_tasks(tmp_path):
+    import json
+
+    import openbench.config.adapter as adapter
+    from openbench.runner.orchestration import _write_run_manifest
+    from openbench.runner.task_planning import build_evaluation_tasks
+
+    cfg = _make_cfg(tmp_path, comparison_enabled=False)
+    runner_cfg = adapter.RunnerConfig(
+        basename="case",
+        basedir=str(tmp_path),
+        evaluation_items={"Runoff": True},
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
+        general={"syear": 2000, "eyear": 2001},
+    )
+    bindings = type(
+        "Bindings",
+        (),
+        {
+            "runner_cfg": runner_cfg,
+            "namelists": adapter.LegacyNamelists(main={}, reference={}, simulation={}),
+            "figures": adapter.LegacyFigureConfig(raw={}),
+            "iter_task_sources": lambda self, variables: [adapter.EvaluationSource("Runoff", "SimA", "TestRef")],
+        },
+    )()
+    tasks = build_evaluation_tasks(
+        cfg=cfg,
+        bindings=bindings,
+        output_dir=tmp_path,
+        metric_vars=["bias"],
+        score_vars=["Overall_Score"],
+        comparison_vars=[],
+        statistic_vars=[],
+        use_cache=False,
+        only_drawing=False,
+        task_hash_payload_fn=lambda **kwargs: {"inputs": [{"path": "/data/ref.nc", "sha256": "abc"}]},
+    )
+
+    manifest_path = _write_run_manifest(cfg, bindings, tmp_path, tasks)
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["canonical_config"]["project"]["name"] == cfg.project.name
+    assert manifest["resolved_runtime"]["runner_config"]["basename"] == "case"
+    assert manifest["tasks"][0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
+    assert manifest["tasks"][0]["config_hash"] == tasks[0]["config_hash"]
+    assert tasks[0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
+
+
+def test_run_continues_and_releases_hash_payload_when_manifest_write_fails(tmp_path, monkeypatch, caplog):
+    from types import SimpleNamespace
+
+    import openbench.config.adapter as adapter
+    import openbench.runner.local as local_runner
+    import openbench.runner.orchestration as orchestration
+
+    cfg = _make_cfg(tmp_path, comparison_enabled=False)
+    bindings = SimpleNamespace(
+        runner_cfg=SimpleNamespace(
+            basedir=str(tmp_path),
+            basename="case",
+            general={},
+            evaluation_items={"Runoff": True},
+            metrics=[],
+            scores=[],
+            comparisons=[],
+            statistics=[],
+        )
+    )
+    task = {
+        "var_name": "Runoff",
+        "sim_source": "SimA",
+        "ref_source": "TestRef",
+        "hash_payload": {"inputs": ["large"]},
+    }
+    monkeypatch.setattr(adapter, "build_runner_bindings", lambda cfg: bindings)
+    monkeypatch.setattr(local_runner, "_build_evaluation_tasks", lambda **kwargs: [task])
+    monkeypatch.setattr(
+        orchestration,
+        "_write_run_manifest",
+        lambda *args: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    result = orchestration.run_evaluation_impl(cfg, comparison_only=True)
+
+    assert result["status"] == "error"
+    assert "hash_payload" not in task
+    assert "disk full" in caplog.text
+    assert "continuing without an audit manifest" in caplog.text.lower()
+
+
 def test_task_config_hash_changes_when_input_file_mtime_changes(tmp_path):
     """Evaluation cache hashes must include source input file metadata."""
     import os

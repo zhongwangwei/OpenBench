@@ -35,19 +35,18 @@ def build_evaluation_tasks(
         sim_source = source.sim_source
         ref_source = source.ref_source
         cache_key = make_cache_key(var_name, sim_source, ref_source)
-        config_hash = EvaluationCache.hash_config(
-            task_hash_payload_fn(
-                cfg=cfg,
-                bindings=bindings,
-                var_name=var_name,
-                sim_source=sim_source,
-                ref_source=ref_source,
-                metric_vars=metric_vars,
-                score_vars=score_vars,
-                comparison_vars=comparison_vars,
-                statistic_vars=statistic_vars,
-            )
+        hash_payload = task_hash_payload_fn(
+            cfg=cfg,
+            bindings=bindings,
+            var_name=var_name,
+            sim_source=sim_source,
+            ref_source=ref_source,
+            metric_vars=metric_vars,
+            score_vars=score_vars,
+            comparison_vars=comparison_vars,
+            statistic_vars=statistic_vars,
         )
+        config_hash = EvaluationCache.hash_config(hash_payload)
         tasks.append(
             {
                 "var_name": var_name,
@@ -56,6 +55,7 @@ def build_evaluation_tasks(
                 "bindings": bindings,
                 "cache_key": cache_key,
                 "config_hash": config_hash,
+                "hash_payload": hash_payload,
                 "use_cache": use_cache,
                 "update_cache": not only_drawing,
                 "cache_dir": str(output_dir),

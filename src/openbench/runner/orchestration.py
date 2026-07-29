@@ -2,14 +2,71 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from dataclasses import asdict, is_dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from openbench.config.schema import OpenBenchConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _manifest_data(value: Any) -> Any:
+    if is_dataclass(value):
+        return asdict(value)
+    return value
+
+
+def _write_run_manifest(
+    cfg: OpenBenchConfig,
+    bindings: Any,
+    output_dir: Path,
+    tasks: list[dict[str, Any]],
+) -> Path:
+    """Persist the resolved configuration and the exact evidence behind task hashes."""
+    from openbench.util.netcdf import write_file_atomic
+
+    namelists = getattr(bindings, "namelists", None)
+    if namelists is None:
+        namelists = {
+            "main": getattr(bindings, "main_nl", {}),
+            "reference": getattr(bindings, "ref_nml", {}),
+            "simulation": getattr(bindings, "sim_nml", {}),
+        }
+    manifest = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "canonical_config": _manifest_data(cfg),
+        "resolved_runtime": {
+            "runner_config": _manifest_data(bindings.runner_cfg),
+            "namelists": _manifest_data(namelists),
+            "figures": _manifest_data(getattr(bindings, "figures", getattr(bindings, "fig_nml", {}))),
+        },
+        "tasks": [
+            {
+                "variable": task.get("var_name"),
+                "simulation": task.get("sim_source"),
+                "reference": task.get("ref_source"),
+                "cache_key": task.get("cache_key"),
+                "config_hash": task.get("config_hash"),
+                "hash_payload": task.get("hash_payload"),
+            }
+            for task in tasks
+        ],
+    }
+    path = output_dir / "run_manifest.json"
+
+    def _write(temp_path: Path) -> None:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, indent=2, default=str)
+            handle.write("\n")
+
+    write_file_atomic(path, _write, suffix=".tmp.json")
+    return path
 
 
 def run_evaluation_impl(
@@ -119,6 +176,17 @@ def run_evaluation_impl(
         use_cache=use_cache,
         only_drawing=only_drawing,
     )
+    try:
+        _write_run_manifest(cfg, bindings, output_dir, tasks)
+    except Exception as exc:
+        logger.warning(
+            "Run manifest unavailable at %s: %s; continuing without an audit manifest.",
+            output_dir / "run_manifest.json",
+            exc,
+        )
+    finally:
+        for task in tasks:
+            task.pop("hash_payload", None)
 
     if not tasks:
         errors = [

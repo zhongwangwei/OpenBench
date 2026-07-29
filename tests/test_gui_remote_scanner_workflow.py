@@ -330,6 +330,7 @@ def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
     assert "_inspect_nc_file" in script
     assert "_detect_data_groupby" in script
     assert "nc_inspections" in script
+    assert "remote_inspection_error" in script
 
 
 def test_remote_scan_rehydration_ignores_unknown_fields(monkeypatch):
@@ -380,6 +381,7 @@ def test_remote_scan_script_generates_station_fulllists(monkeypatch):
     script = captured["script"]
     assert "generate_station_list" in script
     assert "remote_fulllist" in script
+    assert "remote_fulllist_error" in script
     assert "station_lists" in script
     compile(script, "<remote-scan-script>", "exec")  # assembled f-string must be valid Python
 
@@ -396,11 +398,19 @@ def test_remote_scan_caveats_skips_station_datasets_with_remote_fulllist():
         root_dir="/r",
         remote_fulllist="/remote/home/.openbench/station_lists/Covered.csv",
     )
-    uncovered = ScannedDataset(name="Uncovered", resolution="Station", category="Water", data_type="stn", root_dir="/r")
+    uncovered = ScannedDataset(
+        name="Uncovered",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir="/r",
+        remote_fulllist_error="no NetCDF files found",
+    )
 
     message = remote_scan_caveats([covered, uncovered])
 
     assert "Uncovered" in message
+    assert "no NetCDF files found" in message
     assert "Covered," not in message and " Covered" not in message
     assert remote_scan_caveats([covered]) == ""
 
@@ -417,6 +427,26 @@ def test_remote_scan_caveats_flags_station_datasets():
     assert "fulllist" in message
     assert "S" in message
     assert remote_scan_caveats([grid]) == ""
+
+
+def test_remote_scan_caveats_reports_metadata_inspection_degradation():
+    from openbench.data.registry.scanner import ScannedDataset
+    from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+    grid = ScannedDataset(
+        name="G",
+        resolution="LowRes",
+        category="Water",
+        data_type="grid",
+        root_dir="/r",
+        remote_inspection_error="missing scanner metadata API",
+    )
+
+    message = remote_scan_caveats([grid])
+
+    assert "G_LowRes" in message
+    assert "missing scanner metadata API" in message
+    assert "data_groupby" in message
 
 
 class RemoteController(FakeControllerBase):

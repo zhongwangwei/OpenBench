@@ -255,7 +255,9 @@ def scan(ref_root, auto, dry_run, rescan=False, only_pattern=None, allow_skip=Fa
     """Scan a directory for reference datasets and register new ones.
 
         REF_ROOT is the reference data root (e.g., /Volumes/work/Reference).
-        Expected structure: Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
+        Expected structures:
+          Grid/{LowRes,MidRes,HigRes}/<category>/<variable>/<dataset>/
+          Station/<category>/<variable>/<dataset>/
 
     
     Examples:

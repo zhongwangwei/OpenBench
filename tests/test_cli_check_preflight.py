@@ -996,7 +996,7 @@ def test_check_rejects_comparison_only_with_only_drawing(tmp_path, monkeypatch):
             }
         },
     )
-    config["comparison"] = {"enabled": True, "variables": ["Mean"]}
+    config["comparison"] = {"enabled": True, "items": ["Mean"]}
     path = _write_config(tmp_path, config)
     _install_registry(
         monkeypatch,

@@ -515,7 +515,9 @@ class ScannedDataset:
     # registration consumes inspection results computed on the remote host.
     nc_inspections: dict[str, dict] = field(default_factory=dict)  # var_name -> _inspect_nc_file result
     detected_data_groupby: str = ""  # remote-computed _detect_data_groupby result
+    remote_inspection_error: str = ""  # why remote NC metadata/data_groupby inspection degraded
     remote_fulllist: str = ""  # station fulllist CSV generated on the remote host
+    remote_fulllist_error: str = ""  # why remote station fulllist generation failed
 
     @property
     def registry_name(self) -> str:

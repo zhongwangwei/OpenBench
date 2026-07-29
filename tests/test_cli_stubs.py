@@ -1742,6 +1742,26 @@ def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monk
     assert descriptor["variables"]["Evapotranspiration"]["varname"] == "ET"
 
 
+def test_ref_register_builtin_path_writes_only_sparse_overlay(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    data_root = tmp_path / "references"
+    data_root.mkdir()
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    result = runner.invoke(
+        cli,
+        ["ref", "register", "GRDD_Monthly", "--root-dir", str(data_root)],
+    )
+
+    assert result.exit_code == 0, result.output
+    descriptor = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["GRDD_Monthly"]
+    assert descriptor == {"root_dir": str(data_root)}
+
+
 def test_ref_register_updates_existing_reference_metadata_options(tmp_path, monkeypatch):
     import openbench.data.registry as registry_package
     from openbench.data.registry.schema import ReferenceDataset, VariableMapping
@@ -2913,7 +2933,7 @@ def test_init_requires_reference_root_on_fresh_empty_overlay(tmp_path, monkeypat
     result = runner.invoke(cli, ["init", "-o", str(output)], input="\n" * 300)
 
     assert result.exit_code != 0
-    assert "Reference catalog is missing or empty" in result.output
+    assert "bundled reference catalog is still available" in result.output
     assert "Reference data root" in result.output
     assert not output.exists()
 
@@ -3545,6 +3565,7 @@ def test_init_reloads_reference_status_after_overlay_creation(tmp_path, monkeypa
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(init_module, "ensure_user_registry_overlays", fake_ensure_user_registry_overlays)
     monkeypatch.setattr(init_module, "_init_reference_registry_preflight", fake_preflight)
+    monkeypatch.setattr(init_module, "_validate_selected_reference_data", lambda selected: None)
     _install_single_reference_registry(monkeypatch)
 
     output = tmp_path / "openbench.yaml"
@@ -3935,13 +3956,12 @@ def test_init_keeps_all_variables_in_template_when_some_are_skipped(tmp_path, mo
     assert "# - Runoff" in output.read_text(encoding="utf-8")
 
 
-def test_init_reference_preflight_missing_catalog_runs_scan_then_registers(tmp_path, monkeypatch):
+def test_init_reference_preflight_empty_overlay_configures_root_without_scanning(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
 
     catalog_path = tmp_path / "user" / "references" / "reference_catalog.yaml"
     ref_root = tmp_path / "Reference"
     ref_root.mkdir()
-    scanned = [object()]
     calls = []
     home = tmp_path / "home"
 
@@ -3958,23 +3978,35 @@ def test_init_reference_preflight_missing_catalog_runs_scan_then_registers(tmp_p
     monkeypatch.setattr(
         init_module,
         "_scan_reference_variants",
-        lambda root: calls.append(("scan", root)) or scanned,
+        lambda root: (_ for _ in ()).throw(AssertionError("scan should require --refresh-ref")),
     )
-    monkeypatch.setattr(
-        init_module,
-        "_register_reference_variants",
-        lambda variants, path, **kwargs: calls.append(("register", variants, path, kwargs.get("ref_root"))),
-    )
-    monkeypatch.setattr(click, "confirm", lambda *args, **kwargs: True)
 
     init_module._init_reference_registry_preflight(status)
 
-    assert calls == [
-        ("scan", ref_root),
-        ("register", scanned, catalog_path, ref_root),
-    ]
+    assert calls == []
     settings = yaml.safe_load((home / ".openbench" / "settings.yaml").read_text(encoding="utf-8"))
     assert settings["reference_root"] == str(ref_root.resolve())
+
+
+def test_init_reference_refresh_with_no_matching_layouts_keeps_bundled_catalog(tmp_path, monkeypatch, capsys):
+    import openbench.cli.init_cmd as init_module
+
+    ref_root = tmp_path / "Reference"
+    ref_root.mkdir()
+    status = init_module.ReferenceCatalogStatus(
+        catalog_path=tmp_path / "user" / "references" / "reference_catalog.yaml",
+        exists=False,
+        empty=True,
+    )
+
+    monkeypatch.setattr(init_module, "_resolve_reference_root", lambda value: ref_root)
+    monkeypatch.setattr(init_module, "_scan_reference_variants", lambda root: [])
+
+    init_module._init_reference_registry_preflight(status, refresh_ref=True)
+
+    message = capsys.readouterr().out
+    assert "No datasets" in message
+    assert "bundled catalog remains available" in message
 
 
 def test_init_reference_preflight_existing_catalog_can_skip_update(tmp_path, monkeypatch):
@@ -3989,7 +4021,9 @@ def test_init_reference_preflight_existing_catalog_can_skip_update(tmp_path, mon
         empty=False,
     )
 
-    monkeypatch.setattr(click, "confirm", lambda *args, **kwargs: False)
+    ref_root = tmp_path / "Reference"
+    ref_root.mkdir()
+    monkeypatch.setattr(init_module, "_resolve_reference_root", lambda value: ref_root)
     monkeypatch.setattr(
         init_module,
         "_scan_reference_variants",
@@ -3998,6 +4032,31 @@ def test_init_reference_preflight_existing_catalog_can_skip_update(tmp_path, mon
     )
 
     init_module._init_reference_registry_preflight(status)
+
+
+def test_selected_station_reference_requires_registered_dataset_file(tmp_path):
+    import openbench.cli.init_cmd as init_module
+    from openbench.data.registry.schema import ReferenceDataset, StationMatchingConfig, VariableMapping
+
+    ref = ReferenceDataset(
+        name="GRDD_Monthly",
+        description="",
+        category="Water",
+        data_type="stn",
+        tim_res="Month",
+        data_groupby="single",
+        timezone=0,
+        years=[1900, 2020],
+        root_dir=str(tmp_path),
+        station_matching=StationMatchingConfig(dataset_file="GRDD_monthly.nc"),
+        variables={"Streamflow": VariableMapping(varname="discharge", varunit="m3 s-1")},
+    )
+
+    with pytest.raises(click.ClickException, match="GRDD_monthly.nc"):
+        init_module._validate_selected_reference_data({"Streamflow": ref})
+
+    (tmp_path / "GRDD_monthly.nc").touch()
+    init_module._validate_selected_reference_data({"Streamflow": ref})
 
 
 def test_init_refresh_ref_registers_without_second_confirmation(tmp_path, monkeypatch):
