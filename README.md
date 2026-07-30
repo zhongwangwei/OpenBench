@@ -315,12 +315,15 @@ uncertainty:
 ```
 
 `uncertainty` preserves the deterministic outputs. Bootstrap intervals summarize
-the configured evaluation domain (or station network); OpenBench does not create
-per-grid-cell/per-station intervals. Model spread holds the reference fixed,
-reference sensitivity holds the simulation fixed, and the two axes are never
-pooled into a grand ensemble. Time-series bootstrap blocks are sampled only
-within contiguous paired-data segments, so they never bridge missing or
-irregular time gaps.
+the spatially weighted mean of standard per-grid-cell metrics (or the mean of
+station metrics); OpenBench does not create per-grid-cell/per-station intervals.
+Pairwise grid verdicts use only the common valid support of both models. Model
+spread holds the reference fixed, reference sensitivity holds the simulation
+fixed, and the two axes are never pooled into a grand ensemble. Station
+reference-sensitivity products match colocated stations rather than source IDs.
+Time-series bootstrap blocks are sampled only within contiguous paired-data
+segments, so they never bridge missing or irregular time gaps; results are
+reported as insufficient when no segment can actually be resampled.
 
 ### Key `project` options
 

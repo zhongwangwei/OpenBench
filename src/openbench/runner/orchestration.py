@@ -138,6 +138,8 @@ def run_evaluation_impl(
     output_dir = basedir / basename
     for sub in ["data", "metrics", "scores", "figures", "comparisons", "uncertainty", "reports", "scratch", "tmp"]:
         (output_dir / sub).mkdir(parents=True, exist_ok=True)
+    if not cfg.uncertainty.enabled:
+        (output_dir / "uncertainty" / "summary.json").unlink(missing_ok=True)
 
     logger.info("Starting evaluation: %s", basename)
     logger.info("Output directory: %s", output_dir)

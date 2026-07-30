@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import pandas as pd
+import xarray as xr
 
 logger = logging.getLogger(__name__)
 
@@ -40,3 +41,21 @@ def normalize_time_coordinate(data_array: Any, resolution: str | None) -> Any:
     except Exception as exc:
         logger.debug("Failed to assign normalized time coordinates: %s", exc)
         return data_array
+
+
+def align_time_coordinates(
+    first: Any,
+    second: Any,
+    resolution: str | None,
+) -> tuple[Any, Any, bool]:
+    """Use normalized timestamps when they preserve more paired time steps."""
+    exact_first, exact_second = xr.align(first, second, join="inner")
+    normalized_first = normalize_time_coordinate(first, resolution)
+    normalized_second = normalize_time_coordinate(second, resolution)
+    try:
+        normalized_first, normalized_second = xr.align(normalized_first, normalized_second, join="inner")
+    except ValueError:
+        return exact_first, exact_second, False
+    if normalized_first.sizes.get("time", 0) > exact_first.sizes.get("time", 0):
+        return normalized_first.sortby("time"), normalized_second.sortby("time"), True
+    return exact_first.sortby("time"), exact_second.sortby("time"), False

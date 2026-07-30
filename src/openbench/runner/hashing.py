@@ -70,6 +70,8 @@ ALGORITHM_SOURCE_MODULES = (
     "openbench.core.statistics.stat_variance",
     "openbench.core.statistics.stat_z_score",
     "openbench.runner.masking",
+    "openbench.runner.uncertainty",
+    "openbench.util.time",
     "openbench.data.climatology",
     "openbench.data.coordinates",
     "openbench.data.processing",

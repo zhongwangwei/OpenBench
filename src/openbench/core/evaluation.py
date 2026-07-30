@@ -588,31 +588,24 @@ class Evaluation_stn(metrics, scores):
         return normalize_time_coordinate(data_array, compare_res)
 
     def _align_station_times(self, s: xr.DataArray, o: xr.DataArray, station_id) -> tuple[xr.DataArray, xr.DataArray]:
-        """Align station series exactly first; normalize only as a fallback."""
-        s_times = pd.to_datetime(s["time"].values)
-        o_times = pd.to_datetime(o["time"].values)
-        common_times = np.intersect1d(
-            s_times.values if hasattr(s_times, "values") else s_times,
-            o_times.values if hasattr(o_times, "values") else o_times,
-        )
-        if common_times.size:
-            return s.sel(time=common_times).sortby("time"), o.sel(time=common_times).sortby("time")
+        """Align station series using the representation with the most paired steps."""
+        from openbench.util.time import align_time_coordinates
 
-        s_norm = self._normalize_time_coordinate(s)
-        o_norm = self._normalize_time_coordinate(o)
-        s_times = pd.to_datetime(s_norm["time"].values)
-        o_times = pd.to_datetime(o_norm["time"].values)
-        common_times = np.intersect1d(
-            s_times.values if hasattr(s_times, "values") else s_times,
-            o_times.values if hasattr(o_times, "values") else o_times,
-        )
-        if common_times.size:
+        compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
+        aligned_s, aligned_o, normalized = align_time_coordinates(s, o, compare_res)
+        if aligned_s.sizes.get("time", 0):
+            if normalized:
+                logging.warning(
+                    "Station %s time coordinates required normalization before alignment; using %d overlapping steps",
+                    station_id,
+                    aligned_s.sizes["time"],
+                )
+            return aligned_s, aligned_o
+        if normalized:
             logging.warning(
-                "Station %s time coordinates required normalization before alignment; using %d overlapping steps",
+                "Station %s time coordinate normalization produced no overlapping steps",
                 station_id,
-                common_times.size,
             )
-            return s_norm.sel(time=common_times).sortby("time"), o_norm.sel(time=common_times).sortby("time")
         raise ValueError(f"Station {station_id} has no overlapping time steps after exact or normalized alignment")
 
     def make_evaluation_parallel(self, station_list, iik):

@@ -147,7 +147,9 @@ def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons()
 
     assert "openbench.core.evaluation" in modules
     assert "openbench.core._comparison_helpers" in modules
+    assert "openbench.runner.uncertainty" in modules
     assert "openbench.runner.masking" in modules
+    assert "openbench.util.time" in modules
     assert "openbench.data._processing_grid_regrid" in modules
 
 

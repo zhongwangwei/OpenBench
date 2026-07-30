@@ -2,9 +2,11 @@ import numpy as np
 
 from openbench.core.uncertainty import (
     _metric_values,
+    bootstrap_grid_metric,
     bootstrap_metric,
     bootstrap_network_metric,
     metric_value,
+    paired_grid_metric_difference,
     paired_metric_difference,
     segmented_block_index_matrix,
     segmented_block_indices,
@@ -45,6 +47,8 @@ def test_vectorized_metrics_match_scalar_metrics():
     ref = np.arange(1, 21, dtype=float)
     simulations = np.stack([ref + np.sin(ref), ref * 1.1 + 2])
     references = np.stack([ref, ref])
+    simulations[0, 3] = np.nan
+    references[1, 5] = np.nan
 
     for metric in (
         "bias",
@@ -65,6 +69,48 @@ def test_vectorized_metrics_match_scalar_metrics():
     ):
         expected = [metric_value(metric, sim, obs) for sim, obs in zip(simulations, references)]
         np.testing.assert_allclose(_metric_values(metric, simulations, references), expected)
+
+
+def test_grid_bootstrap_aggregates_metrics_without_spatial_error_cancellation():
+    ref = np.zeros((2, 20))
+    sim = np.stack([np.ones(20), -np.ones(20)])
+
+    result = bootstrap_grid_metric(
+        sim,
+        ref,
+        "RMSE",
+        spatial_weights=np.ones(2),
+        n_resamples=20,
+        confidence_level=0.9,
+        block_length=3,
+        seed=1,
+    )
+
+    assert result["estimate"] == 1.0
+    assert result["lower"] == 1.0
+    assert result["upper"] == 1.0
+
+
+def test_paired_grid_difference_uses_common_cell_metrics():
+    ref = np.tile([[50.0]], (1, 20))
+    sim_a = ref.copy()
+    sim_b = ref.copy()
+
+    result = paired_grid_metric_difference(
+        sim_a,
+        sim_b,
+        ref,
+        "RMSE",
+        spatial_weights=np.ones(1),
+        n_resamples=20,
+        confidence_level=0.9,
+        block_length=3,
+        seed=2,
+    )
+
+    assert result["estimate"] == 0.0
+    assert result["lower"] == 0.0
+    assert result["upper"] == 0.0
 
 
 def test_bootstrap_metric_is_reproducible_and_pairwise_nan_safe():
@@ -112,7 +158,7 @@ def test_bootstrap_metric_splits_irregular_time_gaps():
         "RMSE",
         n_resamples=20,
         confidence_level=0.9,
-        block_length=12,
+        block_length=3,
         seed=2,
         time=time,
     )
@@ -120,8 +166,41 @@ def test_bootstrap_metric_splits_irregular_time_gaps():
     assert result["status"] == "available"
     assert result["segment_count"] == 2
     assert result["valid_pair_count"] == 10
-    assert result["block_length"] == 5
+    assert result["block_length"] == 3
     assert result["method"] == "segmented_moving_block_bootstrap"
+
+
+def test_bootstrap_metric_uses_declared_monthly_cadence_for_gap_detection():
+    time = np.array(
+        [
+            "2000-01-15",
+            "2000-03-15",
+            "2000-05-15",
+            "2000-07-15",
+            "2000-09-15",
+            "2000-11-15",
+            "2001-01-15",
+            "2001-03-15",
+        ],
+        dtype="datetime64[D]",
+    )
+    ref = np.arange(time.size, dtype=float)
+
+    result = bootstrap_metric(
+        ref + np.sin(ref),
+        ref,
+        "RMSE",
+        n_resamples=20,
+        confidence_level=0.9,
+        block_length=2,
+        seed=2,
+        time=time,
+        time_resolution="Month",
+    )
+
+    assert result["status"] == "insufficient_data"
+    assert result["segment_count"] == 8
+    assert result["reason"] == "no resampleable contiguous segment"
 
 
 def test_bootstrap_metric_reports_insufficient_data():
@@ -194,6 +273,14 @@ def test_verdicts_do_not_pool_references():
         simulation_a="A",
         simulation_b="B",
     )
+    noisy_sign_change = verdict_from_reference_differences(
+        {
+            "ref_a": {"status": "available", "estimate": 0.01, "lower": -1.0, "upper": 1.0},
+            "ref_b": {"status": "available", "estimate": -0.01, "lower": -1.0, "upper": 1.0},
+        },
+        simulation_a="A",
+        simulation_b="B",
+    )
     incomplete = verdict_from_reference_differences(
         {
             "ref_a": {"status": "available", "estimate": 1.0, "lower": 0.2, "upper": 1.8},
@@ -207,4 +294,5 @@ def test_verdicts_do_not_pool_references():
     assert robust["winner"] == "A"
     assert sensitive["status"] == "reference_sensitive"
     assert uncertain["status"] == "indistinguishable"
+    assert noisy_sign_change["status"] == "indistinguishable"
     assert incomplete["status"] == "insufficient_data"
