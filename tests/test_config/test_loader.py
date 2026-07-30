@@ -20,6 +20,109 @@ def test_load_minimal():
     # Defaults applied
     assert cfg.project.time_alignment == "intersection"
     assert cfg.comparison.enabled is False
+    assert cfg.uncertainty.enabled is False
+
+
+def test_load_uncertainty_config(tmp_path):
+    config = tmp_path / "openbench.yaml"
+    config.write_text(
+        """
+project:
+  name: uncertainty
+  output_dir: .
+  years: [2000, 2001]
+evaluation:
+  variables: [Streamflow]
+reference:
+  Streamflow: GRDC_Monthly
+simulation:
+  demo:
+    model: demo
+    root_dir: .
+uncertainty:
+  enabled: true
+  metrics: [RMSE, correlation]
+  n_resamples: 200
+  confidence_level: 0.9
+  block_length: 3
+  seed: 7
+""",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(config)
+
+    assert cfg.uncertainty.enabled is True
+    assert cfg.uncertainty.metrics == ["RMSE", "correlation"]
+    assert cfg.uncertainty.n_resamples == 200
+    assert cfg.uncertainty.confidence_level == 0.9
+    assert cfg.uncertainty.block_length == 3
+    assert cfg.uncertainty.seed == 7
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("n_resamples: 1", "n_resamples"),
+        ("confidence_level: 1", "confidence_level"),
+        ("block_length: 0", "block_length"),
+        ("seed: -1", "seed"),
+        ("metrcis: [RMSE]", "Unknown configuration key.*metrcis"),
+        ("metrics: [not_a_metric]", "unsupported metric"),
+    ],
+)
+def test_rejects_invalid_uncertainty_config(tmp_path, body, message):
+    config = tmp_path / "openbench.yaml"
+    config.write_text(
+        f"""
+project:
+  name: uncertainty
+  output_dir: .
+  years: [2000, 2001]
+evaluation:
+  variables: [Streamflow]
+reference:
+  Streamflow: GRDC_Monthly
+simulation:
+  demo:
+    model: demo
+    root_dir: .
+uncertainty:
+  enabled: true
+  {body}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match=message):
+        load_config(config)
+
+
+def test_enabled_uncertainty_rejects_unsupported_top_level_metric(tmp_path):
+    config = tmp_path / "openbench.yaml"
+    config.write_text(
+        """
+project:
+  name: uncertainty
+  output_dir: .
+  years: [2000, 2001]
+evaluation:
+  variables: [Streamflow]
+reference:
+  Streamflow: GRDC_Monthly
+simulation:
+  demo:
+    model: demo
+    root_dir: .
+metrics: [RMSE, custom_metric]
+uncertainty:
+  enabled: true
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="custom_metric"):
+        load_config(config)
 
 
 def test_load_full():

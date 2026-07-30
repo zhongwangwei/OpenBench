@@ -8,6 +8,7 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
+    UncertaintyConfig,
     is_simple_project_name,
 )
 
@@ -86,6 +87,15 @@ def test_statistics_config_defaults():
     assert s.enabled is False
 
 
+def test_uncertainty_config_defaults():
+    uncertainty = UncertaintyConfig()
+    assert uncertainty.enabled is False
+    assert uncertainty.n_resamples == 1000
+    assert uncertainty.confidence_level == 0.95
+    assert uncertainty.block_length is None
+    assert uncertainty.seed == 42
+
+
 def test_openbench_config_minimal():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="test", output_dir="./output", years=[2004, 2010]),
@@ -98,6 +108,7 @@ def test_openbench_config_minimal():
     assert cfg.scores is None
     assert cfg.comparison.enabled is False
     assert cfg.statistics.enabled is False
+    assert cfg.uncertainty.enabled is False
     assert cfg.project.time_alignment == "intersection"
 
 

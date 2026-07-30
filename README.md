@@ -79,6 +79,9 @@ file changes. OpenBench turns that into one declarative config:
   variable name mappings and unit conversions automatically.
 - **Rich science suite** — 25+ point-wise metrics, 8 normalized skill scores, and
   17 statistical analysis modules.
+- **Uncertainty-aware evaluation** — opt-in aggregate moving-block confidence
+  intervals, separate model spread/reference sensitivity products, and
+  conservative pairwise verdicts.
 - **Comparison & visualization** — Taylor, Target, Portrait, heat-map, parallel
   coordinates, KDE, ridgeline, and more — generated automatically.
 - **Classification group-by** — per-class aggregation by IGBP land cover, PFT, or
@@ -301,7 +304,21 @@ comparison:
 statistics:
   enabled: true
   items: [Z_Score, ANOVA]
+
+uncertainty:
+  enabled: true
+  metrics: [RMSE, correlation]  # must also appear in top-level metrics
+  n_resamples: 1000
+  confidence_level: 0.95
+  block_length: null            # null = automatic cube-root rule
+  seed: 42
 ```
+
+`uncertainty` preserves the deterministic outputs. Bootstrap intervals summarize
+the configured evaluation domain (or station network); OpenBench does not create
+per-grid-cell/per-station intervals. Model spread holds the reference fixed,
+reference sensitivity holds the simulation fixed, and the two axes are never
+pooled into a grand ensemble.
 
 ### Key `project` options
 
@@ -520,6 +537,7 @@ output/<project_name>/
 ├── figures/             # per-pair visualizations (PNG)
 ├── comparisons/         # cross-model figures + group-by results (if enabled)
 ├── statistics/          # statistical analyses (if enabled)
+├── uncertainty/         # bootstrap CSV/JSON + model/reference NetCDF/CSV products
 ├── reports/
 │   ├── report.html
 │   └── report.pdf       # only with the [report] extra

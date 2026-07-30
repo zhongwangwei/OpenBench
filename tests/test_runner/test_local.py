@@ -16,6 +16,7 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
+    UncertaintyConfig,
 )
 from openbench.runner.local import run_evaluation
 
@@ -2397,6 +2398,7 @@ def test_task_config_hash_payload_serializes_simulation_entry_as_data(tmp_path):
     """Cache hash payload should not depend on dataclass repr formatting."""
     import openbench.config.adapter as adapter
     import openbench.runner.local as local_runner
+    from openbench.runner.cache import EvaluationCache
 
     cfg = _make_cfg(tmp_path, comparison_enabled=False)
     runner_cfg = adapter.RunnerConfig(
@@ -2460,6 +2462,22 @@ def test_task_config_hash_payload_serializes_simulation_entry_as_data(tmp_path):
         "fulllist": None,
         "variables": None,
     }
+    assert payload["uncertainty"]["enabled"] is False
+
+    cfg.uncertainty = UncertaintyConfig(enabled=True, metrics=["bias"], n_resamples=10, seed=7)
+    changed = local_runner._task_hash_payload(
+        cfg=cfg,
+        bindings=bindings,
+        var_name="Runoff",
+        sim_source="SimA",
+        ref_source="TestRef",
+        metric_vars=["bias"],
+        score_vars=["Overall_Score"],
+        comparison_vars=[],
+        statistic_vars=[],
+    )
+    assert changed["uncertainty"]["seed"] == 7
+    assert EvaluationCache.hash_config(changed) != EvaluationCache.hash_config(payload)
 
 
 def test_run_manifest_preserves_hash_evidence_without_mutating_worker_tasks(tmp_path):

@@ -48,6 +48,7 @@ ALGORITHM_SOURCE_MODULES = (
     "openbench.core._comparison_target",
     "openbench.core._comparison_taylor",
     "openbench.core.metrics",
+    "openbench.core.uncertainty",
     "openbench.core.scores",
     "openbench.core.statistics.Mod_Statistics",
     "openbench.core.statistics.base",
@@ -391,6 +392,7 @@ def task_hash_payload(
         "scores": score_vars,
         "comparisons": comparison_vars,
         "statistics": statistic_vars,
+        "uncertainty": stable_hash_data(cfg.uncertainty),
         "openbench": {
             "version": openbench_version_fn(),
             "algorithm_version": OPENBENCH_ALGORITHM_VERSION,

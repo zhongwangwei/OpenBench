@@ -29,6 +29,7 @@ from openbench.runner import preflight_facade as _runner_preflight_facade
 from openbench.runner import preprocessing as _runner_preprocessing
 from openbench.runner import task_execution as _runner_task_execution
 from openbench.runner import task_planning as _runner_task_planning
+from openbench.runner import uncertainty as _runner_uncertainty
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 logger = logging.getLogger(__name__)
@@ -422,6 +423,17 @@ def _run_statistics(bindings, statistic_vars, output_dir: Path | None = None):
         make_phase_error_fn=_local_attr("_make_phase_error"),
         post_phase_preflight_errors_fn=_local_attr("_post_phase_preflight_errors"),
         filter_evaluation_items_with_outputs_fn=_local_attr("_filter_evaluation_items_with_outputs"),
+    )
+
+
+def _run_uncertainty(cfg, tasks, output_dir, metric_vars):
+    """Run uncertainty-aware aggregate and spread processing."""
+    return _runner_uncertainty.run_uncertainty(
+        cfg,
+        tasks,
+        output_dir,
+        metric_vars,
+        make_phase_error_fn=_local_attr("_make_phase_error"),
     )
 
 

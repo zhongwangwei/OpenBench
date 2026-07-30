@@ -10,6 +10,24 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Optional
 
+UNCERTAINTY_METRIC_DIRECTIONS = {
+    "bias": "zero",
+    "percent_bias": "zero",
+    "absolute_percent_bias": "lower",
+    "RMSE": "lower",
+    "ubRMSE": "lower",
+    "CRMSD": "lower",
+    "mean_absolute_error": "lower",
+    "correlation": "higher",
+    "correlation_R2": "higher",
+    "NSE": "higher",
+    "KGE": "higher",
+    "KGESS": "higher",
+    "L": "higher",
+    "index_agreement": "higher",
+    "ubNSE": "higher",
+}
+
 
 def is_simple_project_name(name: object) -> bool:
     """Return True when *name* is a directory name, not a path."""
@@ -160,6 +178,18 @@ class StatisticsConfig:
 
 
 @dataclass
+class UncertaintyConfig:
+    """Sampling and multi-source uncertainty settings."""
+
+    enabled: bool = False
+    metrics: Optional[list[str]] = None  # Omitted → supported entries from top-level metrics
+    n_resamples: int = 1000
+    confidence_level: float = 0.95
+    block_length: Optional[int] = None  # None → cube-root rule
+    seed: int = 42
+
+
+@dataclass
 class OpenBenchConfig:
     """Top-level configuration container.
 
@@ -175,3 +205,4 @@ class OpenBenchConfig:
     scores: Optional[list[str]] = None  # Score names; omitted → ["Overall_Score"]
     comparison: ComparisonConfig = field(default_factory=ComparisonConfig)  # Comparison phase config
     statistics: StatisticsConfig = field(default_factory=StatisticsConfig)  # Statistics phase config
+    uncertainty: UncertaintyConfig = field(default_factory=UncertaintyConfig)  # Uncertainty-aware evaluation

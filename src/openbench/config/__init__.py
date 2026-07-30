@@ -15,6 +15,7 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
+    UncertaintyConfig,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "SimulationEntry",
     "ComparisonConfig",
     "StatisticsConfig",
+    "UncertaintyConfig",
 ]

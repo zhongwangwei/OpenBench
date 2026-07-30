@@ -121,6 +121,7 @@ def run_evaluation_impl(
     _run_groupby = _local_runner._run_groupby
     _run_report = _local_runner._run_report
     _run_statistics = _local_runner._run_statistics
+    _run_uncertainty = _local_runner._run_uncertainty
     _validate_comparison_only_inputs = _local_runner._validate_comparison_only_inputs
 
     os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
@@ -135,7 +136,7 @@ def run_evaluation_impl(
     basedir = Path(runner_cfg.basedir)
     basename = runner_cfg.basename
     output_dir = basedir / basename
-    for sub in ["data", "metrics", "scores", "figures", "comparisons", "reports", "scratch", "tmp"]:
+    for sub in ["data", "metrics", "scores", "figures", "comparisons", "uncertainty", "reports", "scratch", "tmp"]:
         (output_dir / sub).mkdir(parents=True, exist_ok=True)
 
     logger.info("Starting evaluation: %s", basename)
@@ -375,7 +376,18 @@ def run_evaluation_impl(
             len(errors),
         )
 
-    # ─── Phase 2: Comparison ───
+    # ─── Phase 2: Uncertainty-aware evaluation ───
+    if cfg.uncertainty.enabled and post_phases_allowed and not comparison_only and not only_drawing:
+        logger.info("Starting uncertainty-aware evaluation")
+        try:
+            errors.extend(_run_uncertainty(cfg, tasks, output_dir, metric_vars) or [])
+        except Exception as exc:
+            logger.exception("Uncertainty phase failed")
+            errors.append(_make_phase_error("uncertainty", f"uncertainty phase failed: {exc}"))
+    elif cfg.uncertainty.enabled and post_phases_allowed and only_drawing and not comparison_only:
+        logger.info("Skipping uncertainty recomputation in only_drawing mode")
+
+    # ─── Phase 3: Comparison ───
     if cfg.comparison.enabled and comparison_vars and post_phases_allowed:
         logger.info("Starting comparison phase: %s", comparison_vars)
         try:
@@ -384,7 +396,7 @@ def run_evaluation_impl(
             logger.exception("Comparison phase failed")
             errors.append(_make_phase_error("comparison", f"comparison phase failed: {exc}"))
 
-    # ─── Phase 2b: Groupby (IGBP / PFT / Climate Zone) ───
+    # ─── Phase 3b: Groupby (IGBP / PFT / Climate Zone) ───
     # Skipped under --comparison-only: the CLI flag advertises "only run
     # comparisons", so groupby/statistics/report belong to the full
     # pipeline only.
@@ -395,7 +407,7 @@ def run_evaluation_impl(
             logger.exception("Groupby phase failed")
             errors.append(_make_phase_error("groupby", f"groupby phase failed: {exc}"))
 
-    # ─── Phase 3: Statistics ───
+    # ─── Phase 4: Statistics ───
     # Statistics module operates on gridded NC files (spatial remap + aggregation).
     # Skip for purely station-based evaluations where metrics are CSV-only.
     # Also skip under --comparison-only (see note above).
@@ -427,7 +439,7 @@ def run_evaluation_impl(
     ):
         logger.info("Skipping statistics phase: not applicable for station-only evaluations")
 
-    # ─── Phase 4: Report ───
+    # ─── Phase 5: Report ───
     # Skipped under --comparison-only — the report aggregates evaluation
     # outputs across all phases and would partially regenerate reports
     # users may have already curated.

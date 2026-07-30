@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from openbench.config.schema import (
+    UNCERTAINTY_METRIC_DIRECTIONS,
     ComparisonConfig,
     DaskConfig,
     EvaluationConfig,
@@ -27,6 +28,7 @@ from openbench.config.schema import (
     ReferenceConfig,
     SimulationEntry,
     StatisticsConfig,
+    UncertaintyConfig,
     is_simple_project_name,
 )
 from openbench.util.names import (
@@ -73,6 +75,7 @@ _TOP_LEVEL_KEYS = {
     "scores",
     "comparison",
     "statistics",
+    "uncertainty",
     "options",
 }
 _PROJECT_KEYS = {
@@ -837,6 +840,22 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     scores = _validated_optional_string_list(raw.get("scores"), "scores")
     comparison = _build_comparison(raw.get("comparison", {}))
     statistics = _build_statistics(raw.get("statistics", {}))
+    uncertainty = _build_uncertainty(raw.get("uncertainty", {}))
+    effective_metrics = metrics or ["bias", "RMSE", "correlation"]
+    uncertainty_metrics = uncertainty.metrics or (effective_metrics if uncertainty.enabled else [])
+    unsupported = [metric for metric in uncertainty_metrics if metric not in UNCERTAINTY_METRIC_DIRECTIONS]
+    if unsupported:
+        raise ConfigError(
+            "uncertainty.metrics contains unsupported metric(s): "
+            f"{', '.join(unsupported)}. Supported: {', '.join(UNCERTAINTY_METRIC_DIRECTIONS)}"
+        )
+    missing_outputs = [metric for metric in uncertainty_metrics if metric not in effective_metrics]
+    if missing_outputs:
+        raise ConfigError(
+            "uncertainty.metrics must also be present in top-level metrics: " f"{', '.join(missing_outputs)}"
+        )
+    if uncertainty.enabled and not uncertainty_metrics:
+        raise ConfigError("uncertainty.enabled requires at least one supported top-level metric")
 
     return OpenBenchConfig(
         project=project,
@@ -847,6 +866,7 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
         scores=scores,
         comparison=comparison,
         statistics=statistics,
+        uncertainty=uncertainty,
     )
 
 
@@ -1120,4 +1140,46 @@ def _build_statistics(raw: Any) -> StatisticsConfig:
     return StatisticsConfig(
         enabled=_validated_optional_bool(raw.get("enabled"), "statistics.enabled", default=False),
         items=_validated_optional_string_list(raw.get("items"), "statistics.items"),
+    )
+
+
+def _build_uncertainty(raw: Any) -> UncertaintyConfig:
+    """Build uncertainty-aware evaluation settings."""
+    if raw is None or raw == {}:
+        return UncertaintyConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError(f"'uncertainty' must be a mapping, got {type(raw).__name__}")
+    _reject_unknown_keys(
+        raw,
+        {"enabled", "metrics", "n_resamples", "confidence_level", "block_length", "seed"},
+        "uncertainty",
+    )
+
+    metrics = _validated_optional_string_list(raw.get("metrics"), "uncertainty.metrics")
+    if metrics is not None and (not metrics or any(not metric.strip() for metric in metrics)):
+        raise ConfigError("uncertainty.metrics must contain at least one non-empty metric name")
+
+    n_resamples = raw.get("n_resamples", 1000)
+    if isinstance(n_resamples, bool) or not isinstance(n_resamples, int) or n_resamples < 2:
+        raise ConfigError("uncertainty.n_resamples must be an integer >= 2")
+
+    confidence_level = raw.get("confidence_level", 0.95)
+    if isinstance(confidence_level, bool) or not isinstance(confidence_level, (int, float)):
+        raise ConfigError("uncertainty.confidence_level must be a number between 0 and 1")
+    confidence_level = float(confidence_level)
+    if not 0 < confidence_level < 1:
+        raise ConfigError("uncertainty.confidence_level must be greater than 0 and less than 1")
+
+    block_length = _validated_optional_positive_int(raw.get("block_length"), "uncertainty.block_length")
+    seed = raw.get("seed", 42)
+    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+        raise ConfigError("uncertainty.seed must be an integer >= 0")
+
+    return UncertaintyConfig(
+        enabled=bool(_validated_optional_bool(raw.get("enabled"), "uncertainty.enabled", default=False)),
+        metrics=[metric.strip() for metric in metrics] if metrics is not None else None,
+        n_resamples=n_resamples,
+        confidence_level=confidence_level,
+        block_length=block_length,
+        seed=seed,
     )

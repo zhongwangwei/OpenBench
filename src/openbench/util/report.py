@@ -6,6 +6,7 @@ Generates comprehensive HTML and PDF evaluation reports with tables, figures, an
 """
 
 import glob
+import json
 import os
 import shutil
 from datetime import datetime
@@ -79,6 +80,7 @@ class ReportGenerator:
         self.scores_dir = os.path.join(output_dir, "scores")
         self.comparisons_dir = os.path.join(output_dir, "comparisons")
         self.data_dir = os.path.join(output_dir, "data")
+        self.uncertainty_dir = os.path.join(output_dir, "uncertainty")
 
         # Create reports directory if it doesn't exist
         os.makedirs(self.report_dir, exist_ok=True)
@@ -154,6 +156,7 @@ class ReportGenerator:
             "overall_summary": {},
             "comparisons": {},
             "climate_zone_analysis": {},
+            "uncertainty": {},
         }
 
         # Collect data for each evaluation item
@@ -184,8 +187,22 @@ class ReportGenerator:
 
         # Collect groupby analysis summary
         report_data["groupby_summary"] = self._generate_groupby_analysis_summary(report_data)
+        report_data["uncertainty"] = self._collect_uncertainty_data()
 
         return report_data
+
+    def _collect_uncertainty_data(self) -> Dict[str, Any]:
+        """Load the machine-readable uncertainty summary when available."""
+        path = os.path.join(self.uncertainty_dir, "summary.json")
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, encoding="utf-8") as handle:
+                data = json.load(handle)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not read uncertainty summary %s: %s", path, exc)
+            return {}
 
     def _collect_metrics_data(self, item: str) -> Dict[str, Any]:
         """Collect metrics data for a specific evaluation item"""
@@ -1544,6 +1561,9 @@ class ReportGenerator:
             {% for item in metadata.evaluation_items %}
             <li><a href="#{{ item|replace(' ', '-')|lower }}">{{ item }} Analysis</a></li>
             {% endfor %}
+            {% if uncertainty %}
+            <li><a href="#uncertainty">Uncertainty-aware Evaluation</a></li>
+            {% endif %}
             <li><a href="#overall-comparison">Overall Comparison</a></li>
             <li><a href="#appendix">Appendix</a></li>
         </ul>
@@ -1595,6 +1615,70 @@ class ReportGenerator:
         </div>
     </div>
     
+    {% if uncertainty %}
+    <div class="section" id="uncertainty">
+        <h2>Uncertainty-aware Evaluation</h2>
+        <p>Confidence intervals use paired moving-block bootstrap resampling. Model spread and reference sensitivity are reported as separate axes.</p>
+
+        {% if uncertainty.bootstrap %}
+        <h3>Aggregate Metric Confidence Intervals</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Variable</th><th>Reference</th><th>Simulation</th><th>Metric</th>
+                    <th>Scope</th><th>Estimate</th><th>Confidence Interval</th><th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in uncertainty.bootstrap %}
+                <tr>
+                    <td>{{ row.variable }}</td><td>{{ row.reference }}</td><td>{{ row.simulation }}</td>
+                    <td>{{ row.metric }}</td><td>{{ row.scope }}</td>
+                    {% if row.status == 'available' %}
+                    <td>{{ "%.4g"|format(row.estimate) }}</td>
+                    <td>[{{ "%.4g"|format(row.lower) }}, {{ "%.4g"|format(row.upper) }}]</td>
+                    {% else %}
+                    <td>—</td><td>—</td>
+                    {% endif %}
+                    <td>{{ row.status|replace('_', ' ') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if uncertainty.verdicts %}
+        <h3>Pairwise Model Verdicts</h3>
+        <table>
+            <thead>
+                <tr><th>Variable</th><th>Metric</th><th>Model Pair</th><th>Verdict</th><th>Winner</th></tr>
+            </thead>
+            <tbody>
+                {% for row in uncertainty.verdicts %}
+                <tr>
+                    <td>{{ row.variable }}</td><td>{{ row.metric }}</td>
+                    <td>{{ row.simulation_a }} vs {{ row.simulation_b }}</td>
+                    <td>{{ row.status|replace('_', ' ') }}</td><td>{{ row.winner or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if uncertainty.products %}
+        <h3>Spatial and Station Products</h3>
+        <ul>
+            {% for path in uncertainty.products.model_spread %}
+            <li>Model spread: <a href="../{{ path|url_path }}">{{ path }}</a></li>
+            {% endfor %}
+            {% for path in uncertainty.products.reference_sensitivity %}
+            <li>Reference sensitivity: <a href="../{{ path|url_path }}">{{ path }}</a></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Individual Item Analysis -->
     {% for item, item_data in evaluation_items.items() %}
     <div class="section" id="{{ item|replace(' ', '-')|lower }}">
