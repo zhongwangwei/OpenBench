@@ -12,6 +12,7 @@ import numpy as np
 from openbench.config.schema import UNCERTAINTY_METRIC_DIRECTIONS
 
 MIN_VALID_SAMPLES = 8
+BOOTSTRAP_BATCH_SIZE = 128
 
 
 def derived_seed(seed: int, *parts: object) -> int:
@@ -80,31 +81,54 @@ def segmented_block_indices(
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, list[int]]:
     """Draw non-circular blocks without crossing a contiguous-segment boundary."""
+    matrix, block_sizes = segmented_block_index_matrix(
+        segments,
+        sample_count,
+        block_length,
+        1,
+        rng,
+    )
+    return matrix[0], block_sizes
+
+
+def segmented_block_index_matrix(
+    segments: Sequence[slice],
+    sample_count: int,
+    block_length: int,
+    n_resamples: int,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, list[int]]:
+    """Draw stratified non-circular blocks for several bootstrap resamples."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     if block_length <= 0:
         raise ValueError("block_length must be positive")
+    if n_resamples <= 0:
+        raise ValueError("n_resamples must be positive")
     usable = [segment for segment in segments if int(segment.stop) > int(segment.start)]
     if not usable:
         raise ValueError("at least one non-empty segment is required")
+    if sum(int(segment.stop) - int(segment.start) for segment in usable) != sample_count:
+        raise ValueError("sample_count must equal the total segment length")
 
-    lengths = np.asarray([int(segment.stop) - int(segment.start) for segment in usable], dtype=float)
-    draw_lengths = np.minimum(lengths, block_length)
-    weights = lengths / draw_lengths
-    probabilities = weights / weights.sum()
-    blocks: list[np.ndarray] = []
+    resampled_segments: list[np.ndarray] = []
     block_sizes: list[int] = []
-    collected = 0
-    while collected < sample_count:
-        segment = usable[int(rng.choice(len(usable), p=probabilities))]
+    for segment in usable:
         segment_length = int(segment.stop) - int(segment.start)
-        actual_length = min(block_length, segment_length, sample_count - collected)
-        latest_start = int(segment.stop) - actual_length
-        start = int(rng.integers(int(segment.start), latest_start + 1))
-        blocks.append(np.arange(start, start + actual_length))
-        block_sizes.append(actual_length)
-        collected += actual_length
-    return np.concatenate(blocks), block_sizes
+        actual_length = min(block_length, segment_length)
+        block_count = math.ceil(segment_length / actual_length)
+        starts = rng.integers(
+            int(segment.start),
+            int(segment.stop) - actual_length + 1,
+            size=(n_resamples, block_count),
+        )
+        offsets = np.arange(actual_length)
+        indices = (starts[..., None] + offsets).reshape(n_resamples, -1)[:, :segment_length]
+        resampled_segments.append(indices)
+        block_sizes.extend(
+            [actual_length] * (block_count - 1) + [segment_length - actual_length * (block_count - 1)]
+        )
+    return np.concatenate(resampled_segments, axis=1), block_sizes
 
 
 def _resolved_block_length(sample_count: int, segments: Sequence[slice], requested: int | None) -> int:
@@ -125,61 +149,95 @@ def metric_value(metric: str, sim: Any, ref: Any) -> float:
     sim_values, ref_values = _paired_values(sim, ref)
     if sim_values.size < 2:
         return math.nan
+    return float(_metric_values(metric, sim_values, ref_values))
 
+
+def _metric_values(metric: str, sim_values: np.ndarray, ref_values: np.ndarray) -> np.ndarray:
+    """Evaluate one metric along the last axis of paired finite arrays."""
+    if metric not in UNCERTAINTY_METRIC_DIRECTIONS:
+        raise ValueError(f"unsupported uncertainty metric: {metric}")
     diff = sim_values - ref_values
     if metric == "bias":
-        return float(np.mean(diff))
+        return np.mean(diff, axis=-1)
     if metric == "percent_bias":
-        denominator = np.sum(ref_values)
-        return float(100 * np.sum(diff) / denominator) if denominator != 0 else math.nan
+        denominator = np.sum(ref_values, axis=-1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(denominator != 0, 100 * np.sum(diff, axis=-1) / denominator, np.nan)
     if metric == "absolute_percent_bias":
-        denominator = abs(np.sum(ref_values))
-        return float(100 * abs(np.sum(diff)) / denominator) if denominator != 0 else math.nan
+        denominator = np.abs(np.sum(ref_values, axis=-1))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(denominator != 0, 100 * np.abs(np.sum(diff, axis=-1)) / denominator, np.nan)
     if metric == "RMSE":
-        return float(np.sqrt(np.mean(diff**2)))
+        return np.sqrt(np.mean(diff**2, axis=-1))
+    sim_centered = sim_values - np.mean(sim_values, axis=-1, keepdims=True)
+    ref_centered = ref_values - np.mean(ref_values, axis=-1, keepdims=True)
     if metric in {"ubRMSE", "CRMSD"}:
-        return float(np.sqrt(np.mean(((sim_values - sim_values.mean()) - (ref_values - ref_values.mean())) ** 2)))
+        return np.sqrt(np.mean((sim_centered - ref_centered) ** 2, axis=-1))
     if metric == "mean_absolute_error":
-        return float(np.mean(np.abs(diff)))
+        return np.mean(np.abs(diff), axis=-1)
 
-    ref_variance_sum = np.sum((ref_values - ref_values.mean()) ** 2)
+    ref_variance_sum = np.sum(ref_centered**2, axis=-1)
     if metric == "NSE":
-        return float(1 - np.sum(diff**2) / ref_variance_sum) if ref_variance_sum != 0 else math.nan
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(ref_variance_sum != 0, 1 - np.sum(diff**2, axis=-1) / ref_variance_sum, np.nan)
     if metric == "ubNSE":
-        centered_diff = (sim_values - sim_values.mean()) - (ref_values - ref_values.mean())
-        return float(1 - np.sum(centered_diff**2) / ref_variance_sum) if ref_variance_sum != 0 else math.nan
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(
+                ref_variance_sum != 0,
+                1 - np.sum((sim_centered - ref_centered) ** 2, axis=-1) / ref_variance_sum,
+                np.nan,
+            )
 
-    sim_std = np.std(sim_values)
-    ref_std = np.std(ref_values)
-    correlation = (
-        float(np.corrcoef(sim_values, ref_values)[0, 1]) if sim_std != 0 and ref_std != 0 else math.nan
-    )
+    sim_variance_sum = np.sum(sim_centered**2, axis=-1)
+    correlation_denominator = np.sqrt(sim_variance_sum * ref_variance_sum)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        correlation = np.where(
+            correlation_denominator != 0,
+            np.sum(sim_centered * ref_centered, axis=-1) / correlation_denominator,
+            np.nan,
+        )
     if metric == "correlation":
         return correlation
     if metric == "correlation_R2":
         return correlation**2
     if metric in {"KGE", "KGESS"}:
-        ref_mean = np.mean(ref_values)
-        if not np.isfinite(correlation) or ref_std == 0 or ref_mean == 0:
-            return math.nan
-        kge = 1 - math.sqrt((correlation - 1) ** 2 + (sim_std / ref_std - 1) ** 2 + (sim_values.mean() / ref_mean - 1) ** 2)
-        return float((kge + 0.41) / 1.41) if metric == "KGESS" else float(kge)
+        sim_std = np.std(sim_values, axis=-1)
+        ref_std = np.std(ref_values, axis=-1)
+        sim_mean = np.mean(sim_values, axis=-1)
+        ref_mean = np.mean(ref_values, axis=-1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            kge = 1 - np.sqrt(
+                (correlation - 1) ** 2 + (sim_std / ref_std - 1) ** 2 + (sim_mean / ref_mean - 1) ** 2
+            )
+        kge = np.where(np.isfinite(correlation) & (ref_std != 0) & (ref_mean != 0), kge, np.nan)
+        return (kge + 0.41) / 1.41 if metric == "KGESS" else kge
     if metric == "L":
-        return float(np.exp(-5 * np.sum(diff**2) / ref_variance_sum)) if ref_variance_sum != 0 else math.nan
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(
+                ref_variance_sum != 0,
+                np.exp(-5 * np.sum(diff**2, axis=-1) / ref_variance_sum),
+                np.nan,
+            )
     if metric == "index_agreement":
-        denominator = np.sum((np.abs(sim_values - ref_values.mean()) + np.abs(ref_values - ref_values.mean())) ** 2)
-        return float(1 - np.sum(diff**2) / denominator) if denominator != 0 else math.nan
+        ref_mean = np.mean(ref_values, axis=-1, keepdims=True)
+        denominator = np.sum((np.abs(sim_values - ref_mean) + np.abs(ref_values - ref_mean)) ** 2, axis=-1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(denominator != 0, 1 - np.sum(diff**2, axis=-1) / denominator, np.nan)
     raise AssertionError(metric)
 
 
 def quality_value(metric: str, value: float) -> float:
     """Convert a metric to a common higher-is-better scale."""
+    return float(_quality_values(metric, np.asarray(value)))
+
+
+def _quality_values(metric: str, values: np.ndarray) -> np.ndarray:
     direction = UNCERTAINTY_METRIC_DIRECTIONS[metric]
     if direction == "lower":
-        return -value
+        return -values
     if direction == "zero":
-        return -abs(value)
-    return value
+        return -np.abs(values)
+    return values
 
 
 def _finite_mean(values: Sequence[float]) -> float:
@@ -265,9 +323,16 @@ def bootstrap_metric(
 
     rng = np.random.default_rng(seed)
     samples = np.empty(n_resamples, dtype=float)
-    for index in range(n_resamples):
-        positions, _ = segmented_block_indices(segments, sample_count, resolved_block, rng)
-        samples[index] = metric_value(metric, sim_values[positions], ref_values[positions])
+    for start in range(0, n_resamples, BOOTSTRAP_BATCH_SIZE):
+        stop = min(start + BOOTSTRAP_BATCH_SIZE, n_resamples)
+        positions, _ = segmented_block_index_matrix(
+            segments,
+            sample_count,
+            resolved_block,
+            stop - start,
+            rng,
+        )
+        samples[start:stop] = _metric_values(metric, sim_values[positions], ref_values[positions])
     return _interval_summary(
         metric_value(metric, sim_values, ref_values),
         samples,
@@ -309,18 +374,23 @@ def paired_metric_difference(
             segment_count=len(segments),
         )
 
-    def difference(positions: Any = slice(None)) -> float:
-        return quality_value(metric, metric_value(metric, a[positions], o[positions])) - quality_value(
-            metric, metric_value(metric, b[positions], o[positions])
-        )
-
     rng = np.random.default_rng(seed)
     samples = np.empty(n_resamples, dtype=float)
-    for index in range(n_resamples):
-        positions, _ = segmented_block_indices(segments, sample_count, resolved_block, rng)
-        samples[index] = difference(positions)
+    for start in range(0, n_resamples, BOOTSTRAP_BATCH_SIZE):
+        stop = min(start + BOOTSTRAP_BATCH_SIZE, n_resamples)
+        positions, _ = segmented_block_index_matrix(
+            segments,
+            sample_count,
+            resolved_block,
+            stop - start,
+            rng,
+        )
+        samples[start:stop] = _quality_values(metric, _metric_values(metric, a[positions], o[positions])) - (
+            _quality_values(metric, _metric_values(metric, b[positions], o[positions]))
+        )
+    estimate = quality_value(metric, metric_value(metric, a, o)) - quality_value(metric, metric_value(metric, b, o))
     return _interval_summary(
-        difference(),
+        estimate,
         samples,
         confidence_level=confidence_level,
         sample_count=sample_count,
@@ -367,12 +437,24 @@ def bootstrap_network_metric(
 
     rng = np.random.default_rng(seed)
     samples = np.empty(n_resamples, dtype=float)
-    for index in range(n_resamples):
-        station_values = []
+    for start in range(0, n_resamples, BOOTSTRAP_BATCH_SIZE):
+        stop = min(start + BOOTSTRAP_BATCH_SIZE, n_resamples)
+        batch_size = stop - start
+        total = np.zeros(batch_size, dtype=float)
+        count = np.zeros(batch_size, dtype=int)
         for sim, ref, segments, resolved_block in pairs:
-            positions, _ = segmented_block_indices(segments, sim.size, resolved_block, rng)
-            station_values.append(metric_value(metric, sim[positions], ref[positions]))
-        samples[index] = _finite_mean(station_values)
+            positions, _ = segmented_block_index_matrix(
+                segments,
+                sim.size,
+                resolved_block,
+                batch_size,
+                rng,
+            )
+            values = _metric_values(metric, sim[positions], ref[positions])
+            finite = np.isfinite(values)
+            total[finite] += values[finite]
+            count[finite] += 1
+        samples[start:stop] = np.divide(total, count, out=np.full(batch_size, np.nan), where=count > 0)
 
     resolved_blocks = [resolved for _, _, _, resolved in pairs]
     result = _interval_summary(
@@ -425,23 +507,39 @@ def paired_network_metric_difference(
         result["station_count"] = 0
         return result
 
-    def network_difference(resample: bool, rng: np.random.Generator | None = None) -> float:
-        station_values = []
-        for a, b, o, segments, resolved_block in triplets:
-            positions: Any = slice(None)
-            if resample:
-                positions, _ = segmented_block_indices(segments, a.size, resolved_block, rng)
-            station_values.append(
-                quality_value(metric, metric_value(metric, a[positions], o[positions]))
-                - quality_value(metric, metric_value(metric, b[positions], o[positions]))
-            )
-        return _finite_mean(station_values)
-
     rng = np.random.default_rng(seed)
-    samples = [network_difference(True, rng) for _ in range(n_resamples)]
+    samples = np.empty(n_resamples, dtype=float)
+    for start in range(0, n_resamples, BOOTSTRAP_BATCH_SIZE):
+        stop = min(start + BOOTSTRAP_BATCH_SIZE, n_resamples)
+        batch_size = stop - start
+        total = np.zeros(batch_size, dtype=float)
+        count = np.zeros(batch_size, dtype=int)
+        for a, b, o, segments, resolved_block in triplets:
+            positions, _ = segmented_block_index_matrix(
+                segments,
+                a.size,
+                resolved_block,
+                batch_size,
+                rng,
+            )
+            values = _quality_values(metric, _metric_values(metric, a[positions], o[positions])) - _quality_values(
+                metric, _metric_values(metric, b[positions], o[positions])
+            )
+            finite = np.isfinite(values)
+            total[finite] += values[finite]
+            count[finite] += 1
+        samples[start:stop] = np.divide(total, count, out=np.full(batch_size, np.nan), where=count > 0)
+
+    estimate = _finite_mean(
+        [
+            quality_value(metric, metric_value(metric, a, o))
+            - quality_value(metric, metric_value(metric, b, o))
+            for a, b, o, _, _ in triplets
+        ]
+    )
     resolved_blocks = [resolved for _, _, _, _, resolved in triplets]
     result = _interval_summary(
-        network_difference(False),
+        estimate,
         samples,
         confidence_level=confidence_level,
         sample_count=sample_count,

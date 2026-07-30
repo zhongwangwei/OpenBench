@@ -1,9 +1,12 @@
 import numpy as np
 
 from openbench.core.uncertainty import (
+    _metric_values,
     bootstrap_metric,
     bootstrap_network_metric,
+    metric_value,
     paired_metric_difference,
+    segmented_block_index_matrix,
     segmented_block_indices,
     verdict_from_reference_differences,
 )
@@ -22,6 +25,46 @@ def test_segmented_block_indices_never_cross_gap():
         assert np.all(np.diff(block) == 1)
         assert np.all(block < 4) or np.all(block >= 4)
         offset += size
+
+
+def test_segmented_block_matrix_preserves_each_segment_size():
+    indices, _ = segmented_block_index_matrix(
+        [slice(0, 4), slice(4, 9)],
+        sample_count=9,
+        block_length=3,
+        n_resamples=5,
+        rng=np.random.default_rng(5),
+    )
+
+    assert indices.shape == (5, 9)
+    assert np.all(indices[:, :4] < 4)
+    assert np.all(indices[:, 4:] >= 4)
+
+
+def test_vectorized_metrics_match_scalar_metrics():
+    ref = np.arange(1, 21, dtype=float)
+    simulations = np.stack([ref + np.sin(ref), ref * 1.1 + 2])
+    references = np.stack([ref, ref])
+
+    for metric in (
+        "bias",
+        "percent_bias",
+        "absolute_percent_bias",
+        "RMSE",
+        "ubRMSE",
+        "CRMSD",
+        "mean_absolute_error",
+        "NSE",
+        "ubNSE",
+        "correlation",
+        "correlation_R2",
+        "KGE",
+        "KGESS",
+        "L",
+        "index_agreement",
+    ):
+        expected = [metric_value(metric, sim, obs) for sim, obs in zip(simulations, references)]
+        np.testing.assert_allclose(_metric_values(metric, simulations, references), expected)
 
 
 def test_bootstrap_metric_is_reproducible_and_pairwise_nan_safe():
