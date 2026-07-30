@@ -25,6 +25,7 @@ from openbench.core.uncertainty import (
 from openbench.runner.preflight import task_output_data_types
 from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_file_atomic, write_netcdf_atomic
+from openbench.util.time import normalize_time_coordinate
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ def _load_station_pairs(
     folder = output_dir / "data" / f"stn_{task['ref_source']}_{task['sim_source']}"
     pairs: dict[str, tuple[xr.DataArray, xr.DataArray]] = {}
     prefix = f"{item}_sim_"
+    runner_cfg = getattr(task["bindings"], "runner_cfg", None)
+    resolution = getattr(runner_cfg, "general", {}).get("compare_tim_res") if runner_cfg is not None else None
     for sim_path in sorted(folder.glob(f"{prefix}*.nc")):
         suffix = sim_path.name[len(prefix) :]
         ref_path = folder / f"{item}_ref_{suffix}"
@@ -107,7 +110,14 @@ def _load_station_pairs(
         with xr.open_dataset(sim_path) as sim_ds, xr.open_dataset(ref_path) as ref_ds:
             sim = select_data_array(sim_ds, item).squeeze()
             ref = select_data_array(ref_ds, item).squeeze()
-            sim, ref = xr.align(sim, ref, join="inner")
+            aligned_sim, aligned_ref = xr.align(sim, ref, join="inner")
+            if aligned_sim.sizes.get("time", 0) == 0 and resolution:
+                aligned_sim, aligned_ref = xr.align(
+                    normalize_time_coordinate(sim, resolution),
+                    normalize_time_coordinate(ref, resolution),
+                    join="inner",
+                )
+            sim, ref = aligned_sim, aligned_ref
             if "time" not in sim.dims or sim.sizes.get("time", 0) == 0:
                 continue
             station_id = suffix.rsplit("_", 2)[0]
@@ -133,10 +143,20 @@ def _bootstrap_rows(
                 "seed": derived_seed(options.seed, "aggregate", item, ref_source, sim_source, metric),
             }
             if kind == "station":
-                result = bootstrap_network_metric(list(data.values()), metric, **kwargs)
+                station_pairs = [
+                    (sim.values, ref.values, sim["time"].values)
+                    for sim, ref in data.values()
+                ]
+                result = bootstrap_network_metric(station_pairs, metric, **kwargs)
                 scope = "station_network"
             else:
-                result = bootstrap_metric(data[0].values, data[1].values, metric, **kwargs)
+                result = bootstrap_metric(
+                    data[0].values,
+                    data[1].values,
+                    metric,
+                    time=data[0]["time"].values,
+                    **kwargs,
+                )
                 scope = "evaluation_domain"
             rows.append(
                 {
@@ -154,14 +174,14 @@ def _bootstrap_rows(
 def _aligned_station_triplets(
     first: dict[str, tuple[xr.DataArray, xr.DataArray]],
     second: dict[str, tuple[xr.DataArray, xr.DataArray]],
-) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
     triplets = []
     for station_id in sorted(first.keys() & second.keys()):
         sim_a, ref_a = first[station_id]
         sim_b, ref_b = second[station_id]
         sim_a, ref_a, sim_b, ref_b = xr.align(sim_a, ref_a, sim_b, ref_b, join="inner")
         if sim_a.sizes.get("time", 0):
-            triplets.append((sim_a.values, sim_b.values, ref_a.values))
+            triplets.append((sim_a.values, sim_b.values, ref_a.values, sim_a["time"].values))
     return triplets
 
 
@@ -218,6 +238,7 @@ def _verdicts(
                             sim_b_data.values,
                             ref_a_data.values,
                             metric,
+                            time=sim_a_data["time"].values,
                             **kwargs,
                         )
                 verdict = verdict_from_reference_differences(

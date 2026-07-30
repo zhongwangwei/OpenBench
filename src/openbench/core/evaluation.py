@@ -582,39 +582,10 @@ class Evaluation_stn(metrics, scores):
         Ensures reference/simulation station series use identical timestamps even when
         source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
         """
-        if not hasattr(data_array, "coords") or "time" not in data_array.coords:
-            return data_array
-
         compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
-        if not compare_res:
-            return data_array
+        from openbench.util.time import normalize_time_coordinate
 
-        try:
-            times = pd.to_datetime(data_array["time"].values)
-        except Exception as err:
-            logging.debug(f"Station time normalization skipped: {err}")
-            return data_array
-
-        if times.size == 0:
-            return data_array
-
-        normalized = None
-        if compare_res in {"day", "d", "1d", "daily"}:
-            normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
-        elif compare_res in {"hour", "h", "1h", "hourly"}:
-            normalized = (times.floor("H") + pd.Timedelta(minutes=30)).values
-        elif compare_res in {"month", "mon", "m", "1m", "monthly"}:
-            normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
-        elif compare_res in {"year", "yr", "y", "1y", "annual", "yearly"}:
-            normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values
-        else:
-            return data_array
-
-        try:
-            data_array = data_array.assign_coords(time=("time", normalized))
-        except Exception as err:
-            logging.debug(f"Failed to assign normalized station times: {err}")
-        return data_array
+        return normalize_time_coordinate(data_array, compare_res)
 
     def _align_station_times(self, s: xr.DataArray, o: xr.DataArray, station_id) -> tuple[xr.DataArray, xr.DataArray]:
         """Align station series exactly first; normalize only as a fallback."""

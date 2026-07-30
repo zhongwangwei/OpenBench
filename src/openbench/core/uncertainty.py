@@ -20,28 +20,102 @@ def derived_seed(seed: int, *parts: object) -> int:
     return int.from_bytes(digest[:8], "big", signed=False)
 
 
-def moving_block_indices(
+def _numeric_time_deltas(time: Any) -> np.ndarray | None:
+    values = np.asarray(time).reshape(-1)
+    deltas = []
+    for earlier, later in zip(values[:-1], values[1:]):
+        try:
+            delta = later - earlier
+            if isinstance(delta, np.timedelta64):
+                value = float(delta / np.timedelta64(1, "ns"))
+            elif hasattr(delta, "total_seconds"):
+                value = float(delta.total_seconds())
+            else:
+                value = float(delta)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        deltas.append(value)
+    return np.asarray(deltas, dtype=float)
+
+
+def _paired_values_and_segments(
+    arrays: Sequence[Any],
+    time: Any | None = None,
+) -> tuple[list[np.ndarray], list[slice]]:
+    values = [np.asarray(array, dtype=float).reshape(-1) for array in arrays]
+    if not values or any(array.size != values[0].size for array in values[1:]):
+        raise ValueError("paired samples must have the same length")
+    if time is not None and np.asarray(time).size != values[0].size:
+        raise ValueError("time coordinates and paired samples must have the same length")
+
+    valid = np.logical_and.reduce([np.isfinite(array) for array in values])
+    valid_positions = np.flatnonzero(valid)
+    filtered = [array[valid] for array in values]
+    if valid_positions.size == 0:
+        return filtered, []
+
+    time_deltas = _numeric_time_deltas(time) if time is not None else None
+    expected_step = None
+    if time_deltas is not None:
+        positive = time_deltas[np.isfinite(time_deltas) & (time_deltas > 0)]
+        if positive.size:
+            expected_step = float(np.median(positive))
+
+    breaks = [0]
+    for compressed_index, (previous, current) in enumerate(zip(valid_positions[:-1], valid_positions[1:]), start=1):
+        discontinuous = current != previous + 1
+        if expected_step is not None:
+            delta = time_deltas[previous]
+            discontinuous = discontinuous or not np.isfinite(delta) or delta <= 0 or delta > expected_step * 1.5
+        if discontinuous:
+            breaks.append(compressed_index)
+    breaks.append(int(valid_positions.size))
+    return filtered, [slice(start, stop) for start, stop in zip(breaks[:-1], breaks[1:]) if stop > start]
+
+
+def segmented_block_indices(
+    segments: Sequence[slice],
     sample_count: int,
     block_length: int,
     rng: np.random.Generator,
-) -> np.ndarray:
-    """Draw circular moving blocks until *sample_count* positions are filled."""
+) -> tuple[np.ndarray, list[int]]:
+    """Draw non-circular blocks without crossing a contiguous-segment boundary."""
     if sample_count <= 0:
         raise ValueError("sample_count must be positive")
     if block_length <= 0:
         raise ValueError("block_length must be positive")
-    block_length = min(block_length, sample_count)
-    starts = rng.integers(0, sample_count, size=math.ceil(sample_count / block_length))
-    return np.concatenate([(start + np.arange(block_length)) % sample_count for start in starts])[:sample_count]
+    usable = [segment for segment in segments if int(segment.stop) > int(segment.start)]
+    if not usable:
+        raise ValueError("at least one non-empty segment is required")
+
+    lengths = np.asarray([int(segment.stop) - int(segment.start) for segment in usable], dtype=float)
+    draw_lengths = np.minimum(lengths, block_length)
+    weights = lengths / draw_lengths
+    probabilities = weights / weights.sum()
+    blocks: list[np.ndarray] = []
+    block_sizes: list[int] = []
+    collected = 0
+    while collected < sample_count:
+        segment = usable[int(rng.choice(len(usable), p=probabilities))]
+        segment_length = int(segment.stop) - int(segment.start)
+        actual_length = min(block_length, segment_length, sample_count - collected)
+        latest_start = int(segment.stop) - actual_length
+        start = int(rng.integers(int(segment.start), latest_start + 1))
+        blocks.append(np.arange(start, start + actual_length))
+        block_sizes.append(actual_length)
+        collected += actual_length
+    return np.concatenate(blocks), block_sizes
+
+
+def _resolved_block_length(sample_count: int, segments: Sequence[slice], requested: int | None) -> int:
+    longest_segment = max((int(segment.stop) - int(segment.start) for segment in segments), default=1)
+    automatic = max(1, round(max(1, sample_count) ** (1 / 3)))
+    return min(requested or automatic, longest_segment)
 
 
 def _paired_values(sim: Any, ref: Any) -> tuple[np.ndarray, np.ndarray]:
-    sim_values = np.asarray(sim, dtype=float).reshape(-1)
-    ref_values = np.asarray(ref, dtype=float).reshape(-1)
-    if sim_values.size != ref_values.size:
-        raise ValueError("simulation and reference samples must have the same length")
-    valid = np.isfinite(sim_values) & np.isfinite(ref_values)
-    return sim_values[valid], ref_values[valid]
+    values, _ = _paired_values_and_segments((sim, ref))
+    return values[0], values[1]
 
 
 def metric_value(metric: str, sim: Any, ref: Any) -> float:
@@ -123,6 +197,7 @@ def _interval_summary(
     n_resamples: int,
     block_length: int,
     method: str,
+    segment_count: int = 1,
 ) -> dict[str, Any]:
     valid = np.asarray(samples, dtype=float)
     valid = valid[np.isfinite(valid)]
@@ -134,6 +209,8 @@ def _interval_summary(
             "upper": None,
             "standard_error": None,
             "sample_count": sample_count,
+            "valid_pair_count": sample_count,
+            "segment_count": segment_count,
             "valid_resamples": int(valid.size),
             "n_resamples": n_resamples,
             "confidence_level": confidence_level,
@@ -148,6 +225,8 @@ def _interval_summary(
         "upper": float(np.quantile(valid, 1 - alpha)),
         "standard_error": float(np.std(valid, ddof=1)),
         "sample_count": sample_count,
+        "valid_pair_count": sample_count,
+        "segment_count": segment_count,
         "valid_resamples": int(valid.size),
         "n_resamples": n_resamples,
         "confidence_level": confidence_level,
@@ -165,11 +244,13 @@ def bootstrap_metric(
     confidence_level: float,
     block_length: int | None,
     seed: int,
+    time: Any | None = None,
 ) -> dict[str, Any]:
-    """Estimate a percentile CI by paired circular moving-block bootstrap."""
-    sim_values, ref_values = _paired_values(sim, ref)
+    """Estimate a percentile CI using paired gap-aware moving blocks."""
+    values, segments = _paired_values_and_segments((sim, ref), time)
+    sim_values, ref_values = values
     sample_count = int(sim_values.size)
-    resolved_block = min(block_length or max(1, round(sample_count ** (1 / 3))), max(1, sample_count))
+    resolved_block = _resolved_block_length(sample_count, segments, block_length)
     if sample_count < MIN_VALID_SAMPLES:
         return _interval_summary(
             math.nan,
@@ -178,13 +259,14 @@ def bootstrap_metric(
             sample_count=sample_count,
             n_resamples=n_resamples,
             block_length=resolved_block,
-            method="moving_block_bootstrap",
+            method="segmented_moving_block_bootstrap",
+            segment_count=len(segments),
         )
 
     rng = np.random.default_rng(seed)
     samples = np.empty(n_resamples, dtype=float)
     for index in range(n_resamples):
-        positions = moving_block_indices(sample_count, resolved_block, rng)
+        positions, _ = segmented_block_indices(segments, sample_count, resolved_block, rng)
         samples[index] = metric_value(metric, sim_values[positions], ref_values[positions])
     return _interval_summary(
         metric_value(metric, sim_values, ref_values),
@@ -193,7 +275,8 @@ def bootstrap_metric(
         sample_count=sample_count,
         n_resamples=n_resamples,
         block_length=resolved_block,
-        method="moving_block_bootstrap",
+        method="segmented_moving_block_bootstrap",
+        segment_count=len(segments),
     )
 
 
@@ -207,17 +290,13 @@ def paired_metric_difference(
     confidence_level: float,
     block_length: int | None,
     seed: int,
+    time: Any | None = None,
 ) -> dict[str, Any]:
     """Bootstrap the quality difference between two simulations against one reference."""
-    a = np.asarray(sim_a, dtype=float).reshape(-1)
-    b = np.asarray(sim_b, dtype=float).reshape(-1)
-    o = np.asarray(ref, dtype=float).reshape(-1)
-    if a.size != b.size or a.size != o.size:
-        raise ValueError("paired model difference inputs must have the same length")
-    valid = np.isfinite(a) & np.isfinite(b) & np.isfinite(o)
-    a, b, o = a[valid], b[valid], o[valid]
+    values, segments = _paired_values_and_segments((sim_a, sim_b, ref), time)
+    a, b, o = values
     sample_count = int(a.size)
-    resolved_block = min(block_length or max(1, round(sample_count ** (1 / 3))), max(1, sample_count))
+    resolved_block = _resolved_block_length(sample_count, segments, block_length)
     if sample_count < MIN_VALID_SAMPLES:
         return _interval_summary(
             math.nan,
@@ -226,7 +305,8 @@ def paired_metric_difference(
             sample_count=sample_count,
             n_resamples=n_resamples,
             block_length=resolved_block,
-            method="paired_moving_block_bootstrap",
+            method="paired_segmented_moving_block_bootstrap",
+            segment_count=len(segments),
         )
 
     def difference(positions: Any = slice(None)) -> float:
@@ -237,7 +317,8 @@ def paired_metric_difference(
     rng = np.random.default_rng(seed)
     samples = np.empty(n_resamples, dtype=float)
     for index in range(n_resamples):
-        samples[index] = difference(moving_block_indices(sample_count, resolved_block, rng))
+        positions, _ = segmented_block_indices(segments, sample_count, resolved_block, rng)
+        samples[index] = difference(positions)
     return _interval_summary(
         difference(),
         samples,
@@ -245,12 +326,13 @@ def paired_metric_difference(
         sample_count=sample_count,
         n_resamples=n_resamples,
         block_length=resolved_block,
-        method="paired_moving_block_bootstrap",
+        method="paired_segmented_moving_block_bootstrap",
+        segment_count=len(segments),
     )
 
 
 def bootstrap_network_metric(
-    station_pairs: Sequence[tuple[Any, Any]],
+    station_pairs: Sequence[tuple[Any, ...]],
     metric: str,
     *,
     n_resamples: int,
@@ -259,9 +341,16 @@ def bootstrap_network_metric(
     seed: int,
 ) -> dict[str, Any]:
     """Bootstrap a station-network mean metric using temporal blocks within stations."""
-    pairs = [_paired_values(sim, ref) for sim, ref in station_pairs]
-    pairs = [(sim, ref) for sim, ref in pairs if sim.size >= MIN_VALID_SAMPLES]
-    sample_count = sum(sim.size for sim, _ in pairs)
+    pairs = []
+    for pair in station_pairs:
+        if len(pair) not in {2, 3}:
+            raise ValueError("station pairs must contain simulation, reference, and optional time")
+        values, segments = _paired_values_and_segments(pair[:2], pair[2] if len(pair) == 3 else None)
+        sim, ref = values
+        if sim.size >= MIN_VALID_SAMPLES:
+            pairs.append((sim, ref, segments, _resolved_block_length(sim.size, segments, block_length)))
+    sample_count = sum(sim.size for sim, _, _, _ in pairs)
+    segment_count = sum(len(segments) for _, _, segments, _ in pairs)
     if not pairs:
         result = _interval_summary(
             math.nan,
@@ -270,7 +359,8 @@ def bootstrap_network_metric(
             sample_count=sample_count,
             n_resamples=n_resamples,
             block_length=block_length or 1,
-            method="station_network_moving_block_bootstrap",
+            method="station_network_segmented_moving_block_bootstrap",
+            segment_count=segment_count,
         )
         result["station_count"] = 0
         return result
@@ -279,27 +369,29 @@ def bootstrap_network_metric(
     samples = np.empty(n_resamples, dtype=float)
     for index in range(n_resamples):
         station_values = []
-        for sim, ref in pairs:
-            resolved_block = min(block_length or max(1, round(sim.size ** (1 / 3))), sim.size)
-            positions = moving_block_indices(sim.size, resolved_block, rng)
+        for sim, ref, segments, resolved_block in pairs:
+            positions, _ = segmented_block_indices(segments, sim.size, resolved_block, rng)
             station_values.append(metric_value(metric, sim[positions], ref[positions]))
         samples[index] = _finite_mean(station_values)
 
+    resolved_blocks = [resolved for _, _, _, resolved in pairs]
     result = _interval_summary(
-        _finite_mean([metric_value(metric, sim, ref) for sim, ref in pairs]),
+        _finite_mean([metric_value(metric, sim, ref) for sim, ref, _, _ in pairs]),
         samples,
         confidence_level=confidence_level,
         sample_count=sample_count,
         n_resamples=n_resamples,
-        block_length=block_length or 0,
-        method="station_network_moving_block_bootstrap",
+        block_length=max(resolved_blocks),
+        method="station_network_segmented_moving_block_bootstrap",
+        segment_count=segment_count,
     )
     result["station_count"] = len(pairs)
+    result["minimum_block_length"] = min(resolved_blocks)
     return result
 
 
 def paired_network_metric_difference(
-    station_triplets: Sequence[tuple[Any, Any, Any]],
+    station_triplets: Sequence[tuple[Any, ...]],
     metric: str,
     *,
     n_resamples: int,
@@ -309,17 +401,16 @@ def paired_network_metric_difference(
 ) -> dict[str, Any]:
     """Bootstrap a paired station-network quality difference."""
     triplets = []
-    for sim_a, sim_b, ref in station_triplets:
-        a = np.asarray(sim_a, dtype=float).reshape(-1)
-        b = np.asarray(sim_b, dtype=float).reshape(-1)
-        o = np.asarray(ref, dtype=float).reshape(-1)
-        if a.size != b.size or a.size != o.size:
-            raise ValueError("paired station inputs must have the same length")
-        valid = np.isfinite(a) & np.isfinite(b) & np.isfinite(o)
-        if np.count_nonzero(valid) >= MIN_VALID_SAMPLES:
-            triplets.append((a[valid], b[valid], o[valid]))
+    for triplet in station_triplets:
+        if len(triplet) not in {3, 4}:
+            raise ValueError("station triplets must contain two simulations, reference, and optional time")
+        values, segments = _paired_values_and_segments(triplet[:3], triplet[3] if len(triplet) == 4 else None)
+        a, b, o = values
+        if a.size >= MIN_VALID_SAMPLES:
+            triplets.append((a, b, o, segments, _resolved_block_length(a.size, segments, block_length)))
 
-    sample_count = sum(a.size for a, _, _ in triplets)
+    sample_count = sum(a.size for a, _, _, _, _ in triplets)
+    segment_count = sum(len(segments) for _, _, _, segments, _ in triplets)
     if not triplets:
         result = _interval_summary(
             math.nan,
@@ -328,18 +419,18 @@ def paired_network_metric_difference(
             sample_count=sample_count,
             n_resamples=n_resamples,
             block_length=block_length or 1,
-            method="paired_station_network_moving_block_bootstrap",
+            method="paired_station_network_segmented_moving_block_bootstrap",
+            segment_count=segment_count,
         )
         result["station_count"] = 0
         return result
 
     def network_difference(resample: bool, rng: np.random.Generator | None = None) -> float:
         station_values = []
-        for a, b, o in triplets:
+        for a, b, o, segments, resolved_block in triplets:
             positions: Any = slice(None)
             if resample:
-                resolved_block = min(block_length or max(1, round(a.size ** (1 / 3))), a.size)
-                positions = moving_block_indices(a.size, resolved_block, rng)
+                positions, _ = segmented_block_indices(segments, a.size, resolved_block, rng)
             station_values.append(
                 quality_value(metric, metric_value(metric, a[positions], o[positions]))
                 - quality_value(metric, metric_value(metric, b[positions], o[positions]))
@@ -348,16 +439,19 @@ def paired_network_metric_difference(
 
     rng = np.random.default_rng(seed)
     samples = [network_difference(True, rng) for _ in range(n_resamples)]
+    resolved_blocks = [resolved for _, _, _, _, resolved in triplets]
     result = _interval_summary(
         network_difference(False),
         samples,
         confidence_level=confidence_level,
         sample_count=sample_count,
         n_resamples=n_resamples,
-        block_length=block_length or 0,
-        method="paired_station_network_moving_block_bootstrap",
+        block_length=max(resolved_blocks),
+        method="paired_station_network_segmented_moving_block_bootstrap",
+        segment_count=segment_count,
     )
     result["station_count"] = len(triplets)
+    result["minimum_block_length"] = min(resolved_blocks)
     return result
 
 

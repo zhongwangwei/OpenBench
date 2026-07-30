@@ -16,6 +16,8 @@ def test_report_includes_uncertainty_summary(tmp_path):
                         "simulation": "ModelA",
                         "metric": "RMSE",
                         "scope": "station_network",
+                        "valid_pair_count": 240,
+                        "segment_count": 2,
                         "status": "available",
                         "estimate": 1.2,
                         "lower": 0.8,

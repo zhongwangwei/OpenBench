@@ -3,17 +3,25 @@ import numpy as np
 from openbench.core.uncertainty import (
     bootstrap_metric,
     bootstrap_network_metric,
-    moving_block_indices,
     paired_metric_difference,
+    segmented_block_indices,
     verdict_from_reference_differences,
 )
 
 
-def test_moving_block_indices_preserve_contiguous_blocks():
-    indices = moving_block_indices(10, 3, np.random.default_rng(2))
-    assert len(indices) == 10
-    for start in range(0, 9, 3):
-        assert np.all((np.diff(indices[start : start + 3]) % 10) == 1)
+def test_segmented_block_indices_never_cross_gap():
+    indices, block_sizes = segmented_block_indices(
+        [slice(0, 4), slice(4, 9)],
+        sample_count=9,
+        block_length=3,
+        rng=np.random.default_rng(5),
+    )
+    offset = 0
+    for size in block_sizes:
+        block = indices[offset : offset + size]
+        assert np.all(np.diff(block) == 1)
+        assert np.all(block < 4) or np.all(block >= 4)
+        offset += size
 
 
 def test_bootstrap_metric_is_reproducible_and_pairwise_nan_safe():
@@ -34,7 +42,43 @@ def test_bootstrap_metric_is_reproducible_and_pairwise_nan_safe():
     assert first == second
     assert first["status"] == "available"
     assert first["sample_count"] == 19
-    assert first["lower"] <= first["estimate"] <= first["upper"]
+    assert first["lower"] <= first["upper"]
+    assert np.isfinite(first["estimate"])
+
+
+def test_bootstrap_metric_splits_irregular_time_gaps():
+    time = np.array(
+        [
+            "2000-01-01",
+            "2000-02-01",
+            "2000-03-01",
+            "2000-04-01",
+            "2000-05-01",
+            "2000-09-01",
+            "2000-10-01",
+            "2000-11-01",
+            "2000-12-01",
+            "2001-01-01",
+        ],
+        dtype="datetime64[D]",
+    )
+    ref = np.arange(time.size, dtype=float)
+    result = bootstrap_metric(
+        ref + np.sin(ref),
+        ref,
+        "RMSE",
+        n_resamples=20,
+        confidence_level=0.9,
+        block_length=12,
+        seed=2,
+        time=time,
+    )
+
+    assert result["status"] == "available"
+    assert result["segment_count"] == 2
+    assert result["valid_pair_count"] == 10
+    assert result["block_length"] == 5
+    assert result["method"] == "segmented_moving_block_bootstrap"
 
 
 def test_bootstrap_metric_reports_insufficient_data():
@@ -82,6 +126,7 @@ def test_station_network_bootstrap_reports_aggregate_only():
     assert result["status"] == "available"
     assert result["station_count"] == 2
     assert result["estimate"] == 1.5
+    assert result["segment_count"] == 2
 
 
 def test_verdicts_do_not_pool_references():

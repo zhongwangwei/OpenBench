@@ -1618,7 +1618,7 @@ class ReportGenerator:
     {% if uncertainty %}
     <div class="section" id="uncertainty">
         <h2>Uncertainty-aware Evaluation</h2>
-        <p>Confidence intervals use paired moving-block bootstrap resampling. Model spread and reference sensitivity are reported as separate axes.</p>
+        <p>Confidence intervals use paired, gap-aware moving-block bootstrap resampling. Model spread and reference sensitivity are reported as separate axes.</p>
 
         {% if uncertainty.bootstrap %}
         <h3>Aggregate Metric Confidence Intervals</h3>
@@ -1626,7 +1626,8 @@ class ReportGenerator:
             <thead>
                 <tr>
                     <th>Variable</th><th>Reference</th><th>Simulation</th><th>Metric</th>
-                    <th>Scope</th><th>Estimate</th><th>Confidence Interval</th><th>Status</th>
+                    <th>Scope</th><th>Valid pairs</th><th>Segments</th>
+                    <th>Estimate</th><th>Confidence Interval</th><th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -1634,6 +1635,7 @@ class ReportGenerator:
                 <tr>
                     <td>{{ row.variable }}</td><td>{{ row.reference }}</td><td>{{ row.simulation }}</td>
                     <td>{{ row.metric }}</td><td>{{ row.scope }}</td>
+                    <td>{{ row.valid_pair_count }}</td><td>{{ row.segment_count }}</td>
                     {% if row.status == 'available' %}
                     <td>{{ "%.4g"|format(row.estimate) }}</td>
                     <td>[{{ "%.4g"|format(row.lower) }}, {{ "%.4g"|format(row.upper) }}]</td>

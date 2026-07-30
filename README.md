@@ -318,7 +318,9 @@ uncertainty:
 the configured evaluation domain (or station network); OpenBench does not create
 per-grid-cell/per-station intervals. Model spread holds the reference fixed,
 reference sensitivity holds the simulation fixed, and the two axes are never
-pooled into a grand ensemble.
+pooled into a grand ensemble. Time-series bootstrap blocks are sampled only
+within contiguous paired-data segments, so they never bridge missing or
+irregular time gaps.
 
 ### Key `project` options
 

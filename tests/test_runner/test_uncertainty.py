@@ -38,6 +38,7 @@ def _cfg(tmp_path: Path, simulations: list[str], references: list[str]) -> OpenB
 
 def _bindings(simulations: list[str], references: list[str], data_type: str) -> SimpleNamespace:
     return SimpleNamespace(
+        runner_cfg=SimpleNamespace(general={"compare_tim_res": "Month"}),
         namelists=SimpleNamespace(
             reference={
                 "Flow": {
@@ -70,7 +71,7 @@ def test_grid_uncertainty_outputs_keep_model_and_reference_axes_separate(tmp_pat
     simulations = ["A", "B"]
     references = ["R1", "R2"]
     bindings = _bindings(simulations, references, "grid")
-    time = np.arange(20)
+    time = np.concatenate([np.arange(10), np.arange(20, 30)])
     coords = {"time": time, "lat": [0.0, 10.0], "lon": [100.0, 110.0]}
     shape = (20, 2, 2)
     for name, value in {"A": 0.1, "B": 2.0}.items():
@@ -102,6 +103,7 @@ def test_grid_uncertainty_outputs_keep_model_and_reference_axes_separate(tmp_pat
     assert errors == []
     summary = json.loads((output / "uncertainty" / "summary.json").read_text())
     assert len(summary["bootstrap"]) == 4
+    assert all(row["segment_count"] == 2 for row in summary["bootstrap"])
     assert summary["verdicts"][0]["status"] == "reference_sensitive"
     assert len(summary["products"]["model_spread"]) == 2
     assert len(summary["products"]["reference_sensitivity"]) == 2
@@ -116,15 +118,21 @@ def test_station_uncertainty_writes_network_bootstrap_and_csv_products(tmp_path)
     (output / "metrics").mkdir(parents=True)
     simulations = ["A", "B"]
     bindings = _bindings(simulations, ["R"], "stn")
-    time = np.arange(20)
+    sim_time = pd.date_range("2000-01-31", periods=20, freq="ME")
+    ref_time = pd.date_range("2000-01-01", periods=20, freq="MS") + pd.Timedelta(days=14)
     for simulation, offsets in {"A": [0.5, 1.0], "B": [1.5, 2.0]}.items():
         folder = output / "data" / f"stn_R_{simulation}"
         folder.mkdir(parents=True)
         for station, offset in zip(["one", "two"], offsets):
-            xr.DataArray(np.arange(20) + offset, coords={"time": time}, dims="time", name="flow").to_netcdf(
+            xr.DataArray(
+                np.arange(20) + offset,
+                coords={"time": sim_time},
+                dims="time",
+                name="flow",
+            ).to_netcdf(
                 folder / f"Flow_sim_{station}_2000_2001.nc"
             )
-            xr.DataArray(np.arange(20), coords={"time": time}, dims="time", name="flow").to_netcdf(
+            xr.DataArray(np.arange(20), coords={"time": ref_time}, dims="time", name="flow").to_netcdf(
                 folder / f"Flow_ref_{station}_2000_2001.nc"
             )
         pd.DataFrame({"ID": ["one", "two"], "RMSE": offsets}).to_csv(
