@@ -203,8 +203,10 @@ class ConfigManager:
         statistics = {name: True for name in ((config.get("statistics") or {}).get("items") or [])}
 
         ref_general: Dict[str, Any] = {}
+        ref_metadata: Dict[str, Any] = {}
         if reference.get("data_root"):
             ref_general["data_root"] = reference["data_root"]
+            ref_metadata["_data_root_explicit"] = True
         ref_sources = reference.get("sources") if isinstance(reference.get("sources"), dict) else reference
         for var in variables:
             if var in ref_sources:
@@ -252,7 +254,7 @@ class ConfigManager:
             "scores": scores,
             "comparisons": comparisons,
             "statistics": statistics,
-            "ref_data": {"general": ref_general, "def_nml": {}},
+            "ref_data": {"general": ref_general, "def_nml": {}, **ref_metadata},
             "sim_data": {
                 "general": sim_general,
                 "def_nml": {},
@@ -632,7 +634,7 @@ class ConfigManager:
         Maps the legacy internal dict format to the new schema:
           general.*        → project.*
           evaluation_items → evaluation.variables
-          ref_data         → reference (data_root + source names)
+          ref_data         → reference (explicit data_root override + source names)
           sim_data         → simulation (_defaults + entries)
           metrics/scores   → metrics/scores (lists)
           comparisons      → comparison.items
@@ -735,9 +737,10 @@ class ConfigManager:
         ref_data = config.get("ref_data", {})
         ref_general = ref_data.get("general", {})
 
-        # data_root
+        # ``_scan_root`` is GUI-only. Export data_root only when it came from
+        # an explicit unified-config override, never from the scan text box.
         data_root = ref_general.get("data_root", "")
-        if data_root:
+        if data_root and ref_data.get("_data_root_explicit"):
             reference["data_root"] = _maybe_transform_path(data_root)
 
         for var in variables:

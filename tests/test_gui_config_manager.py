@@ -85,9 +85,9 @@ def _runnable_config(tmp_path):
         "evaluation_items": {"Evapotranspiration": True},
         "ref_data": {
             "general": {
-                "data_root": "Reference",
                 "Evapotranspiration_ref_source": "ET_Xu_etal_2025_LowRes",
-            }
+            },
+            "_scan_root": "Reference",
         },
         "sim_data": {
             "general": {"Evapotranspiration_sim_source": ["CaseA"]},
@@ -114,6 +114,7 @@ def test_generate_config_yaml_preserves_exact_reference_source_names(tmp_path):
     data = yaml.safe_load(ConfigManager().generate_config_yaml(_runnable_config(tmp_path)))
 
     assert data["reference"]["Evapotranspiration"] == "ET_Xu_etal_2025_LowRes"
+    assert "data_root" not in data["reference"]
 
 
 def test_generate_config_yaml_preserves_gui_default_min_year_and_none_weight(tmp_path):
@@ -251,8 +252,73 @@ def test_generate_config_yaml_remote_case_dir_overrides_output_and_transforms_pa
     )
 
     assert data["project"]["output_dir"] == "/remote/output"
-    assert data["reference"]["data_root"] == "/remote/project/Reference"
+    assert "data_root" not in data["reference"]
     assert data["simulation"]["CaseA"]["root_dir"] == "/remote/project/Simulation/CaseA"
+
+
+def test_generate_config_yaml_preserves_explicit_reference_root_override(tmp_path):
+    config = _runnable_config(tmp_path)
+    config["ref_data"]["general"]["data_root"] = "Reference/Grid/MidRes"
+    config["ref_data"]["_data_root_explicit"] = True
+
+    data = yaml.safe_load(
+        ConfigManager().generate_config_yaml(
+            config,
+            path_transform=lambda path: f"/remote/project/{path.strip('/')}",
+        )
+    )
+
+    assert data["reference"]["data_root"] == "/remote/project/Reference/Grid/MidRes"
+
+
+def test_generate_config_yaml_ignores_unmarked_legacy_scan_root(tmp_path):
+    config = _runnable_config(tmp_path)
+    config["ref_data"]["general"]["data_root"] = "Reference"
+
+    data = yaml.safe_load(ConfigManager().generate_config_yaml(config))
+
+    assert "data_root" not in data["reference"]
+
+
+def test_gui_era5land_scan_root_does_not_hide_registered_resolution_root(tmp_path, monkeypatch):
+    from openbench.cli.check import _reference_data_findings
+    from openbench.config.loader import _build_config
+    from openbench.config.resolver import resolve_all_references
+    from openbench.data.registry import RegistryManager
+    from openbench.data.registry.manager import clear_registry_cache
+
+    reference_root = tmp_path / "Reference"
+    data_dir = reference_root / "Grid" / "MidRes" / "Heat" / "Latent_Heat" / "ERA5LAND"
+    data_dir.mkdir(parents=True)
+    (data_dir / "ERA5LAND_2003.nc").touch()
+    monkeypatch.setenv("OPENBENCH_REF_ROOT", str(reference_root))
+
+    config = _runnable_config(tmp_path)
+    config["general"]["compare_tim_res"] = "Day"
+    config["general"]["compare_grid_res"] = 0.25
+    config["evaluation_items"] = {"Latent_Heat": True}
+    config["ref_data"] = {
+        "general": {"Latent_Heat_ref_source": "ERA5LAND_MidRes"},
+        "_scan_root": str(reference_root),
+    }
+    config["sim_data"]["general"] = {"Latent_Heat_sim_source": ["CaseA"]}
+    config["sim_data"]["source_configs"]["CaseA"]["general"].update(
+        {"tim_res": "Day", "grid_res": 0.25}
+    )
+
+    exported = yaml.safe_load(ConfigManager().generate_config_yaml(config))
+    assert "data_root" not in exported["reference"]
+
+    clear_registry_cache()
+    try:
+        cfg = _build_config(exported)
+        (resolved,) = resolve_all_references(cfg, RegistryManager())
+        errors, _, info = _reference_data_findings(cfg, resolved)
+    finally:
+        clear_registry_cache()
+
+    assert errors == []
+    assert info == [f"effective root: {reference_root / 'Grid' / 'MidRes'}"]
 
 
 def test_unified_config_converts_to_gui_internal_shape():
@@ -293,6 +359,7 @@ def test_unified_config_converts_to_gui_internal_shape():
     assert gui_config["general"]["Climate_zone_groupby"] is True
     assert gui_config["evaluation_items"] == {"Evapotranspiration": True}
     assert gui_config["ref_data"]["general"]["data_root"] == "/ref"
+    assert gui_config["ref_data"]["_data_root_explicit"] is True
     assert gui_config["ref_data"]["general"]["Evapotranspiration_ref_source"] == ["GLEAM", "ERA5LAND"]
     assert gui_config["sim_data"]["general"]["Evapotranspiration_sim_source"] == ["CaseA"]
     assert gui_config["sim_data"]["source_configs"]["CaseA"]["general"]["model"] == "CoLM2024"
@@ -300,6 +367,9 @@ def test_unified_config_converts_to_gui_internal_shape():
     assert gui_config["scores"] == {"Overall_Score": True}
     assert gui_config["comparisons"] == {"Taylor_Diagram": True}
     assert gui_config["statistics"] == {"ANOVA": True}
+
+    round_tripped = yaml.safe_load(ConfigManager().generate_config_yaml(gui_config))
+    assert round_tripped["reference"]["data_root"] == "/ref"
 
 
 def test_generate_config_yaml_preserves_simulation_variables_and_fulllist(tmp_path):

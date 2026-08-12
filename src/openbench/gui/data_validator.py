@@ -519,6 +519,7 @@ class DataValidator:
         remote_openbench_root: str = "",
         python_path: str = "",
         conda_env: str = "",
+        reference_data_root: str = "",
     ):
         """Initialize validator.
 
@@ -529,10 +530,12 @@ class DataValidator:
             remote_openbench_root: Remote OpenBench root path (for remote mode)
             python_path: Python interpreter path for remote execution
             conda_env: Conda environment name for remote execution
+            reference_data_root: Explicit runtime override for grid reference roots
         """
         self._is_remote = is_remote
         self._ssh_manager = ssh_manager
         self._remote_openbench_root = remote_openbench_root
+        self._reference_data_root = reference_data_root
         self.last_error: str | None = None
 
         if is_remote and ssh_manager:
@@ -568,6 +571,8 @@ class DataValidator:
         varname = var_config.get("varname") or source_config.get("varname", "")
         data_groupby = general.get("data_groupby", "Year")
         data_type = general.get("data_type", "grid")
+        if data_type != "stn" and self._reference_data_root:
+            root_dir = self._reference_data_root
 
         # Use source-specific years if available, otherwise general config.
         # source_config is shaped {"general": {...}, "varname": ..., ...} so

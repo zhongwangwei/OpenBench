@@ -307,7 +307,7 @@ def test_remote_ref_browse_routes_through_shared_browse_directory(monkeypatch):
         monkeypatch, "page_ref_data", "PageRefData", "data_root_input", "_browse_data_root"
     )
 
-    assert captured.get("args") == (controller, "Select Reference Data Root", "/old/value")
+    assert captured.get("args") == (controller, "Select Reference Scan Root", "/old/value")
     assert text == "/remote/picked"
 
 
