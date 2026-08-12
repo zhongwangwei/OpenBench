@@ -15,6 +15,7 @@ Internal data structure:
 """
 
 import logging
+import posixpath
 from typing import Dict, Any
 
 from PySide6.QtWidgets import (
@@ -48,12 +49,11 @@ from openbench.gui.path_utils import get_remote_ssh_manager
 
 
 def _infer_ref_data_root(general_section, selected_vars) -> str:
-    """Fallback scan root when the loaded config has no reference.data_root.
+    """Fallback scan root when the GUI has no persisted ``_scan_root``.
 
-    CLI-generated openbench.yaml files usually omit data_root (sources are
-    resolved through the registry), so derive the common parent of the
-    selected sources' registry root_dir entries instead of leaving the
-    scan field empty after loading a config.
+    Runtime configs normally resolve sources through the registry, so derive
+    the directory accepted by ``openbench ref scan`` from the selected
+    sources' registry roots instead of leaving the scan field empty.
     """
     try:
         from openbench.data.registry.manager import get_registry
@@ -75,7 +75,26 @@ def _infer_ref_data_root(general_section, selected_vars) -> str:
             root_dir = getattr(dataset, "root_dir", "") if dataset else ""
             if root_dir:
                 roots.append(str(root_dir))
-    from openbench.gui.path_utils import infer_common_scan_root
+    from openbench.gui.path_utils import infer_common_scan_root, to_posix_path
+
+    # Registry roots sit below the directory accepted by ``openbench ref scan``
+    # (for example, Reference/Grid/MidRes). Strip that hierarchy first.
+    scan_roots = []
+    for root in roots:
+        parts = to_posix_path(root).rstrip("/").split("/")
+        marker_index = next(
+            (index for index, part in enumerate(parts) if part.lower() in {"grid", "station"}),
+            None,
+        )
+        if marker_index is None:
+            break
+        scan_roots.append("/".join(parts[:marker_index]) or "/")
+    else:
+        if scan_roots:
+            try:
+                return posixpath.commonpath(scan_roots)
+            except ValueError:
+                pass
 
     return infer_common_scan_root(roots)
 
@@ -91,11 +110,11 @@ class PageRefData(BasePage):
     def _setup_content(self):
         """Setup page content."""
         # === Data Root + Scan Controls ===
-        scan_group = QGroupBox("Reference Data Root")
+        scan_group = QGroupBox("Reference Scan Root")
         scan_layout = QHBoxLayout(scan_group)
 
         self.data_root_input = QLineEdit()
-        self.data_root_input.setPlaceholderText("Reference data root directory (e.g., /Volumes/work/Reference)")
+        self.data_root_input.setPlaceholderText("Directory to scan for reference datasets (e.g., /Volumes/work/Reference)")
         # Try to pre-fill from environment or common paths
         import os
 
@@ -243,7 +262,7 @@ class PageRefData(BasePage):
     def _browse_data_root(self):
         """Browse for reference data root directory."""
         path = browse_directory(
-            self.controller, self, "Select Reference Data Root", self.data_root_input.text().strip()
+            self.controller, self, "Select Reference Scan Root", self.data_root_input.text().strip()
         )
         if path:
             self.data_root_input.setText(path)
@@ -627,14 +646,14 @@ class PageRefData(BasePage):
         def_nml = ref_data.get("def_nml", {})
         saved_source_configs = ref_data.get("source_configs", {})
 
-        # Restore the data root text box from the persisted general
-        # section so reloading a project doesn't lose the user's path.
-        # CLI configs carry no data_root, so fall back to the common parent
-        # of the selected sources' registry directories.
-        saved_data_root = general_section.get("data_root", "")
+        # The scan root is GUI-only state. Runtime ``reference.data_root`` is
+        # a separate explicit override and must not be inferred from this box.
+        saved_data_root = ref_data.get("_scan_root", "")
         if not saved_data_root:
             eval_items_cfg = self.controller.config.get("evaluation_items", {})
             saved_data_root = _infer_ref_data_root(general_section, [k for k, v in eval_items_cfg.items() if v])
+        if not saved_data_root and ref_data.get("_data_root_explicit"):
+            saved_data_root = general_section.get("data_root", "")
         if saved_data_root:
             self.data_root_input.setText(saved_data_root)
 
@@ -826,10 +845,15 @@ class PageRefData(BasePage):
         ``ref_data["general"]["{var}_ref_source"]``.
         """
         existing_ref_data = self.controller.config.get("ref_data", {})
+        explicit_data_root = (
+            existing_ref_data.get("general", {}).get("data_root", "")
+            if existing_ref_data.get("_data_root_explicit")
+            else ""
+        )
         preserved = {
             key: value
             for key, value in existing_ref_data.items()
-            if key not in {"general", "def_nml", "source_configs"}
+            if key not in {"general", "def_nml", "source_configs", "_scan_root", "_data_root_explicit"}
         }
         existing_general = existing_ref_data.get("general", {})
         general = {
@@ -837,6 +861,8 @@ class PageRefData(BasePage):
             for key, value in existing_general.items()
             if key != "data_root" and not key.endswith("_ref_source")
         }
+        if explicit_data_root:
+            general["data_root"] = explicit_data_root
         def_nml = {}
         source_configs = {}
 
@@ -857,16 +883,13 @@ class PageRefData(BasePage):
                 source_configs[compound_key] = source_data.copy()
                 source_configs[compound_key]["_var_name"] = var_name
 
-        # Persist the reference data root so it survives a reload. The
-        # text box is the user's primary anchor for browsing/scanning;
-        # losing it on save makes the page look blank on reopen.
-        general["data_root"] = self.data_root_input.text().strip()
-
         ref_data = {
             **preserved,
             "general": general,
             "def_nml": def_nml,
             "source_configs": source_configs,
+            "_scan_root": self.data_root_input.text().strip(),
+            **({"_data_root_explicit": True} if explicit_data_root else {}),
         }
         self.controller.update_section("ref_data", ref_data)
 
@@ -964,12 +987,17 @@ class PageRefData(BasePage):
         is_remote = bool(context)
 
         # Create validator
+        ref_data = self.controller.config.get("ref_data", {})
+        reference_data_root = (
+            ref_data.get("general", {}).get("data_root", "") if ref_data.get("_data_root_explicit") else ""
+        )
         validator = DataValidator(
             is_remote=is_remote,
             ssh_manager=context.get("ssh_manager"),
             remote_openbench_root=context.get("openbench_path", ""),
             python_path=context.get("python_path", ""),
             conda_env=context.get("conda_env", ""),
+            reference_data_root=reference_data_root,
         )
 
         # Show progress dialog

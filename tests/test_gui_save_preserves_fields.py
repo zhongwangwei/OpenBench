@@ -91,7 +91,7 @@ def test_sim_data_save_preserves_unknown_top_level_metadata():
     assert controller.config["sim_data"]["general"] == {"Runoff_sim_source": ["CaseA"]}
 
 
-def test_ref_data_save_preserves_general_metadata_and_top_level_metadata():
+def test_ref_data_save_migrates_legacy_scan_root_without_export_override():
     controller = FakeController(
         {
             "general": {"basedir": "/out"},
@@ -123,10 +123,44 @@ def test_ref_data_save_preserves_general_metadata_and_top_level_metadata():
     ref_data = controller.config["ref_data"]
     assert ref_data["_schema_version"] == 2
     assert ref_data["general"]["strict_reference"] is True
-    assert ref_data["general"]["data_root"] == "/new/ref"
+    assert "data_root" not in ref_data["general"]
+    assert ref_data["_scan_root"] == "/new/ref"
     assert ref_data["general"]["Runoff_ref_source"] == "NewRef"
     assert ref_data["source_configs"]["Runoff::NewRef"]["_var_name"] == "Runoff"
     assert controller.synced is True
+
+
+def test_ref_data_save_preserves_explicit_runtime_override_separately_from_scan_root():
+    controller = FakeController(
+        {
+            "general": {"basedir": "/out"},
+            "ref_data": {
+                "_data_root_explicit": True,
+                "general": {
+                    "data_root": "/runtime/override",
+                    "Runoff_ref_source": "Ref",
+                },
+            },
+        }
+    )
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("/scan/root")
+    page._source_configs = {
+        "Runoff": {
+            "Ref": {
+                "general": {"root_dir": "/registered/root"},
+                "varname": "q",
+            }
+        }
+    }
+
+    page.save_to_config()
+
+    ref_data = controller.config["ref_data"]
+    assert ref_data["general"]["data_root"] == "/runtime/override"
+    assert ref_data["_data_root_explicit"] is True
+    assert ref_data["_scan_root"] == "/scan/root"
 
 
 def test_general_save_preserves_runtime_local_openbench_path():

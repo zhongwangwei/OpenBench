@@ -107,7 +107,8 @@ def test_ref_page_data_root_inferred_from_registry(monkeypatch):
 
     class FakeRegistry:
         def get_reference(self, name):
-            return SimpleNamespace(root_dir=f"/vol/Reference/Grid/{name}")
+            resolution = "LowRes" if name == "GLEAM" else "MidRes"
+            return SimpleNamespace(root_dir=f"/vol/Reference/Grid/{resolution}")
 
     import openbench.data.registry.manager as manager_module
 
@@ -118,7 +119,53 @@ def test_ref_page_data_root_inferred_from_registry(monkeypatch):
         ["Evapotranspiration", "Albedo"],
     )
 
-    assert inferred == "/vol/Reference/Grid"
+    assert inferred == "/vol/Reference"
+
+
+def test_ref_page_data_root_inferred_from_windows_registry_tree(monkeypatch):
+    from openbench.gui.pages import page_ref_data
+
+    class FakeRegistry:
+        def get_reference(self, _name):
+            return SimpleNamespace(root_dir="G:/Cases_for_openbench/Reference/Grid/MidRes")
+
+    import openbench.data.registry.manager as manager_module
+
+    monkeypatch.setattr(manager_module, "get_registry", lambda: FakeRegistry())
+
+    inferred = page_ref_data._infer_ref_data_root(
+        {"Latent_Heat_ref_source": "ERA5LAND_MidRes"},
+        ["Latent_Heat"],
+    )
+
+    assert inferred == "G:/Cases_for_openbench/Reference"
+
+
+def test_gui_reference_validation_uses_explicit_runtime_root(tmp_path):
+    from openbench.gui.data_validator import DataValidator
+
+    registered_root = tmp_path / "registered" / "Grid" / "MidRes"
+    override_root = tmp_path / "override" / "Grid" / "MidRes"
+    sub_dir = "Heat/Latent_Heat/ERA5LAND"
+    data_dir = override_root / sub_dir
+    data_dir.mkdir(parents=True)
+    (data_dir / "ERA5LAND_2003.nc").touch()
+
+    result = DataValidator(reference_data_root=str(override_root)).validate_source(
+        "Latent_Heat",
+        "ERA5LAND_MidRes",
+        {
+            "general": {"root_dir": str(registered_root), "data_type": "grid", "data_groupby": "Year"},
+            "sub_dir": sub_dir,
+            "prefix": "ERA5LAND_",
+            "varname": "slhf",
+        },
+        {"syear": 2003, "eyear": 2003},
+    )
+
+    file_check = next(check for check in result.checks if check.name == "file_exists")
+    assert file_check.passed is True
+    assert str(override_root) in file_check.message
 
 
 # ---------------------------------------------------------------------------
