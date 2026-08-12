@@ -114,7 +114,9 @@ class PageRefData(BasePage):
         scan_layout = QHBoxLayout(scan_group)
 
         self.data_root_input = QLineEdit()
-        self.data_root_input.setPlaceholderText("Directory to scan for reference datasets (e.g., /Volumes/work/Reference)")
+        self.data_root_input.setPlaceholderText(
+            "Directory to scan for reference datasets (e.g., /Volumes/work/Reference)"
+        )
         # Try to pre-fill from environment or common paths
         import os
 
