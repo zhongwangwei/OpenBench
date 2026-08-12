@@ -302,9 +302,7 @@ def test_gui_era5land_scan_root_does_not_hide_registered_resolution_root(tmp_pat
         "_scan_root": str(reference_root),
     }
     config["sim_data"]["general"] = {"Latent_Heat_sim_source": ["CaseA"]}
-    config["sim_data"]["source_configs"]["CaseA"]["general"].update(
-        {"tim_res": "Day", "grid_res": 0.25}
-    )
+    config["sim_data"]["source_configs"]["CaseA"]["general"].update({"tim_res": "Day", "grid_res": 0.25})
 
     exported = yaml.safe_load(ConfigManager().generate_config_yaml(config))
     assert "data_root" not in exported["reference"]
