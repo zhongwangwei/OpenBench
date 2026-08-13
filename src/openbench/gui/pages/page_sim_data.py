@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -223,16 +224,76 @@ def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
     return _remote_detect_case_pattern(ssh_manager, case_dir)[0]
 
 
-def _remote_list_child_dirs(ssh_manager, root: str) -> list[str]:
+def _remote_list_dirs(ssh_manager, root: str, max_depth: int = 5) -> list[str]:
     quoted = quote_remote_path(root)
     stdout, _, exit_code = execute_responsive(
         ssh_manager,
-        f"find {quoted} -mindepth 1 -maxdepth 1 -type d -print | sort",
+        f"find {quoted} -mindepth 0 -maxdepth {int(max_depth)} -type d -print | sort",
         timeout=30,
     )
     if exit_code != 0:
         return []
     return [line.strip() for line in stdout.splitlines() if line.strip()]
+
+
+def _model_from_case_label(label: str, model_names: List[str]) -> str:
+    """Match an exact case label to a registered model without guessing."""
+    try:
+        from openbench.data.registry.manager import canonical_model_key
+
+        label_key = canonical_model_key(label)
+        for name in model_names:
+            if canonical_model_key(name) == label_key:
+                return name
+    except Exception:
+        pass
+    return ""
+
+
+def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
+    """Use the shared CLI scanner so GUI discovery follows the same rules."""
+    from openbench.data.sim_scanner import scan_simulation_roots
+
+    result = scan_simulation_roots([root], model_name="auto")
+    discovered: List[tuple] = []
+    case_meta: Dict[str, Dict[str, Any]] = {}
+    for scanned in result.cases:
+        nc_dir = str(scanned.root_dir)
+        files = [os.path.basename(str(path)) for path in _glob_nc_local(nc_dir)]
+        detected_prefix, detected_suffix, multi_stream = _case_file_patterns(files)
+        prefix = detected_prefix if multi_stream else (scanned.prefix or detected_prefix)
+        suffix = detected_suffix if multi_stream else (scanned.suffix or detected_suffix)
+        overrides = dict(scanned.variable_overrides or {})
+        multi_stream = multi_stream or not _case_prefix_is_safe(prefix, suffix, overrides)
+        model = "" if scanned.model == "UNRESOLVED" else scanned.model
+        discovered.append((scanned.label, nc_dir, prefix))
+        case_meta[scanned.label] = {
+            "files": files,
+            "suffix": suffix,
+            "multi_stream": multi_stream,
+            "model": model,
+            "variables": list(scanned.variables or []),
+            "variable_overrides": overrides,
+        }
+    return discovered, case_meta
+
+
+def _apply_variable_pattern_edit(overrides: Dict[str, Any], variable_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply one variable-pattern edit while preserving other inferred fields."""
+    current = overrides.get(variable_name, {}) if isinstance(overrides.get(variable_name, {}), dict) else {}
+    edited_name = data.get("variable_name", "") or variable_name
+    updated = dict(current)
+    for key in ("varname", "varunit", "prefix", "suffix"):
+        value = data.get(key, "")
+        if value:
+            updated[key] = value
+        else:
+            updated.pop(key, None)
+    result = dict(overrides)
+    result.pop(variable_name, None)
+    if updated:
+        result[edited_name] = updated
+    return result
 
 
 def _get_model_names() -> List[str]:
@@ -244,57 +305,6 @@ def _get_model_names() -> List[str]:
         return sorted([m.name for m in mgr.list_models()])
     except Exception:
         return []
-
-
-def _read_nc_varnames(nc_dir: str) -> List[str]:
-    """Read variable names from the first NC file in a directory."""
-    nc_files = [str(path) for path in _glob_nc_local(nc_dir)]
-    if not nc_files:
-        return []
-    try:
-        import xarray as xr
-
-        with xr.open_dataset(nc_files[0]) as ds:
-            return list(ds.data_vars)
-    except Exception:
-        return []
-
-
-def _match_model(nc_vars: List[str]) -> List[tuple]:
-    """Match NC variable names against registered model profiles.
-
-    Returns list of (model_name, match_count, total_profile_vars, match_ratio)
-    sorted by match_ratio descending. Only includes models with ratio > 0.
-    """
-    if not nc_vars:
-        return []
-    nc_set = set(nc_vars)
-    results = []
-    try:
-        from openbench.data.registry.manager import get_registry
-
-        mgr = get_registry()
-        for mp in mgr.list_models():
-            if not mp.variables:
-                continue
-            # Collect all varnames (primary + fallbacks) for this model
-            model_varnames = set()
-            for vm in mp.variables.values():
-                if isinstance(vm.varname, list):
-                    model_varnames.update(vm.varname)
-                elif vm.varname:
-                    model_varnames.add(vm.varname)
-                if vm.fallbacks:
-                    for fb in vm.fallbacks:
-                        model_varnames.add(fb.varname)
-            overlap = nc_set & model_varnames
-            if overlap:
-                ratio = len(overlap) / len(model_varnames) if model_varnames else 0
-                results.append((mp.name, len(overlap), len(model_varnames), ratio))
-    except Exception:
-        pass
-    results.sort(key=lambda x: x[3], reverse=True)
-    return results
 
 
 def _get_model_variables(model_name: str) -> List[str]:
@@ -469,55 +479,49 @@ class PageSimData(BasePage):
             # dialog so per-variable overrides can be derived for the chosen model.
             case_meta: Dict[str, Dict[str, Any]] = {}
             if is_remote:
-                for full in _remote_list_child_dirs(ssh_manager, root):
-                    label = os.path.basename(full.rstrip("/"))
+                seen_nc_dirs = set()
+                for full in _remote_list_dirs(ssh_manager, root):
                     nc_dir = _remote_find_nc_dir(ssh_manager, full)
-                    if nc_dir:
-                        prefix, suffix, multi_stream, file_names = _remote_detect_case_pattern(ssh_manager, full)
-                        discovered.append((label, nc_dir, prefix))
-                        case_meta[label] = {"files": file_names, "suffix": suffix, "multi_stream": multi_stream}
+                    normalized_nc_dir = nc_dir.rstrip("/")
+                    if not nc_dir or normalized_nc_dir in seen_nc_dirs:
+                        continue
+                    seen_nc_dirs.add(normalized_nc_dir)
+                    nc_leaf = normalized_nc_dir.rsplit("/", 1)[-1].lower()
+                    label_dir = normalized_nc_dir.rsplit("/", 1)[0] if nc_leaf == "history" else full
+                    label = label_dir.rstrip("/").rsplit("/", 1)[-1]
+                    prefix, suffix, multi_stream, file_names = _remote_detect_case_pattern(ssh_manager, full)
+                    discovered.append((label, nc_dir, prefix))
+                    case_meta[label] = {
+                        "files": file_names,
+                        "suffix": suffix,
+                        "multi_stream": multi_stream,
+                    }
             else:
                 try:
-                    entries = sorted(os.listdir(root))
-                except OSError as exc:
-                    QMessageBox.critical(self, "Error", f"Cannot list directory:\n{exc}")
+                    discovered, case_meta = _scan_local_cases(root)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Error", f"Cannot scan directory:\n{exc}")
                     return
-
-                for entry in entries:
-                    full = os.path.join(root, entry)
-                    if not os.path.isdir(full):
-                        continue
-                    nc_dir = _find_nc_dir(full)
-                    if nc_dir:
-                        file_names = [os.path.basename(str(path)) for path in _glob_nc_local(nc_dir)]
-                        prefix, suffix, multi_stream = _case_file_patterns(file_names)
-                        discovered.append((entry, nc_dir, prefix))
-                        case_meta[entry] = {"files": file_names, "suffix": suffix, "multi_stream": multi_stream}
         finally:
             QApplication.restoreOverrideCursor()
 
         if not discovered:
-            QMessageBox.information(self, "No Cases Found", f"No subdirectories with NetCDF files under:\n{root}")
+            QMessageBox.information(self, "No Cases Found", f"No NetCDF simulation cases found under:\n{root}")
             return
-
-        # Auto-detect model from the first case's NC file
-        first_nc_dir = discovered[0][1]
-        nc_vars = [] if is_remote else _read_nc_varnames(first_nc_dir)
-        auto_model = ""
-        match_info = ""
-
-        if nc_vars:
-            matches = _match_model(nc_vars)
-            if matches and matches[0][3] >= 0.3:
-                auto_model = matches[0][0]
-            match_info = (
-                "\n".join(f"{name}: {count}/{total} vars ({ratio:.0%})" for name, count, total, ratio in matches[:5])
-                if matches
-                else "No matching model profiles found."
-            )
 
         # Refresh model names
         self._model_names = _get_model_names()
+        case_models = {}
+        for label, _nc_dir, _prefix in discovered:
+            meta = case_meta.get(label, {})
+            model = meta.get("model", "")
+            if not model and is_remote:
+                model = _model_from_case_label(label, self._model_names)
+            case_models[label] = model
+        match_info = "\n".join(
+            f"{label}: {case_models.get(label) or 'model unresolved'}" for label, _nc_dir, _prefix in discovered
+        )
+        nc_var_count = len({variable for meta in case_meta.values() for variable in meta.get("variables", [])})
 
         # Show confirmation dialog
         from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
@@ -525,9 +529,10 @@ class PageSimData(BasePage):
         dlg = ScanConfirmDialog(
             discovered=discovered,
             model_names=self._model_names,
-            auto_model=auto_model,
+            auto_model="",
             match_info=match_info,
-            nc_var_count=len(nc_vars),
+            nc_var_count=nc_var_count,
+            case_models=case_models,
             parent=self,
         )
         # Wire "Register New Model" button to navigate to registry
@@ -537,24 +542,25 @@ class PageSimData(BasePage):
             return
 
         confirmed = dlg.get_results()
-        if not confirmed:
-            return
 
         # Build per-case rows from confirmed results
         for case in confirmed:
             meta = case_meta.get(case["label"], {})
-            overrides = self._compute_variable_overrides(
-                case["nc_dir"],
-                meta.get("files") or [],
-                case["model"],
-                is_remote,
-                meta.get("multi_stream", False),
-            )
+            if case["model"] == meta.get("model"):
+                overrides = meta.get("variable_overrides") or {}
+            else:
+                overrides = self._compute_variable_overrides(
+                    case["nc_dir"],
+                    meta.get("files") or [],
+                    case["model"],
+                    is_remote,
+                    meta.get("multi_stream", False),
+                )
             self._add_case_row(
                 case["label"],
                 case["nc_dir"],
                 case["prefix"],
-                checked=True,
+                checked=case.get("checked", True),
                 model_name=case["model"],
                 suffix=meta.get("suffix", ""),
                 files=meta.get("files") or [],
@@ -608,17 +614,26 @@ class PageSimData(BasePage):
         path_label.setToolTip(nc_dir)
         row_layout.addWidget(path_label, 1)
 
-        prefix_label = QLabel(f"prefix: {prefix}")
-        prefix_label.setStyleSheet("color: #aaa; font-size: 10px;")
+        prefix_input = QLineEdit(prefix)
+        prefix_input.setPlaceholderText("prefix")
+        prefix_input.setMaximumWidth(240)
         if multi_stream:
-            prefix_label.setToolTip(
+            prefix_input.setToolTip(
                 "One file per variable detected — per-variable file patterns "
                 "are exported instead of a single case prefix."
             )
-        row_layout.addWidget(prefix_label)
+        row_layout.addWidget(QLabel("prefix:"))
+        row_layout.addWidget(prefix_input)
+
+        suffix_input = QLineEdit(suffix)
+        suffix_input.setPlaceholderText("suffix")
+        suffix_input.setMaximumWidth(120)
+        row_layout.addWidget(QLabel("suffix:"))
+        row_layout.addWidget(suffix_input)
 
         model_combo = QComboBox()
         model_combo.setMinimumWidth(150)
+        model_combo.addItem("Select model...", "")
         for mn in self._model_names:
             model_combo.addItem(mn, mn)
         if model_name:
@@ -626,6 +641,10 @@ class PageSimData(BasePage):
             if idx >= 0:
                 model_combo.setCurrentIndex(idx)
         row_layout.addWidget(model_combo)
+
+        patterns_btn = QPushButton("Variables...")
+        patterns_btn.setToolTip("Edit per-variable varname, unit, prefix, and suffix")
+        row_layout.addWidget(patterns_btn)
 
         gear_btn = QPushButton("⚙")
         gear_btn.setFixedWidth(30)
@@ -641,13 +660,53 @@ class PageSimData(BasePage):
             "nc_dir": nc_dir,
             "auto_prefix": prefix,
             "auto_suffix": suffix,
+            "prefix_input": prefix_input,
+            "suffix_input": suffix_input,
+            "case_pattern_edited": False,
             "files": list(files or []),
             "variable_overrides": dict(variable_overrides or {}),
             "multi_stream": multi_stream,
             "row_widget": row,
         }
+        prefix_input.textEdited.connect(lambda _text, c=case: self._on_case_pattern_changed(c))
+        suffix_input.textEdited.connect(lambda _text, c=case: self._on_case_pattern_changed(c))
         model_combo.currentIndexChanged.connect(lambda _index, c=case: self._on_case_model_changed(c))
+        patterns_btn.clicked.connect(lambda _checked=False, c=case: self._edit_variable_pattern(c))
         self._cases.append(case)
+
+    def _on_case_pattern_changed(self, case: Dict[str, Any]):
+        case["case_pattern_edited"] = True
+        self._on_selection_changed()
+
+    def _edit_variable_pattern(self, case: Dict[str, Any]):
+        variables = sorted(
+            set(_get_model_variables(case["model_combo"].currentData() or ""))
+            | set((case.get("variable_overrides") or {}).keys())
+        )
+        if not variables:
+            QMessageBox.information(self, "No Variables", "Select a model with registered variables first.")
+            return
+        variable_name, accepted = QInputDialog.getItem(self, "Edit Variable Pattern", "Variable:", variables, 0, False)
+        if not accepted or not variable_name:
+            return
+
+        from openbench.gui.widgets.variable_editor import VariableEditorDialog
+
+        overrides = case.get("variable_overrides") or {}
+        current = overrides.get(variable_name, {}) if isinstance(overrides.get(variable_name, {}), dict) else {}
+        dlg = VariableEditorDialog(
+            mode="simulation",
+            variable_name=variable_name,
+            varname=current.get("varname", ""),
+            varunit=current.get("varunit", ""),
+            prefix=current.get("prefix", ""),
+            suffix=current.get("suffix", ""),
+            parent=self,
+        )
+        if not dlg.exec():
+            return
+        case["variable_overrides"] = _apply_variable_pattern_edit(overrides, variable_name, dlg.get_data())
+        self._on_selection_changed()
 
     def _on_case_model_changed(self, case: Dict[str, Any]):
         """Recompute per-variable overrides when a case's model changes.
@@ -704,9 +763,17 @@ class PageSimData(BasePage):
             if not case["checkbox"].isChecked():
                 continue
             overrides = case.get("variable_overrides") or {}
-            prefix = prefix_override or case["auto_prefix"]
-            suffix = suffix_override or case.get("auto_suffix", "")
-            if not prefix_override and not _case_prefix_is_safe(case["auto_prefix"], suffix, overrides):
+            case_prefix = case.get("prefix_input")
+            case_suffix = case.get("suffix_input")
+            case_prefix = case_prefix.text().strip() if case_prefix is not None else case["auto_prefix"]
+            case_suffix = case_suffix.text().strip() if case_suffix is not None else case.get("auto_suffix", "")
+            prefix = prefix_override or case_prefix
+            suffix = suffix_override or case_suffix
+            if (
+                not prefix_override
+                and not case.get("case_pattern_edited", False)
+                and not _case_prefix_is_safe(case_prefix, suffix, overrides)
+            ):
                 # Multi-stream case (one file per variable): a case-level
                 # prefix would force one stream's files onto every variable,
                 # so only the per-variable overrides are exported.
@@ -736,8 +803,34 @@ class PageSimData(BasePage):
         preserved = {
             key: value
             for key, value in existing_sim_data.items()
-            if key not in {"general", "def_nml", "source_configs", "_scan_root", "_shared_settings"}
+            if key
+            not in {
+                "general",
+                "def_nml",
+                "source_configs",
+                "_scan_root",
+                "_scanned_cases",
+                "_shared_settings",
+            }
         }
+
+        scanned_cases = existing_sim_data.get("_scanned_cases", [])
+        if hasattr(self, "_cases"):
+            scanned_cases = [
+                {
+                    "label": case["label"],
+                    "nc_dir": case["nc_dir"],
+                    "prefix": case["prefix_input"].text().strip(),
+                    "suffix": case["suffix_input"].text().strip(),
+                    "checked": case["checkbox"].isChecked(),
+                    "model": case["model_combo"].currentData() or "",
+                    "files": list(case.get("files") or []),
+                    "variables": dict(case.get("variable_overrides") or {}),
+                    "multi_stream": bool(case.get("multi_stream", False)),
+                    "case_pattern_edited": bool(case.get("case_pattern_edited", False)),
+                }
+                for case in self._cases
+            ]
 
         prefix_override = self._prefix_input.text().strip()
 
@@ -762,8 +855,11 @@ class PageSimData(BasePage):
             # Per-variable file-pattern overrides from the scan (one file per
             # variable layouts). Preserve overrides loaded from a config when
             # this row was restored without a fresh scan.
-            if c.get("variables"):
-                existing_source["variables"] = c["variables"]
+            if "variables" in c:
+                if c["variables"]:
+                    existing_source["variables"] = c["variables"]
+                else:
+                    existing_source.pop("variables", None)
             source_configs[c["label"]] = existing_source
 
         # For every selected evaluation variable, all selected cases are sources.
@@ -786,6 +882,7 @@ class PageSimData(BasePage):
             "def_nml": existing_sim_data.get("def_nml", {}) or {},
             "source_configs": source_configs,
             "_scan_root": self._root_input.text().strip(),
+            "_scanned_cases": scanned_cases,
             "_shared_settings": {
                 "data_type": self._data_type_combo.currentText(),
                 "grid_res": self._grid_res_input.text().strip(),
@@ -820,6 +917,7 @@ class PageSimData(BasePage):
             self._root_input.setText(scan_root)
 
         saved_configs = sim_data.get("source_configs", {})
+        scanned_cases = sim_data.get("_scanned_cases", [])
 
         # Restore shared settings. Configs written by the CLI have no
         # _shared_settings block, so seed the shared combos from the first
@@ -850,7 +948,7 @@ class PageSimData(BasePage):
                 self._suffix_input.setText(ss["suffix"])
 
         # Restore cases from source_configs
-        if not saved_configs:
+        if not saved_configs and not scanned_cases:
             return
 
         # Determine which labels are selected
@@ -864,6 +962,31 @@ class PageSimData(BasePage):
                     selected_labels.add(val)
 
         self._clear_cases()
+        if isinstance(scanned_cases, list) and scanned_cases:
+            for saved_case in scanned_cases:
+                if not isinstance(saved_case, dict) or not saved_case.get("label"):
+                    continue
+                label = saved_case["label"]
+                cfg = saved_configs.get(label, {}) or {}
+                gen = cfg.get("general", {}) or {}
+                overrides = saved_case.get("variables")
+                if not isinstance(overrides, dict):
+                    overrides = cfg.get("variables") if isinstance(cfg.get("variables"), dict) else {}
+                self._add_case_row(
+                    label,
+                    saved_case.get("nc_dir", gen.get("root_dir", "")),
+                    saved_case.get("prefix", gen.get("prefix", "")),
+                    checked=bool(saved_case.get("checked", label in selected_labels)),
+                    model_name=saved_case.get("model", gen.get("model_namelist", "")),
+                    suffix=saved_case.get("suffix", gen.get("suffix", "")),
+                    files=saved_case.get("files") or [],
+                    variable_overrides=overrides,
+                    multi_stream=bool(saved_case.get("multi_stream", False)),
+                )
+                self._cases[-1]["case_pattern_edited"] = bool(saved_case.get("case_pattern_edited", False))
+            self._settings_group.setVisible(True)
+            return
+
         for label, cfg in saved_configs.items():
             gen = cfg.get("general", {})
             nc_dir = gen.get("root_dir", "")

@@ -36,6 +36,27 @@ def test_remote_sim_scan_helpers_quote_paths_and_find_nc4():
     assert any(shlex.quote(f"{case_dir}/history") in command for command in commands)
 
 
+def test_remote_scan_includes_root_and_nested_directories():
+    commands = []
+
+    class FakeSSH:
+        def execute(self, command, timeout=30):
+            commands.append(command)
+            return "/remote/Simulation\n/remote/Simulation/LSMs/CLM5\n", "", 0
+
+    found = page_sim_data._remote_list_dirs(FakeSSH(), "/remote/Simulation")
+
+    assert found == ["/remote/Simulation", "/remote/Simulation/LSMs/CLM5"]
+    assert "-mindepth 0 -maxdepth 5" in commands[0]
+
+
+def test_remote_model_match_uses_case_label_and_leaves_unknown_blank():
+    models = ["LEM2", "CLM5", "CoLM2024"]
+
+    assert page_sim_data._model_from_case_label("CLM5", models) == "CLM5"
+    assert page_sim_data._model_from_case_label("UnknownCase", models) == ""
+
+
 class _Controller:
     def __init__(self):
         self.config = {

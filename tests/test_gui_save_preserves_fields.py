@@ -91,6 +91,125 @@ def test_sim_data_save_preserves_unknown_top_level_metadata():
     assert controller.config["sim_data"]["general"] == {"Runoff_sim_source": ["CaseA"]}
 
 
+def test_sim_data_save_removes_cleared_variable_pattern_overrides():
+    controller = FakeController(
+        {
+            "evaluation_items": {"Albedo": True},
+            "sim_data": {
+                "general": {"Albedo_sim_source": ["TE"]},
+                "source_configs": {
+                    "TE": {
+                        "general": {"model_namelist": "TE", "root_dir": "/sim/TE"},
+                        "variables": {"Albedo": {"prefix": "old_"}},
+                    }
+                },
+            },
+        }
+    )
+    page = PageSimData.__new__(PageSimData)
+    page.controller = controller
+    page.get_selected_cases = lambda: [
+        {"label": "TE", "model": "TE", "nc_dir": "/sim/TE", "prefix": "", "suffix": "", "variables": {}}
+    ]
+    page._prefix_input = FakeText("")
+    page._data_type_combo = FakeCombo("grid")
+    page._grid_res_input = FakeText("0.5")
+    page._tim_res_combo = FakeCombo("Month")
+    page._data_groupby_combo = FakeCombo("month")
+    page._suffix_input = FakeText("")
+    page._root_input = FakeText("/sim")
+
+    page.save_to_config()
+
+    assert "variables" not in controller.config["sim_data"]["source_configs"]["TE"]
+
+
+def test_sim_data_save_keeps_unchecked_scan_rows_out_of_runtime_sources():
+    controller = FakeController({"evaluation_items": {"Runoff": True}, "sim_data": {}})
+    page = PageSimData.__new__(PageSimData)
+    page.controller = controller
+    page.get_selected_cases = lambda: [
+        {"label": "CaseA", "model": "CLM5", "nc_dir": "/sim/CaseA", "prefix": "hist_", "variables": {}}
+    ]
+    page._cases = [
+        {
+            "label": "CaseA",
+            "nc_dir": "/sim/CaseA",
+            "prefix_input": FakeText("hist_"),
+            "suffix_input": FakeText(""),
+            "checkbox": FakeCheck(True),
+            "model_combo": FakeCombo("CLM5", "CLM5"),
+            "variable_overrides": {},
+        },
+        {
+            "label": "CaseB",
+            "nc_dir": "/sim/CaseB",
+            "prefix_input": FakeText("case_b_"),
+            "suffix_input": FakeText(".nc"),
+            "checkbox": FakeCheck(False),
+            "model_combo": FakeCombo("CoLM2024", "CoLM2024"),
+            "variable_overrides": {"Runoff": {"varname": "q"}},
+            "multi_stream": True,
+        },
+    ]
+    page._prefix_input = FakeText("")
+    page._data_type_combo = FakeCombo("grid")
+    page._grid_res_input = FakeText("0.5")
+    page._tim_res_combo = FakeCombo("Month")
+    page._data_groupby_combo = FakeCombo("Year")
+    page._suffix_input = FakeText("")
+    page._root_input = FakeText("/sim")
+
+    page.save_to_config()
+
+    sim_data = controller.config["sim_data"]
+    assert list(sim_data["source_configs"]) == ["CaseA"]
+    assert sim_data["general"]["Runoff_sim_source"] == ["CaseA"]
+    assert [(case["label"], case["checked"]) for case in sim_data["_scanned_cases"]] == [
+        ("CaseA", True),
+        ("CaseB", False),
+    ]
+
+
+def test_sim_data_load_restores_unchecked_scan_rows():
+    sim_data = {
+        "_scan_root": "/sim",
+        "_scanned_cases": [
+            {"label": "CaseA", "nc_dir": "/sim/CaseA", "prefix": "hist_", "checked": True, "model": "CLM5"},
+            {
+                "label": "CaseB",
+                "nc_dir": "/sim/CaseB",
+                "prefix": "case_b_",
+                "suffix": ".nc",
+                "checked": False,
+                "model": "CoLM2024",
+                "variables": {"Runoff": {"varname": "q"}},
+                "multi_stream": True,
+            },
+        ],
+    }
+    page = PageSimData.__new__(PageSimData)
+    page.controller = FakeController({"sim_data": sim_data})
+    page._root_input = FakeText("")
+    page._cases = []
+    page._clear_cases = lambda: page._cases.clear()
+    restored = []
+
+    def add_case(label, nc_dir, prefix, **kwargs):
+        restored.append((label, nc_dir, prefix, kwargs))
+        page._cases.append({})
+
+    page._add_case_row = add_case
+    page._settings_group = type("Settings", (), {"setVisible": lambda self, visible: None})()
+
+    page.load_from_config()
+
+    assert [case[0] for case in restored] == ["CaseA", "CaseB"]
+    assert restored[1][3]["checked"] is False
+    assert restored[1][3]["variable_overrides"] == {"Runoff": {"varname": "q"}}
+    assert page._cases[1]["case_pattern_edited"] is False
+
+
 def test_ref_data_save_migrates_legacy_scan_root_without_export_override():
     controller = FakeController(
         {

@@ -82,6 +82,7 @@ class VariableEditorDialog(QDialog):
     mode : str
         ``"model"`` shows Variable name, NC varname, unit, compute, fallbacks.
         ``"reference"`` additionally shows sub_dir, prefix, suffix.
+        ``"simulation"`` shows the file-pattern fields without sub_dir.
     variable_name : str
         The standard OpenBench variable name (e.g. ``Latent_Heat``).
     varname : str
@@ -172,12 +173,15 @@ class VariableEditorDialog(QDialog):
         else:
             self.edit_compute = None
 
-        # Reference-only fields
+        # File-pattern fields
         if self._mode == "reference":
             self.edit_sub_dir = QLineEdit(sub_dir)
             self.edit_sub_dir.setPlaceholderText("Subdirectory inside root_dir")
             form.addRow("sub_dir:", self.edit_sub_dir)
+        else:
+            self.edit_sub_dir = None
 
+        if self._mode in {"reference", "simulation"}:
             self.edit_prefix = QLineEdit(prefix)
             self.edit_prefix.setPlaceholderText("File prefix")
             form.addRow("prefix:", self.edit_prefix)
@@ -186,33 +190,33 @@ class VariableEditorDialog(QDialog):
             self.edit_suffix.setPlaceholderText("File suffix")
             form.addRow("suffix:", self.edit_suffix)
         else:
-            self.edit_sub_dir = None
             self.edit_prefix = None
             self.edit_suffix = None
 
         layout.addWidget(core_group)
 
-        # --- Fallbacks ---
-        fb_group = QGroupBox("Fallback Variables")
-        fb_layout = QVBoxLayout(fb_group)
+        if self._mode != "simulation":
+            # --- Fallbacks ---
+            fb_group = QGroupBox("Fallback Variables")
+            fb_layout = QVBoxLayout(fb_group)
 
-        self.fallback_list = QListWidget()
-        self.fallback_list.setMaximumHeight(120)
-        self._refresh_fallback_list()
-        fb_layout.addWidget(self.fallback_list)
+            self.fallback_list = QListWidget()
+            self.fallback_list.setMaximumHeight(120)
+            self._refresh_fallback_list()
+            fb_layout.addWidget(self.fallback_list)
 
-        fb_btn_layout = QHBoxLayout()
-        btn_add_fb = QPushButton("+ Add Fallback")
-        btn_add_fb.clicked.connect(self._add_fallback)
-        fb_btn_layout.addWidget(btn_add_fb)
+            fb_btn_layout = QHBoxLayout()
+            btn_add_fb = QPushButton("+ Add Fallback")
+            btn_add_fb.clicked.connect(self._add_fallback)
+            fb_btn_layout.addWidget(btn_add_fb)
 
-        btn_remove_fb = QPushButton("Remove Selected")
-        btn_remove_fb.clicked.connect(self._remove_fallback)
-        fb_btn_layout.addWidget(btn_remove_fb)
-        fb_btn_layout.addStretch()
-        fb_layout.addLayout(fb_btn_layout)
+            btn_remove_fb = QPushButton("Remove Selected")
+            btn_remove_fb.clicked.connect(self._remove_fallback)
+            fb_btn_layout.addWidget(btn_remove_fb)
+            fb_btn_layout.addStretch()
+            fb_layout.addLayout(fb_btn_layout)
 
-        layout.addWidget(fb_group)
+            layout.addWidget(fb_group)
 
         # --- OK / Cancel ---
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)

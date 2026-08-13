@@ -172,6 +172,81 @@ def test_gui_reference_validation_uses_explicit_runtime_root(tmp_path):
 # Bug 2 — one-file-per-variable scan alignment with the CLI scanner
 # ---------------------------------------------------------------------------
 
+
+def test_gui_local_scan_accepts_a_case_directory_as_the_root(tmp_path):
+    case_root = tmp_path / "Simulation" / "LSMs" / "CoLM2024"
+    case_root.mkdir(parents=True)
+    (case_root / "hist_2000.nc").touch()
+
+    discovered, metadata = page_sim_data._scan_local_cases(str(case_root))
+
+    assert discovered == [("CoLM2024", str(case_root), "hist_")]
+    assert metadata["CoLM2024"]["model"] == "CoLM2024"
+
+
+def test_gui_local_scan_discovers_nested_cases_instead_of_only_direct_children(tmp_path):
+    root = tmp_path / "Simulation"
+    colm = root / "LSMs" / "CoLM2024"
+    clm = root / "LSMs" / "CLM5" / "history"
+    colm.mkdir(parents=True)
+    clm.mkdir(parents=True)
+    (colm / "hist_2000.nc").touch()
+    (clm / "hist_2000.nc").touch()
+
+    discovered, metadata = page_sim_data._scan_local_cases(str(root))
+
+    assert [case[0] for case in discovered] == ["CLM5", "CoLM2024"]
+    assert metadata["CLM5"]["model"] == "CLM5"
+    assert metadata["CoLM2024"]["model"] == "CoLM2024"
+
+
+def test_gui_local_scan_does_not_display_one_variable_stream_as_case_prefix(tmp_path):
+    case_root = tmp_path / "Simulation" / "LSMs" / "TE"
+    case_root.mkdir(parents=True)
+    for name in _TE_FILES:
+        (case_root / name).touch()
+
+    discovered, metadata = page_sim_data._scan_local_cases(str(case_root))
+
+    assert discovered == [("TE", str(case_root), "YEE2_JRA-55_")]
+    assert metadata["TE"]["multi_stream"] is True
+
+
+def test_scan_confirmation_keeps_unchecked_cases_and_assigns_models_per_case(qapp):
+    from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
+
+    dialog = ScanConfirmDialog(
+        discovered=[("CLM5", "/sim/CLM5", "hist_"), ("CoLM2024", "/sim/CoLM2024", "hist_")],
+        model_names=["LEM2", "CLM5", "CoLM2024"],
+        auto_model="",
+        match_info="",
+        nc_var_count=0,
+        case_models={"CLM5": "CLM5", "CoLM2024": "CoLM2024"},
+    )
+    dialog._checkboxes[1].setChecked(False)
+
+    results = dialog.get_results()
+
+    assert [(item["model"], item["checked"]) for item in results] == [
+        ("CLM5", True),
+        ("CoLM2024", False),
+    ]
+
+
+def test_scan_confirmation_leaves_unresolved_model_blank(qapp):
+    from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
+
+    dialog = ScanConfirmDialog(
+        discovered=[("Unknown", "/sim/Unknown", "")],
+        model_names=["LEM2", "CLM5"],
+        auto_model="",
+        match_info="",
+        nc_var_count=0,
+    )
+
+    assert dialog.get_results()[0]["model"] == ""
+
+
 _TE_FILES = [
     "YEE2_JRA-55_alb_Mon_2000.nc",
     "YEE2_JRA-55_alb_Mon_2001.nc",
@@ -277,6 +352,78 @@ def test_get_selected_cases_keeps_prefix_for_single_stream():
 
     assert selected["prefix"] == "hist_"
     assert selected["variables"] == {}
+
+
+def test_get_selected_cases_uses_per_case_pattern_edits():
+    case = {
+        "checkbox": _FakeCheck(),
+        "model_combo": _FakeCombo("GLDAS"),
+        "label": "GLDAS",
+        "nc_dir": "/sims/GLDAS",
+        "auto_prefix": "wrong_",
+        "auto_suffix": "",
+        "prefix_input": _Text("GLDAS_NOAH025_M.A"),
+        "suffix_input": _Text(".021"),
+        "case_pattern_edited": True,
+        "variable_overrides": {},
+        "multi_stream": False,
+    }
+
+    (selected,) = _selected_cases(case)
+
+    assert selected["prefix"] == "GLDAS_NOAH025_M.A"
+    assert selected["suffix"] == ".021"
+
+
+def test_simulation_variable_editor_exposes_prefix_and_suffix(qapp):
+    from openbench.gui.widgets.variable_editor import VariableEditorDialog
+
+    dialog = VariableEditorDialog(
+        mode="simulation",
+        variable_name="Albedo",
+        varname="alb",
+        prefix="YEE2_JRA-55_alb_M",
+        suffix="GLB050",
+    )
+
+    data = dialog.get_data()
+    assert data["variable_name"] == "Albedo"
+    assert data["varname"] == "alb"
+    assert data["prefix"] == "YEE2_JRA-55_alb_M"
+    assert data["suffix"] == "GLB050"
+    assert "sub_dir" not in data
+
+
+def test_variable_pattern_edit_preserves_inferred_metadata_and_can_clear_fields():
+    overrides = {
+        "Albedo": {
+            "varname": "alb",
+            "prefix": "old_",
+            "suffix": "old.nc",
+            "grid_res": 0.5,
+        }
+    }
+
+    edited = page_sim_data._apply_variable_pattern_edit(
+        overrides,
+        "Albedo",
+        {
+            "variable_name": "Albedo",
+            "varname": "alb",
+            "varunit": "1",
+            "prefix": "new_",
+            "suffix": "",
+        },
+    )
+
+    assert edited == {
+        "Albedo": {
+            "varname": "alb",
+            "varunit": "1",
+            "prefix": "new_",
+            "grid_res": 0.5,
+        }
+    }
 
 
 def test_generate_config_yaml_exports_per_variable_overrides_without_case_prefix():
