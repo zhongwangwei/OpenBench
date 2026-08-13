@@ -156,6 +156,15 @@ def test_standard_deviation_uses_sample_ddof_like_smpi():
     assert abs(float(stats.stat_standard_deviation(data)) - np.sqrt(0.5)) < 1e-12
 
 
+def test_mann_kendall_short_series_with_ties_uses_supported_p_value_method():
+    stats = statistics_calculate({"stats_nml": {"Mann_Kendall_Trend_Test": {"significance_level": 0.05}}})
+
+    result = stats.stat_mann_kendall_trend_test(make_da([1.0, 1.0, 2.0, 3.0, 4.0]))
+
+    assert np.isfinite(float(result["tau"]))
+    assert np.isfinite(float(result["p_value"]))
+
+
 class _AnovaSelf:
     stats_nml = {"ANOVA": {"n_jobs": 1, "analysis_type": "oneway"}}
 

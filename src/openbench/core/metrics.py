@@ -65,7 +65,11 @@ class metrics:
 
     def percent_bias(self, s, o):
         """
-        Calculate Percent Bias.
+        Calculate Percent Bias using the standard signed observed-sum denominator.
+
+        This metric is intended for variables whose observed aggregate is
+        meaningfully non-zero. Sign-changing anomaly or flux series can make
+        percent bias unstable or difficult to interpret.
 
         Args:
             s (xr.DataArray): Simulated data
@@ -315,15 +319,19 @@ class metrics:
         return scores.index_agreement(self, s, o)
 
     def kappa_coeff(self, s, o):
-        """Calculate Cohen's kappa along time with multi-dimensional support."""
+        """Calculate Cohen's kappa for integer-coded categorical labels."""
         s, o = xr.align(s, o, join="inner")
 
         def _kappa_1d(s_values, o_values):
             mask = np.isfinite(s_values) & np.isfinite(o_values)
-            s_flat = s_values[mask].astype(int)
-            o_flat = o_values[mask].astype(int)
+            s_flat = s_values[mask]
+            o_flat = o_values[mask]
             if s_flat.size == 0:
                 return np.nan
+            if not np.all(s_flat == np.floor(s_flat)) or not np.all(o_flat == np.floor(o_flat)):
+                raise ValueError("kappa_coeff requires integer-coded categorical labels")
+            s_flat = s_flat.astype(int)
+            o_flat = o_flat.astype(int)
             unique_data = np.unique(np.concatenate([s_flat, o_flat]))
             kappa_mat = np.zeros((len(unique_data), len(unique_data)), dtype=float)
             index = {value: idx for idx, value in enumerate(unique_data)}
@@ -826,7 +834,7 @@ class metrics:
         o_climate = o.mean(dim="time")
 
         diff_squared = (s_climate - o_climate) ** 2
-        normalized_diff = xr.where(obs_var != 0, diff_squared / obs_var, np.nan)
+        normalized_diff = diff_squared / obs_var.where(obs_var != 0)
 
         smpi_dims = list(normalized_diff.dims)
         smpi = normalized_diff.mean(dim=smpi_dims, skipna=True) if smpi_dims else normalized_diff
@@ -841,7 +849,7 @@ class metrics:
             o_boot = o.isel(time=bootstrap_indices)
             obs_var_boot = o_boot.var(dim="time", ddof=1)
             diff_boot = (s_boot.mean(dim="time") - o_boot.mean(dim="time")) ** 2
-            normalized_boot = xr.where(obs_var_boot != 0, diff_boot / obs_var_boot, np.nan)
+            normalized_boot = diff_boot / obs_var_boot.where(obs_var_boot != 0)
             boot_dims = list(normalized_boot.dims)
             boot_mean = normalized_boot.mean(dim=boot_dims, skipna=True) if boot_dims else normalized_boot
             bootstrap_smpi.append(boot_mean if dask_backed else float(boot_mean))
@@ -852,12 +860,21 @@ class metrics:
             smpi_upper = bootstrap_da.quantile(0.95, dim="bootstrap", skipna=True)
         else:
             bootstrap_array = np.array(bootstrap_smpi)
-            smpi_lower, smpi_upper = np.percentile(bootstrap_array, [5, 95])
+            finite_bootstrap = bootstrap_array[np.isfinite(bootstrap_array)]
+            if finite_bootstrap.size:
+                smpi_lower, smpi_upper = np.percentile(finite_bootstrap, [5, 95])
+            else:
+                smpi_lower = smpi_upper = np.nan
 
         return smpi, smpi_lower, smpi_upper
 
     def MFM_omega(self, s, o, p=1, phase_penalty_scaling=4, phase=True):
-        """Return MFM's normalized error with phase penalty component (omega)."""
+        """Return MFM's normalized error with phase penalty component (omega).
+
+        ``p`` selects the error norm. ``phase_penalty_scaling`` controls how
+        strongly phase differences affect the cosine penalty; the default 4
+        preserves OpenBench's historical behavior and is not a physical constant.
+        """
         s, o = self._validate_inputs(s, o)
 
         def FFT_component(sim, obs):
@@ -1097,7 +1114,8 @@ class metrics:
             p (float): Exponent for error calculation (default=1, p=1 gives MAE, p=2 gives RMSE)
             bins_suse (int): Number of bins for entropy calculation (default=10)
             bins_phi (int): Number of bins for histogram intersection (default=10)
-            phase_penalty_scaling (float): Scaling factor for phase difference penalty (default=4)
+            phase_penalty_scaling (float): Scaling factor for phase difference penalty. The default 4 preserves
+                OpenBench's historical behavior and is not a physical constant.
             phase (bool): Whether to include phase difference component (default=True)
 
         Returns:

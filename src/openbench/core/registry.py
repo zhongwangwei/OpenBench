@@ -17,10 +17,13 @@ _METRIC_EXCLUDE = {
     "PBIAS_HF",
     "PBIAS_LF",
     "index_agreement",
+    # SMPI returns (estimate, lower, upper) and belongs to the dedicated
+    # comparison workflow, not the single-DataArray evaluation contract.
+    "smpi",
     # Unsafe as general continuous-field metrics: ubKGE can degenerate after
-    # mean removal, and kappa_coeff silently bins continuous values via int
-    # casting.  Keep the methods importable for compatibility but do not expose
-    # them through GUI/CLI selectable metric registries.
+    # mean removal, while kappa_coeff only accepts categorical labels. Keep the
+    # methods importable for compatibility but do not expose them through
+    # GUI/CLI selectable metric registries.
     "ubKGE",
     "kappa_coeff",
 }

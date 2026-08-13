@@ -175,6 +175,7 @@ def test_tch_statistic_returns_finite_values_for_independent_sources():
     result = stat_three_cornered_hat(None, *arrays)
 
     np.testing.assert_allclose(result["uncertainty"].values[:, 0, 0], [1.0, 2.0, 3.0], rtol=1e-12, atol=1e-12)
+    assert result.attrs["assumption"] == "Classical TCH assumes mutually uncorrelated source errors"
 
 
 def test_check_time_repairs_unparseable_time_without_dropping_level_dimension():

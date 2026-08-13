@@ -209,6 +209,7 @@ def stat_three_cornered_hat(self, *variables):
             "Relative uncertainty (%) estimated using the Three-Cornered Hat method"
         )
         ds.attrs["method"] = "Three-Cornered Hat"
+        ds.attrs["assumption"] = "Classical TCH assumes mutually uncorrelated source errors"
         ds.attrs["n_datasets"] = len(variables)
 
         return ds

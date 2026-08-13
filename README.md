@@ -425,7 +425,11 @@ the top-level `metrics:` list.
 | `KGE`, `KGESS` | (−∞, 1] | Kling–Gupta efficiency / skill score |
 | `index_agreement` | [0, 1] | Willmott index of agreement |
 | `rv` | [0, ∞) | Variance ratio σ_sim / σ_obs |
-| `kappa_coeff` | [−1, 1] | Categorical agreement |
+| `kappa_coeff` | [−1, 1] | Compatibility Python API for integer-coded categorical agreement; not GUI/CLI-selectable |
+
+`percent_bias` uses the standard signed sum of observations as its denominator.
+Use it only when that aggregate is meaningfully non-zero; it is not robust for
+sign-changing anomaly or flux series whose positive and negative values cancel.
 
 **8 normalized skill scores** rescale metrics onto a comparable 0–1 axis
 (1 = best): `nBiasScore`, `nRMSEScore`, `nPhaseScore`, `nIavScore`,
@@ -435,6 +439,8 @@ the top-level `metrics:` list.
 Beyond metrics/scores, the `statistics` block exposes **17 analysis modules**
 (correlation, ANOVA, Mann–Kendall trend, three-cornered hat, Hellinger distance,
 partial least squares, false discovery rate, …).
+The classical three-cornered-hat implementation assumes mutually uncorrelated
+source errors; OpenBench does not claim the correlated-error GTCH extension.
 
 ## Comparison & Visualization
 

@@ -31,7 +31,7 @@ def _smpi_normalized_diff(s, o):
     s_climate = s.mean(dim="time")
     o_climate = o.mean(dim="time")
     diff_squared = (s_climate - o_climate) ** 2
-    return xr.where(obs_var != 0, diff_squared / obs_var, np.nan)
+    return diff_squared / obs_var.where(obs_var != 0)
 
 
 def _smpi_scalar(value) -> float:
@@ -70,6 +70,15 @@ def _smpi_weighted_mean(normalized_diff: xr.DataArray, weights: xr.DataArray | N
     return _smpi_scalar(normalized_diff.weighted(weights).mean(skipna=True).values)
 
 
+def _smpi_percentile_interval(samples) -> tuple[float, float]:
+    values = np.asarray(samples, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return np.nan, np.nan
+    lower, upper = np.percentile(values, [5, 95])
+    return float(lower), float(upper)
+
+
 def _smpi_grid_summary(s, o, *, weight: str, n_bootstrap: int = 1000):
     normalized_diff = _smpi_normalized_diff(s, o)
     weights = _smpi_spatial_weights(weight, o)
@@ -91,7 +100,7 @@ def _smpi_grid_summary(s, o, *, weight: str, n_bootstrap: int = 1000):
     if not bootstrap_smpi:
         return smpi, np.nan, np.nan, normalized_diff
 
-    smpi_lower, smpi_upper = np.percentile(np.asarray(bootstrap_smpi), [5, 95])
+    smpi_lower, smpi_upper = _smpi_percentile_interval(bootstrap_smpi)
     return smpi, smpi_lower, smpi_upper, normalized_diff
 
 
@@ -121,8 +130,7 @@ class SingleModelPerformanceIndexComparisonMixin:
                 smpi_boot = float(_smpi_normalized_diff(s_boot, o_boot).mean(skipna=True))
                 bootstrap_smpi.append(smpi_boot)
 
-            bootstrap_smpi = np.array(bootstrap_smpi)
-            smpi_lower, smpi_upper = np.percentile(bootstrap_smpi, [5, 95])
+            smpi_lower, smpi_upper = _smpi_percentile_interval(bootstrap_smpi)
 
             return smpi, smpi_lower, smpi_upper
 
