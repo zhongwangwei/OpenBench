@@ -7,6 +7,7 @@ import logging
 import os
 import posixpath
 import tempfile
+from pathlib import Path
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox
 from PySide6.QtCore import Signal
@@ -26,6 +27,90 @@ class RemoteNamelistSyncError(RuntimeError):
 
 
 from openbench.gui.path_utils import get_remote_ssh_manager
+
+
+def _selected_simulation_labels(config: dict) -> list[str]:
+    evaluation_items = config.get("evaluation_items", {}) or {}
+    sim_general = (config.get("sim_data", {}) or {}).get("general", {}) or {}
+    labels = []
+    for variable, enabled in evaluation_items.items():
+        if not enabled:
+            continue
+        sources = sim_general.get(f"{variable}_sim_source", [])
+        if isinstance(sources, str):
+            sources = [sources]
+        for label in sources:
+            if label and label not in labels:
+                labels.append(label)
+    return labels
+
+
+def _materialize_local_station_sources(config: dict, output_dir: str) -> None:
+    """Generate missing station fulllists inside the case output directory."""
+    sim_data = config.get("sim_data", {}) or {}
+    source_configs = sim_data.get("source_configs", {}) or {}
+    selected_labels = _selected_simulation_labels(config)
+    if not selected_labels:
+        return
+
+    from openbench.data.sim_scanner import SimulationCase, SimulationScanResult, materialize_station_cases
+
+    pending = []
+    pending_configs = {}
+    for label in selected_labels:
+        source_config = source_configs.get(label, {}) or {}
+        general = source_config.get("general", {}) or {}
+        if str(general.get("data_type", "")).casefold() != "stn":
+            continue
+        root_dir = general.get("root_dir", "")
+        if not root_dir:
+            raise RuntimeError(f"Station simulation '{label}' has no root_dir.")
+        root_path = Path(root_dir).expanduser()
+        if not root_path.is_dir():
+            raise RuntimeError(f"Station simulation directory does not exist: {root_dir}")
+        fulllist = general.get("fulllist", "")
+        if fulllist:
+            path = Path(fulllist).expanduser()
+            if not path.is_absolute():
+                path = root_path / path
+            if path.is_file():
+                continue
+        pending.append(
+            SimulationCase(
+                label=label,
+                root_dir=root_path,
+                model=general.get("model_namelist", "") or general.get("model", "") or "UNRESOLVED",
+                depth=0,
+                data_type="stn",
+                tim_res=general.get("tim_res"),
+                data_groupby=general.get("data_groupby"),
+                station_layout="gui",
+            )
+        )
+        pending_configs[label] = general
+
+    if not pending:
+        return
+
+    station_output = Path(output_dir).expanduser().resolve() / "station_data"
+    result = SimulationScanResult(roots=[], cases=pending)
+    materialize_station_cases(result, station_output)
+
+    partial = [case for case in pending if case.station_dropped_sites]
+    if partial:
+        details = "; ".join(f"{case.label}: {', '.join(case.station_dropped_sites)}" for case in partial)
+        raise RuntimeError(f"Station materialization dropped sites: {details}")
+
+    snapshots = sim_data.get("_scanned_cases", [])
+    for case in pending:
+        if not case.fulllist:
+            raise RuntimeError(f"Station materialization did not create a fulllist for '{case.label}'.")
+        fulllist = str(case.fulllist)
+        pending_configs[case.label]["fulllist"] = fulllist
+        for snapshot in snapshots if isinstance(snapshots, list) else []:
+            if isinstance(snapshot, dict) and snapshot.get("label") == case.label:
+                snapshot.setdefault("metadata", {})["fulllist"] = fulllist
+                break
 
 
 class PagePreview(BasePage):
@@ -69,6 +154,13 @@ class PagePreview(BasePage):
         if isinstance(self.controller.storage, RemoteStorage):
             remote_path_base = self.controller.remote_settings().get("openbench_path", "") or output_dir
             generate_kwargs["path_transform"] = lambda path: self._resolve_path_for_remote(path, remote_path_base)
+        else:
+            try:
+                _materialize_local_station_sources(config, output_dir)
+            except Exception as exc:
+                logger.exception("Could not prepare station simulation data")
+                self.config_preview.set_content(f"# Station preparation failed\n# {exc}\n")
+                return
 
         config_yaml = self.config_manager.generate_config_yaml(config, **generate_kwargs)
         self.config_preview.set_content(config_yaml)
@@ -116,6 +208,7 @@ class PagePreview(BasePage):
 
         try:
             openbench_root = self._get_openbench_root()
+            _materialize_local_station_sources(self.controller.config, output_dir)
             files = self.config_manager.export_all(self.controller.config, output_dir, openbench_root=openbench_root)
 
             # Navigate to run page

@@ -40,6 +40,35 @@ def test_main_window_disables_navigation_while_runner_is_active():
     assert window.btn_rerun.visible is True
 
 
+def test_next_saves_current_page_before_navigation():
+    events = []
+
+    class Controller:
+        current_page = "sim_data"
+
+        def go_next(self):
+            events.append("next")
+            return True
+
+    class Page:
+        def validate(self):
+            events.append("validate")
+            return True
+
+        def save_to_config(self):
+            events.append("save")
+
+    window = MainWindow.__new__(MainWindow)
+    window.controller = Controller()
+    window.pages = {"sim_data": Page()}
+    window._runner_is_active = lambda: False
+    window._save_current_page = lambda trigger_sync=False: window.pages["sim_data"].save_to_config()
+
+    window._on_next_clicked()
+
+    assert events == ["validate", "save", "next"]
+
+
 def test_preview_ignores_duplicate_run_request_while_export_in_progress():
     preview = PagePreview.__new__(PagePreview)
     preview._export_in_progress = True

@@ -124,6 +124,42 @@ def test_sim_data_save_removes_cleared_variable_pattern_overrides():
     assert "variables" not in controller.config["sim_data"]["source_configs"]["TE"]
 
 
+def test_sim_data_save_uses_detected_case_metadata_instead_of_auto_override_labels():
+    controller = FakeController({"evaluation_items": {"Latent_Heat": True}, "sim_data": {}})
+    page = PageSimData.__new__(PageSimData)
+    page.controller = controller
+    page.get_selected_cases = lambda: [
+        {
+            "label": "StationCase",
+            "model": "CoLM2024",
+            "nc_dir": "/sim/StationCase",
+            "prefix": "",
+            "suffix": "",
+            "variables": {},
+            "data_type": "stn",
+            "grid_res": None,
+            "tim_res": "Day",
+            "data_groupby": "Single",
+            "fulllist": "/output/stations.csv",
+        }
+    ]
+    page._prefix_input = FakeText("")
+    page._data_type_combo = FakeCombo("Auto (per case)", "")
+    page._grid_res_input = FakeText("")
+    page._tim_res_combo = FakeCombo("Auto (per case)", "")
+    page._data_groupby_combo = FakeCombo("Auto (per case)", "")
+    page._suffix_input = FakeText("")
+    page._root_input = FakeText("/sim")
+
+    page.save_to_config()
+
+    general = controller.config["sim_data"]["source_configs"]["StationCase"]["general"]
+    assert general["data_type"] == "stn"
+    assert general["tim_res"] == "Day"
+    assert general["data_groupby"] == "Single"
+    assert general["fulllist"] == "/output/stations.csv"
+
+
 def test_sim_data_save_keeps_unchecked_scan_rows_out_of_runtime_sources():
     controller = FakeController({"evaluation_items": {"Runoff": True}, "sim_data": {}})
     page = PageSimData.__new__(PageSimData)

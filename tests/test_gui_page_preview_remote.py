@@ -3,7 +3,12 @@ import os
 import pytest
 import yaml
 
-from openbench.gui.pages.page_preview import PagePreview, RemoteNamelistSyncError
+from openbench.gui.config_manager import ConfigManager
+from openbench.gui.pages.page_preview import (
+    PagePreview,
+    RemoteNamelistSyncError,
+    _materialize_local_station_sources,
+)
 from tests.gui_fakes import FakeControllerBase
 
 
@@ -95,6 +100,67 @@ def test_preview_uses_actual_case_output_dir_when_rendering_unified_yaml():
     assert preview.config_manager.calls == [(preview.controller.config, {"case_output_dir": "/case/output/demo"})]
     assert preview.output_dir_label.text == "/case/output/demo"
     assert preview.config_preview.content == "project: {}\n"
+
+
+def test_local_station_sources_are_materialized_before_export(monkeypatch, tmp_path):
+    root = tmp_path / "stations"
+    root.mkdir()
+    config = {
+        "evaluation_items": {"Latent_Heat": True},
+        "sim_data": {
+            "general": {"Latent_Heat_sim_source": ["StationCase"]},
+            "source_configs": {
+                "StationCase": {
+                    "general": {
+                        "model_namelist": "CoLM2024",
+                        "root_dir": str(root),
+                        "data_type": "stn",
+                        "tim_res": "Day",
+                    }
+                }
+            },
+        },
+    }
+
+    def fake_materialize(result, output_dir, **_kwargs):
+        case = result.cases[0]
+        fulllist = tmp_path / "output" / "station_data" / "StationCase" / "StationCase_stations.csv"
+        fulllist.parent.mkdir(parents=True, exist_ok=True)
+        fulllist.write_text("ID,sim_dir\nA,a.nc\n")
+        case.fulllist = fulllist
+        case.station_count = 1
+
+    monkeypatch.setattr("openbench.data.sim_scanner.materialize_station_cases", fake_materialize)
+
+    _materialize_local_station_sources(config, str(tmp_path / "output"))
+
+    general = config["sim_data"]["source_configs"]["StationCase"]["general"]
+    assert general["fulllist"].endswith("StationCase_stations.csv")
+    exported = yaml.safe_load(ConfigManager().generate_config_yaml(config, case_output_dir=str(tmp_path / "output")))
+    assert exported["simulation"]["StationCase"]["data_type"] == "stn"
+    assert exported["simulation"]["StationCase"]["tim_res"] == "Day"
+    assert exported["simulation"]["StationCase"]["fulllist"].endswith("StationCase_stations.csv")
+
+
+def test_local_grid_sources_do_not_trigger_station_materialization(monkeypatch, tmp_path):
+    called = []
+    monkeypatch.setattr(
+        "openbench.data.sim_scanner.materialize_station_cases",
+        lambda *_args, **_kwargs: called.append(True),
+    )
+    config = {
+        "evaluation_items": {"Latent_Heat": True},
+        "sim_data": {
+            "general": {"Latent_Heat_sim_source": ["GridCase"]},
+            "source_configs": {
+                "GridCase": {"general": {"root_dir": "/grid", "data_type": "grid"}},
+            },
+        },
+    }
+
+    _materialize_local_station_sources(config, str(tmp_path / "output"))
+
+    assert called == []
 
 
 def test_remote_preview_uses_same_remote_path_transform_as_export():

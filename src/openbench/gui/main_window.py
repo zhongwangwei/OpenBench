@@ -470,6 +470,11 @@ class MainWindow(QMainWindow):
                 preview_page.export_and_run()
             return
 
+        # Forward navigation must persist edits just like Back/sidebar
+        # navigation. Several pages intentionally save on navigation rather
+        # than wiring every field's change signal.
+        self._save_current_page(trigger_sync=False)
+
         if not self.controller.go_next():
             # At the end - ask for confirmation before closing
             reply = QMessageBox.question(
