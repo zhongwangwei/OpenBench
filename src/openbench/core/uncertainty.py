@@ -333,7 +333,7 @@ def _interval_summary(
     if not np.isfinite(estimate) or valid.size < 2:
         result = {
             "status": "insufficient_data",
-            "estimate": None,
+            "estimate": float(estimate) if np.isfinite(estimate) else None,
             "lower": None,
             "upper": None,
             "standard_error": None,

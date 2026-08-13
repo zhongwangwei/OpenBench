@@ -1,5 +1,8 @@
 import numpy as np
+import xarray as xr
 
+from openbench.config.schema import UNCERTAINTY_METRIC_DIRECTIONS
+from openbench.core.metrics import metrics
 from openbench.core.uncertainty import (
     _metric_values,
     bootstrap_grid_metric,
@@ -69,6 +72,20 @@ def test_vectorized_metrics_match_scalar_metrics():
     ):
         expected = [metric_value(metric, sim, obs) for sim, obs in zip(simulations, references)]
         np.testing.assert_allclose(_metric_values(metric, simulations, references), expected)
+
+
+def test_uncertainty_metrics_match_core_metrics_with_pairwise_nans():
+    ref = np.linspace(1.0, 20.0, 20)
+    sim = ref * 1.1 + np.sin(ref)
+    sim[[3, 11]] = np.nan
+    ref[[5, 11, 17]] = np.nan
+    sim_da = xr.DataArray(sim, dims="time")
+    ref_da = xr.DataArray(ref, dims="time")
+    core_metrics = metrics()
+
+    for metric in UNCERTAINTY_METRIC_DIRECTIONS:
+        expected = float(getattr(core_metrics, metric)(sim_da, ref_da))
+        np.testing.assert_allclose(metric_value(metric, sim, ref), expected, rtol=1e-12, atol=1e-12)
 
 
 def test_grid_bootstrap_aggregates_metrics_without_spatial_error_cancellation():
@@ -216,6 +233,22 @@ def test_bootstrap_metric_reports_insufficient_data():
     assert result["status"] == "insufficient_data"
     assert result["estimate"] is None
     assert result["sample_count"] == 2
+
+
+def test_bootstrap_metric_keeps_estimate_when_only_interval_is_unavailable():
+    result = bootstrap_metric(
+        np.arange(8, dtype=float) + 1,
+        np.arange(8, dtype=float),
+        "bias",
+        n_resamples=10,
+        confidence_level=0.95,
+        block_length=8,
+        seed=1,
+    )
+
+    assert result["status"] == "insufficient_data"
+    assert result["estimate"] == 1.0
+    assert result["reason"] == "no resampleable contiguous segment"
 
 
 def test_paired_difference_uses_metric_direction():
