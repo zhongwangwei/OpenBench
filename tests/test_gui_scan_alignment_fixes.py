@@ -212,6 +212,49 @@ def test_gui_local_scan_does_not_display_one_variable_stream_as_case_prefix(tmp_
     assert metadata["TE"]["multi_stream"] is True
 
 
+def test_gui_local_scan_keeps_detected_case_metadata(monkeypatch, tmp_path):
+    case_root = tmp_path / "StationCase"
+    case_root.mkdir()
+    scanned = SimpleNamespace(
+        label="StationCase",
+        root_dir=case_root,
+        source_root=tmp_path,
+        model="CoLM2024",
+        prefix="",
+        suffix="",
+        variables=["Latent_Heat"],
+        variable_overrides={},
+        data_type="stn",
+        grid_res=None,
+        tim_res="Day",
+        data_groupby="Single",
+        fulllist=None,
+        station_layout="flat",
+    )
+    monkeypatch.setattr(
+        "openbench.data.sim_scanner.scan_simulation_roots",
+        lambda *_args, **_kwargs: SimpleNamespace(cases=[scanned]),
+    )
+
+    _, metadata = page_sim_data._scan_local_cases(str(tmp_path))
+
+    assert metadata["StationCase"] | {} == {
+        "files": [],
+        "suffix": "",
+        "multi_stream": False,
+        "model": "CoLM2024",
+        "variables": ["Latent_Heat"],
+        "variable_overrides": {},
+        "data_type": "stn",
+        "grid_res": None,
+        "tim_res": "Day",
+        "data_groupby": "Single",
+        "fulllist": "",
+        "station_layout": "flat",
+        "source_root": str(tmp_path),
+    }
+
+
 def test_scan_confirmation_keeps_unchecked_cases_and_assigns_models_per_case(qapp):
     from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
 
@@ -245,6 +288,24 @@ def test_scan_confirmation_leaves_unresolved_model_blank(qapp):
     )
 
     assert dialog.get_results()[0]["model"] == ""
+
+
+def test_scan_confirmation_does_not_claim_model_is_unresolved_when_case_model_was_detected(qapp):
+    from PySide6.QtWidgets import QLabel
+
+    from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
+
+    dialog = ScanConfirmDialog(
+        discovered=[("CaseA", "/sim/CaseA", "")],
+        model_names=["CoLM2024"],
+        auto_model="",
+        match_info="CaseA: CoLM2024",
+        nc_var_count=10,
+        case_models={"CaseA": "CoLM2024"},
+    )
+
+    text = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "No model auto-detected" not in text
 
 
 _TE_FILES = [
@@ -311,6 +372,55 @@ class _FakeCombo:
 def _selected_cases(case):
     page = SimpleNamespace(_prefix_input=_Text(""), _suffix_input=_Text(""), _cases=[case])
     return page_sim_data.PageSimData.get_selected_cases(page)
+
+
+def test_get_selected_cases_uses_per_case_scan_metadata_when_shared_overrides_are_blank():
+    case = {
+        "checkbox": _FakeCheck(),
+        "model_combo": _FakeCombo("CoLM2024"),
+        "label": "StationCase",
+        "nc_dir": "/sims/StationCase",
+        "auto_prefix": "",
+        "auto_suffix": "",
+        "variable_overrides": {},
+        "scan_metadata": {
+            "data_type": "stn",
+            "tim_res": "Day",
+            "grid_res": None,
+            "data_groupby": "Single",
+            "station_layout": "flat",
+        },
+    }
+    page = SimpleNamespace(
+        _prefix_input=_Text("global_"),
+        _suffix_input=_Text(".nc"),
+        _data_type_combo=_FakeCombo(""),
+        _tim_res_combo=_FakeCombo(""),
+        _data_groupby_combo=_FakeCombo(""),
+        _grid_res_input=_Text(""),
+        _cases=[case],
+    )
+
+    (selected,) = page_sim_data.PageSimData.get_selected_cases(page)
+
+    assert selected["data_type"] == "stn"
+    assert selected["tim_res"] == "Day"
+    assert selected["grid_res"] is None
+    assert selected["data_groupby"] == "Single"
+    assert selected["station_layout"] == "flat"
+    assert selected["prefix"] == ""
+    assert selected["suffix"] == ""
+
+
+def test_gui_tim_res_options_cover_all_config_values():
+    from openbench.config.loader import VALID_TIM_RES_VALUES
+
+    assert set(page_sim_data.SIM_TIM_RES_OPTIONS) == VALID_TIM_RES_VALUES
+
+
+def test_manual_grid_res_override_is_exported_as_a_number():
+    assert page_sim_data._grid_res_value("0.25") == 0.25
+    assert page_sim_data._grid_res_value(0.5) == 0.5
 
 
 def test_get_selected_cases_suppresses_case_prefix_for_multi_stream():

@@ -40,6 +40,18 @@ from openbench.gui.pages.base_page import BasePage
 
 logger = logging.getLogger(__name__)
 
+SIM_TIM_RES_OPTIONS = [
+    "Month",
+    "Day",
+    "Hour",
+    "Year",
+    "3Hour",
+    "6Hour",
+    "8Day",
+    "climatology-month",
+    "climatology-year",
+]
+
 
 from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
 
@@ -274,6 +286,13 @@ def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]
             "model": model,
             "variables": list(scanned.variables or []),
             "variable_overrides": overrides,
+            "data_type": scanned.data_type,
+            "grid_res": scanned.grid_res,
+            "tim_res": scanned.tim_res,
+            "data_groupby": scanned.data_groupby,
+            "fulllist": str(scanned.fulllist) if scanned.fulllist else "",
+            "station_layout": scanned.station_layout,
+            "source_root": str(scanned.source_root) if scanned.source_root else "",
         }
     return discovered, case_meta
 
@@ -319,6 +338,29 @@ def _get_model_variables(model_name: str) -> List[str]:
     except Exception:
         pass
     return []
+
+
+def _combo_value(combo) -> str:
+    """Return a combo's data value, with text-only test/legacy fallback."""
+    if combo is None:
+        return ""
+    current_data = getattr(combo, "currentData", None)
+    if callable(current_data):
+        value = current_data()
+        if value is not None:
+            return str(value).strip()
+    current_text = getattr(combo, "currentText", None)
+    return str(current_text()).strip() if callable(current_text) else ""
+
+
+def _grid_res_value(value: Any) -> Any:
+    """Keep blank/unresolved values, but export valid UI input numerically."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -384,24 +426,30 @@ class PageSimData(BasePage):
         self._model_names: List[str] = _get_model_names()
 
         # === Shared settings ===
-        self._settings_group = QGroupBox("Shared Case Settings")
+        self._settings_group = QGroupBox("Optional Overrides for Selected Cases")
         settings_form = QFormLayout(self._settings_group)
 
         self._data_type_combo = QComboBox()
-        self._data_type_combo.addItems(["grid", "stn"])
-        settings_form.addRow("data_type:", self._data_type_combo)
+        self._data_type_combo.addItem("Auto (per case)", "")
+        self._data_type_combo.addItem("grid", "grid")
+        self._data_type_combo.addItem("stn", "stn")
+        settings_form.addRow("data_type override:", self._data_type_combo)
 
         self._grid_res_input = QLineEdit()
-        self._grid_res_input.setPlaceholderText("e.g. 0.5")
-        settings_form.addRow("grid_res:", self._grid_res_input)
+        self._grid_res_input.setPlaceholderText("Auto per case (e.g. 0.5)")
+        settings_form.addRow("grid_res override:", self._grid_res_input)
 
         self._tim_res_combo = QComboBox()
-        self._tim_res_combo.addItems(["Month", "Day", "Hour", "Year"])
-        settings_form.addRow("tim_res:", self._tim_res_combo)
+        self._tim_res_combo.addItem("Auto (per case)", "")
+        for value in SIM_TIM_RES_OPTIONS:
+            self._tim_res_combo.addItem(value, value)
+        settings_form.addRow("tim_res override:", self._tim_res_combo)
 
         self._data_groupby_combo = QComboBox()
-        self._data_groupby_combo.addItems(["month", "Year", "day", "single"])
-        settings_form.addRow("data_groupby:", self._data_groupby_combo)
+        self._data_groupby_combo.addItem("Auto (per case)", "")
+        for value in ("month", "Year", "day", "single", "Single"):
+            self._data_groupby_combo.addItem(value, value)
+        settings_form.addRow("data_groupby override:", self._data_groupby_combo)
 
         self._prefix_input = QLineEdit()
         self._prefix_input.setPlaceholderText("Per-case auto-detected (override here for all)")
@@ -495,6 +543,13 @@ class PageSimData(BasePage):
                         "files": file_names,
                         "suffix": suffix,
                         "multi_stream": multi_stream,
+                        "data_type": None,
+                        "grid_res": None,
+                        "tim_res": None,
+                        "data_groupby": None,
+                        "fulllist": "",
+                        "station_layout": None,
+                        "source_root": root,
                     }
             else:
                 try:
@@ -566,6 +621,7 @@ class PageSimData(BasePage):
                 files=meta.get("files") or [],
                 variable_overrides=overrides,
                 multi_stream=meta.get("multi_stream", False),
+                scan_metadata=meta,
             )
 
         self._settings_group.setVisible(True)
@@ -598,6 +654,7 @@ class PageSimData(BasePage):
         files: List[str] = None,
         variable_overrides: Dict[str, Any] = None,
         multi_stream: bool = False,
+        scan_metadata: Dict[str, Any] = None,
     ):
         """Add one case row: [checkbox] label  path  [model combo]"""
         row = QWidget()
@@ -613,6 +670,17 @@ class PageSimData(BasePage):
         path_label.setStyleSheet("color: #888; font-size: 11px;")
         path_label.setToolTip(nc_dir)
         row_layout.addWidget(path_label, 1)
+
+        metadata = dict(scan_metadata or {})
+        detected = [
+            str(value)
+            for value in (metadata.get("data_type"), metadata.get("tim_res"), metadata.get("grid_res"))
+            if value not in (None, "")
+        ]
+        metadata_label = QLabel(" / ".join(detected) if detected else "metadata unresolved")
+        metadata_label.setStyleSheet("color: #777; font-size: 10px;")
+        metadata_label.setToolTip("Detected data_type / tim_res / grid_res")
+        row_layout.addWidget(metadata_label)
 
         prefix_input = QLineEdit(prefix)
         prefix_input.setPlaceholderText("prefix")
@@ -666,6 +734,7 @@ class PageSimData(BasePage):
             "files": list(files or []),
             "variable_overrides": dict(variable_overrides or {}),
             "multi_stream": multi_stream,
+            "scan_metadata": metadata,
             "row_widget": row,
         }
         prefix_input.textEdited.connect(lambda _text, c=case: self._on_case_pattern_changed(c))
@@ -759,10 +828,16 @@ class PageSimData(BasePage):
         result = []
         prefix_override = self._prefix_input.text().strip()
         suffix_override = self._suffix_input.text().strip()
+        data_type_override = _combo_value(getattr(self, "_data_type_combo", None))
+        tim_res_override = _combo_value(getattr(self, "_tim_res_combo", None))
+        data_groupby_override = _combo_value(getattr(self, "_data_groupby_combo", None))
+        grid_res_override = getattr(self, "_grid_res_input", None)
+        grid_res_override = grid_res_override.text().strip() if grid_res_override is not None else ""
         for case in self._cases:
             if not case["checkbox"].isChecked():
                 continue
             overrides = case.get("variable_overrides") or {}
+            metadata = case.get("scan_metadata") or {}
             case_prefix = case.get("prefix_input")
             case_suffix = case.get("suffix_input")
             case_prefix = case_prefix.text().strip() if case_prefix is not None else case["auto_prefix"]
@@ -780,6 +855,10 @@ class PageSimData(BasePage):
                 prefix = ""
                 if not suffix_override:
                     suffix = ""
+            data_type = data_type_override or metadata.get("data_type") or ""
+            if data_type == "stn":
+                prefix = ""
+                suffix = ""
             result.append(
                 {
                     "label": case["label"],
@@ -788,6 +867,13 @@ class PageSimData(BasePage):
                     "suffix": suffix,
                     "model": case["model_combo"].currentData() or "",
                     "variables": overrides,
+                    "data_type": data_type,
+                    "grid_res": _grid_res_value(grid_res_override if grid_res_override else metadata.get("grid_res")),
+                    "tim_res": tim_res_override or metadata.get("tim_res") or "",
+                    "data_groupby": data_groupby_override or metadata.get("data_groupby") or "",
+                    "fulllist": (metadata.get("fulllist") or "") if data_type == "stn" else "",
+                    "station_layout": metadata.get("station_layout") or "",
+                    "source_root": metadata.get("source_root") or "",
                 }
             )
         return result
@@ -828,6 +914,7 @@ class PageSimData(BasePage):
                     "variables": dict(case.get("variable_overrides") or {}),
                     "multi_stream": bool(case.get("multi_stream", False)),
                     "case_pattern_edited": bool(case.get("case_pattern_edited", False)),
+                    "metadata": dict(case.get("scan_metadata") or {}),
                 }
                 for case in self._cases
             ]
@@ -843,14 +930,21 @@ class PageSimData(BasePage):
                 {
                     "model_namelist": c["model"],
                     "root_dir": c["nc_dir"],
-                    "data_type": self._data_type_combo.currentText(),
-                    "grid_res": self._grid_res_input.text().strip(),
-                    "tim_res": self._tim_res_combo.currentText(),
-                    "data_groupby": self._data_groupby_combo.currentText(),
+                    "data_type": c.get("data_type") or _combo_value(self._data_type_combo),
+                    "grid_res": (
+                        c.get("grid_res") if c.get("grid_res") is not None else self._grid_res_input.text().strip()
+                    ),
+                    "tim_res": c.get("tim_res") or _combo_value(self._tim_res_combo),
+                    "data_groupby": c.get("data_groupby") or _combo_value(self._data_groupby_combo),
                     "prefix": prefix_override or c["prefix"],
                     "suffix": c.get("suffix", self._suffix_input.text().strip()),
                 }
             )
+            if "fulllist" in c:
+                if c["fulllist"]:
+                    source_general["fulllist"] = c["fulllist"]
+                else:
+                    source_general.pop("fulllist", None)
             existing_source["general"] = source_general
             # Per-variable file-pattern overrides from the scan (one file per
             # variable layouts). Preserve overrides loaded from a config when
@@ -884,10 +978,10 @@ class PageSimData(BasePage):
             "_scan_root": self._root_input.text().strip(),
             "_scanned_cases": scanned_cases,
             "_shared_settings": {
-                "data_type": self._data_type_combo.currentText(),
+                "data_type": _combo_value(self._data_type_combo),
                 "grid_res": self._grid_res_input.text().strip(),
-                "tim_res": self._tim_res_combo.currentText(),
-                "data_groupby": self._data_groupby_combo.currentText(),
+                "tim_res": _combo_value(self._tim_res_combo),
+                "data_groupby": _combo_value(self._data_groupby_combo),
                 "prefix": prefix_override,
                 "suffix": self._suffix_input.text().strip(),
             },
@@ -919,29 +1013,18 @@ class PageSimData(BasePage):
         saved_configs = sim_data.get("source_configs", {})
         scanned_cases = sim_data.get("_scanned_cases", [])
 
-        # Restore shared settings. Configs written by the CLI have no
-        # _shared_settings block, so seed the shared combos from the first
-        # case — otherwise the next save would overwrite the loaded per-case
-        # data_type/tim_res/data_groupby with the combo defaults.
+        # Restore only explicit shared overrides. CLI/unified configs carry
+        # per-case metadata and must not be homogenized from the first case.
         ss = sim_data.get("_shared_settings", {})
-        if not ss and saved_configs:
-            first_general = next(iter(saved_configs.values())).get("general", {}) or {}
-            ss = {key: first_general.get(key, "") for key in ("data_type", "grid_res", "tim_res", "data_groupby")}
         if ss:
-            if ss.get("data_type"):
-                idx = self._data_type_combo.findText(str(ss["data_type"]), Qt.MatchFixedString)
-                if idx >= 0:
-                    self._data_type_combo.setCurrentIndex(idx)
+            idx = self._data_type_combo.findData(str(ss.get("data_type", "")))
+            self._data_type_combo.setCurrentIndex(max(idx, 0))
             if ss.get("grid_res"):
                 self._grid_res_input.setText(str(ss["grid_res"]))
-            if ss.get("tim_res"):
-                idx = self._tim_res_combo.findText(str(ss["tim_res"]), Qt.MatchFixedString)
-                if idx >= 0:
-                    self._tim_res_combo.setCurrentIndex(idx)
-            if ss.get("data_groupby"):
-                idx = self._data_groupby_combo.findText(str(ss["data_groupby"]), Qt.MatchFixedString)
-                if idx >= 0:
-                    self._data_groupby_combo.setCurrentIndex(idx)
+            idx = self._tim_res_combo.findData(str(ss.get("tim_res", "")))
+            self._tim_res_combo.setCurrentIndex(max(idx, 0))
+            idx = self._data_groupby_combo.findData(str(ss.get("data_groupby", "")))
+            self._data_groupby_combo.setCurrentIndex(max(idx, 0))
             if ss.get("prefix"):
                 self._prefix_input.setText(ss["prefix"])
             if ss.get("suffix"):
@@ -969,6 +1052,10 @@ class PageSimData(BasePage):
                 label = saved_case["label"]
                 cfg = saved_configs.get(label, {}) or {}
                 gen = cfg.get("general", {}) or {}
+                metadata = dict(saved_case.get("metadata") or {})
+                for key in ("data_type", "grid_res", "tim_res", "data_groupby", "fulllist"):
+                    if metadata.get(key) in (None, "") and gen.get(key) not in (None, ""):
+                        metadata[key] = gen[key]
                 overrides = saved_case.get("variables")
                 if not isinstance(overrides, dict):
                     overrides = cfg.get("variables") if isinstance(cfg.get("variables"), dict) else {}
@@ -982,6 +1069,7 @@ class PageSimData(BasePage):
                     files=saved_case.get("files") or [],
                     variable_overrides=overrides,
                     multi_stream=bool(saved_case.get("multi_stream", False)),
+                    scan_metadata=metadata,
                 )
                 self._cases[-1]["case_pattern_edited"] = bool(saved_case.get("case_pattern_edited", False))
             self._settings_group.setVisible(True)
@@ -993,6 +1081,11 @@ class PageSimData(BasePage):
             prefix = gen.get("prefix", "")
             model_name = gen.get("model_namelist", "")
             overrides = cfg.get("variables") if isinstance(cfg.get("variables"), dict) else {}
+            metadata = {
+                key: gen.get(key)
+                for key in ("data_type", "grid_res", "tim_res", "data_groupby", "fulllist")
+                if gen.get(key) not in (None, "")
+            }
             self._add_case_row(
                 label,
                 nc_dir,
@@ -1002,6 +1095,7 @@ class PageSimData(BasePage):
                 suffix=gen.get("suffix", ""),
                 variable_overrides=overrides,
                 multi_stream=not _case_prefix_is_safe(prefix, gen.get("suffix", ""), overrides),
+                scan_metadata=metadata,
             )
 
         if saved_configs:
@@ -1019,6 +1113,13 @@ class PageSimData(BasePage):
         for c in cases:
             if not c["model"]:
                 QMessageBox.warning(self, "No Model", f"Please select a model for case '{c['label']}'.")
+                return False
+            grid_res = c.get("grid_res")
+            if grid_res is not None and not isinstance(grid_res, (int, float)):
+                QMessageBox.warning(self, "Invalid Resolution", "grid_res must be a positive number.")
+                return False
+            if isinstance(grid_res, (int, float)) and grid_res <= 0:
+                QMessageBox.warning(self, "Invalid Resolution", "grid_res must be a positive number.")
                 return False
         return True
 

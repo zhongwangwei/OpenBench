@@ -51,7 +51,8 @@ class ScanConfirmDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # --- Summary ---
-        if auto_model:
+        detected_models = {model for model in self._case_models.values() if model}
+        if auto_model or detected_models:
             summary = QLabel(f"Found <b>{len(discovered)}</b> cases with <b>{nc_var_count}</b> NC variables.\n")
         else:
             summary = QLabel(
