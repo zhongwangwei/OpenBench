@@ -37,13 +37,10 @@ def stat_mann_kendall_trend_test(self, data):
             if len(x) < 4:
                 return np.array([np.nan, np.nan, np.nan, np.nan])
 
-            # Calculate Kendall's tau and p-value. Use the exact distribution
-            # for short series (scipy's default switches to a normal
-            # approximation that is inaccurate for n < ~20). The exact
-            # path becomes prohibitively slow for n > 50, so we cap there
-            # and fall back to the asymptotic p-value above that.
-            method = "exact" if len(x) <= 50 else "asymptotic"
-            tau, p_value = stats.kendalltau(np.arange(len(x)), x, method=method)
+            # Let SciPy select exact inference only when it is valid. In
+            # particular, tied values cannot use method="exact" and require
+            # the tie-corrected asymptotic path.
+            tau, p_value = stats.kendalltau(np.arange(len(x)), x, method="auto")
 
             # Determine trend. Propagate NaN from `p_value` (e.g. exact-method
             # output for a degenerate constant series) into `significance`

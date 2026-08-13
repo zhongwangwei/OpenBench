@@ -182,6 +182,49 @@ def test_smpi_uses_climatological_mean_difference_not_instantaneous_error():
     assert np.isfinite(upper) or np.isnan(upper)
 
 
+def test_smpi_numpy_and_dask_ignore_the_same_invalid_bootstrap_samples():
+    import warnings
+
+    import dask.array as da
+
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    obs = np.array([0.0, 0.0, 0.0, 1.0])
+    sim = obs + 1.0
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", RuntimeWarning)
+        eager = m.smpi(make_da(sim), make_da(obs), n_bootstrap=20, seed=4)
+        lazy = m.smpi(
+            xr.DataArray(da.from_array(sim, chunks=2), dims="time"),
+            xr.DataArray(da.from_array(obs, chunks=2), dims="time"),
+            n_bootstrap=20,
+            seed=4,
+        )
+        lazy_interval = [float(value.compute()) for value in lazy[1:]]
+
+    assert np.isfinite(eager[1:]).all()
+    np.testing.assert_allclose(eager[1:], lazy_interval)
+    assert not [warning for warning in caught if issubclass(warning.category, RuntimeWarning)]
+
+
+def test_comparison_smpi_interval_ignores_invalid_bootstrap_samples():
+    from openbench.core._comparison_smpi import _smpi_percentile_interval
+
+    lower, upper = _smpi_percentile_interval([np.nan, 1.0, 2.0, np.inf])
+
+    np.testing.assert_allclose([lower, upper], [1.05, 1.95])
+
+
+def test_kappa_rejects_non_integral_continuous_values():
+    import pytest
+
+    from openbench.core.metrics import metrics
+
+    with pytest.raises(ValueError, match="integer-coded categorical"):
+        metrics().kappa_coeff(make_da([0.1, 0.9, 1.2]), make_da([0.0, 1.0, 1.0]))
+
+
 def test_taylor_grid_summary_uses_pairwise_mask_for_all_three_terms():
     from openbench.core._comparison_taylor import _taylor_grid_summary_statistics
     from openbench.core.metrics import metrics
