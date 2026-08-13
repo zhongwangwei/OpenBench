@@ -36,6 +36,7 @@ class ScanConfirmDialog(QDialog):
         match_info: str,  # human-readable match summary
         nc_var_count: int,  # number of NC variables found
         parent=None,
+        case_models: Dict[str, str] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Confirm Scan Results")
@@ -45,6 +46,7 @@ class ScanConfirmDialog(QDialog):
         self._discovered = discovered
         self._model_names = model_names
         self._auto_model = auto_model
+        self._case_models = case_models or {}
 
         layout = QVBoxLayout(self)
 
@@ -67,10 +69,10 @@ class ScanConfirmDialog(QDialog):
             layout.addWidget(match_label)
 
         # --- Case table ---
-        layout.addWidget(QLabel("Select cases and assign models:"))
+        layout.addWidget(QLabel("Select cases to run and assign models:"))
 
         self._table = QTableWidget(len(discovered), 4)
-        self._table.setHorizontalHeaderLabels(["Include", "Case", "Path", "Model"])
+        self._table.setHorizontalHeaderLabels(["Run", "Case", "Path", "Model"])
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -102,10 +104,12 @@ class ScanConfirmDialog(QDialog):
 
             # Model combo
             combo = QComboBox()
+            combo.addItem("Select model...", "")
             for mn in model_names:
                 combo.addItem(mn, mn)
-            if auto_model:
-                idx = combo.findData(auto_model)
+            detected_model = self._case_models.get(label) or auto_model
+            if detected_model:
+                idx = combo.findData(detected_model)
                 if idx >= 0:
                     combo.setCurrentIndex(idx)
             self._model_combos.append(combo)
@@ -146,17 +150,17 @@ class ScanConfirmDialog(QDialog):
             cb.setChecked(checked)
 
     def get_results(self) -> List[Dict[str, Any]]:
-        """Return list of confirmed cases: {label, nc_dir, prefix, model}."""
+        """Return all discovered cases with their run-selection state."""
         results = []
         for i, (label, nc_dir, prefix) in enumerate(self._discovered):
-            if self._checkboxes[i].isChecked():
-                model = self._model_combos[i].currentData() or ""
-                results.append(
-                    {
-                        "label": label,
-                        "nc_dir": nc_dir,
-                        "prefix": prefix,
-                        "model": model,
-                    }
-                )
+            model = self._model_combos[i].currentData() or ""
+            results.append(
+                {
+                    "label": label,
+                    "nc_dir": nc_dir,
+                    "prefix": prefix,
+                    "model": model,
+                    "checked": self._checkboxes[i].isChecked(),
+                }
+            )
         return results
