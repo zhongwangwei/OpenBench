@@ -203,7 +203,7 @@ def scan(
             )
             click.secho(f"Wrote draft model profile {catalog_path}", fg="green", bold=True)
 
-        _atomic_yaml_write(sim_path, _simulation_yaml(result, sim_path=sim_path))
+        _atomic_yaml_write(sim_path, _simulation_yaml(result))
         _atomic_yaml_write(report_path, _report_yaml(result, case_depth=case_depth))
 
     finally:
@@ -559,8 +559,8 @@ def _apply_temporal_kind_candidate(case) -> None:
     case.provenance["tim_res"] = "climatology"
 
 
-def _simulation_yaml(result, *, sim_path: Path | None = None) -> dict:
-    entries = {case.label: _case_simulation_entry(case, sim_path=sim_path) for case in result.cases}
+def _simulation_yaml(result) -> dict:
+    entries = {case.label: _case_simulation_entry(case) for case in result.cases}
     defaults = _common_defaults(entries)
     if defaults:
         for entry in entries.values():
@@ -570,22 +570,13 @@ def _simulation_yaml(result, *, sim_path: Path | None = None) -> dict:
     return {"simulation": entries}
 
 
-def _portable_artifact_path(path: Path | None, sim_path: Path | None) -> str | None:
+def _absolute_artifact_path(path: Path | None) -> str | None:
     if path is None:
         return None
-    target = Path(path)
-    if sim_path is not None:
-        try:
-            base = Path(sim_path).expanduser().resolve().parent
-            rel = Path(os.path.relpath(target.expanduser().resolve(), start=base)).as_posix()
-            if not rel.startswith(".."):
-                return rel
-        except (OSError, ValueError):
-            pass
-    return str(target)
+    return str(Path(path).expanduser().resolve())
 
 
-def _case_simulation_entry(case, *, sim_path: Path | None = None) -> dict:
+def _case_simulation_entry(case) -> dict:
     entry = {
         "model": case.model,
         "root_dir": str(case.root_dir),
@@ -605,7 +596,7 @@ def _case_simulation_entry(case, *, sim_path: Path | None = None) -> dict:
     if getattr(case, "variable_overrides", None):
         entry["variables"] = case.variable_overrides
     if getattr(case, "fulllist", None):
-        entry["fulllist"] = _portable_artifact_path(case.fulllist, sim_path)
+        entry["fulllist"] = _absolute_artifact_path(case.fulllist)
     return entry
 
 

@@ -4460,7 +4460,7 @@ def test_scan_simulation_config_prompts_for_model_when_auto_inference_is_unresol
     assert simulation["Case01"]["model"] == "CoLM"
 
 
-def test_scan_simulation_config_writes_portable_station_fulllist(tmp_path, monkeypatch):
+def test_scan_simulation_config_writes_absolute_station_fulllist(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
@@ -4503,7 +4503,8 @@ def test_scan_simulation_config_writes_portable_station_fulllist(tmp_path, monke
     )
 
     assert materialize_calls == [(tmp_path / "configs" / "openbench_sim_station_lists", {"allow_partial": False})]
-    assert simulation["Case01"]["fulllist"] == "openbench_sim_station_lists/Case01/Case01_stations.csv"
+    expected = tmp_path / "configs" / "openbench_sim_station_lists" / "Case01" / "Case01_stations.csv"
+    assert simulation["Case01"]["fulllist"] == str(expected)
 
 
 def test_scan_simulation_config_aborts_on_partial_station_materialization(tmp_path, monkeypatch):
