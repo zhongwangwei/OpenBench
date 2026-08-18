@@ -1,26 +1,5 @@
 # Changelog
 
-## [3.0.0b12] - 2026-08-18
-
-Beta release over 3.0.0b11 for uncertainty-aware evaluation and reliable
-station-scan configuration.
-
-### Added
-- Opt-in, gap-aware moving-block bootstrap intervals for supported evaluation
-  metrics, with machine-readable verdicts and report integration.
-- Separate model-spread and reference-sensitivity products for grid and station
-  evaluation workflows.
-
-### Changed
-- Uncertainty configuration participates in cache identity and cached outputs
-  are reused only when their complete configuration still matches.
-
-### Fixed
-- Bootstrap results retain valid point estimates when an interval cannot be
-  calculated from the available contiguous samples.
-- `openbench init` and `openbench sim scan` now write absolute station
-  `fulllist` paths so generated YAML works from any current directory.
-
 ## [3.0.0b11] - 2026-08-13
 
 Beta release over 3.0.0b10 for GUI dataset discovery, registry coverage, and
