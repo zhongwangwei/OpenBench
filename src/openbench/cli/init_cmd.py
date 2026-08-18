@@ -695,7 +695,7 @@ def _scan_simulation_config(
         )
     if project_years is not None:
         _warn_simulation_case_year_coverage(result.cases, project_years)
-    return _simulation_yaml(result, sim_path=output)["simulation"]
+    return _simulation_yaml(result)["simulation"]
 
 
 def _prompt_manual_simulations(mgr) -> dict:
