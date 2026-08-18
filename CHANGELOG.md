@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.0.0b11] - 2026-08-13
+
+Beta release over 3.0.0b10 for GUI dataset discovery, registry coverage, and
+statistical evaluation correctness.
+
+### Added
+- Expanded Crop reference catalog coverage and CoLM2024 model metadata.
+- Run-manifest and configuration-key validation for more reproducible runs.
+
+### Changed
+- GUI simulation scans retain per-case grid/station metadata and prepare station
+  lists before local preview/export.
+- SMPI remains available through its dedicated comparison workflow instead of
+  the single-value metric selector.
+
+### Fixed
+- GUI navigation now persists edits, registered reference paths are no longer
+  overwritten by scan roots, and simulation discovery follows the selected run.
+- Reference station-list resolution, Streamflow catalog entries, units, and
+  registry behavior were corrected.
+- Mann-Kendall handles tied short series, categorical kappa rejects continuous
+  inputs, and SMPI bootstrap intervals are consistent for NumPy and Dask data.
+
 ## [3.0.0b10] - 2026-07-18
 
 Beta release over 3.0.0b9 for station-reference routing correctness.

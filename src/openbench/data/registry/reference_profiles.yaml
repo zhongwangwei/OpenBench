@@ -1279,17 +1279,29 @@ _Ignore_FLUXCOM_raw_composite:
     root_sub_dir: Grid/LowRes/Composite/FLUXCOM
 
 GDHY2019ver:
-  scan:
-    layout: grid_nested_root
-    root_sub_dir: Grid/LowRes/Anth/Crop/GDHY2019ver
-  description: GDHY2019 harvested area and yield crop masks
-  category: Urban
+  description: GDHY2019 global historical crop-yield dataset
+  category: Bio
   tim_res: Month
   data_groupby: Year
+  years:
+    - 1981
+    - 2016
   variables:
-    Crop:
-      varname: Crop
-      varunit: ''
+    Crop_Yield_Rice:
+      varname: var
+      varunit: t ha-1
+    Crop_Yield_Corn:
+      varname: var
+      varunit: t ha-1
+    Crop_Yield_Maize:
+      varname: var
+      varunit: t ha-1
+    Crop_Yield_Soybean:
+      varname: var
+      varunit: t ha-1
+    Crop_Yield_Wheat:
+      varname: var
+      varunit: t ha-1
 
 GRUN_ENSEMBLE:
   description: G-RUN ENSEMBLE global runoff
