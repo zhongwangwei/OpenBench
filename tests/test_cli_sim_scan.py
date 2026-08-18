@@ -117,6 +117,7 @@ def test_sim_scan_station_collection_writes_fulllist_and_merged_station_files(
     assert "suffix" not in entry
 
     fulllist = Path(entry["fulllist"])
+    assert fulllist.is_absolute()
     assert fulllist.exists()
     rows = pd.read_csv(fulllist)
     assert sorted(rows["ID"]) == ["US-AAA", "US-BBB"]
@@ -162,8 +163,7 @@ def test_sim_scan_default_station_output_follows_explicit_output_parent(
     sim_data = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     raw_fulllist = sim_data["simulation"]["CaseA"]["fulllist"]
     fulllist = Path(raw_fulllist)
-    if not fulllist.is_absolute():
-        fulllist = (output_path.parent / fulllist).resolve()
+    assert fulllist.is_absolute()
     assert fulllist.parent.parent == output_dir / "foo_sim_station_lists"
     assert not list(cwd.glob("openbench_sim_scan_station_lists_*"))
 
