@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.0b12] - 2026-08-18
+
+Beta release over 3.0.0b11 for reliable generated station configuration.
+
+### Fixed
+- `openbench init` and `openbench sim scan` now write absolute station
+  `fulllist` paths so generated YAML works from any current directory.
+
 ## [3.0.0b11] - 2026-08-13
 
 Beta release over 3.0.0b10 for GUI dataset discovery, registry coverage, and
