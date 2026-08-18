@@ -121,11 +121,7 @@ def _load_station_pairs(
     pairs: dict[str, tuple[xr.DataArray, xr.DataArray]] = {}
     runner_cfg = getattr(task["bindings"], "runner_cfg", None)
     resolution = getattr(runner_cfg, "general", {}).get("compare_tim_res") if runner_cfg is not None else None
-    evaluation_path = (
-        output_dir
-        / "metrics"
-        / f"{item}_stn_{task['ref_source']}_{task['sim_source']}_evaluations.csv"
-    )
+    evaluation_path = output_dir / "metrics" / f"{item}_stn_{task['ref_source']}_{task['sim_source']}_evaluations.csv"
     station_rows = pd.read_csv(evaluation_path, dtype={"ID": str})
     if "ID" not in station_rows:
         raise ValueError(f"station evaluation output has no ID column: {evaluation_path}")
@@ -182,9 +178,7 @@ def _bootstrap_rows(
                 "time_resolution": pair_resolutions[key],
             }
             if kind == "station":
-                station_pairs = [
-                    (sim.values, ref.values, sim["time"].values) for sim, ref in data.values()
-                ]
+                station_pairs = [(sim.values, ref.values, sim["time"].values) for sim, ref in data.values()]
                 result = bootstrap_network_metric(station_pairs, metric, **kwargs)
                 scope = "station_network"
             else:
@@ -417,9 +411,7 @@ def _write_spread_products(
         for metric in metrics:
             for ref_source in refs:
                 members = [
-                    (sim, task_keys[(item, ref_source, sim)])
-                    for sim in sims
-                    if (item, ref_source, sim) in task_keys
+                    (sim, task_keys[(item, ref_source, sim)]) for sim in sims if (item, ref_source, sim) in task_keys
                 ]
                 kinds = {"station" if "stn" in task_output_data_types(task) else "grid" for _, task in members}
                 if len(members) < 2:
@@ -482,9 +474,7 @@ def _write_spread_products(
 
             for sim_source in sims:
                 members = [
-                    (ref, task_keys[(item, ref, sim_source)])
-                    for ref in refs
-                    if (item, ref, sim_source) in task_keys
+                    (ref, task_keys[(item, ref, sim_source)]) for ref in refs if (item, ref, sim_source) in task_keys
                 ]
                 kinds = {"station" if "stn" in task_output_data_types(task) else "grid" for _, task in members}
                 if len(members) < 2:
@@ -601,16 +591,16 @@ def run_uncertainty(
 ) -> list[dict[str, Any]]:
     """Generate aggregate bootstrap, spread/sensitivity products, and verdicts."""
     summary_path = output_dir / "uncertainty" / "summary.json"
-    if tasks and all(task.get("cache_skipped") for task in tasks) and _cached_uncertainty_outputs_complete(
-        cfg, output_dir
+    if (
+        tasks
+        and all(task.get("cache_skipped") for task in tasks)
+        and _cached_uncertainty_outputs_complete(cfg, output_dir)
     ):
         logger.info("Reusing cached uncertainty outputs")
         return []
     summary_path.unlink(missing_ok=True)
 
-    metrics = cfg.uncertainty.metrics or [
-        metric for metric in metric_vars if metric in UNCERTAINTY_METRIC_DIRECTIONS
-    ]
+    metrics = cfg.uncertainty.metrics or [metric for metric in metric_vars if metric in UNCERTAINTY_METRIC_DIRECTIONS]
     errors: list[dict[str, Any]] = []
     pair_data: dict[tuple[str, str, str], Any] = {}
     pair_kinds: dict[tuple[str, str, str], str] = {}
@@ -624,11 +614,7 @@ def run_uncertainty(
             pair_resolutions[key] = (
                 getattr(runner_cfg, "general", {}).get("compare_tim_res") if runner_cfg is not None else None
             )
-            pair_data[key] = (
-                _load_station_pairs(task, output_dir)
-                if is_station
-                else _load_grid_pair(task, output_dir)
-            )
+            pair_data[key] = _load_station_pairs(task, output_dir) if is_station else _load_grid_pair(task, output_dir)
         except Exception as exc:
             logger.exception("Failed to load uncertainty inputs for %s", key)
             errors.append(

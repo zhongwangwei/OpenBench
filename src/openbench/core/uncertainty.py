@@ -165,9 +165,7 @@ def segmented_block_index_matrix(
         offsets = np.arange(actual_length)
         indices = (starts[..., None] + offsets).reshape(n_resamples, -1)[:, :segment_length]
         resampled_segments.append(indices)
-        block_sizes.extend(
-            [actual_length] * (block_count - 1) + [segment_length - actual_length * (block_count - 1)]
-        )
+        block_sizes.extend([actual_length] * (block_count - 1) + [segment_length - actual_length * (block_count - 1)])
     return np.concatenate(resampled_segments, axis=1), block_sizes
 
 
@@ -269,14 +267,16 @@ def _metric_values(metric: str, sim_values: np.ndarray, ref_values: np.ndarray) 
     if metric == "correlation_R2":
         return correlation**2
     if metric in {"KGE", "KGESS"}:
-        sim_std = np.sqrt(np.divide(sim_variance_sum, count, out=np.full_like(sim_variance_sum, np.nan), where=count > 0))
-        ref_std = np.sqrt(np.divide(ref_variance_sum, count, out=np.full_like(ref_variance_sum, np.nan), where=count > 0))
+        sim_std = np.sqrt(
+            np.divide(sim_variance_sum, count, out=np.full_like(sim_variance_sum, np.nan), where=count > 0)
+        )
+        ref_std = np.sqrt(
+            np.divide(ref_variance_sum, count, out=np.full_like(ref_variance_sum, np.nan), where=count > 0)
+        )
         sim_mean = mean(sim_values)
         ref_mean = mean(ref_values)
         with np.errstate(divide="ignore", invalid="ignore"):
-            kge = 1 - np.sqrt(
-                (correlation - 1) ** 2 + (sim_std / ref_std - 1) ** 2 + (sim_mean / ref_mean - 1) ** 2
-            )
+            kge = 1 - np.sqrt((correlation - 1) ** 2 + (sim_std / ref_std - 1) ** 2 + (sim_mean / ref_mean - 1) ** 2)
         kge = np.where(np.isfinite(correlation) & (ref_std != 0) & (ref_mean != 0), kge, np.nan)
         return enough((kge + 0.41) / 1.41 if metric == "KGESS" else kge)
     if metric == "L":
@@ -462,9 +462,7 @@ def paired_metric_difference(
             segment_count=len(segments),
         )
     if not _has_resampleable_segment(segments, resolved_block):
-        estimate = quality_value(metric, metric_value(metric, a, o)) - quality_value(
-            metric, metric_value(metric, b, o)
-        )
+        estimate = quality_value(metric, metric_value(metric, a, o)) - quality_value(metric, metric_value(metric, b, o))
         return _interval_summary(
             estimate,
             [],
@@ -743,11 +741,7 @@ def paired_grid_metric_difference(
             segment_count=len(segments),
         )
     result["spatial_cell_count"] = int(
-        np.sum(
-            np.isfinite(weights)
-            & (weights > 0)
-            & np.any(np.isfinite(a) & np.isfinite(b) & np.isfinite(o), axis=1)
-        )
+        np.sum(np.isfinite(weights) & (weights > 0) & np.any(np.isfinite(a) & np.isfinite(b) & np.isfinite(o), axis=1))
     )
     return result
 
@@ -887,8 +881,7 @@ def paired_network_metric_difference(
         resolved_blocks = [resolved for _, _, _, _, resolved in triplets]
         estimate = _finite_mean(
             [
-                quality_value(metric, metric_value(metric, a, o))
-                - quality_value(metric, metric_value(metric, b, o))
+                quality_value(metric, metric_value(metric, a, o)) - quality_value(metric, metric_value(metric, b, o))
                 for a, b, o, _, _ in triplets
             ]
         )
@@ -932,8 +925,7 @@ def paired_network_metric_difference(
 
     estimate = _finite_mean(
         [
-            quality_value(metric, metric_value(metric, a, o))
-            - quality_value(metric, metric_value(metric, b, o))
+            quality_value(metric, metric_value(metric, a, o)) - quality_value(metric, metric_value(metric, b, o))
             for a, b, o, _, _ in triplets
         ]
     )

@@ -852,7 +852,7 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     missing_outputs = [metric for metric in uncertainty_metrics if metric not in effective_metrics]
     if missing_outputs:
         raise ConfigError(
-            "uncertainty.metrics must also be present in top-level metrics: " f"{', '.join(missing_outputs)}"
+            f"uncertainty.metrics must also be present in top-level metrics: {', '.join(missing_outputs)}"
         )
     if uncertainty.enabled and not uncertainty_metrics:
         raise ConfigError("uncertainty.enabled requires at least one supported top-level metric")

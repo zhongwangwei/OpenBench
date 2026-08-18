@@ -59,7 +59,7 @@ def _bindings(simulations: list[str], references: list[str], data_type: str) -> 
                     **{f"{name}_data_type": data_type for name in simulations},
                 }
             },
-        )
+        ),
     )
 
 
@@ -112,16 +112,12 @@ def test_grid_uncertainty_outputs_keep_model_and_reference_axes_separate(tmp_pat
     assert len(summary["bootstrap"]) == 4
     assert all(row["segment_count"] == 2 for row in summary["bootstrap"])
     estimates = {(row["reference"], row["simulation"]): row["estimate"] for row in summary["bootstrap"]}
-    assert estimates == pytest.approx(
-        {("R1", "A"): 0.1, ("R1", "B"): 2.0, ("R2", "A"): 2.9, ("R2", "B"): 1.0}
-    )
+    assert estimates == pytest.approx({("R1", "A"): 0.1, ("R1", "B"): 2.0, ("R2", "A"): 2.9, ("R2", "B"): 1.0})
     assert summary["verdicts"][0]["status"] == "reference_sensitive"
     assert len(summary["products"]["model_spread"]) == 2
     assert len(summary["products"]["reference_sensitivity"]) == 2
     with xr.open_dataset(output / summary["products"]["model_spread"][0]) as product:
-        assert {"ensemble_mean", "model_spread", "member_count", "coefficient_of_variation"} <= set(
-            product.data_vars
-        )
+        assert {"ensemble_mean", "model_spread", "member_count", "coefficient_of_variation"} <= set(product.data_vars)
 
 
 def test_station_uncertainty_writes_network_bootstrap_and_csv_products(tmp_path):
@@ -140,9 +136,7 @@ def test_station_uncertainty_writes_network_bootstrap_and_csv_products(tmp_path)
                 coords={"time": sim_time},
                 dims="time",
                 name="flow",
-            ).to_netcdf(
-                folder / f"Flow_sim_{station}_2000_2001.nc"
-            )
+            ).to_netcdf(folder / f"Flow_sim_{station}_2000_2001.nc")
             xr.DataArray(np.arange(20), coords={"time": ref_time}, dims="time", name="flow").to_netcdf(
                 folder / f"Flow_ref_{station}_2000_2001.nc"
             )
@@ -220,9 +214,9 @@ def test_station_loader_uses_current_evaluation_rows_and_best_time_alignment(tmp
         xr.DataArray(np.arange(4.0), coords={"time": ref_time}, dims="time", name="flow").to_netcdf(
             folder / f"Flow_ref_{station}_2000_2000.nc"
         )
-    pd.DataFrame(
-        {"ID": ["current"], "use_syear": [2000], "use_eyear": [2000], "RMSE": [0.0]}
-    ).to_csv(output / "metrics" / "Flow_stn_R_A_evaluations.csv", index=False)
+    pd.DataFrame({"ID": ["current"], "use_syear": [2000], "use_eyear": [2000], "RMSE": [0.0]}).to_csv(
+        output / "metrics" / "Flow_stn_R_A_evaluations.csv", index=False
+    )
     task = _tasks(_bindings(["A"], ["R"], "stn"), ["A"], ["R"])[0]
 
     pairs = _load_station_pairs(task, output)
@@ -235,12 +229,8 @@ def test_station_reference_spread_matches_locations_not_source_ids(tmp_path):
     first = tmp_path / "first.csv"
     second = tmp_path / "second.csv"
     output = tmp_path / "spread.csv"
-    pd.DataFrame({"ID": ["A"], "ref_lat": [10.0], "ref_lon": [20.0], "RMSE": [1.0]}).to_csv(
-        first, index=False
-    )
-    pd.DataFrame({"ID": ["B"], "ref_lat": [10.0], "ref_lon": [20.0], "RMSE": [3.0]}).to_csv(
-        second, index=False
-    )
+    pd.DataFrame({"ID": ["A"], "ref_lat": [10.0], "ref_lon": [20.0], "RMSE": [1.0]}).to_csv(first, index=False)
+    pd.DataFrame({"ID": ["B"], "ref_lat": [10.0], "ref_lon": [20.0], "RMSE": [3.0]}).to_csv(second, index=False)
 
     assert _write_station_spread(
         [("R1", first), ("R2", second)],
@@ -327,9 +317,7 @@ def test_local_runner_invokes_enabled_uncertainty_phase(tmp_path, monkeypatch):
     monkeypatch.setattr(
         local_runner,
         "_evaluate_ready_tasks",
-        lambda *args, **kwargs: [
-            {"variable": "Flow", "sim": "A", "ref": "R", "status": "success", "skipped": False}
-        ],
+        lambda *args, **kwargs: [{"variable": "Flow", "sim": "A", "ref": "R", "status": "success", "skipped": False}],
     )
     monkeypatch.setattr(
         local_runner,
@@ -380,9 +368,7 @@ def test_local_runner_removes_stale_uncertainty_summary_when_disabled(tmp_path, 
     monkeypatch.setattr(
         local_runner,
         "_evaluate_ready_tasks",
-        lambda *args, **kwargs: [
-            {"variable": "Flow", "sim": "A", "ref": "R", "status": "success", "skipped": False}
-        ],
+        lambda *args, **kwargs: [{"variable": "Flow", "sim": "A", "ref": "R", "status": "success", "skipped": False}],
     )
     monkeypatch.setattr(orchestration, "_write_run_manifest", lambda *args: None)
 
