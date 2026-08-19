@@ -119,3 +119,26 @@ def test_remote_sim_helpers_expand_tilde_paths():
     assert commands
     assert '"$HOME"/Simulation' in commands[0]
     assert "'~/" not in commands[0]
+
+
+def test_local_gui_sim_scan_runs_off_gui_thread(qapp, monkeypatch, tmp_path):
+    from PySide6.QtCore import QThread
+
+    ran_on_gui_thread = []
+
+    def fake_scan(root):
+        assert root == str(tmp_path)
+        ran_on_gui_thread.append(QThread.currentThread() == qapp.thread())
+        return [], {}
+
+    monkeypatch.setattr(page_sim_data, "_scan_local_cases", fake_scan)
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: None)
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object()),
+        _root_input=_Text(str(tmp_path)),
+        _clear_cases=lambda: None,
+    )
+
+    page_sim_data.PageSimData._do_scan_flow(page)
+
+    assert ran_on_gui_thread == [False]
