@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from openbench.gui.remote_python import quote_remote_path
-from openbench.gui.widgets._ssh_worker import execute_responsive
+from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.pages.base_page import BasePage
 
 logger = logging.getLogger(__name__)
@@ -553,7 +553,7 @@ class PageSimData(BasePage):
                     }
             else:
                 try:
-                    discovered, case_meta = _scan_local_cases(root)
+                    discovered, case_meta = call_responsive(lambda: _scan_local_cases(root))
                 except Exception as exc:
                     QMessageBox.critical(self, "Error", f"Cannot scan directory:\n{exc}")
                     return

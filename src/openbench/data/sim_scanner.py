@@ -510,9 +510,9 @@ def _infer_variable_file_overrides(
         return {}
 
     try:
-        from openbench.data.registry import RegistryManager
+        from openbench.data.registry.manager import get_registry
 
-        profile = RegistryManager().get_model(model)
+        profile = get_registry().get_model(model)
     except Exception:
         profile = None
     if not profile:
@@ -1216,11 +1216,10 @@ def _resolve_model(
         return model_name, "user", None
 
     try:
-        from openbench.data.registry import RegistryManager
-        from openbench.data.registry.manager import canonical_model_key
+        from openbench.data.registry.manager import canonical_model_key, get_registry
 
         models = _deduplicate_equivalent_models(
-            RegistryManager().list_models(),
+            get_registry().list_models(),
             canonical_key=canonical_model_key,
         )
     except Exception:
