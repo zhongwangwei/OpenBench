@@ -291,6 +291,9 @@ def run_statistics(
         if output_dir is not None:
             runner_cfg = getattr(bindings, "runner_cfg", None)
             all_items = list(getattr(runner_cfg, "evaluation_items", {}).keys())
+            grid_check = getattr(bindings, "has_grid_evaluation", None)
+            if callable(grid_check):
+                all_items = [item for item in all_items if grid_check([item]).has_grid]
             preflight_errors = post_phase_preflight_errors_fn(
                 bindings,
                 output_dir,

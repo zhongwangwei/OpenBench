@@ -48,6 +48,44 @@ _DETACHED_SCAN_WORKERS = []
 from openbench.gui.path_utils import get_remote_ssh_manager
 
 
+def _registry_source_data(var_name: str, source_name: str) -> dict | None:
+    """Build the GUI source config directly from a registry descriptor."""
+    from openbench.data.registry.manager import get_registry
+
+    ref = get_registry().get_reference(source_name)
+    if ref is None:
+        return None
+
+    general = {
+        "root_dir": ref.root_dir or "",
+        "data_type": ref.data_type,
+        "tim_res": ref.tim_res,
+        "data_groupby": ref.data_groupby,
+        "timezone": ref.timezone,
+        "syear": ref.years[0] if ref.years else "",
+        "eyear": ref.years[1] if len(ref.years) > 1 else "",
+    }
+    if ref.grid_res is not None:
+        general["grid_res"] = ref.grid_res
+    if ref.fulllist:
+        general["fulllist"] = ref.fulllist
+
+    source_data = {"general": general}
+    var_mapping = ref.variables.get(var_name)
+    if var_mapping:
+        source_data.update(
+            {
+                "varname": var_mapping.varname,
+                "varunit": var_mapping.varunit,
+                "prefix": var_mapping.prefix,
+                "suffix": var_mapping.suffix,
+            }
+        )
+        if var_mapping.sub_dir:
+            source_data["sub_dir"] = var_mapping.sub_dir
+    return source_data
+
+
 def _infer_ref_data_root(general_section, selected_vars) -> str:
     """Fallback scan root when the GUI has no persisted ``_scan_root``.
 
@@ -312,6 +350,13 @@ class PageRefData(BasePage):
                 if not os.path.isdir(data_root):
                     QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
                     return
+                data_root = os.path.abspath(os.path.expanduser(data_root))
+                self.data_root_input.setText(data_root)
+                os.environ["OPENBENCH_REF_ROOT"] = data_root
+                from openbench.config.user_settings import remember_reference_root
+
+                remember_reference_root(data_root)
+                self.save_to_config()
 
             progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
             progress.setWindowTitle("Scanning")
@@ -511,40 +556,10 @@ class PageRefData(BasePage):
             source_name = combo_data
 
         try:
-            from openbench.data.registry.manager import get_registry
-
-            mgr = get_registry()
-            ref = mgr.get_reference(source_name)
-            if ref is None:
+            source_data = _registry_source_data(var_name, source_name)
+            if source_data is None:
                 QMessageBox.warning(self, "Not Found", f"Dataset '{source_name}' not found in registry.")
                 return
-
-            # Build source_data from registry descriptor
-            var_mapping = ref.variables.get(var_name, None)
-
-            general = {
-                "root_dir": ref.root_dir or "",
-                "data_type": ref.data_type,
-                "tim_res": ref.tim_res,
-                "data_groupby": ref.data_groupby,
-                "timezone": ref.timezone,
-                "syear": ref.years[0] if ref.years else "",
-                "eyear": ref.years[1] if len(ref.years) > 1 else "",
-            }
-            if ref.grid_res is not None:
-                general["grid_res"] = ref.grid_res
-            if ref.fulllist:
-                general["fulllist"] = ref.fulllist
-
-            source_data = {"general": general}
-
-            if var_mapping:
-                source_data["varname"] = var_mapping.varname
-                source_data["varunit"] = var_mapping.varunit
-                source_data["prefix"] = var_mapping.prefix
-                source_data["suffix"] = var_mapping.suffix
-                if var_mapping.sub_dir:
-                    source_data["sub_dir"] = var_mapping.sub_dir
 
             # Store as the single source for this variable
             self._source_configs[var_name] = {source_name: source_data}
@@ -721,6 +736,12 @@ class PageRefData(BasePage):
                         if var_name in nml_content:
                             for field, value in nml_content[var_name].items():
                                 source_data[field] = value
+
+            registry_data = _registry_source_data(var_name, source_name)
+            if registry_data:
+                registry_data["general"].update(source_data.get("general", {}))
+                registry_data.update({key: value for key, value in source_data.items() if key != "general"})
+                source_data = registry_data
 
             self._source_configs[var_name] = {source_name: source_data}
 

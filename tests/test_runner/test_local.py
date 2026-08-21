@@ -7084,6 +7084,32 @@ def test_run_statistics_filter_does_not_include_items_without_outputs(tmp_path, 
     assert captured_items["items"] == ["Runoff_2"]
 
 
+def test_run_statistics_preflight_only_checks_grid_grid_items(tmp_path, monkeypatch):
+    import openbench.config.adapter as adapter_module
+    import openbench.runner.local as local_runner
+
+    checked = []
+
+    def fake_preflight(_bindings, _output_dir, items, *_args):
+        checked.extend(items)
+        return [{"phase": "preflight"}]
+
+    bindings = type(
+        "Bindings",
+        (),
+        {
+            "runner_cfg": type("RunnerCfg", (), {"evaluation_items": {"Grid": True, "Station": True}})(),
+            "has_grid_evaluation": lambda self, items: adapter_module.GridEvaluationEvidence(items == ["Grid"]),
+        },
+    )()
+    monkeypatch.setattr(local_runner, "_post_phase_preflight_errors", fake_preflight)
+
+    errors = local_runner._run_statistics(bindings, ["Mean"], tmp_path)
+
+    assert checked == ["Grid"]
+    assert errors == [{"phase": "preflight"}]
+
+
 def test_run_statistics_uses_namelist_fallback_for_station_column_preflight(tmp_path):
     """Statistics preflight should reject incomplete configured station outputs before building context."""
     import openbench.config.adapter as adapter_module

@@ -131,7 +131,7 @@ class RunnerBindings:
         return tasks
 
     def has_grid_evaluation(self, variables: list[str]) -> "GridEvaluationEvidence":
-        """Return typed evidence about whether any evaluation uses gridded data."""
+        """Return whether any evaluation produces grid-grid statistics input."""
         ref_general = self.namelists.reference.get("general", {})
         sim_general = self.namelists.simulation.get("general", {})
 
@@ -145,19 +145,11 @@ class RunnerBindings:
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
 
-            # Full Cartesian product: must inspect every (ref, sim) pair.
-            # Earlier code checked only sim_sources[0], which incorrectly returned
-            # has_grid=False for mixed sim types like [SimStn, SimGrid] paired with
-            # a stn ref — SimGrid required grid evaluation but was ignored.
             for ref_s in ref_sources_list:
                 ref_dtype = self.namelists.reference.get(var_name, {}).get(f"{ref_s}_data_type")
-                if not sim_sources:
-                    if ref_dtype != "stn":
-                        return GridEvaluationEvidence(has_grid=True)
-                    continue
                 for sim_s in sim_sources:
                     sim_dtype = self.namelists.simulation.get(var_name, {}).get(f"{sim_s}_data_type")
-                    if ref_dtype != "stn" or sim_dtype != "stn":
+                    if ref_dtype != "stn" and sim_dtype != "stn":
                         return GridEvaluationEvidence(has_grid=True)
 
         return GridEvaluationEvidence(has_grid=False)
@@ -266,11 +258,15 @@ class RunnerBindings:
                     ref_varname = ref_nml_var.get(f"{ref_source}_varname", var_name)
                     ref_varunit = ref_nml_var.get(f"{ref_source}_varunit", "")
                     ref_dtype = ref_nml_var.get(f"{ref_source}_data_type", "grid")
+                    has_grid_pair = False
 
                     for sim_source in sim_sources:
                         sim_varname = sim_nml_var.get(f"{sim_source}_varname", var_name)
                         sim_varunit = sim_nml_var.get(f"{sim_source}_varunit", "")
                         sim_dtype = sim_nml_var.get(f"{sim_source}_data_type", "grid")
+                        if ref_dtype == "stn" or sim_dtype == "stn":
+                            continue
+                        has_grid_pair = True
 
                         # File prefixes match evaluation output naming.
                         # Use the per-pair format ONLY when those files
@@ -318,7 +314,7 @@ class RunnerBindings:
                     # For Three_Cornered_Hat, add this ref as an extra source per ref
                     # (only when per_pair didn't already register one above —
                     # which only happens when per-pair files actually exist).
-                    if stat in THREE_SOURCE_METHODS and not per_pair_files_exist:
+                    if stat in THREE_SOURCE_METHODS and not per_pair_files_exist and has_grid_pair:
                         ref_label = f"{var_name}_{ref_source}"
                         if ref_label not in source_names:
                             source_names.append(ref_label)

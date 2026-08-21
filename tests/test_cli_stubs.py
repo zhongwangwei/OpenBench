@@ -1740,6 +1740,39 @@ def test_ref_register_accepts_scanner_tim_res_values(tmp_path, monkeypatch):
     assert descriptor["tim_res"] == "8Day"
 
 
+def test_ref_register_accepts_named_variable_with_subdir(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    data_root = tmp_path / "ManualDS"
+    data_root.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    result = runner.invoke(
+        cli,
+        [
+            "ref",
+            "register",
+            "ManualDS",
+            "--root-dir",
+            str(data_root),
+            "-v",
+            'Evapotranspiration name=E unit="mm day-1" sub_dir=Water/Evapotranspiration prefix=E_ suffix=_daily',
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    mapping = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["ManualDS"]["variables"]["Evapotranspiration"]
+    assert mapping == {
+        "varname": "E",
+        "varunit": "mm day-1",
+        "sub_dir": "Water/Evapotranspiration",
+        "prefix": "E_",
+        "suffix": "_daily",
+    }
+
+
 def test_parse_fallbacks_preserves_conversion_with_colons():
     from openbench.cli._parsing import parse_fallbacks, parse_variables
 
@@ -3498,6 +3531,17 @@ def test_init_sets_project_resolution_from_selected_reference_when_sim_scan_is_m
     project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["tim_res"] == "Month"
     assert project["grid_res"] == 0.25
+
+
+def test_init_uses_coarsest_source_time_resolution():
+    from openbench.cli.init_cmd import _infer_project_resolution_fields
+
+    fields = _infer_project_resolution_fields(
+        {"Evapotranspiration": SimpleNamespace(tim_res="Month", grid_res=0.25)},
+        {"CaseA": {"tim_res": "Day", "grid_res": 0.5}},
+    )
+
+    assert fields == {"tim_res": "Month", "grid_res": 0.25}
 
 
 def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, monkeypatch):

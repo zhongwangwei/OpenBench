@@ -112,7 +112,7 @@ def delete(name, yes):
     "-v",
     "--variable",
     multiple=True,
-    help="'StdName:ncname:unit[:prefix[:suffix]]' (repeatable). Overwrites if exists.",
+    help=("'StdName:ncname:unit[:prefix[:suffix]]' or 'StdName name=nc unit=unit [sub_dir=...]' (repeatable)."),
 )
 @click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
 def register(name, root_dir, data_type, tim_res, grid_res, category, years, fulllist, variable, fallback):
@@ -142,6 +142,11 @@ openbench ref register PLUMBER2 --root-dir /data/PLUMBER2/dataset \
 
 
 openbench ref register MyData -v "Runoff:RNOF:mm day-1"
+
+\b
+PowerShell (keep the complete -v value in one quoted argument):
+openbench ref register MyData `
+  -v 'Runoff name=RNOF unit="mm day-1" sub_dir=Water/Runoff'
     """
     return _register.register_reference(
         name,

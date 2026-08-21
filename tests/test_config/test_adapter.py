@@ -708,12 +708,7 @@ def test_iter_task_sources_single_ref_str_works_unchanged():
 
 
 def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
-    """has_grid_evaluation must check every (ref, sim) pair, not just sim_sources[0].
-
-    Regression: earlier code checked only sim_sources[0]. With ref=stn and
-    sim=[SimStn, SimGrid], it returned False because the first sim was stn —
-    silently skipping grid evaluation that SimGrid actually needed.
-    """
+    """A later grid-grid pair must make statistics applicable."""
     runner_cfg = adapter_module.RunnerConfig(
         basename="case",
         basedir=".",
@@ -738,8 +733,8 @@ def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
         namelists=adapter_module.LegacyNamelists(
             main={"general": runner_cfg.general},
             reference={
-                "general": {"ET_ref_source": "RefStn"},
-                "ET": {"RefStn_data_type": "stn"},
+                "general": {"ET_ref_source": "RefGrid"},
+                "ET": {"RefGrid_data_type": "grid"},
             },
             simulation={
                 # Mixed sim types: stn first, grid second (the regression scenario)
@@ -751,9 +746,76 @@ def test_has_grid_evaluation_full_cartesian_with_mixed_sim_types():
     )
 
     evidence = bindings.has_grid_evaluation(["ET"])
-    assert evidence.has_grid is True, (
-        "has_grid_evaluation returned False for mixed sim types — SimGrid requires grid evaluation but was ignored"
+    assert evidence.has_grid is True
+
+
+def test_has_grid_evaluation_rejects_station_grid_pairs():
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case",
+        basedir=".",
+        evaluation_items={"ET": True},
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=["Mean"],
+        general={"basename": "case", "basedir": ".", "syear": 2000, "eyear": 2001},
     )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={"general": {"ET_ref_source": "RefStn"}, "ET": {"RefStn_data_type": "stn"}},
+            simulation={"general": {"ET_sim_source": ["SimGrid"]}, "ET": {"SimGrid_data_type": "grid"}},
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    assert bindings.has_grid_evaluation(["ET"]).has_grid is False
+
+
+def test_statistics_context_skips_station_pairs_within_mixed_sources(tmp_path):
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case",
+        basedir=str(tmp_path),
+        evaluation_items={"ET": True},
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=["Mean"],
+        general={
+            "basename": "case",
+            "basedir": str(tmp_path),
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "syear": 2000,
+            "eyear": 2001,
+        },
+    )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={
+                "general": {"ET_ref_source": "RefGrid"},
+                "ET": {"RefGrid_data_type": "grid", "RefGrid_varname": "E"},
+            },
+            simulation={
+                "general": {"ET_sim_source": ["SimStn", "SimGrid"]},
+                "ET": {
+                    "SimStn_data_type": "stn",
+                    "SimStn_varname": "station_E",
+                    "SimGrid_data_type": "grid",
+                    "SimGrid_varname": "grid_E",
+                },
+            },
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    context = bindings.build_statistics_context(["Mean"])
+
+    assert context.stats_nml["general"]["Mean_data_source"] == "ET_SimGrid"
+    assert "ET_SimStn_dir" not in context.stats_nml["Mean"]
 
 
 def test_has_grid_evaluation_pure_stn_x_stn_returns_false():
