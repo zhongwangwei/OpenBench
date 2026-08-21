@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Qt
 
+from openbench.gui.localization import get_language_manager
+
 
 class CheckboxGroup(QWidget):
     """Widget displaying grouped checkboxes with search and bulk selection."""
@@ -128,6 +130,7 @@ class CheckboxGroup(QWidget):
         count = sum(1 for cb in self._checkboxes.values() if cb.isChecked())
         total = len(self._checkboxes)
         self.count_label.setText(f"Selected: {count} / {total}")
+        get_language_manager().apply(self.count_label)
 
     def _filter_items(self, text: str):
         """Filter checkboxes by search text."""

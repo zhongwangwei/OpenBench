@@ -24,16 +24,17 @@ from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_parti
 def build_remote_run_command(python_path: str, openbench_path: str, config_path: str, conda_env: str) -> str:
     """Build the remote evaluation invocation with tilde-safe path quoting.
 
-    PYTHONUNBUFFERED=1 keeps output unbuffered for real-time logging; the v3
-    entry point is ``python -m openbench run`` (the legacy openbench.py was
-    removed in the v3.0 restructuring).
+    PYTHONUNBUFFERED=1 keeps output unbuffered for real-time logging. The
+    existing CLI check gates the v3 run entry point so invalid configs never
+    start an evaluation.
     """
     from openbench.gui.remote_python import quote_remote_path, wrap_with_conda_env
 
     q_python = quote_remote_path(python_path or "python3")
     q_openbench = quote_remote_path(openbench_path)
     q_config = shlex.quote(config_path)
-    invocation = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench run {q_config}"
+    prefix = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench"
+    invocation = f"{prefix} check {q_config} && {prefix} run {q_config}"
     return wrap_with_conda_env(
         f"cd {q_openbench} && {invocation}",
         python_path=python_path,
@@ -427,7 +428,7 @@ class RemoteRunner(QThread):
                 return
             # Match only this run's uploaded config path, not every OpenBench
             # run owned by the same shared HPC account.
-            pattern = f"python.*-m openbench run .*{re.escape(self._remote_config_path)}"
+            pattern = f"python.*-m openbench (check|run) .*{re.escape(self._remote_config_path)}"
             self._ssh_manager.execute(
                 f"pkill -f -- {shlex.quote(pattern)} || true",
                 timeout=10,

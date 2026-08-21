@@ -207,7 +207,8 @@ def test_remote_run_command_expands_tilde_paths():
     # '~/OpenBench' is the documented remote default; a shlex-quoted literal
     # tilde would make both cd and the interpreter path fail remotely.
     assert 'cd "$HOME"/OpenBench && ' in cmd
-    assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
+    assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench check' in cmd
+    assert '&& PYTHONUNBUFFERED=1 "$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
     assert "'~/" not in cmd
 
 
@@ -316,6 +317,66 @@ def test_find_datasets_worker_passes_interruption_probe(qapp, monkeypatch):
     worker.run()
 
     assert callable(captured.get("should_abort"))
+    assert captured["rescan"] is True
+    assert callable(captured["on_skip"])
+
+
+def test_local_gui_reference_scan_refreshes_existing_entries_and_keeps_skips(qapp, monkeypatch):
+    from openbench.data.registry import scanner
+    from openbench.gui.pages import _scan_worker
+
+    skip = scanner.ScanSkip("Grid/LowRes/Water/Bad", "unsupported_layout", "Register it manually.")
+
+    def fake_scan(root, on_skip=None):
+        assert root == "/local/ref"
+        on_skip(skip)
+        return ["all scanned groups"]
+
+    monkeypatch.setattr(scanner, "scan_reference_directory", fake_scan)
+    results = []
+    worker = _scan_worker.FindDatasetsWorker("/local/ref")
+    worker.finished_with_result.connect(results.append)
+
+    worker.run()
+
+    assert results == [(["all scanned groups"], [skip])]
+
+
+def test_remote_reference_scan_rehydrates_skipped_folders(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    _capture_remote_json(
+        monkeypatch,
+        result={
+            "groups": [],
+            "skipped": [
+                {
+                    "path": "Grid/LowRes/Water/Bad",
+                    "reason": "unsupported_layout",
+                    "hint": "Register it manually.",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: set())
+    skipped = []
+
+    groups = _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", on_skip=skipped.append)
+
+    assert groups == []
+    assert [(item.path, item.reason, item.hint) for item in skipped] == [
+        ("Grid/LowRes/Water/Bad", "unsupported_layout", "Register it manually.")
+    ]
+
+
+def test_gui_reference_scan_skip_message_includes_remediation():
+    from openbench.data.registry.scanner import ScanSkip
+    from openbench.gui.pages._scan_worker import format_scan_skips
+
+    message = format_scan_skips([ScanSkip("Grid/LowRes/Water/Bad", "unsupported_layout", "Register it manually.")])
+
+    assert "Grid/LowRes/Water/Bad: unsupported_layout" in message
+    assert "Register it manually." in message
 
 
 def test_remote_scan_script_attaches_remote_inspections(monkeypatch):

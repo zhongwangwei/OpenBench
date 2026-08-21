@@ -46,7 +46,8 @@ def _runner(tmp_path, monkeypatch, process):
     config.write_text("project: {}\n", encoding="utf-8")
     runner = EvaluationRunner(str(config), python_path="/fake/python")
     monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
-    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: process)
+    processes = iter([FakeProcess(["check passed\n"], 0), process])
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: next(processes))
     return runner
 
 
@@ -115,4 +116,76 @@ def test_local_runner_popen_exception_includes_command_context(tmp_path, monkeyp
 
     assert finished[-1][0] is False
     assert "Local execution error: spawn failed" in finished[-1][1]
-    assert "Command: /fake/python -m openbench run" in finished[-1][1]
+    assert "Command: /fake/python -m openbench check" in finished[-1][1]
+
+
+def test_local_runner_checks_before_run(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    commands = []
+    processes = iter([FakeProcess(["Ready to run\n"], 0), FakeProcess(["Evaluation complete\n"], 0)])
+
+    def fake_popen(command, **kwargs):
+        commands.append(command)
+        return next(processes)
+
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    runner.run()
+
+    assert [command[3] for command in commands] == ["check", "run"]
+    assert finished[-1][0] is True
+
+
+def test_local_runner_does_not_run_when_check_fails(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    commands = []
+
+    def fake_popen(command, **kwargs):
+        commands.append(command)
+        return FakeProcess(["Reference years do not overlap project years\n"], 1)
+
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    runner.run()
+
+    assert [command[3] for command in commands] == ["check"]
+    assert finished[-1][0] is False
+    assert "Configuration check failed" in finished[-1][1]
+    assert "years do not overlap" in finished[-1][1]
+
+
+def test_local_runner_stop_after_check_does_not_start_run(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    commands = []
+
+    class StopAfterCheck(FakeProcess):
+        def wait(self):
+            with runner._stop_lock:
+                runner._stop_requested = True
+            return super().wait()
+
+    def fake_popen(command, **kwargs):
+        commands.append(command)
+        return StopAfterCheck(["Ready to run\n"], 0)
+
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    runner.run()
+
+    assert [command[3] for command in commands] == ["check"]
+    assert finished[-1] == (False, "Stopped by user")

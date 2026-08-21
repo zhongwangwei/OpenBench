@@ -836,11 +836,15 @@ class PageRegistry(BasePage):
         self._finish_scan_worker()
         try:
             from openbench.data.registry.scanner import register_scanned_datasets_batch
+            from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
+
+            new_groups, skipped = unpack_scan_result(new_groups)
+            if skipped:
+                QMessageBox.warning(self, "Scan Incomplete", format_scan_skips(skipped))
 
             if not new_groups:
-                QMessageBox.information(
-                    self, "Scan Complete", "No new datasets found. All datasets already registered."
-                )
+                if not skipped:
+                    QMessageBox.information(self, "Scan Complete", "No supported reference datasets found.")
                 return
 
             # Show discovery dialog for user to select which datasets to register
@@ -872,7 +876,7 @@ class PageRegistry(BasePage):
             )
             _clear_cache()
             self._refresh_dataset_list()
-            message = f"Registered {len(variants)} new dataset(s)."
+            message = f"Registered/updated {len(variants)} dataset(s)."
             if getattr(self, "_scan_was_remote", False):
                 from openbench.gui.pages._scan_worker import remote_scan_caveats
 
