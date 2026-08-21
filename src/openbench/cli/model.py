@@ -12,6 +12,8 @@ import click
 import yaml
 
 from openbench.cli._options import TIM_RES_TYPE
+from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields
+from openbench.cli._wizard import prompt as wizard_prompt
 from openbench.util.names import (
     AmbiguousNameError,
     get_mapping_key_case_insensitive,
@@ -611,12 +613,34 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
     if grid_res is not None and effective_data_type == "stn":
         raise click.ClickException("--grid-res is not valid for station model profiles")
 
-    if is_new and not data_type:
-        data_type = click.prompt("  Data type", type=click.Choice(["grid", "stn"]), default="grid")
-    if is_new and grid_res is None and (data_type or existing.get("data_type")) == "grid":
-        grid_res = click.prompt("  Grid resolution (degrees)", type=float, default=0.5)
-    if is_new and tim_res is None:
-        tim_res = click.prompt("  Time resolution", type=TIM_RES_TYPE, default="Month")
+    prompt_data_type = is_new and not data_type
+    prompt_grid_res = is_new and grid_res is None
+    prompt_tim_res = is_new and tim_res is None
+    interactive_variables = not variable and not fallback and not var_attr and is_new
+    if prompt_data_type or prompt_grid_res or prompt_tim_res or interactive_variables:
+        navigation_hint()
+
+    while prompt_data_type or prompt_grid_res or prompt_tim_res:
+        try:
+            candidate_data_type = data_type
+            if prompt_data_type:
+                candidate_data_type = wizard_prompt(
+                    "  Data type",
+                    type=click.Choice(["grid", "stn"]),
+                    default="grid",
+                )
+            fields = []
+            if prompt_grid_res and (candidate_data_type or existing.get("data_type")) == "grid":
+                fields.append(("grid_res", "  Grid resolution (degrees)", {"type": float, "default": 0.5}))
+            if prompt_tim_res:
+                fields.append(("tim_res", "  Time resolution", {"type": TIM_RES_TYPE, "default": "Month"}))
+            values = prompt_fields(fields)
+            data_type = candidate_data_type
+            grid_res = values.get("grid_res", grid_res)
+            tim_res = values.get("tim_res", tim_res)
+            break
+        except BackRequested:
+            click.secho("  Already at the first model setting; restarting model settings.", fg="yellow")
 
     # Parse primary variables. Fallbacks are attached inside the write lock so
     # they see the latest catalog variables in concurrent register calls.
@@ -624,39 +648,92 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
 
     new_vars = parse_variables(variable)
 
-    if not variable and not fallback and not var_attr and is_new:
-        if description is None:
-            prompted_description = click.prompt("  Description", default="", show_default=False)
-            if prompted_description:
-                description = prompted_description
-        if not time_offset:
-            prompted_offset = click.prompt("  Time offset (optional)", default="", show_default=False)
-            if prompted_offset:
-                time_offset = (prompted_offset,)
-
-        # Interactive variable entry
-        click.echo("\nAdd variables (empty name to finish):")
+    if interactive_variables:
         while True:
-            std_name = click.prompt("  Standard variable name (e.g., Evapotranspiration)", default="")
-            if not std_name:
+            try:
+                metadata_fields = []
+                if description is None:
+                    metadata_fields.append(("description", "  Description", {"default": "", "show_default": False}))
+                if not time_offset:
+                    metadata_fields.append(
+                        ("time_offset", "  Time offset (optional)", {"default": "", "show_default": False})
+                    )
+                metadata = prompt_fields(metadata_fields)
+                candidate_vars = {}
+                std_default = ""
+                entry_defaults = None
+                click.echo("\nAdd variables (empty name to finish):")
+                while True:
+                    try:
+                        std_name = wizard_prompt(
+                            "  Standard variable name (e.g., Evapotranspiration)",
+                            default=std_default,
+                        )
+                    except BackRequested:
+                        if not candidate_vars:
+                            raise
+                        std_default, entry_defaults = candidate_vars.popitem()
+                        click.secho("  Returning to the previous variable.", fg="yellow")
+                        continue
+                    if not std_name:
+                        break
+                    while True:
+                        try:
+                            defaults = entry_defaults or {}
+                            nc_default = ",".join(
+                                [defaults.get("varname", std_name)]
+                                + [item["varname"] for item in defaults.get("fallbacks", [])]
+                            )
+                            fields = prompt_fields(
+                                [
+                                    (
+                                        "nc_name",
+                                        "  NetCDF variable name(s), comma-separated for fallback",
+                                        {"default": nc_default},
+                                    ),
+                                    ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
+                                    (
+                                        "sub_dir",
+                                        "  Sub-directory (optional)",
+                                        {"default": defaults.get("sub_dir", ""), "show_default": False},
+                                    ),
+                                    (
+                                        "prefix",
+                                        "  File prefix (optional)",
+                                        {"default": defaults.get("prefix", ""), "show_default": False},
+                                    ),
+                                    (
+                                        "suffix",
+                                        "  File suffix (optional)",
+                                        {"default": defaults.get("suffix", ""), "show_default": False},
+                                    ),
+                                ]
+                            )
+                            break
+                        except BackRequested:
+                            std_name = wizard_prompt(
+                                "  Standard variable name (e.g., Evapotranspiration)",
+                                default=std_name,
+                            )
+                            entry_defaults = None
+                    nc_names = [n.strip() for n in fields["nc_name"].split(",") if n.strip()]
+                    primary = nc_names[0] if nc_names else std_name
+                    entry = {"varname": primary, "varunit": fields["unit"]}
+                    for key in ("sub_dir", "prefix", "suffix"):
+                        if fields[key]:
+                            entry[key] = fields[key]
+                    if len(nc_names) > 1:
+                        entry["fallbacks"] = [{"varname": nc, "varunit": fields["unit"]} for nc in nc_names[1:]]
+                    candidate_vars[std_name] = entry
+                    std_default = ""
+                    entry_defaults = None
+                description = metadata.get("description") or description
+                if metadata.get("time_offset"):
+                    time_offset = (metadata["time_offset"],)
+                new_vars = candidate_vars
                 break
-            nc_name = click.prompt("  NetCDF variable name(s), comma-separated for fallback", default=std_name)
-            unit = click.prompt("  Unit", default="")
-            sub_dir = click.prompt("  Sub-directory (optional)", default="", show_default=False)
-            prefix = click.prompt("  File prefix (optional)", default="", show_default=False)
-            suffix = click.prompt("  File suffix (optional)", default="", show_default=False)
-            nc_names = [n.strip() for n in nc_name.split(",") if n.strip()]
-            primary = nc_names[0] if nc_names else std_name
-            entry = {"varname": primary, "varunit": unit}
-            if sub_dir:
-                entry["sub_dir"] = sub_dir
-            if prefix:
-                entry["prefix"] = prefix
-            if suffix:
-                entry["suffix"] = suffix
-            if len(nc_names) > 1:
-                entry["fallbacks"] = [{"varname": nc, "varunit": unit} for nc in nc_names[1:]]
-            new_vars[std_name] = entry
+            except BackRequested:
+                click.secho("  Returning to the start of interactive model details.", fg="yellow")
 
     # Backup previous catalog before write (recovery path) + invalidate
     # singleton cache so subsequent get_registry() reads see the new entry.

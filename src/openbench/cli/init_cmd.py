@@ -13,6 +13,9 @@ from typing import Any
 import click
 import yaml
 
+from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields, prompt_steps
+from openbench.cli._wizard import confirm as _wizard_confirm
+from openbench.cli._wizard import prompt as _wizard_prompt
 from openbench.core.registry import IMPLEMENTED_METRIC_NAMES, IMPLEMENTED_SCORE_NAMES
 
 _SEED_MANIFEST_NAME = ".seeded_defaults.yaml"
@@ -427,7 +430,11 @@ def _scan_reference_variants(ref_root: Path) -> list:
             click.secho(f"Updated {updated} ignore profile(s). Rescanning...", fg="green")
         else:
             before_skip_keys = _scan_skip_keys(skipped)
-            updated = _create_profiles_for_scan_skips(skipped, ref_root)
+            try:
+                updated = _create_profiles_for_scan_skips(skipped, ref_root)
+            except BackRequested:
+                click.secho("Returning to the unsupported-folder action menu.", fg="yellow")
+                continue
             if updated == 0:
                 raise click.ClickException("No reference profiles were created from the skipped folders.")
             click.secho(f"Updated {updated} reference profile(s). Rescanning...", fg="green")
@@ -485,7 +492,12 @@ def _register_reference_variants(variants: list, catalog_path: Path, ref_root: P
             desc = var.get("long_name") or var.get("standard_name") or ""
             suffix = f"  - {desc}" if desc else ""
             click.echo(f"    [{i}] {var['name']:<20} {var['unit']:<15} {var['dims']}{suffix}")
-        choice = click.prompt("  Select variable number", type=int, default=1)
+        while True:
+            try:
+                choice = _wizard_prompt("  Select variable number", type=int, default=1)
+                break
+            except BackRequested:
+                click.secho("  Already at the first variable selection.", fg="yellow")
         if choice < 1 or choice > len(all_vars):
             raise click.ClickException(
                 f"Variable choice out of range for {sub_dir}/ ({var_name}): {choice} (expected 1-{len(all_vars)})"
@@ -664,7 +676,7 @@ def _scan_simulation_config(
     if result.unresolved:
         labels = ", ".join(case.label for case in result.unresolved)
         if model_name == "auto":
-            retry_model = click.prompt(
+            retry_model = _wizard_prompt(
                 "  Model profile for unresolved simulation case(s)",
                 default="",
                 show_default=False,
@@ -707,12 +719,23 @@ def _prompt_manual_simulations(mgr) -> dict:
             click.echo(f"    [{i}] {m.name} ({len(m.variables)} variables)")
 
     simulation = {}
+    model_default = ""
+    entry_defaults = None
     while True:
         click.echo()
-        model_input = click.prompt(
-            "  Model name (or number from list, empty to finish)",
-            default="",
-        )
+        try:
+            model_input = _wizard_prompt(
+                "  Model name (or number from list, empty to finish)",
+                default=model_default,
+            )
+        except BackRequested:
+            if not simulation:
+                raise
+            previous_label, previous = simulation.popitem()
+            model_default = previous["model"]
+            entry_defaults = (previous["root_dir"], previous_label)
+            click.secho("  Returning to the previous simulation.", fg="yellow")
+            continue
         if not model_input:
             break
 
@@ -725,7 +748,22 @@ def _prompt_manual_simulations(mgr) -> dict:
         else:
             model_name = model_input
 
-        root_dir = click.prompt(f"  Data root directory for {model_name}")
+        root_default, label_default = entry_defaults or (None, model_name)
+        try:
+            values = prompt_fields(
+                [
+                    (
+                        "root_dir",
+                        f"  Data root directory for {model_name}",
+                        {"default": root_default} if root_default is not None else {},
+                    ),
+                    ("label", "  Label for this run", {"default": label_default}),
+                ]
+            )
+        except BackRequested:
+            model_default = model_input
+            continue
+        root_dir = values["root_dir"]
         if known_model_names and model_name.lower() not in known_model_names:
             click.secho(
                 f"  Warning: model is not registered: {model_name}",
@@ -742,13 +780,17 @@ def _prompt_manual_simulations(mgr) -> dict:
                 f"  Warning: simulation root does not exist yet: {root_path}",
                 fg="yellow",
             )
-        label = click.prompt("  Label for this run", default=model_name)
+        label = values["label"]
         if label in simulation:
             click.secho(f"  Label already exists: {label}. Choose a different label.", fg="red")
+            model_default = model_input
+            entry_defaults = (root_dir, label)
             continue
 
         simulation[label] = {"model": model_name, "root_dir": root_dir}
         click.echo(f"  Added: {label}")
+        model_default = ""
+        entry_defaults = None
 
     if not simulation:
         click.secho("  No simulations added. Adding placeholder.", fg="yellow")
@@ -812,28 +854,54 @@ def _unique_non_null_values(values) -> list:
     return result
 
 
-def _prompt_missing_project_resolution_fields(project_resolution: dict, simulation: dict) -> dict:
-    fields = dict(project_resolution)
+def _prompt_project_options(project_resolution: dict, simulation: dict) -> tuple[bool, bool, dict]:
+    resolution = dict(project_resolution)
     sim_entries = _simulation_entries_with_defaults(simulation)
+    steps = [
+        (
+            "comparison",
+            "Enable comparison?",
+            lambda: _wizard_confirm("  Enable comparison?", default=True),
+        ),
+        (
+            "statistics",
+            "Enable statistics?",
+            lambda: _wizard_confirm("  Enable statistics?", default=False),
+        ),
+    ]
 
-    if "tim_res" not in fields:
+    if "tim_res" not in resolution:
         tim_values = _unique_non_null_values(entry.get("tim_res") for entry in sim_entries)
         if len(tim_values) > 1:
-            fields["tim_res"] = click.prompt(
-                "  Target tim_res for mixed simulation resolutions",
-                default=str(tim_values[0]),
+            steps.append(
+                (
+                    "tim_res",
+                    "Target tim_res for mixed simulation resolutions",
+                    lambda: _wizard_prompt(
+                        "  Target tim_res for mixed simulation resolutions",
+                        default=str(tim_values[0]),
+                    ),
+                )
             )
 
-    if "grid_res" not in fields:
+    if "grid_res" not in resolution:
         grid_values = _unique_non_null_values(entry.get("grid_res") for entry in sim_entries)
         if len(grid_values) > 1:
-            fields["grid_res"] = click.prompt(
-                "  Target grid_res for mixed simulation resolutions",
-                type=float,
-                default=float(grid_values[0]),
+            steps.append(
+                (
+                    "grid_res",
+                    "Target grid_res for mixed simulation resolutions",
+                    lambda: _wizard_prompt(
+                        "  Target grid_res for mixed simulation resolutions",
+                        type=float,
+                        default=float(grid_values[0]),
+                    ),
+                )
             )
 
-    return fields
+    values = prompt_steps(steps)
+    resolution.update({key: values[key] for key in ("tim_res", "grid_res") if key in values})
+    return values["comparison"], values["statistics"], resolution
 
 
 def _parse_variable_selection(selection: str, var_list: list[str]) -> list[str]:
@@ -1311,162 +1379,217 @@ def init_cmd(
     click.secho("OpenBench Configuration Wizard", bold=True)
     click.echo()
 
-    # Project settings
-    click.secho("1. Project Settings", bold=True)
-    name = click.prompt("  Project name", default="my-evaluation")
-    from openbench.config.schema import is_simple_project_name
+    navigation_hint()
+    step = 1
+    while step <= 5:
+        try:
+            if step == 1:
+                click.secho("1. Project Settings", bold=True)
+                from openbench.config.schema import is_simple_project_name
 
-    if not is_simple_project_name(name):
-        raise click.ClickException("project.name must be a simple directory name, not a path.")
-    output_dir = _expand_project_output_dir(click.prompt("  Output directory", default="./output"))
-    syear = click.prompt("  Start year", type=int, default=2004)
-    eyear = click.prompt("  End year", type=int, default=2010)
-    if eyear < syear:
-        raise click.ClickException(f"Start year must be <= end year (got {syear} > {eyear}).")
+                def _project_name():
+                    value = _wizard_prompt("  Project name", default="my-evaluation")
+                    if not is_simple_project_name(value):
+                        raise click.ClickException("project.name must be a simple directory name, not a path.")
+                    return value
 
-    # Variable selection
-    click.echo()
-    click.secho("2. Evaluation Variables", bold=True)
-    click.echo("  Available variables (by category):")
+                def _project_output_dir():
+                    return _expand_project_output_dir(_wizard_prompt("  Output directory", default="./output"))
 
-    all_refs = mgr.list_references()
-
-    # Group by category
-    categories = {}
-    for ref in all_refs:
-        cat = ref.category or "Other"
-        if cat not in categories:
-            categories[cat] = set()
-        categories[cat].update(ref.variables.keys())
-
-    var_list = []
-    seen_vars = set()
-    idx = 1
-    for cat in sorted(categories.keys()):
-        category_vars = []
-        for var in sorted(categories[cat]):
-            if var in seen_vars:
+                fields = prompt_steps(
+                    [
+                        ("name", "Project name", _project_name),
+                        ("output_dir", "Output directory", _project_output_dir),
+                        ("syear", "Start year", lambda: _wizard_prompt("  Start year", type=int, default=2004)),
+                        ("eyear", "End year", lambda: _wizard_prompt("  End year", type=int, default=2010)),
+                    ]
+                )
+                name = fields["name"]
+                output_dir = fields["output_dir"]
+                syear = fields["syear"]
+                eyear = fields["eyear"]
+                if eyear < syear:
+                    raise click.ClickException(f"Start year must be <= end year (got {syear} > {eyear}).")
+                step = 2
                 continue
-            seen_vars.add(var)
-            category_vars.append(var)
-        if not category_vars:
-            continue
-        click.echo(f"  {cat}:")
-        for var in category_vars:
-            click.echo(f"    [{idx}] {var}")
-            var_list.append(var)
-            idx += 1
 
-    template_reference_mode = False
-    if not var_list:
-        if not no_ref_check:
-            raise click.ClickException(
-                "Reference registry has no variables. Run `openbench ref scan ROOT --auto` first."
+            if step == 2:
+                click.echo()
+                click.secho("2. Evaluation Variables", bold=True)
+                click.echo("  Available variables (by category):")
+                all_refs = mgr.list_references()
+                categories = {}
+                for ref in all_refs:
+                    cat = ref.category or "Other"
+                    if cat not in categories:
+                        categories[cat] = set()
+                    categories[cat].update(ref.variables.keys())
+
+                var_list = []
+                seen_vars = set()
+                idx = 1
+                for cat in sorted(categories.keys()):
+                    category_vars = []
+                    for var in sorted(categories[cat]):
+                        if var in seen_vars:
+                            continue
+                        seen_vars.add(var)
+                        category_vars.append(var)
+                    if not category_vars:
+                        continue
+                    click.echo(f"  {cat}:")
+                    for var in category_vars:
+                        click.echo(f"    [{idx}] {var}")
+                        var_list.append(var)
+                        idx += 1
+
+                template_reference_mode = False
+                if not var_list:
+                    if not no_ref_check:
+                        raise click.ClickException(
+                            "Reference registry has no variables. Run `openbench ref scan ROOT --auto` first."
+                        )
+                    template_reference_mode = True
+                    click.secho(
+                        "  Reference registry has no variables. "
+                        "Continuing in template mode because --no-ref-check was set.",
+                        fg="yellow",
+                    )
+                    selection = _wizard_prompt(
+                        "  Enter evaluation variables (comma-separated names)",
+                        default="",
+                        show_default=False,
+                    )
+                    selected_vars = _parse_freeform_variable_selection(selection)
+                    var_list = list(selected_vars)
+                else:
+                    click.echo()
+                    selection = _wizard_prompt(
+                        "  Select variables (comma-separated session-local numbers, names, or 'all')",
+                        default="all",
+                    )
+                    selected_vars = _parse_variable_selection(selection, list(var_list))
+                step = 3
+                continue
+
+            if step == 3:
+                click.echo()
+                click.secho("3. Reference Data Sources", bold=True)
+                reference = {}
+                selected_reference_objects = {}
+                candidate_vars = list(selected_vars)
+                if template_reference_mode:
+                    click.secho(
+                        "  No reference registry entries are available; generated YAML will contain placeholders.",
+                        fg="yellow",
+                    )
+                else:
+                    reference_steps = []
+                    available_by_var = {}
+                    for var in list(candidate_vars):
+                        available = mgr.references_for_variable(var)
+                        available_by_var[var] = available
+                        if len(available) == 1:
+                            click.echo(f"  {var} -> {available[0].name} (only option)")
+                        elif len(available) > 1:
+                            click.echo(f"  {var} - available sources:")
+                            click.echo("    [0] skip this variable")
+                            for i, ref in enumerate(available, 1):
+                                click.echo(f"    [{i}] {_format_reference_choice(ref)}")
+                            reference_steps.append(
+                                (
+                                    var,
+                                    f"Select for {var}",
+                                    lambda var=var, available=available: _parse_reference_selection(
+                                        _wizard_prompt(f"  Select for {var}", default="1"),
+                                        available,
+                                        var,
+                                    ),
+                                )
+                            )
+
+                    choices = prompt_steps(reference_steps)
+                    for var in list(candidate_vars):
+                        available = available_by_var[var]
+                        if len(available) == 1:
+                            chosen = available[0]
+                        elif len(available) > 1:
+                            chosen = choices[var]
+                            if chosen is None:
+                                candidate_vars.remove(var)
+                                click.secho(f"  {var} skipped", fg="yellow")
+                                continue
+                        else:
+                            click.secho(f"  {var} - no reference data available, skipping", fg="yellow")
+                            candidate_vars.remove(var)
+                            continue
+                        reference[var] = chosen.name
+                        selected_reference_objects[var] = chosen
+                    if not candidate_vars:
+                        raise click.ClickException("No reference data selected for evaluation variables.")
+                    if not no_ref_check:
+                        _validate_selected_reference_data(selected_reference_objects)
+                    _warn_reference_year_coverage(selected_reference_objects, (syear, eyear))
+                selected_vars = candidate_vars
+                step = 4
+                continue
+
+            if step == 4:
+                click.echo()
+                click.secho("4. Simulation Data", bold=True)
+                roots = _parse_simulation_root_values(list(sim_roots))
+                while True:
+                    if not roots:
+                        root_input = _wizard_prompt(
+                            "  Simulation data root(s) to scan (comma-separated, empty for manual entry)",
+                            default="",
+                            show_default=False,
+                        )
+                        roots = _parse_simulation_roots(root_input)
+
+                    if roots:
+                        simulation = _scan_simulation_config(
+                            roots,
+                            model_name=sim_model,
+                            output_path=output,
+                            project_years=(syear, eyear),
+                            case_depth=sim_case_depth,
+                            case_pattern=sim_case_pattern,
+                            exclude=tuple(sim_exclude),
+                            climatology=sim_climatology,
+                        )
+                        break
+                    try:
+                        simulation = _prompt_manual_simulations(mgr)
+                        break
+                    except BackRequested:
+                        roots = []
+                        click.secho("  Returning to simulation data roots.", fg="yellow")
+                step = 5
+                continue
+
+            click.echo()
+            click.secho("5. Options", bold=True)
+            project_resolution = _infer_project_resolution_fields(
+                selected_reference_objects,
+                simulation,
             )
-        template_reference_mode = True
-        click.secho(
-            "  Reference registry has no variables. Continuing in template mode because --no-ref-check was set.",
-            fg="yellow",
-        )
-        selection = click.prompt(
-            "  Enter evaluation variables (comma-separated names)",
-            default="",
-            show_default=False,
-        )
-        selected_vars = _parse_freeform_variable_selection(selection)
-        var_list = list(selected_vars)
-    else:
-        click.echo()
-        selection = click.prompt(
-            "  Select variables (comma-separated session-local numbers, names, or 'all')",
-            default="all",
-        )
-        selected_vars = _parse_variable_selection(selection, list(var_list))
-
-    # Reference selection
-    click.echo()
-    click.secho("3. Reference Data Sources", bold=True)
-    reference = {}
-    selected_reference_objects = {}
-    if template_reference_mode:
-        click.secho(
-            "  No reference registry entries are available; generated YAML will contain placeholders.",
-            fg="yellow",
-        )
-    else:
-        for var in list(selected_vars):
-            available = mgr.references_for_variable(var)
-            if len(available) == 1:
-                chosen = available[0]
-                reference[var] = chosen.name
-                selected_reference_objects[var] = chosen
-                click.echo(f"  {var} -> {chosen.name} (only option)")
-            elif len(available) > 1:
-                click.echo(f"  {var} - available sources:")
-                click.echo("    [0] skip this variable")
-                for i, ref in enumerate(available, 1):
-                    click.echo(f"    [{i}] {_format_reference_choice(ref)}")
-                choice = click.prompt(f"  Select for {var}", default="1")
-                chosen = _parse_reference_selection(choice, available, var)
-                if chosen is None:
-                    selected_vars.remove(var)
-                    click.secho(f"  {var} skipped", fg="yellow")
-                    continue
-                reference[var] = chosen.name
-                selected_reference_objects[var] = chosen
+            comparison, statistics, project_resolution = _prompt_project_options(
+                project_resolution,
+                simulation,
+            )
+            if project_resolution:
+                click.echo(
+                    "  Inferred target resolution: "
+                    + ", ".join(f"{key}={value}" for key, value in project_resolution.items())
+                )
+            step = 6
+        except BackRequested:
+            if step == 1:
+                click.secho("  Already at the first step; restarting Project Settings.", fg="yellow")
             else:
-                click.secho(f"  {var} - no reference data available, skipping", fg="yellow")
-                selected_vars.remove(var)
-        if not selected_vars:
-            raise click.ClickException("No reference data selected for evaluation variables.")
-        if not no_ref_check:
-            _validate_selected_reference_data(selected_reference_objects)
-        _warn_reference_year_coverage(selected_reference_objects, (syear, eyear))
-
-    # Simulation selection
-    click.echo()
-    click.secho("4. Simulation Data", bold=True)
-    roots = _parse_simulation_root_values(list(sim_roots))
-    if not roots:
-        root_input = click.prompt(
-            "  Simulation data root(s) to scan (comma-separated, empty for manual entry)",
-            default="",
-            show_default=False,
-        )
-        roots = _parse_simulation_roots(root_input)
-
-    if roots:
-        simulation = _scan_simulation_config(
-            roots,
-            model_name=sim_model,
-            output_path=output,
-            project_years=(syear, eyear),
-            case_depth=sim_case_depth,
-            case_pattern=sim_case_pattern,
-            exclude=tuple(sim_exclude),
-            climatology=sim_climatology,
-        )
-    else:
-        simulation = _prompt_manual_simulations(mgr)
-
-    # Options
-    click.echo()
-    click.secho("5. Options", bold=True)
-    comparison = click.confirm("  Enable comparison?", default=True)
-    statistics = click.confirm("  Enable statistics?", default=False)
-
-    project_resolution = _infer_project_resolution_fields(
-        selected_reference_objects,
-        simulation,
-    )
-    project_resolution = _prompt_missing_project_resolution_fields(
-        project_resolution,
-        simulation,
-    )
-    if project_resolution:
-        click.echo(
-            "  Inferred target resolution: " + ", ".join(f"{key}={value}" for key, value in project_resolution.items())
-        )
+                step -= 1
+                click.secho(f"  Returning to step {step}.", fg="yellow")
 
     # Build config
     # NOTE: reference uses flat var→source mapping (matches loader._build_reference);

@@ -10,6 +10,8 @@ from pathlib import Path
 import click
 
 from openbench.cli._options import expand_existing_directory, expand_path
+from openbench.cli._wizard import BackRequested
+from openbench.cli._wizard import confirm as wizard_confirm
 
 _REGISTER_MODEL_EXISTS_HINT = (
     "Use `openbench model register` to update variable mappings, "
@@ -123,13 +125,28 @@ def scan(
         _print_scan_summary(result, dry_run=dry_run)
         raise click.ClickException(_unresolved_message_for_cases(result.unresolved))
 
-    _handle_climatology_candidates(
-        result,
-        climatology=climatology,
-        auto=auto,
-        dry_run=dry_run,
-    )
-    _print_scan_summary(result, dry_run=dry_run)
+    candidate_state = [
+        (
+            case,
+            case.temporal_kind_candidate,
+            case.temporal_kind,
+            case.tim_res,
+            dict(case.provenance),
+        )
+        for case in result.cases
+        if case.temporal_kind_candidate
+    ]
+
+    def _review_climatology_candidates():
+        _handle_climatology_candidates(
+            result,
+            climatology=climatology,
+            auto=auto,
+            dry_run=dry_run,
+        )
+        _print_scan_summary(result, dry_run=dry_run)
+
+    _review_climatology_candidates()
 
     if dry_run:
         if register_model_name:
@@ -143,8 +160,23 @@ def scan(
             f"Register model profile '{register_model_name}' and write simulation config "
             f"for {len(result.cases)} case(s)?"
         )
-    if not auto and not click.confirm(confirm_message):
-        return
+    if not auto:
+        while True:
+            try:
+                if not wizard_confirm(confirm_message, default=False):
+                    return
+                break
+            except BackRequested:
+                if not candidate_state:
+                    click.secho("  Already at the first simulation review step.", fg="yellow")
+                    continue
+                for case, candidate, temporal_kind, tim_res, provenance in candidate_state:
+                    case.temporal_kind_candidate = candidate
+                    case.temporal_kind = temporal_kind
+                    case.tim_res = tim_res
+                    case.provenance = dict(provenance)
+                click.secho("  Returning to climatology review.", fg="yellow")
+                _review_climatology_candidates()
 
     sim_path, report_path, station_output_path = _resolve_output_paths(output, report, station_output)
     sim_path.parent.mkdir(parents=True, exist_ok=True)
@@ -538,11 +570,28 @@ def _handle_climatology_candidates(result, *, climatology: str, auto: bool, dry_
     if auto:
         raise click.ClickException(message)
 
-    for case in candidates:
-        if click.confirm(
-            f"Treat {case.label} as {case.temporal_kind_candidate}?",
-            default=False,
-        ):
+    index = 0
+    decisions = []
+    while index < len(candidates):
+        case = candidates[index]
+        try:
+            accepted = wizard_confirm(
+                f"Treat {case.label} as {case.temporal_kind_candidate}?",
+                default=False,
+            )
+        except BackRequested:
+            if index == 0:
+                click.secho("  Already at the first climatology candidate.", fg="yellow")
+            else:
+                index -= 1
+                decisions.pop()
+                click.secho(f"  Returning to: {candidates[index].label}", fg="yellow")
+            continue
+        decisions.append(accepted)
+        index += 1
+
+    for case, accepted in zip(candidates, decisions):
+        if accepted:
             _apply_temporal_kind_candidate(case)
         else:
             case.provenance["temporal_kind"] = "user-declined"

@@ -747,10 +747,18 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
         input="\n".join(
             [
                 "p",  # create/update profile and rescan
+                "back",  # profile name -> action menu
+                "p",  # choose profile rescue again
                 "",  # profile name default: BadComposite_LowRes
+                "back",  # file glob -> profile name
+                "",  # keep profile name
                 "",  # file glob for cama
                 "Streamflow",  # standard name for cama
+                "back",  # NetCDF name -> standard name
+                "",  # keep standard name
                 "",  # NetCDF variable default: discharge
+                "back",  # unit -> NetCDF name
+                "",  # keep NetCDF variable
                 "",  # unit default: m3 s-1
                 "",  # file glob for land
                 "Latent_Heat",  # standard name for land
@@ -763,7 +771,10 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    assert "[p] create/update reference profile and rescan" in result.output
+    assert result.output.count("[p] create/update reference profile and rescan") == 2
+    assert "Returning to the unsupported-folder action menu" in result.output
+    assert "Returning to: Standard variable name" in result.output
+    assert "Returning to: NetCDF variable name" in result.output
     assert "[r]" not in result.output
     assert "Updated reference profile: BadComposite_LowRes" in result.output
     assert "Registered 1 dataset" in result.output
@@ -1317,6 +1328,47 @@ def test_ref_register_writes_user_reference_catalog(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     user_catalog = home / ".openbench" / "references" / "reference_catalog.yaml"
     assert "ManualDS" in yaml.safe_load(user_catalog.read_text(encoding="utf-8"))
+
+
+def test_ref_register_can_return_to_previous_variable_field(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    data_root = tmp_path / "BackRef"
+    data_root.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = ["Runoff", "ro", "back", "ro2", "mm", "", "", ""]
+
+    result = runner.invoke(
+        cli,
+        ["ref", "register", "BackRef", "--root-dir", str(data_root), "--data-type", "grid"],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["BackRef"]["variables"]["Runoff"]["varname"] == "ro2"
+    assert "Returning to: Variable name in NetCDF file" in result.output
+
+
+def test_ref_register_repeated_back_at_first_variable_does_not_abort(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    data_root = tmp_path / "BackRef"
+    data_root.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = ["Runoff", "back", "back", "", "ro", "mm", "", "", ""]
+
+    result = runner.invoke(
+        cli,
+        ["ref", "register", "BackRef", "--root-dir", str(data_root), "--data-type", "grid"],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
+    assert yaml.safe_load(catalog_path.read_text())["BackRef"]["variables"]["Runoff"]["varname"] == "ro"
+    assert "Already at the first variable" in result.output
 
 
 def test_ref_register_data_type_autodetect_handles_iterdir_errors(tmp_path, monkeypatch):
@@ -2536,6 +2588,86 @@ def test_model_register_cancels_new_profile_with_no_variables(tmp_path, monkeypa
     assert not catalog.exists() or "EmptyModel" not in (yaml.safe_load(catalog.read_text(encoding="utf-8")) or {})
 
 
+def test_model_register_can_return_to_previous_interactive_fields(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = [
+        "grid",
+        "back",
+        "stn",
+        "Month",
+        "",
+        "",
+        "Runoff",
+        "ro",
+        "back",
+        "ro2",
+        "mm",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+    result = runner.invoke(
+        cli,
+        ["model", "register", "BackModel"],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    catalog = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())
+    assert catalog["BackModel"]["data_type"] == "stn"
+    assert catalog["BackModel"]["variables"]["Runoff"]["varname"] == "ro2"
+    assert "Returning to: NetCDF variable name" in result.output
+
+
+def test_model_register_can_return_to_previous_variable_without_losing_it(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = [
+        "",
+        "",
+        "Runoff",
+        "ro",
+        "mm",
+        "",
+        "",
+        "",
+        "back",
+        "",
+        "ro2",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+    result = runner.invoke(
+        cli,
+        [
+            "model",
+            "register",
+            "BackVariableModel",
+            "--data-type",
+            "grid",
+            "--grid-res",
+            "0.5",
+            "--tim-res",
+            "Month",
+        ],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    catalog = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())
+    assert catalog["BackVariableModel"]["variables"] == {"Runoff": {"varname": "ro2", "varunit": "mm"}}
+    assert "Returning to the previous variable" in result.output
+
+
 def test_model_register_merges_against_latest_catalog_under_write_lock(tmp_path, monkeypatch):
     import copy
     from contextlib import nullcontext
@@ -2901,6 +3033,117 @@ def test_init_command_initializes_user_registry_overlays(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert called == [True]
     assert output.exists()
+
+
+def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
+    refs = [
+        _InitFakeReference(name="FirstRef"),
+        _InitFakeReference(name="SecondRef"),
+    ]
+    monkeypatch.setattr(
+        "openbench.cli.init_cmd.ensure_user_registry_overlays",
+        lambda: tmp_path / "user",
+    )
+    _install_single_reference_registry(monkeypatch, refs=refs)
+    output = tmp_path / "openbench.yaml"
+    answers = [
+        "",
+        "",
+        "",
+        "",
+        "back",  # variables -> project
+        "fixed-project",
+        "",
+        "2005",
+        "2006",
+        "1",
+        "back",  # references -> variables
+        "1",
+        "2",
+        "back",  # simulation -> references
+        "2",
+        "",
+        "",
+        "back",  # options -> simulation
+        "",
+        "",
+        "n",
+        "n",
+    ]
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
+    assert config["project"]["name"] == "fixed-project"
+    assert config["project"]["years"] == [2005, 2006]
+    assert config["reference"] == {"Latent_Heat": "SecondRef"}
+    assert result.output.count("Returning to step") == 4
+
+
+def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "openbench.cli.init_cmd.ensure_user_registry_overlays",
+        lambda: tmp_path / "user",
+    )
+    _install_single_reference_registry(monkeypatch)
+    output = tmp_path / "openbench.yaml"
+    answers = [
+        "",
+        "",
+        "2005",
+        "back",
+        "2006",
+        "2007",
+        "",
+        "",
+        "",
+        "n",
+        "n",
+    ]
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert yaml.safe_load(output.read_text(encoding="utf-8"))["project"]["years"] == [2006, 2007]
+    assert "Returning to: Start year" in result.output
+
+
+def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
+    refs = [
+        _InitFakeReference(name="LatentA"),
+        _InitFakeReference(name="LatentB"),
+        _InitFakeReference(name="RunoffA", variable="Runoff", category="Water"),
+        _InitFakeReference(name="RunoffB", variable="Runoff", category="Water"),
+    ]
+    monkeypatch.setattr(
+        "openbench.cli.init_cmd.ensure_user_registry_overlays",
+        lambda: tmp_path / "user",
+    )
+    _install_single_reference_registry(monkeypatch, refs=refs)
+    output = tmp_path / "openbench.yaml"
+    answers = ["", "", "2004", "2004", "", "1", "back", "2", "2", "", "", "n", "n"]
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert yaml.safe_load(output.read_text())["reference"] == {
+        "Latent_Heat": "LatentB",
+        "Runoff": "RunoffB",
+    }
+    assert "Returning to: Select for Latent_Heat" in result.output
 
 
 def test_init_uses_timestamped_default_output(tmp_path, monkeypatch):

@@ -9,6 +9,8 @@ from typing import Callable
 import click
 import yaml
 
+from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields
+from openbench.cli._wizard import prompt as wizard_prompt
 from openbench.util.names import get_mapping_key_case_insensitive
 
 
@@ -84,21 +86,51 @@ def register_reference(
         raise click.ClickException("--root-dir is required for new datasets.")
 
     if not variable and not fallback and is_new:
+        navigation_hint()
         click.echo("\nAdd variables (empty name to finish):")
+        previous = {}
+        var_default = ""
         while True:
-            var_name = click.prompt("  Standard variable name (e.g., Evapotranspiration)", default="")
+            try:
+                var_name = wizard_prompt(
+                    "  Standard variable name (e.g., Evapotranspiration)",
+                    default=var_default,
+                )
+            except BackRequested:
+                if previous or not new_vars:
+                    click.secho("  Already at the first variable.", fg="yellow")
+                    continue
+                var_name, previous = new_vars.popitem()
+                var_default = var_name
+                click.secho(f"  Returning to variable: {var_name}", fg="yellow")
+                continue
             if not var_name:
                 break
-            nc_name = click.prompt("  Variable name in NetCDF file", default=var_name)
-            unit = click.prompt("  Unit", default="")
-            prefix = click.prompt("  File prefix", default="")
-            suffix = click.prompt("  File suffix", default="")
-            entry = {"varname": nc_name, "varunit": unit}
-            if prefix:
-                entry["prefix"] = prefix
-            if suffix:
-                entry["suffix"] = suffix
+            defaults = previous
+            try:
+                fields = prompt_fields(
+                    [
+                        (
+                            "nc_name",
+                            "  Variable name in NetCDF file",
+                            {"default": defaults.get("varname", var_name)},
+                        ),
+                        ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
+                        ("prefix", "  File prefix", {"default": defaults.get("prefix", "")}),
+                        ("suffix", "  File suffix", {"default": defaults.get("suffix", "")}),
+                    ]
+                )
+            except BackRequested:
+                var_default = var_name
+                continue
+            entry = {"varname": fields["nc_name"], "varunit": fields["unit"]}
+            if fields["prefix"]:
+                entry["prefix"] = fields["prefix"]
+            if fields["suffix"]:
+                entry["suffix"] = fields["suffix"]
             new_vars[var_name] = entry
+            previous = {}
+            var_default = ""
 
     if not new_vars and is_new and not fallback:
         click.secho("No variables defined. Registration cancelled.", fg="yellow")
