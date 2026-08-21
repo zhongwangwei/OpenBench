@@ -398,11 +398,7 @@ class LanguageManager(QObject):
                 self._translate_widget(widget)
 
     def eventFilter(self, watched, event):  # noqa: N802 - Qt API name
-        if (
-            event.type() == QEvent.Show
-            and isinstance(watched, QWidget)
-            and not watched.property("i18n_skip")
-        ):
+        if event.type() == QEvent.Show and isinstance(watched, QWidget) and not watched.property("i18n_skip"):
             self._translate_widget(watched)
         return super().eventFilter(watched, event)
 

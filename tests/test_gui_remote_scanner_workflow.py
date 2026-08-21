@@ -767,6 +767,7 @@ def test_local_ref_scan_remembers_root_before_worker_starts(tmp_path, monkeypatc
     ref_root = tmp_path / "Reference"
     ref_root.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     page = PageRefData.__new__(PageRefData)
     page.controller = SimpleNamespace(storage=object())
     page.data_root_input = FakeLineEdit("~/Reference")
