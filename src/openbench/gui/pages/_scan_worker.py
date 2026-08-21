@@ -51,6 +51,26 @@ def remote_scan_caveats(variants) -> str:
     return "\n".join(messages)
 
 
+def unpack_scan_result(result):
+    """Return ``(groups, skipped)`` while accepting legacy list results."""
+    if isinstance(result, tuple) and len(result) == 2:
+        return result
+    return result, []
+
+
+def format_scan_skips(skipped) -> str:
+    """Format unsupported reference folders for a GUI warning."""
+    lines = [f"The scanner skipped {len(skipped)} unsupported folder(s):"]
+    for item in skipped:
+        path = getattr(item, "path", str(item))
+        reason = getattr(item, "reason", "unsupported_layout")
+        hint = getattr(item, "hint", "")
+        lines.append(f"• {path}: {reason}")
+        if hint:
+            lines.append(f"  {hint}")
+    return "\n".join(lines)
+
+
 def scan_reference_datasets_remote(
     ssh_manager,
     data_root: str,
@@ -60,6 +80,8 @@ def scan_reference_datasets_remote(
     openbench_path: str = "",
     timeout: int = 900,
     should_abort=None,
+    rescan: bool = False,
+    on_skip=None,
 ):
     """Run reference registry discovery on the remote host and rehydrate groups.
 
@@ -69,10 +91,10 @@ def scan_reference_datasets_remote(
     "already registered" filter uses the LOCAL catalog names, because that is
     the catalog registration writes to.
     """
-    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset, ScanSkip
     from openbench.gui.remote_python import run_remote_python_json
 
-    existing_names = sorted(_local_reference_names())
+    existing_names = [] if rescan else sorted(_local_reference_names())
 
     bootstrap = ""
     if openbench_path:
@@ -90,9 +112,10 @@ def scan_reference_datasets_remote(
 
     script = f"""{bootstrap}
 import dataclasses
+import inspect
 import json
 
-from openbench.data.registry.scanner import find_new_datasets
+from openbench.data.registry.scanner import find_new_datasets, scan_reference_directory
 
 try:
     from openbench.data.registry.scanner import _detect_data_groupby, _expand_path, _inspect_nc_file
@@ -132,7 +155,22 @@ def _json_default(value):
     return str(value)
 
 
-groups = find_new_datasets({json.dumps(data_root)}, existing_names=set({json.dumps(existing_names)}))
+def _scan_with_skips(scan_fn, *args, **kwargs):
+    if "on_skip" in inspect.signature(scan_fn).parameters:
+        kwargs["on_skip"] = skipped.append
+    return scan_fn(*args, **kwargs)
+
+
+skipped = []
+groups = (
+    _scan_with_skips(scan_reference_directory, {json.dumps(data_root)})
+    if {rescan!r}
+    else _scan_with_skips(
+        find_new_datasets,
+        {json.dumps(data_root)},
+        existing_names=set({json.dumps(existing_names)}),
+    )
+)
 payload = []
 for group in groups:
     variants = {{}}
@@ -157,7 +195,7 @@ for group in groups:
                 data["remote_fulllist_error"] = "generation failed: %s: %s" % (type(exc).__name__, exc)
         variants[resolution] = data
     payload.append({{"base_name": group.base_name, "variants": variants}})
-print(json.dumps(payload, default=_json_default))
+print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for item in skipped]}}, default=_json_default))
 """
     payload = run_remote_python_json(
         ssh_manager,
@@ -168,11 +206,18 @@ print(json.dumps(payload, default=_json_default))
         should_abort=should_abort,
     )
 
+    raw_groups = payload.get("groups", []) if isinstance(payload, dict) else payload
+    raw_skips = payload.get("skipped", []) if isinstance(payload, dict) else []
+    if on_skip:
+        skip_fields = {f.name for f in dataclasses.fields(ScanSkip)}
+        for item in raw_skips:
+            on_skip(ScanSkip(**{key: value for key, value in item.items() if key in skip_fields}))
+
     # Rehydrate tolerantly: the remote checkout may be a different OpenBench
     # version, so drop unknown fields instead of crashing on them.
     field_names = {f.name for f in dataclasses.fields(ScannedDataset)}
     groups = []
-    for item in payload:
+    for item in raw_groups:
         variants = {}
         for resolution, variant in (item.get("variants") or {}).items():
             known = {key: value for key, value in variant.items() if key in field_names}
@@ -212,6 +257,7 @@ class FindDatasetsWorker(QThread):
     def run(self) -> None:  # pragma: no cover - exercised through GUI integration
         try:
             if self._ssh_manager is not None:
+                skipped = []
                 result = scan_reference_datasets_remote(
                     self._ssh_manager,
                     self._data_root,
@@ -219,11 +265,14 @@ class FindDatasetsWorker(QThread):
                     conda_env=self._conda_env,
                     openbench_path=self._openbench_path,
                     should_abort=self.isInterruptionRequested,
+                    rescan=True,
+                    on_skip=skipped.append,
                 )
             else:
-                from openbench.data.registry.scanner import find_new_datasets
+                from openbench.data.registry.scanner import scan_reference_directory
 
-                result = find_new_datasets(self._data_root)
-            self.finished_with_result.emit(result)
+                skipped = []
+                result = scan_reference_directory(self._data_root, on_skip=skipped.append)
+            self.finished_with_result.emit((result, skipped))
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")

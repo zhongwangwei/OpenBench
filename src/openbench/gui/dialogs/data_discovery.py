@@ -50,7 +50,7 @@ def choose_nc_variable(parent, var_name, sub_dir, all_vars):
 
 
 class DataDiscoveryDialog(QDialog):
-    """Dialog showing newly discovered reference datasets for registration."""
+    """Dialog showing scanned reference datasets for registration or refresh."""
 
     def __init__(self, new_groups, parent=None):
         """
@@ -58,7 +58,7 @@ class DataDiscoveryDialog(QDialog):
             new_groups: List of DatasetGroup from scanner.find_new_datasets().
         """
         super().__init__(parent)
-        self.setWindowTitle("New Reference Datasets Found")
+        self.setWindowTitle("Reference Datasets Found")
         self.setMinimumSize(800, 500)
         self._new_groups = new_groups
         self._checkboxes = {}  # (base_name, resolution) -> QCheckBox
@@ -67,8 +67,8 @@ class DataDiscoveryDialog(QDialog):
 
         # Header
         header = QLabel(
-            f"<b>{len(new_groups)} new dataset(s)</b> found in the reference data directory.\n"
-            "Select which to register into the OpenBench registry."
+            f"<b>{len(new_groups)} dataset group(s)</b> found in the reference data directory.\n"
+            "Select which to register or update in the OpenBench registry."
         )
         header.setWordWrap(True)
         layout.addWidget(header)
@@ -127,7 +127,7 @@ class DataDiscoveryDialog(QDialog):
         btn_layout.addStretch()
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("Register Selected")
+        buttons.button(QDialogButtonBox.Ok).setText("Register/Update Selected")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         btn_layout.addWidget(buttons)
