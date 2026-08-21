@@ -802,6 +802,74 @@ def test_ref_scan_interactive_can_add_profile_and_rescan(tmp_path, monkeypatch):
     assert entry["variables"]["Streamflow"]["sub_dir"] == "Composite/BadComposite/cama"
 
 
+def test_profile_rescue_back_keeps_completed_skip_answers(tmp_path, monkeypatch):
+    import openbench.cli._profile_rescue as rescue
+    from openbench.cli._wizard import BackRequested
+
+    skips = [SimpleNamespace(path="first"), SimpleNamespace(path="second")]
+    responses = iter([("First", {"variables": {"A": {}}}), BackRequested(), ("Second", {"variables": {"B": {}}})])
+    written = []
+
+    def prompt_profile(*_args):
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(rescue, "_profile_rescue_supported", lambda _item: True)
+    monkeypatch.setattr(rescue, "_prompt_reference_profile_for_scan_skip", prompt_profile)
+    monkeypatch.setattr(rescue, "wizard_confirm", lambda *_args, **_kwargs: True, raising=False)
+    monkeypatch.setattr(rescue, "_write_reference_profiles", lambda pending: written.extend(pending) or len(pending))
+
+    assert rescue._create_profiles_for_scan_skips(skips, tmp_path) == 2
+    assert [name for name, _profile in written] == ["First", "Second"]
+
+
+def test_profile_variable_double_back_preserves_later_variable_defaults(monkeypatch):
+    import openbench.cli._profile_rescue as rescue
+    from openbench.cli._wizard import BackRequested
+
+    responses = iter(
+        [
+            ("A", "a", "ua"),
+            ("B", "b", "ub"),
+            BackRequested(),
+            BackRequested(),
+            ("A", "a2", "ua"),
+            ("B", "b2", "ub"),
+            None,
+        ]
+    )
+    calls = []
+
+    def prompt_variable(**kwargs):
+        calls.append(kwargs)
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(rescue, "_prompt_profile_variable", prompt_variable)
+
+    variables = rescue._prompt_profile_variables_for_child(
+        child_rel="child",
+        nc_rel="child",
+        child_name="child",
+        all_vars=[{"name": "a"}, {"name": "b"}],
+        default_nc="raw",
+        default_unit="",
+        existing_names=set(),
+        file_glob=None,
+        default_std=None,
+        allow_skip_single=True,
+        include_root_sub_dir=False,
+    )
+
+    assert calls[5]["default_std"] == "B"
+    assert calls[5]["default_nc"] == "b"
+    assert set(variables) == {"A", "B"}
+
+
 def test_ref_scan_profile_rescue_accepts_multiple_vars_from_one_nc(tmp_path, monkeypatch):
     import numpy as np
     import xarray as xr
@@ -1369,6 +1437,52 @@ def test_ref_register_repeated_back_at_first_variable_does_not_abort(tmp_path, m
     catalog_path = home / ".openbench" / "references" / "reference_catalog.yaml"
     assert yaml.safe_load(catalog_path.read_text())["BackRef"]["variables"]["Runoff"]["varname"] == "ro"
     assert "Already at the first variable" in result.output
+
+
+def test_ref_register_can_back_across_multiple_completed_variables(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    data_root = tmp_path / "BackRef"
+    data_root.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = [
+        "A",
+        "a",
+        "ua",
+        "",
+        "",
+        "B",
+        "b",
+        "ub",
+        "",
+        "",
+        "back",
+        "back",
+        "",
+        "a2",
+        "",
+        "",
+        "",
+        "",
+        "b2",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+    result = runner.invoke(
+        cli,
+        ["ref", "register", "BackRef", "--root-dir", str(data_root), "--data-type", "grid"],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    variables = yaml.safe_load(
+        (home / ".openbench" / "references" / "reference_catalog.yaml").read_text(encoding="utf-8")
+    )["BackRef"]["variables"]
+    assert variables["A"]["varname"] == "a2"
+    assert variables["B"]["varname"] == "b2"
 
 
 def test_ref_register_data_type_autodetect_handles_iterdir_errors(tmp_path, monkeypatch):
@@ -2701,6 +2815,63 @@ def test_model_register_can_return_to_previous_variable_without_losing_it(tmp_pa
     assert "Returning to the previous variable" in result.output
 
 
+def test_model_register_double_back_keeps_completed_variables(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    answers = [
+        "Runoff",
+        "ro",
+        "mm",
+        "",
+        "",
+        "",
+        "GPP",
+        "back",
+        "back",
+        "",
+        "ro2",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "gpp",
+        "g m-2 s-1",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+    result = runner.invoke(
+        cli,
+        [
+            "model",
+            "register",
+            "DoubleBackModel",
+            "--data-type",
+            "grid",
+            "--grid-res",
+            "0.5",
+            "--tim-res",
+            "Month",
+            "--description",
+            "demo",
+            "--time-offset",
+            "Month=0",
+        ],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    variables = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["DoubleBackModel"][
+        "variables"
+    ]
+    assert set(variables) == {"Runoff", "GPP"}
+    assert variables["Runoff"]["varname"] == "ro2"
+
+
 def test_model_register_merges_against_latest_catalog_under_write_lock(tmp_path, monkeypatch):
     import copy
     from contextlib import nullcontext
@@ -3116,6 +3287,66 @@ def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
     assert config["project"]["years"] == [2005, 2006]
     assert config["reference"] == {"Latent_Heat": "SecondRef"}
     assert result.output.count("Returning to step") == 4
+
+
+def test_init_back_skips_promptless_reference_step(tmp_path, monkeypatch):
+    monkeypatch.setattr("openbench.cli.init_cmd.ensure_user_registry_overlays", lambda: tmp_path / "user")
+    _install_single_reference_registry(monkeypatch)
+    output = tmp_path / "openbench.yaml"
+    answers = ["", "", "", "", "", "back", "", "", "", "n", "n"]
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input="\n".join(answers) + "\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.output.count("2. Evaluation Variables") == 2
+    assert "Returning to step 2" in result.output
+
+
+def test_prompt_fields_back_keeps_latest_value():
+    from openbench.cli._wizard import prompt_fields
+
+    @click.command()
+    def demo():
+        values = prompt_fields(
+            [
+                ("start", "Start year", {"type": int, "default": 2004}),
+                ("end", "End year", {"type": int, "default": 2010}),
+            ]
+        )
+        click.echo(f"{values['start']}-{values['end']}")
+
+    result = runner.invoke(demo, input="2019\nback\n\n2020\n")
+
+    assert result.exit_code == 0, result.output
+    assert "2019-2020" in result.output
+
+
+def test_init_mixed_simulation_resolutions_keep_target_prompt(monkeypatch):
+    import openbench.cli.init_cmd as init_module
+
+    confirmations = iter([True, False])
+    prompts = []
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *_args, **_kwargs: next(confirmations))
+    monkeypatch.setattr(
+        init_module,
+        "_wizard_prompt",
+        lambda text, **_kwargs: prompts.append(text) or "Day",
+    )
+
+    _comparison, _statistics, resolution = init_module._prompt_project_options(
+        {"tim_res": "Month"},
+        {
+            "Monthly": {"tim_res": "Month"},
+            "Daily": {"tim_res": "Day"},
+        },
+    )
+
+    assert prompts == ["  Target tim_res for mixed simulation resolutions"]
+    assert resolution["tim_res"] == "Day"
 
 
 def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, monkeypatch):

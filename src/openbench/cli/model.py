@@ -649,6 +649,9 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
     new_vars = parse_variables(variable)
 
     if interactive_variables:
+        candidate_entries = []
+        variable_index = 0
+        draft_names = {}
         while True:
             try:
                 metadata_fields = []
@@ -659,63 +662,57 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
                         ("time_offset", "  Time offset (optional)", {"default": "", "show_default": False})
                     )
                 metadata = prompt_fields(metadata_fields)
-                candidate_vars = {}
-                std_default = ""
-                entry_defaults = None
                 click.echo("\nAdd variables (empty name to finish):")
                 while True:
+                    previous = candidate_entries[variable_index] if variable_index < len(candidate_entries) else None
                     try:
                         std_name = wizard_prompt(
                             "  Standard variable name (e.g., Evapotranspiration)",
-                            default=std_default,
+                            default=previous[0] if previous else draft_names.get(variable_index, ""),
                         )
                     except BackRequested:
-                        if not candidate_vars:
+                        if variable_index == 0:
                             raise
-                        std_default, entry_defaults = candidate_vars.popitem()
+                        variable_index -= 1
                         click.secho("  Returning to the previous variable.", fg="yellow")
                         continue
                     if not std_name:
+                        del candidate_entries[variable_index:]
                         break
-                    while True:
-                        try:
-                            defaults = entry_defaults or {}
-                            nc_default = ",".join(
-                                [defaults.get("varname", std_name)]
-                                + [item["varname"] for item in defaults.get("fallbacks", [])]
-                            )
-                            fields = prompt_fields(
-                                [
-                                    (
-                                        "nc_name",
-                                        "  NetCDF variable name(s), comma-separated for fallback",
-                                        {"default": nc_default},
-                                    ),
-                                    ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
-                                    (
-                                        "sub_dir",
-                                        "  Sub-directory (optional)",
-                                        {"default": defaults.get("sub_dir", ""), "show_default": False},
-                                    ),
-                                    (
-                                        "prefix",
-                                        "  File prefix (optional)",
-                                        {"default": defaults.get("prefix", ""), "show_default": False},
-                                    ),
-                                    (
-                                        "suffix",
-                                        "  File suffix (optional)",
-                                        {"default": defaults.get("suffix", ""), "show_default": False},
-                                    ),
-                                ]
-                            )
-                            break
-                        except BackRequested:
-                            std_name = wizard_prompt(
-                                "  Standard variable name (e.g., Evapotranspiration)",
-                                default=std_name,
-                            )
-                            entry_defaults = None
+                    draft_names[variable_index] = std_name
+                    defaults = previous[1] if previous else {}
+                    nc_default = ",".join(
+                        [defaults.get("varname", std_name)]
+                        + [item["varname"] for item in defaults.get("fallbacks", [])]
+                    )
+                    try:
+                        fields = prompt_fields(
+                            [
+                                (
+                                    "nc_name",
+                                    "  NetCDF variable name(s), comma-separated for fallback",
+                                    {"default": nc_default},
+                                ),
+                                ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
+                                (
+                                    "sub_dir",
+                                    "  Sub-directory (optional)",
+                                    {"default": defaults.get("sub_dir", ""), "show_default": False},
+                                ),
+                                (
+                                    "prefix",
+                                    "  File prefix (optional)",
+                                    {"default": defaults.get("prefix", ""), "show_default": False},
+                                ),
+                                (
+                                    "suffix",
+                                    "  File suffix (optional)",
+                                    {"default": defaults.get("suffix", ""), "show_default": False},
+                                ),
+                            ]
+                        )
+                    except BackRequested:
+                        continue
                     nc_names = [n.strip() for n in fields["nc_name"].split(",") if n.strip()]
                     primary = nc_names[0] if nc_names else std_name
                     entry = {"varname": primary, "varunit": fields["unit"]}
@@ -724,13 +721,16 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
                             entry[key] = fields[key]
                     if len(nc_names) > 1:
                         entry["fallbacks"] = [{"varname": nc, "varunit": fields["unit"]} for nc in nc_names[1:]]
-                    candidate_vars[std_name] = entry
-                    std_default = ""
-                    entry_defaults = None
+                    if previous:
+                        candidate_entries[variable_index] = (std_name, entry)
+                    else:
+                        candidate_entries.append((std_name, entry))
+                    draft_names.pop(variable_index, None)
+                    variable_index += 1
                 description = metadata.get("description") or description
                 if metadata.get("time_offset"):
                     time_offset = (metadata["time_offset"],)
-                new_vars = candidate_vars
+                new_vars = dict(candidate_entries)
                 break
             except BackRequested:
                 click.secho("  Returning to the start of interactive model details.", fg="yellow")

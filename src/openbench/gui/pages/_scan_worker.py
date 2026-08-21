@@ -115,7 +115,18 @@ import dataclasses
 import inspect
 import json
 
-from openbench.data.registry.scanner import find_new_datasets, scan_reference_directory
+try:
+    from openbench.data.registry.scanner import find_new_datasets
+except ImportError:
+    find_new_datasets = None
+
+try:
+    from openbench.data.registry.scanner import scan_reference_directory
+except ImportError:
+    scan_reference_directory = None
+
+if find_new_datasets is None and scan_reference_directory is None:
+    raise RuntimeError("remote OpenBench scanner API is unavailable")
 
 try:
     from openbench.data.registry.scanner import _detect_data_groupby, _expand_path, _inspect_nc_file
@@ -156,21 +167,21 @@ def _json_default(value):
 
 
 def _scan_with_skips(scan_fn, *args, **kwargs):
-    if "on_skip" in inspect.signature(scan_fn).parameters:
+    parameters = inspect.signature(scan_fn).parameters
+    kwargs = {{key: value for key, value in kwargs.items() if key in parameters}}
+    if "on_skip" in parameters:
         kwargs["on_skip"] = skipped.append
     return scan_fn(*args, **kwargs)
 
 
 skipped = []
-groups = (
-    _scan_with_skips(scan_reference_directory, {json.dumps(data_root)})
-    if {rescan!r}
-    else _scan_with_skips(
-        find_new_datasets,
-        {json.dumps(data_root)},
-        existing_names=set({json.dumps(existing_names)}),
-    )
-)
+if {rescan!r}:
+    scan_fn = scan_reference_directory or find_new_datasets
+    scan_kwargs = {{}} if scan_reference_directory is not None else {{"existing_names": set()}}
+else:
+    scan_fn = find_new_datasets or scan_reference_directory
+    scan_kwargs = {{"existing_names": set({json.dumps(existing_names)})}} if find_new_datasets is not None else {{}}
+groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
 payload = []
 for group in groups:
     variants = {{}}

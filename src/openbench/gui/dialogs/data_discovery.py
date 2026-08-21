@@ -52,7 +52,7 @@ def choose_nc_variable(parent, var_name, sub_dir, all_vars):
 class DataDiscoveryDialog(QDialog):
     """Dialog showing scanned reference datasets for registration or refresh."""
 
-    def __init__(self, new_groups, parent=None):
+    def __init__(self, new_groups, parent=None, *, existing_names=None):
         """
         Args:
             new_groups: List of DatasetGroup from scanner.find_new_datasets().
@@ -61,6 +61,7 @@ class DataDiscoveryDialog(QDialog):
         self.setWindowTitle("Reference Datasets Found")
         self.setMinimumSize(800, 500)
         self._new_groups = new_groups
+        self._existing_names = set(existing_names or ())
         self._checkboxes = {}  # (base_name, resolution) -> QCheckBox
 
         layout = QVBoxLayout(self)
@@ -75,12 +76,14 @@ class DataDiscoveryDialog(QDialog):
 
         # Tree view
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Dataset", "Resolution", "Type", "Variables", "Files"])
+        self.tree.setProperty("i18n_items", True)
+        self.tree.setHeaderLabels(["Dataset", "Resolution", "Status", "Type", "Variables", "Files"])
         self.tree.setColumnWidth(0, 250)
         self.tree.setColumnWidth(1, 100)
-        self.tree.setColumnWidth(2, 60)
-        self.tree.setColumnWidth(3, 50)
+        self.tree.setColumnWidth(2, 90)
+        self.tree.setColumnWidth(3, 60)
         self.tree.setColumnWidth(4, 50)
+        self.tree.setColumnWidth(5, 50)
 
         for group in new_groups:
             # Parent item: dataset base name
@@ -88,26 +91,28 @@ class DataDiscoveryDialog(QDialog):
                 [
                     group.base_name,
                     f"{len(group.variants)} variant(s)",
+                    "",
                     group.category,
                     "",
                     "",
                 ]
             )
-            parent_item.setFlags(parent_item.flags() | Qt.ItemIsUserCheckable)
-            parent_item.setCheckState(0, Qt.Checked)
+            parent_item.setFlags(parent_item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsAutoTristate)
 
             for res_name, variant in sorted(group.variants.items()):
+                is_existing = variant.registry_name in self._existing_names
                 child = QTreeWidgetItem(
                     [
                         "",
                         res_name,
+                        "Registered" if is_existing else "New",
                         variant.data_type,
                         str(len(variant.variables)),
                         str(variant.file_count),
                     ]
                 )
                 child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
-                child.setCheckState(0, Qt.Checked)
+                child.setCheckState(0, Qt.Unchecked if is_existing else Qt.Checked)
                 child.setData(0, Qt.UserRole, (group.base_name, res_name))
                 parent_item.addChild(child)
 

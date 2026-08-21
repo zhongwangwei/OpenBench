@@ -187,6 +187,21 @@ class EvaluationRunner(QThread):
                 output_tail.clear()
                 saw_partial_completion = False
                 if not checking:
+                    progress = 0
+                    self._current_variable = ""
+                    self._current_ref = ""
+                    self._current_sim = ""
+                    self._completed_eval_tasks.clear()
+                    self._completed_groupby_tasks.clear()
+                    self._completed_comparison_tasks.clear()
+                    self._emit_progress(
+                        RunnerStatus.RUNNING,
+                        0,
+                        "Starting",
+                        "",
+                        "Evaluation",
+                        "Starting OpenBench evaluation...",
+                    )
                     self.log_message.emit("Configuration valid. Starting OpenBench evaluation...")
                 self.log_message.emit(f"Running: {' '.join(cmd)}")
 

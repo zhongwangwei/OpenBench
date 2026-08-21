@@ -307,7 +307,8 @@ class MainWindow(QMainWindow):
         self.nav_list.blockSignals(False)
         self._update_buttons()
         self._update_page_indicator()
-        self.language_manager.apply(self)
+        for widget in (self.nav_list, self.btn_next, self.page_indicator):
+            self.language_manager.apply(widget)
         self._update_language_button()
 
     def _on_language_changed(self, _language: str):

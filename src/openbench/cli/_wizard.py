@@ -45,9 +45,17 @@ def confirm(text: str, *, default: bool) -> bool:
 
 def prompt_fields(fields: Sequence[tuple[str, str, dict[str, Any]]]) -> dict[str, Any]:
     """Collect a fixed field sequence, moving back one field on request."""
-    return prompt_steps(
-        [(key, text, lambda text=text, kwargs=kwargs: prompt(text, **kwargs)) for key, text, kwargs in fields]
-    )
+    steps = []
+    for key, text, kwargs in fields:
+        prompt_kwargs = dict(kwargs)
+
+        def ask(text=text, prompt_kwargs=prompt_kwargs):
+            value = prompt(text, **prompt_kwargs)
+            prompt_kwargs["default"] = value
+            return value
+
+        steps.append((key, text, ask))
+    return prompt_steps(steps)
 
 
 def prompt_steps(steps: Sequence[tuple[str, str, Callable[[], Any]]]) -> dict[str, Any]:

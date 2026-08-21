@@ -208,6 +208,7 @@ ZH_CN = {
     "Yes": "是",
     "No": "否",
     "New": "新建",
+    "Registered": "已注册",
     "Open": "打开",
     "Export": "导出",
     "Select": "选择",
@@ -394,7 +395,7 @@ class LanguageManager(QObject):
 
     def eventFilter(self, watched, event):  # noqa: N802 - Qt API name
         if event.type() == QEvent.Show and isinstance(watched, QWidget):
-            self.apply(watched)
+            self._translate_widget(watched)
         return super().eventFilter(watched, event)
 
     def _translate_widget(self, widget: QWidget) -> None:
@@ -421,6 +422,13 @@ class LanguageManager(QObject):
         if isinstance(widget, QListWidget) and widget.property("i18n_items"):
             for index in range(widget.count()):
                 self._translate_item(widget.item(index))
+        if isinstance(widget, QTreeWidget) and widget.property("i18n_items"):
+            pending = [widget.topLevelItem(index) for index in range(widget.topLevelItemCount())]
+            while pending:
+                item = pending.pop()
+                for column in range(item.columnCount()):
+                    self._translate_item(item, column)
+                pending.extend(item.child(index) for index in range(item.childCount()))
         if isinstance(widget, (QTableWidget, QTreeWidget)):
             for index in range(widget.columnCount()):
                 item = widget.horizontalHeaderItem(index) if isinstance(widget, QTableWidget) else widget.headerItem()

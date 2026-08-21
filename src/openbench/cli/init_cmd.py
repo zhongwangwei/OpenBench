@@ -866,44 +866,61 @@ def _unique_non_null_values(values) -> list:
 def _prompt_project_options(project_resolution: dict, simulation: dict) -> tuple[bool, bool, dict]:
     resolution = dict(project_resolution)
     sim_entries = _simulation_entries_with_defaults(simulation)
+    defaults = {
+        "comparison": True,
+        "statistics": False,
+        "tim_res": str(resolution.get("tim_res", "")),
+        "grid_res": resolution.get("grid_res"),
+    }
+
+    def remembered_confirm(key: str, text: str) -> bool:
+        defaults[key] = _wizard_confirm(text, default=defaults[key])
+        return defaults[key]
+
+    def remembered_prompt(key: str, text: str, **kwargs):
+        kwargs["default"] = defaults[key]
+        defaults[key] = _wizard_prompt(text, **kwargs)
+        return defaults[key]
+
     steps = [
         (
             "comparison",
             "Enable comparison?",
-            lambda: _wizard_confirm("  Enable comparison?", default=True),
+            lambda: remembered_confirm("comparison", "  Enable comparison?"),
         ),
         (
             "statistics",
             "Enable statistics?",
-            lambda: _wizard_confirm("  Enable statistics?", default=False),
+            lambda: remembered_confirm("statistics", "  Enable statistics?"),
         ),
     ]
 
-    if "tim_res" not in resolution:
-        tim_values = _unique_non_null_values(entry.get("tim_res") for entry in sim_entries)
-        if len(tim_values) > 1:
-            steps.append(
-                (
+    tim_values = _unique_non_null_values(entry.get("tim_res") for entry in sim_entries)
+    if len(tim_values) > 1:
+        defaults["tim_res"] = defaults["tim_res"] or str(tim_values[0])
+        steps.append(
+            (
+                "tim_res",
+                "Target tim_res for mixed simulation resolutions",
+                lambda: remembered_prompt(
                     "tim_res",
-                    "Target tim_res for mixed simulation resolutions",
-                    lambda: _wizard_prompt(
-                        "  Target tim_res for mixed simulation resolutions",
-                        default=str(tim_values[0]),
-                    ),
-                )
+                    "  Target tim_res for mixed simulation resolutions",
+                ),
             )
+        )
 
     if "grid_res" not in resolution:
         grid_values = _unique_non_null_values(entry.get("grid_res") for entry in sim_entries)
         if len(grid_values) > 1:
+            defaults["grid_res"] = defaults["grid_res"] or float(grid_values[0])
             steps.append(
                 (
                     "grid_res",
                     "Target grid_res for mixed simulation resolutions",
-                    lambda: _wizard_prompt(
+                    lambda: remembered_prompt(
+                        "grid_res",
                         "  Target grid_res for mixed simulation resolutions",
                         type=float,
-                        default=float(grid_values[0]),
                     ),
                 )
             )
@@ -1390,27 +1407,44 @@ def init_cmd(
 
     navigation_hint()
     step = 1
+    reference_step_interactive = False
+    reference_defaults = {}
+    project_defaults = {
+        "name": "my-evaluation",
+        "output_dir": "./output",
+        "syear": 2004,
+        "eyear": 2010,
+    }
     while step <= 5:
         try:
             if step == 1:
                 click.secho("1. Project Settings", bold=True)
                 from openbench.config.schema import is_simple_project_name
 
-                def _project_name():
-                    value = _wizard_prompt("  Project name", default="my-evaluation")
+                def project_name():
+                    value = _wizard_prompt("  Project name", default=project_defaults["name"])
                     if not is_simple_project_name(value):
                         raise click.ClickException("project.name must be a simple directory name, not a path.")
+                    project_defaults["name"] = value
                     return value
 
-                def _project_output_dir():
-                    return _expand_project_output_dir(_wizard_prompt("  Output directory", default="./output"))
+                def project_output_dir():
+                    value = _wizard_prompt("  Output directory", default=project_defaults["output_dir"])
+                    expanded = _expand_project_output_dir(value)
+                    project_defaults["output_dir"] = value
+                    return expanded
+
+                def project_year(key, text):
+                    value = _wizard_prompt(text, type=int, default=project_defaults[key])
+                    project_defaults[key] = value
+                    return value
 
                 fields = prompt_steps(
                     [
-                        ("name", "Project name", _project_name),
-                        ("output_dir", "Output directory", _project_output_dir),
-                        ("syear", "Start year", lambda: _wizard_prompt("  Start year", type=int, default=2004)),
-                        ("eyear", "End year", lambda: _wizard_prompt("  End year", type=int, default=2010)),
+                        ("name", "Project name", project_name),
+                        ("output_dir", "Output directory", project_output_dir),
+                        ("syear", "Start year", lambda: project_year("syear", "  Start year")),
+                        ("eyear", "End year", lambda: project_year("eyear", "  End year")),
                     ]
                 )
                 name = fields["name"]
@@ -1487,6 +1521,7 @@ def init_cmd(
                 reference = {}
                 selected_reference_objects = {}
                 candidate_vars = list(selected_vars)
+                reference_step_interactive = False
                 if template_reference_mode:
                     click.secho(
                         "  No reference registry entries are available; generated YAML will contain placeholders.",
@@ -1495,12 +1530,26 @@ def init_cmd(
                 else:
                     reference_steps = []
                     available_by_var = {}
+
+                    def select_reference(var, available):
+                        choice = _parse_reference_selection(
+                            _wizard_prompt(
+                                f"  Select for {var}",
+                                default=reference_defaults.get(var, "1"),
+                            ),
+                            available,
+                            var,
+                        )
+                        reference_defaults[var] = "0" if choice is None else str(available.index(choice) + 1)
+                        return choice
+
                     for var in list(candidate_vars):
                         available = mgr.references_for_variable(var)
                         available_by_var[var] = available
                         if len(available) == 1:
                             click.echo(f"  {var} -> {available[0].name} (only option)")
                         elif len(available) > 1:
+                            reference_step_interactive = True
                             click.echo(f"  {var} - available sources:")
                             click.echo("    [0] skip this variable")
                             for i, ref in enumerate(available, 1):
@@ -1509,11 +1558,7 @@ def init_cmd(
                                 (
                                     var,
                                     f"Select for {var}",
-                                    lambda var=var, available=available: _parse_reference_selection(
-                                        _wizard_prompt(f"  Select for {var}", default="1"),
-                                        available,
-                                        var,
-                                    ),
+                                    lambda var=var, available=available: select_reference(var, available),
                                 )
                             )
 
@@ -1598,6 +1643,8 @@ def init_cmd(
                 click.secho("  Already at the first step; restarting Project Settings.", fg="yellow")
             else:
                 step -= 1
+                if step == 3 and not reference_step_interactive:
+                    step = 2
                 click.secho(f"  Returning to step {step}.", fg="yellow")
 
     # Build config

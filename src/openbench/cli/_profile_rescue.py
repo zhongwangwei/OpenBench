@@ -8,6 +8,7 @@ import click
 import yaml
 
 from openbench.cli._wizard import BackRequested, navigation_hint
+from openbench.cli._wizard import confirm as wizard_confirm
 from openbench.cli._wizard import prompt as wizard_prompt
 
 
@@ -85,6 +86,7 @@ def _profile_rescue_supported(skip) -> bool:
 
 def _create_profiles_for_scan_skips(skipped, ref_root: Path) -> int:
     pending = []
+    supported = []
     for item in skipped:
         if not _profile_rescue_supported(item):
             path = getattr(item, "path", str(item))
@@ -95,8 +97,26 @@ def _create_profiles_for_scan_skips(skipped, ref_root: Path) -> int:
                 fg="yellow",
             )
             continue
-        profile_name, profile = _prompt_reference_profile_for_scan_skip(item, ref_root)
-        pending.append((profile_name, profile))
+        supported.append(item)
+
+    index = 0
+    while index < len(supported):
+        try:
+            if index < len(pending) and wizard_confirm(
+                f"  Keep profile '{pending[index][0]}'?",
+                default=True,
+            ):
+                index += 1
+                continue
+            del pending[index:]
+            profile_name, profile = _prompt_reference_profile_for_scan_skip(supported[index], ref_root)
+            pending.append((profile_name, profile))
+            index += 1
+        except BackRequested:
+            if index == 0:
+                raise
+            index -= 1
+            click.secho("  Returning to the previous skipped dataset.", fg="yellow")
     updated = _write_reference_profiles(pending)
     for profile_name, _profile in pending:
         click.secho(f"Updated reference profile: {profile_name}", fg="green")
@@ -415,40 +435,47 @@ def _prompt_profile_variables_for_child(
     allow_skip_single: bool,
     include_root_sub_dir: bool,
 ) -> dict[str, dict]:
-    variables: dict[str, dict] = {}
     if len(all_vars) > 1:
-        previous = None
+        entries = []
+        index = 0
         while True:
-            used_nc_names = {entry["varname"] for entry in variables.values()}
+            previous = entries[index] if index < len(entries) else None
+            used_nc_names = {entry["varname"] for i, (_name, entry) in enumerate(entries) if i != index}
             try:
                 result = _prompt_profile_variable(
                     child_rel=child_rel,
                     all_vars=all_vars,
                     default_std=previous[0] if previous else None,
-                    default_nc=previous[1]["varname"]
-                    if previous
-                    else _next_nc_default(all_vars, used_nc_names, default_nc),
+                    default_nc=(
+                        previous[1]["varname"]
+                        if previous
+                        else _next_nc_default(all_vars, used_nc_names, default_nc)
+                    ),
                     default_unit=previous[1]["varunit"] if previous else default_unit,
-                    existing_names=existing_names | set(variables),
+                    existing_names=existing_names | {name for i, (name, _entry) in enumerate(entries) if i != index},
                     allow_empty=True,
                 )
             except BackRequested:
-                if not variables:
+                if index == 0:
                     raise
-                previous = variables.popitem()
+                index -= 1
                 click.secho("    Returning to the previous profile variable.", fg="yellow")
                 continue
             if result is None:
-                return variables
+                return dict(entries[:index])
             std_name, nc_name, unit = result
-            variables[std_name] = _profile_variable_entry(
+            entry = _profile_variable_entry(
                 nc_rel=nc_rel,
                 nc_name=nc_name,
                 unit=unit,
                 file_glob=file_glob,
                 include_root_sub_dir=include_root_sub_dir,
             )
-            previous = None
+            if previous:
+                entries[index] = (std_name, entry)
+            else:
+                entries.append((std_name, entry))
+            index += 1
 
     result = _prompt_profile_variable(
         child_rel=child_rel,

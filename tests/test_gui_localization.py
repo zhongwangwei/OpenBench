@@ -42,8 +42,9 @@ def test_main_window_language_button_updates_existing_pages(qapp):
 
     from openbench.gui.main_window import MainWindow
 
-    window = MainWindow()
+    window = None
     try:
+        window = MainWindow()
         from PySide6.QtCore import Qt
 
         assert window.btn_language.text() == "中文"
@@ -60,8 +61,9 @@ def test_main_window_language_button_updates_existing_pages(qapp):
         assert window.btn_next.text() == "Next"
     finally:
         qapp.removeEventFilter(manager)
-        window.close()
-        window.deleteLater()
+        if window is not None:
+            window.close()
+            window.deleteLater()
         qapp.processEvents()
         if old_manager is None:
             del qapp._openbench_language_manager

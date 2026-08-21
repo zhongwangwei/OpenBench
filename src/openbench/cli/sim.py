@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from openbench.cli._options import expand_existing_directory, expand_path
-from openbench.cli._wizard import BackRequested
+from openbench.cli._wizard import BackRequested, navigation_hint
 from openbench.cli._wizard import confirm as wizard_confirm
 
 _REGISTER_MODEL_EXISTS_HINT = (
@@ -146,6 +146,8 @@ def scan(
         )
         _print_scan_summary(result, dry_run=dry_run)
 
+    if not auto and not dry_run:
+        navigation_hint()
     _review_climatology_candidates()
 
     if dry_run:
