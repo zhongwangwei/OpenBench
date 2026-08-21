@@ -7,6 +7,9 @@ from pathlib import Path
 import click
 import yaml
 
+from openbench.cli._wizard import BackRequested, navigation_hint
+from openbench.cli._wizard import prompt as wizard_prompt
+
 
 def _load_catalog_for_cli(path: Path) -> dict:
     from openbench.data.registry.scanner import _safe_load_catalog
@@ -120,6 +123,7 @@ def _prompt_reference_profile_for_scan_skip(skip, ref_root: Path) -> tuple[str, 
     skip_path = getattr(skip, "path", str(skip))
     reason = getattr(skip, "reason", "unsupported_layout")
     parts = Path(skip_path).parts
+    navigation_hint()
     if reason == "ambiguous_nc_subdirectories" and _is_grid_composite_root_skip(parts):
         return _prompt_grid_composite_profile(skip_path, parts, ref_root)
     if reason == "ambiguous_nc_subdirectories" and _is_grid_dataset_skip(parts):
@@ -146,30 +150,40 @@ def _prompt_grid_composite_profile(skip_path: str, parts: tuple[str, ...], ref_r
     profile_default = _default_profile_name_for_skip(parts)
     click.echo()
     click.secho(f"Create reference profile for {skip_path}", bold=True)
-    profile_name = click.prompt("Profile name", default=profile_default).strip()
-    if not profile_name:
-        raise click.ClickException("Profile name cannot be empty.")
+    profile_name = _prompt_profile_name(profile_default)
 
     child_specs = _profile_child_specs(dataset_root, ref_root)
     if not child_specs:
         raise click.ClickException(f"No NC-bearing child folders found under {skip_path}.")
 
     variables: dict[str, dict] = {}
-    for child, nc_dir, nc_info in child_specs:
+    completed_children: list[set[str]] = []
+    child_index = 0
+    while child_index < len(child_specs):
+        child, nc_dir, nc_info = child_specs[child_index]
         child_rel = _ref_relative_path(child, ref_root)
         nc_rel = _ref_relative_path(nc_dir, ref_root)
         all_vars = nc_info.get("all_data_vars") or []
         default_nc = nc_info.get("varname") or (all_vars[0]["name"] if all_vars else child.name)
         default_unit = nc_info.get("varunit") or (all_vars[0].get("unit", "") if all_vars else "")
-        file_glob = _prompt_file_glob(child_rel)
+        try:
+            file_glob = _prompt_file_glob(child_rel)
+        except BackRequested:
+            if child_index == 0:
+                profile_name = _prompt_profile_name(profile_name)
+            else:
+                child_index -= 1
+                for name in completed_children.pop():
+                    variables.pop(name, None)
+            continue
 
         if len(all_vars) > 1:
             click.secho("    Multiple NetCDF variables detected:", fg="yellow")
             for idx, var in enumerate(all_vars, 1):
                 click.echo(f"      [{idx}] {var['name']} {var.get('unit', '')}")
 
-        variables.update(
-            _prompt_profile_variables_for_child(
+        try:
+            child_variables = _prompt_profile_variables_for_child(
                 child_rel=child_rel,
                 nc_rel=nc_rel,
                 child_name=child.name,
@@ -182,7 +196,12 @@ def _prompt_grid_composite_profile(skip_path: str, parts: tuple[str, ...], ref_r
                 allow_skip_single=True,
                 include_root_sub_dir=True,
             )
-        )
+        except BackRequested:
+            click.secho("  Returning to the file glob.", fg="yellow")
+            continue
+        variables.update(child_variables)
+        completed_children.append(set(child_variables))
+        child_index += 1
 
     if not variables:
         raise click.ClickException(f"No variables were added to profile '{profile_name}'.")
@@ -206,9 +225,7 @@ def _prompt_grid_dataset_choice_profile(skip_path: str, parts: tuple[str, ...], 
     default_std = parts[3] if len(parts) >= 5 else profile_default
     click.echo()
     click.secho(f"Create grid dataset choice profile for {skip_path}", bold=True)
-    profile_name = click.prompt("Profile name", default=profile_default).strip()
-    if not profile_name:
-        raise click.ClickException("Profile name cannot be empty.")
+    profile_name = _prompt_profile_name(profile_default)
 
     child_specs = _profile_child_specs(dataset_root, ref_root)
     if not child_specs:
@@ -216,27 +233,46 @@ def _prompt_grid_dataset_choice_profile(skip_path: str, parts: tuple[str, ...], 
     click.echo("  Choose the child directory to register:")
     for idx, (_child, nc_dir, _info) in enumerate(child_specs, 1):
         click.echo(f"    [{idx}] {_ref_relative_path(nc_dir, ref_root)}")
-    choice = click.prompt("  Child number", type=int, default=1)
-    if not 1 <= choice <= len(child_specs):
-        raise click.ClickException(f"Child choice out of range: {choice}")
-    child, nc_dir, nc_info = child_specs[choice - 1]
-    all_vars = nc_info.get("all_data_vars") or []
-    default_nc = nc_info.get("varname") or (all_vars[0]["name"] if all_vars else default_std)
-    default_unit = nc_info.get("varunit") or (all_vars[0].get("unit", "") if all_vars else "")
-    file_glob = _prompt_file_glob(_ref_relative_path(nc_dir, ref_root))
-    variables = _prompt_profile_variables_for_child(
-        child_rel=_ref_relative_path(nc_dir, ref_root),
-        nc_rel=nc_dir.relative_to(ref_root / "Grid" / parts[1]).as_posix(),
-        child_name=default_std,
-        all_vars=all_vars,
-        default_nc=default_nc,
-        default_unit=default_unit,
-        existing_names=set(),
-        file_glob=file_glob,
-        default_std=default_std,
-        allow_skip_single=False,
-        include_root_sub_dir=False,
-    )
+    while True:
+        try:
+            choice = wizard_prompt("  Child number", type=int, default=1)
+        except BackRequested:
+            profile_name = _prompt_profile_name(profile_name)
+            continue
+        if not 1 <= choice <= len(child_specs):
+            raise click.ClickException(f"Child choice out of range: {choice}")
+        child, nc_dir, nc_info = child_specs[choice - 1]
+        all_vars = nc_info.get("all_data_vars") or []
+        default_nc = nc_info.get("varname") or (all_vars[0]["name"] if all_vars else default_std)
+        default_unit = nc_info.get("varunit") or (all_vars[0].get("unit", "") if all_vars else "")
+        return_to_child = False
+        while True:
+            try:
+                file_glob = _prompt_file_glob(_ref_relative_path(nc_dir, ref_root))
+            except BackRequested:
+                return_to_child = True
+                break
+            try:
+                variables = _prompt_profile_variables_for_child(
+                    child_rel=_ref_relative_path(nc_dir, ref_root),
+                    nc_rel=nc_dir.relative_to(ref_root / "Grid" / parts[1]).as_posix(),
+                    child_name=default_std,
+                    all_vars=all_vars,
+                    default_nc=default_nc,
+                    default_unit=default_unit,
+                    existing_names=set(),
+                    file_glob=file_glob,
+                    default_std=default_std,
+                    allow_skip_single=False,
+                    include_root_sub_dir=False,
+                )
+            except BackRequested:
+                click.secho("  Returning to the file glob.", fg="yellow")
+                continue
+            break
+        if return_to_child:
+            continue
+        break
     for entry in variables.values():
         entry["sub_dir"] = nc_dir.relative_to(ref_root / "Grid" / parts[1]).as_posix()
     return profile_name, {
@@ -259,11 +295,7 @@ def _prompt_station_direct_profile(skip_path: str, parts: tuple[str, ...], ref_r
     default_std = _station_standard_variable_default(parts)
     click.echo()
     click.secho(f"Create station reference profile for {skip_path}", bold=True)
-    profile_name = click.prompt("Profile name", default=profile_default).strip()
-    if not profile_name:
-        raise click.ClickException("Profile name cannot be empty.")
-
-    file_glob = click.prompt("  File glob", default="**/*.nc").strip()
+    profile_name = _prompt_profile_name(profile_default)
     nc_info = _inspect_first_nc_under(dataset_root)
     all_vars = nc_info.get("all_data_vars") or []
     default_nc = nc_info.get("varname") or (all_vars[0]["name"] if all_vars else default_std)
@@ -274,19 +306,29 @@ def _prompt_station_direct_profile(skip_path: str, parts: tuple[str, ...], ref_r
         for idx, var in enumerate(all_vars, 1):
             click.echo(f"    [{idx}] {var['name']} {var.get('unit', '')}")
 
-    variables = _prompt_profile_variables_for_child(
-        child_rel=skip_path,
-        nc_rel="",
-        child_name=default_std,
-        all_vars=all_vars,
-        default_nc=default_nc,
-        default_unit=default_unit,
-        existing_names=set(),
-        file_glob=None,
-        default_std=default_std,
-        allow_skip_single=False,
-        include_root_sub_dir=False,
-    )
+    while True:
+        try:
+            file_glob = wizard_prompt("  File glob", default="**/*.nc").strip()
+        except BackRequested:
+            profile_name = _prompt_profile_name(profile_name)
+            continue
+        try:
+            variables = _prompt_profile_variables_for_child(
+                child_rel=skip_path,
+                nc_rel="",
+                child_name=default_std,
+                all_vars=all_vars,
+                default_nc=default_nc,
+                default_unit=default_unit,
+                existing_names=set(),
+                file_glob=None,
+                default_std=default_std,
+                allow_skip_single=False,
+                include_root_sub_dir=False,
+            )
+            break
+        except BackRequested:
+            click.secho("  Returning to the file glob.", fg="yellow")
     if not variables:
         raise click.ClickException(f"No variables were added to profile '{profile_name}'.")
 
@@ -308,9 +350,7 @@ def _prompt_grid_nested_profile(skip_path: str, parts: tuple[str, ...], ref_root
     default_std = parts[3] if len(parts) >= 5 else profile_default
     click.echo()
     click.secho(f"Create nested grid reference profile for {skip_path}", bold=True)
-    profile_name = click.prompt("Profile name", default=profile_default).strip()
-    if not profile_name:
-        raise click.ClickException("Profile name cannot be empty.")
+    profile_name = _prompt_profile_name(profile_default)
 
     nc_info = _inspect_first_nc_under(dataset_root)
     from openbench.data.coordinates import glob_nc
@@ -328,19 +368,24 @@ def _prompt_grid_nested_profile(skip_path: str, parts: tuple[str, ...], ref_root
         for idx, var in enumerate(all_vars, 1):
             click.echo(f"    [{idx}] {var['name']} {var.get('unit', '')}")
 
-    variables = _prompt_profile_variables_for_child(
-        child_rel=skip_path,
-        nc_rel=skip_path,
-        child_name=default_std,
-        all_vars=all_vars,
-        default_nc=default_nc,
-        default_unit=default_unit,
-        existing_names=set(),
-        file_glob=None,
-        default_std=default_std,
-        allow_skip_single=False,
-        include_root_sub_dir=False,
-    )
+    while True:
+        try:
+            variables = _prompt_profile_variables_for_child(
+                child_rel=skip_path,
+                nc_rel=skip_path,
+                child_name=default_std,
+                all_vars=all_vars,
+                default_nc=default_nc,
+                default_unit=default_unit,
+                existing_names=set(),
+                file_glob=None,
+                default_std=default_std,
+                allow_skip_single=False,
+                include_root_sub_dir=False,
+            )
+            break
+        except BackRequested:
+            profile_name = _prompt_profile_name(profile_name)
     if not variables:
         raise click.ClickException(f"No variables were added to profile '{profile_name}'.")
     for entry in variables.values():
@@ -372,25 +417,30 @@ def _prompt_profile_variables_for_child(
 ) -> dict[str, dict]:
     variables: dict[str, dict] = {}
     if len(all_vars) > 1:
-        used_nc_names: set[str] = set()
+        previous = None
         while True:
-            std_name = _prompt_standard_variable_name(
-                child_rel,
-                existing_names | set(variables),
-                default=None,
-                allow_empty=True,
-            )
-            if not std_name:
+            used_nc_names = {entry["varname"] for entry in variables.values()}
+            try:
+                result = _prompt_profile_variable(
+                    child_rel=child_rel,
+                    all_vars=all_vars,
+                    default_std=previous[0] if previous else None,
+                    default_nc=previous[1]["varname"]
+                    if previous
+                    else _next_nc_default(all_vars, used_nc_names, default_nc),
+                    default_unit=previous[1]["varunit"] if previous else default_unit,
+                    existing_names=existing_names | set(variables),
+                    allow_empty=True,
+                )
+            except BackRequested:
+                if not variables:
+                    raise
+                previous = variables.popitem()
+                click.secho("    Returning to the previous profile variable.", fg="yellow")
+                continue
+            if result is None:
                 return variables
-
-            nc_default = _next_nc_default(all_vars, used_nc_names, default_nc)
-            nc_name, detected_unit = _prompt_nc_variable_name(child_rel, all_vars, nc_default)
-            used_nc_names.add(nc_name)
-            unit = click.prompt(
-                "    Unit",
-                default=detected_unit or default_unit,
-                show_default=bool(detected_unit or default_unit),
-            ).strip()
+            std_name, nc_name, unit = result
             variables[std_name] = _profile_variable_entry(
                 nc_rel=nc_rel,
                 nc_name=nc_name,
@@ -398,21 +448,20 @@ def _prompt_profile_variables_for_child(
                 file_glob=file_glob,
                 include_root_sub_dir=include_root_sub_dir,
             )
+            previous = None
 
-    std_name = _prompt_standard_variable_name(
-        child_rel,
-        existing_names,
-        default=default_std,
+    result = _prompt_profile_variable(
+        child_rel=child_rel,
+        all_vars=all_vars,
+        default_std=default_std,
+        default_nc=default_nc,
+        default_unit=default_unit,
+        existing_names=existing_names,
         allow_empty=allow_skip_single,
     )
-    if not std_name:
+    if result is None:
         return {}
-    nc_name, detected_unit = _prompt_nc_variable_name(child_rel, all_vars, default_nc)
-    unit = click.prompt(
-        "    Unit",
-        default=detected_unit or default_unit,
-        show_default=bool(detected_unit or default_unit),
-    ).strip()
+    std_name, nc_name, unit = result
     return {
         std_name: _profile_variable_entry(
             nc_rel=nc_rel,
@@ -422,6 +471,61 @@ def _prompt_profile_variables_for_child(
             include_root_sub_dir=include_root_sub_dir,
         )
     }
+
+
+def _prompt_profile_variable(
+    *,
+    child_rel: str,
+    all_vars: list[dict],
+    default_std: str | None,
+    default_nc: str,
+    default_unit: str,
+    existing_names: set[str],
+    allow_empty: bool,
+) -> tuple[str, str, str] | None:
+    detected_unit = default_unit
+    std_prompt_default = default_std
+    nc_prompt_default = default_nc
+    stage = 0
+    while True:
+        try:
+            if stage == 0:
+                std_name = _prompt_standard_variable_name(
+                    child_rel,
+                    existing_names,
+                    default=std_prompt_default,
+                    allow_empty=allow_empty,
+                )
+                if not std_name:
+                    return None
+            elif stage == 1:
+                nc_name, detected_unit = _prompt_nc_variable_name(child_rel, all_vars, nc_prompt_default)
+            else:
+                unit = wizard_prompt(
+                    "    Unit",
+                    default=detected_unit or default_unit,
+                    show_default=bool(detected_unit or default_unit),
+                ).strip()
+                return std_name, nc_name, unit
+            stage += 1
+        except BackRequested:
+            if stage == 0:
+                raise
+            stage -= 1
+            if stage == 0:
+                std_prompt_default = std_name
+                label = "Standard variable name"
+            else:
+                nc_prompt_default = nc_name
+                label = "NetCDF variable name"
+            click.secho(f"    Returning to: {label}", fg="yellow")
+
+
+def _prompt_profile_name(default: str) -> str:
+    value = wizard_prompt("Profile name", default=default).strip()
+    if not value:
+        raise click.ClickException("Profile name cannot be empty.")
+    return value
 
 
 def _profile_variable_entry(
@@ -452,13 +556,13 @@ def _prompt_standard_variable_name(
 ) -> str:
     while True:
         if default is None:
-            value = click.prompt(
+            value = wizard_prompt(
                 "    Standard variable name (blank to skip/finish)",
                 default="",
                 show_default=False,
             ).strip()
         else:
-            value = click.prompt("    Standard variable name", default=default).strip()
+            value = wizard_prompt("    Standard variable name", default=default).strip()
         if value.lower() in {"skip", "-"} and allow_empty:
             return ""
         if not value:
@@ -475,7 +579,7 @@ def _prompt_standard_variable_name(
 
 def _prompt_nc_variable_name(child_rel: str, all_vars: list[dict], default_name: str) -> tuple[str, str]:
     while True:
-        value = click.prompt("    NetCDF variable name", default=default_name).strip()
+        value = wizard_prompt("    NetCDF variable name", default=default_name).strip()
         if not value:
             click.secho(f"    NetCDF variable name cannot be empty for {child_rel}.", fg="yellow")
             continue
@@ -527,7 +631,7 @@ def _next_nc_default(all_vars: list[dict], used_nc_names: set[str], fallback: st
 
 def _prompt_file_glob(child_rel: str) -> str:
     click.echo(f"  {child_rel}")
-    return click.prompt(
+    return wizard_prompt(
         "    File glob (blank for all *.nc)",
         default="",
         show_default=False,

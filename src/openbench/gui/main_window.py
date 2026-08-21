@@ -115,13 +115,24 @@ class MainWindow(QMainWindow):
         title_frame.setStyleSheet("background-color: #252525; padding: 20px;")
         title_layout = QVBoxLayout(title_frame)
 
-        title_label = QLabel("OpenBench")
-        title_label.setStyleSheet("color: #ffffff; font-size: 20px; font-weight: bold;")
-        title_layout.addWidget(title_label)
+        self.title_label = QLabel("OpenBench")
+        self.title_label.setStyleSheet("color: #ffffff; font-size: 20px; font-weight: bold;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(self.title_label)
 
-        subtitle_label = QLabel("NML Configuration Wizard")
-        subtitle_label.setStyleSheet("color: #888888; font-size: 12px;")
-        title_layout.addWidget(subtitle_label)
+        self.btn_language = QPushButton()
+        self.btn_language.setProperty("i18n_skip", True)
+        self.btn_language.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #aaaaaa;
+                border: none;
+                padding: 4px 12px;
+                font-size: 12px;
+            }
+            QPushButton:hover { color: #ffffff; background-color: #3d3d3d; }
+        """)
+        title_layout.addWidget(self.btn_language, alignment=Qt.AlignCenter)
 
         sidebar_layout.addWidget(title_frame)
 
@@ -162,11 +173,6 @@ class MainWindow(QMainWindow):
             QPushButton:hover { background-color: #4d4d4d; }
         """)
         btn_layout.addWidget(self.btn_new)
-
-        self.btn_language = QPushButton()
-        self.btn_language.setProperty("i18n_skip", True)
-        self.btn_language.setStyleSheet(self.btn_new.styleSheet())
-        btn_layout.addWidget(self.btn_language)
 
         sidebar_layout.addWidget(btn_frame)
 

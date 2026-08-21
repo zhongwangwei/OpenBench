@@ -44,7 +44,11 @@ def test_main_window_language_button_updates_existing_pages(qapp):
 
     window = MainWindow()
     try:
+        from PySide6.QtCore import Qt
+
         assert window.btn_language.text() == "中文"
+        assert window.btn_language.parent() is window.title_label.parent()
+        assert window.title_label.alignment() & Qt.AlignHCenter
         window.btn_language.click()
         assert window.windowTitle() == "OpenBench NML 配置向导"
         assert window.btn_language.text() == "English"

@@ -8,6 +8,10 @@ from typing import Callable
 
 import click
 
+from openbench.cli._wizard import BackRequested, navigation_hint
+from openbench.cli._wizard import confirm as wizard_confirm
+from openbench.cli._wizard import prompt as wizard_prompt
+
 ExpandDirectory = Callable[[str | Path, str], str]
 SkipHandler = Callable[[object], None]
 
@@ -117,7 +121,11 @@ def run_scan(
                 continue
 
             before_skip_keys = scan_skip_keys_fn(skipped)
-            updated = create_profiles_for_scan_skips_fn(skipped, ref_root_path)
+            try:
+                updated = create_profiles_for_scan_skips_fn(skipped, ref_root_path)
+            except BackRequested:
+                click.secho("Returning to the unsupported-folder action menu.", fg="yellow")
+                continue
             if updated == 0:
                 if any(profile_rescue_supported_fn(item) for item in skipped):
                     raise click.ClickException("Reference profile creation was cancelled or produced no updates.")
@@ -194,11 +202,6 @@ def run_scan(
             click.echo("Re-run without --dry-run to commit. Use --auto to skip the confirmation prompt.")
             return
 
-        if not auto:
-            action = "Register/update" if rescan else "Register"
-            if not click.confirm(f"{action} {len(to_register)} dataset(s)?"):
-                return
-
         def _multi_var_handler(var_name, sub_dir, all_vars):
             """Pick a variable when NC file has multiple data variables."""
             click.echo()
@@ -222,7 +225,7 @@ def run_scan(
                     "to silently choose the first candidate."
                 )
             while True:
-                choice = click.prompt("  Select variable number", type=int, default=1)
+                choice = wizard_prompt("  Select variable number", type=int, default=1)
                 if 1 <= choice <= len(all_vars):
                     return all_vars[choice - 1]["name"]
                 click.secho(
@@ -234,12 +237,27 @@ def run_scan(
         def _register_progress(msg):
             click.secho(f"  ✓{msg.lstrip()}", fg="green")
 
-        written_catalog_path = register_scanned_datasets_batch(
-            to_register,
-            catalog_path=catalog_path,
-            on_multi_var=_multi_var_handler,
-            on_progress=_register_progress,
-        )
+        if not auto:
+            navigation_hint()
+        while True:
+            if not auto:
+                action = "Register/update" if rescan else "Register"
+                try:
+                    if not wizard_confirm(f"{action} {len(to_register)} dataset(s)?", default=False):
+                        return
+                except BackRequested:
+                    click.secho("  Already at the first registration step.", fg="yellow")
+                    continue
+            try:
+                written_catalog_path = register_scanned_datasets_batch(
+                    to_register,
+                    catalog_path=catalog_path,
+                    on_multi_var=_multi_var_handler,
+                    on_progress=_register_progress,
+                )
+                break
+            except BackRequested:
+                click.secho("  Returning to the dataset registration confirmation.", fg="yellow")
         registered = len(to_register)
         settings_path = remember_reference_root(ref_root_path)
 
