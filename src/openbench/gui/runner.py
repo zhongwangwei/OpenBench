@@ -133,9 +133,9 @@ class EvaluationRunner(QThread):
         saw_partial_completion = False
         try:
             self._emit_progress(
-                RunnerStatus.RUNNING, 0, "Initializing", "", "Starting", "Starting OpenBench evaluation..."
+                RunnerStatus.RUNNING, 0, "Checking", "", "Preflight", "Checking OpenBench configuration..."
             )
-            self.log_message.emit("Starting OpenBench evaluation...")
+            self.log_message.emit("Checking OpenBench configuration before evaluation...")
 
             # Find Python interpreter (not the bundled executable)
             python_exe = self._find_python_interpreter()
@@ -152,9 +152,10 @@ class EvaluationRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return
 
-            cmd = [python_exe, "-m", "openbench", "run", self.config_path]
-
-            self.log_message.emit(f"Running: {' '.join(cmd)}")
+            commands = [
+                [python_exe, "-m", "openbench", "check", self.config_path],
+                [python_exe, "-m", "openbench", "run", self.config_path],
+            ]
 
             # Determine project root from the config file location
             project_root = os.path.dirname(os.path.abspath(self.config_path))
@@ -180,86 +181,97 @@ class EvaluationRunner(QThread):
             # Disable output buffering to ensure real-time log display
             env["PYTHONUNBUFFERED"] = "1"
 
-            self._process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                cwd=project_root,
-                env=env,
-                encoding="utf-8",
-                errors="replace",  # Replace unencodable characters instead of raising error
-            )
-
-            # Read output in real-time
             progress = 0
+            for index, cmd in enumerate(commands):
+                checking = index == 0
+                output_tail.clear()
+                saw_partial_completion = False
+                if not checking:
+                    self.log_message.emit("Configuration valid. Starting OpenBench evaluation...")
+                self.log_message.emit(f"Running: {' '.join(cmd)}")
 
-            # Verify process started successfully
-            if self._process is None or self._process.stdout is None:
-                self.finished_signal.emit(False, "Failed to start OpenBench process")
-                return
-
-            while True:
-                # Thread-safe check for stop request
                 with self._stop_lock:
-                    stop_requested = self._stop_requested
-
-                if stop_requested:
-                    # Kill the process and all children
-                    self._kill_process_tree()
-                    self._emit_progress(RunnerStatus.STOPPED, progress, "Stopped", "", "", "Evaluation stopped by user")
-                    self.finished_signal.emit(False, "Stopped by user")
-                    return
-
-                line = self._process.stdout.readline()
-                if not line:
-                    # No more output - check if process is still running
-                    if self._process.poll() is not None:
-                        break
-                    # Process still running, just no output yet - continue
-                    continue
-
-                line = line.strip()
-                if line:
-                    output_tail.append(line)
-                    saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
-                    self.log_message.emit(line)
-
-                    # Parse progress from log
-                    progress, var, stage = self._parse_progress(line, progress)
-                    self._emit_progress(
-                        RunnerStatus.RUNNING, progress, f"{var} - {stage}" if var else "Processing", var, stage, line
+                    if self._stop_requested:
+                        self._emit_progress(
+                            RunnerStatus.STOPPED, progress, "Stopped", "", "", "Evaluation stopped by user"
+                        )
+                        self.finished_signal.emit(False, "Stopped by user")
+                        return
+                    self._process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        cwd=project_root,
+                        env=env,
+                        encoding="utf-8",
+                        errors="replace",  # Replace unencodable characters instead of raising error
                     )
 
-            # Read any remaining buffered output after process terminates
-            remaining_output = self._process.stdout.read()
-            if remaining_output:
-                for line in remaining_output.strip().split("\n"):
+                if self._process.stdout is None:
+                    self.finished_signal.emit(False, "Failed to start OpenBench process")
+                    return
+
+                while True:
+                    with self._stop_lock:
+                        stop_requested = self._stop_requested
+
+                    if stop_requested:
+                        self._kill_process_tree()
+                        self._emit_progress(
+                            RunnerStatus.STOPPED, progress, "Stopped", "", "", "Evaluation stopped by user"
+                        )
+                        self.finished_signal.emit(False, "Stopped by user")
+                        return
+
+                    line = self._process.stdout.readline()
+                    if not line:
+                        if self._process.poll() is not None:
+                            break
+                        continue
+
                     line = line.strip()
                     if line:
                         output_tail.append(line)
                         saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
                         self.log_message.emit(line)
                         progress, var, stage = self._parse_progress(line, progress)
+                        self._emit_progress(
+                            RunnerStatus.RUNNING,
+                            progress,
+                            f"{var} - {stage}" if var else ("Checking" if checking else "Processing"),
+                            var,
+                            stage,
+                            line,
+                        )
 
-            # Check result
-            return_code = self._process.wait()
+                remaining_output = self._process.stdout.read()
+                if remaining_output:
+                    for line in remaining_output.strip().split("\n"):
+                        line = line.strip()
+                        if line:
+                            output_tail.append(line)
+                            saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
+                            self.log_message.emit(line)
+                            progress, var, stage = self._parse_progress(line, progress)
 
-            if return_code == 0:
-                self._emit_progress(
-                    RunnerStatus.COMPLETED, 100, "Complete", "", "", "Evaluation completed successfully"
-                )
-                self.finished_signal.emit(True, "Evaluation completed successfully")
-            else:
-                message = self._format_failure_with_tail(f"Process exited with code {return_code}", output_tail)
-                if saw_partial_completion:
-                    if not _looks_like_partial_completion([message]):
-                        message = "Evaluation completed with errors\n" + message
-                    self._emit_progress(RunnerStatus.PARTIAL, progress, "Partial", "", "", message)
-                else:
-                    self._emit_progress(RunnerStatus.FAILED, progress, "Failed", "", "", message)
-                self.finished_signal.emit(False, message)
+                return_code = self._process.wait()
+                self._process = None
+                if return_code != 0:
+                    heading = "Configuration check failed" if checking else f"Process exited with code {return_code}"
+                    message = self._format_failure_with_tail(heading, output_tail)
+                    if saw_partial_completion:
+                        if not _looks_like_partial_completion([message]):
+                            message = "Evaluation completed with errors\n" + message
+                        self._emit_progress(RunnerStatus.PARTIAL, progress, "Partial", "", "", message)
+                    else:
+                        self._emit_progress(RunnerStatus.FAILED, progress, "Failed", "", "", message)
+                    self.finished_signal.emit(False, message)
+                    return
+
+            self._emit_progress(RunnerStatus.COMPLETED, 100, "Complete", "", "", "Evaluation completed successfully")
+            self.finished_signal.emit(True, "Evaluation completed successfully")
 
         except Exception as e:
             error_msg = self._format_command_context(f"Local execution error: {e}", cmd)

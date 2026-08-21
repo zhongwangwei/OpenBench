@@ -149,8 +149,8 @@ def test_kill_remote_process_matches_current_config_not_all_openbench_runs(tmp_p
     assert len(ssh.commands) == 1
     assert "pkill -f --" in ssh.commands[0]
     assert "openbench_wizard_abcd1234" in ssh.commands[0]
-    assert "python.*-m openbench run" in ssh.commands[0]
-    assert ssh.commands[0] != "pkill -f 'python.*-m openbench run' || true"
+    assert "python.*-m openbench (check|run)" in ssh.commands[0]
+    assert ssh.commands[0] != "pkill -f 'python.*-m openbench (check|run)' || true"
 
 
 def test_cleanup_remote_reports_nonzero_rm_failure(tmp_path):
