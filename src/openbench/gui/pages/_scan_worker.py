@@ -312,11 +312,7 @@ def enrich_selected_remote_variants(
         if progress is not None:
             progress.close()
             progress.deleteLater()
-    refreshed = {
-        variant.registry_name: variant
-        for group in groups
-        for variant in group.variants.values()
-    }
+    refreshed = {variant.registry_name: variant for group in groups for variant in group.variants.values()}
     missing = refresh_names - set(refreshed)
     if missing:
         raise RuntimeError("Selected remote datasets disappeared during refresh: " + ", ".join(sorted(missing)))

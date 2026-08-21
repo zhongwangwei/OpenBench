@@ -447,9 +447,7 @@ def _prompt_profile_variables_for_child(
                     all_vars=all_vars,
                     default_std=previous[0] if previous else None,
                     default_nc=(
-                        previous[1]["varname"]
-                        if previous
-                        else _next_nc_default(all_vars, used_nc_names, default_nc)
+                        previous[1]["varname"] if previous else _next_nc_default(all_vars, used_nc_names, default_nc)
                     ),
                     default_unit=previous[1]["varunit"] if previous else default_unit,
                     existing_names=existing_names | {name for i, (name, _entry) in enumerate(entries) if i != index},
