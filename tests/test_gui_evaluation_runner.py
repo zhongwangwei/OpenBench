@@ -141,6 +141,23 @@ def test_local_runner_checks_before_run(tmp_path, monkeypatch):
     assert finished[-1][0] is True
 
 
+def test_local_runner_resets_progress_between_check_and_run(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    runner.set_task_counts(1, 1, 1, 1, 0, 0, 0)
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    processes = iter([FakeProcess(["Config validation\n"], 0), FakeProcess(["Processing Runoff\n"], 0)])
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: next(processes))
+    progress = []
+    runner.progress_updated.connect(progress.append)
+
+    runner.run()
+
+    run_start = next(item for item in progress if item.message == "Starting OpenBench evaluation...")
+    assert run_start.progress == 0
+
+
 def test_local_runner_does_not_run_when_check_fails(tmp_path, monkeypatch):
     config = tmp_path / "openbench.yaml"
     config.write_text("project: {}\n", encoding="utf-8")

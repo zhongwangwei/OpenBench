@@ -848,10 +848,11 @@ class PageRegistry(BasePage):
                 return
 
             # Show discovery dialog for user to select which datasets to register
+            existing_names = {ref.name for ref in _get_registry().list_references()}
             try:
                 from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
 
-                dlg = DataDiscoveryDialog(new_groups, parent=self)
+                dlg = DataDiscoveryDialog(new_groups, existing_names=existing_names, parent=self)
                 if not dlg.exec():
                     return
                 selected = dlg.get_selected()
@@ -867,7 +868,8 @@ class PageRegistry(BasePage):
                 variants = []
                 for group in new_groups:
                     for _res, variant in group.variants.items():
-                        variants.append(variant)
+                        if variant.registry_name not in existing_names:
+                            variants.append(variant)
                 multi_var_picker = lambda _var_name, _sub_dir, all_vars: all_vars[0]["name"] if all_vars else None
 
             register_scanned_datasets_batch(

@@ -347,10 +347,10 @@ class PageRefData(BasePage):
             else:
                 import os
 
+                data_root = os.path.abspath(os.path.expanduser(data_root))
                 if not os.path.isdir(data_root):
                     QMessageBox.warning(self, "Invalid Path", f"Directory not found: {data_root}")
                     return
-                data_root = os.path.abspath(os.path.expanduser(data_root))
                 self.data_root_input.setText(data_root)
                 os.environ["OPENBENCH_REF_ROOT"] = data_root
                 from openbench.config.user_settings import remember_reference_root
@@ -421,6 +421,7 @@ class PageRefData(BasePage):
     def _on_scan_data_root_finished(self, new_groups):
         self._finish_scan_worker()
         try:
+            from openbench.data.registry.manager import clear_registry_cache, get_registry
             from openbench.data.registry.scanner import register_scanned_datasets_batch
             from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
             from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
@@ -434,7 +435,8 @@ class PageRefData(BasePage):
                     QMessageBox.information(self, "Scan Complete", "No supported reference datasets found.")
                 return
 
-            dlg = DataDiscoveryDialog(new_groups, parent=self)
+            existing_names = {ref.name for ref in get_registry().list_references()}
+            dlg = DataDiscoveryDialog(new_groups, existing_names=existing_names, parent=self)
             if dlg.exec():
                 selected = dlg.get_selected()
                 if not selected:
@@ -450,8 +452,6 @@ class PageRefData(BasePage):
                 registered = len(variants)
 
                 # Refresh registry
-                from openbench.data.registry.manager import clear_registry_cache, get_registry
-
                 clear_registry_cache()
                 mgr2 = get_registry()
                 self.registry_label.setText(f"Registry: {len(mgr2.list_references())} datasets available")

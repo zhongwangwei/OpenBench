@@ -773,6 +773,30 @@ def test_has_grid_evaluation_rejects_station_grid_pairs():
     assert bindings.has_grid_evaluation(["ET"]).has_grid is False
 
 
+def test_has_grid_evaluation_without_simulation_source_is_false():
+    runner_cfg = adapter_module.RunnerConfig(
+        basename="case",
+        basedir=".",
+        evaluation_items={"ET": True},
+        metrics=[],
+        scores=[],
+        comparisons=[],
+        statistics=["Mean"],
+        general={"basename": "case", "basedir": "."},
+    )
+    bindings = adapter_module.RunnerBindings(
+        runner_cfg=runner_cfg,
+        namelists=adapter_module.LegacyNamelists(
+            main={"general": runner_cfg.general},
+            reference={"general": {"ET_ref_source": "RefGrid"}, "ET": {"RefGrid_data_type": "grid"}},
+            simulation={"general": {}, "ET": {}},
+        ),
+        figures=adapter_module.LegacyFigureConfig(raw={}),
+    )
+
+    assert bindings.has_grid_evaluation(["ET"]).has_grid is False
+
+
 def test_statistics_context_skips_station_pairs_within_mixed_sources(tmp_path):
     runner_cfg = adapter_module.RunnerConfig(
         basename="case",

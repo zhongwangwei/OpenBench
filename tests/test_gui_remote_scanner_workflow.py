@@ -285,7 +285,7 @@ def test_remote_scan_script_bootstraps_openbench_path_and_local_names(monkeypatc
     assert "sys.path.insert" in script
     assert '"/remote/openbench/src"' in script
     assert "Already_LowRes" in script
-    assert "existing_names=" in script
+    assert '"existing_names"' in script
     assert captured["timeout"] == 900
 
 
@@ -392,6 +392,8 @@ def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
     assert "_detect_data_groupby" in script
     assert "nc_inspections" in script
     assert "remote_inspection_error" in script
+    assert "from openbench.data.registry.scanner import find_new_datasets, scan_reference_directory" not in script
+    compile(script, "<remote-scan>", "exec")
 
 
 def test_remote_scan_rehydration_ignores_unknown_fields(monkeypatch):
@@ -703,9 +705,12 @@ def test_local_ref_scan_remembers_root_before_worker_starts(tmp_path, monkeypatc
         def deleteLater(self):
             pass
 
+    ref_root = tmp_path / "Reference"
+    ref_root.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
     page = PageRefData.__new__(PageRefData)
     page.controller = SimpleNamespace(storage=object())
-    page.data_root_input = FakeLineEdit(str(tmp_path / "."))
+    page.data_root_input = FakeLineEdit("~/Reference")
     page.btn_scan = FakeButton()
     page.save_to_config = lambda: captured.setdefault("saved", True)
     monkeypatch.setenv("OPENBENCH_REF_ROOT", "old-root")
@@ -716,9 +721,37 @@ def test_local_ref_scan_remembers_root_before_worker_starts(tmp_path, monkeypatc
 
     PageRefData._scan_data_root(page)
 
-    root = str(tmp_path.resolve())
+    root = str(ref_root.resolve())
     assert remembered == [root]
     assert captured == {"saved": True, "root": root, "started": True}
+
+
+def test_registry_scan_dialog_receives_registered_dataset_names(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import page_registry
+    from openbench.gui.pages.page_registry import PageRegistry
+
+    variant = ScannedDataset("Existing", "LowRes", "Water", "grid", "/ref", {"Runoff": "runoff"})
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            captured["existing_names"] = existing_names
+
+        def exec(self):
+            return False
+
+    registry = SimpleNamespace(list_references=lambda: [SimpleNamespace(name=variant.registry_name)])
+    monkeypatch.setattr(page_registry, "_get_registry", lambda: registry)
+    monkeypatch.setattr(PageRegistry, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+
+    PageRegistry._on_scan_directory_finished(
+        PageRegistry.__new__(PageRegistry),
+        ([DatasetGroup("Existing", {"LowRes": variant})], []),
+    )
+
+    assert captured["existing_names"] == {variant.registry_name}
 
 
 def test_ref_scan_reports_connection_loss_distinctly(monkeypatch):

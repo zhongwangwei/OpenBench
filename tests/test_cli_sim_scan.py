@@ -433,6 +433,7 @@ def test_sim_scan_interactive_confirmation_applies_monthly_climatology_candidate
     assert result.exit_code == 0
     assert "Already at the first climatology candidate" in result.output
     assert "Returning to climatology review" in result.output
+    assert "Type 'back' to return to the previous step" in result.output
     sim_data = yaml.safe_load((tmp_path / "openbench_sim_scan_20260501-151500.yaml").read_text(encoding="utf-8"))
     assert sim_data["simulation"]["CaseA"]["tim_res"] == "climatology-month"
 

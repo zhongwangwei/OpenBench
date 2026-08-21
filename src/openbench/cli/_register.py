@@ -88,25 +88,28 @@ def register_reference(
     if not variable and not fallback and is_new:
         navigation_hint()
         click.echo("\nAdd variables (empty name to finish):")
-        previous = {}
-        var_default = ""
+        entries = []
+        index = 0
+        draft_name = ""
         while True:
+            previous = entries[index] if index < len(entries) else None
             try:
                 var_name = wizard_prompt(
                     "  Standard variable name (e.g., Evapotranspiration)",
-                    default=var_default,
+                    default=previous[0] if previous else draft_name,
                 )
             except BackRequested:
-                if previous or not new_vars:
+                if index == 0:
                     click.secho("  Already at the first variable.", fg="yellow")
                     continue
-                var_name, previous = new_vars.popitem()
-                var_default = var_name
-                click.secho(f"  Returning to variable: {var_name}", fg="yellow")
+                index -= 1
+                draft_name = ""
+                click.secho(f"  Returning to variable: {entries[index][0]}", fg="yellow")
                 continue
             if not var_name:
+                del entries[index:]
                 break
-            defaults = previous
+            defaults = previous[1] if previous else {}
             try:
                 fields = prompt_fields(
                     [
@@ -121,16 +124,20 @@ def register_reference(
                     ]
                 )
             except BackRequested:
-                var_default = var_name
+                draft_name = var_name
                 continue
             entry = {"varname": fields["nc_name"], "varunit": fields["unit"]}
             if fields["prefix"]:
                 entry["prefix"] = fields["prefix"]
             if fields["suffix"]:
                 entry["suffix"] = fields["suffix"]
-            new_vars[var_name] = entry
-            previous = {}
-            var_default = ""
+            if previous:
+                entries[index] = (var_name, entry)
+            else:
+                entries.append((var_name, entry))
+            index += 1
+            draft_name = ""
+        new_vars = dict(entries)
 
     if not new_vars and is_new and not fallback:
         click.secho("No variables defined. Registration cancelled.", fg="yellow")
