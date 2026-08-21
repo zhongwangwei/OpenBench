@@ -105,7 +105,7 @@ class DataDiscoveryDialog(QDialog):
                     [
                         "",
                         res_name,
-                        "Registered" if is_existing else "New",
+                        "Registered" if is_existing else "Unregistered",
                         variant.data_type,
                         str(len(variant.variables)),
                         str(variant.file_count),

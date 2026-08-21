@@ -32,6 +32,20 @@ def test_language_switch_is_reversible_and_persistent(qapp, tmp_path):
     assert translate_text("Step 3 of 12", CHINESE) == "第 3 步，共 12 步"
 
 
+def test_show_event_respects_i18n_skip(qapp):
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QPushButton
+
+    manager = LanguageManager(persist=False)
+    manager.language = CHINESE
+    button = QPushButton("New")
+    button.setProperty("i18n_skip", True)
+
+    manager.eventFilter(button, QEvent(QEvent.Show))
+
+    assert button.text() == "New"
+
+
 def test_main_window_language_button_updates_existing_pages(qapp):
     old_manager = getattr(qapp, "_openbench_language_manager", None)
     if old_manager is not None:
