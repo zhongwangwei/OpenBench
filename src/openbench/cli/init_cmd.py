@@ -830,11 +830,20 @@ def _infer_project_resolution_fields(selected_refs: dict, simulation: dict) -> d
     ref_grid_res = _common_non_null_value(getattr(ref, "grid_res", None) for ref in selected_refs.values())
 
     fields = {}
-    # Time resolution follows the simulation outputs when available because
-    # they define the evaluation cadence. Spatial resolution follows selected
-    # references first because target grids are usually chosen from reference
-    # products; simulation resolution is only a fallback.
-    tim_res = sim_tim_res if sim_tim_res is not None else ref_tim_res
+    # Every source must be able to supply the target cadence, so use the
+    # coarsest known time resolution across simulations and references.
+    from openbench.data.registry.scanner import _tim_res_rank
+
+    tim_res_values = _unique_non_null_values(
+        [entry.get("tim_res") for entry in sim_entries]
+        + [getattr(ref, "tim_res", None) for ref in selected_refs.values()]
+    )
+    ranked_tim_res = [(_tim_res_rank(str(value)), value) for value in tim_res_values]
+    ranked_tim_res = [item for item in ranked_tim_res if item[0] >= 0]
+    tim_res = min(ranked_tim_res)[1] if ranked_tim_res else sim_tim_res or ref_tim_res
+
+    # Spatial resolution follows selected references first because target
+    # grids are usually chosen from reference products.
     grid_res = ref_grid_res if ref_grid_res is not None else sim_grid_res
     if tim_res is not None:
         fields["tim_res"] = tim_res

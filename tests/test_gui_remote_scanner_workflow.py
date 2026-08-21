@@ -659,6 +659,68 @@ def test_ref_scan_disables_button_before_remote_existence_check(monkeypatch):
     assert page.btn_scan.enabled is True
 
 
+def test_local_ref_scan_remembers_root_before_worker_starts(tmp_path, monkeypatch):
+    from openbench.gui.pages import page_ref_data
+    from openbench.gui.pages.page_ref_data import PageRefData
+    from tests.gui_fakes import FakeLineEdit
+
+    remembered = []
+    captured = {}
+
+    class FakeProgress:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def setWindowTitle(self, *_args):
+            pass
+
+        def setWindowModality(self, *_args):
+            pass
+
+        def setMinimumDuration(self, *_args):
+            pass
+
+        def setCancelButton(self, *_args):
+            pass
+
+        def show(self):
+            pass
+
+    class FakeSignal:
+        def connect(self, *_args):
+            pass
+
+    class FakeWorker:
+        def __init__(self, root, **_kwargs):
+            captured["root"] = root
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            captured["started"] = True
+
+        def deleteLater(self):
+            pass
+
+    page = PageRefData.__new__(PageRefData)
+    page.controller = SimpleNamespace(storage=object())
+    page.data_root_input = FakeLineEdit(str(tmp_path / "."))
+    page.btn_scan = FakeButton()
+    page.save_to_config = lambda: captured.setdefault("saved", True)
+    monkeypatch.setenv("OPENBENCH_REF_ROOT", "old-root")
+    monkeypatch.setattr("openbench.gui.path_utils.remote_exec_context", lambda *_args: {})
+    monkeypatch.setattr("openbench.config.user_settings.remember_reference_root", remembered.append)
+    monkeypatch.setattr(page_ref_data, "QProgressDialog", FakeProgress)
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.FindDatasetsWorker", FakeWorker)
+
+    PageRefData._scan_data_root(page)
+
+    root = str(tmp_path.resolve())
+    assert remembered == [root]
+    assert captured == {"saved": True, "root": root, "started": True}
+
+
 def test_ref_scan_reports_connection_loss_distinctly(monkeypatch):
     """A dropped SSH session must not be reported as 'directory not found'."""
     from openbench.gui.pages.page_ref_data import PageRefData

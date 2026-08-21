@@ -22,6 +22,27 @@ class FakeCombo:
         return self.data
 
 
+class FakeLoadCombo:
+    def __init__(self, items):
+        self.items = list(items)
+        self.index = 0
+
+    def blockSignals(self, _blocked):
+        pass
+
+    def count(self):
+        return len(self.items)
+
+    def itemData(self, index):
+        return self.items[index][1]
+
+    def setCurrentIndex(self, index):
+        self.index = index
+
+    def addItem(self, label, data):
+        self.items.append((label, data))
+
+
 class FakeSpin:
     def __init__(self, value):
         self._value = value
@@ -316,6 +337,65 @@ def test_ref_data_save_preserves_explicit_runtime_override_separately_from_scan_
     assert ref_data["general"]["data_root"] == "/runtime/override"
     assert ref_data["_data_root_explicit"] is True
     assert ref_data["_scan_root"] == "/scan/root"
+
+
+def test_ref_data_load_uses_registry_when_generated_namelist_is_missing(monkeypatch):
+    from types import SimpleNamespace
+
+    import openbench.data.registry.manager as manager_module
+
+    ref = SimpleNamespace(
+        root_dir="${OPENBENCH_REF_ROOT}/Grid/MidRes/Water",
+        data_type="grid",
+        tim_res="Month",
+        data_groupby="Month",
+        timezone=0,
+        years=[2000, 2020],
+        grid_res=0.25,
+        fulllist="",
+        variables={
+            "Runoff": SimpleNamespace(
+                varname="ro",
+                varunit="mm day-1",
+                prefix="runoff_",
+                suffix=".nc",
+                sub_dir="Runoff/Demo",
+            )
+        },
+    )
+    monkeypatch.setattr(
+        manager_module,
+        "get_registry",
+        lambda: SimpleNamespace(get_reference=lambda name: ref if name == "Demo" else None),
+    )
+
+    controller = FakeController(
+        {
+            "evaluation_items": {"Runoff": True},
+            "ref_data": {
+                "general": {"Runoff_ref_source": "Demo"},
+                "def_nml": {"Demo": "/missing/Demo.yaml"},
+            },
+        }
+    )
+    controller.storage = object()
+    controller.project_root = ""
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {}
+    page._var_combos = {"Runoff": FakeLoadCombo([("Choose", None), ("Demo", "Demo")])}
+    page._var_advanced_fields = {
+        "Runoff": {key: FakeText("") for key in ("varname", "varunit", "prefix", "suffix", "sub_dir")}
+    }
+    page._rebuild_variable_groups = lambda: None
+
+    page.load_from_config()
+
+    source = page._source_configs["Runoff"]["Demo"]
+    assert source["general"]["root_dir"] == "${OPENBENCH_REF_ROOT}/Grid/MidRes/Water"
+    assert source["varname"] == "ro"
+    assert source["def_nml_path"] == "/missing/Demo.yaml"
 
 
 def test_general_save_preserves_runtime_local_openbench_path():
