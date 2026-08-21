@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         self._update_language_button()
 
     def _on_language_changed(self, _language: str):
-        """Retranslate navigation and all existing pages."""
+        """Rebuild navigation before application-wide retranslation."""
         self._update_navigation()
 
     def _update_language_button(self):

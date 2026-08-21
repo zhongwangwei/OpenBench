@@ -81,20 +81,20 @@ def scan_reference_datasets_remote(
     timeout: int = 900,
     should_abort=None,
     rescan: bool = False,
+    only_names: set[str] | None = None,
     on_skip=None,
 ):
     """Run reference registry discovery on the remote host and rehydrate groups.
 
-    The remote script also performs the per-variable NetCDF inspection and
-    data_groupby detection there (where the files actually live) and ships the
-    results along, so local registration does not silently degrade. The
-    "already registered" filter uses the LOCAL catalog names, because that is
-    the catalog registration writes to.
+    The remote script performs expensive NetCDF inspection for new datasets,
+    or for ``only_names`` when explicitly refreshing registered datasets.
+    Local catalog names determine both discovery status and registration.
     """
     from openbench.data.registry.scanner import DatasetGroup, ScannedDataset, ScanSkip
     from openbench.gui.remote_python import run_remote_python_json
 
-    existing_names = [] if rescan else sorted(_local_reference_names())
+    registered_names = sorted(_local_reference_names())
+    only_names_expr = "None" if only_names is None else f"set({json.dumps(sorted(only_names))})"
 
     bootstrap = ""
     if openbench_path:
@@ -175,37 +175,44 @@ def _scan_with_skips(scan_fn, *args, **kwargs):
 
 
 skipped = []
+registered_names = set({json.dumps(registered_names)})
+only_names = {only_names_expr}
 if {rescan!r}:
     scan_fn = scan_reference_directory or find_new_datasets
     scan_kwargs = {{}} if scan_reference_directory is not None else {{"existing_names": set()}}
 else:
     scan_fn = find_new_datasets or scan_reference_directory
-    scan_kwargs = {{"existing_names": set({json.dumps(existing_names)})}} if find_new_datasets is not None else {{}}
+    scan_kwargs = {{"existing_names": registered_names}} if find_new_datasets is not None else {{}}
 groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
 payload = []
 for group in groups:
     variants = {{}}
     for resolution, variant in group.variants.items():
+        registry_name = variant.registry_name
+        if only_names is not None and registry_name not in only_names:
+            continue
         data = dataclasses.asdict(variant)
-        data["remote_inspection_error"] = _inspection_import_error
-        inspections = {{}}
-        if _inspect_nc_file is not None:
-            for var_name, sub_dir in variant.variables.items():
-                dataset_path = _expand_path(variant.root_dir) / sub_dir
-                if dataset_path.is_dir():
-                    file_glob = getattr(variant, "file_globs", {{}}).get(var_name)
-                    inspections[var_name] = _inspect_nc_file(dataset_path, file_glob=file_glob)
-        data["nc_inspections"] = inspections
-        if _detect_data_groupby is not None:
-            data["detected_data_groupby"] = _detect_data_groupby(variant)
-        if variant.data_type == "stn":
-            try:
-                data["remote_fulllist"], data["remote_fulllist_error"] = _station_fulllist(variant)
-            except Exception as exc:
-                data["remote_fulllist"] = ""
-                data["remote_fulllist_error"] = "generation failed: %s: %s" % (type(exc).__name__, exc)
+        if only_names is not None or registry_name not in registered_names:
+            data["remote_inspection_error"] = _inspection_import_error
+            inspections = {{}}
+            if _inspect_nc_file is not None:
+                for var_name, sub_dir in variant.variables.items():
+                    dataset_path = _expand_path(variant.root_dir) / sub_dir
+                    if dataset_path.is_dir():
+                        file_glob = getattr(variant, "file_globs", {{}}).get(var_name)
+                        inspections[var_name] = _inspect_nc_file(dataset_path, file_glob=file_glob)
+            data["nc_inspections"] = inspections
+            if _detect_data_groupby is not None:
+                data["detected_data_groupby"] = _detect_data_groupby(variant)
+            if variant.data_type == "stn":
+                try:
+                    data["remote_fulllist"], data["remote_fulllist_error"] = _station_fulllist(variant)
+                except Exception as exc:
+                    data["remote_fulllist"] = ""
+                    data["remote_fulllist_error"] = "generation failed: %s: %s" % (type(exc).__name__, exc)
         variants[resolution] = data
-    payload.append({{"base_name": group.base_name, "variants": variants}})
+    if variants:
+        payload.append({{"base_name": group.base_name, "variants": variants}})
 print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for item in skipped]}}, default=_json_default))
 """
     payload = run_remote_python_json(
@@ -241,6 +248,57 @@ print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for i
                 ) from exc
         groups.append(DatasetGroup(base_name=item.get("base_name", ""), variants=variants))
     return groups
+
+
+def enrich_selected_remote_variants(
+    ssh_manager,
+    data_root: str,
+    variants,
+    *,
+    existing_names: set[str],
+    python_path: str = "",
+    conda_env: str = "",
+    openbench_path: str = "",
+    parent=None,
+):
+    """Inspect registered variants only when the user explicitly selects them."""
+    refresh_names = {variant.registry_name for variant in variants} & set(existing_names)
+    if not refresh_names:
+        return variants
+    progress = None
+    if parent is not None:
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QProgressDialog
+
+        progress = QProgressDialog("Inspecting selected reference datasets...", None, 0, 0, parent)
+        progress.setWindowTitle("Inspecting")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
+        progress.show()
+    try:
+        groups = scan_reference_datasets_remote(
+            ssh_manager,
+            data_root,
+            python_path=python_path,
+            conda_env=conda_env,
+            openbench_path=openbench_path,
+            rescan=True,
+            only_names=refresh_names,
+        )
+    finally:
+        if progress is not None:
+            progress.close()
+            progress.deleteLater()
+    refreshed = {
+        variant.registry_name: variant
+        for group in groups
+        for variant in group.variants.values()
+    }
+    missing = refresh_names - set(refreshed)
+    if missing:
+        raise RuntimeError("Selected remote datasets disappeared during refresh: " + ", ".join(sorted(missing)))
+    return [refreshed.get(variant.registry_name, variant) for variant in variants]
 
 
 class FindDatasetsWorker(QThread):

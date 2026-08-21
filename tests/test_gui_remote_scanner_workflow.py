@@ -392,8 +392,63 @@ def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
     assert "_detect_data_groupby" in script
     assert "nc_inspections" in script
     assert "remote_inspection_error" in script
+    assert "registry_name not in registered_names" in script
     assert "from openbench.data.registry.scanner import find_new_datasets, scan_reference_directory" not in script
     compile(script, "<remote-scan>", "exec")
+
+
+def test_remote_scan_script_limits_registered_refresh_to_selected_names(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch)
+    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: {"Existing_LowRes", "Other_LowRes"})
+
+    _scan_worker.scan_reference_datasets_remote(
+        object(),
+        "/remote/ref",
+        rescan=True,
+        only_names={"Existing_LowRes"},
+    )
+
+    script = captured["script"]
+    assert 'only_names = set(["Existing_LowRes"])' in script
+    assert "if only_names is not None and registry_name not in only_names" in script
+    compile(script, "<selected-remote-refresh>", "exec")
+
+
+def test_remote_refresh_enriches_only_selected_registered_variants(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import _scan_worker
+
+    existing = ScannedDataset("Existing", "LowRes", "Water", "grid", "/ref", {"Runoff": "existing"})
+    new = ScannedDataset("New", "LowRes", "Water", "grid", "/ref", {"Runoff": "new"})
+    enriched = ScannedDataset(
+        "Existing",
+        "LowRes",
+        "Water",
+        "grid",
+        "/ref",
+        {"Runoff": "existing"},
+        nc_inspections={"Runoff": {"varname": "runoff"}},
+    )
+    captured = {}
+
+    def fake_scan(*_args, **kwargs):
+        captured.update(kwargs)
+        return [DatasetGroup("Existing", {"LowRes": enriched})]
+
+    monkeypatch.setattr(_scan_worker, "scan_reference_datasets_remote", fake_scan)
+
+    variants = _scan_worker.enrich_selected_remote_variants(
+        object(),
+        "/remote/ref",
+        [existing, new],
+        existing_names={existing.registry_name},
+    )
+
+    assert captured["rescan"] is True
+    assert captured["only_names"] == {existing.registry_name}
+    assert variants == [enriched, new]
 
 
 def test_remote_scan_rehydration_ignores_unknown_fields(monkeypatch):

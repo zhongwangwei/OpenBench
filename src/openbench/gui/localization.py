@@ -209,6 +209,7 @@ ZH_CN = {
     "No": "否",
     "New": "新建",
     "Registered": "已注册",
+    "Unregistered": "未注册",
     "Open": "打开",
     "Export": "导出",
     "Select": "选择",
@@ -235,12 +236,15 @@ ZH_CN = {
     "NC file:": "NC 文件：",
     "Path to .nc file": ".nc 文件路径",
     "Variable": "变量",
+    "Variables": "变量",
     "Dataset": "数据集",
     "Resolution": "分辨率",
     "Type": "类型",
     "Files": "文件",
     "Data Source": "数据源",
     "Status": "状态",
+    "Inspecting": "正在检查",
+    "Inspecting selected reference datasets...": "正在检查所选参考数据集...",
     "Case": "案例",
     "Path": "路径",
     "Model": "模型",
@@ -394,7 +398,11 @@ class LanguageManager(QObject):
                 self._translate_widget(widget)
 
     def eventFilter(self, watched, event):  # noqa: N802 - Qt API name
-        if event.type() == QEvent.Show and isinstance(watched, QWidget):
+        if (
+            event.type() == QEvent.Show
+            and isinstance(watched, QWidget)
+            and not watched.property("i18n_skip")
+        ):
             self._translate_widget(watched)
         return super().eventFilter(watched, event)
 

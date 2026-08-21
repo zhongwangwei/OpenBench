@@ -792,6 +792,7 @@ class PageRegistry(BasePage):
             progress.deleteLater()
             return
         self._scan_was_remote = bool(worker_kwargs)
+        self._scan_remote_context = (path, dict(worker_kwargs)) if worker_kwargs else None
 
         worker = FindDatasetsWorker(path, **worker_kwargs)
         self._scan_worker = worker
@@ -859,6 +860,18 @@ class PageRegistry(BasePage):
                 if not selected:
                     return
                 variants = [variant for _base, _res, variant in selected]
+                remote_context = getattr(self, "_scan_remote_context", None)
+                if remote_context:
+                    from openbench.gui.pages._scan_worker import enrich_selected_remote_variants
+
+                    data_root, remote_kwargs = remote_context
+                    variants = enrich_selected_remote_variants(
+                        data_root=data_root,
+                        variants=variants,
+                        existing_names=existing_names,
+                        parent=self,
+                        **remote_kwargs,
+                    )
                 multi_var_picker = lambda var_name, sub_dir, all_vars: choose_nc_variable(
                     self, var_name, sub_dir, all_vars
                 )

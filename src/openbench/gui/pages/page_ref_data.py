@@ -367,6 +367,7 @@ class PageRefData(BasePage):
             from openbench.gui.pages._scan_worker import FindDatasetsWorker
 
             self._scan_was_remote = bool(worker_kwargs)
+            self._scan_remote_context = (data_root, dict(worker_kwargs)) if worker_kwargs else None
 
             worker = FindDatasetsWorker(data_root, **worker_kwargs)
             self._scan_worker = worker
@@ -443,6 +444,18 @@ class PageRefData(BasePage):
                     return
 
                 variants = [variant for _base, _res, variant in selected]
+                remote_context = getattr(self, "_scan_remote_context", None)
+                if remote_context:
+                    from openbench.gui.pages._scan_worker import enrich_selected_remote_variants
+
+                    data_root, remote_kwargs = remote_context
+                    variants = enrich_selected_remote_variants(
+                        data_root=data_root,
+                        variants=variants,
+                        existing_names=existing_names,
+                        parent=self,
+                        **remote_kwargs,
+                    )
                 register_scanned_datasets_batch(
                     variants,
                     on_multi_var=lambda var_name, sub_dir, all_vars: choose_nc_variable(
