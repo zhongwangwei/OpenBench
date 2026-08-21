@@ -398,20 +398,24 @@ def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
 
 
 def test_remote_scan_script_limits_registered_refresh_to_selected_names(monkeypatch):
+    from openbench.data.registry.scanner import ScannedDataset
     from openbench.gui.pages import _scan_worker
 
     captured = _capture_remote_json(monkeypatch)
     monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: {"Existing_LowRes", "Other_LowRes"})
+    existing = ScannedDataset("Existing", "LowRes", "Water", "grid", "/ref", {"Runoff": "existing"})
 
     _scan_worker.scan_reference_datasets_remote(
         object(),
         "/remote/ref",
         rescan=True,
         only_names={"Existing_LowRes"},
+        selected_variants=[existing],
     )
 
     script = captured["script"]
     assert 'only_names = set(["Existing_LowRes"])' in script
+    assert "if selected_variants is not None" in script
     assert "if only_names is not None and registry_name not in only_names" in script
     compile(script, "<selected-remote-refresh>", "exec")
 
@@ -446,8 +450,8 @@ def test_remote_refresh_enriches_only_selected_registered_variants(monkeypatch):
         existing_names={existing.registry_name},
     )
 
-    assert captured["rescan"] is True
     assert captured["only_names"] == {existing.registry_name}
+    assert captured["selected_variants"] == [existing]
     assert variants == [enriched, new]
 
 

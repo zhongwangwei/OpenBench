@@ -82,19 +82,28 @@ def scan_reference_datasets_remote(
     should_abort=None,
     rescan: bool = False,
     only_names: set[str] | None = None,
+    selected_variants=None,
     on_skip=None,
 ):
     """Run reference registry discovery on the remote host and rehydrate groups.
 
-    The remote script performs expensive NetCDF inspection for new datasets,
-    or for ``only_names`` when explicitly refreshing registered datasets.
-    Local catalog names determine both discovery status and registration.
+    The remote script performs expensive NetCDF inspection for new datasets.
+    When ``selected_variants`` is provided it skips discovery entirely and
+    inspects only those paths. Local catalog names determine discovery status.
     """
     from openbench.data.registry.scanner import DatasetGroup, ScannedDataset, ScanSkip
     from openbench.gui.remote_python import run_remote_python_json
 
     registered_names = sorted(_local_reference_names())
     only_names_expr = "None" if only_names is None else f"set({json.dumps(sorted(only_names))})"
+    selected_payload = None
+    if selected_variants is not None:
+        selected_payload = []
+        for variant in selected_variants:
+            data = dataclasses.asdict(variant)
+            data["registry_name"] = variant.registry_name
+            selected_payload.append(data)
+    selected_variants_json = json.dumps(selected_payload)
 
     bootstrap = ""
     if openbench_path:
@@ -114,6 +123,9 @@ def scan_reference_datasets_remote(
 import dataclasses
 import inspect
 import json
+from types import SimpleNamespace
+
+selected_variants = json.loads({selected_variants_json!r})
 
 try:
     from openbench.data.registry.scanner import find_new_datasets
@@ -125,7 +137,7 @@ try:
 except ImportError:
     scan_reference_directory = None
 
-if find_new_datasets is None and scan_reference_directory is None:
+if selected_variants is None and find_new_datasets is None and scan_reference_directory is None:
     raise RuntimeError("remote OpenBench scanner API is unavailable")
 
 try:
@@ -177,13 +189,22 @@ def _scan_with_skips(scan_fn, *args, **kwargs):
 skipped = []
 registered_names = set({json.dumps(registered_names)})
 only_names = {only_names_expr}
-if {rescan!r}:
+if selected_variants is not None:
+    groups = [
+        SimpleNamespace(
+            base_name=item["name"],
+            variants={{item["resolution"]: SimpleNamespace(**item)}},
+        )
+        for item in selected_variants
+    ]
+elif {rescan!r}:
     scan_fn = scan_reference_directory or find_new_datasets
     scan_kwargs = {{}} if scan_reference_directory is not None else {{"existing_names": set()}}
+    groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
 else:
     scan_fn = find_new_datasets or scan_reference_directory
     scan_kwargs = {{"existing_names": registered_names}} if find_new_datasets is not None else {{}}
-groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
+    groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
 payload = []
 for group in groups:
     variants = {{}}
@@ -191,7 +212,8 @@ for group in groups:
         registry_name = variant.registry_name
         if only_names is not None and registry_name not in only_names:
             continue
-        data = dataclasses.asdict(variant)
+        data = dataclasses.asdict(variant) if dataclasses.is_dataclass(variant) else vars(variant).copy()
+        data.pop("registry_name", None)
         if only_names is not None or registry_name not in registered_names:
             data["remote_inspection_error"] = _inspection_import_error
             inspections = {{}}
@@ -283,8 +305,8 @@ def enrich_selected_remote_variants(
             python_path=python_path,
             conda_env=conda_env,
             openbench_path=openbench_path,
-            rescan=True,
             only_names=refresh_names,
+            selected_variants=[variant for variant in variants if variant.registry_name in refresh_names],
         )
     finally:
         if progress is not None:
