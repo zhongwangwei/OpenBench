@@ -644,7 +644,7 @@ class metrics:
             data_array (xr.DataArray): Simulated data.
             obs_array (xr.DataArray): Observed data.
             na_rm (bool, optional): If True, removes missing values before calculation. Defaults to True.
-            use_abs (bool, optional): If True, uses absolute value of slope in calculation. Defaults to False.
+            use_abs (bool, optional): If True, uses absolute value of slope in calculation. Defaults to True.
             fun (function, optional): Transformation function to apply to data before calculation. Defaults to None.
             epsilon_type (str, optional): Type of epsilon handling for zero values in 'fun'. Defaults to "none".
             epsilon_value (float, optional): Value for epsilon handling. Defaults to None.
