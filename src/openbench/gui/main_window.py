@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from openbench.gui.remote_python import quote_remote_path
+from openbench.gui.localization import CHINESE, get_language_manager
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.controller import WizardController
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
@@ -64,6 +65,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.language_manager = get_language_manager()
         self.setWindowTitle("OpenBench NML Wizard")
         self.setMinimumSize(1200, 800)
 
@@ -126,6 +128,7 @@ class MainWindow(QMainWindow):
         # Navigation list
         self.nav_list = QListWidget()
         self.nav_list.setObjectName("nav_sidebar")
+        self.nav_list.setProperty("i18n_items", True)
         self.nav_list.setFocusPolicy(Qt.NoFocus)
         sidebar_layout.addWidget(self.nav_list)
 
@@ -159,6 +162,11 @@ class MainWindow(QMainWindow):
             QPushButton:hover { background-color: #4d4d4d; }
         """)
         btn_layout.addWidget(self.btn_new)
+
+        self.btn_language = QPushButton()
+        self.btn_language.setProperty("i18n_skip", True)
+        self.btn_language.setStyleSheet(self.btn_new.styleSheet())
+        btn_layout.addWidget(self.btn_language)
 
         sidebar_layout.addWidget(btn_frame)
 
@@ -259,6 +267,8 @@ class MainWindow(QMainWindow):
         self.btn_rerun.clicked.connect(self._on_rerun_clicked)
         self.btn_load.clicked.connect(self._on_load_clicked)
         self.btn_new.clicked.connect(self._on_new_clicked)
+        self.btn_language.clicked.connect(self.language_manager.toggle)
+        self.language_manager.language_changed.connect(self._on_language_changed)
 
         # Sidebar navigation
         self.nav_list.currentRowChanged.connect(self._on_nav_selected)
@@ -291,6 +301,21 @@ class MainWindow(QMainWindow):
         self.nav_list.blockSignals(False)
         self._update_buttons()
         self._update_page_indicator()
+        self.language_manager.apply(self)
+        self._update_language_button()
+
+    def _on_language_changed(self, _language: str):
+        """Retranslate navigation and all existing pages."""
+        self._update_navigation()
+
+    def _update_language_button(self):
+        """Show the language that clicking the toggle will activate."""
+        if self.language_manager.language == CHINESE:
+            self.btn_language.setText("English")
+            self.btn_language.setToolTip("Switch to English")
+        else:
+            self.btn_language.setText("中文")
+            self.btn_language.setToolTip("切换到中文")
 
     def closeEvent(self, event):
         """Stop any running evaluation before closing.

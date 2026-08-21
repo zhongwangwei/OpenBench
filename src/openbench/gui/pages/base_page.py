@@ -9,6 +9,7 @@ from typing import Dict, Any
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QFrame
 from PySide6.QtCore import Qt
 
+from openbench.gui.localization import get_language_manager
 from openbench.gui.path_utils import get_openbench_root
 
 
@@ -126,3 +127,4 @@ class BasePage(QWidget):
         """Called when page becomes visible."""
         super().showEvent(event)
         self.load_from_config()
+        get_language_manager().apply(self)
