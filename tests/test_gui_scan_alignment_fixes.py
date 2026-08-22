@@ -168,6 +168,35 @@ def test_gui_reference_validation_uses_explicit_runtime_root(tmp_path):
     assert str(override_root) in file_check.message
 
 
+def test_gui_reference_validation_rejects_non_overlapping_years(tmp_path):
+    from openbench.gui.data_validator import DataValidator
+
+    data_root = tmp_path / "ref"
+    data_root.mkdir()
+    (data_root / "runoff_2015.nc").touch()
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "DemoRef",
+        {
+            "general": {
+                "root_dir": str(data_root),
+                "data_type": "grid",
+                "data_groupby": "Year",
+                "syear": 2015,
+                "eyear": 2020,
+            },
+            "prefix": "runoff_",
+            "varname": "runoff",
+        },
+        {"syear": 2001, "eyear": 2002},
+    )
+
+    time_check = next(check for check in result.checks if check.name == "time_range")
+    assert time_check.passed is False
+    assert "do not overlap" in time_check.message
+
+
 # ---------------------------------------------------------------------------
 # Bug 2 — one-file-per-variable scan alignment with the CLI scanner
 # ---------------------------------------------------------------------------

@@ -574,13 +574,24 @@ class DataValidator:
         if data_type != "stn" and self._reference_data_root:
             root_dir = self._reference_data_root
 
-        # Use source-specific years if available, otherwise general config.
-        # source_config is shaped {"general": {...}, "varname": ..., ...} so
-        # `source_config.get("syear")` was always None — the actual per-source
-        # value lives one level down under "general".
-        _src_general = source_config.get("general", {}) or {}
-        syear = _src_general.get("syear") or general.get("syear") or general_config.get("syear", 2000)
-        eyear = _src_general.get("eyear") or general.get("eyear") or general_config.get("eyear", 2020)
+        data_syear = general.get("syear")
+        data_eyear = general.get("eyear")
+        syear = int(general_config.get("syear", 2000))
+        eyear = int(general_config.get("eyear", 2020))
+        if data_syear is not None and data_eyear is not None:
+            try:
+                data_syear, data_eyear = int(data_syear), int(data_eyear)
+            except (TypeError, ValueError):
+                pass
+            else:
+                if data_eyear < syear or data_syear > eyear:
+                    checks.append(
+                        ValidationCheck(
+                            "time_range",
+                            False,
+                            f"Data years {data_syear}-{data_eyear} do not overlap required years {syear}-{eyear}",
+                        )
+                    )
 
         # For station data without prefix/suffix, skip file path validation
         # Station data files may not follow the standard naming pattern

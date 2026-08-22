@@ -119,6 +119,16 @@ def _write_fake_netcdf(path):
     xr.Dataset({"value": ("sample", np.array([1.0]))}).to_netcdf(path)
 
 
+def _write_time_netcdf(path, years):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    times = pd.to_datetime([f"{year}-01-01" for year in years])
+    xr.Dataset({"runoff": ("time", np.ones(len(times)))}, coords={"time": times}).to_netcdf(path)
+
+
 def _base_config(tmp_path, *, simulation=None, reference=None, project=None, variables=None):
     return {
         "project": {
@@ -388,6 +398,39 @@ def test_check_flags_station_fulllist_time_and_year_problems(tmp_path, monkeypat
     assert "Reference 'DemoRef' years [2015, 2020] do not overlap project years [2001, 2002]" in result.output
     assert "Station fulllist does not exist" in result.output
     assert "Station reference 'DemoRef' has no fulllist" in result.output
+
+
+def test_check_rejects_simulation_data_outside_project_years(tmp_path, monkeypatch):
+    sim_root = tmp_path / "sim"
+    ref_root = tmp_path / "ref"
+    ref_root.mkdir()
+    (ref_root / "runoff.nc").touch()
+    _write_time_netcdf(sim_root / "runoff.nc", [2015, 2016])
+    path = _write_config(
+        tmp_path,
+        _base_config(
+            tmp_path,
+            simulation={
+                "CaseA": {
+                    "model": "KnownModel",
+                    "root_dir": str(sim_root),
+                    "data_groupby": "Single",
+                }
+            },
+        ),
+    )
+    _install_registry(
+        monkeypatch,
+        _Registry(
+            {"DemoRef": _ref("DemoRef", str(ref_root))},
+            {"KnownModel": _model("KnownModel", variables={"Runoff": _var("runoff")})},
+        ),
+    )
+
+    result = runner.invoke(cli, ["check", str(path)])
+
+    assert result.exit_code == 1
+    assert "Simulation 'CaseA' data years [2015, 2016] do not overlap project years [2001, 2002]" in result.output
 
 
 def test_check_resolves_relative_station_simulation_fulllist_against_root_dir(tmp_path, monkeypatch):
