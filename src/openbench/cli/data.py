@@ -168,7 +168,12 @@ openbench ref register MyData `
 
 @data.command("register-profile", cls=RegistrationCommand)
 @click.argument("name")
-@click.option("-v", "--variable", multiple=True, help="'StdName:ncname:unit[:prefix[:suffix]]' (repeatable).")
+@click.option(
+    "-v",
+    "--variable",
+    multiple=True,
+    help="'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\".",
+)
 @click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
 @click.option("--tim-res", type=TIM_RES_TYPE, default=None, help="Time resolution override.")
 @click.option("--category", default=None, help="Category override: Water, Carbon, Energy, etc.")

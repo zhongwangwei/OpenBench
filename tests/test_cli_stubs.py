@@ -1903,11 +1903,12 @@ def test_parse_fallbacks_preserves_conversion_with_colons():
 
 def test_registration_cli_explains_how_to_quote_units_with_spaces():
     result = runner.invoke(cli, ["model", "register", "StudentDemo", "-v", "Runoff:ro:mm", "day-1"])
-    help_result = runner.invoke(cli, ["ref", "register", "--help"])
 
     assert result.exit_code == 2
     assert 'quote the complete value, for example: -v "Runoff name=ro unit=mm day-1"' in result.output
-    assert 'one quoted value, e.g. "Runoff name=ro unit=mm day-1"' in " ".join(help_result.output.split())
+    for command in (("ref", "register"), ("ref", "register-profile"), ("model", "register")):
+        help_result = runner.invoke(cli, [*command, "--help"])
+        assert 'one quoted value, e.g. "Runoff name=ro unit=mm day-1"' in " ".join(help_result.output.split())
 
 
 def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monkeypatch):
