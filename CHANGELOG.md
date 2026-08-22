@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.0.0b13] - 2026-08-22
+
+Beta release over 3.0.0b12 for safer configuration, registration, and GUI
+workflows.
+
+### Added
+- Chinese/English GUI switching with immediate page retranslation.
+- Back navigation throughout interactive CLI setup and registration wizards.
+
+### Changed
+- GUI evaluations now run the same CLI preflight check before execution.
+- Reference rescans distinguish new and registered datasets, default to new
+  entries, and enrich only explicitly selected registered datasets.
+- CLI registration accepts quoted whitespace-containing units in named
+  `key=value` variable specifications and provides actionable shell guidance.
+
+### Fixed
+- CLI and GUI preflight reject evaluations whose configured years do not
+  overlap the available data period.
+- Reference rescans preserve manual catalog corrections and keep remote refresh
+  work responsive and narrowly targeted.
+- Multi-step CLI back navigation retains previously entered values across
+  variables and empty intermediate steps.
+- Cross-platform CI behavior for paths, generated artifacts, and GUI tests.
+
 ## [3.0.0b12] - 2026-08-18
 
 Beta release over 3.0.0b11 for reliable generated station configuration.
