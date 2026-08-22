@@ -274,21 +274,29 @@ def _tim_res_rank(value: str | None) -> int:
     return scanner_tim_res_rank(value or "")
 
 
-def _years_findings(ref_name: str, ref_years: Any, project_years: list[int]) -> tuple[list[str], list[str]]:
-    if not ref_years:
-        return [], [f"Reference '{ref_name}' has no registered years; using project years at runtime"]
-    if not isinstance(ref_years, list) or len(ref_years) < 2:
-        return [], [f"Reference '{ref_name}' years metadata is incomplete: {ref_years}"]
-    ref_start, ref_end = ref_years[0], ref_years[1]
+def _years_findings(
+    name: str,
+    data_years: Any,
+    project_years: list[int],
+    *,
+    kind: str = "Reference",
+    qualifier: str = "",
+) -> tuple[list[str], list[str]]:
+    years_label = f"{qualifier} years" if qualifier else "years"
+    if not data_years:
+        return [], [f"{kind} '{name}' has no registered years; using project years at runtime"]
+    if not isinstance(data_years, list) or len(data_years) < 2:
+        return [], [f"{kind} '{name}' {years_label} metadata is incomplete: {data_years}"]
+    data_start, data_end = data_years[0], data_years[1]
     proj_start, proj_end = project_years[0], project_years[1]
-    if ref_end < proj_start or ref_start > proj_end:
+    if data_end < proj_start or data_start > proj_end:
         return [
-            f"Reference '{ref_name}' years [{ref_start}, {ref_end}] do not overlap "
+            f"{kind} '{name}' {years_label} [{data_start}, {data_end}] do not overlap "
             f"project years [{proj_start}, {proj_end}]"
         ], []
-    if ref_start > proj_start or ref_end < proj_end:
+    if data_start > proj_start or data_end < proj_end:
         return [], [
-            f"Reference '{ref_name}' years [{ref_start}, {ref_end}] only partially cover "
+            f"{kind} '{name}' {years_label} [{data_start}, {data_end}] only partially cover "
             f"project years [{proj_start}, {proj_end}]"
         ]
     return [], []
@@ -370,6 +378,9 @@ def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]
     inline_variables = entry.variables or {}
     inline_key = get_mapping_key_case_insensitive(inline_variables, var_name)
     inline = inline_variables.get(inline_key, {}) if inline_key is not None else {}
+    profile_variables = getattr(model_profile, "variables", {}) if model_profile else {}
+    profile_key = get_mapping_key_case_insensitive(profile_variables, var_name)
+    profile_var = profile_variables.get(profile_key) if profile_key is not None else None
     return {
         "inline": inline,
         "data_type": inline.get("data_type")
@@ -386,7 +397,31 @@ def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]
             else (getattr(model_profile, "grid_res", None) if model_profile else None)
         ),
         "fulllist": inline.get("fulllist") if "fulllist" in inline else entry.fulllist,
+        "data_groupby": inline.get("data_groupby") or entry.data_groupby or "Year",
+        "sub_dir": inline.get("sub_dir") or getattr(profile_var, "sub_dir", None),
+        "prefix": inline.get("prefix", entry.prefix or getattr(profile_var, "prefix", "")),
+        "suffix": inline.get("suffix", entry.suffix or getattr(profile_var, "suffix", "")),
     }
+
+
+def _simulation_data_years(entry, values: dict[str, Any]) -> list[int] | None:
+    if str(values["data_type"]).lower() == "stn":
+        return None
+
+    root, error = _expanded_path(str(entry.root_dir), "Simulation root")
+    if error or root is None:
+        return None
+    data_dir = root / values["sub_dir"] if values["sub_dir"] else root
+
+    from openbench.data.coordinates import glob_nc
+    from openbench.data.sim_scanner import _infer_time_coverage
+
+    prefix = values["prefix"] or ""
+    suffix = values["suffix"] or ""
+    files = [path for path in glob_nc(data_dir) if path.stem.startswith(prefix) and path.stem.endswith(suffix)]
+    if not files:
+        return None
+    return _infer_time_coverage(data_dir, files=files, data_groupby=values["data_groupby"]).get("years")
 
 
 def _append_simulation_model_findings(findings: dict[str, dict[str, list[str]]], cfg, registry) -> None:
@@ -458,11 +493,36 @@ def _simulation_findings(
     if output_only:
         return findings
 
+    year_cache: dict[tuple[str, str, str, str, str], list[int] | None] = {}
     for label, entry in cfg.simulation.items():
         can_validate_model = hasattr(registry, "get_model")
         model_profile = registry.get_model(entry.model) if can_validate_model else None
         for var_name in cfg.evaluation.variables:
             values = _effective_sim_values(entry, model_profile, var_name)
+            cache_key = (
+                str(entry.root_dir),
+                str(values["sub_dir"] or ""),
+                str(values["prefix"] or ""),
+                str(values["suffix"] or ""),
+                str(values["data_groupby"] or ""),
+            )
+            if cache_key not in year_cache:
+                year_cache[cache_key] = _simulation_data_years(entry, values)
+            data_years = year_cache[cache_key]
+            if data_years:
+                year_errors, year_warnings = _years_findings(
+                    label,
+                    data_years,
+                    cfg.project.years,
+                    kind="Simulation",
+                    qualifier="data",
+                )
+                for message in year_errors:
+                    if message not in findings[label]["errors"]:
+                        findings[label]["errors"].append(message)
+                for message in year_warnings:
+                    if message not in findings[label]["warnings"]:
+                        findings[label]["warnings"].append(message)
             if str(values["data_type"]).lower() == "stn":
                 fulllist = values["fulllist"]
                 if fulllist:
