@@ -29,6 +29,18 @@ _NAMED_VAR_KEYS = {
 }
 
 
+class RegistrationCommand(click.Command):
+    """Add a quoting hint when the shell splits a registration value."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        try:
+            return super().parse_args(ctx, args)
+        except click.UsageError as exc:
+            if "unexpected extra argument" in exc.message:
+                exc.message += '\nHint: quote values containing spaces, for example: -v "Runoff:ro:mm day-1"'
+            raise
+
+
 def _parse_named_variable(raw: str) -> tuple[str, dict[str, Any]]:
     try:
         tokens = shlex.split(raw)

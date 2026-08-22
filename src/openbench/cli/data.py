@@ -6,6 +6,7 @@ import click
 
 from openbench.cli import _display, _optimize, _profile_rescue, _ref_commands, _register, _scan, _scan_support
 from openbench.cli._options import TIM_RES_TYPE, expand_existing_directory, expand_path
+from openbench.cli._parsing import RegistrationCommand
 
 DATA_GROUPBY_TYPE = click.Choice(
     ["single", "Year", "Day", "Month"],
@@ -90,7 +91,7 @@ def delete(name, yes):
     return _ref_commands.delete_reference(name, yes, load_catalog_for_cli_fn=_load_catalog_for_cli)
 
 
-@data.command()
+@data.command(cls=RegistrationCommand)
 @click.argument("name")
 @click.option(
     "--root-dir",
@@ -165,7 +166,7 @@ openbench ref register MyData `
     )
 
 
-@data.command("register-profile")
+@data.command("register-profile", cls=RegistrationCommand)
 @click.argument("name")
 @click.option("-v", "--variable", multiple=True, help="'StdName:ncname:unit[:prefix[:suffix]]' (repeatable).")
 @click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
