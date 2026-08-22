@@ -539,7 +539,7 @@ def show(name, fmt, history):
     "-v",
     "--variable",
     multiple=True,
-    help="'StdName:ncname:unit[:prefix[:suffix]]' or 'StdName name=nc unit=unit' (repeatable).",
+    help="'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\".",
 )
 @click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
 @click.option("--var-attr", multiple=True, help="'StdName:key=value' for compute, sub_dir, prefix_fallback, etc.")

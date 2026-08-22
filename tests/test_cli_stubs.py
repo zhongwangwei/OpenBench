@@ -1870,7 +1870,7 @@ def test_ref_register_accepts_named_variable_with_subdir(tmp_path, monkeypatch):
             "--root-dir",
             str(data_root),
             "-v",
-            'Evapotranspiration name=E unit="mm day-1" sub_dir=Water/Evapotranspiration prefix=E_ suffix=_daily',
+            "Evapotranspiration name=E unit=mm day-1 sub_dir=Water/Evapotranspiration prefix=E_ suffix=_daily",
         ],
     )
 
@@ -1901,11 +1901,13 @@ def test_parse_fallbacks_preserves_conversion_with_colons():
     assert fallback["convert"] == "mapping['a:b'] if value > 0 else defaults['c:d']"
 
 
-def test_register_hints_when_shell_splits_a_unit_with_spaces():
+def test_registration_cli_explains_how_to_quote_units_with_spaces():
     result = runner.invoke(cli, ["model", "register", "StudentDemo", "-v", "Runoff:ro:mm", "day-1"])
+    help_result = runner.invoke(cli, ["ref", "register", "--help"])
 
     assert result.exit_code == 2
-    assert 'quote values containing spaces, for example: -v "Runoff:ro:mm day-1"' in result.output
+    assert 'quote the complete value, for example: -v "Runoff name=ro unit=mm day-1"' in result.output
+    assert 'one quoted value, e.g. "Runoff name=ro unit=mm day-1"' in " ".join(help_result.output.split())
 
 
 def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monkeypatch):
