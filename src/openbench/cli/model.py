@@ -12,6 +12,7 @@ import click
 import yaml
 
 from openbench.cli._options import TIM_RES_TYPE
+from openbench.cli._parsing import RegistrationCommand
 from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields
 from openbench.cli._wizard import prompt as wizard_prompt
 from openbench.util.names import (
@@ -528,7 +529,7 @@ def show(name, fmt, history):
         click.echo(f"{var_name:<35} {vn_str:<25} {mapping.varunit:<15} {notes}")
 
 
-@model.command()
+@model.command(cls=RegistrationCommand)
 @click.argument("name")
 @click.option("--data-type", type=click.Choice(["grid", "stn"]), default=None)
 @click.option("--grid-res", type=float, default=None)

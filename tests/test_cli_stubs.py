@@ -1901,6 +1901,13 @@ def test_parse_fallbacks_preserves_conversion_with_colons():
     assert fallback["convert"] == "mapping['a:b'] if value > 0 else defaults['c:d']"
 
 
+def test_register_hints_when_shell_splits_a_unit_with_spaces():
+    result = runner.invoke(cli, ["model", "register", "StudentDemo", "-v", "Runoff:ro:mm", "day-1"])
+
+    assert result.exit_code == 2
+    assert 'quote values containing spaces, for example: -v "Runoff:ro:mm day-1"' in result.output
+
+
 def test_ref_register_updates_existing_reference_via_user_overlay(tmp_path, monkeypatch):
     import openbench.data.registry as registry_package
     from openbench.data.registry.schema import ReferenceDataset, VariableMapping
