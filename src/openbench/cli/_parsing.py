@@ -37,7 +37,7 @@ class RegistrationCommand(click.Command):
             return super().parse_args(ctx, args)
         except click.UsageError as exc:
             if "unexpected extra argument" in exc.message:
-                exc.message += '\nHint: quote values containing spaces, for example: -v "Runoff:ro:mm day-1"'
+                exc.message += '\nHint: quote the complete value, for example: -v "Runoff name=ro unit=mm day-1"'
             raise
 
 
@@ -53,8 +53,12 @@ def _parse_named_variable(raw: str) -> tuple[str, dict[str, Any]]:
         raise click.ClickException(f"Invalid format: '{raw}'. Standard variable name must not be empty.")
 
     entry: dict[str, Any] = {}
+    current_key = None
     for token in tokens[1:]:
         if "=" not in token:
+            if current_key == "varunit":
+                entry[current_key] = f"{entry[current_key]} {token}".strip()
+                continue
             raise click.ClickException(f"Invalid variable attribute '{token}'. Use key=value in named -v syntax.")
         key, value = token.split("=", 1)
         key = key.strip()
@@ -67,6 +71,7 @@ def _parse_named_variable(raw: str) -> tuple[str, dict[str, Any]]:
             entry[mapped_key] = [part.strip() for part in value.split(",") if part.strip()]
         else:
             entry[mapped_key] = value
+        current_key = mapped_key
 
     if not entry.get("varname"):
         raise click.ClickException(f"Invalid format: '{raw}'. Named -v syntax requires name= or varname=.")
@@ -78,7 +83,7 @@ def parse_variables(raw_vars: tuple[str, ...]) -> dict[str, dict[str, Any]]:
     """Parse variable options into registry variable mappings.
 
     Supports the legacy ``StdName:ncname:unit[:prefix[:suffix]]`` form and the
-    named form ``StdName name=ncname unit="mm day-1" prefix="C:/case/"`` for
+    named form ``StdName name=ncname unit=mm day-1 prefix=C:/case/`` for
     values that contain colons or other delimiter-sensitive text.
 
     Returns:
