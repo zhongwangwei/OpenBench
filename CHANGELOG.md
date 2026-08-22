@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.0b14] - 2026-08-22
+
+Beta release over 3.0.0b13 for actionable GUI preflight diagnostics.
+
+### Fixed
+- GUI configuration-check failures now include the complete CLI check output,
+  so validation details are not hidden by the final summary lines.
+
 ## [3.0.0b13] - 2026-08-22
 
 Beta release over 3.0.0b12 for safer configuration, registration, and GUI
