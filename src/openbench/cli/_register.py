@@ -118,7 +118,7 @@ def register_reference(
                             "  Variable name in NetCDF file",
                             {"default": defaults.get("varname", var_name)},
                         ),
-                        ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
+                        ("unit", "  Unit (e.g. mm day-1)", {"default": defaults.get("varunit", "")}),
                         ("prefix", "  File prefix", {"default": defaults.get("prefix", "")}),
                         ("suffix", "  File suffix", {"default": defaults.get("suffix", "")}),
                     ]
@@ -320,7 +320,9 @@ def register_reference_profile(
     new_vars = parse_variables(variable)
 
     if not variable and not fallback and not existing:
-        raise click.ClickException("No variables specified. Use -v 'StdName:ncname:unit[:prefix[:suffix]]'")
+        raise click.ClickException(
+            'No variables specified. Use -v "Runoff:ro:mm day-1" or -v "Runoff name=ro unit=mm day-1".'
+        )
 
     latest_is_new = is_new
     merged = {}

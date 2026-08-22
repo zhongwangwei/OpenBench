@@ -28,16 +28,31 @@ _NAMED_VAR_KEYS = {
     "prefix_fallback": "prefix_fallback",
 }
 
+VARIABLE_OPTION_HELP = (
+    "'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\" (repeatable)."
+)
+FALLBACK_OPTION_HELP = (
+    "Quote the complete value. Fields: standard name, fallback name, unit, conversion. "
+    'e.g. "Runoff:ro_alt:mm day-1:value * 2" (repeatable).'
+)
+
 
 class RegistrationCommand(click.Command):
     """Add a quoting hint when the shell splits a registration value."""
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        original_args = tuple(args)
         try:
             return super().parse_args(ctx, args)
         except click.UsageError as exc:
             if "unexpected extra argument" in exc.message:
-                exc.message += '\nHint: quote the complete value, for example: -v "Runoff name=ro unit=mm day-1"'
+                if any(arg in {"-f", "--fallback"} or arg.startswith("--fallback=") for arg in original_args):
+                    example = '-f "Runoff:ro_alt:mm day-1:value * 2"'
+                elif any(arg == "--var-attr" or arg.startswith("--var-attr=") for arg in original_args):
+                    example = '--var-attr "Runoff:compute=value * 2"'
+                else:
+                    example = '-v "Runoff name=ro unit=mm day-1"'
+                exc.message += f"\nHint: quote the complete value, for example: {example}"
             raise
 
 
