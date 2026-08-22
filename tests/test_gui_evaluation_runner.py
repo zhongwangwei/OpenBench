@@ -167,7 +167,19 @@ def test_local_runner_does_not_run_when_check_fails(tmp_path, monkeypatch):
 
     def fake_popen(command, **kwargs):
         commands.append(command)
-        return FakeProcess(["Reference years do not overlap project years\n"], 1)
+        return FakeProcess(
+            [
+                "Config validation:\n",
+                "  ✓ YAML syntax valid\n",
+                "  ✗ Reference years do not overlap project years\n",
+                "Reference data (1 sources):\n",
+                "Simulation data (1 models):\n",
+                "Options:\n",
+                "  Time alignment: intersection\n",
+                "✗ Config has errors. Please fix and re-check.\n",
+            ],
+            1,
+        )
 
     monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
     finished = []

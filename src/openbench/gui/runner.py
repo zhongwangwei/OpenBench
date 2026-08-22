@@ -184,7 +184,7 @@ class EvaluationRunner(QThread):
             progress = 0
             for index, cmd in enumerate(commands):
                 checking = index == 0
-                output_tail.clear()
+                output_tail = deque(maxlen=None if checking else 5)
                 saw_partial_completion = False
                 if not checking:
                     progress = 0
