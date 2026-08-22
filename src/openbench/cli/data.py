@@ -6,7 +6,7 @@ import click
 
 from openbench.cli import _display, _optimize, _profile_rescue, _ref_commands, _register, _scan, _scan_support
 from openbench.cli._options import TIM_RES_TYPE, expand_existing_directory, expand_path
-from openbench.cli._parsing import RegistrationCommand
+from openbench.cli._parsing import FALLBACK_OPTION_HELP, VARIABLE_OPTION_HELP, RegistrationCommand
 
 DATA_GROUPBY_TYPE = click.Choice(
     ["single", "Year", "Day", "Month"],
@@ -104,7 +104,7 @@ def delete(name, yes):
     default=None,
     help="Data type (auto-detected from NC if omitted).",
 )
-@click.option("--tim-res", type=TIM_RES_TYPE, default=None)
+@click.option("--tim-res", type=TIM_RES_TYPE, default=None, help="Time resolution (e.g. Day or Month).")
 @click.option("--grid-res", type=float, default=None, help="Grid resolution in degrees.")
 @click.option("--category", default="Other", help="Category: Water, Carbon, Energy, etc.")
 @click.option("--years", nargs=2, type=int, default=None, help="Start and end year.")
@@ -113,40 +113,41 @@ def delete(name, yes):
     "-v",
     "--variable",
     multiple=True,
-    help=("'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\"."),
+    help=VARIABLE_OPTION_HELP,
 )
-@click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
+@click.option("-f", "--fallback", multiple=True, help=FALLBACK_OPTION_HELP)
 def register(name, root_dir, data_type, tim_res, grid_res, category, years, fulllist, variable, fallback):
     """Register or update a reference dataset in the registry.
 
-    Creates a new entry or updates an existing one. Variables are overwritten
-    by default when names match.
+    Creates a new entry or updates an existing one. Existing variables with
+    matching names are overwritten.
 
 
 Examples:
-openbench ref register MyData --root-dir /data/myref \
-  --data-type grid --grid-res 0.5 --tim-res Month \
-  --years 2000 2020 --category Water \
+openbench ref register MyData --root-dir /data/myref \\
+  --data-type grid --grid-res 0.5 --tim-res Month \\
+  --years 2000 2020 --category Water \\
   -v "Evapotranspiration:ET:mm day-1"
 
 
-openbench ref register ERA5 --root-dir /data/era5 \
-  -v "Latent_Heat:slhf:W m-2" \
+openbench ref register ERA5 --root-dir /data/era5 \\
+  -v "Latent_Heat:slhf:W m-2" \\
   -f "Latent_Heat:surface_latent_heat_flux:J m-2:value / 3600"
 
 
-openbench ref register PLUMBER2 --root-dir /data/PLUMBER2/dataset \
-  --data-type stn --tim-res Day \
-  --fulllist /data/PLUMBER2/list/PLUMBER2.csv \
-  -v "Latent_Heat:Qle_cor:W/m2" \
+openbench ref register PLUMBER2 --root-dir /data/PLUMBER2/dataset \\
+  --data-type stn --tim-res Day \\
+  --fulllist /data/PLUMBER2/list/PLUMBER2.csv \\
+  -v "Latent_Heat:Qle_cor:W/m2" \\
   -v "Sensible_Heat:Qh_cor:W/m2"
 
 
-openbench ref register MyData -v "Runoff:RNOF:mm day-1"
+openbench ref register MyData --root-dir /data/myref \\
+  -v "Runoff:RNOF:mm day-1"
 
 \b
 PowerShell (keep the complete -v value in one quoted argument):
-openbench ref register MyData `
+openbench ref register MyData --root-dir C:\\data\\myref `
   -v "Runoff name=RNOF unit=mm day-1 sub_dir=Water/Runoff"
     """
     return _register.register_reference(
@@ -172,9 +173,9 @@ openbench ref register MyData `
     "-v",
     "--variable",
     multiple=True,
-    help="'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\".",
+    help=VARIABLE_OPTION_HELP,
 )
-@click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
+@click.option("-f", "--fallback", multiple=True, help=FALLBACK_OPTION_HELP)
 @click.option("--tim-res", type=TIM_RES_TYPE, default=None, help="Time resolution override.")
 @click.option("--category", default=None, help="Category override: Water, Carbon, Energy, etc.")
 @click.option("--data-groupby", type=DATA_GROUPBY_TYPE, default=None, help="Data groupby override.")
@@ -197,14 +198,14 @@ def register_profile(
 
 
 Examples:
-openbench ref register-profile MyData \
-  -v "Latent_Heat:LE:W m-2" \
+openbench ref register-profile MyData \\
+  -v "Latent_Heat:LE:W m-2" \\
   -v "Sensible_Heat:H:W m-2"
 
 
-openbench ref register-profile PLUMBER2_new \
-  --tim-res Day --data-groupby single \
-  --fulllist "../list/stations.csv" \
+openbench ref register-profile PLUMBER2_new \\
+  --tim-res Day --data-groupby single \\
+  --fulllist "../list/stations.csv" \\
   -v "Latent_Heat:Qle_cor:W m-2"
     """
     return _register.register_reference_profile(

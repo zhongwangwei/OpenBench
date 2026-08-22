@@ -12,7 +12,7 @@ import click
 import yaml
 
 from openbench.cli._options import TIM_RES_TYPE
-from openbench.cli._parsing import RegistrationCommand
+from openbench.cli._parsing import FALLBACK_OPTION_HELP, VARIABLE_OPTION_HELP, RegistrationCommand
 from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields
 from openbench.cli._wizard import prompt as wizard_prompt
 from openbench.util.names import (
@@ -531,18 +531,22 @@ def show(name, fmt, history):
 
 @model.command(cls=RegistrationCommand)
 @click.argument("name")
-@click.option("--data-type", type=click.Choice(["grid", "stn"]), default=None)
-@click.option("--grid-res", type=float, default=None)
-@click.option("--tim-res", type=TIM_RES_TYPE, default=None)
-@click.option("--description", default=None)
+@click.option("--data-type", type=click.Choice(["grid", "stn"]), default=None, help="Model data type.")
+@click.option("--grid-res", type=float, default=None, help="Grid resolution in degrees.")
+@click.option("--tim-res", type=TIM_RES_TYPE, default=None, help="Time resolution (e.g. Day or Month).")
+@click.option("--description", default=None, help="Model profile description.")
 @click.option(
     "-v",
     "--variable",
     multiple=True,
-    help="'StdName:ncname:unit[:prefix[:suffix]]' or one quoted value, e.g. \"Runoff name=ro unit=mm day-1\".",
+    help=VARIABLE_OPTION_HELP,
 )
-@click.option("-f", "--fallback", multiple=True, help="'StdName:fallback_name:fallback_unit:conversion' (repeatable).")
-@click.option("--var-attr", multiple=True, help="'StdName:key=value' for compute, sub_dir, prefix_fallback, etc.")
+@click.option("-f", "--fallback", multiple=True, help=FALLBACK_OPTION_HELP)
+@click.option(
+    "--var-attr",
+    multiple=True,
+    help="Quote the complete 'StdName:key=value' when values contain spaces (repeatable).",
+)
 @click.option("--time-offset", multiple=True, help="'Resolution=offset' or 'Resolution:Var1,Var2=offset' (repeatable).")
 @click.option("--append-only", is_flag=True, help="Only add new variables, skip existing ones.")
 def register(
@@ -694,7 +698,7 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
                                     "  NetCDF variable name(s), comma-separated for fallback",
                                     {"default": nc_default},
                                 ),
-                                ("unit", "  Unit", {"default": defaults.get("varunit", "")}),
+                                ("unit", "  Unit (e.g. mm day-1)", {"default": defaults.get("varunit", "")}),
                                 (
                                     "sub_dir",
                                     "  Sub-directory (optional)",
