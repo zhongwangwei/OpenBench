@@ -843,7 +843,7 @@ def _matching_nc_files(directory: Path, pattern: str | list[str] | tuple[str, ..
         for file_path in search:
             if file_path.is_file() and file_path.suffix in NC_SUFFIXES and _casefold_match(file_path, pat):
                 files[file_path] = None
-    return sorted(files)
+    return sorted(files, key=lambda path: path.relative_to(directory).as_posix())
 
 
 def _profile_var_names(profile: dict, fallback: str) -> list[str]:

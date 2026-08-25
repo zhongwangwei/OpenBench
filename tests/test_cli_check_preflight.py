@@ -926,8 +926,8 @@ def test_check_rejects_missing_requested_reference_resolution(tmp_path, monkeypa
     result = runner.invoke(cli, ["check", str(path)])
 
     assert result.exit_code == 1, result.output
-    assert "Grid/MidRes" in result.output
-    assert "Grid/LowRes" not in result.output
+    assert str(mid_root) in result.output
+    assert str(tmp_path / "Grid" / "LowRes") not in result.output
     assert "Reference data path does not exist" in result.output
 
 
