@@ -250,11 +250,14 @@ class ConfigManager:
                 continue
             entry = {**sim_defaults, **raw_entry}
             variables_override = {}
-            if isinstance(sim_defaults.get("variables"), dict) or isinstance(raw_entry.get("variables"), dict):
-                variables_override = {
-                    **(sim_defaults.get("variables") or {}),
-                    **(raw_entry.get("variables") or {}),
-                }
+            default_vars = sim_defaults.get("variables") if isinstance(sim_defaults.get("variables"), dict) else {}
+            entry_vars = raw_entry.get("variables") if isinstance(raw_entry.get("variables"), dict) else {}
+            for var_name in set(default_vars) | set(entry_vars):
+                base = default_vars.get(var_name) if isinstance(default_vars.get(var_name), dict) else {}
+                override = entry_vars.get(var_name) if isinstance(entry_vars.get(var_name), dict) else {}
+                merged = {**base, **override}
+                if merged:
+                    variables_override[var_name] = merged
             source_general: Dict[str, Any] = {
                 "model": entry.get("model", ""),
                 "model_namelist": entry.get("model", ""),
@@ -809,11 +812,22 @@ class ConfigManager:
                 override = overrides.setdefault(source_name, {})
                 general_cfg = source_cfg.get("general", {}) if isinstance(source_cfg.get("general"), dict) else {}
                 if general_cfg:
-                    for key in ("root_dir", "dir", "data_type", "tim_res", "data_groupby", "timezone", "grid_res", "fulllist"):
+                    for key in (
+                        "root_dir",
+                        "dir",
+                        "data_type",
+                        "tim_res",
+                        "data_groupby",
+                        "timezone",
+                        "grid_res",
+                        "fulllist",
+                    ):
                         value = general_cfg.get(key)
                         if value not in (None, ""):
                             out_key = "root_dir" if key == "dir" else key
-                            override[out_key] = _maybe_transform_path(value) if out_key in {"root_dir", "fulllist"} else value
+                            override[out_key] = (
+                                _maybe_transform_path(value) if out_key in {"root_dir", "fulllist"} else value
+                            )
                     syear = general_cfg.get("syear")
                     eyear = general_cfg.get("eyear")
                     if syear not in (None, "") or eyear not in (None, ""):
@@ -905,8 +919,11 @@ class ConfigManager:
             if isinstance(src_cfg.get("variables"), dict) and src_cfg["variables"]:
                 entry["variables"] = src_cfg["variables"]
 
-            # Use source_name as label, or derive a cleaner one
-            label = self._derive_label(source_name, entry.get("root_dir", ""))
+            # Preserve explicit GUI source labels; deriving from paths can collapse
+            # distinct cases (Case01/foo and Case01/bar) into one YAML entry.
+            label = source_name or self._derive_label(source_name, entry.get("root_dir", ""))
+            if label in sim_entries:
+                raise ValueError(f"Duplicate simulation label after export: {label}")
             sim_entries[label] = entry
 
         simulation = self._extract_sim_defaults(sim_entries)

@@ -538,7 +538,6 @@ class StatisticsContext:
     statistic_fig: dict[str, Any]
 
 
-
 _UNSAFE_SOURCE_CHARS = set('<>:"/\\|?*')
 _WINDOWS_RESERVED_SOURCE_NAMES = {
     "CON",
@@ -1156,12 +1155,13 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 inline_vars.get("tim_res") or sim_entry.tim_res or (model_profile.tim_res if model_profile else "Month")
             )
 
-            # Construct sim directory: root_dir from sim_entry, optionally with sub_dir from profile
+            # Construct sim directory: root_dir plus inline sub_dir (highest priority) or profile sub_dir.
             sim_dir = sim_entry.root_dir
-            if model_profile and profile_key is not None:
-                profile_sub = model_profile.variables[profile_key].sub_dir
-                if profile_sub:
-                    sim_dir = os.path.join(sim_dir, profile_sub)
+            sub_dir = inline_vars.get("sub_dir")
+            if sub_dir is None and model_profile and profile_key is not None:
+                sub_dir = model_profile.variables[profile_key].sub_dir
+            if sub_dir:
+                sim_dir = os.path.join(sim_dir, str(sub_dir))
 
             prefix = sim_label
             var_section[f"{prefix}_model"] = model_name
@@ -1182,11 +1182,24 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_prefix"] = var_prefix
             var_section[f"{prefix}_suffix"] = var_suffix
 
-            # Pass prefix_fallback if this variable may be in alternative files
-            if model_profile and profile_key is not None:
+            # Pass inline/profile compute and fallbacks through to runtime.
+            compute_expr = inline_vars.get("compute")
+            if compute_expr is None and model_profile and profile_key is not None:
+                compute_expr = getattr(model_profile.variables[profile_key], "compute", None)
+            if compute_expr:
+                var_section[f"{prefix}_compute"] = compute_expr
+
+            fallback_dicts = inline_vars.get("fallbacks")
+            if fallback_dicts is None and model_profile and profile_key is not None:
+                fallback_dicts = _fallbacks_to_dicts(model_profile.variables[profile_key])
+            if fallback_dicts:
+                var_section[f"{prefix}_fallbacks"] = fallback_dicts
+
+            pf = inline_vars.get("prefix_fallback")
+            if pf is None and model_profile and profile_key is not None:
                 pf = model_profile.variables[profile_key].prefix_fallback
-                if pf:
-                    var_section[f"{prefix}_prefix_fallback"] = pf
+            if pf:
+                var_section[f"{prefix}_prefix_fallback"] = pf
             var_section[f"{prefix}_timezone"] = inline_vars.get("timezone", 0)
 
             # Optional station-related fields: inline config > entry-level > model profile

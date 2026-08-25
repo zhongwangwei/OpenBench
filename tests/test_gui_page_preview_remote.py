@@ -481,3 +481,13 @@ def test_remote_export_marks_direct_sftp_uploads_synced_in_remote_storage_cache(
     assert sync.get_sync_status("output/demo/nml/main-demo.yaml") is SyncStatus.SYNCED
     assert sync.read("output/demo/openbench.yaml") == "new config"
     assert sync.read("output/demo/nml/main-demo.yaml") == "new main"
+
+
+def test_resolve_path_for_remote_rejects_windows_local_data_path():
+    preview = _preview()
+
+    with pytest.raises(RemoteNamelistSyncError, match="Windows local path cannot be converted"):
+        preview._resolve_path_for_remote("C:/Users/me/sim/CaseA", "/remote/openbench")
+
+    with pytest.raises(RemoteNamelistSyncError, match="Windows local path cannot be converted"):
+        preview._resolve_path_for_remote(r"\\server\share\sim\CaseA", "/remote/openbench")

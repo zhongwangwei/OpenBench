@@ -5865,9 +5865,88 @@ def test_preprocess_runs_for_each_ref_source(tmp_path, monkeypatch):
     assert len([c for c in prepare_calls if c[0] == "ref" and c[1] == "RefA"]) == 1
     assert len([c for c in prepare_calls if c[0] == "ref" and c[1] == "RefB"]) == 1
 
-    # Sim should be preprocessed for every (sim, ref) task: 4 calls
+    # Pure grid simulation preprocessing is independent of the reference and
+    # should run once per simulation source.
     sim_calls = [c for c in prepare_calls if c[0] == "sim"]
-    assert len(sim_calls) == 4, f"expected 4 sim preprocess calls (2 sim × 2 ref), got {len(sim_calls)}"
+    assert len(sim_calls) == 2, f"expected one sim preprocess per source, got {len(sim_calls)}"
+
+
+def test_preprocessing_emits_gui_progress_marker(monkeypatch, capsys):
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    monkeypatch.setenv("OPENBENCH_GUI_PROGRESS", "1")
+    monkeypatch.setattr(
+        local_runner,
+        "_build_bridge_runtime_info",
+        lambda task: {
+            "casedir": "/tmp/case",
+            "ref_varname": "ref",
+            "sim_varname": "sim",
+            "ref_data_type": "grid",
+            "sim_data_type": "grid",
+            "ref_source": task["ref_source"],
+            "sim_source": task["sim_source"],
+        },
+    )
+
+    class Processor:
+        def __init__(self, info):
+            pass
+
+        def prepare_source(self, datasource):
+            pass
+
+    monkeypatch.setattr(processing, "DatasetProcessing", Processor)
+    task = {"var_name": "Runoff", "sim_source": "SimA", "ref_source": "RefA"}
+
+    local_runner._preprocess_variable_tasks(
+        "Runoff",
+        [task],
+        unified_mask=False,
+        time_alignment="intersection",
+    )
+
+    output = capsys.readouterr().out
+    assert 'OPENBENCH_PROGRESS {"event":"preprocessing_started"' in output
+    assert 'OPENBENCH_PROGRESS {"event":"preprocessing_completed"' in output
+
+
+def test_failed_preprocessing_does_not_emit_completion_marker(monkeypatch, capsys):
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    monkeypatch.setenv("OPENBENCH_GUI_PROGRESS", "1")
+    monkeypatch.setattr(
+        local_runner,
+        "_build_bridge_runtime_info",
+        lambda task: {
+            "casedir": "/tmp/case",
+            "ref_data_type": "grid",
+            "sim_data_type": "grid",
+            "ref_source": task["ref_source"],
+            "sim_source": task["sim_source"],
+        },
+    )
+
+    class Processor:
+        def __init__(self, info):
+            pass
+
+        def prepare_source(self, datasource):
+            raise ValueError("bad source")
+
+    monkeypatch.setattr(processing, "DatasetProcessing", Processor)
+    task = {"var_name": "Runoff", "sim_source": "SimA", "ref_source": "RefA"}
+
+    errors = local_runner._preprocess_variable_tasks(
+        "Runoff", [task], unified_mask=False, time_alignment="intersection"
+    )
+
+    output = capsys.readouterr().out
+    assert errors
+    assert 'OPENBENCH_PROGRESS {"event":"preprocessing_started"' in output
+    assert '"event":"preprocessing_completed"' not in output
 
 
 def test_preprocess_mixed_grid_and_stn_sims_with_same_grid_ref(tmp_path, monkeypatch):

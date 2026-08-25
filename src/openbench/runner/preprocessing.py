@@ -7,6 +7,7 @@ import os
 import shutil
 from typing import Any
 
+from openbench.runner.progress_events import emit_gui_preprocessing_completion, emit_gui_preprocessing_started
 from openbench.util.netcdf import write_file_atomic
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ def preprocess_variable(
     #   - sim_source string: stn-involved prep writes a per-pair output
     #     dir (stn_<ref>_<sim>) and deletes the flat NC; cannot be shared
     preproc_done: set[tuple[str, str]] = set()
+    sim_preproc_done: set[tuple[str, str]] = set()
     # Track first-time-seen per ref_source for unified_mask accumulation
     # For stn×stn symlink optimization: first stn dir per ref_source
     ref_stn_data_dirs: dict[str, str] = {}
@@ -131,6 +133,7 @@ def preprocess_variable(
                 continue
             ref_source = task["ref_source"]
             sim_source = task["sim_source"]
+            emit_gui_preprocessing_started(task)
             try:
                 info = build_bridge_runtime_info_fn(task)
                 ref_dtype = info.get("ref_data_type", "grid")
@@ -205,24 +208,29 @@ def preprocess_variable(
                                 src = os.path.abspath(os.path.join(src_data_dir, ref_file))
                                 dst = os.path.join(this_data_dir, ref_file)
                                 if not os.path.exists(dst):
-                                    os.symlink(src, dst)
+                                    clone_or_link_ref_for_pair_fn(src, dst)
                 elif not is_stn_path:
                     _restore_flat_ref_if_missing(ref_source)
 
-                # Sim: each task
-                logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
-                if sim_dtype != "stn":
-                    sim_varname = info.get("sim_varname", "")
-                    sim_flat_paths[sim_source] = os.path.join(
-                        info["casedir"],
-                        "data",
-                        f"{var_name}_sim_{sim_source}_{sim_varname}.nc",
-                    )
-                    if is_stn_path:
+                # Pure grid simulation preprocessing is independent of the
+                # reference source and writes the same flat NC. Station-involved
+                # paths remain pair-specific because they write stn_<ref>_<sim>.
+                sim_prep_key = (sim_source, sim_source if not is_stn_path else ref_source)
+                if sim_prep_key not in sim_preproc_done:
+                    logger.info("Preprocessing sim: %s (%s)", var_name, sim_source)
+                    if sim_dtype != "stn":
+                        sim_varname = info.get("sim_varname", "")
+                        sim_flat_paths[sim_source] = os.path.join(
+                            info["casedir"],
+                            "data",
+                            f"{var_name}_sim_{sim_source}_{sim_varname}.nc",
+                        )
+                        if is_stn_path:
+                            _backup_flat_sim(sim_source)
+                    processor.prepare_source("sim")
+                    sim_preproc_done.add(sim_prep_key)
+                    if sim_dtype != "stn" and not is_stn_path:
                         _backup_flat_sim(sim_source)
-                processor.prepare_source("sim")
-                if sim_dtype != "stn" and not is_stn_path:
-                    _backup_flat_sim(sim_source)
 
                 # Unified mask: ensure evaluation only covers cells where both ref and sim are valid.
                 if unified_mask:
@@ -288,6 +296,8 @@ def preprocess_variable(
                     )
                 else:
                     logger.exception("Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source)
+            else:
+                emit_gui_preprocessing_completion(task)
 
         # End-of-loop flat-NC restoration:
         # If a ref had any stn-involved prep AND any grid×grid task in this

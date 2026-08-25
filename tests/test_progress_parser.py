@@ -7,6 +7,8 @@ def _state(**overrides):
         "current_variable": "",
         "current_ref": "",
         "current_sim": "",
+        "started_preprocess_tasks": set(),
+        "completed_preprocess_tasks": set(),
         "completed_eval_tasks": set(),
         "completed_groupby_tasks": set(),
         "completed_comparison_tasks": set(),
@@ -71,6 +73,37 @@ def test_progress_parser_counts_structured_completed_evaluation_line():
     assert var == "Latent_Heat"
     assert stage == "Evaluation"
     assert ("Latent_Heat", "GLEAM_v4.2a", "CoLM2024") in state["completed_eval_tasks"]
+
+
+def test_progress_parser_advances_during_structured_preprocessing():
+    state = _state(total_tasks=2)
+
+    progress, variable, stage = parse_progress_line(
+        'OPENBENCH_PROGRESS {"event":"preprocessing_completed","variable":"Runoff","sim":"SimA","ref":"RefA"}',
+        5,
+        state,
+        CONSTANTS,
+    )
+
+    assert progress > 5
+    assert variable == "Runoff"
+    assert stage == "Preprocessing"
+    assert ("Runoff", "RefA", "SimA") in state["completed_preprocess_tasks"]
+
+
+def test_progress_parser_leaves_five_percent_when_preprocessing_starts():
+    state = _state(total_tasks=2)
+
+    progress, variable, stage = parse_progress_line(
+        'OPENBENCH_PROGRESS {"event":"preprocessing_started","variable":"Runoff","sim":"SimA","ref":"RefA"}',
+        5,
+        state,
+        CONSTANTS,
+    )
+
+    assert progress > 5
+    assert variable == "Runoff"
+    assert stage == "Preprocessing"
 
 
 def test_progress_parser_advances_report_stage_without_backtracking():

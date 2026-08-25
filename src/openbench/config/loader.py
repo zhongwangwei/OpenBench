@@ -954,10 +954,14 @@ def _build_evaluation(raw: dict[str, Any]) -> EvaluationConfig:
     return EvaluationConfig(variables=variables)
 
 
-
 _UNSAFE_SOURCE_CHARS = set('<>:"/\\|?*')
 _WINDOWS_RESERVED_SOURCE_NAMES = {
-    "CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
 }
 
 

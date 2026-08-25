@@ -101,11 +101,15 @@ class SelectionMixin:
                             fb_var = fb.get("varname") if isinstance(fb, dict) else getattr(fb, "varname", "")
                             actual_fb_var = get_xarray_key_case_insensitive(ds, fb_var) if fb_var else None
                             if actual_fb_var is not None:
-                                logging.warning("Variable '%s' not found, using fallback '%s'", target_var, actual_fb_var)
+                                logging.warning(
+                                    "Variable '%s' not found, using fallback '%s'", target_var, actual_fb_var
+                                )
                                 target_var = actual_fb_var
                                 actual_target_var = actual_fb_var
                                 setattr(self, f"{datasource}_varname", [target_var])
-                                fb_convert = fb.get("convert", "") if isinstance(fb, dict) else getattr(fb, "convert", "")
+                                fb_convert = (
+                                    fb.get("convert", "") if isinstance(fb, dict) else getattr(fb, "convert", "")
+                                )
                                 fb_unit = fb.get("varunit", "") if isinstance(fb, dict) else getattr(fb, "varunit", "")
                                 if fb_convert:
                                     setattr(self, f"_fb_convert_{datasource}", fb_convert)
@@ -291,6 +295,7 @@ class SelectionMixin:
                 candidates.append(str(name))
 
         try:
+            candidates.extend(self._compute_dependency_varnames_for_file_lookup(datasource))
             source = getattr(self, f"{datasource}_source", "")
             for fb in getattr(self, f"{source}_fallbacks", None) or []:
                 fb_var = fb.get("varname") if isinstance(fb, dict) else getattr(fb, "varname", "")
@@ -319,6 +324,58 @@ class SelectionMixin:
             logging.debug("Variable-aware prefix fallback lookup skipped: %s", exc)
 
         return list(dict.fromkeys(candidates))
+
+    def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
+        expressions = [getattr(self, f"{datasource}_compute", "")]
+        try:
+            source = getattr(self, f"{datasource}_source", "")
+            model = getattr(self, f"{source}_model", source)
+            from openbench.data.registry.manager import get_registry
+
+            profile = get_registry().get_model(model)
+            item = getattr(self, "item", "")
+            profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+            if profile and profile_key is not None:
+                expressions.append(profile.variables[profile_key].compute or "")
+        except Exception as exc:
+            logging.debug("Compute dependency lookup skipped: %s", exc)
+        deps = []
+        for expr in expressions:
+            deps.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(expr)))
+        return list(dict.fromkeys(dep for dep in deps if dep))
+
+    def _find_compute_dependency_files(self, dirx: str, year: int | None, datasource: str) -> list[str]:
+        deps = self._compute_dependency_varnames_for_file_lookup(datasource)
+        if not deps:
+            return []
+        year_token = f"*{year}*" if year is not None else "*"
+        pattern = os.path.join(dirx, "**", f"{year_token}.nc")
+        files = sorted(
+            set(
+                glob.glob(pattern, recursive=True)
+                + glob.glob(pattern + "4", recursive=True)
+                + glob.glob(pattern[:-3] + ".NC", recursive=True)
+                + glob.glob(pattern[:-3] + ".NC4", recursive=True)
+            )
+        )
+        selected = []
+        found = set()
+        for file_path in files:
+            try:
+                with _xr().open_dataset(file_path, decode_times=False) as ds:
+                    available = {str(name).lower(): str(name) for name in ds.variables}
+                    hits = [dep for dep in deps if dep.lower() in available]
+                    if hits:
+                        selected.append(file_path)
+                        found.update(hits)
+            except Exception as exc:
+                logging.debug("Could not inspect compute dependency file %s: %s", file_path, exc)
+        if selected and set(deps).issubset(found):
+            logging.info(
+                "Using %d files containing compute dependencies%s", len(selected), f" for year {year}" if year else ""
+            )
+            return selected
+        return []
 
     def _files_contain_any_var(self, files: list, varnames: list[str]) -> bool:
         if not varnames:
@@ -355,7 +412,7 @@ class SelectionMixin:
         suffix: str,
         datasource: str = "sim",
         varname: List[str] | None = None,
-    ) -> str:
+    ) -> str | list[str]:
         """Find a single data file, trying prefix fallbacks and .nc/.nc4 extensions."""
         candidate_varnames = self._candidate_varnames_for_file_lookup(varname, datasource)
         first_existing_path = None
@@ -370,6 +427,9 @@ class SelectionMixin:
                     if try_prefix != prefix:
                         logging.info(f"Using fallback prefix '{try_prefix}' for single file")
                     return path
+        compute_files = self._find_compute_dependency_files(dirx, None, datasource)
+        if compute_files:
+            return compute_files
         if first_existing_path is not None:
             return first_existing_path
         raise FileNotFoundError(f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc[4]')}")
@@ -402,11 +462,23 @@ class SelectionMixin:
             # entirely. The intentional wildcard is between {year} and {suffix}.
             escaped_prefix = glob.escape(try_prefix)
             escaped_suffix = glob.escape(suffix)
-            # Try primary path with .nc/.nc4 and upper-case variants.
-            var_files = glob_nc_pattern(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
-            # Try subdirectory path
-            if not var_files:
-                var_files = glob_nc_pattern(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
+            # Try primary path, then year subdir, then scanner-style nested date dirs.
+            patterns = [
+                os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
+                os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
+                os.path.join(dirx, "**", f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
+            ]
+            var_files = []
+            for pattern_path in patterns:
+                var_files = glob_nc_pattern(pattern_path)
+                if "**" in pattern_path:
+                    var_files = sorted(set(var_files + glob.glob(pattern_path, recursive=True)))
+                    if pattern_path.endswith(".nc"):
+                        var_files = sorted(set(var_files + glob.glob(pattern_path + "4", recursive=True)))
+                        var_files = sorted(set(var_files + glob.glob(pattern_path[:-3] + ".NC", recursive=True)))
+                        var_files = sorted(set(var_files + glob.glob(pattern_path[:-3] + ".NC4", recursive=True)))
+                if var_files:
+                    break
 
             # Filter: only keep files where part between prefix+year and suffix has no letters
             if var_files:
@@ -418,6 +490,19 @@ class SelectionMixin:
                     if pattern.match(os.path.basename(f)):
                         filtered.append(f)
                 var_files = filtered
+
+            if not var_files and (try_prefix or suffix):
+                exact = os.path.join(dirx, "**", f"{escaped_prefix}{escaped_suffix}.nc")
+                nested = set(glob.glob(exact, recursive=True))
+                nested.update(glob.glob(exact + "4", recursive=True))
+                nested.update(glob.glob(exact[:-3] + ".NC", recursive=True))
+                nested.update(glob.glob(exact[:-3] + ".NC4", recursive=True))
+                year_dir = re.compile(rf"^{year}(?:[-_](?:0[1-9]|1[0-2]))?(?:[-_](?:0[1-9]|[12]\d|3[01]))?$")
+                var_files = sorted(
+                    path
+                    for path in nested
+                    if any(year_dir.fullmatch(part) for part in os.path.relpath(path, dirx).split(os.sep)[:-1])
+                )
 
             if var_files:
                 if first_matching_pattern_files is None:
@@ -433,4 +518,7 @@ class SelectionMixin:
                     logging.info(f"Using fallback prefix '{try_prefix}' for year {year} (primary '{prefix}' not found)")
                 return var_files
 
+        compute_files = self._find_compute_dependency_files(dirx, year, datasource)
+        if compute_files:
+            return compute_files
         return first_matching_pattern_files or []

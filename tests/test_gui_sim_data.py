@@ -142,3 +142,78 @@ def test_local_gui_sim_scan_runs_off_gui_thread(qapp, monkeypatch, tmp_path):
     page_sim_data.PageSimData._do_scan_flow(page)
 
     assert ran_on_gui_thread == [False]
+
+
+def test_remote_sim_scan_helpers_find_uppercase_nc4():
+    class FakeSSH:
+        def execute(self, command, timeout=30):
+            if "test -d" in command:
+                return "dir\n", "", 0
+            if "history" in command:
+                return "/remote/Case/history/HIST_2000.NC4\n", "", 0
+            return "", "", 0
+
+    assert page_sim_data._remote_find_nc_dir(FakeSSH(), "/remote/Case") == "/remote/Case/history"
+    assert page_sim_data._remote_detect_prefix(FakeSSH(), "/remote/Case") == "HIST_"
+
+
+def test_remote_sim_scan_helpers_raise_find_errors():
+    class FakeSSH:
+        def execute(self, command, timeout=30):
+            return "", "permission denied", 1
+
+    try:
+        page_sim_data._remote_list_nc_files(FakeSSH(), "/remote/private")
+    except RuntimeError as exc:
+        assert "permission denied" in str(exc)
+    else:
+        raise AssertionError("expected remote find failure to raise")
+
+
+def test_validate_data_requires_local_netcdf_files(monkeypatch, tmp_path):
+    warnings = []
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *args: warnings.append(args))
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object()),
+        get_selected_cases=lambda: [{"label": "CaseA", "nc_dir": str(tmp_path), "model": "CoLM2024"}],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert "no NetCDF files found" in warnings[0][2]
+
+
+def test_save_to_config_only_assigns_variables_to_supporting_cases(monkeypatch):
+    controller = _Controller()
+    controller.config["evaluation_items"] = {"Runoff": True, "Latent_Heat": True}
+    monkeypatch.setattr(
+        page_sim_data,
+        "_get_model_variables",
+        lambda model: ["Runoff"] if model == "RunoffModel" else [],
+    )
+    page = SimpleNamespace(
+        controller=controller,
+        get_selected_cases=lambda: [
+            {"label": "RunoffCase", "model": "RunoffModel", "nc_dir": "/sim/r", "prefix": "", "variables": {}},
+            {
+                "label": "ManualHeatCase",
+                "model": "UnknownModel",
+                "nc_dir": "/sim/h",
+                "prefix": "",
+                "variables": {"Latent_Heat": {"varname": "lh"}},
+            },
+        ],
+        _prefix_input=_Text(""),
+        _data_type_combo=_Text("grid"),
+        _grid_res_input=_Text("0.5"),
+        _tim_res_combo=_Text("Month"),
+        _data_groupby_combo=_Text("Year"),
+        _suffix_input=_Text(".nc"),
+        _root_input=_Text("/sim"),
+    )
+
+    page_sim_data.PageSimData.save_to_config(page)
+
+    general = controller.updated[1]["general"]
+    assert general["Runoff_sim_source"] == ["RunoffCase"]
+    assert general["Latent_Heat_sim_source"] == ["ManualHeatCase"]

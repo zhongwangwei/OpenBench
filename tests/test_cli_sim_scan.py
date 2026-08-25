@@ -739,3 +739,33 @@ def test_rebase_station_artifacts_updates_fulllist_and_case_paths(tmp_path):
 
     assert case.merged_dir == new_root / "CaseA" / "merged"
     assert str(new_root / "CaseA" / "merged" / "S1.nc") in case.fulllist.read_text(encoding="utf-8")
+
+
+def test_replace_directory_preserving_old_on_failure_restores_existing_output(tmp_path, monkeypatch):
+    import openbench.cli.sim as sim_module
+
+    source = tmp_path / "new"
+    target = tmp_path / "station_output"
+    source.mkdir()
+    target.mkdir()
+    (source / "new.txt").write_text("new", encoding="utf-8")
+    (target / "old.txt").write_text("old", encoding="utf-8")
+    real_replace = sim_module.os.replace
+    calls = {"count": 0}
+
+    def flaky_replace(src, dst):
+        if Path(src) == source and Path(dst) == target:
+            calls["count"] += 1
+            raise OSError("disk full")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(sim_module.os, "replace", flaky_replace)
+
+    import pytest
+
+    with pytest.raises(OSError):
+        sim_module._replace_directory_preserving_old_on_failure(source, target)
+
+    assert (target / "old.txt").read_text(encoding="utf-8") == "old"
+    assert source.exists()
+    assert calls["count"] == 1

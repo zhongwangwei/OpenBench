@@ -96,6 +96,8 @@ class EvaluationRunner(QThread):
         self._do_statistics = False
 
         # Track completed items to avoid double counting
+        self._started_preprocess_tasks = set()  # (var, ref, sim) tuples
+        self._completed_preprocess_tasks = set()  # (var, ref, sim) tuples
         self._completed_eval_tasks = set()  # (var, ref, sim) tuples
         self._completed_groupby_tasks = set()  # (var, groupby_type) tuples
         self._completed_comparison_tasks = set()  # comparison names
@@ -192,6 +194,8 @@ class EvaluationRunner(QThread):
                     self._current_variable = ""
                     self._current_ref = ""
                     self._current_sim = ""
+                    self._started_preprocess_tasks.clear()
+                    self._completed_preprocess_tasks.clear()
                     self._completed_eval_tasks.clear()
                     self._completed_groupby_tasks.clear()
                     self._completed_comparison_tasks.clear()
@@ -408,6 +412,8 @@ class EvaluationRunner(QThread):
             "current_variable": self._current_variable,
             "current_ref": self._current_ref,
             "current_sim": self._current_sim,
+            "started_preprocess_tasks": self._started_preprocess_tasks,
+            "completed_preprocess_tasks": self._completed_preprocess_tasks,
             "completed_eval_tasks": self._completed_eval_tasks,
             "completed_groupby_tasks": self._completed_groupby_tasks,
             "completed_comparison_tasks": self._completed_comparison_tasks,
@@ -498,6 +504,8 @@ class EvaluationRunner(QThread):
 
         # Reset completion tracking
         self._completed_tasks = 0
+        self._started_preprocess_tasks = set()
+        self._completed_preprocess_tasks = set()
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()

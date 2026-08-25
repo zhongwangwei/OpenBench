@@ -812,9 +812,18 @@ class Evaluation_stn(metrics, scores):
                     )
                     results = [self.make_evaluation_parallel(station_list, iik) for iik in station_indices]
 
-            # Filter out None results from stations that failed or were skipped
-            valid_results = [r if r is not None else {} for r in results]
-            station_list = pd.concat([station_list, pd.DataFrame(valid_results)], axis=1)
+            skipped = sum(1 for r in results if r is None)
+            if skipped:
+                raise RuntimeError(f"Station evaluation failed for {skipped}/{len(station_indices)} station(s)")
+            if not results:
+                raise RuntimeError("Station evaluation produced no station results")
+            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+            metric_columns = set((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
+            metric_columns.update(["KGESS", "RMSE", "correlation"])
+            present = [col for col in metric_columns if col in station_list.columns]
+            numeric_results = station_list[present].apply(pd.to_numeric, errors="coerce") if present else None
+            if numeric_results is None or not np.isfinite(numeric_results.to_numpy(dtype=float)).any():
+                raise RuntimeError("Station evaluation produced no finite metric/score rows")
 
             logging.info("Evaluation finished")
             logging.info("=======================================")
