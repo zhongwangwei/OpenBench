@@ -93,7 +93,7 @@ ZH_CN = {
     "Scan a directory for simulation cases, assign models, and select cases to evaluate": "扫描模拟案例目录、分配模型并选择要评估的案例",
     "Reference Data": "参考数据",
     "Configure reference data sources for each evaluation variable": "为每个评估变量配置参考数据源",
-    "Evaluation": "评估",
+    "Evaluation": "评估变量",
     "Evaluation Items": "评估项目",
     "Select the variables to evaluate": "选择要评估的变量",
     "Carbon Cycle": "碳循环",

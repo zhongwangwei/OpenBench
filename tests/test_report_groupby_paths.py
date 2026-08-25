@@ -219,3 +219,94 @@ def test_report_legacy_item_matching_avoids_configured_underscore_prefix_collisi
 
     assert generator._collect_figures("Run")["metrics"] == ["Run_ref_RefA_sim_SimA_bias.jpg"]
     assert generator._collect_figures("Run_off")["metrics"] == ["Run_off_ref_RefA_sim_SimA_bias.jpg"]
+
+
+def test_report_grid_stats_do_not_store_full_value_arrays(tmp_path):
+    import numpy as np
+    import xarray as xr
+
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    item = "Runoff"
+    ref = "RefA"
+    sim = "SimA"
+    metric_file = metrics_dir / f"{join_filename_components(item, 'ref', ref, 'sim', sim, 'bias')}.nc"
+    xr.Dataset({"bias": (("lat", "lon"), np.array([[1.0, 2.0], [np.nan, 4.0]]))}).to_netcdf(metric_file)
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": [item],
+            "metrics": {"bias": True},
+            "scores": {},
+            "ref_nml": {"general": {f"{item}_ref_source": ref}},
+            "sim_nml": {"general": {"Case_lib": sim}},
+            "comparisons": {},
+            "general": {"comparison": False},
+        },
+        str(case_dir),
+    )
+
+    stats = generator._generate_grid_vs_grid_stats(item)
+    metric = stats[f"{ref} vs {sim}"]["metrics"]["bias"]
+    assert "values" not in metric
+    assert metric["mean"] == 7 / 3
+
+
+def test_report_csv_collection_keeps_count_not_full_records_or_recomputed_stats(tmp_path):
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    (metrics_dir / "Runoff_evaluations.csv").write_text("station,bias\nA,1\nB,3\n", encoding="utf-8")
+
+    data = ReportGenerator(
+        {"evaluation_items": ["Runoff"], "metrics": {"bias": True}, "scores": {}, "comparisons": {}},
+        str(case_dir),
+    )._collect_metrics_data("Runoff")
+
+    assert data["Runoff"] == {"row_count": 2, "summary": {}}
+
+
+def test_report_skips_eager_statistics_for_large_netcdf(tmp_path, monkeypatch):
+    import openbench.util.report as report_module
+
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    (metrics_dir / f"{join_filename_components('Runoff', 'ref', 'RefA', 'sim', 'SimA', 'bias')}.nc").touch()
+
+    class LargeArray:
+        size = report_module._MAX_REPORT_STAT_POINTS + 1
+
+        @property
+        def values(self):
+            raise AssertionError("large report arrays must not be loaded eagerly")
+
+    class Dataset:
+        data_vars = {"bias": LargeArray()}
+        coords = {}
+
+        def __getitem__(self, name):
+            return self.data_vars[name]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(report_module.xr, "open_dataset", lambda _path: Dataset())
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"bias": True},
+            "scores": {},
+            "ref_nml": {"general": {"Runoff_ref_source": "RefA"}},
+            "sim_nml": {"general": {"Case_lib": "SimA"}},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+
+    assert generator._collect_metrics_data("Runoff") == {}

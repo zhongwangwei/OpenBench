@@ -73,6 +73,26 @@ def test_scan_simulation_roots_discovers_cases_at_default_depth_five(tmp_path: P
     assert case.depth == 5
 
 
+def test_scan_simulation_roots_reuses_directory_listing_within_each_scan(tmp_path: Path, monkeypatch):
+    import openbench.data.sim_scanner as sim_scanner
+
+    history = tmp_path / "simulations" / "CaseA" / "history"
+    _write_grid_nc(history / "QFLX_EVAP_TOT_2000.nc")
+    original = sim_scanner.glob_nc
+    calls = []
+
+    def counted_glob_nc(directory):
+        calls.append(Path(directory))
+        return original(directory)
+
+    monkeypatch.setattr(sim_scanner, "glob_nc", counted_glob_nc)
+
+    sim_scanner.scan_simulation_roots([tmp_path / "simulations"], model_name="CoLM2024")
+    sim_scanner.scan_simulation_roots([tmp_path / "simulations"], model_name="CoLM2024")
+
+    assert calls.count(history) == 2
+
+
 def test_scan_simulation_roots_skips_generated_derived_output_dirs(tmp_path: Path):
     from openbench.data.sim_scanner import scan_simulation_roots
 

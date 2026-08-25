@@ -80,6 +80,12 @@ def test_main_window_language_button_updates_existing_pages(qapp, monkeypatch):
         assert "alignment: left" in window.pages["registry"].tabs.styleSheet()
         assert window.btn_next.text() == "下一步"
         assert window.nav_list.item(0).text() == "运行环境"
+        evaluation_item = next(
+            window.nav_list.item(i)
+            for i in range(window.nav_list.count())
+            if window.nav_list.item(i).data(Qt.UserRole) == "evaluation_items"
+        )
+        assert evaluation_item.text() == "评估变量"
 
         monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
         window.btn_about.click()
@@ -103,3 +109,31 @@ def test_main_window_language_button_updates_existing_pages(qapp, monkeypatch):
         else:
             qapp._openbench_language_manager = old_manager
             qapp.installEventFilter(old_manager)
+
+
+def test_sidebar_stays_aligned_with_nav_under_theme(qapp):
+    from importlib.resources import files
+
+    from PySide6.QtWidgets import QSplitter
+
+    from openbench.gui.main_window import MainWindow
+
+    old_stylesheet = qapp.styleSheet()
+    window = None
+    try:
+        qapp.setStyleSheet((files("openbench.gui") / "styles" / "theme.qss").read_text(encoding="utf-8"))
+        window = MainWindow()
+        window.resize(1600, 900)
+        window.show()
+        qapp.processEvents()
+
+        splitter = window.findChild(QSplitter)
+        assert splitter is not None
+        sidebar = splitter.widget(0)
+        assert sidebar.width() == window.nav_list.width() == 220
+    finally:
+        if window is not None:
+            window.close()
+            window.deleteLater()
+        qapp.setStyleSheet(old_stylesheet)
+        qapp.processEvents()
