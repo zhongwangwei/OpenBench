@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from openbench.util.filenames import (
     groupby_class_netcdf_filename,
     groupby_pair_dirname,
@@ -253,21 +255,47 @@ def test_report_grid_stats_do_not_store_full_value_arrays(tmp_path):
     assert metric["mean"] == 7 / 3
 
 
-def test_report_csv_collection_keeps_count_not_full_records_or_recomputed_stats(tmp_path):
+def test_report_csv_collection_streams_summary_without_full_records(tmp_path):
     case_dir = tmp_path / "case"
     metrics_dir = case_dir / "metrics"
+    scores_dir = case_dir / "scores"
     metrics_dir.mkdir(parents=True)
+    scores_dir.mkdir(parents=True)
     (metrics_dir / "Runoff_evaluations.csv").write_text("station,bias\nA,1\nB,3\n", encoding="utf-8")
+    (scores_dir / "Runoff_evaluations.csv").write_text("station,Overall_Score\nA,0\nB,0\n", encoding="utf-8")
 
-    data = ReportGenerator(
-        {"evaluation_items": ["Runoff"], "metrics": {"bias": True}, "scores": {}, "comparisons": {}},
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"bias": True},
+            "scores": {"Overall_Score": True},
+            "comparisons": {},
+        },
         str(case_dir),
-    )._collect_metrics_data("Runoff")
+    )
+    data = generator._collect_metrics_data("Runoff")
 
-    assert data["Runoff"] == {"row_count": 2, "summary": {}}
+    assert data["Runoff"]["row_count"] == 2
+    assert "data" not in data["Runoff"]
+    assert data["Runoff"]["summary"]["bias"] == {
+        "mean": 2.0,
+        "std": 2**0.5,
+        "min": 1.0,
+        "max": 3.0,
+        "count": 2,
+    }
+    assert generator._summarize_csv(str(metrics_dir / "Runoff_evaluations.csv"), chunksize=1) == (
+        2,
+        data["Runoff"]["summary"],
+    )
+    report_data = generator._collect_report_data()
+    assert report_data["overall_summary"]["grand_average"] == 0.0
+    html = Path(generator._generate_html_report(report_data, "csv_summary")).read_text(encoding="utf-8")
+    assert "Overall Average Score" in html
+    assert "0.000" in html
 
 
-def test_report_skips_eager_statistics_for_large_netcdf(tmp_path, monkeypatch):
+def test_report_marks_large_netcdf_summary_as_omitted(tmp_path, monkeypatch):
     import openbench.util.report as report_module
 
     case_dir = tmp_path / "case"
@@ -309,4 +337,58 @@ def test_report_skips_eager_statistics_for_large_netcdf(tmp_path, monkeypatch):
         str(case_dir),
     )
 
-    assert generator._collect_metrics_data("Runoff") == {}
+    data = generator._collect_metrics_data("Runoff")
+    metric = data["RefA vs SimA"]["metrics"]["bias"]
+    assert metric["summary_omitted"] is True
+    assert metric["total_points"] == report_module._MAX_REPORT_STAT_POINTS + 1
+
+
+def test_report_does_not_invent_correlation_when_large_real_result_is_omitted(tmp_path, monkeypatch):
+    import openbench.util.report as report_module
+
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    correlation_file = metrics_dir / join_filename_components("Runoff", "ref", "RefA", "sim", "SimA", "correlation")
+    correlation_file.with_suffix(".nc").touch()
+
+    class LargeArray:
+        size = report_module._MAX_REPORT_STAT_POINTS + 1
+
+        @property
+        def values(self):
+            raise AssertionError("large report arrays must not be loaded eagerly")
+
+    class Dataset:
+        data_vars = {"correlation": LargeArray()}
+        coords = {}
+
+        def __getitem__(self, name):
+            return self.data_vars[name]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(report_module.xr, "open_dataset", lambda _path: Dataset())
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"correlation": True},
+            "scores": {},
+            "ref_nml": {"general": {"Runoff_ref_source": "RefA"}},
+            "sim_nml": {"general": {"Case_lib": "SimA"}},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+
+    metric = generator._generate_grid_vs_grid_stats("Runoff")["RefA vs SimA"]["metrics"]["correlation"]
+    assert metric == {
+        "summary_omitted": True,
+        "total_points": report_module._MAX_REPORT_STAT_POINTS + 1,
+        "file": correlation_file.with_suffix(".nc").name,
+    }

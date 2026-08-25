@@ -150,21 +150,21 @@ def register_reference(
         from openbench.data.registry.scanner import _detect_data_type_from_nc
 
         root_path = Path(root_dir)
-        nc_files = glob_nc(root_path)
-        if not nc_files:
-            try:
+        try:
+            nc_files = glob_nc(root_path)
+            if not nc_files:
                 children = sorted(root_path.iterdir())
-            except OSError as exc:
-                click.secho(
-                    f"  Could not inspect subdirectories for data_type auto-detection ({exc}); using default: grid",
-                    fg="yellow",
-                )
-                children = []
-            for child in children:
-                if child.is_dir():
-                    nc_files = glob_nc(child)
-                    if nc_files:
-                        break
+                for child in children:
+                    if child.is_dir():
+                        nc_files = glob_nc(child)
+                        if nc_files:
+                            break
+        except OSError as exc:
+            click.secho(
+                f"  Could not inspect subdirectories for data_type auto-detection ({exc}); using default: grid",
+                fg="yellow",
+            )
+            nc_files = []
         nc_file = nc_files[0] if nc_files else None
         if nc_file is not None:
             detected = _detect_data_type_from_nc(nc_file)

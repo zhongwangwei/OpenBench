@@ -1,3 +1,4 @@
+from openbench.gui.pages.page_run_monitor import count_evaluation_tasks
 from openbench.gui.progress_parser import parse_progress_line
 
 
@@ -106,3 +107,22 @@ def test_progress_parser_counts_actual_groupby_complete_lines():
         assert progress == 95
         assert stage == "Comparison"
         assert ("Runoff", key) in state["completed_groupby_tasks"]
+
+
+def test_evaluation_task_count_uses_each_variables_bound_sources():
+    config = {
+        "ref_data": {
+            "general": {
+                "Runoff_ref_source": "RefA",
+                "GPP_ref_source": "RefB",
+            }
+        },
+        "sim_data": {
+            "general": {
+                "Runoff_sim_source": ["SimA"],
+                "GPP_sim_source": ["SimB"],
+            }
+        },
+    }
+
+    assert count_evaluation_tasks(config, ["Runoff", "GPP"]) == 2
