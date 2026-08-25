@@ -462,6 +462,7 @@ def _year_bounds(values) -> tuple[int, int]:
         raise ValueError("Empty time coordinate")
     return min(years), max(years)
 
+
 def _combined_year_range(nc_files: list[Path]) -> tuple[int, int]:
     ranges = [_read_year_range(path) for path in nc_files]
     return min(start for start, _ in ranges), max(end for _, end in ranges)

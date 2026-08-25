@@ -684,6 +684,7 @@ def _compute_dependencies_span_file_patterns(files: list[Path], mapping) -> bool
         patterns.update(_filename_pattern_for_file(path) for path in matched)
     return len(patterns) > 1
 
+
 def _match_profile_variable_file(files: list[Path], mapping) -> tuple[Path, str] | None:
     candidates = _mapping_candidate_varnames(mapping)
     if not candidates:
@@ -957,6 +958,7 @@ def _datetime_values_from_time_values(raw_values) -> list[datetime]:
         else:
             values.append(pd.Timestamp(value).to_pydatetime().replace(tzinfo=None))
     return values
+
 
 def _raw_time_metadata_from_file(file_path: Path) -> dict:
     try:

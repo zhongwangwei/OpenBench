@@ -584,8 +584,9 @@ def test_selection_ref_fallbacks_and_upper_nc4(tmp_path, monkeypatch):
 
     path = tmp_path / "ALT_2000.NC4"
     (
-        xr.Dataset({"Q": ("time", np.array([1.0]))}, coords={"time": pd.date_range("2000-01-01", periods=1)})
-        .to_netcdf(path)
+        xr.Dataset({"Q": ("time", np.array([1.0]))}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(
+            path
+        )
     )
     dummy = Dummy()
 

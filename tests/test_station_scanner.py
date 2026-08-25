@@ -545,9 +545,9 @@ def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_pat
     from openbench.data.processing import BaseDatasetProcessing
 
     combined = tmp_path / "combined.csv"
-    pd.DataFrame(
-        [{"ID": "A", "sim_dir": "sim.nc", "ref_dir": "ref.nc", "use_syear": 2002, "use_eyear": 2004}]
-    ).to_csv(combined, index=False)
+    pd.DataFrame([{"ID": "A", "sim_dir": "sim.nc", "ref_dir": "ref.nc", "use_syear": 2002, "use_eyear": 2004}]).to_csv(
+        combined, index=False
+    )
 
     proc = BaseDatasetProcessing.__new__(BaseDatasetProcessing)
     proc.ref_data_type = proc.sim_data_type = "stn"

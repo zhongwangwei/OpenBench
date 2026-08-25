@@ -762,6 +762,7 @@ def test_replace_directory_preserving_old_on_failure_restores_existing_output(tm
     monkeypatch.setattr(sim_module.os, "replace", flaky_replace)
 
     import pytest
+
     with pytest.raises(OSError):
         sim_module._replace_directory_preserving_old_on_failure(source, target)
 

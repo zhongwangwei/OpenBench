@@ -371,7 +371,9 @@ class SelectionMixin:
             except Exception as exc:
                 logging.debug("Could not inspect compute dependency file %s: %s", file_path, exc)
         if selected and set(deps).issubset(found):
-            logging.info("Using %d files containing compute dependencies%s", len(selected), f" for year {year}" if year else "")
+            logging.info(
+                "Using %d files containing compute dependencies%s", len(selected), f" for year {year}" if year else ""
+            )
             return selected
         return []
 
