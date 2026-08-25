@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from openbench.config.schema import OpenBenchConfig, is_simple_project_name
@@ -114,8 +114,10 @@ class RunnerBindings:
 
             # Both ref_source and sim_source can be str or list[str] (v2.x compat)
             ref_sources_list = [ref_source] if isinstance(ref_source, str) else list(ref_source)
+            ref_sources_list = list(dict.fromkeys(ref_sources_list))
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
+            sim_sources = list(dict.fromkeys(sim_sources))
 
             # Cartesian product: every (sim, ref) pair becomes a task
             for ref_s in ref_sources_list:
@@ -141,9 +143,11 @@ class RunnerBindings:
                 continue
 
             ref_sources_list = [ref_source] if isinstance(ref_source, str) else list(ref_source)
+            ref_sources_list = list(dict.fromkeys(ref_sources_list))
             sim_sources = sim_general.get(f"{var_name}_sim_source", [])
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
+            sim_sources = list(dict.fromkeys(sim_sources))
 
             for ref_s in ref_sources_list:
                 ref_dtype = self.namelists.reference.get(var_name, {}).get(f"{ref_s}_data_type")
@@ -534,6 +538,81 @@ class StatisticsContext:
     statistic_fig: dict[str, Any]
 
 
+
+_UNSAFE_SOURCE_CHARS = set('<>:"/\\|?*')
+_WINDOWS_RESERVED_SOURCE_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+
+
+def _assert_path_safe_label(label: object, kind: str) -> None:
+    text = str(label)
+    stripped = text.strip()
+    if (
+        text != stripped
+        or any(ch in _UNSAFE_SOURCE_CHARS or ord(ch) < 32 for ch in text)
+        or text.endswith(".")
+        or text.split(".", 1)[0].upper() in _WINDOWS_RESERVED_SOURCE_NAMES
+    ):
+        from openbench.config.loader import ConfigError
+
+        raise ConfigError(f"{kind} must be path-safe for generated output filenames: {text!r}")
+
+
+def _iter_reference_source_names(cfg: OpenBenchConfig):
+    for value in cfg.reference.sources.values():
+        if isinstance(value, str):
+            yield value
+        else:
+            yield from value
+
+
+def _source_override(cfg: OpenBenchConfig, source_name: str) -> dict[str, Any]:
+    overrides = getattr(cfg.reference, "overrides", {}) or {}
+    for key, value in overrides.items():
+        if str(key).lower() == str(source_name).lower():
+            return value if isinstance(value, dict) else {}
+    return {}
+
+
+def _apply_reference_override(ref_ds, var_map, var_name: str, override: dict[str, Any]):
+    """Apply reference.overrides without mutating registry objects."""
+    if not override:
+        return ref_ds, var_map
+    ds_fields = {k: v for k, v in override.items() if k != "variables" and hasattr(ref_ds, k)}
+    if ds_fields:
+        ref_ds = replace(ref_ds, **ds_fields)
+    var_overrides = override.get("variables") if isinstance(override.get("variables"), dict) else {}
+    var_override = {}
+    for key, value in var_overrides.items():
+        if str(key).lower() == str(var_name).lower() and isinstance(value, dict):
+            var_override = value
+            break
+    if var_override and var_map is not None:
+        var_fields = {k: v for k, v in var_override.items() if hasattr(var_map, k)}
+        if var_fields:
+            var_map = replace(var_map, **var_fields)
+    return ref_ds, var_map
+
+
+def _fallbacks_to_dicts(var_map) -> list[dict[str, Any]]:
+    fallbacks = getattr(var_map, "fallbacks", None) or []
+    result = []
+    for fb in fallbacks:
+        item = {"varname": fb.varname}
+        if getattr(fb, "varunit", ""):
+            item["varunit"] = fb.varunit
+        if getattr(fb, "convert", ""):
+            item["convert"] = fb.convert
+        result.append(item)
+    return result
+
+
 def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str, str]:
     """Resolve a variable name from profile, handling fallbacks.
 
@@ -640,23 +719,7 @@ def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None) -> str:
                 logger.info("NC files found in subdirectory: %s", child_path)
                 return child_path
 
-    # Strategy 2: fall back from MidRes/HigRes to LowRes
-    if data_root and sub_dir:
-        for res in ("MidRes", "HigRes"):
-            if res in data_root:
-                lowres_root = data_root.replace(res, "LowRes", 1)
-                lowres_dir = os.path.join(lowres_root, sub_dir)
-                if os.path.isdir(lowres_dir) and glob_nc(lowres_dir):
-                    logger.info("Falling back to LowRes: %s", lowres_dir)
-                    return lowres_dir
-                # Also check subdirectories of LowRes
-                if os.path.isdir(lowres_dir):
-                    for child in sorted(os.listdir(lowres_dir)):
-                        child_path = os.path.join(lowres_dir, child)
-                        if os.path.isdir(child_path) and glob_nc(child_path):
-                            logger.info("Falling back to LowRes subdirectory: %s", child_path)
-                            return child_path
-                break
+    # Do not silently substitute a different requested resolution.
 
     return ref_dir
 
@@ -670,6 +733,10 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
     basename = str(cfg.project.name)
     if not is_simple_project_name(basename):
         raise ConfigError("project.name must be a simple directory name, not a path.")
+    for label in cfg.simulation:
+        _assert_path_safe_label(label, "simulation label")
+    for source_name in _iter_reference_source_names(cfg):
+        _assert_path_safe_label(source_name, "reference source")
 
     try:
         registry = get_registry()
@@ -897,6 +964,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             continue
 
         resolved_name = r.resolved_name
+        if resolved_name:
+            _assert_path_safe_label(resolved_name, "resolved reference source")
         # Accumulate ref source names per variable (str when single, list when multi)
         _ref_source_lists.setdefault(var_name, []).append(resolved_name)
         if resolved_name != r.source_name:
@@ -906,6 +975,9 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
 
         ref_ds = r.ref_ds
         var_map = r.var_map
+        source_override = _source_override(cfg, r.source_name) or _source_override(cfg, resolved_name)
+        if r.status == "ok":
+            ref_ds, var_map = _apply_reference_override(ref_ds, var_map, var_name, source_override)
 
         if r.status == "ok":
             # Construct directory: station data uses its own root_dir;
@@ -913,7 +985,12 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             if ref_ds.data_type == "stn":
                 data_root = ref_ds.root_dir or cfg.reference.data_root or ""
             else:
-                data_root = cfg.reference.data_root or ref_ds.root_dir or ""
+                data_root = (
+                    (source_override.get("root_dir") if source_override else None)
+                    or cfg.reference.data_root
+                    or ref_ds.root_dir
+                    or ""
+                )
             if not data_root:
                 logger.warning(
                     "No data_root or root_dir for reference %s variable %s. "
@@ -929,9 +1006,18 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             if ref_dir and ref_ds.data_type != "stn":
                 ref_dir = _find_nc_dir(ref_dir, data_root, var_map.sub_dir)
 
+            ref_varname, ref_varunit, ref_convert = _resolve_varname(var_map, ref_dir)
             section[f"{prefix}_data_type"] = ref_ds.data_type
-            section[f"{prefix}_varname"] = var_map.varname
-            section[f"{prefix}_varunit"] = var_map.varunit
+            section[f"{prefix}_varname"] = ref_varname
+            section[f"{prefix}_varunit"] = ref_varunit
+            if ref_convert:
+                section[f"{prefix}_convert"] = ref_convert
+                setattr(r, "convert_expr", ref_convert)
+            fallback_dicts = _fallbacks_to_dicts(var_map)
+            if fallback_dicts:
+                section[f"{prefix}_fallbacks"] = fallback_dicts
+            if getattr(var_map, "prefix_fallback", None):
+                section[f"{prefix}_prefix_fallback"] = var_map.prefix_fallback
             section[f"{prefix}_data_groupby"] = ref_ds.data_groupby
             section[f"{prefix}_tim_res"] = ref_ds.tim_res
             section[f"{prefix}_grid_res"] = ref_ds.grid_res

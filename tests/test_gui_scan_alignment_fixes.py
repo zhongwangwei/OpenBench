@@ -13,6 +13,7 @@ Covers four reported GUI defects:
 
 from types import SimpleNamespace
 
+import pytest
 import yaml
 
 from openbench.gui import path_utils
@@ -737,3 +738,98 @@ def test_remote_model_sync_accepts_registry_name(monkeypatch, tmp_path):
     written = yaml.safe_load(model_file.read_text())
     assert written["general"]["model"] == "CoLM2024"
     assert staged == ["CoLM2024"]
+
+
+def test_gui_reference_validation_accepts_nc4_and_uppercase_netcdf_suffixes(tmp_path):
+    from openbench.gui.data_validator import DataValidator
+
+    data_root = tmp_path / "ref"
+    data_root.mkdir()
+    (data_root / "runoff_2001.NC4").touch()
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "DemoRef",
+        {"general": {"root_dir": str(data_root), "data_type": "grid", "data_groupby": "Year"}, "prefix": "runoff_"},
+        {"syear": 2001, "eyear": 2001},
+    )
+
+    file_check = next(check for check in result.checks if check.name == "file_exists")
+    assert file_check.passed is True
+    assert file_check.message.endswith("runoff_2001.NC4")
+
+
+def test_gui_station_reference_validation_rejects_missing_root_without_pattern():
+    from openbench.gui.data_validator import DataValidator
+
+    result = DataValidator().validate_source(
+        "Streamflow",
+        "BadStationRef",
+        {
+            "general": {"root_dir": "/definitely/missing/openbench/ref", "data_type": "stn", "data_groupby": "Single"},
+            "varname": "q",
+        },
+        {"syear": 2000, "eyear": 2001},
+    )
+
+    assert result.is_valid is False
+    assert [(check.name, check.passed) for check in result.checks] == [("directory_exists", False)]
+
+
+def test_gui_reference_validation_rejects_partially_covering_descriptor_years(tmp_path):
+    from openbench.gui.data_validator import DataValidator
+
+    data_root = tmp_path / "ref"
+    data_root.mkdir()
+    (data_root / "runoff_2001.nc").touch()
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "DemoRef",
+        {
+            "general": {
+                "root_dir": str(data_root),
+                "data_type": "grid",
+                "data_groupby": "Year",
+                "syear": 2001,
+                "eyear": 2002,
+            },
+            "prefix": "runoff_",
+        },
+        {"syear": 2000, "eyear": 2002},
+    )
+
+    time_check = next(check for check in result.checks if check.name == "time_range")
+    assert time_check.passed is False
+    assert "do not cover" in time_check.message
+
+
+def test_gui_grid_reference_validation_checks_spatial_range_for_single_file(tmp_path):
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    from openbench.gui.data_validator import DataValidator
+
+    data_root = tmp_path / "ref"
+    data_root.mkdir()
+    path = data_root / "runoff.nc"
+    ds = xr.Dataset(
+        {"q": (("time", "lat", "lon"), np.ones((2, 2, 2)))},
+        coords={"time": pd.date_range("2000-01-01", periods=2, freq="YS"), "lat": [0.0, 1.0], "lon": [0.0, 1.0]},
+    )
+    ds.to_netcdf(path)
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "SpatialRef",
+        {
+            "general": {"root_dir": str(data_root), "data_type": "grid", "data_groupby": "Single"},
+            "varname": "q",
+            "prefix": "runoff",
+        },
+        {"syear": 2000, "eyear": 2001, "min_lat": -10, "max_lat": 10, "min_lon": -10, "max_lon": 10},
+    )
+
+    spatial_check = next(check for check in result.checks if check.name == "spatial_range")
+    assert spatial_check.passed is False
+    assert "Spatial range insufficient" in spatial_check.message

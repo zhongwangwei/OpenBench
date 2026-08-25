@@ -13,11 +13,16 @@ import shlex
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
+from openbench.data.coordinates import NC_SUFFIXES
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.path_utils import to_absolute_path, get_openbench_root
 
 logger = logging.getLogger(__name__)
+
+
+def _has_nc_suffix(value: str) -> bool:
+    return value.casefold().endswith(tuple(suffix.casefold() for suffix in NC_SUFFIXES))
 
 
 def safe_open(path: str):
@@ -159,6 +164,22 @@ class FilePathGenerator:
             return f"{base_dir.rstrip('/')}/{filename}"
         return os.path.join(base_dir, filename)
 
+    def _candidate_filenames(self) -> List[str]:
+        base = f"{self.prefix}{self.suffix}"
+        if _has_nc_suffix(base):
+            return [base]
+        return [f"{base}{ext}" for ext in NC_SUFFIXES]
+
+    def _candidate_patterns(self) -> List[str]:
+        base = f"{self.prefix}*{self.suffix}"
+        if _has_nc_suffix(base):
+            return [base]
+        return [f"{base}{ext}" for ext in NC_SUFFIXES]
+
+    def describe_pattern(self) -> str:
+        patterns = self._candidate_patterns()
+        return patterns[0] if len(patterns) == 1 else "{" + ",".join(patterns) + "}"
+
     def get_sample_paths(self) -> List[str]:
         """Get sample file paths for validation.
 
@@ -167,24 +188,28 @@ class FilePathGenerator:
         """
         base_dir = self._get_base_dir()
 
-        if self.data_groupby == "Single":
-            # Exact match for single file
-            filename = f"{self.prefix}{self.suffix}.nc"
-            return [self._build_path(filename)]
+        if str(self.data_groupby).lower() == "single":
+            candidates = [self._build_path(filename) for filename in self._candidate_filenames()]
+            if self._is_remote:
+                return candidates
+            existing = [path for path in candidates if os.path.exists(path)]
+            return existing or candidates[:1]
 
-        # For Year/Month/Day, use glob to find matching files
-        # Pattern: {prefix}*{suffix}.nc
-        pattern = f"{self.prefix}*{self.suffix}.nc"
+        # For Year/Month/Day, use glob to find matching files.
+        patterns = self._candidate_patterns()
 
         if self._is_remote and self._ssh_manager:
             # Remote mode: use SSH to list files
-            matching_files = self._remote_glob(base_dir, pattern)
+            matching_files = self._remote_glob(base_dir, patterns)
         else:
             # Local mode: use local glob
             import glob
 
-            full_pattern = os.path.join(base_dir, pattern)
-            matching_files = sorted(glob.glob(full_pattern))
+            matching_files = []
+            for pattern in patterns:
+                full_pattern = os.path.join(base_dir, pattern)
+                matching_files.extend(glob.glob(full_pattern))
+            matching_files = sorted(set(matching_files))
 
         if matching_files:
             # Return first, middle, and last file as samples
@@ -200,20 +225,30 @@ class FilePathGenerator:
         # The validation will report "no files found"
         return []
 
-    def _remote_glob(self, base_dir: str, pattern: str) -> List[str]:
+    def _remote_glob(self, base_dir: str, patterns: List[str]) -> List[str]:
         """Find files matching pattern on remote server via SSH."""
         self.last_error = None
+        pattern_desc = patterns[0] if len(patterns) == 1 else "{" + ",".join(patterns) + "}"
         try:
             # Use find command to match files
-            cmd = f"find {quote_remote_path(base_dir)} -maxdepth 1 -name {shlex.quote(pattern)} -type f 2>/dev/null | sort"
+            if len(patterns) == 1:
+                name_expr = f"-name {shlex.quote(patterns[0])}"
+            else:
+                parts = []
+                for index, pattern in enumerate(patterns):
+                    if index:
+                        parts.append("-o")
+                    parts.extend(["-name", shlex.quote(pattern)])
+                name_expr = r"\( " + " ".join(parts) + r" \)"
+            cmd = f"find {quote_remote_path(base_dir)} -maxdepth 1 {name_expr} -type f 2>/dev/null | sort"
             stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=30)
             if exit_code == 0 and stdout.strip():
                 return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
             if exit_code != 0:
                 detail = stderr.strip() or stdout.strip() or f"exit code {exit_code}"
-                self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern}: {detail}"
+                self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern_desc}: {detail}"
         except Exception as exc:
-            self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern}: {exc}"
+            self.last_error = f"Remote glob failed for {base_dir.rstrip('/')}/{pattern_desc}: {exc}"
             logger.warning("%s", self.last_error)
         return []
 
@@ -592,10 +627,34 @@ class DataValidator:
                             f"Data years {data_syear}-{data_eyear} do not overlap required years {syear}-{eyear}",
                         )
                     )
+                elif data_syear > syear or data_eyear < eyear:
+                    checks.append(
+                        ValidationCheck(
+                            "time_range",
+                            False,
+                            f"Data years {data_syear}-{data_eyear} do not cover required years {syear}-{eyear}",
+                        )
+                    )
 
-        # For station data without prefix/suffix, skip file path validation
-        # Station data files may not follow the standard naming pattern
+        # For station data without prefix/suffix, validate the reachable root
+        # and station list rather than returning an empty successful result.
         if data_type == "stn" and not prefix and not suffix:
+            base_dir = FilePathGenerator(
+                root_dir=root_dir,
+                sub_dir=sub_dir,
+                prefix=prefix,
+                suffix=suffix,
+                data_groupby=data_groupby,
+                syear=syear,
+                eyear=eyear,
+                is_remote=self._is_remote,
+                ssh_manager=self._ssh_manager,
+                remote_openbench_root=self._remote_openbench_root,
+            )._get_base_dir()
+            checks.append(self._check_directory_exists(base_dir))
+            fulllist = general.get("fulllist") or source_config.get("fulllist") or var_config.get("fulllist")
+            if fulllist:
+                checks.append(self._check_file_exists(self._resolve_aux_path(fulllist, root_dir)))
             return SourceValidationResult(var_name, source_name, checks)
 
         # Generate file paths
@@ -618,7 +677,7 @@ class DataValidator:
         if not sample_paths:
             # No files found matching the pattern, or remote listing failed.
             base_dir = path_gen._get_base_dir()
-            pattern = f"{prefix}*{suffix}.nc"
+            pattern = path_gen.describe_pattern()
             if getattr(path_gen, "last_error", None):
                 checks.append(ValidationCheck("file_exists", False, path_gen.last_error))
             else:
@@ -643,11 +702,53 @@ class DataValidator:
 
         # Check time range (only for grid data with Single groupby)
         # For Year/Month/Day groupby, each file only contains partial data
-        if data_type == "grid" and data_groupby == "Single":
+        if data_type == "grid" and str(data_groupby).lower() == "single":
             check = self._validator.check_time_range(first_existing_path, int(syear), int(eyear))
             checks.append(check)
 
+        if data_type == "grid" and all(k in general_config for k in ("min_lat", "max_lat", "min_lon", "max_lon")):
+            checks.append(
+                self._validator.check_spatial_range(
+                    first_existing_path,
+                    float(general_config["min_lat"]),
+                    float(general_config["max_lat"]),
+                    float(general_config["min_lon"]),
+                    float(general_config["max_lon"]),
+                )
+            )
+
         return SourceValidationResult(var_name, source_name, checks)
+
+    def _resolve_aux_path(self, path: str, root_dir: str) -> str:
+        if self._is_remote:
+            normalized = str(path).replace("\\", "/")
+            if normalized.startswith("/"):
+                return normalized
+            root = str(root_dir).replace("\\", "/")
+            return f"{root.rstrip('/')}/{normalized}"
+        if os.path.isabs(str(path)):
+            return str(path)
+        return os.path.join(to_absolute_path(str(root_dir), get_openbench_root()), str(path))
+
+    def _check_directory_exists(self, path: str) -> ValidationCheck:
+        if self._is_remote and self._ssh_manager:
+            try:
+                stdout, stderr, exit_code = execute_responsive(
+                    self._ssh_manager, f"test -d {quote_remote_path(path)}", timeout=10
+                )
+                if exit_code == 0:
+                    return ValidationCheck("directory_exists", True, f"Directory exists: {path}")
+                detail = stderr.strip() or stdout.strip()
+                suffix = f": {detail}" if detail else ""
+                return ValidationCheck("directory_exists", False, f"Directory not found: {path}{suffix}")
+            except Exception as exc:
+                return ValidationCheck("directory_exists", False, f"Remote directory check failed: {exc}")
+        if os.path.isdir(path):
+            return ValidationCheck("directory_exists", True, f"Directory exists: {path}")
+        return ValidationCheck("directory_exists", False, f"Directory not found: {path}")
+
+    def _check_file_exists(self, path: str) -> ValidationCheck:
+        return self._validator.check_file_exists(path)
 
     def validate_all(
         self, sources: Dict[str, Dict[str, Dict]], general_config: Dict[str, Any], progress_callback=None

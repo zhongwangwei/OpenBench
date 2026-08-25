@@ -897,7 +897,7 @@ def test_check_detects_recursive_include(tmp_path):
     assert "Recursive !include detected" in result.output
 
 
-def test_check_matches_adapter_lowres_reference_fallback(tmp_path, monkeypatch):
+def test_check_rejects_missing_requested_reference_resolution(tmp_path, monkeypatch):
     sim_root = tmp_path / "sim"
     sim_root.mkdir()
     mid_root = tmp_path / "Grid" / "MidRes"
@@ -925,9 +925,10 @@ def test_check_matches_adapter_lowres_reference_fallback(tmp_path, monkeypatch):
 
     result = runner.invoke(cli, ["check", str(path)])
 
-    assert result.exit_code == 0, result.output
-    assert "LowRes" in result.output
-    assert "Ready to run" in result.output
+    assert result.exit_code == 1, result.output
+    assert "Grid/MidRes" in result.output
+    assert "Grid/LowRes" not in result.output
+    assert "Reference data path does not exist" in result.output
 
 
 def test_check_reports_multi_reference_task_count_and_effective_root(tmp_path, monkeypatch):

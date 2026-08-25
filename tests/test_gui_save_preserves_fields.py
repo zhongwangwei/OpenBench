@@ -408,6 +408,7 @@ def test_general_save_preserves_runtime_local_openbench_path():
                 "python_path": "/usr/bin/python",
                 "conda_env": "base",
                 "local_openbench_path": "/repo/openbench",
+                "strict_reference": True,
                 "remote": {"host": "example"},
             }
         }
@@ -444,6 +445,7 @@ def test_general_save_preserves_runtime_local_openbench_path():
 
     general = controller.config["general"]
     assert general["local_openbench_path"] == "/repo/openbench"
+    assert general["strict_reference"] is True
     assert general["remote"] == {"host": "example"}
 
 
@@ -524,3 +526,222 @@ def test_runtime_page_startup_autoloads_instead_of_clearing_cached_settings():
 
     assert "self._auto_load_settings()" in source
     assert "self._clear_cached_settings_file()" not in source
+
+
+def test_ref_data_load_save_preserves_multiple_reference_sources(monkeypatch):
+    from types import SimpleNamespace
+
+    import openbench.data.registry.manager as manager_module
+
+    def _ref(name):
+        return SimpleNamespace(
+            root_dir=f"/ref/{name}",
+            data_type="grid",
+            tim_res="Month",
+            data_groupby="Year",
+            timezone=0,
+            years=[2000, 2020],
+            grid_res=0.5,
+            fulllist="",
+            variables={
+                "Runoff": SimpleNamespace(varname=f"{name}_q", varunit="mm", prefix=f"{name}_", suffix="", sub_dir="")
+            },
+        )
+
+    monkeypatch.setattr(manager_module, "get_registry", lambda: SimpleNamespace(get_reference=_ref))
+    controller = FakeController(
+        {
+            "general": {"basedir": "/out"},
+            "evaluation_items": {"Runoff": True},
+            "ref_data": {"general": {"Runoff_ref_source": ["RefA", "RefB"]}, "def_nml": {}},
+        }
+    )
+    controller.storage = object()
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {}
+    page._var_combos = {"Runoff": FakeLoadCombo([("Choose", None), ("RefA", "RefA")])}
+    page._var_advanced_fields = {
+        "Runoff": {key: FakeText("") for key in ("varname", "varunit", "prefix", "suffix", "sub_dir")}
+    }
+    page._rebuild_variable_groups = lambda: None
+
+    page.load_from_config()
+
+    ref_data = controller.config["ref_data"]
+    assert ref_data["general"]["Runoff_ref_source"] == ["RefA", "RefB"]
+    assert set(ref_data["def_nml"]) == {"RefA", "RefB"}
+    assert set(ref_data["source_configs"]) == {"Runoff::RefA", "Runoff::RefB"}
+    assert ref_data["source_configs"]["Runoff::RefA"]["_explicit_override"] is False
+    assert ref_data["source_configs"]["Runoff::RefB"]["_explicit_override"] is False
+
+
+def test_registry_source_data_uses_case_insensitive_variable_and_null_years(monkeypatch):
+    from types import SimpleNamespace
+
+    import openbench.data.registry.manager as manager_module
+    from openbench.gui.pages import page_ref_data
+
+    ref = SimpleNamespace(
+        root_dir="/ref/demo",
+        data_type="grid",
+        tim_res="Month",
+        data_groupby="Year",
+        timezone=0,
+        years=None,
+        grid_res=1.0,
+        fulllist="",
+        variables={"runoff": SimpleNamespace(varname="q", varunit="mm", prefix="q_", suffix="", sub_dir="Runoff/Demo")},
+    )
+    monkeypatch.setattr(manager_module, "get_registry", lambda: SimpleNamespace(get_reference=lambda _name: ref))
+
+    source = page_ref_data._registry_source_data("Runoff", "Demo")
+
+    assert source["general"]["syear"] == ""
+    assert source["general"]["eyear"] == ""
+    assert source["varname"] == "q"
+    assert source["sub_dir"] == "Runoff/Demo"
+
+
+def test_ref_multi_resolution_group_selection_updates_combo_state(qapp, monkeypatch):
+    from PySide6.QtWidgets import QComboBox
+
+    from openbench.gui.pages import page_ref_data
+
+    controller = FakeController({"general": {"basedir": "/out"}, "ref_data": {"general": {}}})
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {}
+    page._var_advanced_fields = {
+        "Runoff": {key: FakeText("") for key in ("varname", "varunit", "prefix", "suffix", "sub_dir")}
+    }
+    combo = QComboBox()
+    combo.addItem("Choose", None)
+    combo.addItem("Demo (LowRes/MidRes)", {"group": "Demo", "variants": ["Demo_LowRes", "Demo_MidRes"]})
+    combo.setCurrentIndex(1)
+    page._pick_resolution = lambda _group, _var: "Demo_MidRes"
+    monkeypatch.setattr(
+        page_ref_data,
+        "_registry_source_data",
+        lambda _var, source: {"general": {"root_dir": "/ref"}, "varname": source},
+    )
+
+    page._on_dataset_selected("Runoff", combo)
+
+    assert combo.currentData() == "Demo_MidRes"
+    assert controller.config["ref_data"]["general"]["Runoff_ref_source"] == "Demo_MidRes"
+
+
+def test_ref_advanced_overrides_are_written_to_exported_reference_namelist(tmp_path):
+    import yaml
+
+    from openbench.gui.config_manager import ConfigManager
+
+    out = tmp_path / "nml" / "ref"
+    cfg = {
+        "general": {"basedir": str(tmp_path / "out")},
+        "evaluation_items": {"Runoff": True},
+        "ref_data": {
+            "general": {"Runoff_ref_source": ["RefA", "RefB"]},
+            "def_nml": {"RefA": "", "RefB": ""},
+            "source_configs": {
+                "Runoff::RefA": {
+                    "general": {"root_dir": "ref/a", "data_type": "grid", "data_groupby": "Year"},
+                    "varname": "manual_q_a",
+                    "prefix": "a_",
+                    "suffix": "",
+                },
+                "Runoff::RefB": {
+                    "general": {"root_dir": "ref/b", "data_type": "grid", "data_groupby": "Year"},
+                    "varname": "manual_q_b",
+                    "prefix": "b_",
+                    "suffix": "",
+                },
+            },
+        },
+    }
+
+    copied, _ = ConfigManager()._copy_data_namelists(
+        cfg["ref_data"]["def_nml"], str(out), ["Runoff"], str(tmp_path), "ref", cfg["ref_data"]["source_configs"]
+    )
+
+    assert set(copied) == {"RefA", "RefB"}
+    ref_a = yaml.safe_load((out / "RefA.yaml").read_text())
+    assert ref_a["general"]["root_dir"] == str(tmp_path / "ref" / "a")
+    assert ref_a["Runoff"]["varname"] == "manual_q_a"
+    assert yaml.safe_load((out / "RefB.yaml").read_text())["Runoff"]["varname"] == "manual_q_b"
+
+
+def test_registry_autofill_does_not_export_reference_overrides_when_data_root_is_explicit(monkeypatch):
+    from types import SimpleNamespace
+
+    import yaml
+
+    import openbench.data.registry.manager as manager_module
+    from openbench.gui.config_manager import ConfigManager
+
+    ref = SimpleNamespace(
+        root_dir="/registry/root/that/must/not/override/data_root",
+        data_type="grid",
+        tim_res="Month",
+        data_groupby="Year",
+        timezone=0,
+        years=[2000, 2002],
+        grid_res=0.5,
+        fulllist="",
+        variables={"Runoff": SimpleNamespace(varname="q", varunit="mm", prefix="q_", suffix="", sub_dir="Runoff/Demo")},
+    )
+    monkeypatch.setattr(manager_module, "get_registry", lambda: SimpleNamespace(get_reference=lambda _name: ref))
+
+    gui_config = ConfigManager().unified_to_gui_config(
+        {
+            "project": {"name": "demo", "output_dir": "/out", "years": [2000, 2002]},
+            "evaluation": {"variables": ["Runoff"]},
+            "reference": {"data_root": "/explicit/data_root", "Runoff": "RefA"},
+            "simulation": {"CaseA": {"model": "CoLM2024", "root_dir": "/sim"}},
+        }
+    )
+    controller = FakeController(gui_config)
+    controller.storage = object()
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {}
+    page._var_combos = {"Runoff": FakeLoadCombo([("Choose", None), ("RefA", "RefA")])}
+    page._var_advanced_fields = {
+        "Runoff": {key: FakeText("") for key in ("varname", "varunit", "prefix", "suffix", "sub_dir")}
+    }
+    page._rebuild_variable_groups = lambda: None
+
+    page.load_from_config()
+    exported = yaml.safe_load(ConfigManager().generate_config_yaml(controller.config))
+
+    assert controller.config["ref_data"]["source_configs"]["Runoff::RefA"]["_explicit_override"] is False
+    assert exported["reference"]["data_root"] == "/explicit/data_root"
+    assert exported["reference"]["Runoff"] == "RefA"
+    assert "overrides" not in exported["reference"]
+
+
+def test_ref_advanced_edit_marks_source_config_as_explicit_override():
+    controller = FakeController({"general": {"basedir": "/out"}, "ref_data": {"general": {}}})
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {"Runoff": {"RefA": {"general": {"root_dir": "/ref"}, "_explicit_override": False}}}
+    page._var_advanced_fields = {
+        "Runoff": {
+            "varname": FakeText("manual_q"),
+            "varunit": FakeText(""),
+            "sub_dir": FakeText(""),
+            "prefix": FakeText(""),
+            "suffix": FakeText(""),
+        }
+    }
+
+    page._on_advanced_field_edited("Runoff")
+
+    saved = controller.config["ref_data"]["source_configs"]["Runoff::RefA"]
+    assert saved["_explicit_override"] is True
+    assert saved["varname"] == "manual_q"

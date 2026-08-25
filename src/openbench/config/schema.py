@@ -143,6 +143,8 @@ class ReferenceConfig:
     data_root: Optional[str] = None  # Root directory for reference datasets
     # Variable -> source name (str) or list (multi-ref).
     sources: dict[str, "str | list[str]"] = field(default_factory=dict)
+    # Optional per-source overrides, keyed by source name.
+    overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass

@@ -361,6 +361,16 @@ def resolve_all_references(
             source_names = [source_value]
         else:
             source_names = list(source_value)
+        seen_sources: set[str] = set()
+        for source_name in source_names:
+            norm_source = str(source_name).lower()
+            if norm_source in seen_sources:
+                message = f"Variable '{var_name}' contains duplicate reference source '{source_name}'."
+                if strict:
+                    errors.append(message)
+                    continue
+                raise ConfigError(message)
+            seen_sources.add(norm_source)
 
         for source_name in source_names:
             ctx: TargetResolutionContext | None = base_ctx

@@ -38,10 +38,12 @@ def test_remote_glob_quotes_directory_and_find_pattern():
 
     assert gen.get_sample_paths() == ["/remote/proj/a.nc"]
 
-    pattern = f"{prefix}*{suffix}.nc"
-    assert ssh.commands == [
-        f"find {shlex.quote(root)} -maxdepth 1 -name {shlex.quote(pattern)} -type f 2>/dev/null | sort"
-    ]
+    patterns = [f"{prefix}*{suffix}{ext}" for ext in (".nc", ".nc4", ".NC", ".NC4")]
+    command = ssh.commands[0]
+    assert command.startswith(f"find {shlex.quote(root)} -maxdepth 1 " + r"\( ")
+    assert command.endswith(r" \) -type f 2>/dev/null | sort")
+    for pattern in patterns:
+        assert f"-name {shlex.quote(pattern)}" in command
 
 
 def test_remote_validator_quotes_file_checks():
@@ -109,7 +111,7 @@ def test_remote_glob_exposes_ssh_failures_instead_of_looking_empty():
     )
 
     assert gen.get_sample_paths() == []
-    assert gen.last_error == "Remote glob failed for /remote/data/tas*.nc: network down"
+    assert gen.last_error == "Remote glob failed for /remote/data/{tas*.nc,tas*.nc4,tas*.NC,tas*.NC4}: network down"
 
 
 def test_remote_validation_reports_listing_failure_not_no_files():
@@ -134,4 +136,7 @@ def test_remote_validation_reports_listing_failure_not_no_files():
 
     assert result.checks[0].name == "file_exists"
     assert result.checks[0].passed is False
-    assert result.checks[0].message == "Remote glob failed for /remote/data/tas*.nc: network down"
+    assert (
+        result.checks[0].message
+        == "Remote glob failed for /remote/data/{tas*.nc,tas*.nc4,tas*.NC,tas*.NC4}: network down"
+    )

@@ -796,6 +796,7 @@ class PageGeneral(BasePage):
             "python_path": existing_general.get("python_path", ""),
             "conda_env": existing_general.get("conda_env", ""),
             "local_openbench_path": existing_general.get("local_openbench_path", ""),
+            "strict_reference": bool(existing_general.get("strict_reference", False)),
         }
 
         io_config = self._collect_io_config(existing_general)
