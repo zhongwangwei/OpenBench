@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from fnmatch import fnmatch
@@ -20,6 +21,30 @@ from openbench.data.registry.scanner import (
 )
 
 DEFAULT_CASE_DEPTH = 5
+_SCAN_CACHE: ContextVar[dict | None] = ContextVar("openbench_sim_scan_cache", default=None)
+
+
+def _glob_nc(directory: Path) -> list[Path]:
+    cache = _SCAN_CACHE.get()
+    key = ("glob_nc", Path(directory))
+    if cache is not None and key in cache:
+        return cache[key]
+    result = glob_nc(directory)
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
+def _scan_nc_info(directory: Path) -> dict:
+    cache = _SCAN_CACHE.get()
+    key = ("scan_nc_info", Path(directory))
+    if cache is not None and key in cache:
+        return dict(cache[key])
+    result = inspect_nc_file(directory)
+    if cache is not None:
+        cache[key] = dict(result)
+    return result
+
 
 _DEFAULT_EXCLUDES = {
     "__pycache__",
@@ -113,23 +138,27 @@ def scan_simulation_roots(
     exclude_patterns = tuple(_DEFAULT_EXCLUDES | {str(item) for item in exclude})
     cases: list[SimulationCase] = []
 
-    for root in root_paths:
-        for case_dir, metadata_dir, depth, station_layout in _iter_case_dirs(root, case_depth, exclude_patterns):
-            label = _derive_case_label(root, case_dir)
-            if case_pattern and not fnmatch(label, case_pattern):
-                continue
-            cases.append(
-                _build_case(
-                    root,
-                    case_dir,
-                    metadata_dir,
-                    label,
-                    depth,
-                    model_name,
-                    climatology,
-                    station_layout=station_layout,
+    token = _SCAN_CACHE.set({})
+    try:
+        for root in root_paths:
+            for case_dir, metadata_dir, depth, station_layout in _iter_case_dirs(root, case_depth, exclude_patterns):
+                label = _derive_case_label(root, case_dir)
+                if case_pattern and not fnmatch(label, case_pattern):
+                    continue
+                cases.append(
+                    _build_case(
+                        root,
+                        case_dir,
+                        metadata_dir,
+                        label,
+                        depth,
+                        model_name,
+                        climatology,
+                        station_layout=station_layout,
+                    )
                 )
-            )
+    finally:
+        _SCAN_CACHE.reset(token)
 
     cases.sort(key=lambda case: (case.label, str(case.root_dir)))
     _deduplicate_case_labels(cases)
@@ -148,10 +177,10 @@ def _build_case(
     *,
     station_layout: str | None = None,
 ) -> SimulationCase:
-    info = inspect_nc_file(metadata_dir)
+    info = _scan_nc_info(metadata_dir)
     multi_undated = _has_multiple_no_date_files(metadata_dir) and not station_layout
     if multi_undated:
-        common_prefix, common_suffix = _common_stem_affixes(glob_nc(metadata_dir))
+        common_prefix, common_suffix = _common_stem_affixes(_glob_nc(metadata_dir))
         info["prefix"] = common_prefix
         info["suffix"] = common_suffix
     if station_layout:
@@ -257,7 +286,7 @@ def _infer_time_coverage(
     files: list[Path] | None = None,
     data_groupby: str | None = None,
 ) -> dict:
-    files = files if files is not None else glob_nc(nc_dir)
+    files = files if files is not None else _glob_nc(nc_dir)
     if not files:
         return {}
 
@@ -375,11 +404,11 @@ def _infer_station_time_coverage(case_dir: Path, metadata_dir: Path, station_lay
     if station_layout == "flat":
         coverages = [
             _infer_time_coverage(metadata_dir, files=[file_path], data_groupby="Single")
-            for file_path in glob_nc(metadata_dir)
+            for file_path in _glob_nc(metadata_dir)
         ]
     else:
         coverages = [
-            _infer_time_coverage(nc_dir, files=glob_nc(nc_dir), data_groupby="Single")
+            _infer_time_coverage(nc_dir, files=_glob_nc(nc_dir), data_groupby="Single")
             for nc_dir in _station_child_nc_dirs(case_dir)
         ]
     return _combine_station_time_coverages(coverages)
@@ -433,7 +462,7 @@ def _add_months(value: datetime, months: int) -> datetime:
 
 def _files_for_filename_pattern(nc_dir: Path, prefix: str, suffix: str) -> list[Path]:
     files = []
-    for file_path in glob_nc(nc_dir):
+    for file_path in _glob_nc(nc_dir):
         stem = file_path.stem
         date_match = filename_split_match(stem)
         if date_match:
@@ -448,7 +477,7 @@ def _files_for_filename_pattern(nc_dir: Path, prefix: str, suffix: str) -> list[
 
 
 def _has_multiple_no_date_files(nc_dir: Path) -> bool:
-    files = glob_nc(nc_dir)
+    files = _glob_nc(nc_dir)
     if len(files) <= 1:
         return False
     return not any(most_specific_date_matches(file_path.stem) for file_path in files)
@@ -477,7 +506,7 @@ def _files_for_case_time_coverage(nc_dir: Path, *, info: dict) -> list[Path]:
     no date token, prefix/suffix cannot describe a time stream, so use all files
     to avoid treating the first arbitrary filename as the whole case.
     """
-    files = glob_nc(nc_dir)
+    files = _glob_nc(nc_dir)
     if len(files) <= 1:
         return files
 
@@ -502,7 +531,7 @@ def _infer_variable_file_overrides(
 ) -> dict[str, dict[str, Any]]:
     if not model or model == "UNRESOLVED":
         return {}
-    files = glob_nc(nc_dir)
+    files = _glob_nc(nc_dir)
     if len(files) < 2:
         return {}
     patterns = {_filename_pattern_for_file(file_path) for file_path in files}
@@ -800,7 +829,7 @@ def _per_bucket_variable_metadata(
     if station_layout:
         return base_metadata
 
-    files = glob_nc(metadata_dir)
+    files = _glob_nc(metadata_dir)
     if len(files) <= 1:
         return base_metadata
 
@@ -1065,7 +1094,7 @@ def _infer_tim_res_from_filename(nc_dir: Path) -> str | None:
     """Match unambiguous frequency tokens; single-letter ``m/d/h`` are excluded
     because filename labels (config codes, experiment IDs) trigger them too
     aggressively. ``hr`` is kept because it is widely used as ``3hr/6hr``."""
-    stems = [file_path.stem.lower() for file_path in glob_nc(nc_dir)]
+    stems = [file_path.stem.lower() for file_path in _glob_nc(nc_dir)]
     for stem in stems:
         if re.search(r"(^|[^a-z0-9])(hourly|hour|hr)(?=[^a-z0-9]|$)", stem):
             return "Hour"
@@ -1118,13 +1147,13 @@ def _infer_temporal_kind(
 
 def _has_climatology_hint(nc_dir: Path) -> bool:
     parts = [part.lower() for part in nc_dir.parts]
-    parts.extend(file_path.stem.lower() for file_path in glob_nc(nc_dir))
+    parts.extend(file_path.stem.lower() for file_path in _glob_nc(nc_dir))
     hints = ("clim", "climatology", "climatological")
     return any(any(hint in part for hint in hints) for part in parts)
 
 
 def _infer_file_grouping(nc_dir: Path) -> tuple[str, list[int] | None]:
-    files = glob_nc(nc_dir)
+    files = _glob_nc(nc_dir)
     token_lengths = []
     for file_path in files:
         matches = most_specific_date_matches(file_path.stem)
@@ -1193,11 +1222,11 @@ def _years_from_files(files: list[Path]) -> list[int] | None:
 
 def _years_from_station_collection(case_dir: Path) -> list[int] | None:
     years = []
-    direct_years = _years_from_files(glob_nc(case_dir))
+    direct_years = _years_from_files(_glob_nc(case_dir))
     if direct_years:
         years.extend(direct_years)
     for nc_dir in _station_child_nc_dirs(case_dir):
-        file_years = _years_from_files(glob_nc(nc_dir))
+        file_years = _years_from_files(_glob_nc(nc_dir))
         if file_years:
             years.extend(file_years)
     if not years:
@@ -1460,7 +1489,7 @@ def _children_are_date_subdir_layout(children: list[Path]) -> bool:
     for child in children:
         if not _is_date_dir_name(child.name):
             return False
-        if glob_nc(child):
+        if _glob_nc(child):
             found_with_nc = True
         else:
             return False
@@ -1501,14 +1530,14 @@ def _iter_case_dirs(
             for child in children
             if not _is_excluded(child, exclude_patterns) and _resolve_dir(child) not in visited
         ]
-        direct_nc = bool(glob_nc(current))
+        direct_nc = bool(_glob_nc(current))
 
         if not direct_nc and _children_are_date_subdir_layout(children):
             yield current, children[0], depth, None
             continue
 
         if direct_nc:
-            sibling_cases = [child for child in children if glob_nc(child) or _station_collection_info(child)[0]]
+            sibling_cases = [child for child in children if _glob_nc(child) or _station_collection_info(child)[0]]
             if len(sibling_cases) >= 2 and depth < max_depth:
                 for child in reversed(children):
                     stack.append((child, depth + 1))
@@ -1523,9 +1552,9 @@ def _iter_case_dirs(
 
 
 def _station_collection_info(path: Path) -> tuple[str | None, Path | None]:
-    direct_files = glob_nc(path)
+    direct_files = _glob_nc(path)
     if direct_files:
-        info = inspect_nc_file(path)
+        info = _scan_nc_info(path)
         if info.get("detected_data_type") == "stn":
             return "flat", path
         return None, None
@@ -1536,10 +1565,10 @@ def _station_collection_info(path: Path) -> tuple[str | None, Path | None]:
 
     inspected = []
     for nc_dir in child_dirs:
-        info = inspect_nc_file(nc_dir)
+        info = _scan_nc_info(nc_dir)
         if info.get("detected_data_type") != "stn":
             return None, None
-        inspected.append((nc_dir, len(glob_nc(nc_dir)), info))
+        inspected.append((nc_dir, len(_glob_nc(nc_dir)), info))
 
     if not inspected:
         return None, None
@@ -1579,7 +1608,7 @@ def _station_child_nc_dirs(path: Path) -> list[Path]:
 
 
 def _station_nc_dir_has_time(nc_dir: Path) -> bool:
-    files = glob_nc(nc_dir)
+    files = _glob_nc(nc_dir)
     if not files:
         return False
     info = _time_info_from_file(files[0])
@@ -1624,7 +1653,7 @@ def _station_dir_matches_site_identity(collection_root: Path, nc_dir: Path) -> b
     if not normalized_site:
         return False
 
-    for file_path in glob_nc(nc_dir):
+    for file_path in _glob_nc(nc_dir):
         station_id = _station_identity_from_nc(file_path)
         if station_id and _identity_token(station_id) == normalized_site:
             return True

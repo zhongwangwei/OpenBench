@@ -65,18 +65,30 @@ def parse_progress_line(
     if sim_match:
         state["current_sim"] = next(group for group in sim_match.groups() if group).strip(":,")
 
+    completed_eval_match = re.search(
+        r"\bcompleted\s+([^:]+):.*?\bsim\s*[=:]\s*([^\s,;]+).*?\bref\s*[=:]\s*([^\s,;]+)",
+        line,
+        re.IGNORECASE,
+    )
+    if completed_eval_match:
+        state["current_variable"] = completed_eval_match.group(1).strip()
+        state["current_sim"] = completed_eval_match.group(2).strip(":,")
+        state["current_ref"] = completed_eval_match.group(3).strip(":,")
+        var = state["current_variable"]
+        stage = "Evaluation"
+
     # Detect stage
-    if "evaluation" in line_lower and "item" not in line_lower:
+    if not stage and "evaluation" in line_lower and "item" not in line_lower:
         stage = "Evaluation"
     elif "comparison" in line_lower or "groupby" in line_lower:
         stage = "Comparison"
-        if "done running" in line_lower and "comparison" in line_lower:
-            match = re.search(r"done running\s+(\w+)\s+comparison", line_lower)
-            if match:
-                comp_name = match.group(1)
-                state["completed_comparison_tasks"].add(comp_name)
+        comparison_done = re.search(r"(?:done running|completed)\s+([\w-]+)\s+comparison", line_lower)
+        if comparison_done:
+            state["completed_comparison_tasks"].add(comparison_done.group(1))
     elif "statistic" in line_lower:
         stage = "Statistics"
+    elif "report" in line_lower:
+        stage = "Report"
 
     # Detect task completions
     task_completed = False
@@ -89,7 +101,7 @@ def parse_progress_line(
 
     for groupby_type in ["igbp", "pft", "climate", "landcover"]:
         if groupby_type in line_lower and (
-            "completed" in line_lower or "finished" in line_lower or "done" in line_lower
+            "complete" in line_lower or "finished" in line_lower or "done" in line_lower
         ):
             task_key = (state.get("current_variable", ""), groupby_type)
             if task_key not in state["completed_groupby_tasks"]:
@@ -130,8 +142,15 @@ def parse_progress_line(
     else:
         if stage == "Comparison":
             current_progress = min(current_progress + P_INC, P_MAX)
+        elif stage == "Report":
+            report_inc = P_INC * (4 if "completed" in line_lower or "success" in line_lower else 2)
+            current_progress = min(current_progress + report_inc, P_MAX)
         elif task_completed or stage or "complete" in line_lower or "done" in line_lower:
             current_progress = min(current_progress + P_INC * 2, P_MAX)
+
+    if stage == "Report":
+        report_inc = P_INC * (4 if "completed" in line_lower or "success" in line_lower else 2)
+        current_progress = max(current_progress, min(start_progress + report_inc, P_MAX))
 
     # Progress emitted while a run is active should never move backwards:
     # task-count information can arrive after optimistic increments, and

@@ -158,6 +158,35 @@ def test_local_runner_resets_progress_between_check_and_run(tmp_path, monkeypatc
     assert run_start.progress == 0
 
 
+def test_local_runner_counts_groupby_without_comparison(tmp_path):
+    runner = EvaluationRunner(str(tmp_path / "openbench.yaml"), python_path="/fake/python")
+
+    runner.set_task_counts(
+        num_variables=2,
+        num_ref_sources=1,
+        num_sim_sources=1,
+        num_metrics=1,
+        num_scores=1,
+        num_groupby=1,
+        num_comparisons=0,
+        do_evaluation=True,
+        do_comparison=False,
+        do_statistics=False,
+    )
+
+    assert runner._total_tasks == 3
+
+
+def test_remote_runner_counts_groupby_without_comparison(tmp_path):
+    from openbench.gui.remote_runner import RemoteRunner
+
+    runner = RemoteRunner(str(tmp_path / "openbench.yaml"), object(), {}, config_already_remote=True)
+
+    runner.set_task_counts(2, 1, 1, 1, 1, 1, 0, do_evaluation=True, do_comparison=False)
+
+    assert runner._total_tasks == 3
+
+
 def test_local_runner_does_not_run_when_check_fails(tmp_path, monkeypatch):
     config = tmp_path / "openbench.yaml"
     config.write_text("project: {}\n", encoding="utf-8")

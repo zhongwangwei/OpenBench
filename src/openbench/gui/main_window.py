@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         # === Sidebar ===
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(220)
         sidebar.setStyleSheet("QWidget#sidebar { background-color: #2d2d2d; }")
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)

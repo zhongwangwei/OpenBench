@@ -481,14 +481,11 @@ class EvaluationRunner(QThread):
             # Each variable × each ref source × each sim source
             self._total_tasks += num_variables * self._num_ref_sources * self._num_sim_sources
 
-        if do_comparison:
-            # Each comparison type is one task
-            if num_comparisons > 0:
-                self._total_tasks += num_comparisons
-            # Also count groupby tasks if enabled
-            if num_groupby > 0:
-                metric_score_count = max(1, num_metrics + num_scores)
-                self._total_tasks += num_variables * num_groupby * metric_score_count
+        if do_comparison and num_comparisons > 0:
+            self._total_tasks += num_comparisons
+
+        if num_groupby > 0:
+            self._total_tasks += num_groupby
 
         if do_statistics and num_comparisons > 0:
             self._total_tasks += num_comparisons
