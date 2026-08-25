@@ -177,6 +177,7 @@ class ConfigManager:
             "max_lon": lon_range[1] if len(lon_range) > 1 else 180.0,
             "time_alignment": project.get("time_alignment", "intersection"),
             "num_cores": project.get("num_cores", DEFAULT_NUM_CORES),
+            "strict_reference": bool(project.get("strict_reference", False)),
             "evaluation": True,
             "comparison": bool((config.get("comparison") or {}).get("enabled", False)),
             "statistics": bool((config.get("statistics") or {}).get("enabled", False)),
@@ -212,6 +213,33 @@ class ConfigManager:
         for var in variables:
             if var in ref_sources:
                 ref_general[f"{var}_ref_source"] = ref_sources[var]
+
+        ref_source_configs: Dict[str, Dict[str, Any]] = {}
+        ref_overrides = reference.get("overrides") if isinstance(reference.get("overrides"), dict) else {}
+        for var in variables:
+            raw_sources = ref_general.get(f"{var}_ref_source", [])
+            source_names = raw_sources if isinstance(raw_sources, list) else [raw_sources]
+            for source_name in [name for name in source_names if name]:
+                override = ref_overrides.get(source_name)
+                if not isinstance(override, dict):
+                    continue
+                general_override: Dict[str, Any] = {}
+                for key in ("root_dir", "data_type", "tim_res", "data_groupby", "timezone", "grid_res", "fulllist"):
+                    if override.get(key) is not None:
+                        general_override[key] = override[key]
+                years_override = override.get("years")
+                if isinstance(years_override, list):
+                    if len(years_override) > 0:
+                        general_override["syear"] = years_override[0]
+                    if len(years_override) > 1:
+                        general_override["eyear"] = years_override[1]
+                variables_override = override.get("variables") if isinstance(override.get("variables"), dict) else {}
+                var_override = variables_override.get(var) if isinstance(variables_override.get(var), dict) else {}
+                ref_source_configs[f"{var}::{source_name}"] = {
+                    "general": general_override,
+                    **dict(var_override),
+                    "_explicit_override": True,
+                }
 
         sim_defaults = simulation.get("_defaults", {}) if isinstance(simulation, dict) else {}
         sim_entries = {k: v for k, v in simulation.items() if k != "_defaults"} if isinstance(simulation, dict) else {}
@@ -255,13 +283,14 @@ class ConfigManager:
             "scores": scores,
             "comparisons": comparisons,
             "statistics": statistics,
-            "ref_data": {"general": ref_general, "def_nml": {}, **ref_metadata},
+            "ref_data": {"general": ref_general, "def_nml": {}, "source_configs": ref_source_configs, **ref_metadata},
             "sim_data": {
                 "general": sim_general,
                 "def_nml": {},
                 "source_configs": sim_source_configs,
                 **({"_scan_root": sim_scan_root} if sim_scan_root else {}),
             },
+            **({"uncertainty": config["uncertainty"]} if isinstance(config.get("uncertainty"), dict) else {}),
         }
 
     def generate_main_nml(
@@ -697,6 +726,8 @@ class ConfigManager:
             project["unified_mask"] = False
         if not general.get("generate_report", True):
             project["generate_report"] = False
+        if general.get("strict_reference"):
+            project["strict_reference"] = True
         dask_config = general.get("dask")
         if isinstance(dask_config, dict) and dask_config.get("enabled"):
             project["dask"] = {k: v for k, v in dask_config.items() if v is not None}
@@ -757,6 +788,63 @@ class ConfigManager:
                 reference[var] = cleaned[0] if len(cleaned) == 1 else cleaned
             elif source:
                 reference[var] = source
+
+        selected_refs_by_var: Dict[str, set[str]] = {}
+        for var in variables:
+            raw_source = ref_general.get(f"{var}_ref_source", "")
+            selected_sources = raw_source if isinstance(raw_source, list) else [raw_source]
+            selected_refs_by_var[var] = {name for name in selected_sources if name}
+
+        def _reference_overrides() -> Dict[str, Any]:
+            overrides: Dict[str, Any] = {}
+            source_configs = ref_data.get("source_configs", {})
+            for compound_key, source_cfg in source_configs.items():
+                if not isinstance(source_cfg, dict) or "::" not in compound_key:
+                    continue
+                var_name, source_name = compound_key.split("::", 1)
+                if var_name not in variables or source_name not in selected_refs_by_var.get(var_name, set()):
+                    continue
+                if not source_cfg.get("_explicit_override"):
+                    continue
+                override = overrides.setdefault(source_name, {})
+                general_cfg = source_cfg.get("general", {}) if isinstance(source_cfg.get("general"), dict) else {}
+                if general_cfg:
+                    for key in ("root_dir", "dir", "data_type", "tim_res", "data_groupby", "timezone", "grid_res", "fulllist"):
+                        value = general_cfg.get(key)
+                        if value not in (None, ""):
+                            out_key = "root_dir" if key == "dir" else key
+                            override[out_key] = _maybe_transform_path(value) if out_key in {"root_dir", "fulllist"} else value
+                    syear = general_cfg.get("syear")
+                    eyear = general_cfg.get("eyear")
+                    if syear not in (None, "") or eyear not in (None, ""):
+                        years = []
+                        if syear not in (None, ""):
+                            years.append(int(syear))
+                        if eyear not in (None, ""):
+                            years.append(int(eyear))
+                        if years:
+                            override["years"] = years
+                var_override = {}
+                for key, value in source_cfg.items():
+                    if key in {"general", "_var_name", "def_nml_path", "var_config", "_explicit_override"}:
+                        continue
+                    if value not in (None, ""):
+                        var_override[key] = value
+                nested_var_cfg = source_cfg.get("var_config")
+                if isinstance(nested_var_cfg, dict):
+                    for key, value in nested_var_cfg.items():
+                        if key == "_explicit_override":
+                            continue
+                        if value not in (None, ""):
+                            var_override.setdefault(key, value)
+                if var_override:
+                    variables_override = override.setdefault("variables", {})
+                    variables_override[var_name] = var_override
+            return {source: override for source, override in overrides.items() if override}
+
+        ref_overrides = _reference_overrides()
+        if ref_overrides:
+            reference["overrides"] = ref_overrides
 
         # --- simulation ---
         sim_data = config.get("sim_data", {})
@@ -859,6 +947,9 @@ class ConfigManager:
             output["comparison"] = comparison
         if stats_section:
             output["statistics"] = stats_section
+        uncertainty = config.get("uncertainty")
+        if isinstance(uncertainty, dict) and uncertainty:
+            output["uncertainty"] = {k: v for k, v in uncertainty.items() if v is not None}
 
         return yaml.dump(output, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 
@@ -1092,7 +1183,7 @@ class ConfigManager:
                     organized_configs[source_name]["_general"] = config["general"].copy()
                 # Store var-specific config - copy all fields except internal ones
                 var_config = {}
-                skip_fields = {"general", "_var_name", "def_nml_path"}
+                skip_fields = {"general", "_var_name", "def_nml_path", "_explicit_override"}
                 for field, value in config.items():
                     if field not in skip_fields:
                         var_config[field] = value

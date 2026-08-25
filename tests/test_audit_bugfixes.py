@@ -562,3 +562,35 @@ def test_vertical_coordinate_aliases_are_centralized():
         source = Path(path).read_text(encoding="utf-8")
         assert "COORDINATE_MAP_WITH_VERTICAL" in source
         assert '"elevation": "elev"' not in source
+
+
+def test_selection_ref_fallbacks_and_upper_nc4(tmp_path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    from openbench.data._processing_selection import SelectionMixin
+
+    class Dummy(SelectionMixin):
+        item = "Runoff"
+        ref_source = "RefA"
+        RefA_model = "RefA"
+        RefA_fallbacks = [{"varname": "Q", "varunit": "kg m-2 s-1", "convert": "value * 2"}]
+        ref_varunit = "mm day-1"
+        compare_tim_res = "Month"
+
+        def apply_custom_filter(self, datasource, ds, varname):
+            raise RuntimeError("force fallback")
+
+    path = tmp_path / "ALT_2000.NC4"
+    (
+        xr.Dataset({"Q": ("time", np.array([1.0]))}, coords={"time": pd.date_range("2000-01-01", periods=1)})
+        .to_netcdf(path)
+    )
+    dummy = Dummy()
+
+    assert dummy._find_data_files(str(tmp_path), "ALT_", 2000, "", "ref", ["missing"]) == [str(path)]
+    da = dummy.select_var(2000, 2000, "Month", str(path), ["missing"], "ref")
+    assert float(da.values[0]) == 2.0
+    assert dummy.ref_varname == ["Q"]
+    assert dummy.ref_varunit == "mm day-1"

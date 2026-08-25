@@ -136,13 +136,29 @@ class StationProcessingCoreMixin:
                     source_name = getattr(self, f"{source_key}_model")
                 except AttributeError:
                     source_name = source_key
-                # Same priority: compute → filter → direct
+                # Same priority: runtime fallback → compute → filter → direct
+                runtime_fallback_used = False
+                for fb in getattr(self, f"{source_key}_fallbacks", None) or []:
+                    fb_var = fb.get("varname") if isinstance(fb, dict) else getattr(fb, "varname", "")
+                    actual_fb_var = get_xarray_key_case_insensitive(stn_data, fb_var) if fb_var else None
+                    if actual_fb_var is not None:
+                        current_var_list = [actual_fb_var]
+                        ds = stn_data[actual_fb_var]
+                        fb_convert = fb.get("convert", "") if isinstance(fb, dict) else getattr(fb, "convert", "")
+                        fb_unit = fb.get("varunit", "") if isinstance(fb, dict) else getattr(fb, "varunit", "")
+                        if fb_convert:
+                            setattr(self, f"_fb_convert_{datasource}", fb_convert)
+                        elif fb_unit:
+                            setattr(self, f"{datasource}_varunit", fb_unit)
+                        runtime_fallback_used = True
+                        break
+
                 # Priority 1: compute
-                computed = self._try_compute_from_profile(source_name, stn_data, datasource)
+                computed = None if runtime_fallback_used else self._try_compute_from_profile(source_name, stn_data, datasource)
                 if computed is not None:
                     current_var_list = [getattr(self, "item", current_var_list[0])]
                     ds = computed
-                else:
+                elif not runtime_fallback_used:
                     # Priority 2: filter (station filters handle CaMA allocation etc.)
                     try:
                         from openbench.data.custom import load_filter

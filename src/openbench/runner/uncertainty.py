@@ -304,6 +304,135 @@ def _verdicts(
     return verdicts
 
 
+def _process_pair_groups(
+    cfg: OpenBenchConfig,
+    tasks: list[dict[str, Any]],
+    output_dir: Path,
+    metrics: list[str],
+    *,
+    make_phase_error_fn: MakePhaseError,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[tuple[str, str, str]], list[dict[str, Any]]]:
+    """Process one variable/reference group at a time to bound peak memory."""
+    grouped_tasks: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for task in tasks:
+        group_key = (str(task["var_name"]), str(task["ref_source"]))
+        grouped_tasks.setdefault(group_key, []).append(task)
+
+    bootstrap_rows: list[dict[str, Any]] = []
+    completed_keys: set[tuple[str, str, str]] = set()
+    errors: list[dict[str, Any]] = []
+    differences_by_comparison: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+
+    for (item, ref_source), group in grouped_tasks.items():
+        pair_data: dict[tuple[str, str, str], Any] = {}
+        pair_kinds: dict[tuple[str, str, str], str] = {}
+        pair_resolutions: dict[tuple[str, str, str], str | None] = {}
+        for task in group:
+            key = (item, ref_source, str(task["sim_source"]))
+            if key in pair_data:
+                continue
+            try:
+                is_station = "stn" in task_output_data_types(task)
+                pair_kinds[key] = "station" if is_station else "grid"
+                runner_cfg = getattr(task["bindings"], "runner_cfg", None)
+                pair_resolutions[key] = (
+                    getattr(runner_cfg, "general", {}).get("compare_tim_res")
+                    if runner_cfg is not None
+                    else None
+                )
+                pair_data[key] = (
+                    _load_station_pairs(task, output_dir) if is_station else _load_grid_pair(task, output_dir)
+                )
+                completed_keys.add(key)
+            except Exception as exc:
+                logger.exception("Failed to load uncertainty inputs for %s", key)
+                errors.append(
+                    make_phase_error_fn(
+                        "uncertainty",
+                        f"uncertainty input loading failed: {exc}",
+                        variable=key[0],
+                        ref=key[1],
+                        sim=key[2],
+                    )
+                )
+
+        if not pair_data:
+            continue
+
+        bootstrap_rows.extend(_bootstrap_rows(cfg, pair_data, pair_kinds, pair_resolutions, metrics))
+        simulations = sorted(key[2] for key in pair_data)
+        options = cfg.uncertainty
+        for sim_a, sim_b in combinations(simulations, 2):
+            key_a = (item, ref_source, sim_a)
+            key_b = (item, ref_source, sim_b)
+            kind = pair_kinds[key_a]
+            for metric in metrics:
+                comparison_key = (item, sim_a, sim_b, metric)
+                if pair_kinds[key_b] != kind:
+                    difference = {
+                        "status": "insufficient_data",
+                        "reason": "simulation outputs use different spatial representations",
+                    }
+                else:
+                    kwargs = {
+                        "n_resamples": options.n_resamples,
+                        "confidence_level": options.confidence_level,
+                        "block_length": options.block_length,
+                        "seed": derived_seed(options.seed, "verdict", item, ref_source, sim_a, sim_b, metric),
+                        "time_resolution": pair_resolutions[key_a],
+                    }
+                    if kind == "station":
+                        triplets = _aligned_station_triplets(pair_data[key_a], pair_data[key_b])
+                        difference = paired_network_metric_difference(triplets, metric, **kwargs)
+                    else:
+                        common = _common_grid_support(
+                            pair_data[key_a][0],
+                            pair_data[key_a][1],
+                            pair_data[key_b][0],
+                            pair_data[key_b][1],
+                        )
+                        if common is None:
+                            difference = {
+                                "status": "insufficient_data",
+                                "reason": "models have no common support with an identical reference",
+                            }
+                        else:
+                            arrays, weights, time = _grid_arrays_and_weights(
+                                list(common),
+                                cfg.project.weight or "area",
+                            )
+                            difference = paired_grid_metric_difference(
+                                arrays[0],
+                                arrays[1],
+                                arrays[2],
+                                metric,
+                                spatial_weights=weights,
+                                time=time,
+                                **kwargs,
+                            )
+                differences_by_comparison.setdefault(comparison_key, {})[ref_source] = difference
+
+        # Loaded arrays for this reference are no longer needed once their
+        # compact bootstrap/difference summaries have been produced.
+        pair_data.clear()
+        common = arrays = weights = time = triplets = None
+
+    verdicts = []
+    metric_order = {metric: index for index, metric in enumerate(metrics)}
+    ordered_differences = sorted(
+        differences_by_comparison.items(),
+        key=lambda entry: (*entry[0][:3], metric_order.get(entry[0][3], len(metric_order))),
+    )
+    for (item, sim_a, sim_b, metric), differences in ordered_differences:
+        verdict = verdict_from_reference_differences(
+            differences,
+            simulation_a=sim_a,
+            simulation_b=sim_b,
+        )
+        verdicts.append({"variable": item, "metric": metric, **verdict})
+    return bootstrap_rows, verdicts, completed_keys, errors
+
+
 def _metric_data_array(path: Path, metric: str) -> xr.DataArray:
     with xr.open_dataset(path) as dataset:
         return select_data_array(dataset, metric).load()
@@ -602,41 +731,20 @@ def run_uncertainty(
 
     metrics = cfg.uncertainty.metrics or [metric for metric in metric_vars if metric in UNCERTAINTY_METRIC_DIRECTIONS]
     errors: list[dict[str, Any]] = []
-    pair_data: dict[tuple[str, str, str], Any] = {}
-    pair_kinds: dict[tuple[str, str, str], str] = {}
-    pair_resolutions: dict[tuple[str, str, str], str | None] = {}
-    for task in tasks:
-        key = (str(task["var_name"]), str(task["ref_source"]), str(task["sim_source"]))
-        try:
-            is_station = "stn" in task_output_data_types(task)
-            pair_kinds[key] = "station" if is_station else "grid"
-            runner_cfg = getattr(task["bindings"], "runner_cfg", None)
-            pair_resolutions[key] = (
-                getattr(runner_cfg, "general", {}).get("compare_tim_res") if runner_cfg is not None else None
-            )
-            pair_data[key] = _load_station_pairs(task, output_dir) if is_station else _load_grid_pair(task, output_dir)
-        except Exception as exc:
-            logger.exception("Failed to load uncertainty inputs for %s", key)
-            errors.append(
-                make_phase_error_fn(
-                    "uncertainty",
-                    f"uncertainty input loading failed: {exc}",
-                    variable=key[0],
-                    ref=key[1],
-                    sim=key[2],
-                )
-            )
-
-    if not pair_data:
-        return errors or [make_phase_error_fn("uncertainty", "no completed evaluation pairs were available")]
-
     try:
-        bootstrap_rows = _bootstrap_rows(cfg, pair_data, pair_kinds, pair_resolutions, metrics)
-        verdicts = _verdicts(cfg, pair_data, pair_kinds, pair_resolutions, metrics)
+        bootstrap_rows, verdicts, completed_keys, errors = _process_pair_groups(
+            cfg,
+            tasks,
+            output_dir,
+            metrics,
+            make_phase_error_fn=make_phase_error_fn,
+        )
+        if not completed_keys:
+            return errors or [make_phase_error_fn("uncertainty", "no completed evaluation pairs were available")]
         completed_tasks = [
             task
             for task in tasks
-            if (str(task["var_name"]), str(task["ref_source"]), str(task["sim_source"])) in pair_data
+            if (str(task["var_name"]), str(task["ref_source"]), str(task["sim_source"])) in completed_keys
         ]
         products = _write_spread_products(
             completed_tasks,

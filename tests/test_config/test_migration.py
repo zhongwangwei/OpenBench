@@ -518,3 +518,55 @@ def test_migrate_normalizes_simulation_level_tim_res(tmp_path):
     migrate_config(main, out)
 
     assert yaml.safe_load(out.read_text(encoding="utf-8"))["simulation"]["SimA"]["tim_res"] == "Month"
+
+
+def test_migration_preserves_per_reference_roots_as_overrides(tmp_path):
+    import yaml
+
+    old = tmp_path / "old"
+    old.mkdir()
+    ref_a = tmp_path / "refs" / "A"
+    ref_b = tmp_path / "refs" / "B"
+    ref_a.mkdir(parents=True)
+    ref_b.mkdir(parents=True)
+    (old / "a.yaml").write_text(yaml.safe_dump({"general": {"root_dir": str(ref_a)}}), encoding="utf-8")
+    (old / "b.yaml").write_text(yaml.safe_dump({"general": {"root_dir": str(ref_b)}}), encoding="utf-8")
+    (old / "ref.yaml").write_text(
+        yaml.safe_dump(
+            {"general": {"Runoff_ref_source": ["RefA", "RefB"]}, "def_nml": {"RefA": "a.yaml", "RefB": "b.yaml"}},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (old / "simdef.yaml").write_text(
+        yaml.safe_dump({"general": {"root_dir": "/sim", "model_namelist": "M.nml"}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    (old / "sim.yaml").write_text(
+        yaml.safe_dump({"general": {"Runoff_sim_source": "SimA"}, "def_nml": {"SimA": "simdef.yaml"}}, sort_keys=False),
+        encoding="utf-8",
+    )
+    (old / "main.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "general": {
+                    "basename": "m",
+                    "basedir": "./out",
+                    "syear": 2000,
+                    "eyear": 2001,
+                    "reference_nml": "ref.yaml",
+                    "simulation_nml": "sim.yaml",
+                },
+                "evaluation_items": {"Runoff": True},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "openbench.yaml"
+    migrate_config(old / "main.yaml", out)
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
+
+    assert data["reference"]["overrides"]["RefA"]["root_dir"] == str(ref_a)
+    assert data["reference"]["overrides"]["RefB"]["root_dir"] == str(ref_b)

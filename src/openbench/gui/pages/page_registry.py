@@ -34,6 +34,7 @@ from PySide6.QtCore import Qt
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.path_utils import browse_directory
+from openbench.util.names import get_mapping_key_case_insensitive
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,51 @@ def _get_row_fallbacks(table, row) -> list:
         return []
     raw = item.data(FALLBACKS_ROLE)
     return list(raw) if isinstance(raw, list) else []
+
+
+def _merge_reference_editor_dataset(existing, edited):
+    """Apply visible editor fields without dropping hidden registry metadata."""
+    if existing is None:
+        return edited
+    schema = _schema()
+
+    variables = {}
+    for var_name, edited_var in edited.variables.items():
+        existing_key = get_mapping_key_case_insensitive(existing.variables, var_name)
+        old_var = existing.variables.get(existing_key) if existing_key is not None else None
+        if old_var is None:
+            variables[var_name] = edited_var
+            continue
+        variables[var_name] = schema.VariableMapping(
+            varname=edited_var.varname,
+            varunit=edited_var.varunit,
+            prefix=edited_var.prefix,
+            suffix=edited_var.suffix,
+            sub_dir=edited_var.sub_dir,
+            fallbacks=edited_var.fallbacks,
+            fulllist=old_var.fulllist,
+            max_uparea=old_var.max_uparea,
+            min_uparea=old_var.min_uparea,
+            compute=old_var.compute,
+            prefix_fallback=old_var.prefix_fallback,
+        )
+
+    return schema.ReferenceDataset(
+        name=edited.name,
+        description=edited.description,
+        category=edited.category,
+        data_type=edited.data_type,
+        tim_res=edited.tim_res,
+        data_groupby=edited.data_groupby,
+        timezone=edited.timezone,
+        years=existing.years,
+        variables=variables,
+        grid_res=edited.grid_res,
+        fulllist=existing.fulllist,
+        root_dir=edited.root_dir,
+        station_matching=existing.station_matching,
+        _provenance=existing._provenance,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -669,6 +715,7 @@ class PageRegistry(BasePage):
                 self.dataset_list.addItem(item)
         except Exception as exc:
             logger.warning("Failed to list references: %s", exc)
+            QMessageBox.critical(self, "Registry Error", f"Failed to load reference registry:\n{exc}")
 
     def _on_dataset_selected(self, row: int):
         if row < 0:
@@ -1083,7 +1130,13 @@ class PageRegistry(BasePage):
         )
 
         try:
-            _get_registry().save_reference(name, dataset)
+            existing_name = name
+            item = self.dataset_list.currentItem() if getattr(self, "dataset_list", None) is not None else None
+            if item is not None:
+                existing_name = item.data(Qt.UserRole) or name
+            registry = _get_registry()
+            dataset = _merge_reference_editor_dataset(registry.get_reference(existing_name), dataset)
+            registry.save_reference(name, dataset)
             _clear_cache()
             self._refresh_dataset_list()
             QMessageBox.information(self, "Saved", f"Dataset '{name}' saved to registry.")
