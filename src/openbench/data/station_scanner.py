@@ -24,6 +24,7 @@ from typing import Any
 import pandas as pd
 import xarray as xr
 
+from openbench.data.coordinates import glob_nc as _glob_nc
 from openbench.util.dataset_loader import open_mfdataset as _open_mfdataset_chunked
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
@@ -96,7 +97,7 @@ def _detect_layout(root: Path) -> str:
     Returns: "flat", "nested_single", "nested_multi", or "unknown".
     """
     # Check root for NC files directly
-    root_nc = list(root.glob("*.nc")) + list(root.glob("*.nc4"))
+    root_nc = _glob_nc(root)
     if root_nc:
         return "flat"
 
@@ -142,7 +143,7 @@ _PATTERN_ID_ONLY = re.compile(r"^(?:sim_)?([A-Za-z]{2}[-_][A-Za-z0-9]+)\.nc4?$")
 
 def _scan_flat(root: Path, *, metadata: pd.DataFrame | None = None) -> tuple[pd.DataFrame, list[str]]:
     """Scan flat directory of station NC files."""
-    nc_files = sorted(root.glob("*.nc")) + sorted(root.glob("*.nc4"))
+    nc_files = _glob_nc(root)
     logger.info("Scanning %d station files in flat directory", len(nc_files))
 
     records = []
@@ -340,9 +341,9 @@ def _station_nc_files(site_dir: Path) -> list[Path]:
 
     history = site_dir / "history"
     if history.is_dir():
-        nc_files = sorted(history.glob("*.nc")) + sorted(history.glob("*.nc4"))
+        nc_files = _glob_nc(history)
     else:
-        nc_files = sorted(site_dir.glob("*.nc")) + sorted(site_dir.glob("*.nc4"))
+        nc_files = _glob_nc(site_dir)
 
     if not nc_files:
         return []
@@ -400,9 +401,7 @@ def _merge_site(
             parallel=False,
         ) as ds:
             loaded = ds.load()
-            times = pd.to_datetime(ds.time.values)
-            syear = int(times.min().year)
-            eyear = int(times.max().year)
+            syear, eyear = _year_bounds(ds.time.values)
 
         merged_path = output_dir / f"sim_{site_id}_{syear}_{eyear}.nc"
         try:
@@ -451,8 +450,17 @@ def _read_year_range(nc_path: Path) -> tuple[int, int]:
         units = str(time_var.attrs.get("units", ""))
         if np.issubdtype(np.asarray(values).dtype, np.number) and not units.strip():
             raise ValueError(f"Numeric time coordinate has no units in {nc_path.name}")
-        times = pd.to_datetime(ds.time.values)
-        return int(times.min().year), int(times.max().year)
+        return _year_bounds(ds.time.values)
+
+
+def _year_bounds(values) -> tuple[int, int]:
+    years = []
+    for value in values:
+        year = getattr(value, "year", None)
+        years.append(int(year if year is not None else pd.Timestamp(value).year))
+    if not years:
+        raise ValueError("Empty time coordinate")
+    return min(years), max(years)
 
 
 def _combined_year_range(nc_files: list[Path]) -> tuple[int, int]:

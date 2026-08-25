@@ -198,7 +198,7 @@ class TimeCoreMixin:
         if datasource == "stat":
             ds["time"] = pd.DatetimeIndex(ds["time"].values)
         else:
-            if self.sim_data_type != "stn":
+            if getattr(self, f"{datasource}_data_type", "") != "stn":
                 ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds

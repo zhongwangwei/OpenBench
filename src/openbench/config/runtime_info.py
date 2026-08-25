@@ -530,7 +530,10 @@ class GeneralInfoReader:
         csv_dir = os.path.dirname(os.path.abspath(csv_path))
 
         def _resolve(p):
-            if pd.isna(p) or os.path.isabs(str(p)):
+            if pd.isna(p):
+                return p
+            p = os.path.expanduser(os.path.expandvars(str(p)))
+            if os.path.isabs(p):
                 return p
             # Try 1: resolve against CSV dir
             resolved = os.path.normpath(os.path.join(csv_dir, p))

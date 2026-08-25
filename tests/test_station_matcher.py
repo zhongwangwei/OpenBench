@@ -314,3 +314,10 @@ def test_station_matching_jobs_default_is_conservative(monkeypatch):
     assert _station_matching_jobs(100) == 4
     assert _station_matching_jobs(2) == 2
     assert _station_matching_jobs(100, requested=8) == 8
+
+
+def test_cama_resolution_rejects_unknown_resolution():
+    from openbench.data.station_matcher import get_resolution_suffix
+
+    with pytest.raises(ValueError, match="Unsupported CaMA"):
+        get_resolution_suffix(0.07)

@@ -815,7 +815,6 @@ def test_simulation_defaults_must_be_mapping():
         _build_config(raw)
 
 
-
 def test_reference_rejects_duplicate_sources(tmp_path):
     cfg = tmp_path / "openbench.yaml"
     cfg.write_text(

@@ -336,9 +336,7 @@ def _process_pair_groups(
                 pair_kinds[key] = "station" if is_station else "grid"
                 runner_cfg = getattr(task["bindings"], "runner_cfg", None)
                 pair_resolutions[key] = (
-                    getattr(runner_cfg, "general", {}).get("compare_tim_res")
-                    if runner_cfg is not None
-                    else None
+                    getattr(runner_cfg, "general", {}).get("compare_tim_res") if runner_cfg is not None else None
                 )
                 pair_data[key] = (
                     _load_station_pairs(task, output_dir) if is_station else _load_grid_pair(task, output_dir)

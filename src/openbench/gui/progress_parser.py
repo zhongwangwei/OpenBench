@@ -40,12 +40,20 @@ def parse_progress_line(
             event = json.loads(line.split(GUI_PROGRESS_PREFIX, 1)[1])
         except (json.JSONDecodeError, TypeError):
             event = {}
-        if event.get("event") == "evaluation_completed":
+        if event.get("event") in {"preprocessing_started", "preprocessing_completed", "evaluation_completed"}:
             state["current_variable"] = str(event.get("variable", ""))
             state["current_sim"] = str(event.get("sim", ""))
             state["current_ref"] = str(event.get("ref", ""))
             var = state["current_variable"]
-            stage = "Evaluation"
+            task_key = (state["current_variable"], state["current_ref"], state["current_sim"])
+            if event.get("event") in {"preprocessing_started", "preprocessing_completed"}:
+                if event.get("event") == "preprocessing_started":
+                    state.setdefault("started_preprocess_tasks", set()).add(task_key)
+                else:
+                    state.setdefault("completed_preprocess_tasks", set()).add(task_key)
+                stage = "Preprocessing"
+            else:
+                stage = "Evaluation"
 
     natural_line = "" if protocol_line else line
     natural_line_lower = natural_line.lower()
@@ -144,10 +152,19 @@ def parse_progress_line(
     P_INC = constants["PROGRESS_INCREMENT"]
 
     if total_tasks > 0:
+        completed_eval_tasks = state["completed_eval_tasks"]
+        preprocess_only = state.get("completed_preprocess_tasks", set()) - completed_eval_tasks
+        preprocess_started_only = (
+            state.get("started_preprocess_tasks", set())
+            - state.get("completed_preprocess_tasks", set())
+            - completed_eval_tasks
+        )
         total_completed = (
-            len(state["completed_eval_tasks"])
+            len(completed_eval_tasks)
             + len(state["completed_groupby_tasks"])
             + len(state["completed_comparison_tasks"])
+            + 0.4 * len(preprocess_only)
+            + 0.05 * len(preprocess_started_only)
         )
         task_progress = (total_completed / max(1, total_tasks)) * P_WORK
         current_progress = min(P_INIT + task_progress, P_MAX)

@@ -178,6 +178,7 @@ def _build_case(
     station_layout: str | None = None,
 ) -> SimulationCase:
     info = _scan_nc_info(metadata_dir)
+    date_subdir_files = _date_subdir_files(case_dir, metadata_dir)
     multi_undated = _has_multiple_no_date_files(metadata_dir) and not station_layout
     if multi_undated:
         common_prefix, common_suffix = _common_stem_affixes(_glob_nc(metadata_dir))
@@ -185,6 +186,8 @@ def _build_case(
         info["suffix"] = common_suffix
     if station_layout:
         data_groupby, filename_years = "Single", _years_from_station_collection(case_dir)
+    elif date_subdir_files:
+        data_groupby, filename_years = _infer_date_subdir_grouping(date_subdir_files)
     else:
         data_groupby, filename_years = _infer_file_grouping(metadata_dir)
     if station_layout:
@@ -195,8 +198,8 @@ def _build_case(
             info=info,
         )
         time_coverage = _infer_time_coverage(
-            metadata_dir,
-            files=selected_files or None,
+            case_dir if date_subdir_files else metadata_dir,
+            files=date_subdir_files or selected_files or None,
             data_groupby=data_groupby,
         )
     temporal_kind, temporal_kind_candidate, temporal_source = _infer_temporal_kind(
@@ -271,7 +274,7 @@ def _build_case(
             "data_type": "nc" if info.get("detected_data_type") else "unknown",
             "tim_res": tim_res_source,
             "grid_res": "nc" if info.get("detected_grid_res") else "unknown",
-            "data_groupby": "filename",
+            "data_groupby": "directory" if date_subdir_files else "filename",
             "temporal_kind": temporal_source,
             "years": "filename" if filename_years else ("nc" if time_coverage.get("years") else "unknown"),
             "time_coverage": "nc" if time_coverage.get("time_start") else "unknown",
@@ -549,6 +552,9 @@ def _infer_variable_file_overrides(
 
     overrides: dict[str, dict[str, Any]] = {}
     for variable_name, mapping in profile.variables.items():
+        if getattr(mapping, "compute", None) and _compute_dependencies_span_file_patterns(files, mapping):
+            overrides[variable_name] = {"prefix": "", "suffix": ""}
+            continue
         matched = _match_profile_variable_file(files, mapping)
         if matched is None:
             continue
@@ -664,6 +670,19 @@ def _filename_pattern_for_file(file_path: Path) -> tuple[str, str]:
     if not date_match:
         return stem, ""
     return stem[: date_match.start("token")], stem[date_match.end("token") :]
+
+
+def _compute_dependencies_span_file_patterns(files: list[Path], mapping) -> bool:
+    deps = re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(getattr(mapping, "compute", "")))
+    if len(deps) < 2:
+        return False
+    patterns = set()
+    for dep in deps:
+        matched = [path for path in files if _stem_contains_var_token(path.stem, dep)]
+        if not matched:
+            return True
+        patterns.update(_filename_pattern_for_file(path) for path in matched)
+    return len(patterns) > 1
 
 
 def _match_profile_variable_file(files: list[Path], mapping) -> tuple[Path, str] | None:
@@ -815,7 +834,6 @@ def _per_bucket_variable_metadata(
     *,
     info: dict,
     station_layout: str | None,
-    max_buckets: int = 8,
 ) -> list[dict[str, Any]]:
     """Collect variable metadata across distinct prefix/suffix buckets.
 
@@ -837,8 +855,6 @@ def _per_bucket_variable_metadata(
     for file_path in files:
         key = _filename_pattern_for_file(file_path)
         buckets.setdefault(key, file_path)
-        if len(buckets) >= max_buckets:
-            break
     if len(buckets) <= 1:
         return base_metadata
 
@@ -902,7 +918,6 @@ def _time_info_from_file(file_path: Path) -> dict:
     raw = _raw_time_metadata_from_file(file_path)
     try:
         import numpy as np
-        import pandas as pd
         import xarray as xr
 
         with xr.open_dataset(file_path, decode_times=True, decode_timedelta=False) as ds:
@@ -913,10 +928,7 @@ def _time_info_from_file(file_path: Path) -> dict:
             units = raw.get("raw_time_units") or str(time_var.attrs.get("units", ""))
             if np.issubdtype(np.asarray(raw_values).dtype, np.number) and not units.strip():
                 return _raw_time_info_from_file(file_path)
-            timestamps = pd.to_datetime(raw_values)
-            if getattr(timestamps, "ndim", 1) == 0:
-                timestamps = [timestamps]
-            values = [ts.to_pydatetime().replace(tzinfo=None) for ts in timestamps if not pd.isna(ts)]
+            values = _datetime_values_from_time_values(raw_values)
             return {
                 "readable": True,
                 "has_time": True,
@@ -928,6 +940,24 @@ def _time_info_from_file(file_path: Path) -> dict:
             }
     except Exception:
         return _raw_time_info_from_file(file_path)
+
+
+def _datetime_values_from_time_values(raw_values) -> list[datetime]:
+    import calendar
+
+    import pandas as pd
+
+    values = []
+    for value in getattr(raw_values, "reshape", lambda *_: raw_values)(-1):
+        if pd.isna(value):
+            continue
+        if all(hasattr(value, attr) for attr in ("year", "month", "day")):
+            year, month = int(value.year), int(value.month)
+            day = min(int(value.day), calendar.monthrange(year, month)[1])
+            values.append(datetime(year, month, day))
+        else:
+            values.append(pd.Timestamp(value).to_pydatetime().replace(tzinfo=None))
+    return values
 
 
 def _raw_time_metadata_from_file(file_path: Path) -> dict:
@@ -1358,8 +1388,6 @@ def materialize_station_cases(
             return_dropped=True,
         )
         time_coverage = _infer_station_dataframe_time_coverage(df)
-        if "sim_dir" in df.columns:
-            df["sim_dir"] = df["sim_dir"].apply(lambda value: _portable_sim_dir(value, case.source_root))
 
         fulllist = case_output_dir / f"{case_label}_stations.csv"
         df.to_csv(fulllist, index=False)
@@ -1404,20 +1432,6 @@ def _safe_path_label(label: str) -> str:
         return safe
     digest = blake2s(text.encode("utf-8"), digest_size=4).hexdigest()
     return f"case_{digest}"
-
-
-def _portable_sim_dir(value, source_root: Path | None) -> str:
-    """Replace the ``source_root`` prefix with ``${OPENBENCH_SIM_ROOT}`` when applicable."""
-    text = str(value)
-    if source_root is None:
-        return text
-    try:
-        target = Path(text).expanduser().resolve()
-        base = Path(source_root).expanduser().resolve()
-        rel = target.relative_to(base)
-    except (OSError, ValueError):
-        return text
-    return "${OPENBENCH_SIM_ROOT}/" + rel.as_posix()
 
 
 def _infer_station_dataframe_time_coverage(df) -> dict:
@@ -1494,6 +1508,26 @@ def _children_are_date_subdir_layout(children: list[Path]) -> bool:
         else:
             return False
     return found_with_nc
+
+
+def _date_subdir_files(case_dir: Path, metadata_dir: Path) -> list[Path]:
+    if metadata_dir.parent != case_dir:
+        return []
+    children = sorted(child for child in case_dir.iterdir() if child.is_dir())
+    if not _children_are_date_subdir_layout(children):
+        return []
+    return [file_path for child in children for file_path in _glob_nc(child)]
+
+
+def _infer_date_subdir_grouping(files: list[Path]) -> tuple[str, list[int]]:
+    names = {file_path.parent.name for file_path in files}
+    digit_counts = [len(re.sub(r"\D", "", name)) for name in names]
+    years = sorted({int(re.sub(r"\D", "", name)[:4]) for name in names})
+    if max(digit_counts) >= 8:
+        return "Day", years
+    if max(digit_counts) >= 6:
+        return "Month", years
+    return "Year", years
 
 
 def _iter_case_dirs(
