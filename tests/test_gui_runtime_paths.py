@@ -1,3 +1,4 @@
+import sys
 from copy import deepcopy
 from types import SimpleNamespace
 
@@ -54,7 +55,7 @@ def test_runtime_conda_selection_controls_saved_python_path(qapp, monkeypatch, t
     page.conda_combo.addItem("openbench", str(env_path))
     page.conda_combo.setCurrentIndex(1)
 
-    expected = str(env_path / "bin" / "python")
+    expected = str(env_path / ("python.exe" if sys.platform == "win32" else "bin/python"))
     assert page.controller.config["general"]["python_path"] == expected
     assert page.python_combo.currentData() == expected
 
