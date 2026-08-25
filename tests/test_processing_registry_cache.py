@@ -456,3 +456,134 @@ def test_remap_data_fails_configured_backend_instead_of_falling_back():
     data = xr.Dataset({"v": (("lat", "lon"), np.array([[1.0]]))}, coords={"lat": [0.0], "lon": [0.0]})
     with pytest.raises(RuntimeError, match="Configured regrid backend 'cdo_remapcon' failed"):
         processing.GridDatasetProcessing.remap_data(processor, data)
+
+
+def test_find_data_files_finds_scanner_nested_date_dirs(tmp_path):
+    import openbench.data.processing as processing
+
+    nested = tmp_path / "2000" / "01"
+    nested.mkdir(parents=True)
+    path = nested / "Case_200001.nc"
+    xr.Dataset({"runoff": xr.DataArray(np.array([1.0]))}).to_netcdf(path)
+
+    processor = _make_processor(processing)
+    processor.SimA_prefix_fallback = None
+
+    result = processing.BaseDatasetProcessing._find_data_files(
+        processor,
+        str(tmp_path),
+        prefix="Case_",
+        year=2000,
+        suffix="",
+        datasource="sim",
+        varname=["runoff"],
+    )
+
+    assert result == [str(path)]
+
+
+def test_try_compute_from_inline_namelist_wins_over_catalog(monkeypatch):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as registry_manager
+
+    processor = _make_processor(processing)
+    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.sim_varunit = "mm d-1"
+    ds = xr.Dataset({"rain": ("time", [1.0]), "snow": ("time", [2.0])})
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(ModelProfile("Nope", "", {})))
+
+    result = processing.BaseDatasetProcessing._try_compute_from_profile(processor, "ModelA", ds, "sim")
+
+    assert float(result.values[0]) == 3.0
+    assert processor.sim_varunit == "mm d-1"
+
+
+def test_find_data_files_falls_back_to_compute_dependency_files(tmp_path):
+    import openbench.data.processing as processing
+
+    times = pd.date_range("2000-01-01", periods=1)
+    xr.Dataset({"rain": xr.DataArray([1.0], coords={"time": times})}).to_netcdf(tmp_path / "case_h0.RAIN.2000.nc")
+    xr.Dataset({"snow": xr.DataArray([2.0], coords={"time": times})}).to_netcdf(tmp_path / "case_h0.SNOW.2000.nc")
+
+    processor = _make_processor(processing)
+    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_prefix_fallback = None
+
+    result = processing.BaseDatasetProcessing._find_data_files(
+        processor,
+        str(tmp_path),
+        prefix="",
+        year=2000,
+        suffix="",
+        datasource="sim",
+        varname=["Runoff"],
+    )
+
+    assert {Path(path).name for path in result} == {"case_h0.RAIN.2000.nc", "case_h0.SNOW.2000.nc"}
+
+
+def test_select_var_computes_from_dependency_files_found_by_lookup(tmp_path):
+    import openbench.data.processing as processing
+
+    times = pd.date_range("2000-01-01", periods=1)
+    rain = tmp_path / "case_h0.RAIN.2000.nc"
+    snow = tmp_path / "case_h0.SNOW.2000.nc"
+    xr.Dataset({"rain": xr.DataArray([1.0], coords={"time": times})}).to_netcdf(rain)
+    xr.Dataset({"snow": xr.DataArray([2.0], coords={"time": times})}).to_netcdf(snow)
+
+    processor = _make_processor(processing)
+    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.sim_data_type = "grid"
+    processor.ref_data_type = "grid"
+    processor.sim_tim_res = "Day"
+    processor.compare_tim_res = "Day"
+    files = processing.BaseDatasetProcessing._find_data_files(processor, str(tmp_path), "", 2000, "", "sim", ["Runoff"])
+
+    result = processing.BaseDatasetProcessing.select_var(processor, 2000, 2000, "Day", files, ["Runoff"], "sim")
+
+    assert result.name == "Runoff"
+    assert float(result.values[0]) == 3.0
+
+
+def test_find_single_file_returns_all_undated_compute_dependencies(tmp_path):
+    import openbench.data.processing as processing
+
+    xr.Dataset({"rain": ("time", [1.0])}).to_netcdf(tmp_path / "RAIN.nc")
+    xr.Dataset({"snow": ("time", [2.0])}).to_netcdf(tmp_path / "SNOW.nc")
+    processor = _make_processor(processing)
+    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_prefix_fallback = None
+
+    result = processing.BaseDatasetProcessing._find_single_file(
+        processor,
+        str(tmp_path),
+        prefix="",
+        suffix="",
+        datasource="sim",
+        varname=["Runoff"],
+    )
+
+    assert {Path(path).name for path in result} == {"RAIN.nc", "SNOW.nc"}
+
+
+def test_find_data_files_supports_undated_files_in_month_directories(tmp_path):
+    import openbench.data.processing as processing
+
+    for month in ("2000-01", "2000-02"):
+        directory = tmp_path / month
+        directory.mkdir()
+        xr.Dataset({"QFLX_EVAP_TOT": ("time", [1.0])}).to_netcdf(directory / "QFLX_EVAP_TOT.nc")
+    processor = _make_processor(processing)
+    processor.SimA_prefix_fallback = None
+
+    result = processing.BaseDatasetProcessing._find_data_files(
+        processor,
+        str(tmp_path),
+        prefix="QFLX_EVAP_TOT",
+        year=2000,
+        suffix="",
+        datasource="sim",
+        varname=["QFLX_EVAP_TOT"],
+    )
+
+    assert {Path(path).parent.name for path in result} == {"2000-01", "2000-02"}

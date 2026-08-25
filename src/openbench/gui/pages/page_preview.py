@@ -801,13 +801,15 @@ class PagePreview(BasePage):
 
         # Handle Windows absolute paths (e.g., C:/Users/... or D:/...)
         # After to_posix_path, Windows paths become like "C:/Users/..."
-        if len(path) >= 2 and path[1] == ":":
+        if (len(path) >= 2 and path[1] == ":") or path.startswith("//"):
             # This is a Windows local path - extract relative part if contains /nml/
             if "/nml/" in path:
                 relative_path = "nml/" + path.split("/nml/", 1)[1]
                 return f"{openbench_root.rstrip('/')}/{relative_path}"
-            # Unknown Windows path - cannot convert to remote
-            return path
+            raise RemoteNamelistSyncError(
+                "Windows local path cannot be converted to a remote path: "
+                f"{path}. Choose or enter the corresponding remote server path."
+            )
 
         # If path is already an absolute Unix path
         if path.startswith("/"):

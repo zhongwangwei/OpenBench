@@ -267,6 +267,9 @@ def test_materialize_station_cases_keeps_unicode_case_labels_distinct(tmp_path: 
     assert case_a.fulllist != case_b.fulllist
     assert case_a.fulllist.exists()
     assert case_b.fulllist.exists()
+    station_path = pd.read_csv(case_a.fulllist).loc[0, "sim_dir"]
+    assert Path(station_path).is_absolute()
+    assert "OPENBENCH_SIM_ROOT" not in station_path
 
 
 def test_scan_simulation_roots_infers_flat_station_tim_res_per_station_not_across_sites(tmp_path: Path):
@@ -801,3 +804,82 @@ def test_scan_simulation_roots_auto_model_prefers_strong_variable_match_over_gen
     case = result.cases[0]
     assert case.model == "CoLM2024"
     assert case.provenance["model"] == "variables"
+
+
+def test_runtime_expands_portable_station_sim_dir_env_vars(tmp_path: Path, monkeypatch):
+    from openbench.config.runtime_info import GeneralInfoReader
+
+    root = tmp_path / "simroot"
+    data = pd.DataFrame({"sim_dir": ["${OPENBENCH_SIM_ROOT}/CaseA/site.nc"]})
+    monkeypatch.setenv("OPENBENCH_SIM_ROOT", str(root))
+
+    GeneralInfoReader._resolve_relative_paths(data, "sim_dir", str(tmp_path / "stations.csv"))
+
+    assert data.loc[0, "sim_dir"].replace("\\", "/") == str(root / "CaseA" / "site.nc").replace("\\", "/")
+
+
+def test_scan_simulation_roots_keeps_month_date_subdirs_as_one_runnable_case(tmp_path: Path):
+    from openbench.data.sim_scanner import scan_simulation_roots
+
+    case_root = tmp_path / "simulations" / "CaseA"
+    _write_grid_nc(case_root / "2000-01" / "QFLX_EVAP_TOT.nc", periods=1)
+    _write_grid_nc(case_root / "2000-02" / "QFLX_EVAP_TOT.nc", periods=1, start="2000-02-01")
+
+    result = scan_simulation_roots([tmp_path / "simulations"], model_name="CoLM2024")
+
+    assert len(result.cases) == 1
+    assert result.cases[0].root_dir == case_root
+    assert result.cases[0].data_groupby == "Month"
+
+
+def test_sim_scanner_accepts_360_day_calendar_dates():
+    import cftime
+
+    from openbench.data.sim_scanner import _datetime_values_from_time_values
+
+    values = _datetime_values_from_time_values(np.array([cftime.Datetime360Day(2000, 2, 30)], dtype=object))
+
+    assert values == [pd.Timestamp("2000-02-29").to_pydatetime()]
+
+
+def test_scan_simulation_roots_collects_more_than_eight_variable_buckets(tmp_path: Path):
+    from openbench.data.sim_scanner import scan_simulation_roots
+
+    history = tmp_path / "simulations" / "CaseA" / "history"
+    for index in range(9):
+        _write_grid_nc(history / f"var{index}_2000.nc", var_name=f"var{index}")
+
+    result = scan_simulation_roots([tmp_path / "simulations"], model_name="auto")
+
+    assert set(result.cases[0].variables) >= {f"var{index}" for index in range(9)}
+
+
+def test_compute_variable_spanning_file_patterns_clears_single_dependency_prefix(tmp_path: Path):
+    from openbench.data.sim_scanner import scan_simulation_roots
+
+    history = tmp_path / "simulations" / "CaseA" / "history"
+    _write_grid_nc(history / "case_h0.FSR.2000.nc", var_name="FSR")
+    _write_grid_nc(history / "case_h0.FSDS.2000.nc", var_name="FSDS")
+
+    result = scan_simulation_roots([tmp_path / "simulations"], model_name="CoLM2024")
+
+    assert result.cases[0].variable_overrides["Surface_Albedo"] == {"prefix": "", "suffix": ""}
+
+
+def test_station_scanner_accepts_uppercase_nc4_and_noleap_time(tmp_path: Path):
+    from openbench.data.station_scanner import scan_station_sim_dir
+
+    path = tmp_path / "stations" / "US-AAA.NC4"
+    path.parent.mkdir(parents=True)
+    ds = xr.Dataset(
+        {"QFLX_EVAP_TOT": (["time"], np.zeros(2))},
+        coords={"time": np.array([0, 365]), "lon": -100.0, "lat": 40.0},
+    )
+    ds["time"].attrs["units"] = "days since 2000-01-01 00:00:00"
+    ds["time"].attrs["calendar"] = "noleap"
+    ds.to_netcdf(path)
+
+    df = scan_station_sim_dir(str(path.parent))
+
+    assert df.loc[0, "ID"] == "US-AAA"
+    assert (df.loc[0, "use_syear"], df.loc[0, "use_eyear"]) == (2000, 2001)

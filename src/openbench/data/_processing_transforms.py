@@ -76,33 +76,41 @@ class ProcessingTransformMixin:
         if not item:
             return None
 
+        # Inline namelist compute wins over catalog profiles.
+        compute_expr = getattr(self, f"{datasource}_compute", "")
+        compute_unit = getattr(self, f"{datasource}_varunit", "")
+
         # Check model profile first, then reference dataset.
         var_mapping = None
-        profile = mgr.get_model(source_name)
-        profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
-        if profile and profile_key is not None and profile.variables[profile_key].compute:
-            var_mapping = profile.variables[profile_key]
+        if not compute_expr:
+            profile = mgr.get_model(source_name)
+            profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+            if profile and profile_key is not None and profile.variables[profile_key].compute:
+                var_mapping = profile.variables[profile_key]
 
-        if var_mapping is None:
+        if not compute_expr and var_mapping is None:
             ref = mgr.get_reference(source_name)
             ref_key = get_mapping_key_case_insensitive(ref.variables, item) if ref else None
             if ref and ref_key is not None and ref.variables[ref_key].compute:
                 var_mapping = ref.variables[ref_key]
 
-        if var_mapping is None:
+        if var_mapping is not None:
+            compute_expr = var_mapping.compute
+            compute_unit = var_mapping.varunit
+        if not compute_expr:
             return None
 
-        logging.info("Computing %s via catalog compute expression", item)
+        logging.info("Computing %s via compute expression", item)
         from openbench.data.compute import execute_compute
 
-        result = execute_compute(ds, var_mapping.compute, item)
+        result = execute_compute(ds, compute_expr, item)
 
         if hasattr(result, "name"):
             result.name = item
         result = self._reduce_patch_dimension(result, ds)
 
         setattr(self, f"{datasource}_varname", [item])
-        setattr(self, f"{datasource}_varunit", var_mapping.varunit)
+        setattr(self, f"{datasource}_varunit", compute_unit)
 
         return result
 

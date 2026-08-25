@@ -599,3 +599,41 @@ def test_generate_config_yaml_can_export_groupby_without_comparison(tmp_path):
     assert data["project"]["IGBP_groupby"] is True
     assert "PFT_groupby" not in data["project"]
     assert "climate_zone_groupby" not in data["project"]
+
+def test_unified_to_gui_deep_merges_simulation_variable_defaults():
+    unified = {
+        "project": {"name": "demo"},
+        "evaluation": {"variables": ["Runoff"]},
+        "reference": {"Runoff": "RefA"},
+        "simulation": {
+            "_defaults": {
+                "model": "CoLM2024",
+                "variables": {"Runoff": {"varunit": "mm day-1", "prefix": "hist_"}},
+            },
+            "CaseA": {"root_dir": "/sim/a", "variables": {"Runoff": {"varname": "q"}}},
+        },
+    }
+
+    gui_config = ConfigManager().unified_to_gui_config(unified)
+
+    assert gui_config["sim_data"]["source_configs"]["CaseA"]["variables"]["Runoff"] == {
+        "varname": "q",
+        "varunit": "mm day-1",
+        "prefix": "hist_",
+    }
+
+
+def test_generate_config_yaml_preserves_explicit_simulation_source_labels():
+    config = _runnable_config(Path("/tmp"))
+    config["evaluation_items"] = {"Runoff": True}
+    config["sim_data"] = {
+        "general": {"Runoff_sim_source": ["RunA", "RunB"]},
+        "source_configs": {
+            "RunA": {"general": {"model_namelist": "CoLM2024", "root_dir": "/x/Case01/a"}},
+            "RunB": {"general": {"model_namelist": "CoLM2024", "root_dir": "/x/Case01/b"}},
+        },
+    }
+
+    data = yaml.safe_load(ConfigManager().generate_config_yaml(config))
+
+    assert {k for k in data["simulation"] if k != "_defaults"} == {"RunA", "RunB"}

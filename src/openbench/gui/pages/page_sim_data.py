@@ -199,11 +199,12 @@ def _remote_list_nc_files(ssh_manager, directory: str) -> list[str]:
     quoted = quote_remote_path(directory)
     cmd = (
         f"find {quoted} -maxdepth 1 -type f "
-        r"\( -name '*.nc' -o -name '*.nc4' \) | sort"
+        r"\( -name '*.nc' -o -name '*.nc4' -o -name '*.NC' -o -name '*.NC4' \) | sort"
     )
-    stdout, _, exit_code = execute_responsive(ssh_manager, cmd, timeout=30)
+    stdout, stderr, exit_code = execute_responsive(ssh_manager, cmd, timeout=30)
     if exit_code != 0:
-        return []
+        detail = (stderr or stdout or f"exit {exit_code}").strip()
+        raise RuntimeError(f"Remote NetCDF scan failed for {directory}: {detail}")
     return [line.strip() for line in stdout.splitlines() if line.strip()]
 
 
@@ -224,6 +225,8 @@ def _remote_find_nc_dir(ssh_manager, case_dir: str) -> str:
 def _remote_detect_case_pattern(ssh_manager, case_dir: str) -> tuple:
     """Remote case scan: (prefix, suffix, multi_stream, file_names)."""
     for sub in (f"{case_dir.rstrip('/')}/history", case_dir):
+        if not _remote_is_dir(ssh_manager, sub):
+            continue
         files = _remote_list_nc_files(ssh_manager, sub)
         if files:
             names = [os.path.basename(name) for name in files]
@@ -238,13 +241,14 @@ def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
 
 def _remote_list_dirs(ssh_manager, root: str, max_depth: int = 5) -> list[str]:
     quoted = quote_remote_path(root)
-    stdout, _, exit_code = execute_responsive(
+    stdout, stderr, exit_code = execute_responsive(
         ssh_manager,
         f"find {quoted} -mindepth 0 -maxdepth {int(max_depth)} -type d -print | sort",
         timeout=30,
     )
     if exit_code != 0:
-        return []
+        detail = (stderr or stdout or f"exit {exit_code}").strip()
+        raise RuntimeError(f"Remote directory scan failed for {root}: {detail}")
     return [line.strip() for line in stdout.splitlines() if line.strip()]
 
 
@@ -528,8 +532,17 @@ class PageSimData(BasePage):
             case_meta: Dict[str, Dict[str, Any]] = {}
             if is_remote:
                 seen_nc_dirs = set()
-                for full in _remote_list_dirs(ssh_manager, root):
-                    nc_dir = _remote_find_nc_dir(ssh_manager, full)
+                try:
+                    remote_dirs = _remote_list_dirs(ssh_manager, root)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Error", f"Cannot scan remote directory:\n{exc}")
+                    return
+                for full in remote_dirs:
+                    try:
+                        nc_dir = _remote_find_nc_dir(ssh_manager, full)
+                    except Exception as exc:
+                        QMessageBox.critical(self, "Error", f"Cannot scan remote NetCDF files:\n{exc}")
+                        return
                     normalized_nc_dir = nc_dir.rstrip("/")
                     if not nc_dir or normalized_nc_dir in seen_nc_dirs:
                         continue
@@ -537,7 +550,11 @@ class PageSimData(BasePage):
                     nc_leaf = normalized_nc_dir.rsplit("/", 1)[-1].lower()
                     label_dir = normalized_nc_dir.rsplit("/", 1)[0] if nc_leaf == "history" else full
                     label = label_dir.rstrip("/").rsplit("/", 1)[-1]
-                    prefix, suffix, multi_stream, file_names = _remote_detect_case_pattern(ssh_manager, full)
+                    try:
+                        prefix, suffix, multi_stream, file_names = _remote_detect_case_pattern(ssh_manager, full)
+                    except Exception as exc:
+                        QMessageBox.critical(self, "Error", f"Cannot inspect remote NetCDF files:\n{exc}")
+                        return
                     discovered.append((label, nc_dir, prefix))
                     case_meta[label] = {
                         "files": file_names,
@@ -884,7 +901,6 @@ class PageSimData(BasePage):
 
     def save_to_config(self):
         cases = self.get_selected_cases()
-        case_labels = [c["label"] for c in cases]
         existing_sim_data = self.controller.config.get("sim_data", {})
         preserved = {
             key: value
@@ -956,7 +972,7 @@ class PageSimData(BasePage):
                     existing_source.pop("variables", None)
             source_configs[c["label"]] = existing_source
 
-        # For every selected evaluation variable, all selected cases are sources.
+        # For every selected evaluation variable, only compatible selected cases are sources.
         # Do not fall back to all model-profile variables: Evaluation Variables
         # is the user's source of truth, and an empty selection must stay empty.
         eval_items = self.controller.config.get("evaluation_items", {})
@@ -967,8 +983,23 @@ class PageSimData(BasePage):
         # Only the *_sim_source mappings are rewritten below.
         existing_inner_general = existing_sim_data.get("general", {}) or {}
         general: Dict[str, Any] = {k: v for k, v in existing_inner_general.items() if not k.endswith("_sim_source")}
+        model_vars_cache: Dict[str, Set[str]] = {}
         for var_name in selected_vars:
-            general[f"{var_name}_sim_source"] = list(case_labels)
+            sources = []
+            var_key = str(var_name).casefold()
+            for c in cases:
+                overrides = c.get("variables") if isinstance(c.get("variables"), dict) else {}
+                if var_key in {str(name).casefold() for name in overrides}:
+                    sources.append(c["label"])
+                    continue
+                model = c.get("model", "")
+                if model not in model_vars_cache:
+                    model_vars_cache[model] = (
+                        {str(name).casefold() for name in _get_model_variables(model)} if model else set()
+                    )
+                if var_key in model_vars_cache[model]:
+                    sources.append(c["label"])
+            general[f"{var_name}_sim_source"] = sources
 
         sim_data = {
             **preserved,
@@ -1128,7 +1159,6 @@ class PageSimData(BasePage):
         if not cases:
             QMessageBox.information(self, "Nothing to Validate", "No cases selected.")
             return
-        # Quick check: verify NC directories exist
         issues = []
         from openbench.remote.storage import RemoteStorage
 
@@ -1136,12 +1166,22 @@ class PageSimData(BasePage):
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
         for c in cases:
             if is_remote:
-                ok = ssh_manager and ssh_manager.is_connected and _remote_is_dir(ssh_manager, c["nc_dir"])
+                if not ssh_manager or not ssh_manager.is_connected:
+                    issues.append(f"{c['label']}: remote server is not connected")
+                    continue
+                try:
+                    nc_dir = _remote_find_nc_dir(ssh_manager, c["nc_dir"])
+                except Exception as exc:
+                    issues.append(f"{c['label']}: {exc}")
+                    continue
+                if not nc_dir:
+                    issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
             else:
-                ok = os.path.isdir(c["nc_dir"])
-            if not ok:
-                issues.append(f"{c['label']}: directory not found ({c['nc_dir']})")
+                if not os.path.isdir(c["nc_dir"]):
+                    issues.append(f"{c['label']}: directory not found ({c['nc_dir']})")
+                elif not _find_nc_dir(c["nc_dir"]):
+                    issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
         if issues:
             QMessageBox.warning(self, "Validation Issues", "\n".join(issues))
         else:
-            QMessageBox.information(self, "Validation OK", f"All {len(cases)} case directories verified.")
+            QMessageBox.information(self, "Validation OK", f"All {len(cases)} case directories contain NetCDF files.")

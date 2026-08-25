@@ -87,21 +87,28 @@ class StationProcessingCoreMixin:
         try:
             logging.debug("Processing station data")
             if not hasattr(self, "station_list") or self.station_list is None or self.station_list.empty:
-                logging.error("Station list is empty; cannot process station data.")
-                return
+                raise RuntimeError("Station list is empty; cannot process station data")
 
-            indices = range(len(self.station_list["ID"]))
+            indices = list(range(len(self.station_list["ID"])))
             try:
-                _parallel()(n_jobs=self.num_cores)(
+                results = _parallel()(n_jobs=self.num_cores)(
                     _delayed()(self._make_stn_parallel)(self.station_list, data_params["datasource"], i)
                     for i in indices
                 )
+                if len(results) != len(indices):
+                    raise OSError("parallel station processing returned incomplete results")
             except (PermissionError, OSError) as exc:
                 logging.warning(
                     "Parallel station processing unavailable (%s). Falling back to sequential execution.", exc
                 )
-                for i in indices:
-                    self._make_stn_parallel(self.station_list, data_params["datasource"], i)
+                results = [self._make_stn_parallel(self.station_list, data_params["datasource"], i) for i in indices]
+
+            failures = [r for r in results if isinstance(r, dict) and not r.get("ok")]
+            if failures:
+                failed_ids = ", ".join(str(r.get("station", "?")) for r in failures[:5])
+                raise RuntimeError(
+                    f"Station processing failed for {len(failures)}/{len(indices)} {data_params['datasource']} station(s): {failed_ids}"
+                )
         finally:
             gc.collect()
 
@@ -154,7 +161,9 @@ class StationProcessingCoreMixin:
                         break
 
                 # Priority 1: compute
-                computed = None if runtime_fallback_used else self._try_compute_from_profile(source_name, stn_data, datasource)
+                computed = (
+                    None if runtime_fallback_used else self._try_compute_from_profile(source_name, stn_data, datasource)
+                )
                 if computed is not None:
                     current_var_list = [getattr(self, "item", current_var_list[0])]
                     ds = computed
@@ -221,9 +230,12 @@ class StationProcessingCoreMixin:
                 logging.error("Time dimension not found in the station data.")
                 raise ValueError("Time dimension not found in the station data.")
 
-            # Ensure the time coordinate is datetime
+            # Ensure the time coordinate is datetime-like. Keep cftime indexes intact;
+            # xarray can slice them by ISO strings while pandas cannot parse noleap dates.
             if not np.issubdtype(ds.time.dtype, np.datetime64):
-                ds["time"] = pd.to_datetime(ds.time.values)
+                time_index = ds.indexes.get("time")
+                if not hasattr(time_index, "calendar"):
+                    ds["time"] = pd.to_datetime(ds.time.values)
 
             # Select the time range before resampling
             ds = ds.sel(time=slice(f"{start_year}-01-01", f"{end_year}-12-31"))
@@ -287,15 +299,15 @@ class StationProcessingCoreMixin:
                 stn_data = self._select_merged_station_data(stn_data, station, datasource)
                 processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
                 if processed_data is None:
-                    logging.info(f"Skipping station {station['ID']} ({datasource}) - no valid data after processing")
-                    return
+                    raise ValueError("no valid data after processing")
                 self.save_station_data(processed_data, station, datasource)
-        except (KeyError, FileNotFoundError, ValueError) as e:
-            # Skip individual stations that fail (missing variable, file, or bad data)
+                return {"ok": True, "station": station["ID"]}
+        except Exception as e:
             station_id = (
                 station_list.iloc[index].get("ID", f"index-{index}") if index < len(station_list) else f"index-{index}"
             )
-            logging.warning(f"Skipping station {station_id} ({datasource}): {e}")
+            logging.warning(f"Station {station_id} ({datasource}) failed: {e}")
+            return {"ok": False, "station": station_id, "error": str(e)}
         finally:
             gc.collect()
 

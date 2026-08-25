@@ -164,6 +164,18 @@ def _build_evaluation_tasks(
     only_drawing: bool,
 ) -> list[dict[str, Any]]:
     """Compatibility wrapper for task planning."""
+    _runner_hashing.clear_hashing_caches()
+    signature_cache: dict[tuple[int, str], dict[str, Any]] = {}
+
+    def cached_input_signature(section: dict[str, Any], source: str) -> dict[str, Any]:
+        key = (id(section), source)
+        if key not in signature_cache:
+            signature_cache[key] = _runner_hashing.input_file_signature(section, source)
+        return signature_cache[key]
+
+    def task_hash_payload(**kwargs) -> dict[str, Any]:
+        return _task_hash_payload(**kwargs, input_file_signature_fn=cached_input_signature)
+
     return _runner_task_planning.build_evaluation_tasks(
         cfg=cfg,
         bindings=bindings,
@@ -174,7 +186,7 @@ def _build_evaluation_tasks(
         statistic_vars=statistic_vars,
         use_cache=use_cache,
         only_drawing=only_drawing,
-        task_hash_payload_fn=_task_hash_payload,
+        task_hash_payload_fn=task_hash_payload,
     )
 
 
@@ -293,6 +305,7 @@ def _task_hash_payload(
     score_vars: list[str],
     comparison_vars: list[str],
     statistic_vars: list[str],
+    input_file_signature_fn=None,
 ) -> dict[str, Any]:
     return _runner_hashing.task_hash_payload(
         cfg=cfg,
@@ -306,6 +319,7 @@ def _task_hash_payload(
         statistic_vars=statistic_vars,
         openbench_version_fn=_local_attr("_openbench_version"),
         regrid_backend_signature_fn=_local_attr("_regrid_backend_signature"),
+        **({"input_file_signature_fn": input_file_signature_fn} if input_file_signature_fn else {}),
     )
 
 
