@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,12 @@ def apply_unified_mask(
 
     ref_ds = None
     sim_ds = None
+    staged_path = None
     try:
         import xarray as xr
 
-        ref_ds = xr.open_dataset(ref_path)
-        sim_ds = xr.open_dataset(sim_path)
+        ref_ds = xr.open_dataset(ref_path, chunks="auto")
+        sim_ds = xr.open_dataset(sim_path, chunks="auto")
 
         # The flat file stores the variable under the configured name OR the
         # relabelled evaluation item (when a fallback/convert derived it, e.g.
@@ -99,28 +101,34 @@ def apply_unified_mask(
             if o_aligned.sizes.get("time", 0) == 0:
                 raise ValueError(f"Unified mask: no overlapping timestamps for {var_name}")
 
-        # Apply mask: NaN where either is NaN
-        mask = np.isnan(s_aligned.values) | np.isnan(o_aligned.values)
-        o_data = o.load()
+        # Keep the mask lazy so chunked/dask-backed inputs are not materialized
+        # twice in memory before the NetCDF writer gets a chance to stream them.
+        invalid_overlap = ~(np.isfinite(s_aligned) & np.isfinite(o_aligned))
         if same_values:
-            o_data.values[mask] = np.nan
+            o_data = o.where(~invalid_overlap)
         else:
-            masked_overlap = o_aligned.load()
-            masked_overlap.values[mask] = np.nan
-            o_data.loc[{"time": masked_overlap["time"]}] = masked_overlap
+            invalid_full = invalid_overlap.reindex_like(o, fill_value=False)
+            o_data = o.where(~invalid_full)
 
-        # Close datasets before writing
+        # Write to a sibling staging target while the lazy source datasets are
+        # open, then close them before replacing the original. Windows refuses
+        # to replace an open NetCDF file even when the replacement itself is atomic.
+        fd, staged_path = tempfile.mkstemp(
+            prefix=f".{os.path.basename(ref_path)}.mask-",
+            suffix=".nc",
+            dir=os.path.dirname(ref_path),
+        )
+        os.close(fd)
+        write_netcdf_atomic_fn(o_data, staged_path, compression=False)
         ref_ds.close()
         ref_ds = None
         sim_ds.close()
         sim_ds = None
-
-        # Write masked ref back. Use an atomic replace so a failed NetCDF rewrite
-        # does not leave the existing reference file truncated or otherwise unreadable.
-        write_netcdf_atomic_fn(o_data, ref_path, compression=False)
+        os.replace(staged_path, ref_path)
+        staged_path = None
         logger.debug("Unified mask applied: %s (sim=%s)", var_name, sim_source)
 
-        del o, s, o_aligned, s_aligned, mask, o_data
+        del o, s, o_aligned, s_aligned, invalid_overlap, o_data
 
     except Exception:
         logger.exception("Unified mask failed for %s (sim=%s)", var_name, sim_source)
@@ -135,4 +143,9 @@ def apply_unified_mask(
             try:
                 sim_ds.close()
             except Exception:
+                pass
+        if staged_path is not None:
+            try:
+                os.unlink(staged_path)
+            except FileNotFoundError:
                 pass

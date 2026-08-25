@@ -151,8 +151,23 @@ def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons()
     assert "openbench.data._processing_grid_regrid" in modules
 
 
+def test_source_specific_section_does_not_capture_longer_source_name():
+    from openbench.runner.hashing import source_specific_section
+
+    section = {
+        "LAI_Yuan2011_varname": "lai",
+        "LAI_Yuan2011_8Day_varname": "lai_8day",
+    }
+
+    assert source_specific_section(
+        section,
+        "LAI_Yuan2011",
+        all_sources=["LAI_Yuan2011", "LAI_Yuan2011_8Day"],
+    ) == {"LAI_Yuan2011_varname": "lai"}
+
+
 def test_unified_mask_missing_inputs_raise(tmp_path):
-    from openbench.runner.masking import apply_unified_mask
+    import openbench.runner.masking as masking_module
 
     info = {
         "casedir": str(tmp_path),
@@ -162,10 +177,82 @@ def test_unified_mask_missing_inputs_raise(tmp_path):
     }
 
     with pytest.raises(FileNotFoundError, match="Unified mask input file not found"):
-        apply_unified_mask(
+        masking_module.apply_unified_mask(
             info,
             "GPP",
             "RefA",
             "SimA",
             write_netcdf_atomic_fn=lambda *args, **kwargs: None,
         )
+
+
+def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch):
+    import dask.array as da
+    import numpy as np
+    import xarray as xr
+    from dask.base import is_dask_collection
+
+    import openbench.runner.masking as masking_module
+
+    ref_path = tmp_path / "data" / "GPP_ref_RefA_ref.nc"
+    sim_path = tmp_path / "data" / "GPP_sim_SimA_sim.nc"
+    ref_path.parent.mkdir()
+    ref_path.touch()
+    sim_path.touch()
+    coords = {"time": [0, 1], "lat": [0.0], "lon": [0.0]}
+
+    states = {"ref": "closed", "sim": "closed"}
+
+    def dataset(name, values):
+        states[name] = "open"
+        result = xr.DataArray(
+            da.from_array(values, chunks=(1, 1, 1)),
+            coords=coords,
+            dims=("time", "lat", "lon"),
+            name=name,
+        ).to_dataset()
+        result.set_close(lambda: states.__setitem__(name, "closed"))
+        return result
+
+    open_calls = []
+
+    def open_dataset(path, **kwargs):
+        open_calls.append(kwargs)
+        if str(path) == str(ref_path):
+            return dataset("ref", [[[1.0]], [[2.0]]])
+        return dataset("sim", [[[1.0]], [[float("nan")]]])
+
+    monkeypatch.setattr(xr, "open_dataset", open_dataset)
+    observed = {}
+
+    def writer(data, *_args, **_kwargs):
+        observed["lazy"] = is_dask_collection(data.data)
+        observed["values"] = data.compute().values
+        Path(_args[0]).write_bytes(b"masked")
+
+    real_replace = masking_module.os.replace
+
+    def replace_after_close(source, target):
+        assert states == {"ref": "closed", "sim": "closed"}
+        real_replace(source, target)
+
+    monkeypatch.setattr(masking_module.os, "replace", replace_after_close)
+
+    masking_module.apply_unified_mask(
+        {
+            "casedir": str(tmp_path),
+            "ref_varname": "ref",
+            "sim_varname": "sim",
+            "time_alignment": "intersection",
+        },
+        "GPP",
+        "RefA",
+        "SimA",
+        write_netcdf_atomic_fn=writer,
+    )
+
+    assert observed["lazy"] is True
+    assert open_calls == [{"chunks": "auto"}, {"chunks": "auto"}]
+    assert ref_path.read_bytes() == b"masked"
+    assert observed["values"][0, 0, 0] == 1.0
+    assert np.isnan(observed["values"][1, 0, 0])

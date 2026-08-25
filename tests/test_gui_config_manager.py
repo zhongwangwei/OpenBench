@@ -387,6 +387,91 @@ def test_unified_config_converts_to_gui_internal_shape():
 
     round_tripped = yaml.safe_load(ConfigManager().generate_config_yaml(gui_config))
     assert round_tripped["reference"]["data_root"] == "/ref"
+    assert round_tripped["reference"]["Evapotranspiration"] == ["GLEAM", "ERA5LAND"]
+
+
+def test_unified_config_round_trips_strict_reference_and_uncertainty():
+    unified = {
+        "project": {"name": "demo", "output_dir": "/out", "years": [2000, 2001], "strict_reference": True},
+        "evaluation": {"variables": ["Runoff"]},
+        "reference": {"Runoff": ["RefA", "RefB"]},
+        "simulation": {"CaseA": {"model": "CoLM2024", "root_dir": "/sim"}},
+        "metrics": ["RMSE"],
+        "uncertainty": {"enabled": True, "metrics": ["RMSE"], "n_resamples": 25, "seed": 9},
+    }
+
+    gui_config = ConfigManager().unified_to_gui_config(unified)
+    exported = yaml.safe_load(ConfigManager().generate_config_yaml(gui_config))
+
+    assert gui_config["general"]["strict_reference"] is True
+    assert gui_config["uncertainty"] == unified["uncertainty"]
+    assert exported["project"]["strict_reference"] is True
+    assert exported["reference"]["Runoff"] == ["RefA", "RefB"]
+    assert exported["uncertainty"] == unified["uncertainty"]
+
+
+def test_generate_config_yaml_exports_reference_overrides_for_runtime(tmp_path):
+    config = _config()
+    config["evaluation_items"] = {"Runoff": True}
+    config["ref_data"] = {
+        "general": {"Runoff_ref_source": ["RefA", "RefB"]},
+        "source_configs": {
+            "Runoff::RefA": {
+                "general": {
+                    "root_dir": "ref/a",
+                    "data_type": "grid",
+                    "tim_res": "Month",
+                    "data_groupby": "Single",
+                    "timezone": 0,
+                    "grid_res": 0.5,
+                    "syear": 2000,
+                    "eyear": 2002,
+                },
+                "varname": "manual_q_a",
+                "prefix": "a_",
+                "suffix": "",
+                "_explicit_override": True,
+            },
+            "Runoff::RefB": {
+                "general": {"root_dir": "ref/b", "data_type": "grid", "data_groupby": "Year"},
+                "varname": "manual_q_b",
+                "_explicit_override": True,
+            },
+        },
+    }
+
+    data = yaml.safe_load(ConfigManager().generate_config_yaml(config, path_transform=lambda p: f"/remote/{p}"))
+
+    assert data["reference"]["Runoff"] == ["RefA", "RefB"]
+    assert data["reference"]["overrides"]["RefA"]["root_dir"] == "/remote/ref/a"
+    assert data["reference"]["overrides"]["RefA"]["years"] == [2000, 2002]
+    assert data["reference"]["overrides"]["RefA"]["variables"]["Runoff"]["varname"] == "manual_q_a"
+    assert data["reference"]["overrides"]["RefB"]["root_dir"] == "/remote/ref/b"
+    assert data["reference"]["overrides"]["RefB"]["variables"]["Runoff"]["varname"] == "manual_q_b"
+
+
+def test_unified_config_imports_reference_overrides_into_gui_source_configs():
+    unified = {
+        "project": {"name": "demo", "output_dir": "/out", "years": [2000, 2002]},
+        "evaluation": {"variables": ["Runoff"]},
+        "reference": {
+            "Runoff": ["RefA", "RefB"],
+            "overrides": {
+                "RefA": {
+                    "variables": {"Runoff": {"varname": "manual_q_a", "prefix": "a_"}},
+                }
+            },
+        },
+        "simulation": {"CaseA": {"model": "CoLM2024", "root_dir": "/sim"}},
+    }
+
+    gui_config = ConfigManager().unified_to_gui_config(unified)
+
+    ref_a = gui_config["ref_data"]["source_configs"]["Runoff::RefA"]
+    assert ref_a["general"] == {}
+    assert ref_a["varname"] == "manual_q_a"
+    assert ref_a["_explicit_override"] is True
+    assert "Runoff::RefB" not in gui_config["ref_data"]["source_configs"]
 
 
 def test_generate_config_yaml_preserves_simulation_variables_and_fulllist(tmp_path):

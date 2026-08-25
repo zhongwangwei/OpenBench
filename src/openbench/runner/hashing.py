@@ -92,10 +92,24 @@ ALGORITHM_SOURCE_MODULES = (
 )
 
 
-def source_specific_section(section: dict[str, Any], source: str) -> dict[str, Any]:
+def source_specific_section(
+    section: dict[str, Any],
+    source: str,
+    *,
+    all_sources: list[str] | tuple[str, ...] | set[str] = (),
+) -> dict[str, Any]:
     """Return legacy namelist keys owned by one reference/simulation source."""
     prefix = f"{source}_"
-    return {key: value for key, value in section.items() if str(key).startswith(prefix)}
+    nested_prefixes = tuple(
+        f"{candidate}_"
+        for candidate in all_sources
+        if candidate != source and str(candidate).startswith(prefix)
+    )
+    return {
+        key: value
+        for key, value in section.items()
+        if str(key).startswith(prefix) and not str(key).startswith(nested_prefixes)
+    }
 
 
 def legacy_source_value(section: dict[str, Any], source: str, field: str, default: Any = "") -> Any:
@@ -323,7 +337,9 @@ def shared_mask_peer_payload(
             {
                 "sim_source": peer_source,
                 "config": stable_hash_data(sim_entry),
-                "namelist": stable_hash_data(source_specific_section(sim_section, peer_source)),
+                "namelist": stable_hash_data(
+                    source_specific_section(sim_section, peer_source, all_sources=candidate_sources)
+                ),
                 "inputs": input_file_signature(sim_section, peer_source),
             }
         )
@@ -360,8 +376,18 @@ def task_hash_payload(
     ref_section = {}
     sim_section = {}
     if namelists is not None:
-        ref_section = source_specific_section(namelists.reference.get(var_name, {}), ref_source)
-        sim_section = source_specific_section(namelists.simulation.get(var_name, {}), sim_source)
+        configured_refs = cfg.reference.sources.get(var_name, [])
+        ref_sources = [configured_refs] if isinstance(configured_refs, str) else list(configured_refs)
+        ref_section = source_specific_section(
+            namelists.reference.get(var_name, {}),
+            ref_source,
+            all_sources=ref_sources,
+        )
+        sim_section = source_specific_section(
+            namelists.simulation.get(var_name, {}),
+            sim_source,
+            all_sources=list(cfg.simulation),
+        )
 
     general_keys = (
         "syear",

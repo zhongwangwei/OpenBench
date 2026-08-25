@@ -800,13 +800,15 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
             raw_reference["data_root"] = old_data_root
     canonical_reference = (
         _canonicalize_variable_mapping_keys(
-            {k: v for k, v in raw_reference.items() if k != "data_root"},
+            {k: v for k, v in raw_reference.items() if k not in {"data_root", "overrides"}},
             evaluation_lookup,
             path="reference",
         )
         or {}
     )
     raw_reference = {"data_root": raw_reference.get("data_root"), **canonical_reference}
+    if "overrides" in raw.get("reference", {}):
+        raw_reference["overrides"] = raw["reference"]["overrides"]
     if raw_reference.get("data_root") is None:
         raw_reference.pop("data_root", None)
     reference = _build_reference(raw_reference)
@@ -952,6 +954,57 @@ def _build_evaluation(raw: dict[str, Any]) -> EvaluationConfig:
     return EvaluationConfig(variables=variables)
 
 
+
+_UNSAFE_SOURCE_CHARS = set('<>:"/\\|?*')
+_WINDOWS_RESERVED_SOURCE_NAMES = {
+    "CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))
+}
+
+
+def _validate_path_safe_source_name(source: str, path: str) -> str:
+    text = source.strip()
+    if not text:
+        raise ConfigError(f"{path} must not be empty")
+    if source != text or (
+        any(ch in _UNSAFE_SOURCE_CHARS or ord(ch) < 32 for ch in text)
+        or text.endswith((".",))
+        or text.split(".", 1)[0].upper() in _WINDOWS_RESERVED_SOURCE_NAMES
+    ):
+        raise ConfigError(f"{path} must be a path-safe source name")
+    return text
+
+
+def _validate_reference_overrides(raw: Any) -> dict[str, dict[str, Any]]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError("reference.overrides must be a mapping")
+    allowed_dataset = {
+        "root_dir",
+        "data_type",
+        "tim_res",
+        "data_groupby",
+        "timezone",
+        "years",
+        "grid_res",
+        "fulllist",
+        "variables",
+    }
+    result: dict[str, dict[str, Any]] = {}
+    for source, override in raw.items():
+        safe_source = _validate_path_safe_source_name(str(source), f"reference.overrides.{source}")
+        if not isinstance(override, dict):
+            raise ConfigError(f"reference.overrides.{source} must be a mapping")
+        _reject_unknown_keys(override, allowed_dataset, f"reference.overrides.{source}")
+        if "root_dir" in override:
+            _validated_required_string(override["root_dir"], f"reference.overrides.{source}.root_dir")
+        variables = override.get("variables")
+        if variables is not None:
+            _validated_variables_mapping(variables, f"reference.overrides.{source}.variables")
+        result[safe_source] = dict(override)
+    return result
+
+
 def _build_reference(raw: Any) -> ReferenceConfig:
     """Build ReferenceConfig: extract data_root, treat rest as variable→source mappings.
 
@@ -964,6 +1017,7 @@ def _build_reference(raw: Any) -> ReferenceConfig:
 
     raw_copy = dict(raw)
     data_root = raw_copy.pop("data_root", None)
+    overrides = _validate_reference_overrides(raw_copy.pop("overrides", None))
     if data_root is not None:
         if not isinstance(data_root, str):
             raise ConfigError(f"reference.data_root must be a string, got {type(data_root).__name__}")
@@ -977,31 +1031,32 @@ def _build_reference(raw: Any) -> ReferenceConfig:
         if isinstance(value, str):
             # Auto-split comma-separated strings (legacy NML form)
             if "," in value:
-                parts = [s.strip() for s in value.split(",") if s.strip()]
+                parts = [_validate_path_safe_source_name(s, f"reference.{key}") for s in value.split(",") if s.strip()]
                 if not parts:
                     raise ConfigError(f"reference.{key} must include at least one source name")
+                if len(set(map(str.lower, parts))) != len(parts):
+                    raise ConfigError(f"reference.{key} contains duplicate reference source")
                 sources[key] = parts if len(parts) > 1 else parts[0]
             else:
-                source = value.strip()
-                if not source:
-                    raise ConfigError(f"reference.{key} must not be empty")
-                sources[key] = source
+                sources[key] = _validate_path_safe_source_name(value, f"reference.{key}")
         elif isinstance(value, list):
             for i, item in enumerate(value):
                 if not isinstance(item, str):
                     raise ConfigError(f"reference.{key}[{i}] must be a string (source name), got {type(item).__name__}")
-                if not item.strip():
-                    raise ConfigError(f"reference.{key}[{i}] must not be empty")
+                _validate_path_safe_source_name(item, f"reference.{key}[{i}]")
             if not value:
                 raise ConfigError(f"reference.{key} must not be an empty list")
             # Single-item list collapses to plain string for downstream simplicity
-            sources[key] = value[0].strip() if len(value) == 1 else [item.strip() for item in value]
+            clean = [_validate_path_safe_source_name(item, f"reference.{key}[{i}]") for i, item in enumerate(value)]
+            if len(set(map(str.lower, clean))) != len(clean):
+                raise ConfigError(f"reference.{key} contains duplicate reference source")
+            sources[key] = clean[0] if len(clean) == 1 else clean
         else:
             raise ConfigError(
                 f"reference.{key} must be a string or list of strings (source name), got {type(value).__name__}"
             )
 
-    return ReferenceConfig(data_root=data_root, sources=sources)
+    return ReferenceConfig(data_root=data_root, sources=sources, overrides=overrides)
 
 
 def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
@@ -1022,6 +1077,7 @@ def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
     result = {}
 
     for label, entry in raw_copy.items():
+        _validate_path_safe_source_name(str(label), f"simulation.{label}")
         if not isinstance(entry, dict):
             raise ConfigError(f"simulation.{label} must be a mapping")
         _reject_unknown_keys(entry, _SIMULATION_KEYS, f"simulation.{label}")

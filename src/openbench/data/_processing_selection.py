@@ -12,6 +12,7 @@ from typing import List
 import xarray as xr
 
 from openbench.data.time_utils import decode_nonstandard_time
+from openbench.data.coordinates import NC_SUFFIXES, glob_nc_pattern
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
 
@@ -94,48 +95,60 @@ class SelectionMixin:
                     fallback_found = False
                     try:
                         source = getattr(self, f"{datasource}_source", "")
-                        model = getattr(self, f"{source}_model", source)
-                        from openbench.data.registry.manager import get_registry
+                        runtime_fallbacks = getattr(self, f"{source}_fallbacks", None) or []
+                        primary_unit = getattr(self, f"{datasource}_varunit", "")
+                        for fb in runtime_fallbacks:
+                            fb_var = fb.get("varname") if isinstance(fb, dict) else getattr(fb, "varname", "")
+                            actual_fb_var = get_xarray_key_case_insensitive(ds, fb_var) if fb_var else None
+                            if actual_fb_var is not None:
+                                logging.warning("Variable '%s' not found, using fallback '%s'", target_var, actual_fb_var)
+                                target_var = actual_fb_var
+                                actual_target_var = actual_fb_var
+                                setattr(self, f"{datasource}_varname", [target_var])
+                                fb_convert = fb.get("convert", "") if isinstance(fb, dict) else getattr(fb, "convert", "")
+                                fb_unit = fb.get("varunit", "") if isinstance(fb, dict) else getattr(fb, "varunit", "")
+                                if fb_convert:
+                                    setattr(self, f"_fb_convert_{datasource}", fb_convert)
+                                    setattr(self, f"{datasource}_varunit", primary_unit or fb_unit)
+                                elif fb_unit:
+                                    setattr(self, f"{datasource}_varunit", fb_unit)
+                                fallback_found = True
+                                break
 
-                        mgr = get_registry()
-                        profile = mgr.get_model(model)
-                        item = getattr(self, "item", "")
-                        profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
-                        if profile and profile_key is not None:
-                            var_mapping = profile.variables[profile_key]
-                            # Try fallbacks
-                            if var_mapping.fallbacks:
-                                for fb in var_mapping.fallbacks:
-                                    actual_fb_var = get_xarray_key_case_insensitive(ds, fb.varname)
-                                    if actual_fb_var is not None:
-                                        logging.warning(
-                                            "Variable '%s' not found, using fallback '%s'",
-                                            target_var,
-                                            actual_fb_var,
-                                        )
-                                        target_var = actual_fb_var
-                                        actual_target_var = actual_fb_var
-                                        setattr(self, f"{datasource}_varname", [target_var])
-                                        # A convert expression transforms the fallback
-                                        # variable into the PRIMARY variable's unit (same
-                                        # contract as
-                                        # config.adapter._resolve_varname_from_profile), so
-                                        # the primary varunit must drive downstream unit
-                                        # conversion. Setting fb.varunit here would let
-                                        # process_units re-apply the conversion the
-                                        # expression already did (e.g. mol→gC ×12.011),
-                                        # inflating NEE/GPP fallbacks by ~12×.
-                                        if fb.convert:
-                                            setattr(self, f"_fb_convert_{datasource}", fb.convert)
-                                            setattr(
-                                                self,
-                                                f"{datasource}_varunit",
-                                                var_mapping.varunit or fb.varunit,
+                        if not fallback_found:
+                            model = getattr(self, f"{source}_model", source)
+                            from openbench.data.registry.manager import get_registry
+
+                            mgr = get_registry()
+                            profile = mgr.get_model(model)
+                            item = getattr(self, "item", "")
+                            profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+                            if profile and profile_key is not None:
+                                var_mapping = profile.variables[profile_key]
+                                # Try fallbacks
+                                if var_mapping.fallbacks:
+                                    for fb in var_mapping.fallbacks:
+                                        actual_fb_var = get_xarray_key_case_insensitive(ds, fb.varname)
+                                        if actual_fb_var is not None:
+                                            logging.warning(
+                                                "Variable '%s' not found, using fallback '%s'",
+                                                target_var,
+                                                actual_fb_var,
                                             )
-                                        elif fb.varunit:
-                                            setattr(self, f"{datasource}_varunit", fb.varunit)
-                                        fallback_found = True
-                                        break
+                                            target_var = actual_fb_var
+                                            actual_target_var = actual_fb_var
+                                            setattr(self, f"{datasource}_varname", [target_var])
+                                            if fb.convert:
+                                                setattr(self, f"_fb_convert_{datasource}", fb.convert)
+                                                setattr(
+                                                    self,
+                                                    f"{datasource}_varunit",
+                                                    var_mapping.varunit or fb.varunit,
+                                                )
+                                            elif fb.varunit:
+                                                setattr(self, f"{datasource}_varunit", fb.varunit)
+                                            fallback_found = True
+                                            break
                     except Exception as e:
                         logging.debug("Fallback lookup failed: %s", e)
 
@@ -279,6 +292,10 @@ class SelectionMixin:
 
         try:
             source = getattr(self, f"{datasource}_source", "")
+            for fb in getattr(self, f"{source}_fallbacks", None) or []:
+                fb_var = fb.get("varname") if isinstance(fb, dict) else getattr(fb, "varname", "")
+                if fb_var:
+                    candidates.append(str(fb_var))
             model = getattr(self, f"{source}_model", source)
             from openbench.data.registry.manager import get_registry
 
@@ -312,8 +329,8 @@ class SelectionMixin:
             try:
                 with _xr().open_dataset(file_path, decode_times=False) as ds:
                     inspected = True
-                    available = set(ds.variables)
-                    if any(name in available for name in varnames):
+                    available = {str(name).lower() for name in ds.variables}
+                    if any(str(name).lower() in available for name in varnames):
                         return True
             except Exception as exc:
                 logging.debug("Could not inspect variables in %s: %s", file_path, exc)
@@ -343,7 +360,7 @@ class SelectionMixin:
         candidate_varnames = self._candidate_varnames_for_file_lookup(varname, datasource)
         first_existing_path = None
         for try_prefix in self._prefixes_for_variable_lookup(prefix, datasource, candidate_varnames):
-            for ext in (".nc", ".nc4"):
+            for ext in NC_SUFFIXES:
                 path = os.path.join(dirx, f"{try_prefix}{suffix}{ext}")
                 if os.path.exists(path):
                     if first_existing_path is None:
@@ -385,34 +402,18 @@ class SelectionMixin:
             # entirely. The intentional wildcard is between {year} and {suffix}.
             escaped_prefix = glob.escape(try_prefix)
             escaped_suffix = glob.escape(suffix)
-            # Try primary path (.nc and .nc4)
-            var_files = cached_glob(
-                os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
-                force_refresh=True,
-            )
-            if not var_files:
-                var_files = cached_glob(
-                    os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc4"),
-                    force_refresh=True,
-                )
+            # Try primary path with .nc/.nc4 and upper-case variants.
+            var_files = glob_nc_pattern(os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
             # Try subdirectory path
             if not var_files:
-                var_files = cached_glob(
-                    os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
-                    force_refresh=True,
-                )
-            if not var_files:
-                var_files = cached_glob(
-                    os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc4"),
-                    force_refresh=True,
-                )
+                var_files = glob_nc_pattern(os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"))
 
             # Filter: only keep files where part between prefix+year and suffix has no letters
             if var_files:
                 filtered = []
                 prefix_escaped = re.escape(try_prefix)
                 suffix_escaped = re.escape(suffix) if suffix else ""
-                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc4?$")
+                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc4?$", re.IGNORECASE)
                 for f in var_files:
                     if pattern.match(os.path.basename(f)):
                         filtered.append(f)
