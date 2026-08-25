@@ -5,6 +5,7 @@ Report Generation Module for OpenBench
 Generates comprehensive HTML and PDF evaluation reports with tables, figures, and detailed analysis
 """
 
+import csv
 import glob
 import os
 import shutil
@@ -30,6 +31,9 @@ def _url_path(path: str) -> str:
 
 _jinja_env = Environment(autoescape=select_autoescape(default=True, default_for_string=True))
 _jinja_env.filters["url_path"] = _url_path
+
+# ponytail: report summaries cap eager reads; raise only if large-grid summaries are worth the latency.
+_MAX_REPORT_STAT_POINTS = 1_000_000
 
 # Import PDF generation libraries
 try:
@@ -201,23 +205,16 @@ class ReportGenerator:
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
             try:
-                df = pd.read_csv(csv_file)
-                metrics_data[key] = {
-                    "data": df.to_dict(orient="records"),
-                    "summary": self._generate_metrics_summary(df),
-                }
+                metrics_data[key] = {"row_count": self._count_csv_rows(csv_file), "summary": {}}
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
 
         # Generate comprehensive grid vs grid statistics from NetCDF files
         grid_grid_stats = self._generate_grid_vs_grid_stats(item)
-        grid_grid_pairs = set()
         if grid_grid_stats:
             metrics_data.update(grid_grid_stats)
-            # Keep track of which grid vs grid pairs we've already processed comprehensively
-            for key in grid_grid_stats.keys():
-                if "vs" in key:
-                    grid_grid_pairs.add(key)
+            # Comprehensive stats already cover the matching metric/score NC files.
+            return metrics_data
 
         # Look for individual NetCDF files with spatial metrics
         nc_files = self._item_output_files(self.metrics_dir, item, (".nc", ".nc4"))
@@ -233,8 +230,12 @@ class ReportGenerator:
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
                         if data_vars:
                             main_var = ds[data_vars[0]]
+                            if main_var.size > _MAX_REPORT_STAT_POINTS:
+                                logger.info("Skipping report summary for large NetCDF file: %s", nc_file)
+                                continue
                             # Extract comprehensive statistics
-                            valid_data = main_var.values[~np.isnan(main_var.values)]
+                            values = main_var.values
+                            valid_data = values[~np.isnan(values)]
 
                             if len(valid_data) > 0:
                                 # Try to extract comparison pair from filename first, then fallback to config
@@ -295,6 +296,13 @@ class ReportGenerator:
 
         return metrics_data
 
+    @staticmethod
+    def _count_csv_rows(csv_file: str) -> int:
+        with open(csv_file, newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            next(reader, None)
+            return sum(1 for _row in reader)
+
     def _collect_scores_data(self, item: str) -> Dict[str, Any]:
         """Collect scores data for a specific evaluation item"""
         scores_data = {}
@@ -309,8 +317,7 @@ class ReportGenerator:
         for csv_file in csv_files:
             key = os.path.basename(csv_file).replace("_evaluations.csv", "")
             try:
-                df = pd.read_csv(csv_file)
-                scores_data[key] = {"data": df.to_dict(orient="records"), "summary": self._generate_scores_summary(df)}
+                scores_data[key] = {"row_count": self._count_csv_rows(csv_file), "summary": {}}
             except Exception as e:
                 logger.warning(f"Error reading {csv_file}: {e}")
 
@@ -581,7 +588,7 @@ class ReportGenerator:
                         stats_data.append(
                             {
                                 "file": os.path.basename(csv_file),
-                                "data": df.to_dict(orient="records"),
+                                "row_count": int(len(df)),
                                 "summary": self._generate_groupby_summary(df),
                             }
                         )
@@ -1034,7 +1041,10 @@ class ReportGenerator:
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
                         if data_vars:
                             main_var = ds[data_vars[0]]
-                            values = main_var.values.flatten()
+                            if main_var.size > _MAX_REPORT_STAT_POINTS:
+                                logger.info("Skipping report summary for large NetCDF file: %s", nc_file)
+                                continue
+                            values = main_var.values.ravel()
                             valid_data = values[~np.isnan(values)]
                             total_points = len(values)
                             valid_points = len(valid_data)
@@ -1042,7 +1052,6 @@ class ReportGenerator:
 
                             if len(valid_data) > 0:
                                 pair_data[metric_name] = {
-                                    "values": valid_data.tolist(),
                                     "mean": float(np.mean(valid_data)),
                                     "std": float(np.std(valid_data)),
                                     "min": float(np.min(valid_data)),

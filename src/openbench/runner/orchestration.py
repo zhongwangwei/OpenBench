@@ -388,7 +388,8 @@ def run_evaluation_impl(
     # Skipped under --comparison-only: the CLI flag advertises "only run
     # comparisons", so groupby/statistics/report belong to the full
     # pipeline only.
-    if cfg.comparison.enabled and post_phases_allowed and not comparison_only:
+    groupby_enabled = bool(cfg.project.IGBP_groupby or cfg.project.PFT_groupby or cfg.project.climate_zone_groupby)
+    if groupby_enabled and post_phases_allowed and not comparison_only:
         try:
             errors.extend(_run_groupby(cfg, bindings, output_dir) or [])
         except Exception as exc:

@@ -57,3 +57,52 @@ def test_progress_parser_accepts_structured_ref_and_sim_markers():
     assert state["current_variable"] == "Latent_Heat"
     assert state["current_ref"] == "GLEAM_v4.2a"
     assert state["current_sim"] == "CoLM2024"
+
+
+def test_progress_parser_counts_structured_completed_evaluation_line():
+    state = _state(total_tasks=1)
+
+    progress, var, stage = parse_progress_line(
+        "Completed Latent_Heat: sim=CoLM2024 ref=GLEAM_v4.2a", 5, state, CONSTANTS
+    )
+
+    assert progress == 95
+    assert var == "Latent_Heat"
+    assert stage == "Evaluation"
+    assert ("Latent_Heat", "GLEAM_v4.2a", "CoLM2024") in state["completed_eval_tasks"]
+
+
+def test_progress_parser_advances_report_stage_without_backtracking():
+    state = _state(total_tasks=1)
+
+    progress, _var, stage = parse_progress_line("Starting report generation...", 90, state, CONSTANTS)
+    done, _var, done_stage = parse_progress_line("Report generation completed successfully", progress, state, CONSTANTS)
+
+    assert stage == "Report"
+    assert done_stage == "Report"
+    assert done > progress > 90
+
+
+def test_progress_parser_counts_actual_comparison_completion_line():
+    state = _state(total_tasks=1)
+
+    progress, _var, stage = parse_progress_line("Completed Taylor_Diagram comparison", 5, state, CONSTANTS)
+
+    assert progress == 95
+    assert stage == "Comparison"
+    assert "taylor_diagram" in state["completed_comparison_tasks"]
+
+
+def test_progress_parser_counts_actual_groupby_complete_lines():
+    for line, key in [
+        ("IGBP groupby complete", "igbp"),
+        ("PFT groupby complete", "pft"),
+        ("Climate zone groupby complete", "climate"),
+    ]:
+        state = _state(total_tasks=1, current_variable="Runoff")
+
+        progress, _var, stage = parse_progress_line(line, 5, state, CONSTANTS)
+
+        assert progress == 95
+        assert stage == "Comparison"
+        assert ("Runoff", key) in state["completed_groupby_tasks"]
