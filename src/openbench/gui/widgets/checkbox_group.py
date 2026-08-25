@@ -167,11 +167,10 @@ class CheckboxGroup(QWidget):
 
     def set_selection(self, selection: Dict[str, bool]):
         """Set selection state."""
-        for item_id, checked in selection.items():
-            if item_id in self._checkboxes:
-                self._checkboxes[item_id].blockSignals(True)
-                self._checkboxes[item_id].setChecked(checked)
-                self._checkboxes[item_id].blockSignals(False)
+        for item_id, cb in self._checkboxes.items():
+            cb.blockSignals(True)
+            cb.setChecked(bool(selection.get(item_id, False)))
+            cb.blockSignals(False)
         self._update_count()
 
     def get_selected_items(self) -> List[str]:

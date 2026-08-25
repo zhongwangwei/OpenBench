@@ -388,7 +388,10 @@ class SyncEngine:
         )
         stdout, stderr, exit_code = self._ssh.execute(f"bash -c {shlex.quote(inner)}", timeout=30)
         if exit_code != 0:
-            return []
+            raise IOError(
+                f"glob({pattern!r}) under {base_dir!r} failed (exit {exit_code}): "
+                f"{stderr.strip() or stdout.strip() or 'glob produced no diagnostics'}"
+            )
         return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
 
     def mkdir(self, path: str) -> None:

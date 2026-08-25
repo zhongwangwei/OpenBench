@@ -7,6 +7,7 @@ remotely using SSHManager for file transfer and command execution.
 """
 
 import os
+import json
 import re
 import shlex
 import threading
@@ -117,6 +118,8 @@ class RemoteRunner(QThread):
         self._do_evaluation = True
         self._do_comparison = False
         self._do_statistics = False
+        self._num_statistics = 0
+        self._last_progress = 0.0
 
         # Track completed items to avoid double counting
         self._started_preprocess_tasks = set()
@@ -124,6 +127,7 @@ class RemoteRunner(QThread):
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
+        self._completed_statistics_tasks = set()
 
     def run(self):
         """Run the evaluation on the remote server."""
@@ -190,6 +194,9 @@ class RemoteRunner(QThread):
                 self._handle_stop()
                 return
 
+            if not self._apply_remote_num_cores_override():
+                return
+
             # Step 3: Execute OpenBench on remote server
             self._emit_progress(
                 RunnerStatus.RUNNING, self.PROGRESS_INIT, "Executing", "", "Running", "Starting OpenBench execution..."
@@ -203,10 +210,14 @@ class RemoteRunner(QThread):
                 )
                 self.finished_signal.emit(True, "Evaluation completed successfully")
             else:
-                if _looks_like_partial_completion([message]):
-                    self._emit_progress(RunnerStatus.PARTIAL, self.PROGRESS_MAX, "Partial", "", "", message)
+                if message == "Stopped by user":
+                    self._emit_progress(
+                        RunnerStatus.STOPPED, self._last_progress, "Stopped", "", "", "Evaluation stopped by user"
+                    )
+                elif _looks_like_partial_completion([message]):
+                    self._emit_progress(RunnerStatus.PARTIAL, self._last_progress, "Partial", "", "", message)
                 else:
-                    self._emit_progress(RunnerStatus.FAILED, self.PROGRESS_MAX, "Failed", "", "", message)
+                    self._emit_progress(RunnerStatus.FAILED, self._last_progress, "Failed", "", "", message)
                 self.finished_signal.emit(False, message)
 
         except SSHConnectionError as e:
@@ -341,6 +352,58 @@ class RemoteRunner(QThread):
         """Append the remote command to unexpected execution errors."""
         return f"{message}\n\nCommand: {command}"
 
+    def _apply_remote_num_cores_override(self) -> bool:
+        """Persist the remote runtime core count into the uploaded config."""
+        raw_num_cores = self._remote_config.get("num_cores")
+        if raw_num_cores in (None, ""):
+            return True
+        try:
+            num_cores = int(raw_num_cores)
+        except (TypeError, ValueError):
+            self.finished_signal.emit(False, f"Invalid remote CPU core count: {raw_num_cores!r}")
+            return False
+        if num_cores <= 0:
+            self.finished_signal.emit(False, f"Invalid remote CPU core count: {num_cores}")
+            return False
+        if not self._remote_config_path:
+            return True
+
+        try:
+            from openbench.gui.remote_python import build_remote_python_command
+
+            script = f"""
+import pathlib
+import yaml
+
+path = pathlib.Path({json.dumps(self._remote_config_path)})
+data = yaml.safe_load(path.read_text(encoding="utf-8")) or {{}}
+if not isinstance(data, dict):
+    raise TypeError("OpenBench config root must be a mapping")
+project = data.setdefault("project", {{}})
+if not isinstance(project, dict):
+    raise TypeError("OpenBench config project section must be a mapping")
+project["num_cores"] = {num_cores}
+general = data.get("general")
+if isinstance(general, dict):
+    general["num_cores"] = {num_cores}
+path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+"""
+            command = build_remote_python_command(
+                script,
+                python_path=self._remote_config.get("python_path", "python3"),
+                conda_env=self._remote_config.get("conda_env", ""),
+            )
+            stdout, stderr, exit_code = self._ssh_manager.execute(command, timeout=30)
+            if exit_code != 0:
+                detail = stderr or stdout or "unknown error"
+                self.finished_signal.emit(False, f"Failed to apply remote CPU core count to config: {detail}")
+                return False
+            self.log_message.emit(f"Using {num_cores} CPU cores on remote server.")
+            return True
+        except Exception as exc:
+            self.finished_signal.emit(False, f"Failed to apply remote CPU core count to config: {exc}")
+            return False
+
     def _execute_remote_openbench(self) -> tuple:
         """Execute OpenBench on the remote server.
 
@@ -366,7 +429,7 @@ class RemoteRunner(QThread):
             # code. We need to capture the StopIteration.value to know
             # whether the remote process succeeded; iterating with `for`
             # discards the return value, so drive the generator manually.
-            stream = self._ssh_manager.execute_stream(cmd)
+            stream = self._ssh_manager.execute_stream(cmd, should_abort=self._is_stop_requested)
             exit_code = 0
             stopped_by_user = False
             try:
@@ -418,6 +481,9 @@ class RemoteRunner(QThread):
             return (False, message)
 
         except SSHConnectionError as e:
+            if self._is_stop_requested():
+                self._kill_remote_process()
+                return (False, "Stopped by user")
             return (False, self._format_command_context(f"SSH error while running remote command: {e}", cmd))
         except Exception as e:
             return (False, self._format_command_context(f"Execution error while running remote command: {e}", cmd))
@@ -469,8 +535,10 @@ class RemoteRunner(QThread):
             "completed_eval_tasks": self._completed_eval_tasks,
             "completed_groupby_tasks": self._completed_groupby_tasks,
             "completed_comparison_tasks": self._completed_comparison_tasks,
+            "completed_statistics_tasks": self._completed_statistics_tasks,
             "total_tasks": self._total_tasks,
             "num_comparisons": self._num_comparisons,
+            "num_statistics": self._num_statistics,
             "num_variables": self._num_variables,
         }
         constants = {
@@ -502,6 +570,7 @@ class RemoteRunner(QThread):
         do_comparison: bool = False,
         do_statistics: bool = False,
         num_evaluation_tasks: int | None = None,
+        num_statistics: int = 0,
     ):
         """Set detailed task counts for accurate progress calculation.
 
@@ -517,6 +586,7 @@ class RemoteRunner(QThread):
         self._do_evaluation = do_evaluation
         self._do_comparison = do_comparison
         self._do_statistics = do_statistics
+        self._num_statistics = max(0, int(num_statistics or 0))
 
         # Calculate total tasks
         self._total_tasks = 0
@@ -532,8 +602,8 @@ class RemoteRunner(QThread):
         if num_groupby > 0:
             self._total_tasks += num_groupby
 
-        if do_statistics and num_comparisons > 0:
-            self._total_tasks += num_comparisons
+        if do_statistics:
+            self._total_tasks += self._num_statistics
 
         self._total_tasks = max(1, self._total_tasks)
 
@@ -544,9 +614,11 @@ class RemoteRunner(QThread):
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
+        self._completed_statistics_tasks = set()
 
     def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
         """Emit progress signal."""
+        self._last_progress = progress
         self.progress_updated.emit(
             RunnerProgress(
                 status=status,

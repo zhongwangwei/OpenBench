@@ -94,13 +94,16 @@ class EvaluationRunner(QThread):
         self._do_evaluation = True
         self._do_comparison = False
         self._do_statistics = False
+        self._num_statistics = 0
+        self._last_progress = 0.0
 
         # Track completed items to avoid double counting
         self._started_preprocess_tasks = set()  # (var, ref, sim) tuples
         self._completed_preprocess_tasks = set()  # (var, ref, sim) tuples
         self._completed_eval_tasks = set()  # (var, ref, sim) tuples
-        self._completed_groupby_tasks = set()  # (var, groupby_type) tuples
+        self._completed_groupby_tasks = set()  # groupby type names
         self._completed_comparison_tasks = set()  # comparison names
+        self._completed_statistics_tasks = set()  # statistics names
 
     @staticmethod
     def _format_failure_with_tail(message: str, output_tail) -> str:
@@ -116,6 +119,18 @@ class EvaluationRunner(QThread):
         if not cmd:
             return message
         return f"{message}\n\nCommand: {' '.join(cmd)}"
+
+    def get_process_pid(self) -> int | None:
+        """Return the active OpenBench subprocess pid, if one is running."""
+        process = self._process
+        if process is None:
+            return None
+        try:
+            if process.poll() is not None:
+                return None
+            return getattr(process, "pid", None)
+        except Exception:
+            return None
 
     def _cleanup_process(self):
         """Safely cleanup the subprocess. Idempotent; called from the
@@ -199,6 +214,7 @@ class EvaluationRunner(QThread):
                     self._completed_eval_tasks.clear()
                     self._completed_groupby_tasks.clear()
                     self._completed_comparison_tasks.clear()
+                    self._completed_statistics_tasks.clear()
                     self._emit_progress(
                         RunnerStatus.RUNNING,
                         0,
@@ -417,8 +433,10 @@ class EvaluationRunner(QThread):
             "completed_eval_tasks": self._completed_eval_tasks,
             "completed_groupby_tasks": self._completed_groupby_tasks,
             "completed_comparison_tasks": self._completed_comparison_tasks,
+            "completed_statistics_tasks": self._completed_statistics_tasks,
             "total_tasks": self._total_tasks,
             "num_comparisons": self._num_comparisons,
+            "num_statistics": self._num_statistics,
             "num_variables": self._num_variables,
         }
         constants = {
@@ -450,14 +468,16 @@ class EvaluationRunner(QThread):
         do_comparison: bool = False,
         do_statistics: bool = False,
         num_evaluation_tasks: int | None = None,
+        num_statistics: int = 0,
     ):
         """
         Set detailed task counts for accurate progress calculation.
 
         Total tasks formula:
         - Evaluation: variables × ref_sources × sim_sources
-        - Groupby: variables × groupby_count × (metrics + scores)
+        - Groupby: one task per enabled global groupby phase
         - Comparisons: num_comparisons
+        - Statistics: num_statistics
 
         Args:
             num_variables: Number of evaluation variables (e.g., GPP, ET, etc.)
@@ -481,6 +501,7 @@ class EvaluationRunner(QThread):
         self._do_evaluation = do_evaluation
         self._do_comparison = do_comparison
         self._do_statistics = do_statistics
+        self._num_statistics = max(0, int(num_statistics or 0))
 
         # Calculate total tasks
         self._total_tasks = 0
@@ -496,8 +517,8 @@ class EvaluationRunner(QThread):
         if num_groupby > 0:
             self._total_tasks += num_groupby
 
-        if do_statistics and num_comparisons > 0:
-            self._total_tasks += num_comparisons
+        if do_statistics:
+            self._total_tasks += self._num_statistics
 
         # Ensure at least 1 task
         self._total_tasks = max(1, self._total_tasks)
@@ -509,9 +530,11 @@ class EvaluationRunner(QThread):
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
+        self._completed_statistics_tasks = set()
 
     def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
         """Emit progress signal."""
+        self._last_progress = progress
         self.progress_updated.emit(
             RunnerProgress(
                 status=status,

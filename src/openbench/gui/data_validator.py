@@ -42,6 +42,65 @@ def safe_open(path: str):
         return xr.open_dataset(path, decode_times=False)
 
 
+def _longitude_range_covers(
+    data_min: float,
+    data_max: float,
+    required_min: float,
+    required_max: float,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Compare longitude intervals even when they use different 0/360 domains."""
+    metadata = metadata or {}
+    if metadata.get("lon_is_global"):
+        return True
+    coverage = metadata.get("lon_coverage")
+    if coverage and required_max >= required_min:
+        required_span = required_max - required_min
+        if required_span >= 359.999:
+            return False
+        required_start = required_min % 360.0
+        required_end = required_start + required_span
+        coverage_start, coverage_end = coverage
+        return any(
+            coverage_start <= required_start + shift and coverage_end >= required_end + shift
+            for shift in (-360.0, 0.0, 360.0)
+        )
+    return any(
+        data_min + data_shift <= required_min + required_shift
+        and data_max + data_shift >= required_max + required_shift
+        for data_shift in (-360.0, 0.0, 360.0)
+        for required_shift in (-360.0, 0.0, 360.0)
+    )
+
+
+def _longitude_metadata(values) -> Dict[str, Any]:
+    """Describe a one-dimensional longitude coordinate on a circular domain."""
+    try:
+        import numpy as np
+
+        array = np.asarray(values, dtype=float)
+        if array.ndim != 1:
+            return {}
+        normalized = np.unique(np.mod(array[np.isfinite(array)], 360.0))
+        if normalized.size < 2:
+            return {}
+        gaps = np.diff(np.concatenate((normalized, [normalized[0] + 360.0])))
+        largest_index = int(np.argmax(gaps))
+        smaller_gaps = np.delete(gaps, largest_index)
+        resolution = float(np.median(smaller_gaps[smaller_gaps > 0])) if np.any(smaller_gaps > 0) else 0.0
+        largest_gap = float(gaps[largest_index])
+        coverage_start = float(normalized[(largest_index + 1) % normalized.size])
+        coverage_end = float(normalized[largest_index])
+        if coverage_end < coverage_start:
+            coverage_end += 360.0
+        return {
+            "lon_is_global": bool(normalized.size >= 4 and resolution > 0 and largest_gap <= resolution * 1.5 + 1e-9),
+            "lon_coverage": [coverage_start, coverage_end],
+        }
+    except (ImportError, TypeError, ValueError):
+        return {}
+
+
 # String version of safe_open for embedding in remote scripts
 SAFE_OPEN_CODE = '''
 def safe_open(path):
@@ -272,24 +331,49 @@ class LocalNetCDFValidator:
         """Open dataset using safe_open."""
         return safe_open(path)
 
-    def check_variable(self, path: str, varname: str) -> ValidationCheck:
-        """Check if variable exists in NetCDF file."""
+    def inspect_file(self, path: str) -> Dict[str, Any]:
+        """Read all metadata needed by validation while opening the file once."""
         try:
-            import xarray as xr  # noqa: F401  feature detection
-        except ImportError:
-            return ValidationCheck("variable_exists", False, "xarray required: pip install xarray netCDF4")
+            import pandas as pd
 
-        try:
             with self._open_dataset(path) as ds:
-                available_vars = list(ds.data_vars)
+                result: Dict[str, Any] = {"success": True, "variables": list(ds.data_vars)}
+                time_dim = self._find_dim(ds, self.TIME_DIMS)
+                if time_dim is None:
+                    result["time_missing"] = True
+                else:
+                    try:
+                        time_years = pd.to_datetime(ds[time_dim].values).year
+                        result["time_range"] = [int(time_years.min()), int(time_years.max())]
+                    except (TypeError, ValueError) as exc:
+                        result["time_error"] = str(exc)
 
-            if varname in available_vars:
-                return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
+                lat_dim = self._find_dim(ds, self.LAT_DIMS)
+                lon_dim = self._find_dim(ds, self.LON_DIMS)
+                if lat_dim is not None:
+                    lat_vals = ds[lat_dim].values
+                    result["lat_range"] = [float(lat_vals.min()), float(lat_vals.max())]
+                if lon_dim is not None:
+                    lon_vals = ds[lon_dim].values
+                    result["lon_range"] = [float(lon_vals.min()), float(lon_vals.max())]
+                    result.update(_longitude_metadata(lon_vals))
+                return result
+        except ImportError:
+            return {"success": False, "error": "xarray required: pip install xarray netCDF4"}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    def check_variable(self, path: str, varname: str, inspection: Optional[Dict[str, Any]] = None) -> ValidationCheck:
+        """Check if variable exists in NetCDF file."""
+        result = inspection if inspection is not None else self.inspect_file(path)
+        if not result.get("success"):
             return ValidationCheck(
-                "variable_exists", False, f"Variable '{varname}' not found, available: {available_vars}"
+                "variable_exists", False, f"Cannot read file: {result.get('error', 'Unknown error')}"
             )
-        except Exception as e:
-            return ValidationCheck("variable_exists", False, f"Cannot read file: {e}")
+        available_vars = result.get("variables", [])
+        if varname in available_vars:
+            return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
+        return ValidationCheck("variable_exists", False, f"Variable '{varname}' not found, available: {available_vars}")
 
     def _find_dim(self, ds, candidates: List[str]) -> Optional[str]:
         """Find a dimension by trying common names."""
@@ -298,87 +382,69 @@ class LocalNetCDFValidator:
                 return name
         return None
 
-    def check_time_range(self, path: str, syear: int, eyear: int) -> ValidationCheck:
+    def check_time_range(
+        self, path: str, syear: int, eyear: int, inspection: Optional[Dict[str, Any]] = None
+    ) -> ValidationCheck:
         """Check if data time range covers required period."""
-        try:
-            import xarray as xr  # noqa: F401  feature detection
-            import pandas as pd  # noqa: F401  feature detection
-        except ImportError:
-            return ValidationCheck("time_range", False, "xarray required: pip install xarray netCDF4")
-
-        try:
-            with self._open_dataset(path) as ds:
-                time_dim = self._find_dim(ds, self.TIME_DIMS)
-
-                if time_dim is None:
-                    return ValidationCheck("time_range", False, f"Time dimension not found, tried: {self.TIME_DIMS}")
-
-                time_vals = ds[time_dim].values
-
-            # Convert to years - handle cftime objects
-            try:
-                time_years = pd.to_datetime(time_vals).year
-            except (TypeError, ValueError):
-                # cftime or other non-standard calendar - skip time check
-                return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
-
-            data_syear = int(time_years.min())
-            data_eyear = int(time_years.max())
-
-            if data_syear <= syear and data_eyear >= eyear:
-                return ValidationCheck(
-                    "time_range", True, f"Time range OK: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
-                )
+        result = inspection if inspection is not None else self.inspect_file(path)
+        if not result.get("success"):
+            return ValidationCheck("time_range", False, f"Time check failed: {result.get('error', 'Unknown error')}")
+        if result.get("time_missing"):
+            return ValidationCheck("time_range", False, f"Time dimension not found, tried: {self.TIME_DIMS}")
+        if "time_error" in result:
+            return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
+        time_range = result.get("time_range")
+        if time_range is None:
+            return ValidationCheck("time_range", False, "Time check failed: no time range")
+        data_syear, data_eyear = time_range
+        if data_syear <= syear and data_eyear >= eyear:
             return ValidationCheck(
-                "time_range",
-                False,
-                f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}",
+                "time_range", True, f"Time range OK: data {data_syear}-{data_eyear}, required {syear}-{eyear}"
             )
-        except Exception as e:
-            return ValidationCheck("time_range", False, f"Time check failed: {e}")
+        return ValidationCheck(
+            "time_range",
+            False,
+            f"Time range insufficient: data {data_syear}-{data_eyear}, required {syear}-{eyear}",
+        )
 
     def check_spatial_range(
-        self, path: str, min_lat: float, max_lat: float, min_lon: float, max_lon: float
+        self,
+        path: str,
+        min_lat: float,
+        max_lat: float,
+        min_lon: float,
+        max_lon: float,
+        inspection: Optional[Dict[str, Any]] = None,
     ) -> ValidationCheck:
         """Check if data spatial range covers required area."""
-        try:
-            import xarray as xr  # noqa: F401  feature detection
-        except ImportError:
-            return ValidationCheck("spatial_range", False, "xarray required: pip install xarray netCDF4")
+        result = inspection if inspection is not None else self.inspect_file(path)
+        if not result.get("success"):
+            return ValidationCheck(
+                "spatial_range", False, f"Spatial check failed: {result.get('error', 'Unknown error')}"
+            )
+        lat_range = result.get("lat_range")
+        lon_range = result.get("lon_range")
+        if lat_range is None or lon_range is None:
+            return ValidationCheck("spatial_range", False, "Lat/lon dimensions not found")
+        data_min_lat, data_max_lat = lat_range
+        data_min_lon, data_max_lon = lon_range
+        lat_ok = data_min_lat <= min_lat and data_max_lat >= max_lat
+        lon_ok = _longitude_range_covers(
+            data_min_lon,
+            data_max_lon,
+            min_lon,
+            max_lon,
+            result,
+        )
+        if lat_ok and lon_ok:
+            return ValidationCheck("spatial_range", True, "Spatial range OK")
 
-        try:
-            with self._open_dataset(path) as ds:
-                lat_dim = self._find_dim(ds, self.LAT_DIMS)
-                lon_dim = self._find_dim(ds, self.LON_DIMS)
-
-                if lat_dim is None or lon_dim is None:
-                    return ValidationCheck("spatial_range", False, "Lat/lon dimensions not found")
-
-                lat_vals = ds[lat_dim].values
-                lon_vals = ds[lon_dim].values
-
-            data_min_lat, data_max_lat = float(lat_vals.min()), float(lat_vals.max())
-            data_min_lon, data_max_lon = float(lon_vals.min()), float(lon_vals.max())
-
-            lat_ok = data_min_lat <= min_lat and data_max_lat >= max_lat
-            lon_ok = data_min_lon <= min_lon and data_max_lon >= max_lon
-
-            if lat_ok and lon_ok:
-                return ValidationCheck("spatial_range", True, "Spatial range OK")
-
-            msg_parts = []
-            if not lat_ok:
-                msg_parts.append(
-                    f"Lat: data {data_min_lat:.1f}~{data_max_lat:.1f}, required {min_lat:.1f}~{max_lat:.1f}"
-                )
-            if not lon_ok:
-                msg_parts.append(
-                    f"Lon: data {data_min_lon:.1f}~{data_max_lon:.1f}, required {min_lon:.1f}~{max_lon:.1f}"
-                )
-
-            return ValidationCheck("spatial_range", False, "Spatial range insufficient: " + "; ".join(msg_parts))
-        except Exception as e:
-            return ValidationCheck("spatial_range", False, f"Spatial check failed: {e}")
+        msg_parts = []
+        if not lat_ok:
+            msg_parts.append(f"Lat: data {data_min_lat:.1f}~{data_max_lat:.1f}, required {min_lat:.1f}~{max_lat:.1f}")
+        if not lon_ok:
+            msg_parts.append(f"Lon: data {data_min_lon:.1f}~{data_max_lon:.1f}, required {min_lon:.1f}~{max_lon:.1f}")
+        return ValidationCheck("spatial_range", False, "Spatial range insufficient: " + "; ".join(msg_parts))
 
 
 class RemoteNetCDFValidator:
@@ -425,7 +491,31 @@ try:
             break
     for ld in lon_dims:
         if ld in ds.dims or ld in ds.coords:
-            result["lon_range"] = [float(ds[ld].values.min()), float(ds[ld].values.max())]
+            lon_values = ds[ld].values
+            result["lon_range"] = [float(lon_values.min()), float(lon_values.max())]
+            try:
+                import numpy as np
+                array = np.asarray(lon_values, dtype=float)
+                if array.ndim == 1:
+                    normalized = np.unique(np.mod(array[np.isfinite(array)], 360.0))
+                    if normalized.size > 1:
+                        gaps = np.diff(np.concatenate((normalized, [normalized[0] + 360.0])))
+                        largest_index = int(np.argmax(gaps))
+                        smaller_gaps = np.delete(gaps, largest_index)
+                        positive_gaps = smaller_gaps[smaller_gaps > 0]
+                        resolution = float(np.median(positive_gaps)) if positive_gaps.size else 0.0
+                        coverage_start = float(normalized[(largest_index + 1) % normalized.size])
+                        coverage_end = float(normalized[largest_index])
+                        if coverage_end < coverage_start:
+                            coverage_end += 360.0
+                        result["lon_is_global"] = bool(
+                            normalized.size >= 4
+                            and resolution > 0
+                            and float(gaps[largest_index]) <= resolution * 1.5 + 1e-9
+                        )
+                        result["lon_coverage"] = [coverage_start, coverage_end]
+            except Exception:
+                pass
             break
 
     ds.close()
@@ -473,12 +563,14 @@ except Exception as e:
             pass
         return None
 
-    def check_variable(self, path: str, varname: str) -> ValidationCheck:
-        """Check if variable exists in remote NetCDF file."""
+    def inspect_file(self, path: str) -> Dict[str, Any]:
+        """Return all remotely inspected metadata in one SSH round trip."""
         result = self._run_inspect_script(path)
+        return result if result is not None else {"success": False, "error": "Remote check failed"}
 
-        if result is None:
-            return ValidationCheck("variable_exists", False, "Remote check failed")
+    def check_variable(self, path: str, varname: str, inspection: Optional[Dict[str, Any]] = None) -> ValidationCheck:
+        """Check if variable exists in remote NetCDF file."""
+        result = inspection if inspection is not None else self.inspect_file(path)
 
         if not result.get("success"):
             error = result.get("error", "Unknown error")
@@ -489,11 +581,13 @@ except Exception as e:
             return ValidationCheck("variable_exists", True, f"Variable '{varname}' exists")
         return ValidationCheck("variable_exists", False, f"Variable '{varname}' not found, available: {variables}")
 
-    def check_time_range(self, path: str, syear: int, eyear: int) -> ValidationCheck:
+    def check_time_range(
+        self, path: str, syear: int, eyear: int, inspection: Optional[Dict[str, Any]] = None
+    ) -> ValidationCheck:
         """Check time range on remote file."""
-        result = self._run_inspect_script(path)
+        result = inspection if inspection is not None else self.inspect_file(path)
 
-        if result is None or not result.get("success"):
+        if not result.get("success"):
             return ValidationCheck("time_range", False, "Remote time check failed")
 
         # Check for time conversion error
@@ -512,12 +606,18 @@ except Exception as e:
         )
 
     def check_spatial_range(
-        self, path: str, min_lat: float, max_lat: float, min_lon: float, max_lon: float
+        self,
+        path: str,
+        min_lat: float,
+        max_lat: float,
+        min_lon: float,
+        max_lon: float,
+        inspection: Optional[Dict[str, Any]] = None,
     ) -> ValidationCheck:
         """Check spatial range on remote file."""
-        result = self._run_inspect_script(path)
+        result = inspection if inspection is not None else self.inspect_file(path)
 
-        if result is None or not result.get("success"):
+        if not result.get("success"):
             return ValidationCheck("spatial_range", False, "Remote spatial check failed")
 
         lat_range = result.get("lat_range")
@@ -530,7 +630,13 @@ except Exception as e:
         data_min_lon, data_max_lon = lon_range
 
         lat_ok = data_min_lat <= min_lat and data_max_lat >= max_lat
-        lon_ok = data_min_lon <= min_lon and data_max_lon >= max_lon
+        lon_ok = _longitude_range_covers(
+            data_min_lon,
+            data_max_lon,
+            min_lon,
+            max_lon,
+            result,
+        )
 
         if lat_ok and lon_ok:
             return ValidationCheck("spatial_range", True, "Spatial range OK")
@@ -695,18 +801,28 @@ class DataValidator:
         if first_existing_path is None:
             return SourceValidationResult(var_name, source_name, checks)
 
+        needs_time_check = data_type == "grid" and str(data_groupby).lower() == "single"
+        needs_spatial_check = data_type == "grid" and all(
+            key in general_config for key in ("min_lat", "max_lat", "min_lon", "max_lon")
+        )
+        inspection = (
+            self._validator.inspect_file(first_existing_path)
+            if varname or needs_time_check or needs_spatial_check
+            else None
+        )
+
         # Check variable name
         if varname:
-            check = self._validator.check_variable(first_existing_path, varname)
+            check = self._validator.check_variable(first_existing_path, varname, inspection)
             checks.append(check)
 
         # Check time range (only for grid data with Single groupby)
         # For Year/Month/Day groupby, each file only contains partial data
-        if data_type == "grid" and str(data_groupby).lower() == "single":
-            check = self._validator.check_time_range(first_existing_path, int(syear), int(eyear))
+        if needs_time_check:
+            check = self._validator.check_time_range(first_existing_path, int(syear), int(eyear), inspection)
             checks.append(check)
 
-        if data_type == "grid" and all(k in general_config for k in ("min_lat", "max_lat", "min_lon", "max_lon")):
+        if needs_spatial_check:
             checks.append(
                 self._validator.check_spatial_range(
                     first_existing_path,
@@ -714,6 +830,7 @@ class DataValidator:
                     float(general_config["max_lat"]),
                     float(general_config["min_lon"]),
                     float(general_config["max_lon"]),
+                    inspection,
                 )
             )
 

@@ -116,7 +116,7 @@ def parse_ssh_config() -> List[Dict[str, str]]:
 
         try:
             with open(config_path, "r", encoding="utf-8") as f:
-                current_host = None
+                current_hosts = []
 
                 for line in f:
                     line = line.strip()
@@ -134,23 +134,36 @@ def parse_ssh_config() -> List[Dict[str, str]]:
                     value = match.group(2).strip()
 
                     if key == "host":
-                        # Skip wildcard hosts
-                        if "*" in value or "?" in value:
-                            current_host = None
-                            continue
-                        # New host block
-                        current_host = {"name": value, "hostname": "", "user": "", "port": "22", "identity_file": ""}
-                        hosts.append(current_host)
-                    elif current_host is not None:
-                        if key == "hostname":
-                            current_host["hostname"] = value
-                        elif key == "user":
-                            current_host["user"] = value
-                        elif key == "port":
-                            current_host["port"] = value
-                        elif key == "identityfile":
-                            # Expand ~ in path
-                            current_host["identity_file"] = os.path.expanduser(value)
+                        current_hosts = []
+                        try:
+                            aliases = shlex.split(value)
+                        except ValueError:
+                            aliases = value.split()
+                        for alias in aliases:
+                            # OpenSSH lets one Host line define multiple aliases.
+                            # Wildcards are templates, not directly-connectable menu entries.
+                            if "*" in alias or "?" in alias:
+                                continue
+                            current_host = {
+                                "name": alias,
+                                "hostname": "",
+                                "user": "",
+                                "port": "22",
+                                "identity_file": "",
+                            }
+                            hosts.append(current_host)
+                            current_hosts.append(current_host)
+                    elif current_hosts:
+                        for current_host in current_hosts:
+                            if key == "hostname":
+                                current_host["hostname"] = value
+                            elif key == "user":
+                                current_host["user"] = value
+                            elif key == "port":
+                                current_host["port"] = value
+                            elif key == "identityfile":
+                                # Expand ~ in path
+                                current_host["identity_file"] = os.path.expanduser(value)
         except Exception:
             continue
 
@@ -968,6 +981,22 @@ class RemoteConfigWidget(QWidget):
         self.node_key_widget.setVisible(self.radio_node_key.isChecked())
         self._on_config_changed()
 
+    def _node_auth_type(self) -> str:
+        """Return the selected compute-node authentication mode."""
+        if self.radio_node_password.isChecked():
+            return "password"
+        if self.radio_node_key.isChecked():
+            return "key"
+        return "none"
+
+    def _node_credentials(self) -> tuple[Optional[str], Optional[str]]:
+        """Return password/key-file values for the selected compute-node auth."""
+        if self.radio_node_password.isChecked():
+            return self.node_password_input.text(), None
+        if self.radio_node_key.isChecked():
+            return None, os.path.expanduser(self.node_key_input.text().strip())
+        return None, None
+
     def _browse_node_key(self):
         """Open file dialog to browse for node SSH key file."""
         start_path = os.path.expanduser("~/.ssh")
@@ -1044,11 +1073,19 @@ class RemoteConfigWidget(QWidget):
 
             if not shiboken6.isValid(self):
                 return  # widget destroyed while the handshake event loop ran
+            if self._ssh_manager and not self._ssh_manager.is_connected:
+                self.status_label.setText("Not connected")
+                self.status_label.setStyleSheet("color: #999;")
+                self.btn_test.setEnabled(True)
+                self.btn_disconnect.setEnabled(False)
+                self.connection_status_changed.emit(False)
             self.node_status_label.setText(f"✗ {str(e)[:50]}")
             self.node_status_label.setStyleSheet("color: red;")
             self.btn_confirm_node.setEnabled(True)
             QMessageBox.warning(self, "Connection Failed", str(e))
         finally:
+            if self._ssh_manager is None or not getattr(self._ssh_manager, "is_jump_connected", False):
+                self.btn_confirm_node.setEnabled(True)
             self._handshake_active = False
 
     def _on_config_changed(self):
@@ -1123,7 +1160,13 @@ class RemoteConfigWidget(QWidget):
                 self._ssh_manager, "nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null", timeout=10
             )
             if exit_code == 0 and stdout.strip():
-                cpu_count = int(stdout.strip())
+                cpu_count = None
+                for line in stdout.splitlines():
+                    value = line.strip()
+                    if value.isdigit():
+                        cpu_count = int(value)
+                if cpu_count is None:
+                    raise ValueError(f"No numeric CPU count in remote output: {stdout!r}")
                 self.cpu_available_label.setText(f"(Available on remote: {cpu_count})")
                 # Update the max range
                 self.num_cores_spin.setRange(1, max(128, cpu_count))
@@ -1182,6 +1225,22 @@ class RemoteConfigWidget(QWidget):
         if getattr(self, "_handshake_active", False):
             return  # another handshake is mid-auth; don't race it
 
+        node = ""
+        node_password = None
+        node_key_file = None
+        if self.node_group.isChecked():
+            node = self.node_input.text().strip()
+            if not node:
+                QMessageBox.warning(self, "Compute Node Required", "Enter the compute node name.")
+                return
+            node_password, node_key_file = self._node_credentials()
+            if self.radio_node_password.isChecked() and not node_password:
+                QMessageBox.warning(self, "Authentication Required", "Enter the compute node password.")
+                return
+            if self.radio_node_key.isChecked() and not node_key_file:
+                QMessageBox.warning(self, "Authentication Required", "Select the compute node SSH key.")
+                return
+
         # Update status
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #f39c12;")  # Orange
@@ -1203,13 +1262,14 @@ class RemoteConfigWidget(QWidget):
                 call_responsive(lambda: manager.connect(host, key_file=key_file))
 
             # Test jump connection if enabled
-            if self.node_group.isChecked():
-                node = self.node_input.text().strip()
-                if node:
-                    node_password = None
-                    if self.radio_node_password.isChecked():
-                        node_password = self.node_password_input.text()
-                    call_responsive(lambda: manager.connect_with_jump(main_host=node, main_password=node_password))
+            if node:
+                call_responsive(
+                    lambda: manager.connect_with_jump(
+                        main_host=node,
+                        main_password=node_password,
+                        main_key_file=node_key_file,
+                    )
+                )
 
             import shiboken6
 
@@ -1239,20 +1299,34 @@ class RemoteConfigWidget(QWidget):
 
             if not shiboken6.isValid(self):
                 return
+            if self._ssh_manager:
+                try:
+                    self._ssh_manager.disconnect()
+                except Exception as exc:
+                    logger.warning("Error disconnecting after failed SSH handshake: %s", exc)
+                self._ssh_manager = None
             self.status_label.setText("Connection failed")
             self.status_label.setStyleSheet("color: #e74c3c;")  # Red
             self.connection_status_changed.emit(False)
             self.btn_test.setEnabled(True)
+            self.btn_disconnect.setEnabled(False)
             QMessageBox.critical(self, "Connection Failed", str(e))
         except Exception as e:
             import shiboken6
 
             if not shiboken6.isValid(self):
                 return
+            if self._ssh_manager:
+                try:
+                    self._ssh_manager.disconnect()
+                except Exception as exc:
+                    logger.warning("Error disconnecting after failed SSH handshake: %s", exc)
+                self._ssh_manager = None
             self.status_label.setText("Error")
             self.status_label.setStyleSheet("color: #e74c3c;")  # Red
             self.connection_status_changed.emit(False)
             self.btn_test.setEnabled(True)
+            self.btn_disconnect.setEnabled(False)
             QMessageBox.critical(self, "Error", f"Unexpected error: {e}")
         finally:
             self._handshake_active = False
@@ -1312,17 +1386,24 @@ class RemoteConfigWidget(QWidget):
         password = self.password_input.text() if self.radio_password.isChecked() else None
         key_file = self.key_input.text().strip() if self.radio_key.isChecked() else None
         jump_node = self.node_input.text().strip() if self.node_group.isChecked() else None
-        jump_auth = "password" if self.radio_node_password.isChecked() else "none"
+        jump_auth = self._node_auth_type() if jump_node else "none"
+        node_password = self.node_password_input.text() if jump_auth == "password" else None
+        node_key_file = self.node_key_input.text().strip() if jump_auth == "key" else None
 
         try:
-            self._credential_manager.save_credential(
-                host=host,
-                auth_type=auth_type,
-                password=password,
-                key_file=key_file,
-                jump_node=jump_node,
-                jump_auth=jump_auth,
-            )
+            kwargs = {
+                "host": host,
+                "auth_type": auth_type,
+                "password": password,
+                "key_file": key_file,
+                "jump_node": jump_node,
+                "jump_auth": jump_auth,
+            }
+            if node_key_file:
+                kwargs["node_key_file"] = node_key_file
+            if node_password:
+                kwargs["node_password"] = node_password
+            self._credential_manager.save_credential(**kwargs)
         except CredentialStorageError as exc:
             QMessageBox.warning(self, "Credential Save Failed", str(exc))
             return
@@ -1358,23 +1439,6 @@ class RemoteConfigWidget(QWidget):
         try:
             self.btn_detect_python.setEnabled(False)
 
-            # Debug: Also run which python directly and show result
-            debug_info = []
-            try:
-                stdout, _, _ = execute_responsive(
-                    self._ssh_manager, "bash -i -l -c 'which python3' 2>/dev/null", timeout=15
-                )
-                debug_info.append(f"bash -i -l python3: {stdout.strip()}")
-            except Exception as e:
-                logger.debug("Failed to detect python3 via bash: %s", e)
-            try:
-                stdout, _, _ = execute_responsive(
-                    self._ssh_manager, "bash -i -l -c 'which python' 2>/dev/null", timeout=15
-                )
-                debug_info.append(f"bash -i -l python: {stdout.strip()}")
-            except Exception as e:
-                logger.debug("Failed to detect python via bash: %s", e)
-
             pythons = call_responsive(self._ssh_manager.detect_python_interpreters)
             detection_errors = list(getattr(self._ssh_manager, "last_detection_errors", ()))
             self.python_combo.clear()
@@ -1383,12 +1447,11 @@ class RemoteConfigWidget(QWidget):
                     self.python_combo.addItem(p)
                 msg = f"Found {len(pythons)} Python interpreter(s):\n"
                 msg += "\n".join(pythons)
-                msg += "\n\nDebug info:\n" + "\n".join(debug_info)
                 if detection_errors:
                     msg += "\n\nSome discovery probes failed:\n" + "\n".join(detection_errors)
                 QMessageBox.information(self, "Detection Complete", msg)
             else:
-                msg = "No Python interpreters found.\n\nDebug info:\n" + "\n".join(debug_info)
+                msg = "No Python interpreters found."
                 if detection_errors:
                     msg += "\n\nDiscovery errors:\n" + "\n".join(detection_errors)
                     QMessageBox.warning(self, "Detection Failed", msg)
@@ -1984,7 +2047,11 @@ class RemoteConfigWidget(QWidget):
         Returns:
             True if connected
         """
-        return self._ssh_manager is not None and self._ssh_manager.is_connected
+        if self._ssh_manager is None or not self._ssh_manager.is_connected:
+            return False
+        if self.node_group.isChecked() and self.node_input.text().strip():
+            return self._ssh_manager.is_jump_connected
+        return True
 
     def get_config(self) -> Dict[str, Any]:
         """Get current configuration as dictionary.
@@ -2004,7 +2071,8 @@ class RemoteConfigWidget(QWidget):
             "key_file": self.key_input.text().strip(),
             "use_jump": self.node_group.isChecked(),
             "jump_node": self.node_input.text().strip(),
-            "jump_auth": "password" if self.radio_node_password.isChecked() else "none",
+            "jump_auth": self._node_auth_type() if self.node_group.isChecked() else "none",
+            "node_key_file": self.node_key_input.text().strip() if self.node_group.isChecked() else "",
             "num_cores": self.num_cores_spin.value(),
             "python_path": self.python_combo.currentText().strip(),
             "conda_env": conda_env,
@@ -2038,8 +2106,11 @@ class RemoteConfigWidget(QWidget):
 
         if config.get("jump_auth") == "password":
             self.radio_node_password.setChecked(True)
+        elif config.get("jump_auth") == "key":
+            self.radio_node_key.setChecked(True)
         else:
             self.radio_node_none.setChecked(True)
+        self.node_key_input.setText(config.get("node_key_file", ""))
 
         # Set num_cores
         self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
@@ -2079,17 +2150,6 @@ class RemoteConfigWidget(QWidget):
         Args:
             host: Host string to load credentials for
         """
-        # Clear credential-derived fields first so switching to a host with
-        # no saved credentials cannot leave a stale password/key visible.
-        self.password_input.clear()
-        self.cb_save_password.setChecked(False)
-        self.key_input.clear()
-        self.node_group.setChecked(False)
-        self.node_input.clear()
-        self.node_password_input.clear()
-        self.node_key_input.clear()
-        self.radio_node_none.setChecked(True)
-
         try:
             cred = self._credential_manager.get_credential(host)
         except CredentialStorageError as exc:
@@ -2097,7 +2157,16 @@ class RemoteConfigWidget(QWidget):
             return
 
         if not cred:
+            self.password_input.clear()
+            self.cb_save_password.setChecked(False)
             return
+
+        # Clear credential-derived fields only after we know credentials exist.
+        # Otherwise a config file that explicitly contains key/jump settings is
+        # silently wiped just because this machine has no saved secret for host.
+        self.password_input.clear()
+        self.cb_save_password.setChecked(False)
+        self.node_password_input.clear()
 
         auth_type = cred.get("auth_type")
         if auth_type == "key":
@@ -2118,6 +2187,14 @@ class RemoteConfigWidget(QWidget):
             self.node_input.setText(cred["jump_node"])
             if cred.get("jump_auth") == "password":
                 self.radio_node_password.setChecked(True)
+                if cred.get("node_password"):
+                    self.node_password_input.setText(cred["node_password"])
+            elif cred.get("jump_auth") == "key":
+                self.radio_node_key.setChecked(True)
+                if cred.get("node_key_file"):
+                    self.node_key_input.setText(cred["node_key_file"])
+            else:
+                self.radio_node_none.setChecked(True)
 
     def disconnect(self):
         """Disconnect from remote server."""
@@ -2159,7 +2236,7 @@ class RemoteConfigWidget(QWidget):
         self.node_input.clear()
         self.node_password_input.clear()
         self.node_key_input.clear()
-        self.radio_node_password.setChecked(True)
+        self.radio_node_none.setChecked(True)
 
         # Environment
         self.num_cores_spin.setValue(DEFAULT_NUM_CORES)

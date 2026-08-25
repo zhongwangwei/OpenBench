@@ -542,103 +542,135 @@ class PageGeneral(BasePage):
         general = self.controller.config.get("general", {})
         basename = general.get("basename", "")
 
-        # Block signals to prevent save_to_config from being called during load
-        self.basename_input.blockSignals(True)
-        self.basename_input.setText(basename)
-        self.basename_input.blockSignals(False)
+        # Block signals to prevent save_to_config from being called during load.
+        # Loading must be a pure render operation; otherwise early widgets can
+        # save stale defaults for fields that are populated later in this method.
+        widgets_to_block = [
+            self.basename_input,
+            self.basedir_input,
+            self.syear_spin,
+            self.eyear_spin,
+            self.min_year_spin,
+            self.min_lat_spin,
+            self.max_lat_spin,
+            self.min_lon_spin,
+            self.max_lon_spin,
+            self.tim_res_combo,
+            self.grid_res_spin,
+            self.time_alignment_combo,
+            self.timezone_spin,
+            self.weight_combo,
+            self.cb_evaluation,
+            self.cb_comparison,
+            self.cb_statistics,
+            self.cb_debug,
+            self.cb_report,
+            self.cb_only_drawing,
+            self.cb_unified_mask,
+            self.cb_igbp,
+            self.cb_pft,
+            self.cb_climate,
+            self.num_cores_spin,
+        ]
+        previous_signal_states = [widget.blockSignals(True) for widget in widgets_to_block]
+        try:
+            self.basename_input.setText(basename)
 
-        # Get basedir and convert to absolute path (without appending project name)
-        basedir = general.get("basedir", "")
+            # Get basedir and convert to absolute path (without appending project name)
+            basedir = general.get("basedir", "")
 
-        # Check if in remote mode using storage type
-        from openbench.remote.storage import RemoteStorage
+            # Check if in remote mode using storage type
+            from openbench.remote.storage import RemoteStorage
 
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
+            is_remote = isinstance(self.controller.storage, RemoteStorage)
 
-        if is_remote:
-            # Remote mode: use remote OpenBench path for defaults
-            remote_openbench = self.controller.remote_settings().get("openbench_path", "")
+            if is_remote:
+                # Remote mode: use remote OpenBench path for defaults
+                remote_openbench = self.controller.remote_settings().get("openbench_path", "")
 
-            if not basedir or basedir == "./output":
-                # Set default to remote OpenBench/output
-                if remote_openbench:
-                    basedir = f"{remote_openbench.rstrip('/')}/output"
-                else:
-                    basedir = "./output"
-            elif not basedir.startswith("/"):
-                # Convert relative path to absolute using remote root
-                if basedir.startswith("./"):
-                    basedir = basedir[2:]
-                if remote_openbench:
-                    basedir = f"{remote_openbench.rstrip('/')}/{basedir}"
-            # Normalize slashes for remote paths
-            basedir = basedir.replace("\\", "/")
-        else:
-            # Local mode: use local OpenBench root
-            openbench_root = self._get_openbench_root()
+                if not basedir or basedir == "./output":
+                    # Set default to remote OpenBench/output
+                    if remote_openbench:
+                        basedir = f"{remote_openbench.rstrip('/')}/output"
+                    else:
+                        basedir = "./output"
+                elif not basedir.startswith("/"):
+                    # Convert relative path to absolute using remote root
+                    if basedir.startswith("./"):
+                        basedir = basedir[2:]
+                    if remote_openbench:
+                        basedir = f"{remote_openbench.rstrip('/')}/{basedir}"
+                # Normalize slashes for remote paths
+                basedir = basedir.replace("\\", "/")
+            else:
+                # Local mode: use local OpenBench root
+                openbench_root = self._get_openbench_root()
 
-            if not basedir or basedir == "./output":
-                # Set default to OpenBench/output (without project name)
-                basedir = os.path.join(openbench_root, "output")
-            elif not os.path.isabs(basedir):
-                # Convert relative path to absolute
-                if basedir.startswith("./"):
-                    basedir = basedir[2:]
-                basedir = os.path.normpath(os.path.join(openbench_root, basedir))
+                if not basedir or basedir == "./output":
+                    # Set default to OpenBench/output (without project name)
+                    basedir = os.path.join(openbench_root, "output")
+                elif not os.path.isabs(basedir):
+                    # Convert relative path to absolute
+                    if basedir.startswith("./"):
+                        basedir = basedir[2:]
+                    basedir = os.path.normpath(os.path.join(openbench_root, basedir))
 
-        # Set path without emitting signal to prevent save_to_config loop
-        self.basedir_input.set_path(basedir, emit_signal=False)
+            # Set path without emitting signal to prevent save_to_config loop
+            self.basedir_input.set_path(basedir, emit_signal=False)
 
-        # Skip local path validation in remote mode (remote paths won't exist locally)
-        self.basedir_input.set_skip_validation(is_remote)
+            # Skip local path validation in remote mode (remote paths won't exist locally)
+            self.basedir_input.set_skip_validation(is_remote)
 
-        self.syear_spin.setValue(general.get("syear", 2000))
-        self.eyear_spin.setValue(general.get("eyear", 2020))
-        self.min_year_spin.setValue(general.get("min_year", 1.0))
-        self.min_lat_spin.setValue(general.get("min_lat", -90.0))
-        self.max_lat_spin.setValue(general.get("max_lat", 90.0))
-        self.min_lon_spin.setValue(general.get("min_lon", -180.0))
-        self.max_lon_spin.setValue(general.get("max_lon", 180.0))
+            self.syear_spin.setValue(general.get("syear", 2000))
+            self.eyear_spin.setValue(general.get("eyear", 2020))
+            self.min_year_spin.setValue(general.get("min_year", 1.0))
+            self.min_lat_spin.setValue(general.get("min_lat", -90.0))
+            self.max_lat_spin.setValue(general.get("max_lat", 90.0))
+            self.min_lon_spin.setValue(general.get("min_lon", -180.0))
+            self.max_lon_spin.setValue(general.get("max_lon", 180.0))
 
-        tim_res = general.get("compare_tim_res", "month")
-        idx = self.tim_res_combo.findText(tim_res)
-        if idx >= 0:
-            self.tim_res_combo.setCurrentIndex(idx)
+            tim_res = general.get("compare_tim_res", "month")
+            idx = self.tim_res_combo.findText(tim_res)
+            if idx >= 0:
+                self.tim_res_combo.setCurrentIndex(idx)
 
-        self.grid_res_spin.setValue(general.get("compare_grid_res", 2.0))
-        self.timezone_spin.setValue(general.get("compare_tzone", 0.0))
+            self.grid_res_spin.setValue(general.get("compare_grid_res", 2.0))
+            self.timezone_spin.setValue(general.get("compare_tzone", 0.0))
 
-        # Time alignment
-        time_align = general.get("time_alignment", "intersection")
-        for i in range(self.time_alignment_combo.count()):
-            if self.time_alignment_combo.itemData(i) == time_align:
-                self.time_alignment_combo.setCurrentIndex(i)
-                break
+            # Time alignment
+            time_align = general.get("time_alignment", "intersection")
+            for i in range(self.time_alignment_combo.count()):
+                if self.time_alignment_combo.itemData(i) == time_align:
+                    self.time_alignment_combo.setCurrentIndex(i)
+                    break
 
-        self.cb_evaluation.setChecked(general.get("evaluation", True))
-        self.cb_comparison.setChecked(general.get("comparison", True))
-        self.cb_statistics.setChecked(general.get("statistics", False))
-        self.cb_debug.setChecked(general.get("debug_mode", False))
-        self.cb_report.setChecked(general.get("generate_report", True))
-        self.cb_only_drawing.setChecked(general.get("only_drawing", False))
+            self.cb_evaluation.setChecked(general.get("evaluation", True))
+            self.cb_comparison.setChecked(general.get("comparison", True))
+            self.cb_statistics.setChecked(general.get("statistics", False))
+            self.cb_debug.setChecked(general.get("debug_mode", False))
+            self.cb_report.setChecked(general.get("generate_report", True))
+            self.cb_only_drawing.setChecked(general.get("only_drawing", False))
 
-        self.cb_igbp.setChecked(general.get("IGBP_groupby", True))
-        self.cb_pft.setChecked(general.get("PFT_groupby", True))
-        self.cb_climate.setChecked(general.get("Climate_zone_groupby", True))
-        self.cb_unified_mask.setChecked(general.get("unified_mask", True))
+            self.cb_igbp.setChecked(general.get("IGBP_groupby", True))
+            self.cb_pft.setChecked(general.get("PFT_groupby", True))
+            self.cb_climate.setChecked(general.get("Climate_zone_groupby", True))
+            self.cb_unified_mask.setChecked(general.get("unified_mask", True))
 
-        self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
-        self._load_performance_settings(general)
+            self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
+            self._load_performance_settings(general)
 
-        weight = general.get("weight", "none")
-        if weight is None:
-            weight = "none"
-        # Map lowercase to display text
-        weight_map = {"none": "None", "area": "area", "mass": "mass"}
-        display_weight = weight_map.get(str(weight).lower(), "None")
-        idx = self.weight_combo.findText(display_weight)
-        if idx >= 0:
-            self.weight_combo.setCurrentIndex(idx)
+            weight = general.get("weight", "none")
+            if weight is None:
+                weight = "none"
+            # Map lowercase to display text
+            weight_map = {"none": "None", "area": "area", "mass": "mass"}
+            display_weight = weight_map.get(str(weight).lower(), "None")
+            idx = self.weight_combo.findText(display_weight)
+            if idx >= 0:
+                self.weight_combo.setCurrentIndex(idx)
+        finally:
+            for widget, state in zip(widgets_to_block, previous_signal_states):
+                widget.blockSignals(state)
 
         # Note: Runtime Environment settings (execution_mode, remote config, python_path, conda_env)
         # are now handled by PageRuntime

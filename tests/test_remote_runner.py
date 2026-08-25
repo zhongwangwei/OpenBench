@@ -1,3 +1,4 @@
+import base64
 import os
 
 import pytest
@@ -173,9 +174,11 @@ class StreamSSH(FakeSSH):
         self.exit_code = exit_code
         self.exc = exc
         self.stream_command = None
+        self.stream_kwargs = {}
 
-    def execute_stream(self, command):
+    def execute_stream(self, command, **kwargs):
         self.stream_command = command
+        self.stream_kwargs = kwargs
         if self.exc:
             raise self.exc
         yield from self.lines
@@ -197,6 +200,19 @@ def test_execute_remote_openbench_nonzero_exit_includes_log_tail(tmp_path):
     assert "line 3" in message
     assert "line 7" in message
     assert "line 1" not in message
+
+
+def test_execute_remote_openbench_passes_should_abort_to_stream(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = StreamSSH(lines=["running\n"], exit_code=0)
+    runner = _runner(config, ssh)
+    runner._remote_config_path = "/remote/main.yaml"
+
+    success, _message = runner._execute_remote_openbench()
+
+    assert success is True
+    assert callable(ssh.stream_kwargs.get("should_abort"))
 
 
 def test_execute_remote_openbench_preserves_partial_marker_outside_tail(tmp_path):
@@ -247,7 +263,7 @@ class CloseFailStream:
 
 
 class CloseFailSSH(FakeSSH):
-    def execute_stream(self, command):
+    def execute_stream(self, command, **kwargs):
         return CloseFailStream()
 
     def execute(self, command, timeout=30):
@@ -269,6 +285,71 @@ def test_execute_remote_openbench_logs_stream_close_failure_on_stop(tmp_path):
     assert message == "Stopped by user"
     assert "Warning: could not close remote output stream: close failed" in logs
     assert "Sent kill signal to remote process" in logs
+
+
+def test_remote_runner_stop_is_not_reported_as_failed(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    runner = RemoteRunner(
+        str(config),
+        FakeSSH(),
+        {"python_path": "python3", "openbench_path": "/remote/openbench"},
+        config_already_remote=True,
+    )
+    runner._last_progress = 17
+    runner._execute_remote_openbench = lambda: (False, "Stopped by user")
+    progress = []
+    finished = []
+    runner.progress_updated.connect(progress.append)
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    runner.run()
+
+    assert finished[-1] == (False, "Stopped by user")
+    assert progress[-1].status.value == "stopped"
+    assert progress[-1].progress != runner.PROGRESS_MAX
+
+
+def test_remote_runner_hard_failure_keeps_current_progress(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    runner = RemoteRunner(
+        str(config),
+        FakeSSH(),
+        {"python_path": "python3", "openbench_path": "/remote/openbench"},
+        config_already_remote=True,
+    )
+    runner._last_progress = 17
+    runner._execute_remote_openbench = lambda: (False, "boom")
+    progress = []
+    runner.progress_updated.connect(progress.append)
+
+    runner.run()
+
+    assert progress[-1].status.value == "failed"
+    assert progress[-1].progress != runner.PROGRESS_MAX
+
+
+def test_remote_runner_applies_remote_num_cores_before_execution(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench", "num_cores": 12},
+        config_already_remote=True,
+    )
+    runner._remote_config_path = "/remote/main.yaml"
+    logs = []
+    runner.log_message.connect(logs.append)
+
+    assert runner._apply_remote_num_cores_override() is True
+
+    assert ssh.commands
+    payload = ssh.commands[0].split()[2]
+    assert 'project["num_cores"] = 12' in base64.b64decode(payload).decode()
+    assert "Using 12 CPU cores on remote server." in logs
 
 
 def test_remote_runner_progress_parser_ignores_exception_source_names(tmp_path):
