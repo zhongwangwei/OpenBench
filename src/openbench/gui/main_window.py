@@ -442,10 +442,26 @@ class MainWindow(QMainWindow):
                 # QThread.wait expects ms; runner.stop sets a flag and the
                 # subprocess loop in run() should exit on the next poll.
                 if hasattr(runner, "wait"):
-                    runner.wait(self._RUNNER_SHUTDOWN_TIMEOUT_MS)
+                    if not runner.wait(self._RUNNER_SHUTDOWN_TIMEOUT_MS):
+                        QMessageBox.warning(
+                            self, "Evaluation Stopping", "The evaluation is still stopping. Try closing again."
+                        )
+                        event.ignore()
+                        return
             except Exception as e:
                 logger.warning("Error during runner shutdown on close: %s", e)
 
+        download_worker = getattr(run_monitor, "_download_worker", None) if run_monitor is not None else None
+        if download_worker is not None and download_worker.isRunning():
+            download_worker.stop()
+            if not download_worker.wait(self._RUNNER_SHUTDOWN_TIMEOUT_MS):
+                QMessageBox.warning(
+                    self, "Download Stopping", "The remote download is still stopping. Try closing again."
+                )
+                event.ignore()
+                return
+
+        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True)
         super().closeEvent(event)
 
     def _runner_is_active(self) -> bool:
@@ -540,11 +556,11 @@ class MainWindow(QMainWindow):
             if not trigger_sync:
                 old_auto_sync = self.controller.auto_sync_enabled
                 self.controller.auto_sync_enabled = False
-
-            current_page.save_to_config()
-
-            if not trigger_sync:
-                self.controller.auto_sync_enabled = old_auto_sync
+            try:
+                current_page.save_to_config()
+            finally:
+                if not trigger_sync:
+                    self.controller.auto_sync_enabled = old_auto_sync
 
     def _on_page_changed(self, page_id: str):
         """Handle page change."""
@@ -1017,13 +1033,22 @@ class MainWindow(QMainWindow):
 
         current = start_dir
         for _ in range(10):  # Max 10 levels up
-            # Check if this looks like OpenBench root
+            # Check if this looks like an OpenBench v3 root. The old
+            # `openbench/openbench.py` marker is gone; accept editable/source
+            # layouts and generated project roots with nml/.
             stdout, stderr, exit_code = execute_responsive(
                 ssh_manager,
-                f"ls -d {quote_remote_path(current + '/openbench')} {quote_remote_path(current + '/nml')} 2>/dev/null | head -1",
+                (
+                    f"test -f {quote_remote_path(current + '/src/openbench/cli/main.py')} "
+                    f"|| grep -Eq 'name = [\"'\"''](colm-openbench|openbench)[\"'\"'']' "
+                    f"{quote_remote_path(current + '/pyproject.toml')} 2>/dev/null "
+                    f"|| (test -f {quote_remote_path(current + '/openbench/cli/main.py')} "
+                    f"&& test -d {quote_remote_path(current + '/openbench/data/registry')}) "
+                    f"|| test -d {quote_remote_path(current + '/nml')}"
+                ),
                 timeout=10,
             )
-            if exit_code == 0 and stdout.strip():
+            if exit_code == 0:
                 return current
 
             # Go up one directory
@@ -1113,6 +1138,47 @@ class MainWindow(QMainWindow):
 
         # Don't load existing project config - start fresh each time
 
+    def _current_sync_engine(self):
+        """Return the active RemoteStorage sync engine, if any."""
+        storage = getattr(self.controller, "storage", None)
+        if not isinstance(storage, RemoteStorage):
+            return None
+        sync_engine = getattr(storage, "sync_engine", None)
+        if sync_engine is not None:
+            return sync_engine
+        return getattr(storage, "_sync", None) or getattr(storage, "_sync_engine", None)
+
+    def _cleanup_remote_storage(self, *, sync_pending: bool, disconnect_ssh: bool) -> None:
+        """Flush and stop active remote storage before replacing/closing it."""
+        sync_engine = self._current_sync_engine()
+        if sync_engine is not None:
+            try:
+                sync_engine._on_status_changed = None
+            except Exception:
+                pass
+            if sync_pending:
+                try:
+                    if not sync_engine.sync_all():
+                        logger.warning("Remote sync_all reported pending sync failures during cleanup")
+                except Exception as exc:
+                    logger.warning("Remote sync_all failed during cleanup: %s", exc)
+            try:
+                sync_engine.stop_background_sync()
+            except Exception as exc:
+                logger.warning("Remote background sync stop failed during cleanup: %s", exc)
+
+        if disconnect_ssh:
+            ssh_manager = getattr(self.controller, "ssh_manager", None)
+            if ssh_manager is None and sync_engine is not None:
+                ssh_manager = getattr(sync_engine, "_ssh", None)
+            if ssh_manager is not None:
+                try:
+                    ssh_manager.disconnect()
+                except Exception as exc:
+                    logger.warning("Remote SSH disconnect failed during cleanup: %s", exc)
+            if hasattr(self.controller, "ssh_manager"):
+                self.controller.ssh_manager = None
+
     def setup_remote_storage(self, ssh_manager, remote_project_dir: str):
         """Setup remote storage when user connects via Runtime Environment page.
 
@@ -1123,6 +1189,17 @@ class MainWindow(QMainWindow):
             remote_project_dir: Remote project directory path
         """
         from openbench.remote.sync import SyncEngine
+
+        # Reconnecting/changing remote roots must not leave the old background
+        # sync thread or a replaced SSH manager alive against a stale path.
+        old_sync_engine = self._current_sync_engine()
+        old_ssh_manager = getattr(old_sync_engine, "_ssh", None) if old_sync_engine is not None else None
+        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=False)
+        if old_ssh_manager is not None and old_ssh_manager is not ssh_manager:
+            try:
+                old_ssh_manager.disconnect()
+            except Exception as exc:
+                logger.warning("Previous remote SSH disconnect failed during replacement: %s", exc)
 
         # Create sync engine and remote storage
         sync_engine = SyncEngine(ssh_manager, remote_project_dir)
@@ -1143,15 +1220,7 @@ class MainWindow(QMainWindow):
         Args:
             project_dir: Local project directory path
         """
-        # Stop and cleanup old sync engine if exists (from previous remote mode)
-        old_storage = self.controller.storage
-        if old_storage and hasattr(old_storage, "_sync_engine"):
-            sync_engine = old_storage._sync_engine
-            if sync_engine:
-                # Clear the callback first to prevent crashes
-                sync_engine._on_status_changed = None
-                # Stop background sync thread
-                sync_engine.stop_background_sync()
+        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True)
 
         self.controller.storage = LocalStorage(project_dir)
         self.controller.project_root = project_dir

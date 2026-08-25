@@ -355,7 +355,13 @@ def get_remote_ssh_manager(controller):
 
     if not isinstance(controller.storage, RemoteStorage):
         return None
-    return controller.ssh_manager
+    manager = controller.ssh_manager
+    if manager is None or not getattr(manager, "is_connected", False):
+        return None
+    get_active_client = getattr(manager, "get_active_client", None)
+    if callable(get_active_client) and get_active_client() is None:
+        return None
+    return manager
 
 
 def _remote_directory_exists(ssh_manager, path: str) -> bool:

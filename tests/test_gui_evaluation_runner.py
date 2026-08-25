@@ -197,6 +197,26 @@ def test_local_runner_uses_exact_evaluation_task_count(tmp_path):
     assert runner._total_tasks == 2
 
 
+def test_local_runner_counts_statistics_independently_from_comparisons(tmp_path):
+    runner = EvaluationRunner(str(tmp_path / "openbench.yaml"), python_path="/fake/python")
+
+    runner.set_task_counts(
+        num_variables=1,
+        num_ref_sources=1,
+        num_sim_sources=1,
+        num_metrics=1,
+        num_scores=1,
+        num_groupby=0,
+        num_comparisons=0,
+        do_evaluation=False,
+        do_comparison=False,
+        do_statistics=True,
+        num_statistics=2,
+    )
+
+    assert runner._total_tasks == 2
+
+
 def test_remote_runner_counts_groupby_without_comparison(tmp_path):
     from openbench.gui.remote_runner import RemoteRunner
 
@@ -205,6 +225,28 @@ def test_remote_runner_counts_groupby_without_comparison(tmp_path):
     runner.set_task_counts(2, 1, 1, 1, 1, 1, 0, do_evaluation=True, do_comparison=False)
 
     assert runner._total_tasks == 3
+
+
+def test_remote_runner_counts_statistics_independently_from_comparisons(tmp_path):
+    from openbench.gui.remote_runner import RemoteRunner
+
+    runner = RemoteRunner(str(tmp_path / "openbench.yaml"), object(), {}, config_already_remote=True)
+
+    runner.set_task_counts(
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        do_evaluation=False,
+        do_comparison=False,
+        do_statistics=True,
+        num_statistics=2,
+    )
+
+    assert runner._total_tasks == 2
 
 
 def test_local_runner_does_not_run_when_check_fails(tmp_path, monkeypatch):

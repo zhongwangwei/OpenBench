@@ -3,7 +3,7 @@
 Progress dashboard widget for displaying evaluation progress.
 """
 
-from typing import List, Optional
+from typing import Callable, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -48,6 +48,9 @@ class ProgressDashboard(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._tasks: List[TaskInfo] = []
+        self._progress_value = 0.0
+        self._resource_mode = "system"
+        self._resource_pid_provider: Optional[Callable[[], int | None]] = None
         self._setup_ui()
 
         # Timer for updating resource usage
@@ -72,7 +75,7 @@ class ProgressDashboard(QWidget):
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(100)
+        self.progress_bar.setMaximum(1000)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFixedHeight(20)
@@ -92,8 +95,8 @@ class ProgressDashboard(QWidget):
         top_row.addWidget(progress_group, 3)
 
         # Resource usage section
-        resource_group = QGroupBox("Resources")
-        resource_layout = QHBoxLayout(resource_group)
+        self.resource_group = QGroupBox("Resources")
+        resource_layout = QHBoxLayout(self.resource_group)
         resource_layout.setSpacing(15)
 
         # CPU
@@ -103,7 +106,7 @@ class ProgressDashboard(QWidget):
         self.cpu_bar.setFixedWidth(80)
         resource_layout.addWidget(self.cpu_bar)
         self.cpu_label = QLabel("0%")
-        self.cpu_label.setFixedWidth(35)
+        self.cpu_label.setFixedWidth(65)
         resource_layout.addWidget(self.cpu_label)
 
         # Memory
@@ -113,10 +116,10 @@ class ProgressDashboard(QWidget):
         self.mem_bar.setFixedWidth(80)
         resource_layout.addWidget(self.mem_bar)
         self.mem_label = QLabel("0%")
-        self.mem_label.setFixedWidth(35)
+        self.mem_label.setFixedWidth(65)
         resource_layout.addWidget(self.mem_label)
 
-        top_row.addWidget(resource_group, 2)
+        top_row.addWidget(self.resource_group, 2)
 
         layout.addLayout(top_row)
 
@@ -169,11 +172,16 @@ class ProgressDashboard(QWidget):
                 break
         self._update_overall_progress()
 
-    def set_progress(self, value: int, eta_seconds: Optional[int] = None):
-        """Set overall progress."""
-        value = max(0, min(100, int(value)))
-        self.progress_bar.setValue(value)
-        self.progress_label.setText(f"{value}%")
+    def set_progress(self, value: float, eta_seconds: Optional[int] = None):
+        """Set overall progress with one-decimal precision for large task sets."""
+        value = max(0.0, min(100.0, float(value)))
+        self._progress_value = value
+        self.progress_bar.setValue(int(round(value * 10)))
+        if abs(value - round(value)) < 0.05:
+            label = f"{int(round(value))}%"
+        else:
+            label = f"{value:.1f}%"
+        self.progress_label.setText(label)
 
         if eta_seconds is not None:
             if eta_seconds < 60:
@@ -200,14 +208,103 @@ class ProgressDashboard(QWidget):
 
         completed = sum(1 for t in self._tasks if t.status == TaskStatus.COMPLETED)
         total = len(self._tasks)
-        progress = int(completed / total * 100)
-        if progress >= self.progress_bar.value():
+        progress = completed / total * 100
+        if progress >= self._progress_value:
             self.set_progress(progress)
+
+    def monitor_system_resources(self):
+        """Show host-wide resources (legacy/default standalone behavior)."""
+        self._resource_mode = "system"
+        self._resource_pid_provider = None
+        self.resource_group.setTitle("Resources")
+
+    def monitor_process_tree(self, pid_provider: Callable[[], int | None]):
+        """Show resources used by the local OpenBench subprocess tree."""
+        self._resource_mode = "process"
+        self._resource_pid_provider = pid_provider
+        self.resource_group.setTitle("Resources (OpenBench local)")
+
+    def show_resource_unavailable(self, title: str = "Resources (remote N/A)"):
+        """Make resource labels explicit when the GUI is not measuring the run host."""
+        self._resource_mode = "unavailable"
+        self._resource_pid_provider = None
+        self.resource_group.setTitle(title)
+        self._set_resource_labels_unavailable()
+
+    def _set_resource_labels_unavailable(self):
+        self.cpu_bar.setValue(0)
+        self.mem_bar.setValue(0)
+        self.cpu_label.setText("N/A")
+        self.mem_label.setText("N/A")
+
+    @staticmethod
+    def _psutil_process_errors(psutil):
+        return tuple(
+            exc
+            for exc in (
+                getattr(psutil, "NoSuchProcess", None),
+                getattr(psutil, "AccessDenied", None),
+                getattr(psutil, "ZombieProcess", None),
+            )
+            if exc is not None
+        ) or (Exception,)
+
+    def _update_process_tree_usage(self, psutil):
+        provider = self._resource_pid_provider
+        pid = provider() if provider is not None else None
+        if not pid:
+            self._set_resource_labels_unavailable()
+            return
+
+        errors = self._psutil_process_errors(psutil)
+        try:
+            root = psutil.Process(pid)
+            processes = [root] + list(root.children(recursive=True))
+        except errors:
+            self._set_resource_labels_unavailable()
+            return
+
+        cpu_percent = 0.0
+        rss_bytes = 0
+        for process in processes:
+            try:
+                cpu_percent += float(process.cpu_percent(interval=None))
+                rss_bytes += int(process.memory_info().rss)
+            except errors + (OSError, AttributeError, TypeError, ValueError):
+                continue
+
+        # psutil's per-process percentage can exceed 100 on multi-core hosts.
+        # Normalize it to a whole-machine 0..100 scale to match the progress bar.
+        try:
+            logical_cpus = max(1, int(psutil.cpu_count() or 1))
+        except (AttributeError, TypeError, ValueError):
+            logical_cpus = 1
+        cpu_percent /= logical_cpus
+
+        try:
+            total_memory = int(psutil.virtual_memory().total)
+            mem_percent = (rss_bytes / total_memory * 100) if total_memory > 0 else 0.0
+        except (OSError, AttributeError, TypeError, ValueError):
+            mem_percent = 0.0
+
+        cpu_value = max(0, min(100, int(round(cpu_percent))))
+        mem_value = max(0, min(100, int(round(mem_percent))))
+        self.cpu_bar.setValue(cpu_value)
+        self.mem_bar.setValue(mem_value)
+        self.cpu_label.setText(f"{cpu_value}%")
+        self.mem_label.setText(f"{mem_value}%")
 
     def _update_resource_usage(self):
         """Update resource usage display."""
+        if self._resource_mode == "unavailable":
+            self._set_resource_labels_unavailable()
+            return
         try:
             import psutil
+
+            if self._resource_mode == "process":
+                self._update_process_tree_usage(psutil)
+                return
 
             cpu_percent = int(psutil.cpu_percent())
             self.cpu_bar.setValue(cpu_percent)
@@ -218,10 +315,7 @@ class ProgressDashboard(QWidget):
             self.mem_bar.setValue(mem_percent)
             self.mem_label.setText(f"{mem_percent}%")
         except (ImportError, AttributeError, OSError):
-            self.cpu_bar.setValue(0)
-            self.mem_bar.setValue(0)
-            self.cpu_label.setText("N/A")
-            self.mem_label.setText("N/A")
+            self._set_resource_labels_unavailable()
 
     def start_monitoring(self):
         """Start resource monitoring."""
@@ -235,6 +329,7 @@ class ProgressDashboard(QWidget):
         """Reset dashboard to initial state."""
         self._tasks.clear()
         self.log_output.clear()
+        self.monitor_system_resources()
         self.set_progress(0)
         self.cpu_bar.setValue(0)
         self.mem_bar.setValue(0)

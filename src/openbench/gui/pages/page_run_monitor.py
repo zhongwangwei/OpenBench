@@ -12,6 +12,7 @@ import os
 import subprocess
 import platform
 
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 
 from openbench.gui.remote_python import quote_remote_path
@@ -57,6 +58,80 @@ def count_evaluation_tasks(config: dict, selected_variables: list[str]) -> int:
     return total
 
 
+class _RemoteDownloadCanceled(Exception):
+    """Internal sentinel for user-canceled remote folder downloads."""
+
+
+class RemoteFolderDownloadWorker(QThread):
+    """Download a remote output folder without blocking the GUI thread."""
+
+    progress_updated = Signal(int, int, str)
+    finished_signal = Signal(bool, bool, str, str)  # success, canceled, message, local_target
+
+    def __init__(self, ssh_manager, remote_dir: str, local_target: str, parent=None):
+        super().__init__(parent)
+        self._ssh_manager = ssh_manager
+        self._remote_dir = remote_dir
+        self._local_target = local_target
+        self._stop_requested = False
+
+    def stop(self):
+        self._stop_requested = True
+
+    def _raise_if_canceled(self):
+        if self._stop_requested:
+            raise _RemoteDownloadCanceled()
+
+    def run(self):
+        try:
+            self._raise_if_canceled()
+            stdout, stderr, exit_code = self._ssh_manager.execute(
+                f"find {quote_remote_path(self._remote_dir)} -type f",
+                timeout=60,
+                should_abort=lambda: self._stop_requested,
+            )
+            if exit_code != 0:
+                self.finished_signal.emit(False, False, f"Failed to list remote files:\n{stderr}", self._local_target)
+                return
+
+            files = [f.strip() for f in stdout.strip().split("\n") if f.strip()]
+            if not files:
+                self.finished_signal.emit(True, False, "No files found in the remote directory.", self._local_target)
+                return
+
+            total_files = len(files)
+            sftp = self._ssh_manager.open_sftp()
+            for index, remote_file in enumerate(files):
+                self._raise_if_canceled()
+                rel_path = PageRunMonitor._remote_download_relpath(remote_file, self._remote_dir)
+                if rel_path is None:
+                    raise ValueError(f"Remote file is outside the requested directory: {remote_file}")
+                local_file = os.path.join(self._local_target, rel_path)
+                os.makedirs(os.path.dirname(local_file), exist_ok=True)
+                self.progress_updated.emit(index, total_files, rel_path)
+
+                def _copy_progress(_transferred, _total):
+                    self._raise_if_canceled()
+
+                try:
+                    sftp.get(remote_file, local_file, callback=_copy_progress)
+                except TypeError:
+                    # Some tests/fakes implement a minimal Paramiko-like get()
+                    # without callback support. Cancellation remains checked
+                    # between files in that compatibility path.
+                    sftp.get(remote_file, local_file)
+                self.progress_updated.emit(index + 1, total_files, rel_path)
+
+            self.finished_signal.emit(True, False, "Download complete", self._local_target)
+        except _RemoteDownloadCanceled:
+            self.finished_signal.emit(False, True, "Download canceled", self._local_target)
+        except Exception as exc:
+            if self._stop_requested:
+                self.finished_signal.emit(False, True, "Download canceled", self._local_target)
+            else:
+                self.finished_signal.emit(False, False, f"Failed to download files:\n{exc}", self._local_target)
+
+
 class PageRunMonitor(BasePage):
     """Run and Monitor page."""
 
@@ -66,6 +141,7 @@ class PageRunMonitor(BasePage):
 
     def __init__(self, controller, parent=None):
         self._runner = None
+        self._download_worker = None
         self._last_ssh_manager_error = ""
         super().__init__(controller, parent)
         # Remove the trailing stretch added by BasePage so dashboard can expand
@@ -107,6 +183,17 @@ class PageRunMonitor(BasePage):
         eval_items = config.get("evaluation_items", {})
         selected = [k for k, v in eval_items.items() if v]
         general = config.get("general", {})
+
+        from openbench.remote.storage import RemoteStorage
+
+        is_remote = general.get("execution_mode") == "remote"
+        if is_remote and not isinstance(self.controller.storage, RemoteStorage):
+            QMessageBox.critical(
+                self,
+                "Remote Connection Required",
+                "Remote execution is selected, but no remote project connection is active.",
+            )
+            return
 
         tasks = []
         for item in selected:
@@ -170,12 +257,12 @@ class PageRunMonitor(BasePage):
         comparisons = config.get("comparisons", {})
         num_comparisons = len([k for k, v in comparisons.items() if v])
 
-        # Check if in remote mode using storage type
-        from openbench.remote.storage import RemoteStorage
-
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
+        # Count statistics independently from comparison tasks.
+        statistics = config.get("statistics", {})
+        num_statistics = len([k for k, v in statistics.items() if v])
 
         if is_remote:
+            self.dashboard.show_resource_unavailable("Resources (remote not monitored)")
             # Remote execution mode
             self._runner = self._create_remote_runner(config_path, general)
             if self._runner is None:
@@ -187,6 +274,7 @@ class PageRunMonitor(BasePage):
             # Local execution mode (default)
             python_path = general.get("python_path", "")
             self._runner = EvaluationRunner(config_path, python_path, self)
+            self.dashboard.monitor_process_tree(lambda: self._runner.get_process_pid() if self._runner else None)
 
         # Configure task counts for accurate progress tracking
         self._runner.set_task_counts(
@@ -201,6 +289,7 @@ class PageRunMonitor(BasePage):
             do_comparison=general.get("comparison", False),
             do_statistics=general.get("statistics", False),
             num_evaluation_tasks=count_evaluation_tasks(config, selected),
+            num_statistics=num_statistics,
         )
 
         # Connect signals - same interface for both runners
@@ -312,6 +401,10 @@ class PageRunMonitor(BasePage):
                 self._last_ssh_manager_error = "remote config widget is not available"
                 return None
 
+            if not remote_config_widget.is_connected():
+                self._last_ssh_manager_error = "configured remote execution target is not connected"
+                return None
+
             # Get the SSH manager from the remote config widget
             return remote_config_widget.get_ssh_manager()
         except Exception as exc:
@@ -321,7 +414,7 @@ class PageRunMonitor(BasePage):
 
     def _on_progress(self, progress):
         """Handle progress update."""
-        self.dashboard.set_progress(int(progress.progress))
+        self.dashboard.set_progress(progress.progress)
 
         # Update task statuses based on progress
         if progress.current_variable and progress.current_stage:
@@ -341,6 +434,9 @@ class PageRunMonitor(BasePage):
             self.dashboard.set_progress(100)
             QMessageBox.information(self, "Complete", message)
         else:
+            if message == "Stopped by user":
+                QMessageBox.information(self, "Stopped", "Evaluation stopped by user.")
+                return
             # Check if it's an OpenBench not found error
             if "Could not find OpenBench" in message:
                 self._prompt_openbench_location()
@@ -546,74 +642,58 @@ class PageRunMonitor(BasePage):
         folder_name = os.path.basename(remote_dir.rstrip("/"))
         local_target = os.path.join(local_dir, folder_name)
 
-        # Create progress dialog
         progress = QProgressDialog("Downloading files from remote server...", "Cancel", 0, 100, parent_dialog)
         progress.setWindowTitle("Downloading")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
         progress.setValue(0)
+        progress.show()
 
-        try:
-            # Get list of files to download
-            stdout, stderr, exit_code = execute_responsive(
-                ssh_manager, f"find {quote_remote_path(remote_dir)} -type f", timeout=60
-            )
-            if exit_code != 0:
-                QMessageBox.warning(parent_dialog, "Error", f"Failed to list remote files:\n{stderr}")
+        worker = RemoteFolderDownloadWorker(ssh_manager, remote_dir, local_target)
+        self._download_worker = worker
+        progress.canceled.connect(worker.stop)
+        worker.finished.connect(worker.deleteLater)
+
+        def _on_progress(done: int, total: int, rel_path: str):
+            import shiboken6
+
+            if not shiboken6.isValid(progress):
                 return
+            progress.setMaximum(max(1, total))
+            progress.setLabelText(f"Downloading: {rel_path}")
+            progress.setValue(done)
 
-            files = [f.strip() for f in stdout.strip().split("\n") if f.strip()]
-            if not files:
-                QMessageBox.information(parent_dialog, "Empty Directory", "No files found in the remote directory.")
+        def _on_finished(success: bool, canceled: bool, message: str, target: str):
+            if getattr(self, "_download_worker", None) is worker:
+                self._download_worker = None
+            import shiboken6
+
+            if not shiboken6.isValid(progress) or not shiboken6.isValid(parent_dialog):
                 return
+            progress.close()
+            if canceled:
+                QMessageBox.information(parent_dialog, "Download Canceled", "Remote folder download was canceled.")
+                return
+            if not success:
+                QMessageBox.warning(parent_dialog, "Download Error", message)
+                return
+            if message.startswith("No files"):
+                QMessageBox.information(parent_dialog, "Empty Directory", message)
+                return
+            QMessageBox.information(parent_dialog, "Download Complete", f"Successfully downloaded files to:\n{target}")
+            try:
+                if platform.system() == "Darwin":
+                    subprocess.run(["open", target], check=False)
+                elif platform.system() == "Windows":
+                    os.startfile(target)
+                else:
+                    subprocess.run(["xdg-open", target], check=False)
+            except Exception as e:
+                logger.debug("Failed to open downloaded folder: %s", e)
 
-            total_files = len(files)
-            progress.setMaximum(total_files)
-
-            # Open SFTP connection. The sftp client is owned by SSHManager
-            # (cached, reused), so we must NOT close it here.
-            sftp = ssh_manager.open_sftp()
-            for i, remote_file in enumerate(files):
-                if progress.wasCanceled():
-                    break
-
-                # Calculate relative path, validating that remote output did
-                # not escape the requested directory before writing locally.
-                rel_path = self._remote_download_relpath(remote_file, remote_dir)
-                if rel_path is None:
-                    raise ValueError(f"Remote file is outside the requested directory: {remote_file}")
-                local_file = os.path.join(local_target, rel_path)
-
-                # Create local directory if needed
-                local_file_dir = os.path.dirname(local_file)
-                os.makedirs(local_file_dir, exist_ok=True)
-
-                # Download file
-                progress.setLabelText(f"Downloading: {rel_path}")
-                sftp.get(remote_file, local_file)
-
-                progress.setValue(i + 1)
-
-            if not progress.wasCanceled():
-                QMessageBox.information(
-                    parent_dialog,
-                    "Download Complete",
-                    f"Successfully downloaded {total_files} files to:\n{local_target}",
-                )
-
-                # Open the downloaded folder
-                try:
-                    if platform.system() == "Darwin":
-                        subprocess.run(["open", local_target], check=False)
-                    elif platform.system() == "Windows":
-                        os.startfile(local_target)
-                    else:
-                        subprocess.run(["xdg-open", local_target], check=False)
-                except Exception as e:
-                    logger.debug("Failed to open downloaded folder: %s", e)
-
-        except Exception as e:
-            QMessageBox.warning(parent_dialog, "Download Error", f"Failed to download files:\n{str(e)}")
+        worker.progress_updated.connect(_on_progress)
+        worker.finished_signal.connect(_on_finished)
+        worker.start()
 
     def load_from_config(self):
         """Called when page becomes visible."""

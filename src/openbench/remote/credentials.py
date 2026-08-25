@@ -207,6 +207,8 @@ class CredentialManager:
         key_file: Optional[str] = None,
         jump_node: Optional[str] = None,
         jump_auth: str = "none",
+        node_password: Optional[str] = None,
+        node_key_file: Optional[str] = None,
     ) -> None:
         """Save credential for a host."""
         data = self._load_credentials_for_update()
@@ -214,6 +216,9 @@ class CredentialManager:
         encrypted_password = None
         if password:
             encrypted_password = self._fernet.encrypt(password.encode()).decode()
+        encrypted_node_password = None
+        if node_password:
+            encrypted_node_password = self._fernet.encrypt(node_password.encode()).decode()
 
         data["servers"][host] = {
             "auth_type": auth_type,
@@ -221,6 +226,8 @@ class CredentialManager:
             "key_file": key_file,
             "jump_node": jump_node,
             "jump_auth": jump_auth,
+            "node_password": encrypted_node_password,
+            "node_key_file": node_key_file,
         }
 
         self._save_credentials(data)
@@ -248,6 +255,20 @@ class CredentialManager:
                     e,
                 )
                 cred["password"] = None
+
+        if cred.get("node_password"):
+            try:
+                decrypted = self._fernet.decrypt(cred["node_password"].encode()).decode()
+                cred["node_password"] = decrypted
+            except Exception as e:
+                logger.warning(
+                    "Failed to decrypt saved node password for host %r (%s). "
+                    "Re-save the credential to regenerate it under the "
+                    "current machine identity.",
+                    host,
+                    e,
+                )
+                cred["node_password"] = None
 
         return cred
 

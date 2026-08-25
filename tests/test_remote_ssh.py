@@ -219,3 +219,60 @@ def test_execute_stream_closes_channel_when_generator_is_closed(monkeypatch):
     stream.close()
 
     assert transport.channel.closed is True
+
+
+def test_jump_connection_failure_disconnects_main_to_avoid_login_node_fallback(monkeypatch):
+    main_client = FakeSSHClient()
+    manager = SSHManager(auto_add_host_keys=True)
+    manager._client = main_client
+    manager._user = "alice"
+
+    class RaisingSSHClient(FakeSSHClient):
+        def __init__(self):
+            super().__init__(raise_on_connect=True)
+
+    monkeypatch.setattr(ssh_module.paramiko, "SSHClient", RaisingSSHClient)
+
+    with pytest.raises(SSHConnectionError, match="Jump connection failed"):
+        manager.connect_with_jump("node001", main_password="secret")
+
+    assert main_client.closed is True
+    assert manager.get_active_client() is None
+
+
+def test_disconnected_requested_compute_node_never_falls_back_to_login_node():
+    manager = SSHManager(auto_add_host_keys=True)
+    manager._client = FakeSSHClient()
+    manager._jump_required = True
+
+    assert manager.get_active_client() is None
+
+
+def test_detect_conda_envs_uses_last_absolute_path_from_noisy_login_shell():
+    manager = SSHManager(auto_add_host_keys=True)
+    calls = []
+
+    def fake_execute(command, timeout=None):
+        calls.append(command)
+        if command == "echo $HOME":
+            return "/home/alice\n", "", 0
+        if "ls -d" in command:
+            return "", "", 1
+        if "which conda" in command:
+            return "Welcome\n/home/alice/miniconda3/bin/conda\n", "", 0
+        if command == "/home/alice/miniconda3/bin/conda env list":
+            return (
+                "# conda environments:\n"
+                "base * /home/alice/miniconda3\n"
+                "openbench /home/alice/miniconda3/envs/openbench\n",
+                "",
+                0,
+            )
+        return "", "", 1
+
+    manager.execute = fake_execute
+
+    assert manager.detect_conda_envs() == [
+        ("base", "/home/alice/miniconda3"),
+        ("openbench", "/home/alice/miniconda3/envs/openbench"),
+    ]
