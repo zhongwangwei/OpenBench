@@ -229,6 +229,7 @@ class SSHManager:
         # Multi-hop connection attributes
         self._jump_client: Optional[SSHClient] = None
         self._jump_channel = None
+        self._jump_required = False
         self._last_detection_errors: list[str] = []
         # Reentrant lock guarding mutations of self._client / self._sftp /
         # self._jump_* and short reads of the active client. Held only across
@@ -246,6 +247,19 @@ class SSHManager:
         detail = f"{message}: {exc}"
         self._last_detection_errors.append(detail)
         logger.debug(detail)
+
+    @staticmethod
+    def _last_absolute_path(stdout: str, *, basename: Optional[str] = None) -> str:
+        """Return the last absolute path line from noisy shell output."""
+        path = ""
+        for line in stdout.splitlines():
+            candidate = line.strip()
+            if not candidate.startswith("/"):
+                continue
+            if basename and posixpath.basename(candidate) != basename:
+                continue
+            path = candidate
+        return path
 
     @property
     def is_connected(self) -> bool:
@@ -305,6 +319,7 @@ class SSHManager:
             SSHConnectionError: If connection fails
         """
         user, host, port = self._parse_host_string(host_string)
+        self._jump_required = False
 
         if user is None:
             raise SSHConnectionError("Username is required (format: user@host)")
@@ -379,6 +394,7 @@ class SSHManager:
         with self._state_lock:
             # First disconnect jump connection if present
             self.disconnect_jump()
+            self._jump_required = False
 
             if self._sftp:
                 try:
@@ -458,6 +474,8 @@ class SSHManager:
         if not self.is_connected:
             raise SSHConnectionError("Must connect to main server first")
 
+        self._jump_required = True
+
         if self._jump_client is not None or self._jump_channel is not None or self._jump_sftp is not None:
             self.disconnect_jump()
 
@@ -523,6 +541,14 @@ class SSHManager:
                 pass
             self._jump_client = None
             self._jump_channel = None
+            # A requested compute-node connection is the execution target. If
+            # it fails, keeping the login-node client alive lets later
+            # execute()/SFTP calls silently run on the wrong machine. Tear down
+            # the main connection as well so callers must reconnect deliberately.
+            try:
+                self.disconnect()
+            except Exception:
+                pass
             raise SSHConnectionError(f"Jump connection failed: {e}") from e
 
     def disconnect_jump(self) -> None:
@@ -556,6 +582,8 @@ class SSHManager:
         """
         if self.is_jump_connected:
             return self._jump_client
+        if self._jump_required:
+            return None
         return self._client
 
     @staticmethod
@@ -988,11 +1016,7 @@ class SSHManager:
                     # `cd` notices before our `which python` output. Pick
                     # the last line that actually looks like an absolute
                     # path instead of blindly taking `[0]`.
-                    path = ""
-                    for line in stdout.splitlines():
-                        line = line.strip()
-                        if line.startswith("/"):
-                            path = line
+                    path = self._last_absolute_path(stdout)
                     if path and path not in pythons and not is_system_path(path):
                         pythons.append(path)
             except Exception as exc:
@@ -1030,7 +1054,7 @@ class SSHManager:
             cmd = f"ls -d {home}/miniconda*/bin/conda {home}/miniforge*/bin/conda {home}/anaconda*/bin/conda {home}/mambaforge*/bin/conda 2>/dev/null | head -1"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
-                conda_exe = stdout.strip().split("\n")[0]
+                conda_exe = self._last_absolute_path(stdout, basename="conda")
         except Exception as exc:
             self._record_detection_error("Conda discovery command failed", exc)
 
@@ -1039,7 +1063,7 @@ class SSHManager:
             try:
                 stdout, _, exit_code = self.execute("bash -i -l -c 'which conda' 2>/dev/null", timeout=15)
                 if exit_code == 0 and stdout.strip():
-                    conda_exe = stdout.strip().split("\n")[0]
+                    conda_exe = self._last_absolute_path(stdout, basename="conda")
             except Exception as exc:
                 self._record_detection_error("Conda discovery command failed", exc)
 

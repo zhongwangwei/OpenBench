@@ -189,12 +189,21 @@ class PagePreview(BasePage):
             QMessageBox.warning(self, "Validation Failed", error_msg)
             return False
 
-        # Check if in remote mode using storage type
+        # Execution mode is authoritative. Storage can still be local while a
+        # saved remote config is disconnected; silently running locally would
+        # execute on the wrong machine.
         from openbench.remote.storage import RemoteStorage
 
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
+        is_remote = self.controller.config.get("general", {}).get("execution_mode") == "remote"
 
         if is_remote:
+            if not isinstance(self.controller.storage, RemoteStorage):
+                QMessageBox.warning(
+                    self,
+                    "Remote Connection Required",
+                    "Remote execution is selected, but no remote project connection is active.",
+                )
+                return False
             # TODO: Refactor to use ProjectStorage interface for unified export
             # Currently uses direct SSH/SFTP operations
             return self._export_and_run_remote(output_dir)

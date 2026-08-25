@@ -833,3 +833,103 @@ def test_gui_grid_reference_validation_checks_spatial_range_for_single_file(tmp_
     spatial_check = next(check for check in result.checks if check.name == "spatial_range")
     assert spatial_check.passed is False
     assert "Spatial range insufficient" in spatial_check.message
+
+
+def test_gui_grid_validation_opens_sample_dataset_once(tmp_path, monkeypatch):
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    import openbench.gui.data_validator as validator_module
+
+    path = tmp_path / "global.nc"
+    longitudes = np.arange(0.0, 360.0, 60.0)
+    xr.Dataset(
+        {"q": (("time", "lat", "lon"), np.ones((2, 2, len(longitudes))))},
+        coords={
+            "time": pd.date_range("2000-01-01", periods=2, freq="YS"),
+            "lat": [-90.0, 90.0],
+            "lon": longitudes,
+        },
+    ).to_netcdf(path)
+    calls = 0
+    real_safe_open = validator_module.safe_open
+
+    def counting_open(candidate):
+        nonlocal calls
+        calls += 1
+        return real_safe_open(candidate)
+
+    monkeypatch.setattr(validator_module, "safe_open", counting_open)
+    result = validator_module.DataValidator().validate_source(
+        "Runoff",
+        "GlobalRef",
+        {
+            "general": {"root_dir": str(tmp_path), "data_type": "grid", "data_groupby": "Single"},
+            "varname": "q",
+            "prefix": "global",
+        },
+        {"syear": 2000, "eyear": 2001, "min_lat": -90, "max_lat": 90, "min_lon": -180, "max_lon": 180},
+    )
+
+    assert result.is_valid is True
+    assert calls == 1
+
+
+def test_gui_grid_validation_normalizes_equivalent_longitude_domains(tmp_path):
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    from openbench.gui.data_validator import DataValidator
+
+    path = tmp_path / "global.nc"
+    longitudes = np.arange(0.0, 360.0, 60.0)
+    xr.Dataset(
+        {"q": (("time", "lat", "lon"), np.ones((2, 2, len(longitudes))))},
+        coords={
+            "time": pd.date_range("2000-01-01", periods=2, freq="YS"),
+            "lat": [-90.0, 90.0],
+            "lon": longitudes,
+        },
+    ).to_netcdf(path)
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "GlobalRef",
+        {
+            "general": {"root_dir": str(tmp_path), "data_type": "grid", "data_groupby": "Single"},
+            "varname": "q",
+            "prefix": "global",
+        },
+        {"syear": 2000, "eyear": 2001, "min_lat": -90, "max_lat": 90, "min_lon": -180, "max_lon": 180},
+    )
+
+    spatial = next(check for check in result.checks if check.name == "spatial_range")
+    assert spatial.passed is True
+
+
+def test_gui_grid_validation_does_not_treat_dateline_region_as_global(tmp_path):
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    from openbench.gui.data_validator import DataValidator
+
+    longitudes = np.array([350.0, 355.0, 0.0, 5.0, 10.0])
+    path = tmp_path / "dateline.nc"
+    xr.Dataset(
+        {"q": (("time", "lat", "lon"), np.ones((2, 2, len(longitudes))))},
+        coords={"time": pd.date_range("2000-01-01", periods=2, freq="YS"), "lat": [-10.0, 10.0], "lon": longitudes},
+    ).to_netcdf(path)
+
+    result = DataValidator().validate_source(
+        "Runoff",
+        "DatelineRef",
+        {
+            "general": {"root_dir": str(tmp_path), "data_type": "grid", "data_groupby": "Single"},
+            "varname": "q",
+            "prefix": "dateline",
+        },
+        {"syear": 2000, "eyear": 2001, "min_lat": -10, "max_lat": 10, "min_lon": 100, "max_lon": 200},
+    )
+
+    spatial = next(check for check in result.checks if check.name == "spatial_range")
+    assert spatial.passed is False

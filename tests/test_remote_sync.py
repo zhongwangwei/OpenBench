@@ -293,3 +293,15 @@ def test_sync_engine_sftp_paths_expand_tilde_project_dir():
         ("/home/openbench/OpenBench/nml/ref.yaml", "wb"),
     ]
     assert all(not path.startswith("~") for path, _mode in ssh.sftp.opens)
+
+
+def test_glob_raises_remote_diagnostics_on_nonzero_exit():
+    class FailingGlobSSH(FakeSSH):
+        def execute(self, command, timeout=30):
+            self.commands.append(command)
+            return "", "permission denied", 13
+
+    sync = SyncEngine(FailingGlobSSH(), "/remote/project")
+
+    with pytest.raises(IOError, match="permission denied"):
+        sync.glob("nml/**/*.yaml")

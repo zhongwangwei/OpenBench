@@ -1,3 +1,5 @@
+import pytest
+
 from openbench.gui.pages.page_run_monitor import count_evaluation_tasks
 from openbench.gui.progress_parser import parse_progress_line
 
@@ -12,8 +14,10 @@ def _state(**overrides):
         "completed_eval_tasks": set(),
         "completed_groupby_tasks": set(),
         "completed_comparison_tasks": set(),
+        "completed_statistics_tasks": set(),
         "total_tasks": 0,
         "num_comparisons": 0,
+        "num_statistics": 0,
         "num_variables": 0,
     }
     state.update(overrides)
@@ -139,7 +143,33 @@ def test_progress_parser_counts_actual_groupby_complete_lines():
 
         assert progress == 95
         assert stage == "Comparison"
-        assert ("Runoff", key) in state["completed_groupby_tasks"]
+        assert key in state["completed_groupby_tasks"]
+
+
+def test_progress_parser_counts_statistics_independently_from_comparisons():
+    state = _state(total_tasks=2, num_comparisons=0, num_statistics=2)
+
+    progress, _var, stage = parse_progress_line("Completed Mean analysis", 5, state, CONSTANTS)
+
+    assert progress == 50
+    assert stage == "Statistics"
+    assert "Mean" in state["completed_statistics_tasks"]
+    assert state["completed_comparison_tasks"] == set()
+
+
+def test_progress_parser_large_task_fraction_survives_for_display():
+    state = _state(total_tasks=1000)
+
+    progress, variable, stage = parse_progress_line(
+        'OPENBENCH_PROGRESS {"event":"evaluation_completed","variable":"Runoff","sim":"SimA","ref":"RefA"}',
+        5,
+        state,
+        CONSTANTS,
+    )
+
+    assert progress == pytest.approx(5.09)
+    assert variable == "Runoff"
+    assert stage == "Evaluation"
 
 
 def test_evaluation_task_count_uses_each_variables_bound_sources():

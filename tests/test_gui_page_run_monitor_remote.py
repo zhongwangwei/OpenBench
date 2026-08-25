@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from openbench.gui.pages.page_run_monitor import PageRunMonitor  # noqa: E402
+from openbench.gui.pages.page_run_monitor import PageRunMonitor, RemoteFolderDownloadWorker  # noqa: E402
 
 
 class RaisingController:
@@ -17,7 +17,7 @@ class FakeSSH:
         self.exc = exc
         self.commands = []
 
-    def execute(self, command, timeout=30):
+    def execute(self, command, timeout=30, should_abort=None):
         self.commands.append(command)
         if self.exc:
             raise self.exc
@@ -80,3 +80,62 @@ def test_remote_download_relpath_rejects_paths_outside_remote_dir():
     assert page._remote_download_relpath("/remote/output/a/b.nc", "/remote/output") == "a/b.nc"
     assert page._remote_download_relpath("/remote/output2/evil.nc", "/remote/output") is None
     assert page._remote_download_relpath("/etc/passwd", "/remote/output") is None
+
+
+def test_on_finished_reports_stopped_without_failed_warning(monkeypatch):
+    page = _page()
+    page.dashboard = type("Dashboard", (), {"stop_monitoring": lambda self: None})()
+    page._refresh_parent_navigation = lambda: None
+    infos = []
+    warnings = []
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_run_monitor.QMessageBox.information",
+        lambda parent, title, message: infos.append((title, message)),
+    )
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_run_monitor.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    page._on_finished(False, "Stopped by user")
+
+    assert infos == [("Stopped", "Evaluation stopped by user.")]
+    assert warnings == []
+
+
+class FakeSftp:
+    def __init__(self):
+        self.downloads = []
+
+    def get(self, remote, local, callback=None):
+        if callback is not None:
+            callback(1, 1)
+        self.downloads.append((remote, local))
+
+
+class ListingSSH(FakeSSH):
+    def __init__(self):
+        super().__init__()
+        self.sftp = FakeSftp()
+
+    def execute(self, command, timeout=30, should_abort=None):
+        self.commands.append(command)
+        return "/remote/output/a.nc\n/remote/output/sub/b.nc\n", "", 0
+
+    def open_sftp(self):
+        return self.sftp
+
+
+def test_remote_folder_download_worker_downloads_in_background_target(tmp_path, qapp):
+    ssh = ListingSSH()
+    worker = RemoteFolderDownloadWorker(ssh, "/remote/output", str(tmp_path / "output"))
+    finished = []
+    worker.finished_signal.connect(
+        lambda success, canceled, message, target: finished.append((success, canceled, message, target))
+    )
+
+    worker.run()
+
+    assert finished == [(True, False, "Download complete", str(tmp_path / "output"))]
+    assert len(ssh.sftp.downloads) == 2
+    assert (tmp_path / "output" / "a.nc").parent.exists()

@@ -29,7 +29,8 @@ class ValidationWorker(QThread):
     """Worker thread for running validation."""
 
     progress = Signal(int, int, str, str)  # current, total, var_name, source_name
-    finished = Signal(object)  # DataValidationReport
+    result_ready = Signal(object)  # DataValidationReport
+    cancelled = Signal()
     error = Signal(str)
 
     def __init__(self, validator: DataValidator, sources: dict, general_config: dict, parent=None):
@@ -52,9 +53,9 @@ class ValidationWorker(QThread):
                 self.progress.emit(current, total, var_name, source_name)
 
             report = self._validator.validate_all(self._sources, self._general_config, progress_callback)
-            self.finished.emit(report)
+            self.result_ready.emit(report)
         except InterruptedError:
-            pass
+            self.cancelled.emit()
         except Exception as e:
             self.error.emit(str(e))
 
@@ -66,6 +67,8 @@ class ValidationWorker(QThread):
 class ValidationProgressDialog(QDialog):
     """Dialog showing validation progress."""
 
+    _active_workers = set()
+
     def __init__(self, validator: DataValidator, sources: dict, general_config: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Validating Data...")
@@ -75,14 +78,19 @@ class ValidationProgressDialog(QDialog):
 
         self._report: Optional[DataValidationReport] = None
         self._closing = False
+        self._cancel_requested = False
         self._worker: Optional[ValidationWorker] = None
         self._setup_ui()
 
         # Start worker - don't set parent to avoid Qt destruction issues
         self._worker = ValidationWorker(validator, sources, general_config, None)
+        self._active_workers.add(self._worker)
         self._worker.progress.connect(self._on_progress, Qt.QueuedConnection)
-        self._worker.finished.connect(self._on_finished, Qt.QueuedConnection)
+        self._worker.result_ready.connect(self._on_finished, Qt.QueuedConnection)
+        self._worker.cancelled.connect(self._on_cancelled, Qt.QueuedConnection)
         self._worker.error.connect(self._on_error, Qt.QueuedConnection)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.finished.connect(lambda worker=self._worker: self._active_workers.discard(worker))
         self._worker.start()
 
     def _setup_ui(self):
@@ -115,7 +123,7 @@ class ValidationProgressDialog(QDialog):
 
     def _on_progress(self, current: int, total: int, var_name: str, source_name: str):
         """Handle progress update."""
-        if self._closing:
+        if self._closing or getattr(self, "_cancel_requested", False):
             return
 
         total = max(0, int(total))
@@ -149,6 +157,17 @@ class ValidationProgressDialog(QDialog):
 
     def _on_cancel(self):
         """Handle cancel button."""
+        if self._worker is None or not self._worker.isRunning():
+            self._closing = True
+            self.reject()
+            return
+        self._cancel_requested = True
+        self.cancel_btn.setEnabled(False)
+        self.progress_label.setText("Cancelling...")
+        self._worker.cancel()
+
+    def _on_cancelled(self):
+        """Close after the worker reaches a safe cancellation point."""
         self._closing = True
         self._cleanup_worker()
         self.reject()
@@ -159,26 +178,20 @@ class ValidationProgressDialog(QDialog):
             # Disconnect signals first to prevent any more callbacks
             try:
                 self._worker.progress.disconnect()
-                self._worker.finished.disconnect()
+                self._worker.result_ready.disconnect()
+                self._worker.cancelled.disconnect()
                 self._worker.error.disconnect()
             except RuntimeError:
                 pass  # Already disconnected
 
-            # Request cancellation and wait for thread to finish
-            self._worker.cancel()
-            if self._worker.isRunning():
-                self._worker.wait(3000)
-                if self._worker.isRunning():
-                    # Force terminate if still running
-                    self._worker.terminate()
-                    self._worker.wait(1000)
-
-            # Schedule deletion to ensure all events are processed
-            self._worker.deleteLater()
             self._worker = None
 
     def closeEvent(self, event):
         """Handle dialog close event."""
+        if not self._closing and self._worker is not None and self._worker.isRunning():
+            self._on_cancel()
+            event.ignore()
+            return
         self._closing = True
         self._cleanup_worker()
         super().closeEvent(event)

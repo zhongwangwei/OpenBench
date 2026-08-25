@@ -46,3 +46,37 @@ def test_reading_corrupt_credentials_returns_empty_without_destroying_file(tmp_p
     assert mgr.get_credential("bob@example.org") is None
     assert mgr.list_hosts() == []
     assert credentials_path.read_text(encoding="utf-8") == "not-json"
+
+
+def test_save_credential_roundtrips_compute_node_key_and_password(tmp_path):
+    mgr = CredentialManager(config_dir=str(tmp_path))
+
+    mgr.save_credential(
+        "alice@example.org",
+        "key",
+        key_file="/keys/login",
+        jump_node="node001",
+        jump_auth="key",
+        node_key_file="/keys/node",
+    )
+
+    cred = mgr.get_credential("alice@example.org")
+    assert cred["key_file"] == "/keys/login"
+    assert cred["jump_node"] == "node001"
+    assert cred["jump_auth"] == "key"
+    assert cred["node_key_file"] == "/keys/node"
+
+    mgr.save_credential(
+        "alice@example.org",
+        "password",
+        password="login-secret",
+        jump_node="node002",
+        jump_auth="password",
+        node_password="node-secret",
+    )
+
+    cred = mgr.get_credential("alice@example.org")
+    assert cred["password"] == "login-secret"
+    assert cred["jump_node"] == "node002"
+    assert cred["jump_auth"] == "password"
+    assert cred["node_password"] == "node-secret"
