@@ -428,10 +428,14 @@ class PageRefData(BasePage):
             from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
 
             new_groups, skipped = unpack_scan_result(new_groups)
+            self._available_registry_names = {
+                variant.registry_name for group in new_groups for variant in group.variants.values()
+            }
             if skipped:
                 QMessageBox.warning(self, "Scan Incomplete", format_scan_skips(skipped))
 
             if not new_groups:
+                self._refresh_registry_after_scan()
                 if not skipped:
                     QMessageBox.information(self, "Scan Complete", "No supported reference datasets found.")
                 return
@@ -441,6 +445,7 @@ class PageRefData(BasePage):
             if dlg.exec():
                 selected = dlg.get_selected()
                 if not selected:
+                    self._refresh_registry_after_scan()
                     return
 
                 variants = [variant for _base, _res, variant in selected]
@@ -466,12 +471,7 @@ class PageRefData(BasePage):
 
                 # Refresh registry
                 clear_registry_cache()
-                mgr2 = get_registry()
-                self.registry_label.setText(f"Registry: {len(mgr2.list_references())} datasets available")
-
-                # Rebuild variable groups to pick up new registry entries
-                self._rebuild_variable_groups()
-                self.load_from_config()
+                self._refresh_registry_after_scan()
 
                 message = (
                     f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
@@ -483,10 +483,21 @@ class PageRefData(BasePage):
                     if caveats:
                         message += f"\n\n{caveats}"
                 QMessageBox.information(self, "Scan Complete", message)
+            else:
+                self._refresh_registry_after_scan()
 
         except Exception as e:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning: {e}")
             logger.exception("Data scan registration failed")
+
+    def _refresh_registry_after_scan(self):
+        """Refresh selectors using only registry entries confirmed by the scan."""
+        from openbench.data.registry.manager import get_registry
+
+        registered = {ref.name for ref in get_registry().list_references()}
+        available = getattr(self, "_available_registry_names", set())
+        self.registry_label.setText(f"Registry: {len(registered & available)} datasets available")
+        self.load_from_config()
 
     def _populate_registry_combo(self, combo, var_name):
         """Populate registry combo with available reference datasets for this variable.
@@ -502,6 +513,9 @@ class PageRefData(BasePage):
 
             mgr = get_registry()
             refs_with_var = mgr.references_for_variable(var_name)
+            available = getattr(self, "_available_registry_names", None)
+            if available is not None:
+                refs_with_var = [ref for ref in refs_with_var if ref.name in available]
             if refs_with_var:
                 # Group by base name (strip _LowRes/_MidRes/_HigRes suffix)
                 groups = {}

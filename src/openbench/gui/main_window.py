@@ -5,8 +5,11 @@ Main window with sidebar navigation and page container.
 
 import logging
 import os
+from importlib.resources import files
+
 import yaml
 
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -25,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from openbench import __version__
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.localization import CHINESE, get_language_manager
 from openbench.gui.widgets._ssh_worker import execute_responsive
@@ -69,6 +73,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("OpenBench NML Wizard")
         self.setMinimumSize(1200, 800)
 
+        self._logo_pixmap = QPixmap()
+        logo = files("openbench.gui") / "styles" / "openbench-logo.png"
+        if logo.is_file():
+            self._logo_pixmap.loadFromData(logo.read_bytes(), "PNG")
+            self.setWindowIcon(QIcon(self._logo_pixmap))
+
         # Initialize controller
         self.controller = WizardController(self)
 
@@ -94,13 +104,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         # Main layout
-        main_layout = QHBoxLayout(central)
+        main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
         # Create splitter for sidebar and content
         splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(splitter, 1)
 
         # === Sidebar ===
         sidebar = QWidget()
@@ -114,6 +124,12 @@ class MainWindow(QMainWindow):
         title_frame = QFrame()
         title_frame.setStyleSheet("background-color: #252525; padding: 20px;")
         title_layout = QVBoxLayout(title_frame)
+
+        self.logo_label = QLabel()
+        if not self._logo_pixmap.isNull():
+            self.logo_label.setPixmap(self._logo_pixmap.scaled(160, 92, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(self.logo_label)
 
         self.title_label = QLabel("OpenBench")
         self.title_label.setStyleSheet("color: #ffffff; font-size: 20px; font-weight: bold;")
@@ -133,6 +149,10 @@ class MainWindow(QMainWindow):
             QPushButton:hover { color: #ffffff; background-color: #3d3d3d; }
         """)
         title_layout.addWidget(self.btn_language, alignment=Qt.AlignCenter)
+
+        self.btn_about = QPushButton("About")
+        self.btn_about.setStyleSheet(self.btn_language.styleSheet())
+        title_layout.addWidget(self.btn_about, alignment=Qt.AlignCenter)
 
         sidebar_layout.addWidget(title_frame)
 
@@ -233,6 +253,13 @@ class MainWindow(QMainWindow):
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 
+        self.copyright_label = QLabel("Copyright: CoLM LSM Development Team, School of Atmospheric Sciences, SYSU")
+        self.copyright_label.setAlignment(Qt.AlignCenter)
+        self.copyright_label.setStyleSheet(
+            "background-color: #ffffff; color: #777777; border-top: 1px solid #eeeeee; padding: 5px; font-size: 10px;"
+        )
+        main_layout.addWidget(self.copyright_label)
+
     def _setup_pages(self):
         """Create and add all pages to the stack."""
         self.pages = {}
@@ -274,6 +301,7 @@ class MainWindow(QMainWindow):
         self.btn_load.clicked.connect(self._on_load_clicked)
         self.btn_new.clicked.connect(self._on_new_clicked)
         self.btn_language.clicked.connect(self.language_manager.toggle)
+        self.btn_about.clicked.connect(self._show_about)
         self.language_manager.language_changed.connect(self._on_language_changed)
 
         # Sidebar navigation
@@ -323,6 +351,62 @@ class MainWindow(QMainWindow):
         else:
             self.btn_language.setText("中文")
             self.btn_language.setToolTip("切换到中文")
+
+    def _show_about(self):
+        """Show OpenBench version, maintainer, and copyright information."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About OpenBench")
+        dialog.setFixedWidth(460)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(36, 28, 36, 24)
+        layout.setSpacing(8)
+
+        logo = QLabel()
+        if not self._logo_pixmap.isNull():
+            logo.setPixmap(self._logo_pixmap.scaled(220, 127, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(logo)
+
+        title = QLabel("OpenBench")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        layout.addWidget(title)
+
+        version = QLabel(f"Version {__version__}")
+        version.setAlignment(Qt.AlignCenter)
+        version.setStyleSheet("color: #777777;")
+        layout.addWidget(version)
+
+        description = QLabel("Open Source Land Surface Model Benchmarking System")
+        description.setAlignment(Qt.AlignCenter)
+        layout.addWidget(description)
+
+        signature = QLabel(
+            "Developed and maintained by\n"
+            "CoLM LSM Development Team\n"
+            "School of Atmospheric Sciences, SYSU\n\n"
+            "Contact\n"
+            "Zhongwang Wei (魏忠旺)\n"
+            "weizhw6@mail.sysu.edu.cn"
+        )
+        signature.setAlignment(Qt.AlignCenter)
+        signature.setStyleSheet("border-top: 1px solid #e5e5e5; border-bottom: 1px solid #e5e5e5; padding: 16px;")
+        layout.addWidget(signature)
+
+        copyright_label = QLabel("Copyright: CoLM LSM Development Team, School of Atmospheric Sciences, SYSU")
+        copyright_label.setAlignment(Qt.AlignCenter)
+        copyright_label.setWordWrap(True)
+        copyright_label.setStyleSheet("color: #777777; font-size: 11px;")
+        layout.addWidget(copyright_label)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button, alignment=Qt.AlignCenter)
+
+        self.language_manager.apply(dialog)
+        self._about_dialog = dialog
+        dialog.exec()
 
     def closeEvent(self, event):
         """Stop any running evaluation before closing.

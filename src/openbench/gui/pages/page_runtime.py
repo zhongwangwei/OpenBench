@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import QThread, Signal
 
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets.remote_config import RemoteConfigWidget, _InstallProgressDialog
 
@@ -142,7 +143,7 @@ class PageRuntime(BasePage):
         cores_layout = QHBoxLayout()
         self.num_cores_spin = NoScrollSpinBox()
         self.num_cores_spin.setRange(1, 128)
-        self.num_cores_spin.setValue(min(4, os.cpu_count() or 4))
+        self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
         self.num_cores_spin.setMinimumWidth(80)
         self.num_cores_spin.setToolTip("Number of CPU cores to use for parallel processing")
         self.num_cores_spin.valueChanged.connect(self._on_config_changed)
@@ -736,7 +737,7 @@ class PageRuntime(BasePage):
             self.remote_config_widget.hide()
 
         # Load num_cores (for local mode)
-        self.num_cores_spin.setValue(general.get("num_cores", 4))
+        self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
 
         # Load Python path
         python_path = general.get("python_path", "")
@@ -887,7 +888,7 @@ class PageRuntime(BasePage):
             self.radio_local.setChecked(True)
 
         # Apply num_cores
-        self.num_cores_spin.setValue(settings.get("num_cores", 4))
+        self.num_cores_spin.setValue(settings.get("num_cores", DEFAULT_NUM_CORES))
 
         # Apply Python path
         python_path = settings.get("python_path", "")
@@ -1006,7 +1007,7 @@ class PageRuntime(BasePage):
 
             # Reset UI to defaults
             self.radio_local.setChecked(True)
-            self.num_cores_spin.setValue(min(4, os.cpu_count() or 4))
+            self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
             self.python_combo.setCurrentIndex(0)
             self.conda_combo.setCurrentIndex(0)
             self.local_openbench_input.clear()

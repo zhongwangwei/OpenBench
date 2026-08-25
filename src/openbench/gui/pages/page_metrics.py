@@ -5,7 +5,7 @@ Metrics selection page.
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import CheckboxGroup
-from openbench.core.registry import METRICS_ITEMS
+from openbench.core.registry import METRIC_LABELS, METRICS_ITEMS
 
 
 class PageMetrics(BasePage):
@@ -18,7 +18,7 @@ class PageMetrics(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        self.checkbox_group = CheckboxGroup(METRICS_ITEMS)
+        self.checkbox_group = CheckboxGroup(METRICS_ITEMS, labels=METRIC_LABELS, columns=2)
         self.checkbox_group.selection_changed.connect(self._on_selection_changed)
         self.content_layout.addWidget(self.checkbox_group)
 

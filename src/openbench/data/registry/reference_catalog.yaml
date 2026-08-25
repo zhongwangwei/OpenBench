@@ -463,36 +463,6 @@ Dai_Trenberth_Monthly:
   _provenance:
     data_groupby: profile
     tim_res: nc
-Daily:
-  name: Daily
-  description: OpenBench consolidated daily streamflow alias
-  category: Water
-  data_type: stn
-  tim_res: Day
-  data_groupby: single
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/StreamFlow/Daily
-  years:
-  - 1800
-  - 2024
-  station_matching:
-    area_var: area
-    dataset_file: OpenBench_Streamflow_Daily.nc
-    discharge_var: discharge
-    lat_var: lat
-    lon_var: lon
-    method: cama_allocation
-    station_id_var: station
-    time_var: time
-  variables:
-    Streamflow:
-      varname: discharge
-      varunit: m3 s-1
-      max_uparea: 50000000000.0
-      min_uparea: 1000.0
-  _provenance:
-    data_groupby: profile
-    tim_res: nc
 ERA5LAND_LowRes:
   name: ERA5LAND_LowRes
   description: ERA5LAND reference dataset (LowRes)
@@ -1121,61 +1091,6 @@ FLUXNET_PLUMBER2:
     data_groupby: profile
     tim_res: profile
   fulllist: ${OPENBENCH_REF_ROOT}/Station/Composite/FLUXNET_PLUMBER2/list/FLUXNET_PLUMBER2.csv
-FLUX_PLUMBER2:
-  name: FLUX_PLUMBER2
-  description: FLUXNET PLUMBER2 flux tower composite (hourly)
-  category: Composite
-  data_type: stn
-  tim_res: Hour
-  data_groupby: single
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/FLUXNET_PLUMBER2
-  years:
-  - 1992
-  - 2018
-  fulllist: ${OPENBENCH_REF_ROOT}/Station/Composite/FLUXNET_PLUMBER2/list/FLUXNET_PLUMBER2.csv
-  variables:
-    Latent_Heat:
-      varname: Qle_cor
-      varunit: W m-2
-      sub_dir: dataset
-      fallbacks:
-      - varname: Qle
-        varunit: W m-2
-    Sensible_Heat:
-      varname: Qh_cor
-      varunit: W m-2
-      sub_dir: dataset
-      fallbacks:
-      - varname: Qh
-        varunit: W m-2
-    Ground_Heat:
-      varname: Qg
-      varunit: W m-2
-      sub_dir: dataset
-    Net_Radiation:
-      varname: Rnet
-      varunit: W m-2
-      sub_dir: dataset
-    Surface_Upward_SW_Radiation:
-      varname: SWup
-      varunit: W m-2
-      sub_dir: dataset
-    Surface_Upward_LW_Radiation:
-      varname: LWup
-      varunit: W m-2
-      sub_dir: dataset
-    Gross_Primary_Productivity:
-      varname: GPP
-      varunit: mumolCO2 m-2 s-1
-      sub_dir: dataset
-    Net_Ecosystem_Exchange:
-      varname: NEE
-      varunit: mumolCO2 m-2 s-1
-      sub_dir: dataset
-  _provenance:
-    data_groupby: profile
-    tim_res: profile
 GCOS_LowRes:
   name: GCOS_LowRes
   description: GCOS reference dataset (LowRes)
@@ -2174,34 +2089,6 @@ HSWUD_MidRes:
     data_groupby: scan
     tim_res: nc
     grid_res: scan
-Hourly:
-  name: Hourly
-  description: OpenBench consolidated hourly streamflow alias
-  category: Water
-  data_type: stn
-  tim_res: Hour
-  data_groupby: single
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/StreamFlow/Hourly
-  years:
-  - 1980
-  - 2024
-  station_matching:
-    area_var: area
-    dataset_file: OpenBench_Streamflow_Hourly_full.nc
-    discharge_var: discharge
-    lat_var: lat
-    lon_var: lon
-    method: cama_allocation
-    station_id_var: station
-    time_var: time
-  variables:
-    Streamflow:
-      varname: discharge
-      varunit: m3 s-1
-  _provenance:
-    data_groupby: profile
-    tim_res: nc
 Hubei_Hydro_Daily:
   name: Hubei_Hydro_Daily
   description: Hubei Hydrological Bureau daily streamflow
@@ -2411,29 +2298,6 @@ MSWEP_0p25_MidRes:
     data_groupby: scan
     tim_res: nc
     grid_res: nc
-MSWEP_MidRes:
-  name: MSWEP_MidRes
-  description: MSWEP reference dataset (MidRes)
-  category: Water
-  data_type: grid
-  tim_res: Day
-  data_groupby: Year
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
-  years:
-  - 1979
-  - 2020
-  grid_res: 0.25
-  variables:
-    Precipitation:
-      varname: precipitation
-      varunit: mm d-1
-      sub_dir: Water/Precipitation/MSWEP_0p25
-      prefix: Precipitation_
-  _provenance:
-    data_groupby: scan
-    tim_res: nc
-    grid_res: scan
 MSWEP_V280_LowRes:
   name: MSWEP_V280_LowRes
   description: MSWEP_V280 reference dataset (LowRes)
@@ -2626,94 +2490,6 @@ MSWX_LowRes:
     data_groupby: scan
     tim_res: nc
     grid_res: scan
-MSWX_MidRes:
-  name: MSWX_MidRes
-  description: MSWX reference dataset (MidRes)
-  category: Energy
-  data_type: grid
-  tim_res: Day
-  data_groupby: Year
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
-  years:
-  - 1979
-  - 2020
-  grid_res: 0.25
-  variables:
-    Surface_Downward_LW_Radiation:
-      varname: downward_longwave_radiation
-      varunit: W m-2
-      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
-      prefix: LWd_
-    Surface_Downward_SW_Radiation:
-      varname: downward_shortwave_radiation
-      varunit: W m-2
-      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
-      prefix: SWd_
-    Diurnal_Max_Temperature:
-      varname: air_temperature
-      varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
-      prefix: Tmax_
-    Diurnal_Min_Temperature:
-      varname: air_temperature
-      varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
-      prefix: Tmin_
-    Surface_Air_Temperature:
-      varname: air_temperature
-      varunit: degree_Celsius
-      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
-      prefix: Temp_
-    Surface_Specific_Humidity:
-      varname: specific_humidity
-      varunit: kg kg-1
-      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
-      prefix: SpecHum_
-    Surface_Wind_Speed:
-      varname: wind_speed
-      varunit: m s-1
-      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
-      prefix: Wind_
-    Precipitation:
-      varname: precipitation
-      varunit: mm 3h-1
-      sub_dir: Water/Precipitation/MSWX_0p25
-      prefix: Precipitation_
-  _provenance:
-    data_groupby: scan
-    tim_res: nc
-    grid_res: nc
-Monthly:
-  name: Monthly
-  description: OpenBench consolidated monthly streamflow alias
-  category: Water
-  data_type: stn
-  tim_res: Month
-  data_groupby: single
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/StreamFlow/Monthly
-  years:
-  - 1950
-  - 2025
-  station_matching:
-    area_var: upstream_area
-    dataset_file: OpenBench_Streamflow_Monthly_full.nc
-    discharge_var: discharge
-    lat_var: lat
-    lon_var: lon
-    method: cama_allocation
-    station_id_var: station
-    time_var: time
-  variables:
-    Streamflow:
-      varname: discharge
-      varunit: m3 s-1
-      max_uparea: 50000000000.0
-      min_uparea: 1000.0
-  _provenance:
-    data_groupby: profile
-    tim_res: nc
 OpenBench_Streamflow_Daily:
   name: OpenBench_Streamflow_Daily
   description: OpenBench consolidated daily streamflow

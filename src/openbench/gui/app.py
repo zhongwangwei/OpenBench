@@ -56,6 +56,7 @@ def launch(config_path=None):
         from openbench.gui.main_window import MainWindow
 
         window = MainWindow()
+        app.setWindowIcon(window.windowIcon())
         if config_path:
             window._load_config_file(config_path)
         window.show()

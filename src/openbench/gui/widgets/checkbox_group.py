@@ -28,17 +28,27 @@ class CheckboxGroup(QWidget):
 
     selection_changed = Signal(dict)  # Emits {item_id: bool, ...}
 
-    def __init__(self, items: Dict[str, Dict[str, List[str]]], parent=None):
+    def __init__(
+        self,
+        items: Dict[str, Dict[str, List[str]]],
+        labels: Dict[str, str] | None = None,
+        columns: int = 3,
+        parent=None,
+    ):
         """
         Initialize CheckboxGroup.
 
         Args:
             items: Nested dict of {group_name: {category: [item_names]}}
                    or flat dict {group_name: [item_names]}
+            labels: Optional display labels keyed by item ID.
+            columns: Number of checkbox columns.
             parent: Parent widget
         """
         super().__init__(parent)
         self.items = items
+        self.labels = labels or {}
+        self.columns = columns
         self._checkboxes: Dict[str, QCheckBox] = {}
         self._setup_ui()
 
@@ -105,9 +115,9 @@ class CheckboxGroup(QWidget):
                 flat_items = group_items
 
             # Create checkboxes in grid (3 columns)
-            col_count = 3
+            col_count = self.columns
             for i, item_name in enumerate(flat_items):
-                cb = QCheckBox(item_name.replace("_", " "))
+                cb = QCheckBox(self.labels.get(item_name, item_name.replace("_", " ")))
                 cb.setProperty("item_id", item_name)
                 cb.stateChanged.connect(self._on_checkbox_changed)
                 self._checkboxes[item_name] = cb

@@ -488,10 +488,27 @@ def test_streamflow_aggregate_entries_use_existing_station_matching_aliases():
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
     expected = {
-        "Daily": ("Station/Water/StreamFlow/Daily", "OpenBench_Streamflow_Daily.nc"),
-        "Hourly": ("Station/Water/StreamFlow/Hourly", "OpenBench_Streamflow_Hourly_full.nc"),
-        "Monthly": ("Station/Water/StreamFlow/Monthly", "OpenBench_Streamflow_Monthly_full.nc"),
+        "OpenBench_Streamflow_Hourly": (
+            "Station/Water/StreamFlow/Hourly",
+            "OpenBench_Streamflow_Hourly_full.nc",
+        ),
+        "OpenBench_Streamflow_Monthly": (
+            "Station/Water/StreamFlow/Monthly",
+            "OpenBench_Streamflow_Monthly_full.nc",
+        ),
     }
+
+    removed_aliases = {
+        "Daily",
+        "Hourly",
+        "Monthly",
+        "FLUX_PLUMBER2",
+        "FLUX_PLUMBER3",
+        "MSWEP_MidRes",
+        "MSWX_MidRes",
+    }
+    assert removed_aliases.isdisjoint(catalog)
+    assert removed_aliases.isdisjoint(profiles)
 
     for name, (root_suffix, dataset_file) in expected.items():
         entry = catalog[name]

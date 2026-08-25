@@ -27,6 +27,7 @@ UNCERTAINTY_METRIC_DIRECTIONS = {
     "index_agreement": "higher",
     "ubNSE": "higher",
 }
+DEFAULT_NUM_CORES = 6
 
 
 def is_simple_project_name(name: object) -> bool:

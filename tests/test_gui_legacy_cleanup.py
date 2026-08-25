@@ -63,6 +63,31 @@ def test_gui_metric_and_score_options_come_from_core_registry():
     assert {"index_agreement", "nSeasonalityScore"} <= gui_scores
 
 
+def test_metric_and_score_labels_use_full_name_with_abbreviation(qapp):
+    from openbench.core.registry import (
+        IMPLEMENTED_METRICS,
+        IMPLEMENTED_SCORES,
+        METRIC_LABELS,
+        SCORE_LABELS,
+    )
+    from openbench.gui.localization import ZH_CN
+    from openbench.gui.widgets import CheckboxGroup
+
+    assert set(METRIC_LABELS) == IMPLEMENTED_METRICS
+    assert set(SCORE_LABELS) == IMPLEMENTED_SCORES
+
+    group = CheckboxGroup(
+        {"Metrics": ["RMSE"], "Scores": ["nBiasScore"]},
+        labels={**METRIC_LABELS, **SCORE_LABELS},
+    )
+    assert group._checkboxes["RMSE"].text() == "Root Mean Squared Error (RMSE)"
+    assert group._checkboxes["nBiasScore"].text() == "Normalized Bias Score (nBiasScore)"
+    assert ZH_CN[METRIC_LABELS["RMSE"]] == "均方根误差（RMSE）"
+
+    group._checkboxes["RMSE"].setChecked(True)
+    assert group.get_selection()["RMSE"] is True
+
+
 def test_dead_page_options_duplicate_is_removed():
     assert not Path("src/openbench/gui/pages/page_options.py").exists()
 

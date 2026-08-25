@@ -20,6 +20,7 @@ from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.path_utils import browse_directory
 from openbench.gui.widgets import PathSelector
@@ -314,7 +315,7 @@ class PageGeneral(BasePage):
         # num_cores_spin kept for config compatibility
         self.num_cores_spin = NoScrollSpinBox()
         self.num_cores_spin.setRange(1, 128)
-        self.num_cores_spin.setValue(4)
+        self.num_cores_spin.setValue(DEFAULT_NUM_CORES)
         self.num_cores_spin.hide()  # Hidden, but kept for config compatibility
 
     def _on_toggle_changed(self, state):
@@ -626,7 +627,7 @@ class PageGeneral(BasePage):
         self.cb_climate.setChecked(general.get("Climate_zone_groupby", True))
         self.cb_unified_mask.setChecked(general.get("unified_mask", True))
 
-        self.num_cores_spin.setValue(general.get("num_cores", 4))
+        self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
         self._load_performance_settings(general)
 
         weight = general.get("weight", "none")

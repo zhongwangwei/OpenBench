@@ -5,7 +5,7 @@ Scores selection page.
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import CheckboxGroup
-from openbench.core.registry import SCORES_ITEMS
+from openbench.core.registry import SCORE_LABELS, SCORES_ITEMS
 
 
 class PageScores(BasePage):
@@ -18,7 +18,7 @@ class PageScores(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        self.checkbox_group = CheckboxGroup(SCORES_ITEMS)
+        self.checkbox_group = CheckboxGroup(SCORES_ITEMS, labels=SCORE_LABELS, columns=2)
         self.checkbox_group.selection_changed.connect(self._on_selection_changed)
         self.content_layout.addWidget(self.checkbox_group)
 

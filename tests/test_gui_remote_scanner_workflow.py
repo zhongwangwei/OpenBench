@@ -814,6 +814,38 @@ def test_registry_scan_dialog_receives_registered_dataset_names(monkeypatch):
     assert captured["existing_names"] == {variant.registry_name}
 
 
+def test_ref_scan_filters_registry_list_to_datasets_found_on_disk(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages.page_ref_data import PageRefData
+
+    found = ScannedDataset("Found", "LowRes", "Water", "grid", "/ref", {"Runoff": "runoff"})
+    missing = SimpleNamespace(name="OpenBench_Missing")
+    registry = SimpleNamespace(list_references=lambda: [SimpleNamespace(name=found.registry_name), missing])
+    labels = []
+    reloads = []
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            pass
+
+        def exec(self):
+            return False
+
+    monkeypatch.setattr(PageRefData, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+
+    page = PageRefData.__new__(PageRefData)
+    page.registry_label = SimpleNamespace(setText=labels.append)
+    page.load_from_config = lambda: reloads.append(True)
+
+    PageRefData._on_scan_data_root_finished(page, ([DatasetGroup("Found", {"LowRes": found})], []))
+
+    assert page._available_registry_names == {found.registry_name}
+    assert labels == ["Registry: 1 datasets available"]
+    assert reloads == [True]
+
+
 def test_ref_scan_reports_connection_loss_distinctly(monkeypatch):
     """A dropped SSH session must not be reported as 'directory not found'."""
     from openbench.gui.pages.page_ref_data import PageRefData

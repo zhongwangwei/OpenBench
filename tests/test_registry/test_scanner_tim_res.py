@@ -1,7 +1,10 @@
 """Tests for time-resolution detection in the registry scanner."""
 
+import threading
+import time
 from pathlib import Path
 
+from openbench.data.registry import scanner
 from openbench.data.registry.scanner import _detect_tim_res, scan_reference_directory
 
 
@@ -79,6 +82,31 @@ def test_scan_reference_directory_registers_multiple_standard_composite_datasets
     assert set(by_name) == {"DatasetA", "DatasetB"}
     assert skipped == []
     assert by_name["DatasetA"].variants["LowRes"].variables == {"VarX": "Composite/VarX/DatasetA"}
+
+
+def test_scan_reference_directory_parallelizes_independent_dataset_trees(tmp_path: Path, monkeypatch):
+    ref_root = tmp_path / "ref"
+    for index in range(6):
+        nc_dir = ref_root / "Grid" / "LowRes" / "Water" / f"Var{index}" / f"Dataset{index}"
+        nc_dir.mkdir(parents=True)
+        (nc_dir / f"data_{index}.nc").write_text("")
+
+    serial = scan_reference_directory(ref_root, max_workers=1)
+    original = scanner._find_nc_dir_with_descent
+    thread_ids = set()
+    lock = threading.Lock()
+
+    def slow_find(*args, **kwargs):
+        with lock:
+            thread_ids.add(threading.get_ident())
+        time.sleep(0.02)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(scanner, "_find_nc_dir_with_descent", slow_find)
+    parallel = scan_reference_directory(ref_root, max_workers=3)
+
+    assert len(thread_ids) > 1
+    assert [group.base_name for group in parallel] == [group.base_name for group in serial]
 
 
 def test_scan_reference_directory_discovers_one_level_nested_children(tmp_path: Path):
