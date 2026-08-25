@@ -162,7 +162,7 @@ def glob_nc(directory, recursive: bool = False) -> list:
     try:
         paths = d.rglob("*") if recursive else d.iterdir()
         return sorted(path for path in paths if path.is_file() and path.suffix in NC_SUFFIXES)
-    except OSError:
+    except FileNotFoundError:
         return []
 
 

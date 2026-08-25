@@ -356,6 +356,7 @@ class MainWindow(QMainWindow):
     def _show_about(self):
         """Show OpenBench version, maintainer, and copyright information."""
         dialog = QDialog(self)
+        dialog.setAttribute(Qt.WA_DeleteOnClose, True)
         dialog.setWindowTitle("About OpenBench")
         dialog.setFixedWidth(460)
 

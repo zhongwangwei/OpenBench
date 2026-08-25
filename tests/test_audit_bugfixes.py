@@ -163,6 +163,20 @@ def test_glob_nc_matches_uppercase_extensions(tmp_path):
     assert nc_exists(str(tmp_path / "CASE.nc")) == str(upper)
 
 
+def test_glob_nc_does_not_hide_permission_errors(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from openbench.data.coordinates import glob_nc
+
+    def denied(_path):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "iterdir", denied)
+
+    with pytest.raises(PermissionError, match="denied"):
+        glob_nc(tmp_path)
+
+
 def test_ubkge_uses_two_component_unbiased_form():
     from openbench.core.metrics import metrics
 
