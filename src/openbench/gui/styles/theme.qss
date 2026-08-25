@@ -210,7 +210,6 @@ QListWidget#nav_sidebar {
     border: none;
     border-radius: 0;
     min-width: 220px;
-    max-width: 220px;
 }
 
 QListWidget#nav_sidebar::item {

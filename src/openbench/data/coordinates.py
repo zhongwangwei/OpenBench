@@ -139,7 +139,9 @@ def find_lon_name(names) -> str | None:
 
 # --- NetCDF file extensions ---
 
-NC_EXTENSIONS: tuple[str, ...] = ("*.nc", "*.nc4", "*.NC", "*.NC4")
+# Raw extension strings for use in regex and os.path patterns.
+NC_SUFFIXES: tuple[str, ...] = (".nc", ".nc4", ".NC", ".NC4")
+NC_EXTENSIONS: tuple[str, ...] = tuple(f"*{suffix}" for suffix in NC_SUFFIXES)
 
 
 def glob_nc(directory, recursive: bool = False) -> list:
@@ -155,17 +157,13 @@ def glob_nc(directory, recursive: bool = False) -> list:
     from pathlib import Path
 
     d = Path(directory)
-    results = []
-    for ext in NC_EXTENSIONS:
-        if recursive:
-            results.extend(d.rglob(ext))
-        else:
-            results.extend(d.glob(ext))
-    return sorted(set(results))
-
-
-# Raw extension strings for use in regex and os.path patterns.
-NC_SUFFIXES: tuple[str, ...] = (".nc", ".nc4", ".NC", ".NC4")
+    if not d.is_dir():
+        return []
+    try:
+        paths = d.rglob("*") if recursive else d.iterdir()
+        return sorted(path for path in paths if path.is_file() and path.suffix in NC_SUFFIXES)
+    except OSError:
+        return []
 
 
 def glob_nc_pattern(pattern: str) -> list[str]:

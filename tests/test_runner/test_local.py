@@ -5402,14 +5402,15 @@ def test_unhandled_post_phase_error_still_cleans_pair_ref_override(tmp_path, mon
     assert not pair_ref.exists()
 
 
-def test_groupby_phase_obeys_comparison_enabled_gate(tmp_path, monkeypatch):
-    """Groupby toggles should not run when the comparison phase is disabled."""
+@pytest.mark.parametrize(("groupby_enabled", "expected_calls"), [(True, 1), (False, 0)])
+def test_groupby_phase_runs_without_comparison_enabled(tmp_path, monkeypatch, groupby_enabled, expected_calls):
+    """Groupby toggles run independently from comparison.enabled."""
     import openbench.config.adapter as adapter
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
 
     cfg = _make_cfg(tmp_path, comparison_enabled=False)
-    cfg.project.IGBP_groupby = True
+    cfg.project.IGBP_groupby = groupby_enabled
 
     runner_cfg = adapter.RunnerConfig(
         basename="case",
@@ -5479,7 +5480,9 @@ def test_groupby_phase_obeys_comparison_enabled_gate(tmp_path, monkeypatch):
     result = run_evaluation(cfg, force=True)
 
     assert result["status"] == "success"
-    assert groupby_calls == []
+    assert len(groupby_calls) == expected_calls
+    if groupby_calls:
+        assert groupby_calls[0][0] is cfg
 
 
 def test_evaluate_single_strict_rejects_equal_length_mismatched_time(tmp_path, monkeypatch):

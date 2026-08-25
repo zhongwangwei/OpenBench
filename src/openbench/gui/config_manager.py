@@ -613,7 +613,8 @@ class ConfigManager:
 
         if general.get("comparison"):
             selected_comparisons = [k for k, v in config.get("comparisons", {}).items() if v]
-            if not selected_comparisons:
+            groupby_enabled = any(general.get(key) for key in ("IGBP_groupby", "PFT_groupby", "Climate_zone_groupby"))
+            if not selected_comparisons and not groupby_enabled:
                 errors.append("At least one comparison item must be selected when comparison is enabled")
 
         if general.get("statistics"):

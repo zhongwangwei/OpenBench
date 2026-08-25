@@ -237,6 +237,25 @@ def test_generate_config_yaml_does_not_enable_empty_comparison_or_statistics(tmp
     assert "statistics" not in data
 
 
+def test_groupby_only_export_is_loadable_without_comparison_items(tmp_path):
+    from openbench.config.loader import load_config
+
+    config = _runnable_config(tmp_path)
+    config["general"]["comparison"] = True
+    config["general"]["IGBP_groupby"] = True
+
+    assert ConfigManager().validate(config) == []
+
+    path = tmp_path / "openbench.yaml"
+    path.write_text(ConfigManager().generate_config_yaml(config), encoding="utf-8")
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    loaded = load_config(path)
+
+    assert "comparison" not in data
+    assert loaded.comparison.enabled is False
+    assert loaded.project.IGBP_groupby is True
+
+
 def test_generate_config_yaml_remote_case_dir_overrides_output_and_transforms_paths(tmp_path):
     config = _runnable_config(tmp_path)
 
@@ -480,3 +499,18 @@ def test_unified_to_gui_config_preserves_project_io():
     )
 
     assert gui["general"]["io"] == {"netcdf_compression": True, "mfdataset_batch_size": 25}
+
+
+def test_generate_config_yaml_can_export_groupby_without_comparison(tmp_path):
+    config = _runnable_config(tmp_path)
+    config["general"]["comparison"] = False
+    config["general"]["IGBP_groupby"] = True
+    config["general"]["PFT_groupby"] = False
+    config["general"]["Climate_zone_groupby"] = False
+
+    data = yaml.safe_load(ConfigManager().generate_config_yaml(config))
+
+    assert "comparison" not in data
+    assert data["project"]["IGBP_groupby"] is True
+    assert "PFT_groupby" not in data["project"]
+    assert "climate_zone_groupby" not in data["project"]
