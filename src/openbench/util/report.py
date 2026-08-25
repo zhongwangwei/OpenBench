@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 from datetime import datetime
+from itertools import product
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, unquote
 
@@ -32,7 +33,8 @@ def _url_path(path: str) -> str:
 _jinja_env = Environment(autoescape=select_autoescape(default=True, default_for_string=True))
 _jinja_env.filters["url_path"] = _url_path
 
-# ponytail: report summaries cap eager reads; raise only if large-grid summaries are worth the latency.
+# Report statistics read at most this many values per chunk. Exact medians are
+# retained only when the complete result fits within the same bound.
 _MAX_REPORT_STAT_POINTS = 1_000_000
 
 # Import PDF generation libraries
@@ -247,20 +249,9 @@ class ReportGenerator:
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
                         if data_vars:
                             main_var = ds[data_vars[0]]
-                            if main_var.size > _MAX_REPORT_STAT_POINTS:
-                                logger.info("Skipping report summary for large NetCDF file: %s", nc_file)
-                                metrics_data[key] = {
-                                    "summary": {},
-                                    "summary_omitted": True,
-                                    "total_points": int(main_var.size),
-                                    "file": os.path.basename(nc_file),
-                                }
-                                continue
-                            # Extract comprehensive statistics
-                            values = main_var.values
-                            valid_data = values[~np.isnan(values)]
+                            stats = self._summarize_data_array(main_var)
 
-                            if len(valid_data) > 0:
+                            if stats:
                                 # Try to extract comparison pair from filename first, then fallback to config
                                 comparison_pair = self._extract_comparison_pair(key)
 
@@ -297,17 +288,27 @@ class ReportGenerator:
                                     except Exception as e:
                                         logger.warning(f"Error extracting sources from filename {key}: {e}")
 
+                                metric_type = self._extract_metric_type(key)
                                 metrics_data[key] = {
-                                    "global_mean": float(np.mean(valid_data)),
-                                    "global_std": float(np.std(valid_data)),
-                                    "global_min": float(np.min(valid_data)),
-                                    "global_max": float(np.max(valid_data)),
-                                    "global_median": float(np.median(valid_data)),
-                                    "valid_points": int(len(valid_data)),
-                                    "total_points": int(main_var.size),
-                                    "data_coverage": float(len(valid_data) / main_var.size * 100),
+                                    "summary": {
+                                        metric_type: {
+                                            "mean": stats["mean"],
+                                            "std": stats["std"],
+                                            "min": stats["min"],
+                                            "max": stats["max"],
+                                        }
+                                    },
+                                    "global_mean": stats["mean"],
+                                    "global_std": stats["std"],
+                                    "global_min": stats["min"],
+                                    "global_max": stats["max"],
+                                    "global_median": stats["median"],
+                                    "median_omitted": stats["median_omitted"],
+                                    "valid_points": stats["valid_points"],
+                                    "total_points": stats["total_points"],
+                                    "data_coverage": stats["coverage"],
                                     "shape": str(main_var.dims),
-                                    "metric_type": self._extract_metric_type(key),
+                                    "metric_type": metric_type,
                                     "comparison_pair": comparison_pair,
                                 }
                             else:
@@ -318,6 +319,68 @@ class ReportGenerator:
                     logger.warning(f"Error reading {nc_file}: {e}")
 
         return metrics_data
+
+    @staticmethod
+    def _summarize_data_array(main_var: xr.DataArray, max_points: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Calculate exact bounded-memory statistics, omitting only large-array medians."""
+        max_points = max_points or _MAX_REPORT_STAT_POINTS
+        total_points = int(main_var.size)
+        if total_points == 0:
+            return None
+
+        remaining = max_points
+        chunk_sizes = []
+        for size in reversed(main_var.shape):
+            chunk_size = min(int(size), remaining)
+            chunk_sizes.append(max(1, chunk_size))
+            remaining = max(1, remaining // max(1, chunk_size))
+        chunk_sizes.reverse()
+
+        count = 0
+        mean = 0.0
+        m2 = 0.0
+        minimum = float("inf")
+        maximum = float("-inf")
+        median_parts = [] if total_points <= max_points else None
+
+        ranges = [range(0, int(size), chunk) for size, chunk in zip(main_var.shape, chunk_sizes)]
+        for starts in product(*ranges):
+            indexers = {
+                dim: slice(start, min(start + chunk, int(size)))
+                for dim, size, chunk, start in zip(main_var.dims, main_var.shape, chunk_sizes, starts)
+            }
+            values = np.asarray(main_var.isel(indexers).values).ravel()
+            valid = values[~np.isnan(values)]
+            if not len(valid):
+                continue
+
+            chunk_count = int(len(valid))
+            chunk_mean = float(np.mean(valid))
+            chunk_m2 = float(np.sum((valid - chunk_mean) ** 2))
+            new_count = count + chunk_count
+            delta = chunk_mean - mean
+            mean += delta * chunk_count / new_count
+            m2 += chunk_m2 + delta * delta * count * chunk_count / new_count
+            count = new_count
+            minimum = min(minimum, float(np.min(valid)))
+            maximum = max(maximum, float(np.max(valid)))
+            if median_parts is not None:
+                median_parts.append(valid)
+
+        if not count:
+            return None
+
+        return {
+            "mean": mean,
+            "std": float(np.sqrt(m2 / count)),
+            "min": minimum,
+            "max": maximum,
+            "median": float(np.median(np.concatenate(median_parts))) if median_parts is not None else None,
+            "median_omitted": median_parts is None,
+            "coverage": count / total_points * 100,
+            "valid_points": count,
+            "total_points": total_points,
+        }
 
     @staticmethod
     def _summarize_csv(csv_file: str, chunksize: int = 100_000) -> tuple[int, Dict[str, Any]]:
@@ -1117,29 +1180,9 @@ class ReportGenerator:
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
                         if data_vars:
                             main_var = ds[data_vars[0]]
-                            if main_var.size > _MAX_REPORT_STAT_POINTS:
-                                logger.info("Skipping report summary for large NetCDF file: %s", nc_file)
-                                pair_data[metric_name] = {
-                                    "summary_omitted": True,
-                                    "total_points": int(main_var.size),
-                                    "file": os.path.basename(nc_file),
-                                }
-                                continue
-                            values = main_var.values.ravel()
-                            valid_data = values[~np.isnan(values)]
-                            total_points = len(values)
-                            valid_points = len(valid_data)
-                            coverage = (valid_points / total_points * 100) if total_points > 0 else 0.0
-
-                            if len(valid_data) > 0:
-                                pair_data[metric_name] = {
-                                    "mean": float(np.mean(valid_data)),
-                                    "std": float(np.std(valid_data)),
-                                    "min": float(np.min(valid_data)),
-                                    "max": float(np.max(valid_data)),
-                                    "median": float(np.median(valid_data)),
-                                    "coverage": float(coverage),
-                                }
+                            stats = self._summarize_data_array(main_var)
+                            if stats:
+                                pair_data[metric_name] = stats
 
                 except Exception as e:
                     logger.warning(f"Error reading {nc_file}: {e}")
@@ -1742,11 +1785,9 @@ class ReportGenerator:
                     {% endif %}
                     {% endif %}
                 {% endfor %}
-            </div>
-            {% elif metric_data.summary_omitted %}
-            <h4>{{ metric_key }}</h4>
-            <div class="summary-box">
-                <p>Summary omitted for {{ metric_data.total_points }} points to avoid excessive memory use. Raw result: {{ metric_data.file }}</p>
+                {% if metric_data.median_omitted %}
+                <p>Median omitted for large result; all other statistics were calculated from the complete dataset.</p>
+                {% endif %}
             </div>
             {% elif metric_data.station_format %}
             <!-- Grid vs Grid comprehensive statistics (station format) -->
@@ -1758,17 +1799,13 @@ class ReportGenerator:
                 <p><strong>{{ metric_name }}:</strong> {{ "%.0f"|format(metric_values.mean) }}</p>
                 {% endif %}
                 {% else %}
-                {% if metric_values.summary_omitted %}
-                <p><strong>{{ metric_name }}:</strong> Summary omitted for {{ metric_values.total_points }} points to avoid excessive memory use. Raw result: {{ metric_values.file }}</p>
-                {% else %}
                 <p><strong>{{ metric_name }}:</strong> 
                    Mean = {{ "%.4f"|format(metric_values.mean) }}, 
                    Std = {{ "%.4f"|format(metric_values.std) }}, 
-                   Median = {{ "%.4f"|format(metric_values.median) }}, 
+                   Median = {% if metric_values.median is not none %}{{ "%.4f"|format(metric_values.median) }}{% else %}omitted for large result{% endif %},
                    Range = [{{ "%.4f"|format(metric_values.min) }}, {{ "%.4f"|format(metric_values.max) }}]
                    {% if metric_data.data_coverage is not none %}, Data Coverage = {{ "%.1f"|format(metric_data.data_coverage) }}%{% endif %}
                 </p>
-                {% endif %}
                 {% endif %}
                 {% endfor %}
             </div>

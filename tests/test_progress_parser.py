@@ -126,3 +126,19 @@ def test_evaluation_task_count_uses_each_variables_bound_sources():
     }
 
     assert count_evaluation_tasks(config, ["Runoff", "GPP"]) == 2
+
+
+def test_progress_parser_preserves_spaces_in_structured_source_names():
+    state = _state(total_tasks=1)
+    progress, variable, stage = parse_progress_line(
+        'OPENBENCH_PROGRESS {"event":"evaluation_completed","variable":"Runoff Basin","sim":"ERA5 Land",'
+        '"ref":"GLDAS Comparison 2"}',
+        5,
+        state,
+        CONSTANTS,
+    )
+
+    assert progress == 95
+    assert variable == "Runoff Basin"
+    assert stage == "Evaluation"
+    assert ("Runoff Basin", "GLDAS Comparison 2", "ERA5 Land") in state["completed_eval_tasks"]
