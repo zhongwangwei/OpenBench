@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """Shared log-line progress parser for local and remote runners."""
 
+import json
 import re
+
+from openbench.runner.progress_events import GUI_PROGRESS_PREFIX
 
 
 def parse_progress_line(
@@ -31,11 +34,27 @@ def parse_progress_line(
 
     line_lower = line.lower()
 
+    protocol_line = GUI_PROGRESS_PREFIX in line
+    if protocol_line:
+        try:
+            event = json.loads(line.split(GUI_PROGRESS_PREFIX, 1)[1])
+        except (json.JSONDecodeError, TypeError):
+            event = {}
+        if event.get("event") == "evaluation_completed":
+            state["current_variable"] = str(event.get("variable", ""))
+            state["current_sim"] = str(event.get("sim", ""))
+            state["current_ref"] = str(event.get("ref", ""))
+            var = state["current_variable"]
+            stage = "Evaluation"
+
+    natural_line = "" if protocol_line else line
+    natural_line_lower = natural_line.lower()
+
     # Detect variable being processed
-    if "processing" in line_lower or "evaluating" in line_lower:
+    if "processing" in natural_line_lower or "evaluating" in natural_line_lower:
         for keyword in ["Processing", "Evaluating", "processing", "evaluating"]:
-            if keyword in line:
-                parts = line.split(keyword)
+            if keyword in natural_line:
+                parts = natural_line.split(keyword)
                 if len(parts) > 1:
                     remaining = parts[1].strip()
                     if remaining:
@@ -51,7 +70,7 @@ def parse_progress_line(
     # "ReferenceError: ..." as a new reference source.
     ref_match = re.search(
         r"(?:^|[-\s])ref:\s*(\S+)|\bref_source\b\s*[:=]\s*(\S+)|\breference(?:\s+source)?\b\s*[:=]\s*(\S+)",
-        line,
+        natural_line,
         re.IGNORECASE,
     )
     if ref_match:
@@ -59,7 +78,7 @@ def parse_progress_line(
 
     sim_match = re.search(
         r"(?:^|[-\s])sim:\s*(\S+)|\bsim_source\b\s*[:=]\s*(\S+)|\bsimulation(?:\s+source)?\b\s*[:=]\s*(\S+)",
-        line,
+        natural_line,
         re.IGNORECASE,
     )
     if sim_match:
@@ -67,10 +86,10 @@ def parse_progress_line(
 
     completed_eval_match = re.search(
         r"\bcompleted\s+([^:]+):.*?\bsim\s*[=:]\s*([^\s,;]+).*?\bref\s*[=:]\s*([^\s,;]+)",
-        line,
+        natural_line,
         re.IGNORECASE,
     )
-    if completed_eval_match:
+    if completed_eval_match and not stage:
         state["current_variable"] = completed_eval_match.group(1).strip()
         state["current_sim"] = completed_eval_match.group(2).strip(":,")
         state["current_ref"] = completed_eval_match.group(3).strip(":,")
@@ -78,16 +97,16 @@ def parse_progress_line(
         stage = "Evaluation"
 
     # Detect stage
-    if not stage and "evaluation" in line_lower and "item" not in line_lower:
+    if not stage and "evaluation" in natural_line_lower and "item" not in natural_line_lower:
         stage = "Evaluation"
-    elif "comparison" in line_lower or "groupby" in line_lower:
+    elif "comparison" in natural_line_lower or "groupby" in natural_line_lower:
         stage = "Comparison"
-        comparison_done = re.search(r"(?:done running|completed)\s+([\w-]+)\s+comparison", line_lower)
+        comparison_done = re.search(r"(?:done running|completed)\s+([\w-]+)\s+comparison", natural_line_lower)
         if comparison_done:
             state["completed_comparison_tasks"].add(comparison_done.group(1))
-    elif "statistic" in line_lower:
+    elif "statistic" in natural_line_lower:
         stage = "Statistics"
-    elif "report" in line_lower:
+    elif "report" in natural_line_lower:
         stage = "Report"
 
     # Detect task completions
@@ -100,8 +119,8 @@ def parse_progress_line(
             task_completed = True
 
     for groupby_type in ["igbp", "pft", "climate", "landcover"]:
-        if groupby_type in line_lower and (
-            "complete" in line_lower or "finished" in line_lower or "done" in line_lower
+        if groupby_type in natural_line_lower and (
+            "complete" in natural_line_lower or "finished" in natural_line_lower or "done" in natural_line_lower
         ):
             task_key = (state.get("current_variable", ""), groupby_type)
             if task_key not in state["completed_groupby_tasks"]:
