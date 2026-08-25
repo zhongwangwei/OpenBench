@@ -8,6 +8,8 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
+from openbench.runner.progress_events import emit_gui_task_completion
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,22 +90,30 @@ def evaluate_ready_tasks(
     evaluate_group = _local_attr("_evaluate_task_group", evaluate_task_group)
     executor_cls = _local_attr("ProcessPoolExecutor", ProcessPoolExecutor)
 
+    def serial_results(tasks):
+        results = []
+        for task in tasks:
+            result = evaluate_single(task)
+            emit_gui_task_completion(result)
+            results.append(result)
+        return results
+
     workers = worker_count(num_cores, len(ready_tasks))
     if dask_distributed:
         logger.info("Task-level process parallelism disabled while dask.distributed is active")
-        return [evaluate_single(task) for task in ready_tasks]
+        return serial_results(ready_tasks)
     if only_drawing or workers <= 1 or not parallel_safe(ready_tasks):
-        return [evaluate_single(task) for task in ready_tasks]
+        return serial_results(ready_tasks)
 
     if unified_mask:
         # Preprocessing already applied the shared mask. Keep tasks that share
         # a flat ref serial, but allow different refs to evaluate in parallel.
         if not all(task.get("ref_preprocessed") for task in ready_tasks):
-            return [evaluate_single(task) for task in ready_tasks]
+            return serial_results(ready_tasks)
         groups = group_tasks(ready_tasks)
         group_workers = worker_count(num_cores, len(groups))
         if group_workers <= 1 or len(groups) <= 1:
-            return [evaluate_single(task) for task in ready_tasks]
+            return serial_results(ready_tasks)
         cores_per_worker = max(1, _core_budget(num_cores) // group_workers)
         groups = [[{**task, "num_cores_override": cores_per_worker} for task in group] for group in groups]
         logger.info(
@@ -114,7 +124,12 @@ def evaluate_ready_tasks(
         )
         with executor_cls(max_workers=group_workers) as executor:
             grouped_results = executor.map(evaluate_group, groups)
-        return [result for group in grouped_results for result in group]
+            results = []
+            for group in grouped_results:
+                for result in group:
+                    emit_gui_task_completion(result)
+                    results.append(result)
+        return results
 
     cores_per_worker = max(1, _core_budget(num_cores) // workers)
     budgeted_tasks = [{**task, "num_cores_override": cores_per_worker} for task in ready_tasks]
@@ -125,4 +140,8 @@ def evaluate_ready_tasks(
         cores_per_worker,
     )
     with executor_cls(max_workers=workers) as executor:
-        return list(executor.map(evaluate_single, budgeted_tasks))
+        results = []
+        for result in executor.map(evaluate_single, budgeted_tasks):
+            emit_gui_task_completion(result)
+            results.append(result)
+        return results

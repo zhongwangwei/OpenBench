@@ -125,10 +125,12 @@ def test_local_runner_checks_before_run(tmp_path, monkeypatch):
     runner = EvaluationRunner(str(config), python_path="/fake/python")
     monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
     commands = []
+    environments = []
     processes = iter([FakeProcess(["Ready to run\n"], 0), FakeProcess(["Evaluation complete\n"], 0)])
 
     def fake_popen(command, **kwargs):
         commands.append(command)
+        environments.append(kwargs["env"])
         return next(processes)
 
     monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
@@ -138,6 +140,7 @@ def test_local_runner_checks_before_run(tmp_path, monkeypatch):
     runner.run()
 
     assert [command[3] for command in commands] == ["check", "run"]
+    assert all(env["OPENBENCH_GUI_PROGRESS"] == "1" for env in environments)
     assert finished[-1][0] is True
 
 
@@ -175,6 +178,23 @@ def test_local_runner_counts_groupby_without_comparison(tmp_path):
     )
 
     assert runner._total_tasks == 3
+
+
+def test_local_runner_uses_exact_evaluation_task_count(tmp_path):
+    runner = EvaluationRunner(str(tmp_path / "openbench.yaml"), python_path="/fake/python")
+
+    runner.set_task_counts(
+        num_variables=2,
+        num_ref_sources=2,
+        num_sim_sources=2,
+        num_metrics=1,
+        num_scores=1,
+        num_groupby=0,
+        num_comparisons=0,
+        num_evaluation_tasks=2,
+    )
+
+    assert runner._total_tasks == 2
 
 
 def test_remote_runner_counts_groupby_without_comparison(tmp_path):

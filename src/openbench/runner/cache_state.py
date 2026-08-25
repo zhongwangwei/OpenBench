@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from openbench.runner.cache import EvaluationCache
+from openbench.runner.progress_events import emit_gui_task_completion
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ def cached_task_result(task: dict[str, Any]) -> dict[str, Any] | None:
             task["sim_source"],
             task["ref_source"],
         )
-        return {
+        result = {
             "variable": task["var_name"],
             "sim": task["sim_source"],
             "ref": task["ref_source"],
@@ -48,6 +49,8 @@ def cached_task_result(task: dict[str, Any]) -> dict[str, Any] | None:
             "config_hash": config_hash,
             "skipped": True,
         }
+        emit_gui_task_completion(result)
+        return result
 
     logger.warning(
         "Cache stale (output missing or unreadable), re-evaluating %s: sim=%s ref=%s",

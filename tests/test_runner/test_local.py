@@ -291,6 +291,41 @@ def test_ready_tasks_stay_serial_for_unified_mask_or_only_drawing(monkeypatch):
     assert evaluated == ["SimA", "SimA", "SimA", "SimA", "SimA", "SimA"]
 
 
+def test_ready_tasks_emit_gui_progress_markers(monkeypatch, capsys):
+    import openbench.runner.local as local_runner
+
+    task = {"var_name": "Runoff", "sim_source": "SimA", "ref_source": "RefA"}
+    monkeypatch.setenv("OPENBENCH_GUI_PROGRESS", "1")
+    monkeypatch.setattr(
+        local_runner,
+        "_evaluate_single",
+        lambda _task: {"variable": "Runoff", "sim": "SimA", "ref": "RefA", "status": "success"},
+    )
+
+    local_runner._evaluate_ready_tasks([task], num_cores=1, unified_mask=False, only_drawing=False)
+
+    assert (
+        'OPENBENCH_PROGRESS {"event":"evaluation_completed","variable":"Runoff","sim":"SimA","ref":"RefA"}'
+        in capsys.readouterr().out
+    )
+
+
+def test_failed_tasks_do_not_emit_gui_progress_markers(monkeypatch, capsys):
+    import openbench.runner.local as local_runner
+
+    task = {"var_name": "Runoff", "sim_source": "SimA", "ref_source": "RefA"}
+    monkeypatch.setenv("OPENBENCH_GUI_PROGRESS", "1")
+    monkeypatch.setattr(
+        local_runner,
+        "_evaluate_single",
+        lambda _task: {"variable": "Runoff", "sim": "SimA", "ref": "RefA", "status": "error"},
+    )
+
+    local_runner._evaluate_ready_tasks([task], num_cores=1, unified_mask=False, only_drawing=False)
+
+    assert "OPENBENCH_PROGRESS" not in capsys.readouterr().out
+
+
 def test_ready_tasks_parallelize_unified_mask_across_ref_groups(monkeypatch):
     """Unified-mask tasks can parallelize across refs after preprocessing is complete."""
     import openbench.runner.local as local_runner
