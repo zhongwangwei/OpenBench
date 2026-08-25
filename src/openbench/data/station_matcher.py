@@ -58,8 +58,7 @@ def get_resolution_suffix(sim_grid_res: float) -> str:
     for res, suffix in res_map.items():
         if abs(float(sim_grid_res) - res) < 0.001:
             return suffix
-    logging.warning("Unknown resolution %s, defaulting to 03min", sim_grid_res)
-    return "03min"
+    raise ValueError(f"Unsupported CaMA station matching resolution: {sim_grid_res}")
 
 
 def _station_id_to_string(value) -> str:

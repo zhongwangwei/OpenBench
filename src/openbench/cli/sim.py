@@ -223,9 +223,7 @@ def scan(
             )
 
         if station_staging_path is not None:
-            if station_output_path.exists():
-                shutil.rmtree(station_output_path)
-            os.replace(station_staging_path, station_output_path)
+            _replace_directory_preserving_old_on_failure(station_staging_path, station_output_path)
             _rebase_station_artifacts(result, station_staging_path, station_output_path)
             station_staging_path = None
 
@@ -246,6 +244,21 @@ def scan(
 
     click.secho(f"Wrote {sim_path}", fg="green", bold=True)
     click.secho(f"Wrote {report_path}", fg="green", bold=True)
+
+
+def _replace_directory_preserving_old_on_failure(source: Path, target: Path) -> None:
+    if not target.exists():
+        os.replace(source, target)
+        return
+    backup = target.parent / f".{target.name}.old.{next(tempfile._get_candidate_names())}"
+    os.replace(target, backup)
+    try:
+        os.replace(source, target)
+    except Exception:
+        if not target.exists():
+            os.replace(backup, target)
+        raise
+    shutil.rmtree(backup, ignore_errors=True)
 
 
 def _rebase_station_artifacts(result, old_root: Path, new_root: Path) -> None:

@@ -504,3 +504,122 @@ def test_nested_multi_station_rescan_rebuilds_stale_merged_year_range(tmp_path: 
     assert second.loc[0, "use_syear"] == 2000
     assert second.loc[0, "use_eyear"] == 2001
     assert Path(second.loc[0, "sim_dir"]).name == "sim_US-AAA_2000_2001.nc"
+
+
+def test_setup_output_directories_merges_ref_and_sim_fulllists_for_station_pairs(tmp_path):
+    from openbench.data.processing import BaseDatasetProcessing
+
+    sim_file = tmp_path / "sim.nc"
+    ref_file = tmp_path / "ref.nc"
+    sim_file.touch()
+    ref_file.touch()
+    sim_list = tmp_path / "sim.csv"
+    ref_list = tmp_path / "ref.csv"
+    pd.DataFrame(
+        [{"ID": "A", "sim_dir": sim_file.name, "sim_lon": 1, "sim_lat": 2, "use_syear": 2000, "use_eyear": 2005}]
+    ).to_csv(sim_list, index=False)
+    pd.DataFrame(
+        [{"ID": "A", "ref_dir": str(ref_file), "ref_lon": 1, "ref_lat": 2, "use_syear": 2002, "use_eyear": 2004}]
+    ).to_csv(ref_list, index=False)
+
+    proc = BaseDatasetProcessing.__new__(BaseDatasetProcessing)
+    proc.ref_data_type = "stn"
+    proc.sim_data_type = "stn"
+    proc.ref_source = "Ref"
+    proc.sim_source = "Sim"
+    proc.ref_fulllist = str(ref_list)
+    proc.sim_fulllist = str(sim_list)
+    proc.casedir = str(tmp_path / "case")
+
+    proc.setup_output_directories()
+
+    row = proc.station_list.iloc[0]
+    assert row["ID"] == "A"
+    assert row["sim_dir"] == str(sim_file)
+    assert row["ref_dir"] == str(ref_file)
+    assert int(row["use_syear"]) == 2002
+    assert int(row["use_eyear"]) == 2004
+
+
+def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_path):
+    from openbench.data.processing import BaseDatasetProcessing
+
+    combined = tmp_path / "combined.csv"
+    pd.DataFrame(
+        [{"ID": "A", "sim_dir": "sim.nc", "ref_dir": "ref.nc", "use_syear": 2002, "use_eyear": 2004}]
+    ).to_csv(combined, index=False)
+
+    proc = BaseDatasetProcessing.__new__(BaseDatasetProcessing)
+    proc.ref_data_type = proc.sim_data_type = "stn"
+    proc.ref_source, proc.sim_source = "Ref", "Sim"
+    proc.ref_fulllist = str(combined)
+    proc.sim_fulllist = str(tmp_path / "original_sim.csv")
+    proc.casedir = str(tmp_path / "case")
+
+    proc.setup_output_directories()
+
+    assert list(proc.station_list.columns) == ["ID", "sim_dir", "ref_dir", "use_syear", "use_eyear"]
+
+
+def test_process_station_data_hard_fails_partial_station_failures(tmp_path):
+    from openbench.data.processing import StationDatasetProcessing
+
+    proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    proc.num_cores = 1
+    proc.station_list = pd.DataFrame(
+        {"ID": ["A", "B"], "use_syear": [2000, 2000], "use_eyear": [2000, 2000], "sim_dir": ["a.nc", "b.nc"]}
+    )
+    proc._make_stn_parallel = lambda station_list, datasource, i: {"ok": i == 0, "station": station_list.iloc[i]["ID"]}
+
+    with pytest.raises(RuntimeError, match="1/2 sim station"):
+        StationDatasetProcessing.process_station_data(proc, {"datasource": "sim"})
+
+
+def test_station_evaluation_hard_fails_when_any_station_skips(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+    from openbench.core.evaluation import Evaluation_stn
+
+    stnlist = tmp_path / "stn_Ref_Sim_list.txt"
+    pd.DataFrame(
+        [
+            {"ID": "A", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000},
+            {"ID": "B", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000},
+        ]
+    ).to_csv(stnlist, index=False)
+
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir = str(tmp_path)
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.ref_fulllist = str(stnlist)
+    ev.num_cores = 1
+    ev.output_manager = None
+    ev.metrics = ["bias"]
+    ev.scores = []
+    ev.make_evaluation_parallel = lambda station_list, i: (
+        {"KGESS": 1.0, "RMSE": 0.0, "correlation": 1.0, "bias": 0.0} if i == 0 else None
+    )
+    monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
+
+    with pytest.raises(RuntimeError, match="1/2 station"):
+        ev.make_evaluation_P()
+
+
+def test_station_evaluation_hard_fails_when_all_results_are_nonfinite(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+    from openbench.core.evaluation import Evaluation_stn
+
+    stnlist = tmp_path / "stn_Ref_Sim_list.txt"
+    pd.DataFrame([{"ID": "A", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000}]).to_csv(
+        stnlist, index=False
+    )
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir, ev.item, ev.ref_source, ev.sim_source = str(tmp_path), "Runoff", "Ref", "Sim"
+    ev.ref_fulllist, ev.num_cores, ev.output_manager = str(stnlist), 1, None
+    ev.metrics, ev.scores = ["bias"], []
+    ev.make_evaluation_parallel = lambda station_list, i: {"bias": np.inf}
+    monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
+
+    with pytest.raises(RuntimeError, match="no finite"):
+        ev.make_evaluation_P()

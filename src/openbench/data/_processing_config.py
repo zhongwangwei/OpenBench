@@ -270,11 +270,30 @@ class ProcessingConfigMixin:
             # 3. Auto-scan sim directory (generates list on the fly)
             stnlist_path = None
 
-            # Priority 1: explicit fulllist
-            if hasattr(self, "ref_fulllist") and self.ref_fulllist and os.path.exists(self.ref_fulllist):
-                stnlist_path = self.ref_fulllist
-            elif hasattr(self, "sim_fulllist") and self.sim_fulllist and os.path.exists(self.sim_fulllist):
-                stnlist_path = self.sim_fulllist
+            # Priority 1: explicit fulllist. For station×station, merge ref and sim lists by ID
+            # so downstream station processing/evaluation has both file paths.
+            ref_list_path = getattr(self, "ref_fulllist", "")
+            sim_list_path = getattr(self, "sim_fulllist", "")
+            ref_list_is_merged = False
+            if ref_list_path and os.path.exists(ref_list_path):
+                ref_columns = set(pd.read_csv(ref_list_path, nrows=0).columns)
+                ref_list_is_merged = {"ref_dir", "sim_dir"}.issubset(ref_columns)
+            if ref_list_is_merged:
+                stnlist_path = ref_list_path
+            elif (
+                self.ref_data_type == "stn"
+                and self.sim_data_type == "stn"
+                and ref_list_path
+                and sim_list_path
+                and os.path.exists(ref_list_path)
+                and os.path.exists(sim_list_path)
+            ):
+                self.station_list = self._merge_station_fulllists(sim_list_path, ref_list_path)
+                stnlist_path = "__merged__"
+            elif ref_list_path and os.path.exists(ref_list_path):
+                stnlist_path = ref_list_path
+            elif sim_list_path and os.path.exists(sim_list_path):
+                stnlist_path = sim_list_path
 
             # Priority 2: previously generated list
             if not stnlist_path:
@@ -288,8 +307,9 @@ class ProcessingConfigMixin:
                 if sim_dir and os.path.isdir(sim_dir):
                     stnlist_path = self._auto_generate_station_list(sim_dir)
 
-            if stnlist_path and os.path.exists(stnlist_path):
-                self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
+            if stnlist_path == "__merged__" or (stnlist_path and os.path.exists(stnlist_path)):
+                if stnlist_path != "__merged__":
+                    self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
                 canonical_list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
                 os.makedirs(os.path.dirname(canonical_list_path), exist_ok=True)
                 write_file_atomic(
@@ -306,6 +326,51 @@ class ProcessingConfigMixin:
 
             output_dir = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}")
             os.makedirs(output_dir, exist_ok=True)
+
+    @staticmethod
+    def _normalize_station_fulllist(df: pd.DataFrame, side: str) -> pd.DataFrame:
+        df = df.copy()
+        rename = {
+            "DIR": f"{side}_dir",
+            "LON": f"{side}_lon",
+            "LAT": f"{side}_lat",
+            "SYEAR": f"{side}_syear",
+            "EYEAR": f"{side}_eyear",
+            "lon": f"{side}_lon",
+            "lat": f"{side}_lat",
+        }
+        df.rename(columns={k: v for k, v in rename.items() if k in df.columns and v not in df.columns}, inplace=True)
+        if f"{side}_dir" not in df.columns and "dir" in df.columns:
+            df.rename(columns={"dir": f"{side}_dir"}, inplace=True)
+        if f"{side}_syear" not in df.columns and "use_syear" in df.columns:
+            df[f"{side}_syear"] = df["use_syear"]
+        if f"{side}_eyear" not in df.columns and "use_eyear" in df.columns:
+            df[f"{side}_eyear"] = df["use_eyear"]
+        return df
+
+    def _merge_station_fulllists(self, sim_path: str, ref_path: str) -> pd.DataFrame:
+        sim = self._normalize_station_fulllist(pd.read_csv(sim_path, header=0), "sim")
+        ref = self._normalize_station_fulllist(pd.read_csv(ref_path, header=0), "ref")
+        from openbench.config.runtime_info import GeneralInfoReader
+
+        GeneralInfoReader._resolve_relative_paths(sim, "sim_dir", sim_path, getattr(self, "sim_dir", ""))
+        GeneralInfoReader._resolve_relative_paths(ref, "ref_dir", ref_path, getattr(self, "ref_dir", ""))
+        merged = pd.merge(sim, ref, how="inner", on="ID", suffixes=("", "_refdup"))
+        if merged.empty:
+            raise RuntimeError(
+                f"No shared station IDs between simulation fulllist {sim_path} and reference fulllist {ref_path}"
+            )
+        for col in ("sim_syear", "ref_syear", "sim_eyear", "ref_eyear"):
+            if col in merged.columns:
+                merged[col] = pd.to_numeric(merged[col], errors="coerce")
+        if {"sim_syear", "ref_syear"}.issubset(merged.columns):
+            merged["use_syear"] = merged[["sim_syear", "ref_syear"]].max(axis=1).astype(int)
+        if {"sim_eyear", "ref_eyear"}.issubset(merged.columns):
+            merged["use_eyear"] = merged[["sim_eyear", "ref_eyear"]].min(axis=1).astype(int)
+        bad = merged.get("use_syear", pd.Series(dtype=float)) > merged.get("use_eyear", pd.Series(dtype=float))
+        if bool(bad.any()):
+            raise RuntimeError(f"Station fulllists have no overlapping years for {int(bad.sum())} station(s)")
+        return Convert_Type.convert_Frame(merged)
 
     def _auto_generate_station_list(self, sim_dir: str) -> str | None:
         """Auto-scan a station simulation directory and generate a station list CSV."""

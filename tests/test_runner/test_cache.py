@@ -140,6 +140,22 @@ def test_input_file_signature_includes_ctime_ns(tmp_path):
     assert "ctime_ns" in signature["files"][0]
 
 
+def test_input_file_signature_refreshes_after_input_changes(tmp_path):
+    from openbench.runner.hashing import input_file_signature
+
+    source_root = tmp_path / "input"
+    source_root.mkdir()
+    data_file = source_root / "sample.nc"
+    data_file.write_bytes(b"first")
+    section = {"Case_dir": str(source_root)}
+
+    first = input_file_signature(section, "Case")
+    data_file.write_bytes(b"second-version")
+    refreshed = input_file_signature(section, "Case")
+
+    assert refreshed != first
+
+
 def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons():
     from openbench.runner.hashing import ALGORITHM_SOURCE_MODULES
 

@@ -119,6 +119,8 @@ class RemoteRunner(QThread):
         self._do_statistics = False
 
         # Track completed items to avoid double counting
+        self._started_preprocess_tasks = set()
+        self._completed_preprocess_tasks = set()
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()
@@ -462,6 +464,8 @@ class RemoteRunner(QThread):
             "current_variable": self._current_variable,
             "current_ref": self._current_ref,
             "current_sim": self._current_sim,
+            "started_preprocess_tasks": self._started_preprocess_tasks,
+            "completed_preprocess_tasks": self._completed_preprocess_tasks,
             "completed_eval_tasks": self._completed_eval_tasks,
             "completed_groupby_tasks": self._completed_groupby_tasks,
             "completed_comparison_tasks": self._completed_comparison_tasks,
@@ -535,6 +539,8 @@ class RemoteRunner(QThread):
 
         # Reset completion tracking
         self._completed_tasks = 0
+        self._started_preprocess_tasks = set()
+        self._completed_preprocess_tasks = set()
         self._completed_eval_tasks = set()
         self._completed_groupby_tasks = set()
         self._completed_comparison_tasks = set()

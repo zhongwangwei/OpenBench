@@ -1000,7 +1000,6 @@ def test_find_nc_dir_does_not_substitute_lowres(tmp_path):
     assert adapter_module._find_nc_dir(str(mid), str(tmp_path / "Grid" / "MidRes"), "Water/Runoff/Demo") == str(mid)
 
 
-
 def test_adapter_reference_data_root_still_overrides_catalog_root(monkeypatch):
     from openbench.data.registry.schema import ReferenceDataset, VariableMapping
 
@@ -1045,3 +1044,34 @@ def test_adapter_rejects_programmatic_unsafe_labels():
 
     with pytest.raises(ConfigError, match="path-safe"):
         adapter_module.build_runner_config(cfg)
+
+
+def test_build_namelists_preserves_inline_sim_variable_runtime_fields():
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="case", output_dir="./out", years=[2000, 2000]),
+        evaluation=EvaluationConfig(variables=["Runoff"]),
+        reference=ReferenceConfig(sources={"Runoff": "GRDC"}),
+        simulation={
+            "CaseA": SimulationEntry(
+                model="UnknownModel",
+                root_dir="/sim",
+                variables={
+                    "Runoff": {
+                        "varname": "q",
+                        "sub_dir": "hydro",
+                        "compute": "ds['rain'] + ds['snow']",
+                        "fallbacks": [{"varname": "q_alt", "varunit": "mm"}],
+                        "prefix_fallback": ["_hydro_"],
+                    }
+                },
+            )
+        },
+    )
+
+    _, _, sim_nml = adapter_module.build_legacy_namelists(cfg)
+    section = sim_nml["Runoff"]
+
+    assert section["CaseA_dir"].replace("\\", "/") == "/sim/hydro"
+    assert section["CaseA_compute"] == "ds['rain'] + ds['snow']"
+    assert section["CaseA_fallbacks"] == [{"varname": "q_alt", "varunit": "mm"}]
+    assert section["CaseA_prefix_fallback"] == ["_hydro_"]

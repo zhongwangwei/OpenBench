@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 from dataclasses import asdict, is_dataclass
+from functools import lru_cache
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Callable
@@ -161,6 +162,7 @@ def openbench_version() -> str:
     return getattr(openbench, "__version__", "unknown")
 
 
+@lru_cache(maxsize=1)
 def algorithm_source_fingerprint() -> str:
     """Return a digest of source modules that define metric/score semantics."""
     digest = hashlib.sha256()
@@ -215,15 +217,18 @@ def configured_regrid_backend(cfg: OpenBenchConfig, general: dict[str, Any]) -> 
 
 
 def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]:
-    """Return cheap file metadata for raw inputs referenced by one source."""
-    root = legacy_source_value(section, source, "dir")
+    """Return a current file signature for raw inputs referenced by one source."""
+    root = str(legacy_source_value(section, source, "dir") or "")
+    fulllist = str(legacy_source_value(section, source, "fulllist") or "")
+    prefix = str(legacy_source_value(section, source, "prefix", "") or "")
+    suffix = str(legacy_source_value(section, source, "suffix", "") or "")
+    varname = str(legacy_source_value(section, source, "varname", "") or "")
     if not root:
         return {"files": []}
 
     root_path = Path(os.path.expanduser(os.path.expandvars(str(root))))
     candidates: set[Path] = set()
 
-    fulllist = legacy_source_value(section, source, "fulllist")
     if fulllist:
         list_path = Path(os.path.expanduser(os.path.expandvars(str(fulllist))))
         if not list_path.is_absolute():
@@ -231,9 +236,6 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
         candidates.add(list_path)
 
     if root_path.exists():
-        prefix = str(legacy_source_value(section, source, "prefix", "") or "")
-        suffix = str(legacy_source_value(section, source, "suffix", "") or "")
-        varname = str(legacy_source_value(section, source, "varname", "") or "")
         escaped_prefix = glob.escape(prefix)
         escaped_varname = glob.escape(varname)
         escaped_suffix = glob.escape(suffix)
@@ -279,6 +281,11 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
     return {"files": files}
 
 
+def clear_hashing_caches() -> None:
+    """Reset process-stable hashing memoization before planning a new evaluation."""
+    algorithm_source_fingerprint.cache_clear()
+
+
 def stable_hash_data(value: Any) -> Any:
     """Convert dataclass-rich config objects into JSON-stable data."""
     if is_dataclass(value) and not isinstance(value, type):
@@ -296,6 +303,7 @@ def shared_mask_peer_payload(
     bindings: Any,
     var_name: str,
     ref_source: str,
+    input_file_signature_fn: Callable[[dict[str, Any], str], dict[str, Any]] = input_file_signature,
 ) -> dict[str, Any] | None:
     """Return peer simulation inputs that affect a shared unified mask."""
     alignment = getattr(cfg.project, "time_alignment", "intersection")
@@ -343,7 +351,7 @@ def shared_mask_peer_payload(
                 "namelist": stable_hash_data(
                     source_specific_section(sim_section, peer_source, all_sources=candidate_sources)
                 ),
-                "inputs": input_file_signature(sim_section, peer_source),
+                "inputs": input_file_signature_fn(sim_section, peer_source),
             }
         )
 
@@ -371,6 +379,7 @@ def task_hash_payload(
     statistic_vars: list[str],
     openbench_version_fn: Callable[[], str] = openbench_version,
     regrid_backend_signature_fn: Callable[[], dict[str, Any]] = regrid_backend_signature,
+    input_file_signature_fn: Callable[[dict[str, Any], str], dict[str, Any]] = input_file_signature,
 ) -> dict[str, Any]:
     """Build the runtime-sensitive payload used for one task's cache hash."""
     runner_cfg = bindings.runner_cfg
@@ -452,7 +461,7 @@ def task_hash_payload(
             "data_root": cfg.reference.data_root,
             "source": cfg.reference.sources.get(var_name),
             "namelist": ref_section,
-            "inputs": input_file_signature(
+            "inputs": input_file_signature_fn(
                 namelists.reference.get(var_name, {}) if namelists is not None else {},
                 ref_source,
             ),
@@ -460,7 +469,7 @@ def task_hash_payload(
         "simulation": {
             "config": stable_hash_data(sim_entry),
             "namelist": sim_section,
-            "inputs": input_file_signature(
+            "inputs": input_file_signature_fn(
                 namelists.simulation.get(var_name, {}) if namelists is not None else {},
                 sim_source,
             ),
@@ -470,5 +479,6 @@ def task_hash_payload(
             bindings=bindings,
             var_name=var_name,
             ref_source=ref_source,
+            input_file_signature_fn=input_file_signature_fn,
         ),
     }
